@@ -1,0 +1,221 @@
+/* Planet Maiko — Dog-themed sherbet design */
+
+:root {
+  /* Summer sherbet dark palette (default / night) */
+  --bg: #1e2529;
+  --bg-card: #2d363c;
+  --bg-card-alt: #333d44;
+  --bg-hover: #3a454d;
+  --bg-selected: #435058;
+  --text: #e8ecf0;
+  --text-dim: #8b9da8;
+  --text-muted: #5f7280;
+
+  --pink: #F891B4;
+  --pink-soft: rgba(248, 145, 180, 0.15);
+  --pink-glow: rgba(248, 145, 180, 0.08);
+  --blue: #89CFF0;
+  --blue-soft: rgba(137, 207, 240, 0.12);
+  --mint: #7DDBA3;
+  --orange: #FF975B;
+  --lavender: #C3A6E8;
+  --peach: #FFB89A;
+  --creamsicle: #FFCAA8;
+  --lemon: #F9E07F;
+
+  --urgent: #ff6b7f;
+  --high: #FF975B;
+  --normal: #F891B4;
+  --low: #5f7280;
+  --green: #7DDBA3;
+  --border: #435058;
+  --border-subtle: #374148;
+
+  --font: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+}
+
+/* === Light theme === */
+[data-theme="light"] {
+  --bg: #faf8f5; --bg-card: #ffffff; --bg-card-alt: #faf7f4;
+  --bg-hover: #f0ebe5; --bg-selected: #e8e1d9;
+  --text: #2c2420; --text-dim: #6a6058; --text-muted: #a09080;
+  --pink: #d4718a; --pink-soft: rgba(212, 113, 138, 0.10); --pink-glow: rgba(212, 113, 138, 0.05);
+  --blue: #4a94be; --blue-soft: rgba(74, 148, 190, 0.12);
+  --mint: #4aaa6e; --orange: #d47a3a; --lavender: #8a68b8;
+  --peach: #d48a6e; --creamsicle: #e8a878; --lemon: #c4a834;
+  --urgent: #d44a5c; --high: #d47a3a; --normal: #d4718a; --low: #a09080; --green: #4aaa6e;
+  --border: #ddd4ca; --border-subtle: #e8e0d8;
+}
+
+/* === Morning theme === */
+[data-theme="morning"] {
+  --bg: #faf5ec; --bg-card: #fffdf8; --bg-card-alt: #fdf8f0;
+  --bg-hover: #f5ede0; --bg-selected: #ece4d5;
+  --text: #3a3028; --text-dim: #7a6a58; --text-muted: #a09080;
+  --pink: #d47888; --pink-soft: rgba(212, 120, 136, 0.12); --pink-glow: rgba(212, 120, 136, 0.06);
+  --blue: #5a9ec2; --blue-soft: rgba(90, 158, 194, 0.10);
+  --mint: #5ab87d; --orange: #e8944a; --lavender: #9578c2;
+  --peach: #e8a06a; --creamsicle: #f0b878; --lemon: #d4a838;
+  --urgent: #d44a5c; --high: #e8944a; --normal: #d47888; --low: #a09080; --green: #5ab87d;
+  --border: #e0d5c8; --border-subtle: #e8ddd0;
+}
+
+/* === Sunset theme === */
+[data-theme="sunset"] {
+  --bg: #2a1f35; --bg-card: #3a2d48; --bg-card-alt: #43345a;
+  --bg-hover: #4d3e65; --bg-selected: #574870;
+  --text: #f0e8f5; --text-dim: #a090b8; --text-muted: #7a6890;
+  --pink: #ff8fa3; --pink-soft: rgba(255, 143, 163, 0.15); --pink-glow: rgba(255, 143, 163, 0.08);
+  --blue: #7eb8d9; --blue-soft: rgba(126, 184, 217, 0.12);
+  --mint: #7dd4a0; --orange: #FFB07A; --lavender: #d4a0f0;
+  --peach: #ffb899; --creamsicle: #ffd0a8; --lemon: #f0c850;
+  --urgent: #ff6b7f; --high: #FFB07A; --normal: #ff8fa3; --low: #7a6890; --green: #7dd4a0;
+  --border: #574870; --border-subtle: #4d3e65;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background-color: var(--bg);
+  background-image: url('/world-night.svg');
+  background-size: 100% auto;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-theme="light"] body { background-image: url('/world-day.svg'); }
+[data-theme="morning"] body { background-image: url('/world-day.svg'); }
+[data-theme="sunset"] body { background-image: url('/world-sunset.svg'); }
+
+a { color: var(--pink); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* === Cards === */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  position: relative;
+  transition: all 0.2s;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+.card:hover { background: var(--bg-hover); border-color: var(--border); }
+.card.focused { background: var(--bg-selected); border-color: var(--blue); box-shadow: 0 0 0 1px var(--pink-soft), 0 4px 12px rgba(0,0,0,0.3); }
+
+[data-theme="light"] .card { box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+[data-theme="sunset"] .card { box-shadow: 0 1px 6px rgba(0,0,0,0.15); }
+
+/* === Badges === */
+.badge {
+  display: inline-block; font-size: 10px; font-weight: 600;
+  padding: 2px 8px; border-radius: var(--radius-xs);
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.badge.urgent { background: rgba(255, 107, 127, 0.15); color: var(--urgent); }
+.badge.high { background: rgba(255, 151, 91, 0.15); color: var(--high); }
+.badge.normal { background: var(--pink-soft); color: var(--pink); }
+.badge.low { background: rgba(95, 114, 128, 0.15); color: var(--low); }
+.badge.new { background: var(--blue-soft); color: var(--blue); }
+.badge.in_progress { background: rgba(249, 224, 127, 0.15); color: var(--lemon); }
+.badge.done { background: rgba(125, 219, 163, 0.15); color: var(--green); }
+.badge.cancelled { background: rgba(95, 114, 128, 0.15); color: var(--low); }
+.badge.planning { background: rgba(195, 166, 232, 0.15); color: var(--lavender); }
+.badge.approved { background: var(--blue-soft); color: var(--blue); }
+.badge.active { background: rgba(125, 219, 163, 0.15); color: var(--green); }
+.badge.paused { background: rgba(249, 224, 127, 0.15); color: var(--lemon); }
+
+/* === Buttons === */
+.btn {
+  background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim);
+  padding: 4px 10px; border-radius: var(--radius-xs); font-family: var(--font); font-size: 11px;
+  display: inline-flex; align-items: center; gap: 4px;
+  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.btn:hover { color: var(--text); border-color: var(--blue); background: rgba(137, 207, 240, 0.08); }
+.btn-primary { background: var(--pink); color: #fff; border-color: var(--pink); font-weight: 600; }
+.btn-primary:hover { opacity: 0.9; background: var(--pink); border-color: var(--pink); }
+.btn-danger, .btn-dismiss { color: var(--urgent); border-color: currentColor; }
+.btn-danger:hover, .btn-dismiss:hover { background: rgba(255, 107, 127, 0.1); }
+.btn-approve { border-color: var(--green); color: var(--green); }
+.btn-approve:hover { background: rgba(125, 219, 163, 0.1); }
+.btn-action { border-color: var(--lavender); color: var(--lavender); }
+.btn-action:hover { background: rgba(167, 139, 250, 0.1); }
+.btn-session { border-color: var(--blue); color: var(--blue); }
+.btn-session:hover { background: rgba(137, 207, 240, 0.1); }
+.btn-create { border-color: var(--green); color: var(--green); }
+.btn-create:hover { background: rgba(74, 222, 128, 0.1); }
+.btn-comms { border-color: #fbbf24; color: #fbbf24; }
+.btn-comms:hover { background: rgba(251, 191, 36, 0.1); }
+.btn-sm { padding: 2px 6px; font-size: 10px; }
+
+/* === Tags === */
+.tag {
+  background: var(--bg); padding: 1px 6px; border-radius: 4px;
+  font-size: 10px; color: var(--text-muted);
+}
+
+.mono { font-family: var(--font-mono); }
+
+/* === Animations === */
+@keyframes shimmer {
+  0%, 100% { background-position: 0% center; }
+  50% { background-position: 100% center; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cardSlideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes highlightFlash {
+  0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+  50% { box-shadow: 0 0 0 3px var(--pink); }
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-3deg); }
+  75% { transform: rotate(3deg); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin { animation: spin 1s linear infinite; }
+.page-empty { color: var(--text-muted); text-align: center; margin-top: 60px; font-size: 13px; }

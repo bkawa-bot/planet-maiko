@@ -1,0 +1,48 @@
+.skills-page h2 { margin: 0 0 16px; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+
+.skills-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;
+}
+
+.skill-card {
+  cursor: pointer; text-align: center; padding: 20px 16px;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.skill-card:hover { border-color: var(--pink); transform: translateY(-2px); }
+
+.skill-icon { color: var(--pink); margin-bottom: 8px; }
+.skill-name { font-weight: 600; font-size: 14px; color: var(--text); text-transform: capitalize; margin-bottom: 4px; }
+.skill-desc { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+.skill-meta { font-size: 10px; }
+.skill-cmd { color: var(--text-muted); font-family: var(--font-mono); font-size: 10px; background: var(--bg); padding: 2px 6px; border-radius: 3px; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  z-index: 500; display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.modal {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 16px; max-width: 500px; width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.modal-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 20px; font-weight: 700; font-size: 14px; color: var(--text);
+  border-bottom: 1px solid var(--border); text-transform: capitalize;
+}
+.modal-body { padding: 16px 20px; }
+.modal-desc { font-size: 13px; color: var(--text-dim); margin: 0 0 12px; }
+.modal-cmd {
+  padding: 8px 12px; background: var(--bg); border-radius: var(--radius-xs);
+  font-family: var(--font-mono); font-size: 12px; color: var(--text); margin-bottom: 12px;
+}
+.modal-actions { display: flex; gap: 6px; margin-bottom: 12px; }
+
+.skill-result { margin-top: 12px; padding: 12px; background: var(--bg); border-radius: var(--radius-sm); }
+.skill-result.error { border: 1px solid var(--urgent); }
+.skill-output {
+  white-space: pre-wrap; font-size: 12px; color: var(--text-dim);
+  line-height: 1.5; font-family: var(--font); margin: 0; max-height: 300px; overflow-y: auto;
+}
+.skill-error { color: var(--urgent); font-size: 12px; }

@@ -1,0 +1,86 @@
+/* Create bar */
+.create-bar { display: flex; gap: 6px; margin-bottom: 12px; }
+
+/* Forms */
+.create-form { margin-bottom: 12px; padding: 16px; }
+.form-row { margin-bottom: 10px; }
+.form-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-dim); }
+.form-row input, .form-row textarea, .form-row select {
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-xs);
+  background: var(--bg); color: var(--text); font-size: 12px; font-family: inherit;
+}
+.form-row input:focus, .form-row textarea:focus { border-color: var(--pink); outline: none; }
+.form-row-inline { display: flex; gap: 10px; }
+.form-row-inline label { flex: 1; }
+.form-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.required { color: var(--urgent); }
+
+/* Project groups */
+.project-group {
+  margin-bottom: 8px; background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius); overflow: hidden;
+}
+.project-group-header {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+  cursor: pointer; font-size: 13px; transition: background 0.15s;
+}
+.project-group-header:hover { background: var(--bg-hover); }
+.project-group-title { font-weight: 600; color: var(--text); }
+.project-group-id { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+.project-progress-text { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+.project-progress-bar {
+  width: 60px; height: 4px; background: var(--bg); border-radius: 2px; overflow: hidden; margin-left: 6px;
+}
+.project-progress-fill { height: 100%; background: var(--green); border-radius: 2px; transition: width 0.3s; }
+
+/* Task cards */
+.task-card {
+  display: flex; gap: 0; padding: 0; cursor: pointer;
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm); margin: 4px 8px; overflow: hidden;
+  transition: border-color 0.15s;
+}
+.task-card:hover { border-color: var(--border); }
+.task-card.dimmed { opacity: 0.45; }
+
+/* Inside project groups, no border-radius on sides */
+.project-group .task-card { margin: 0; border-radius: 0; border-left: none; border-right: none; border-top: none; }
+.project-group .task-card:last-child { border-bottom: none; }
+
+.task-status-indicator { width: 3px; flex-shrink: 0; }
+
+.task-content { flex: 1; padding: 8px 12px; min-width: 0; }
+.task-top { display: flex; align-items: center; gap: 6px; }
+.task-title { font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-title a { color: var(--text); text-decoration: none; }
+.task-title a:hover { color: var(--pink); }
+
+.task-meta { display: flex; gap: 6px; align-items: center; margin-top: 3px; flex-wrap: wrap; }
+.task-status-label { font-size: 10px; font-weight: 600; text-transform: capitalize; }
+.task-type-label { font-size: 10px; color: var(--text-muted); }
+.task-time { font-size: 10px; color: var(--text-muted); display: flex; align-items: center; gap: 2px; }
+.tag-project { background: rgba(195, 166, 232, 0.12); color: var(--lavender); font-weight: 600; text-transform: uppercase; }
+
+.task-detail { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-subtle); }
+.task-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+
+.task-actions {
+  display: flex; flex-direction: column; gap: 3px; padding: 8px;
+  align-items: flex-end; justify-content: center; flex-shrink: 0;
+}
+
+/* Done section */
+.done-section { margin-top: 12px; }
+.done-header {
+  display: flex; align-items: center; gap: 6px; padding: 8px 12px;
+  font-size: 12px; color: var(--text-muted); cursor: pointer;
+  border-radius: var(--radius-xs);
+}
+.done-header:hover { background: var(--bg-hover); }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 48px 20px; }
+.empty-icon { color: var(--text-muted); margin-bottom: 12px; }
+.empty-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.empty-sub { font-size: 12px; color: var(--text-muted); }
+.page-empty { color: var(--text-muted); text-align: center; margin-top: 60px; font-size: 13px; }

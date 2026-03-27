@@ -1,0 +1,30 @@
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 20px;
+  font-size: 10px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  position: sticky;
+  bottom: 0;
+}
+
+.footer-left, .footer-right {
+  display: flex; align-items: center; gap: 6px;
+}
+
+.footer-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--green); animation: pulse 2s ease-in-out infinite;
+}
+
+.footer-sep { color: var(--border); }
+
+.footer-indicator { display: flex; align-items: center; gap: 4px; }
+
+.sys-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+}
+.sys-dot.brain { background: var(--green); }
