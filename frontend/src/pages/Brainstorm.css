@@ -1,0 +1,24 @@
+.brainstorm-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 16px;
+}
+.brainstorm-header h2 { margin: 0; font-size: 18px; }
+.brainstorm-time { font-size: 10px; color: var(--text-muted); padding: 2px 8px; background: var(--bg-card); border-radius: var(--radius-xs); }
+
+.brainstorm-loading {
+  text-align: center; padding: 48px 20px;
+}
+.brainstorm-loading p { color: var(--text-dim); font-size: 13px; margin-top: 12px; }
+.loading-sub { font-size: 11px; color: var(--text-muted); margin-top: 4px !important; }
+
+.brainstorm-content { padding: 20px; }
+.md-content {
+  white-space: pre-wrap; font-size: 13px; color: var(--text-dim);
+  line-height: 1.7; font-family: var(--font);
+}
+
+.brainstorm-error { padding: 16px; font-size: 13px; color: var(--urgent); }
+
+.empty-state { text-align: center; padding: 48px 20px; }
+.empty-icon { color: var(--text-muted); margin-bottom: 12px; }
+.empty-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.empty-sub { font-size: 12px; color: var(--text-muted); max-width: 400px; margin: 0 auto; }

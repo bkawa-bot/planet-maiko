@@ -1,0 +1,34 @@
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 24px;
+  font-size: 10px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  background: var(--bg-card);
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+}
+
+.footer-left, .footer-right {
+  display: flex; align-items: center; gap: 12px;
+}
+
+.footer-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green); animation: pulse 2s ease-in-out infinite;
+  box-shadow: 0 0 4px var(--green);
+}
+
+.footer-sep { color: var(--border); margin: 0 2px; }
+
+.footer-indicator { display: flex; align-items: center; gap: 4px; }
+
+.sys-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+}
+.sys-dot.brain { background: var(--green); box-shadow: 0 0 4px var(--green); }

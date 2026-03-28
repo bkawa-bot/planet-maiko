@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "planet-maiko"
+version = "0.1.0"
+description = "Personal engineering intelligence dashboard"
+readme = "README.md"
+license = {text = "Proprietary"}
+requires-python = ">=3.10"
+dependencies = [
+    "flask>=3.0",
+    "flask-cors>=4.0",
+    "flask-sqlalchemy>=3.1",
+    "pyyaml>=6.0",
+    "requests>=2.31",
+    "icalendar>=5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-flask>=1.3",
+]
+
+[project.scripts]
+maiko = "planet_maiko.cli.main:main"
+
+[project.entry-points."planet_maiko.pollers"]
+github = "planet_maiko.pollers.github_poller:GitHubPoller"
+linear = "planet_maiko.pollers.linear_poller:LinearPoller"
+calendar = "planet_maiko.pollers.calendar_poller:CalendarPoller"
+
+[project.entry-points."planet_maiko.runtimes"]
+claude-code = "planet_maiko.agents.runtimes.claude_code:ClaudeCodeRuntime"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+planet_maiko = ["static/**/*"]

@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90" shape-rendering="crispEdges" preserveAspectRatio="xMidYMax slice">
+  <defs>
+    <linearGradient id="ds" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f5f0eb"/>
+      <stop offset="40%" stop-color="#efe8e0"/>
+      <stop offset="58%" stop-color="#c8dff0"/>
+      <stop offset="75%" stop-color="#96cce6"/>
+      <stop offset="100%" stop-color="#80c0e0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="160" height="90" fill="url(#ds)"/>
+
+  <!-- Sun -->
+  <g fill="#fff8c0" opacity="0.5">
+    <rect x="137" y="24" width="5" height="1"/>
+    <rect x="136" y="25" width="7" height="1"/>
+    <rect x="136" y="26" width="7" height="1"/>
+    <rect x="137" y="27" width="5" height="1"/>
+  </g>
+  <g fill="#ffe060">
+    <rect x="138" y="25" width="3" height="1"/>
+    <rect x="137" y="26" width="5" height="1"/>
+    <rect x="137" y="27" width="5" height="1"/>
+    <rect x="137" y="28" width="5" height="1"/>
+    <rect x="138" y="29" width="3" height="1"/>
+  </g>
+
+  <!-- Clouds -->
+  <g fill="#fff" opacity="0.65">
+    <rect x="22" y="33" width="6" height="1"/>
+    <rect x="20" y="34" width="10" height="1"/>
+    <rect x="21" y="35" width="8" height="1"/>
+    <rect x="22" y="36" width="5" height="1"/>
+  </g>
+  <g fill="#fff" opacity="0.55">
+    <rect x="72" y="28" width="5" height="1"/>
+    <rect x="70" y="29" width="9" height="1"/>
+    <rect x="71" y="30" width="7" height="1"/>
+  </g>
+  <g fill="#fff" opacity="0.45">
+    <rect x="110" y="36" width="4" height="1"/>
+    <rect x="108" y="37" width="8" height="1"/>
+    <rect x="109" y="38" width="6" height="1"/>
+  </g>
+
+  <!-- Back hill -->
+  <polygon fill="#9dd09c" points="0,64 5,64 5,62 11,62 11,60 18,60 18,58 26,58 26,56 36,56 36,54 48,54 48,53 60,53 60,52 75,52 75,53 85,53 85,55 93,55 93,54 103,54 103,53 118,53 118,55 126,55 126,57 134,57 134,59 141,59 141,61 148,61 148,63 155,63 155,65 160,65 160,90 0,90"/>
+
+  <!-- Trees on back hill -->
+  <g>
+    <!-- Pine at x=40 -->
+    <rect x="42" y="47" width="1" height="1" fill="#2d7530"/>
+    <rect x="41" y="48" width="3" height="1" fill="#2d7530"/>
+    <rect x="40" y="49" width="5" height="1" fill="#2d7530"/>
+    <rect x="41" y="50" width="3" height="1" fill="#42a042"/>
+    <rect x="40" y="51" width="5" height="1" fill="#42a042"/>
+    <rect x="42" y="52" width="1" height="2" fill="#8a6420"/>
+    <!-- Pine at x=65 -->
+    <rect x="67" y="45" width="1" height="1" fill="#2d7530"/>
+    <rect x="66" y="46" width="3" height="1" fill="#2d7530"/>
+    <rect x="65" y="47" width="5" height="1" fill="#2d7530"/>
+    <rect x="66" y="48" width="3" height="1" fill="#42a042"/>
+    <rect x="65" y="49" width="5" height="1" fill="#42a042"/>
+    <rect x="67" y="50" width="1" height="2" fill="#8a6420"/>
+    <!-- Round tree at x=82 -->
+    <rect x="83" y="47" width="3" height="1" fill="#42a042"/>
+    <rect x="82" y="48" width="5" height="1" fill="#2d7530"/>
+    <rect x="82" y="49" width="5" height="1" fill="#42a042"/>
+    <rect x="83" y="50" width="3" height="1" fill="#2d7530"/>
+    <rect x="84" y="51" width="1" height="2" fill="#8a6420"/>
+    <!-- Pine at x=108 -->
+    <rect x="110" y="46" width="1" height="1" fill="#2d7530"/>
+    <rect x="109" y="47" width="3" height="1" fill="#2d7530"/>
+    <rect x="108" y="48" width="5" height="1" fill="#42a042"/>
+    <rect x="109" y="49" width="3" height="1" fill="#42a042"/>
+    <rect x="108" y="50" width="5" height="1" fill="#2d7530"/>
+    <rect x="110" y="51" width="1" height="2" fill="#8a6420"/>
+    <!-- Small pine at x=138 -->
+    <rect x="139" y="55" width="1" height="1" fill="#2d7530"/>
+    <rect x="138" y="56" width="3" height="1" fill="#42a042"/>
+    <rect x="138" y="57" width="3" height="1" fill="#2d7530"/>
+    <rect x="139" y="58" width="1" height="1" fill="#8a6420"/>
+  </g>
+
+  <!-- Mid hill -->
+  <polygon fill="#6ab86a" points="0,74 7,74 7,72 15,72 15,70 24,70 24,68 34,68 34,66 46,66 46,64 60,64 60,63 75,63 75,62 92,62 92,63 106,63 106,65 118,65 118,67 130,67 130,69 140,69 140,71 148,71 148,73 155,73 155,75 160,75 160,90 0,90"/>
+
+  <!-- Trees on mid hill -->
+  <g>
+    <!-- Small pine at x=30 -->
+    <rect x="31" y="64" width="1" height="1" fill="#1e6028"/>
+    <rect x="30" y="65" width="3" height="1" fill="#2d7530"/>
+    <rect x="30" y="66" width="3" height="1" fill="#1e6028"/>
+    <rect x="31" y="67" width="1" height="1" fill="#6b4e18"/>
+    <!-- Small pine at x=55 -->
+    <rect x="56" y="60" width="1" height="1" fill="#1e6028"/>
+    <rect x="55" y="61" width="3" height="1" fill="#2d7530"/>
+    <rect x="55" y="62" width="3" height="1" fill="#1e6028"/>
+    <rect x="56" y="63" width="1" height="1" fill="#6b4e18"/>
+    <!-- Small pine at x=132 -->
+    <rect x="133" y="65" width="1" height="1" fill="#1e6028"/>
+    <rect x="132" y="66" width="3" height="1" fill="#2d7530"/>
+    <rect x="132" y="67" width="3" height="1" fill="#1e6028"/>
+    <rect x="133" y="68" width="1" height="1" fill="#6b4e18"/>
+    <!-- Bush at x=98 -->
+    <rect x="98" y="62" width="4" height="1" fill="#48a048" opacity="0.8"/>
+    <rect x="97" y="63" width="6" height="1" fill="#3a9038" opacity="0.8"/>
+  </g>
+
+  <!-- Front hill -->
+  <polygon fill="#48a048" points="0,80 10,80 10,78 22,78 22,77 35,77 35,76 50,76 50,75 68,75 68,74 85,74 85,73 105,73 105,74 120,74 120,75 133,75 133,76 143,76 143,77 150,77 150,79 160,79 160,90 0,90"/>
+
+  <!-- Flowers on front hill -->
+  <g>
+    <rect x="18" y="78" width="1" height="1" fill="#ff8888"/>
+    <rect x="38" y="76" width="1" height="1" fill="#ffdd55"/>
+    <rect x="55" y="75" width="1" height="1" fill="#cc88dd"/>
+    <rect x="72" y="74" width="1" height="1" fill="#ff8888"/>
+    <rect x="90" y="73" width="1" height="1" fill="#ffdd55"/>
+    <rect x="108" y="74" width="1" height="1" fill="#cc88dd"/>
+    <rect x="125" y="75" width="1" height="1" fill="#ff8888"/>
+    <rect x="140" y="76" width="1" height="1" fill="#ffdd55"/>
+    <rect x="152" y="78" width="1" height="1" fill="#cc88dd"/>
+    <rect x="30" y="77" width="1" height="1" fill="#ffdd55"/>
+    <rect x="62" y="75" width="1" height="1" fill="#ff8888"/>
+    <rect x="98" y="73" width="1" height="1" fill="#cc88dd"/>
+    <rect x="115" y="74" width="1" height="1" fill="#ffdd55"/>
+    <rect x="148" y="77" width="1" height="1" fill="#ff8888"/>
+  </g>
+
+  <!-- Path on front hill -->
+  <g fill="#c4a96e" opacity="0.3">
+    <rect x="88" y="90" width="2" height="1"/>
+    <rect x="87" y="88" width="2" height="2"/>
+    <rect x="86" y="86" width="2" height="2"/>
+    <rect x="85" y="84" width="2" height="2"/>
+    <rect x="86" y="82" width="2" height="2"/>
+    <rect x="87" y="80" width="2" height="2"/>
+    <rect x="89" y="78" width="2" height="2"/>
+    <rect x="91" y="76" width="2" height="2"/>
+    <rect x="93" y="75" width="2" height="1"/>
+  </g>
+</svg>
