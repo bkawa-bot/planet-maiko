@@ -17,7 +17,6 @@ const NAV_ITEMS = [
   { to: "/agents", icon: Bot, label: "Agents" },
   { to: "/gathering", icon: Flame, label: "Gathering" },
   { to: "/skills", icon: Wand2, label: "Skills" },
-  { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
 const THEMES = [
@@ -127,6 +126,13 @@ export default function Header() {
           </span>
         )}
 
+        {/* Notification bell */}
+        <NavLink to="/inbox" className="header-icon-btn" title="Notifications">
+          <Bell size={16} />
+          {badges.pupdates > 0 && <span className="header-icon-badge">{badges.pupdates}</span>}
+        </NavLink>
+
+        {/* Theme toggle */}
         <div className="theme-wrapper" ref={themeRef}>
           <button
             className="theme-toggle"
@@ -149,6 +155,11 @@ export default function Header() {
             </div>
           )}
         </div>
+
+        {/* Settings gear */}
+        <NavLink to="/settings" className="header-icon-btn" title="Settings">
+          <Settings size={16} />
+        </NavLink>
       </div>
     </header>
   );

@@ -141,7 +141,7 @@
 .header-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
@@ -155,6 +155,24 @@
   background: rgba(249, 224, 127, 0.12);
   border-radius: var(--radius-xs);
   text-transform: capitalize;
+}
+
+/* === Icon buttons (bell, gear) === */
+.header-icon-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: var(--radius-xs);
+  color: var(--text-dim); text-decoration: none;
+  transition: all 0.15s; position: relative;
+}
+.header-icon-btn:hover { color: var(--text); background: rgba(255,255,255,0.06); text-decoration: none; }
+.header-icon-btn.active { color: var(--pink); }
+
+.header-icon-badge {
+  position: absolute; top: 2px; right: 2px;
+  font-size: 8px; font-weight: 700;
+  padding: 1px 4px; border-radius: 6px;
+  background: var(--urgent); color: #fff;
+  min-width: 14px; text-align: center; line-height: 1.2;
 }
 
 /* === Theme toggle === */
