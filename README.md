@@ -2,6 +2,8 @@
 
 **A personal engineering assistant that unifies your notifications, triages with AI, and orchestrates coding agents.**
 
+Test PR - please review me!
+
 Planet Maiko monitors your GitHub PRs, Linear issues, Calendar, and Slack - then uses a rules engine and LLM-powered brain to auto-triage, create tasks, and surface what matters. When work needs doing, it prepares coding agents in git worktrees and communicates with them through a bidirectional inbox.
 
 ## Features
