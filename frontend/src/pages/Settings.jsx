@@ -121,6 +121,10 @@ export default function Settings() {
 
       <section className="integration-section">
         <h3>GitHub</h3>
+        <div className="setup-hint">
+          Requires the <code>gh</code> CLI to be installed and authenticated.
+          Run <code>gh auth login</code> in your terminal first, then enter your username below.
+        </div>
         <div className="integration-fields">
           <label>
             <input
@@ -176,6 +180,10 @@ export default function Settings() {
 
       <section className="integration-section">
         <h3>Linear</h3>
+        <div className="setup-hint">
+          Get your API key from Linear: <strong>Settings → API → Personal API keys → Create key</strong>.
+          Find your Team ID in the URL when viewing your team (e.g. <code>linear.app/team/<strong>TEAM-ID</strong>/...</code>).
+        </div>
         <div className="integration-fields">
           <label>
             <input
@@ -213,6 +221,10 @@ export default function Settings() {
 
       <section className="integration-section">
         <h3>Calendar</h3>
+        <div className="setup-hint">
+          Add your calendar's iCal/ICS URL. For Google Calendar: <strong>Settings → Calendar → Integrate calendar → Secret address in iCal format</strong>.
+          For Outlook: <strong>Calendar settings → Shared calendars → Publish a calendar → ICS link</strong>.
+        </div>
         <div className="integration-fields">
           <label>
             <input
@@ -248,6 +260,11 @@ export default function Settings() {
 
       <section className="integration-section">
         <h3>Slack</h3>
+        <div className="setup-hint">
+          Create a Slack app at <strong>api.slack.com/apps</strong> → Create New App → From scratch.
+          Add the <code>channels:history</code> and <code>users:read</code> scopes, install to your workspace,
+          then copy the Bot User OAuth Token (<code>xoxb-...</code>).
+        </div>
         <div className="integration-fields">
           <label>
             <input

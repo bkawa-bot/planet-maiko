@@ -17,6 +17,7 @@ class Task(db.Model):
     url = db.Column(db.String(1024), nullable=True)
     tags = db.Column(db.JSON, default=list)
     extra = db.Column("metadata", db.JSON, default=dict)
+    assigned_agent_id = db.Column(db.String(128), nullable=True)
 
     source_pupdate = db.relationship("Pupdate", backref="tasks")
     project = db.relationship("Project", backref="tasks")
@@ -32,6 +33,7 @@ class Task(db.Model):
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "source_pupdate_id": self.source_pupdate_id,
             "project_id": self.project_id,
+            "assigned_agent_id": self.assigned_agent_id,
             "url": self.url,
             "tags": self.tags,
             "metadata": self.extra,

@@ -23,7 +23,7 @@ class GitHubPoller(BasePoller):
 
     def _gh(self, args):
         """Run a gh CLI command and return parsed JSON."""
-        cmd = ["gh"] + args + ["--json"]
+        cmd = ["gh"] + args
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if result.returncode != 0:
             raise RuntimeError(f"gh command failed: {result.stderr.strip()}")
@@ -35,7 +35,7 @@ class GitHubPoller(BasePoller):
             "search", "prs",
             "--review-requested", username,
             "--state", "open",
-            "number,title,url,repository,author,createdAt,labels",
+            "--json", "number,title,url,repository,author,createdAt,labels",
         ])
 
     def _get_my_prs(self, username):
@@ -44,7 +44,7 @@ class GitHubPoller(BasePoller):
             "search", "prs",
             "--author", username,
             "--state", "open",
-            "number,title,url,repository,createdAt,labels",
+            "--json", "number,title,url,repository,author,createdAt,labels",
         ])
 
     def _get_pr_reviews(self, repo, pr_number):
@@ -171,6 +171,24 @@ class GitHubPoller(BasePoller):
             reviews = pr.get("_reviews", [])
             checks = pr.get("_checks", [])
             labels = [l.get("name", "") for l in pr.get("labels", [])]
+
+            # Always create a pupdate for open PRs (so the user sees them)
+            author = pr.get("author", {}).get("login", "unknown")
+            pupdates.append({
+                "source_id": f"open/{repo}#{number}",
+                "type": "my_pr_open",
+                "priority": "low",
+                "title": f"Open PR: {pr.get('title', '')}",
+                "body": f"Your PR {repo}#{number} is open",
+                "url": pr.get("url", ""),
+                "actionable": False,
+                "tags": [repo.split("/")[-1]] + labels,
+                "metadata": {
+                    "repo": repo,
+                    "number": number,
+                    "author": author,
+                },
+            })
 
             # Count review states
             approved = sum(1 for r in reviews if r.get("state") == "APPROVED")

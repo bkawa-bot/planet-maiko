@@ -1,0 +1,45 @@
+from datetime import datetime, timezone
+from planet_maiko.database import db
+
+
+class CustomSkill(db.Model):
+    """User-editable skill prompt.
+
+    Skills are prompt templates that the brain session executes.
+    Default skills are seeded on first run. Users can edit them
+    or create their own.
+
+    The prompt can reference context variables like {pupdates},
+    {tasks}, {calendar} and can mention MCPs to use.
+    """
+    __tablename__ = "custom_skills"
+
+    id = db.Column(db.String(50), primary_key=True)  # e.g. "morning-brief"
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(256), nullable=True)
+    prompt = db.Column(db.Text, nullable=False)
+    mcps = db.Column(db.JSON, default=list)  # ["slack", "figma", "linear"]
+    icon = db.Column(db.String(20), default="wand")  # lucide icon name
+    is_default = db.Column(db.Boolean, default=False)  # shipped with Maiko
+    schedule_interval_minutes = db.Column(db.Integer, nullable=True)  # null = manual only
+    creates_pupdates = db.Column(db.Boolean, default=False)  # parse output into pupdates
+    last_run_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
+                           onupdate=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "prompt": self.prompt,
+            "mcps": self.mcps,
+            "icon": self.icon,
+            "is_default": self.is_default,
+            "schedule_interval_minutes": self.schedule_interval_minutes,
+            "creates_pupdates": self.creates_pupdates,
+            "last_run_at": self.last_run_at.isoformat() if self.last_run_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { showToast } from "../components/Toast";
 import {
   Bot, MessageCircle, Moon, Bone, GitBranch, CheckSquare,
   HeartPulse, Plus, Star, Trophy, X, ChevronRight, AlertTriangle,
@@ -49,6 +50,7 @@ export default function Agents() {
     try {
       const profile = await api.createProfile({});
       setShowArrival(profile);
+      showToast(`${profile.display_name} just arrived in town! 🐾`, "normal");
       fetchData();
     } catch (err) { console.error(err); }
   };

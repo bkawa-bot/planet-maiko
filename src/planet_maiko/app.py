@@ -12,6 +12,22 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _ensure_columns():
+    """Add columns that db.create_all() won't add to existing tables."""
+    migrations = [
+        "ALTER TABLE tasks ADD COLUMN assigned_agent_id VARCHAR(128)",
+        "ALTER TABLE custom_skills ADD COLUMN schedule_interval_minutes INTEGER",
+        "ALTER TABLE custom_skills ADD COLUMN creates_pupdates BOOLEAN DEFAULT 0",
+        "ALTER TABLE custom_skills ADD COLUMN last_run_at DATETIME",
+    ]
+    for sql in migrations:
+        try:
+            db.session.execute(db.text(sql))
+        except Exception:
+            pass
+    db.session.commit()
+
+
 def create_app(start_scheduler=False):
     app = Flask(__name__)
 
@@ -70,7 +86,16 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.learning import Learning  # noqa: F401
         from planet_maiko.models.agent_profile import AgentProfile  # noqa: F401
         from planet_maiko.models.context_selection import ContextSelection  # noqa: F401
+        from planet_maiko.models.skill_result import SkillResult  # noqa: F401
+        from planet_maiko.models.custom_skill import CustomSkill  # noqa: F401
         db.create_all()
+
+        # Schema migrations for existing DBs (SQLite ALTER TABLE is safe)
+        _ensure_columns()
+
+        # Seed default skills on first run
+        from planet_maiko.agents.skills import seed_defaults
+        seed_defaults()
 
     # Serve pre-built frontend static files
     frontend_dir = static_dir()

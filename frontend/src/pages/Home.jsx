@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { showToast } from "../components/Toast";
 import {
   Shield, CheckSquare, Inbox, FolderOpen, Brain, Calendar,
-  AlertCircle, Palette, Video,
+  AlertCircle, Palette, Video, Sunrise,
 } from "lucide-react";
 import "./Home.css";
 
@@ -14,6 +15,9 @@ export default function Home() {
   const [recentPupdates, setRecentPupdates] = useState([]);
   const [schedule, setSchedule] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
+  const [morningBrief, setMorningBrief] = useState(null);
+  const [briefLoading, setBriefLoading] = useState(false);
+  const [showBrief, setShowBrief] = useState(false);
 
   const fetchAll = async () => {
     try {
@@ -42,6 +46,13 @@ export default function Home() {
 
       // Calendar events from pupdates
       setCalendarEvents(pupdates.filter((p) => p.source === "calendar").slice(0, 5));
+
+      // Load most recent morning brief from skill_results
+      if (!morningBrief) {
+        api.getSkillResults("morning-brief").then((results) => {
+          if (results.length > 0) setMorningBrief(results[0].content);
+        }).catch(() => {});
+      }
     } catch (err) {
       console.error("Failed to load home:", err);
     }
@@ -52,6 +63,35 @@ export default function Home() {
     const interval = setInterval(fetchAll, 15000);
     return () => clearInterval(interval);
   }, []);
+
+  const runMorningBrief = async () => {
+    setBriefLoading(true);
+    showToast("Morning brief is brewing... ☕", "normal");
+    try {
+      const [p, t] = await Promise.all([api.getPupdates(), api.getTasks()]);
+      const result = await api.runSkill("morning-brief", {
+        context: {
+          pupdates: JSON.stringify(p.slice(0, 20)),
+          tasks: JSON.stringify(t.slice(0, 20)),
+          calendar: JSON.stringify(calendarEvents),
+        },
+      });
+      console.log("Morning brief result:", result);
+      if (result.success) {
+        setMorningBrief(result.output);
+        setShowBrief(true);
+        showToast("Your morning brief is ready! 🌅", "normal");
+        // Result is auto-saved to skill_results by the backend
+      } else {
+        console.error("Brief failed:", result.error);
+        showToast(result.error || "Couldn't fetch the brief right now", "high");
+      }
+    } catch (err) {
+      console.error("Brief exception:", err);
+      showToast("Something went wrong: " + err.message, "high");
+    }
+    setBriefLoading(false);
+  };
 
   const focusState = focus?.current_state || "available";
 
@@ -81,6 +121,15 @@ export default function Home() {
       <div className="home-grid">
         {/* Main content */}
         <div className="home-main">
+          {/* Morning Brief button */}
+          <button
+            className={`btn ${morningBrief ? "" : "btn-primary"} morning-brief-btn`}
+            onClick={morningBrief ? () => setShowBrief(true) : runMorningBrief}
+            disabled={briefLoading}
+          >
+            <Sunrise size={12} /> {briefLoading ? "Brewing... ☕" : morningBrief ? "View Morning Brief" : "Start Morning Brief"}
+          </button>
+
           {/* Focus Card */}
           <div className="home-card home-focus-card">
             <div className="home-card-header">
@@ -100,7 +149,9 @@ export default function Home() {
               <div className="home-card-empty">
                 <span style={{ fontSize: 32 }}>🐾</span>
                 <div className="empty-title" style={{ fontSize: 14 }}>No tasks yet</div>
-                <button className="btn btn-primary">Start Morning Brief</button>
+                <button className="btn btn-primary" onClick={runMorningBrief} disabled={briefLoading}>
+                  {briefLoading ? "Fetching brief..." : "Start Morning Brief"}
+                </button>
               </div>
             )}
           </div>
@@ -231,6 +282,45 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Morning Brief Modal */}
+      {showBrief && morningBrief && (
+        <div className="modal-overlay" onClick={() => setShowBrief(false)}>
+          <div className="brief-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="brief-modal-header">
+              <Sunrise size={18} />
+              <span>Good morning! 🐕</span>
+              <button className="btn btn-sm" onClick={() => setShowBrief(false)} style={{ marginLeft: "auto" }}>Close</button>
+            </div>
+            <div className="brief-modal-body">
+              <div className="brief-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(morningBrief) }} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function renderMarkdown(text) {
+  return text
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/^\- (.+)$/gm, '<li>$1</li>')
+    .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+    .replace(/\|(.+)\|/g, (match) => {
+      const cells = match.split('|').filter(c => c.trim());
+      if (cells.every(c => c.trim().match(/^[-:]+$/))) return '';
+      return '<tr>' + cells.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>';
+    })
+    .replace(/(<tr>.*<\/tr>\n?)+/g, '<table>$&</table>')
+    .replace(/^---$/gm, '<hr>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/^(?!<[hultop])(.+)$/gm, '<p>$1</p>')
+    .replace(/<p><\/p>/g, '');
 }

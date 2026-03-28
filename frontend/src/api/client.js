@@ -38,6 +38,7 @@ export const api = {
   startTask: (id) => request(`/tasks/${id}/start`, { method: "POST" }),
   completeTask: (id) => request(`/tasks/${id}/done`, { method: "POST" }),
   cancelTask: (id) => request(`/tasks/${id}/cancel`, { method: "POST" }),
+  importLinear: () => request("/tasks/import-linear", { method: "POST" }),
 
   // Projects
   getProjects: (params = {}) => {
@@ -113,8 +114,17 @@ export const api = {
 
   // Skills
   getSkills: () => request("/skills"),
+  getSkill: (id) => request(`/skills/${id}`),
+  createSkill: (data) => request("/skills", { method: "POST", body: JSON.stringify(data) }),
+  updateSkill: (id, data) => request(`/skills/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteSkill: (id) => request(`/skills/${id}`, { method: "DELETE" }),
   runSkill: (name, data) =>
     request(`/skills/${name}/run`, { method: "POST", body: JSON.stringify(data) }),
+  getSkillResults: (skillName) => {
+    const query = skillName ? `?skill_name=${encodeURIComponent(skillName)}` : "";
+    return request(`/skill-results${query}`);
+  },
+  getSkillResult: (id) => request(`/skill-results/${id}`),
 
   // Suggestions
   runScan: (repos) =>
@@ -140,4 +150,8 @@ export const api = {
     request(`/profiles/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   getAvatars: () => request("/profiles/avatars"),
   recommendAgent: (repo) => request(`/profiles/recommend?repo=${encodeURIComponent(repo || "")}`),
+
+  // Agent assignment
+  assignAgent: (data) =>
+    request("/agents/assign", { method: "POST", body: JSON.stringify(data) }),
 };

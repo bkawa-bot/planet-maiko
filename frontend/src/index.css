@@ -188,6 +188,23 @@ a:hover { text-decoration: underline; }
 
 .mono { font-family: var(--font-mono); }
 
+/* === Modals (global) === */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  z-index: 500; display: flex; align-items: center; justify-content: center;
+  padding: 20px; animation: fadeIn 0.15s ease;
+}
+
+.modal-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 20px; font-weight: 700; font-size: 14px; color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-body {
+  padding: 16px 20px; overflow-y: auto; flex: 1;
+}
+
 /* === Animations === */
 @keyframes shimmer {
   0%, 100% { background-position: 0% center; }

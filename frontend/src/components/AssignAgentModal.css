@@ -1,0 +1,53 @@
+.assign-modal {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 16px; max-width: 480px; width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  display: flex; flex-direction: column;
+}
+
+.assign-task-title {
+  font-weight: 400; font-size: 12px; color: var(--text-muted);
+  margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.assign-loading { text-align: center; color: var(--text-muted); padding: 24px; font-size: 13px; }
+
+.assign-section-label {
+  font-size: 10px; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 8px;
+}
+
+.assign-agent-list { display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto; }
+
+.assign-agent-option {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle); cursor: pointer;
+  transition: all 0.15s;
+}
+.assign-agent-option:hover { border-color: var(--pink); background: var(--bg-hover); }
+.assign-agent-option.selected {
+  border-color: var(--pink); background: var(--pink-glow);
+  box-shadow: 0 0 0 1px var(--pink-soft);
+}
+
+.assign-avatar { font-size: 22px; flex-shrink: 0; }
+
+.assign-agent-info { flex: 1; min-width: 0; }
+.assign-agent-name { font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px; }
+.assign-agent-rank { font-size: 10px; font-weight: 400; color: var(--pink); }
+.assign-agent-reasons { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+.assign-score { font-size: 12px; font-weight: 700; color: var(--pink); font-family: var(--font-mono); }
+
+.assign-repo-input {
+  width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius-xs); background: var(--bg); color: var(--text);
+  font-size: 12px; font-family: var(--font-mono);
+}
+.assign-repo-input:focus { border-color: var(--pink); outline: none; }
+
+.assign-footer {
+  display: flex; gap: 6px; justify-content: flex-end;
+  padding: 12px 20px; border-top: 1px solid var(--border-subtle);
+}

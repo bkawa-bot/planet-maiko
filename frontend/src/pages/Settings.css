@@ -6,6 +6,18 @@
   border-radius: var(--radius-xs); margin-bottom: 16px; font-size: 0.85rem;
 }
 
+.setup-hint {
+  font-size: 11px; color: var(--text-muted); line-height: 1.5;
+  padding: 8px 12px; margin-bottom: 10px;
+  background: var(--bg-card-alt); border-radius: var(--radius-xs);
+  border-left: 3px solid var(--blue);
+}
+.setup-hint code {
+  background: var(--bg); padding: 1px 4px; border-radius: 3px;
+  font-family: var(--font-mono); font-size: 10px; color: var(--peach);
+}
+.setup-hint strong { color: var(--text-dim); }
+
 .integration-section {
   background: var(--bg-card); border: 1px solid var(--border-subtle);
   border-radius: var(--radius); padding: 16px 20px; margin-bottom: 12px;

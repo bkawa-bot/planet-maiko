@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { showToast } from "../components/Toast";
 import { ExternalLink, X, Eye, Search, Inbox as InboxIcon, ClipboardCheck, FolderKanban, CheckSquare, MoreHorizontal, MessageCircle, Pencil, GitBranch, Calendar as CalendarIcon, Bot, Lightbulb, AlertTriangle, MessageSquare, ChevronRight } from "lucide-react";
 import "./Inbox.css";
 
@@ -175,6 +176,25 @@ export default function Inbox() {
                     )}
                     {(p.type === "pr_ci_failed" || p.type === "incident") && (
                       <button className="btn btn-sm btn-session"><Search size={10} /> Investigate</button>
+                    )}
+                    {p.actionable && p.action_hint?.toLowerCase().includes("task") && (
+                      <button className="btn btn-sm btn-create" onClick={async () => {
+                        try {
+                          await api.createTask({
+                            id: `task-${p.id}`,
+                            title: p.title,
+                            type: "todo",
+                            priority: p.priority,
+                            source_pupdate_id: p.id,
+                            url: p.url || "",
+                            tags: p.tags || [],
+                          });
+                          showToast(`Task created: ${p.title.slice(0, 40)}...`, "normal");
+                          handleMarkRead(p.id);
+                        } catch (err) {
+                          showToast("Couldn't create task", "high");
+                        }
+                      }}><CheckSquare size={10} /> Create Task</button>
                     )}
                     {(p.type === "approval" || p.metadata?.needs_approval) && (
                       <button className="btn btn-sm btn-approve"><FolderKanban size={10} /> Create Project</button>

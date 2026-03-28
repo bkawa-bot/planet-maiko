@@ -36,6 +36,7 @@
 .project-group-title { font-weight: 600; color: var(--text); }
 .project-group-id { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
 .project-progress-text { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+.project-empty { padding: 16px; font-size: 12px; color: var(--text-muted); text-align: center; }
 .project-progress-bar {
   width: 60px; height: 4px; background: var(--bg); border-radius: 2px; overflow: hidden; margin-left: 6px;
 }
@@ -88,6 +89,11 @@
 .task-time { font-size: 10px; color: var(--text-muted); display: flex; align-items: center; gap: 2px; }
 .tag-project { background: rgba(195, 166, 232, 0.12); color: var(--lavender); font-weight: 600; text-transform: uppercase; }
 
+.agent-assigned-chip {
+  background: var(--blue-soft); color: var(--blue); font-weight: 600;
+  display: inline-flex; align-items: center; gap: 3px;
+}
+
 /* Expanded detail */
 .task-detail {
   display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px;
@@ -95,10 +101,17 @@
 
 /* Inline actions */
 .task-inline-actions {
-  display: flex; gap: 4px; flex-wrap: wrap; align-items: center;
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
   margin-top: 10px; padding-top: 8px;
   border-top: 1px solid var(--border-subtle);
 }
+
+.task-project-select {
+  padding: 3px 8px; border: 1px solid var(--border); border-radius: var(--radius-xs);
+  background: var(--bg-card); color: var(--text-dim); font-size: 11px;
+  cursor: pointer; font-family: var(--font);
+}
+.task-project-select:focus { border-color: var(--pink); outline: none; }
 
 /* Chevron */
 .task-chevron {

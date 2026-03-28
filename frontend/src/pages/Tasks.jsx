@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { showToast } from "../components/Toast";
+import AssignAgentModal from "../components/AssignAgentModal";
 import {
   CheckSquare, Plus, FolderPlus, Pin, PinOff, ExternalLink,
   ChevronDown, ChevronRight, Folder, GitBranch, Clock, Bot,
-  Play, X, ChevronRight as ChevronR,
+  Play, X, Download,
 } from "lucide-react";
 import "./Tasks.css";
 
@@ -20,6 +22,7 @@ export default function Tasks() {
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [expanded, setExpanded] = useState(null);
   const [collapsedGroups, setCollapsedGroups] = useState({});
+  const [assigningTask, setAssigningTask] = useState(null);
   const [taskForm, setTaskForm] = useState({ title: "", type: "todo", priority: "normal", url: "", project_id: "" });
   const [projectForm, setProjectForm] = useState({ title: "", description: "", priority: "normal" });
 
@@ -87,6 +90,18 @@ export default function Tasks() {
         </button>
         <button className="btn" onClick={() => { setShowProjectForm(!showProjectForm); setShowTaskForm(false); }}>
           <FolderPlus size={12} /> New Project
+        </button>
+        <button className="btn" onClick={async () => {
+          showToast("Importing from Linear... 📥", "normal");
+          try {
+            const result = await api.importLinear();
+            showToast(`Imported ${result.tasks_created} task(s), ${result.projects_created} project(s)`, "normal");
+            fetchData();
+          } catch (err) {
+            showToast(err.message || "Import failed", "high");
+          }
+        }}>
+          <Download size={12} /> Import from Linear
         </button>
       </div>
 
@@ -163,7 +178,7 @@ export default function Tasks() {
       ) : (
         <>
           {/* Project groups */}
-          {projects.filter((p) => projectTasks[p.id]?.length > 0).map((project) => {
+          {projects.map((project) => {
             const pts = projectTasks[project.id] || [];
             const done = pts.filter((t) => t.status === "done").length;
             const collapsed = collapsedGroups[project.id];
@@ -175,7 +190,7 @@ export default function Tasks() {
                   {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                   <Folder size={14} style={{ color: "var(--lavender)" }} />
                   <span className="project-group-title">{project.title}</span>
-                  <span className="project-group-id">{project.id}</span>
+                  {project.source_id && <span className="project-group-id">{project.source_id}</span>}
                   <span className="project-progress-text">{done}/{pts.length}</span>
                   <div className="project-progress-bar">
                     <div className="project-progress-fill" style={{ width: `${pct}%` }} />
@@ -186,14 +201,17 @@ export default function Tasks() {
                     </a>
                   )}
                 </div>
-                {!collapsed && pts.map((t) => renderTaskCard(t, expanded, setExpanded, handleAction))}
+                {!collapsed && (pts.length > 0
+                  ? pts.map((t) => renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask))
+                  : <div className="project-empty">No tasks yet. Create one and assign it to this project.</div>
+                )}
               </div>
             );
           })}
 
           {/* Ungrouped tasks */}
           {ungrouped.filter((t) => t.status !== "done" && t.status !== "cancelled").map((t) =>
-            renderTaskCard(t, expanded, setExpanded, handleAction)
+            renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask)
           )}
 
           {/* Done tasks (collapsed) */}
@@ -204,17 +222,25 @@ export default function Tasks() {
                 <span>Completed ({tasks.filter((t) => t.status === "done" || t.status === "cancelled").length})</span>
               </div>
               {!collapsedGroups["_done"] && tasks.filter((t) => t.status === "done" || t.status === "cancelled").map((t) =>
-                renderTaskCard(t, expanded, setExpanded, handleAction)
+                renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask)
               )}
             </div>
           )}
         </>
       )}
+
+      {assigningTask && (
+        <AssignAgentModal
+          task={assigningTask}
+          onClose={() => setAssigningTask(null)}
+          onAssigned={fetchData}
+        />
+      )}
     </div>
   );
 }
 
-function renderTaskCard(t, expanded, setExpanded, handleAction) {
+function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask) {
   const isExpanded = expanded === t.id;
   const statusColor = {
     new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
@@ -248,6 +274,7 @@ function renderTaskCard(t, expanded, setExpanded, handleAction) {
           {(t.metadata?.repo || t.extra?.repo) && <span className="tag"><GitBranch size={9} /> {t.metadata?.repo || t.extra?.repo}</span>}
           <span className="task-type-label">{t.type}</span>
           {t.updated_at && <span className="task-time"><Clock size={9} /> {new Date(t.updated_at).toLocaleDateString()}</span>}
+          {t.assigned_agent_id && <span className="tag agent-assigned-chip"><Bot size={9} /> {t.assigned_agent_id.replace("agent-", "")}</span>}
         </div>
 
         {isExpanded && (
@@ -258,6 +285,20 @@ function renderTaskCard(t, expanded, setExpanded, handleAction) {
               </div>
             )}
             <div className="task-inline-actions" onClick={(e) => e.stopPropagation()}>
+              <select
+                className="task-project-select"
+                value={t.project_id || ""}
+                onChange={async (e) => {
+                  await api.updateTask(t.id, { project_id: e.target.value || null });
+                  showToast(e.target.value ? "Moved to project" : "Removed from project", "normal");
+                  fetchData();
+                }}
+              >
+                <option value="">No project</option>
+                {(projects || []).map((p) => (
+                  <option key={p.id} value={p.id}>{p.title}</option>
+                ))}
+              </select>
               {t.status === "new" && (
                 <button className="btn btn-sm btn-approve" onClick={(e) => handleAction(e, t.id, "start")}>
                   <Play size={10} /> Start
@@ -272,6 +313,11 @@ function renderTaskCard(t, expanded, setExpanded, handleAction) {
                 <a href={t.url} target="_blank" rel="noreferrer" className="btn btn-sm" onClick={(e) => e.stopPropagation()}>
                   <ExternalLink size={10} /> Open
                 </a>
+              )}
+              {t.status !== "done" && t.status !== "cancelled" && !t.assigned_agent_id && (
+                <button className="btn btn-sm btn-action" onClick={() => setAssigningTask(t)}>
+                  <Bot size={10} /> Assign Agent
+                </button>
               )}
               {t.status !== "done" && t.status !== "cancelled" && (
                 <button className="btn btn-sm btn-danger" onClick={(e) => handleAction(e, t.id, "cancel")}>

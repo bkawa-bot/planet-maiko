@@ -59,7 +59,7 @@ def update_task(task_id):
     task = db.get_or_404(Task, task_id)
     data = request.get_json()
 
-    for field in ["title", "type", "priority", "url", "tags", "project_id"]:
+    for field in ["title", "type", "priority", "url", "tags", "project_id", "assigned_agent_id"]:
         if field in data:
             setattr(task, field, data[field])
     if "metadata" in data:
@@ -98,3 +98,17 @@ def cancel_task(task_id):
     task.updated_at = datetime.now(timezone.utc)
     db.session.commit()
     return jsonify(task.to_dict())
+
+
+@tasks_bp.route("/tasks/import-linear", methods=["POST"])
+def import_from_linear():
+    """Import assigned issues from Linear as tasks with project associations."""
+    from planet_maiko.config import load_config
+    config = load_config()
+    api_key = config.get("linear", {}).get("api_key")
+    if not api_key:
+        return jsonify({"error": "Linear API key not configured. Set it in Settings."}), 400
+
+    from planet_maiko.pollers.linear_poller import LinearPoller
+    stats = LinearPoller.import_issues(api_key)
+    return jsonify(stats)

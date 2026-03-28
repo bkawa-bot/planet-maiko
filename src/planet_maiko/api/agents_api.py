@@ -21,15 +21,161 @@ def get_skills():
     return jsonify(list_skills())
 
 
+@agents_bp.route("/skills/<skill_id>", methods=["GET"])
+def get_skill_detail(skill_id):
+    """Get a skill's full details including prompt."""
+    from planet_maiko.models.custom_skill import CustomSkill
+    skill = db.get_or_404(CustomSkill, skill_id)
+    return jsonify(skill.to_dict())
+
+
+@agents_bp.route("/skills", methods=["POST"])
+def create_skill():
+    """Create a custom skill."""
+    from planet_maiko.models.custom_skill import CustomSkill
+    data = request.get_json()
+    skill = CustomSkill(
+        id=data["id"],
+        name=data["name"],
+        description=data.get("description", ""),
+        prompt=data["prompt"],
+        mcps=data.get("mcps", []),
+        icon=data.get("icon", "wand"),
+        is_default=False,
+        schedule_interval_minutes=data.get("schedule_interval_minutes"),
+        creates_pupdates=data.get("creates_pupdates", False),
+    )
+    db.session.add(skill)
+    db.session.commit()
+    return jsonify(skill.to_dict()), 201
+
+
+@agents_bp.route("/skills/<skill_id>", methods=["PATCH"])
+def update_skill(skill_id):
+    """Update a skill's prompt, name, description, or MCPs."""
+    from planet_maiko.models.custom_skill import CustomSkill
+    skill = db.get_or_404(CustomSkill, skill_id)
+    data = request.get_json()
+    if "name" in data:
+        skill.name = data["name"]
+    if "description" in data:
+        skill.description = data["description"]
+    if "prompt" in data:
+        skill.prompt = data["prompt"]
+    if "mcps" in data:
+        skill.mcps = data["mcps"]
+    if "icon" in data:
+        skill.icon = data["icon"]
+    if "schedule_interval_minutes" in data:
+        skill.schedule_interval_minutes = data["schedule_interval_minutes"] or None
+    if "creates_pupdates" in data:
+        skill.creates_pupdates = data["creates_pupdates"]
+    db.session.commit()
+    return jsonify(skill.to_dict())
+
+
+@agents_bp.route("/skills/<skill_id>", methods=["DELETE"])
+def delete_skill(skill_id):
+    """Delete a custom skill (cannot delete defaults)."""
+    from planet_maiko.models.custom_skill import CustomSkill
+    skill = db.get_or_404(CustomSkill, skill_id)
+    if skill.is_default:
+        return jsonify({"error": "Cannot delete default skills. Edit them instead."}), 400
+    db.session.delete(skill)
+    db.session.commit()
+    return jsonify({"status": "deleted"})
+
+
+@agents_bp.route("/agents/assign", methods=["POST"])
+def assign_agent():
+    """Assign an agent to a task — prepares worktree and links them."""
+    from planet_maiko.models.task import Task
+    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.agents.coding_agent import prepare
+
+    data = request.get_json()
+    task_id = data["task_id"]
+    profile_id = data["profile_id"]
+    repo_path = data.get("repo_path", "")
+
+    task = db.get_or_404(Task, task_id)
+    profile = db.get_or_404(AgentProfile, profile_id)
+
+    # Prepare worktree
+    result = prepare(
+        task_id=task_id,
+        task_title=task.title,
+        prompt=task.title,
+        repo_path=repo_path,
+        branch_prefix="maiko",
+    )
+
+    if not result:
+        return jsonify({"error": "Failed to prepare agent worktree"}), 500
+
+    # Link task to agent
+    task.assigned_agent_id = profile_id
+    if task.status == "new":
+        task.status = "in_progress"
+    db.session.commit()
+
+    return jsonify({
+        "task": task.to_dict(),
+        "agent": profile.to_dict(),
+        "worktree": result,
+    }), 201
+
+
 @agents_bp.route("/skills/<skill_name>/run", methods=["POST"])
 def run_skill_endpoint(skill_name):
-    """Run a skill through the brain session."""
+    """Run a skill through the brain session and save the result."""
     data = request.get_json() or {}
     context = data.get("context", {})
     working_dir = data.get("working_dir")
 
     result = run_skill(skill_name, context=context, working_dir=working_dir)
+
+    # Auto-save successful results
+    if result.get("success") and result.get("output"):
+        from planet_maiko.models.skill_result import SkillResult
+        from datetime import datetime
+        title_map = {
+            "morning-brief": f"Morning Brief — {datetime.now().strftime('%B %d')}",
+            "brainstorm": f"Brainstorm — {datetime.now().strftime('%B %d')}",
+            "eod-summary": f"EOD Summary — {datetime.now().strftime('%B %d')}",
+            "investigate": f"Investigation — {datetime.now().strftime('%B %d %H:%M')}",
+            "repo-analysis": f"Repo Analysis — {datetime.now().strftime('%B %d')}",
+        }
+        sr = SkillResult(
+            skill_name=skill_name,
+            title=title_map.get(skill_name, f"{skill_name} — {datetime.now().strftime('%B %d %H:%M')}"),
+            content=result["output"],
+        )
+        db.session.add(sr)
+        db.session.commit()
+        result["result_id"] = sr.id
+
     return jsonify(result)
+
+
+@agents_bp.route("/skill-results", methods=["GET"])
+def list_skill_results():
+    """List all skill results, optionally filtered by skill name."""
+    from planet_maiko.models.skill_result import SkillResult
+    skill_name = request.args.get("skill_name")
+    query = SkillResult.query
+    if skill_name:
+        query = query.filter_by(skill_name=skill_name)
+    results = query.order_by(SkillResult.created_at.desc()).limit(50).all()
+    return jsonify([r.to_dict() for r in results])
+
+
+@agents_bp.route("/skill-results/<int:result_id>", methods=["GET"])
+def get_skill_result(result_id):
+    """Get a single skill result."""
+    from planet_maiko.models.skill_result import SkillResult
+    sr = db.get_or_404(SkillResult, result_id)
+    return jsonify(sr.to_dict())
 
 
 @agents_bp.route("/agents", methods=["GET"])

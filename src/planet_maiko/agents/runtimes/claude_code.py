@@ -24,8 +24,24 @@ class ClaudeCodeRuntime(AgentRuntime):
     def name(self):
         return "claude-code"
 
+    def _find_claude(self):
+        """Find the claude CLI, checking common install locations."""
+        found = shutil.which("claude")
+        if found:
+            return found
+        # Check common locations not always in PATH
+        import os
+        for path in [
+            os.path.expanduser("~/.local/bin/claude"),
+            "/usr/local/bin/claude",
+            os.path.expanduser("~/.claude/bin/claude"),
+        ]:
+            if os.path.isfile(path) and os.access(path, os.X_OK):
+                return path
+        return None
+
     def is_available(self):
-        return shutil.which("claude") is not None
+        return self._find_claude() is not None
 
     def send(self, prompt, working_dir=None, timeout=300):
         """Send a prompt to claude CLI in print mode.
@@ -33,7 +49,8 @@ class ClaudeCodeRuntime(AgentRuntime):
         Uses --print for single prompt/response (no interactive session).
         This is used for brain triage and skill execution.
         """
-        cmd = ["claude", "--print", "--output-format", "text", prompt]
+        claude_path = self._find_claude() or "claude"
+        cmd = [claude_path, "--print", "--output-format", "text", prompt]
 
         try:
             result = subprocess.run(
@@ -111,7 +128,7 @@ class ClaudeCodeRuntime(AgentRuntime):
         if info["available"]:
             try:
                 result = subprocess.run(
-                    ["claude", "--version"],
+                    [self._find_claude() or "claude", "--version"],
                     capture_output=True, text=True, timeout=5,
                 )
                 info["version"] = result.stdout.strip()

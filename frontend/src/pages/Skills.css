@@ -1,4 +1,7 @@
-.skills-page h2 { margin: 0 0 16px; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+.skills-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 16px;
+}
+.skills-header h2 { margin: 0; font-size: 18px; }
 
 .skills-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;
@@ -6,37 +9,66 @@
 
 .skill-card {
   cursor: pointer; text-align: center; padding: 20px 16px;
-  transition: border-color 0.15s, transform 0.15s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.skill-card:hover { border-color: var(--pink); transform: translateY(-2px); }
+.skill-card:hover { border-color: var(--pink); transform: translateY(-2px); box-shadow: 0 0 0 1px var(--pink-glow), 0 4px 16px rgba(0,0,0,0.2); }
 
 .skill-icon { color: var(--pink); margin-bottom: 8px; }
 .skill-name { font-weight: 600; font-size: 14px; color: var(--text); text-transform: capitalize; margin-bottom: 4px; }
 .skill-desc { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
-.skill-meta { font-size: 10px; }
-.skill-cmd { color: var(--text-muted); font-family: var(--font-mono); font-size: 10px; background: var(--bg); padding: 2px 6px; border-radius: 3px; }
+.skill-mcps { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; min-height: 18px; }
+.schedule-tag { background: rgba(249, 224, 127, 0.15); color: var(--lemon); display: inline-flex; align-items: center; gap: 2px; }
+.checkbox-label { flex-direction: row !important; align-items: center; gap: 6px !important; font-size: 11px; margin-top: auto; }
 
-/* Modal */
-.modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
-  z-index: 500; display: flex; align-items: center; justify-content: center; padding: 20px;
+/* Create form */
+.skill-create { margin-bottom: 16px; padding: 16px; }
+.skill-create label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-dim); margin-bottom: 8px; }
+.skill-create input, .skill-create textarea {
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-xs);
+  background: var(--bg); color: var(--text); font-size: 12px; font-family: inherit;
 }
-.modal {
+.skill-create input:focus, .skill-create textarea:focus { border-color: var(--pink); outline: none; }
+.skill-create textarea { font-family: var(--font-mono); font-size: 11px; line-height: 1.5; }
+.skill-form-row { display: flex; gap: 10px; }
+.skill-form-row label { flex: 1; }
+.skill-form-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px; }
+
+/* Skill detail modal */
+.skill-modal {
   background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: 16px; max-width: 500px; width: 100%;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  border-radius: 16px; max-width: 700px; width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  max-height: 85vh; display: flex; flex-direction: column;
 }
-.modal-header {
-  display: flex; align-items: center; gap: 8px;
-  padding: 14px 20px; font-weight: 700; font-size: 14px; color: var(--text);
-  border-bottom: 1px solid var(--border); text-transform: capitalize;
+
+.skill-modal-desc { font-size: 13px; color: var(--text-dim); margin: 0 0 10px; }
+.skill-modal-mcps { font-size: 11px; color: var(--text-muted); margin-bottom: 12px; display: flex; gap: 4px; align-items: center; }
+
+/* Prompt preview */
+.skill-prompt-preview {
+  margin-bottom: 12px; background: var(--bg); border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle); overflow: hidden;
 }
-.modal-body { padding: 16px 20px; }
-.modal-desc { font-size: 13px; color: var(--text-dim); margin: 0 0 12px; }
-.modal-cmd {
-  padding: 8px 12px; background: var(--bg); border-radius: var(--radius-xs);
-  font-family: var(--font-mono); font-size: 12px; color: var(--text); margin-bottom: 12px;
+.prompt-label {
+  padding: 6px 12px; font-size: 10px; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-card-alt);
 }
+.prompt-text {
+  padding: 12px; font-size: 11px; color: var(--text-dim); line-height: 1.6;
+  font-family: var(--font-mono); white-space: pre-wrap; margin: 0;
+  max-height: 300px; overflow-y: auto;
+}
+
+/* Editor */
+.skill-editor label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
+.skill-editor input, .skill-editor textarea {
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-xs);
+  background: var(--bg); color: var(--text); font-size: 12px; font-family: inherit;
+}
+.skill-editor textarea { font-family: var(--font-mono); font-size: 11px; line-height: 1.5; }
+.skill-editor input:focus, .skill-editor textarea:focus { border-color: var(--pink); outline: none; }
+
 .modal-actions { display: flex; gap: 6px; margin-bottom: 12px; }
 
 .skill-result { margin-top: 12px; padding: 12px; background: var(--bg); border-radius: var(--radius-sm); }
