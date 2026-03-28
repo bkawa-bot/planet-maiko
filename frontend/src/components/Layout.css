@@ -6,7 +6,7 @@
 
 .main-content {
   flex: 1;
-  padding: 16px 20px;
+  padding: 16px 20px 32px;  /* extra bottom padding for fixed footer */
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;

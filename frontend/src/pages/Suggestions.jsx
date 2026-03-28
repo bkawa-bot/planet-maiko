@@ -78,7 +78,7 @@ export default function Suggestions() {
           </button>
         </div>
       ) : (
-        <div className="toy-list">
+        <div className="toy-list card-list-container">
           {filtered.map((s) => (
             <div key={s.id} className="toy-card">
               <div className="toy-header">
@@ -90,7 +90,7 @@ export default function Suggestions() {
                   </span>
                 )}
               </div>
-              {s.body && <div className="toy-body">{s.body}</div>}
+              {s.body && <div className="rich-body">{s.body}</div>}
               <div className="toy-meta">
                 <span className="toy-time">{new Date(s.timestamp).toLocaleDateString()}</span>
                 {s.metadata?.category && (

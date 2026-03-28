@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { ChevronDown, ChevronRight, Check, X, BookOpen } from "lucide-react";
 import "./Settings.css";
 
 export default function Settings() {
@@ -10,6 +11,8 @@ export default function Settings() {
   const [brainStatus, setBrainStatus] = useState(null);
   const [brainRules, setBrainRules] = useState([]);
   const [message, setMessage] = useState("");
+  const [showKnowledge, setShowKnowledge] = useState(false);
+  const [learnings, setLearnings] = useState([]);
 
   useEffect(() => {
     Promise.all([
@@ -284,6 +287,53 @@ export default function Settings() {
       <button className="btn-save" onClick={handleSave} disabled={saving}>
         {saving ? "Saving..." : "Save Settings"}
       </button>
+
+      {/* Advanced: Knowledge Pool */}
+      <section className="integration-section knowledge-section" style={{ marginTop: 24 }}>
+        <h3
+          className="knowledge-toggle"
+          onClick={async () => {
+            if (!showKnowledge) {
+              try { setLearnings(await api.getLearnings()); } catch (e) {}
+            }
+            setShowKnowledge(!showKnowledge);
+          }}
+          style={{ cursor: "pointer" }}
+        >
+          {showKnowledge ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <BookOpen size={14} /> Configure Knowledge Pool
+          <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 400, marginLeft: 8 }}>Advanced</span>
+        </h3>
+
+        {showKnowledge && (
+          <div className="knowledge-pool-list">
+            {learnings.length === 0 ? (
+              <p style={{ color: "var(--text-muted)", fontSize: 12, padding: 12 }}>No learnings yet. They'll appear as the brain processes PR feedback and agent discoveries.</p>
+            ) : (
+              learnings.filter(l => l.status !== "dismissed").map((l) => (
+                <div key={l.id} className="knowledge-row">
+                  <span className={`badge ${l.status}`}>{l.status}</span>
+                  <span className="knowledge-category">{l.category?.replace(/_/g, " ")}</span>
+                  <span className="knowledge-rule">{l.rule}</span>
+                  <span className="knowledge-conf">{(l.confidence * 100).toFixed(0)}%</span>
+                  <div className="knowledge-btns">
+                    {l.status === "pending" && (
+                      <button className="btn btn-sm btn-approve" onClick={async () => {
+                        await api.approveLearning(l.id);
+                        setLearnings(await api.getLearnings());
+                      }}><Check size={10} /></button>
+                    )}
+                    <button className="btn btn-sm btn-danger" onClick={async () => {
+                      await api.dismissLearning(l.id);
+                      setLearnings(await api.getLearnings());
+                    }}><X size={10} /></button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

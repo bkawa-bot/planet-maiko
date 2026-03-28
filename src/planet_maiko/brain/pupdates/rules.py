@@ -120,15 +120,53 @@ DEFAULT_RULES = [
 ]
 
 
-def load_rules():
-    """Load rules from config, falling back to defaults.
+def _discover_plugin_rules():
+    """Discover rules registered by plugins via entry_points."""
+    from importlib.metadata import entry_points
+    plugin_rules = []
+    try:
+        eps = entry_points(group="planet_maiko.rules")
+        for ep in eps:
+            try:
+                rules = ep.load()
+                if isinstance(rules, list):
+                    plugin_rules.extend(rules)
+                    logger.info(f"[rules] Loaded {len(rules)} rule(s) from plugin '{ep.name}'")
+            except Exception as e:
+                logger.warning(f"[rules] Failed to load rules from '{ep.name}': {e}")
+    except Exception:
+        pass
+    return plugin_rules
 
-    Users can override rules in config.yaml under:
-        brain:
-          rules:
-            - name: my_rule
-              match: {source: github, type: pr_approved}
-              action: dismiss
+
+def _discover_poller_rules():
+    """Discover rules from installed pollers via get_rules()."""
+    from importlib.metadata import entry_points
+    poller_rules = []
+    try:
+        eps = entry_points(group="planet_maiko.pollers")
+        for ep in eps:
+            try:
+                poller_cls = ep.load()
+                poller = poller_cls()
+                rules = poller.get_rules()
+                if rules:
+                    poller_rules.extend(rules)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return poller_rules
+
+
+def load_rules():
+    """Load rules from: user config > plugin rules > poller rules > defaults.
+
+    Priority order:
+        1. User-defined rules in config.yaml (if set, replaces everything)
+        2. Default built-in rules
+        3. Plugin-registered rules (entry_points "planet_maiko.rules")
+        4. Poller-provided rules (from get_rules() on each poller)
     """
     config = load_config()
     brain_config = config.get("brain", {})
@@ -137,7 +175,20 @@ def load_rules():
     if user_rules is not None:
         return user_rules
 
-    return list(DEFAULT_RULES)
+    rules = list(DEFAULT_RULES)
+
+    # Merge plugin rules
+    plugin_rules = _discover_plugin_rules()
+    poller_rules = _discover_poller_rules()
+
+    # Deduplicate by name
+    seen = {r["name"] for r in rules}
+    for r in plugin_rules + poller_rules:
+        if r.get("name") and r["name"] not in seen:
+            rules.append(r)
+            seen.add(r["name"])
+
+    return rules
 
 
 def evaluate(pupdate, rules=None):

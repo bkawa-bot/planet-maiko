@@ -64,3 +64,17 @@
 }
 .btn-save:hover { opacity: 0.9; }
 .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Knowledge pool (advanced) */
+.knowledge-section h3 { display: flex; align-items: center; gap: 6px; }
+.knowledge-pool-list { margin-top: 12px; }
+
+.knowledge-row {
+  display: flex; align-items: center; gap: 8px; padding: 8px 0;
+  font-size: 12px; border-bottom: 1px solid var(--border-subtle);
+}
+.knowledge-row:last-child { border-bottom: none; }
+.knowledge-category { font-size: 10px; color: var(--lavender); font-weight: 600; text-transform: uppercase; min-width: 80px; }
+.knowledge-rule { flex: 1; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.knowledge-conf { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); min-width: 30px; text-align: right; }
+.knowledge-btns { display: flex; gap: 3px; flex-shrink: 0; }

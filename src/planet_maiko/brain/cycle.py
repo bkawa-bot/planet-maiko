@@ -5,9 +5,10 @@ just like a CPU executes its pipeline on each clock tick.
 
 Processor pipeline:
     1. agents:     process agent pupdates (auto-complete tasks)
-    2. correlator: group related pupdates into incidents
-    3. pupdates:   match pupdates against rules + triage
-    4. learning:   aggregate signals into learnings
+    2. awareness:  detect conflicts between active agents (A2A)
+    3. correlator: group related pupdates into incidents
+    4. pupdates:   match pupdates against rules + triage
+    5. learning:   aggregate signals into learnings
 """
 
 import logging
@@ -40,7 +41,26 @@ def run(app):
         from planet_maiko.agents.monitor import process_agent_pupdates
         results["agents"] = process_agent_pupdates()
 
-        # Phase 2: Correlate related pupdates into incidents
+        # Phase 2: Check for conflicts between active agents
+        from planet_maiko.brain.awareness.conflicts import detect_conflicts, send_conflict_warnings
+        from planet_maiko.agents.coding_agent import list_prepared
+        try:
+            prepared = list_prepared()
+            worktrees = [
+                {"task_id": a.get("task_id", ""), "worktree_path": a.get("worktree_path", "")}
+                for a in prepared if a.get("worktree_path")
+            ]
+            if len(worktrees) >= 2:
+                conflicts = detect_conflicts(worktrees)
+                warnings = send_conflict_warnings(conflicts) if conflicts else 0
+                results["awareness"] = {"conflicts": len(conflicts), "warnings_sent": warnings}
+            else:
+                results["awareness"] = {"conflicts": 0, "warnings_sent": 0}
+        except Exception as e:
+            logger.debug(f"Awareness check skipped: {e}")
+            results["awareness"] = {"conflicts": 0, "warnings_sent": 0}
+
+        # Phase 3: Correlate related pupdates into incidents
         from planet_maiko.brain.pupdates.correlator import correlate
         results["correlator"] = correlate()
 

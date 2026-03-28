@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import {
   CheckSquare, Plus, FolderPlus, Pin, PinOff, ExternalLink,
   ChevronDown, ChevronRight, Folder, GitBranch, Clock, Bot,
+  Play, X, ChevronRight as ChevronR,
 } from "lucide-react";
 import "./Tasks.css";
 
@@ -220,13 +221,21 @@ function renderTaskCard(t, expanded, setExpanded, handleAction) {
     review: "#a78bfa", done: "#4ade80", cancelled: "#6b7280",
   }[t.status] || "var(--text-muted)";
 
+  const statusIcon = {
+    new: "📋", in_progress: "🔧", waiting: "⏳",
+    review: "👀", done: "✅", cancelled: "⛔",
+  }[t.status] || "📋";
+
   return (
     <div
       key={t.id}
-      className={`task-card ${t.status === "done" || t.status === "cancelled" ? "dimmed" : ""}`}
+      className={`task-card ${t.status === "done" || t.status === "cancelled" ? "dimmed" : ""} ${isExpanded ? "expanded" : ""}`}
       onClick={() => setExpanded(isExpanded ? null : t.id)}
     >
       <div className="task-status-indicator" style={{ background: statusColor }} />
+      <div className="task-icon" style={{ borderColor: statusColor }}>
+        <span className="task-icon-emoji">{statusIcon}</span>
+      </div>
       <div className="task-content">
         <div className="task-top">
           <span className="task-title">
@@ -242,25 +251,38 @@ function renderTaskCard(t, expanded, setExpanded, handleAction) {
         </div>
 
         {isExpanded && (
-          <div className="task-detail">
+          <>
             {t.tags?.length > 0 && (
-              <div className="task-tags">{t.tags.map((tag) => <span key={tag} className="tag">{tag}</span>)}</div>
+              <div className="task-detail">
+                {t.tags.map((tag) => <span key={tag} className="tag">{tag}</span>)}
+              </div>
             )}
-          </div>
+            <div className="task-inline-actions" onClick={(e) => e.stopPropagation()}>
+              {t.status === "new" && (
+                <button className="btn btn-sm btn-approve" onClick={(e) => handleAction(e, t.id, "start")}>
+                  <Play size={10} /> Start
+                </button>
+              )}
+              {(t.status === "new" || t.status === "in_progress") && (
+                <button className="btn btn-sm btn-create" onClick={(e) => handleAction(e, t.id, "done")}>
+                  <CheckSquare size={10} /> Done
+                </button>
+              )}
+              {t.url && (
+                <a href={t.url} target="_blank" rel="noreferrer" className="btn btn-sm" onClick={(e) => e.stopPropagation()}>
+                  <ExternalLink size={10} /> Open
+                </a>
+              )}
+              {t.status !== "done" && t.status !== "cancelled" && (
+                <button className="btn btn-sm btn-danger" onClick={(e) => handleAction(e, t.id, "cancel")}>
+                  <X size={10} /> Cancel
+                </button>
+              )}
+            </div>
+          </>
         )}
       </div>
-
-      <div className="task-actions" onClick={(e) => e.stopPropagation()}>
-        {t.status === "new" && <button className="btn btn-sm" onClick={(e) => handleAction(e, t.id, "start")}>Start</button>}
-        {(t.status === "new" || t.status === "in_progress") && (
-          <button className="btn btn-sm" onClick={(e) => handleAction(e, t.id, "done")}>
-            <CheckSquare size={10} /> Done
-          </button>
-        )}
-        {t.status !== "done" && t.status !== "cancelled" && (
-          <button className="btn btn-sm btn-danger" onClick={(e) => handleAction(e, t.id, "cancel")}>Cancel</button>
-        )}
-      </div>
+      <ChevronRight size={14} className={`task-chevron ${isExpanded ? "open" : ""}`} />
     </div>
   );
 }

@@ -47,6 +47,7 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.eod_api import eod_bp
     from planet_maiko.api.focus_api import focus_bp
     from planet_maiko.api.scene_api import scene_bp
+    from planet_maiko.api.profiles_api import profiles_bp
     app.register_blueprint(pupdates_bp, url_prefix="/api")
     app.register_blueprint(tasks_bp, url_prefix="/api")
     app.register_blueprint(projects_bp, url_prefix="/api")
@@ -57,6 +58,7 @@ def create_app(start_scheduler=False):
     app.register_blueprint(eod_bp, url_prefix="/api")
     app.register_blueprint(focus_bp, url_prefix="/api")
     app.register_blueprint(scene_bp, url_prefix="/api")
+    app.register_blueprint(profiles_bp, url_prefix="/api")
 
     # Create tables on first run
     with app.app_context():
@@ -66,6 +68,8 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.agent_message import AgentMessage  # noqa: F401
         from planet_maiko.models.signal import Signal  # noqa: F401
         from planet_maiko.models.learning import Learning  # noqa: F401
+        from planet_maiko.models.agent_profile import AgentProfile  # noqa: F401
+        from planet_maiko.models.context_selection import ContextSelection  # noqa: F401
         db.create_all()
 
     # Serve pre-built frontend static files

@@ -154,3 +154,16 @@ def get_all_messages(task_id):
         .all()
     )
     return jsonify([m.to_dict() for m in messages])
+
+
+@agents_bp.route("/agents/conflicts", methods=["GET"])
+def get_conflicts():
+    """Get recent conflict warnings between agents."""
+    conflict_msgs = (
+        AgentMessage.query
+        .filter_by(sender="maiko", message_type="conflict_warning")
+        .order_by(AgentMessage.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    return jsonify([m.to_dict() for m in conflict_msgs])

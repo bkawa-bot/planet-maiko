@@ -1,4 +1,4 @@
-.knowledge-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+.knowledge-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
 
 .knowledge-stats {
   display: flex; gap: 12px; margin-bottom: 12px; padding: 8px 12px;

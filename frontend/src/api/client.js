@@ -109,6 +109,7 @@ export const api = {
   getAgentMessages: (taskId) => request(`/agents/${taskId}/messages`),
   sendToAgent: (taskId, data) =>
     request(`/agents/${taskId}/inbox`, { method: "POST", body: JSON.stringify(data) }),
+  getConflicts: () => request("/agents/conflicts"),
 
   // Skills
   getSkills: () => request("/skills"),
@@ -129,4 +130,14 @@ export const api = {
   // Learnings management
   approveLearning: (id) => request(`/learnings/${id}/approve`, { method: "POST" }),
   dismissLearning: (id) => request(`/learnings/${id}/dismiss`, { method: "POST" }),
+
+  // Agent profiles
+  getProfiles: () => request("/profiles"),
+  getProfile: (id) => request(`/profiles/${id}`),
+  createProfile: (data) =>
+    request("/profiles", { method: "POST", body: JSON.stringify(data) }),
+  updateProfile: (id, data) =>
+    request(`/profiles/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  getAvatars: () => request("/profiles/avatars"),
+  recommendAgent: (repo) => request(`/profiles/recommend?repo=${encodeURIComponent(repo || "")}`),
 };

@@ -16,7 +16,6 @@ const NAV_ITEMS = [
   { to: "/suggestions", icon: Lightbulb, label: "Suggestions" },
   { to: "/agents", icon: Bot, label: "Agents" },
   { to: "/gathering", icon: Flame, label: "Gathering" },
-  { to: "/knowledge", icon: BookOpen, label: "Knowledge" },
   { to: "/skills", icon: Wand2, label: "Skills" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];

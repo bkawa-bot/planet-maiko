@@ -86,27 +86,54 @@ class GitHubPoller(BasePoller):
             pass
         return []
 
+    def _get_pr_comments(self, repo, pr_number):
+        """Get review comments (inline code feedback) for a PR."""
+        try:
+            result = subprocess.run(
+                ["gh", "pr", "view", str(pr_number),
+                 "--repo", repo,
+                 "--json", "reviewRequests,comments"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode == 0:
+                data = json.loads(result.stdout)
+                return data.get("comments", [])
+        except Exception:
+            pass
+        return []
+
     def poll(self, config):
         """Fetch all relevant GitHub data."""
         username = config.get("username", "")
         if not username:
             logger.warning("[github] No username configured, skipping poll")
-            return {"review_requests": [], "my_prs": []}
+            return {"review_requests": [], "my_prs": [], "review_comments": []}
 
         review_requests = self._get_review_requests(username)
         my_prs = self._get_my_prs(username)
 
-        # For each of the user's PRs, check review and CI status
+        # For each of the user's PRs, check review and CI status + comments
+        review_comments = []
         for pr in my_prs:
             repo = pr.get("repository", {}).get("nameWithOwner", "")
             number = pr.get("number")
             if repo and number:
                 pr["_reviews"] = self._get_pr_reviews(repo, number)
                 pr["_checks"] = self._get_pr_checks(repo, number)
+                # Collect review comments for learning
+                comments = self._get_pr_comments(repo, number)
+                for c in comments:
+                    review_comments.append({
+                        "repo": repo,
+                        "pr_number": number,
+                        "author": c.get("author", {}).get("login", "unknown"),
+                        "body": c.get("body", ""),
+                    })
 
         return {
             "review_requests": review_requests,
             "my_prs": my_prs,
+            "review_comments": review_comments,
         }
 
     def to_pupdates(self, raw_data):
@@ -213,3 +240,20 @@ class GitHubPoller(BasePoller):
                 })
 
         return pupdates
+
+    def to_signals(self, raw_data):
+        """Extract learning signals from PR review comments."""
+        signals = []
+        for comment in raw_data.get("review_comments", []):
+            body = comment.get("body", "").strip()
+            if not body or len(body) < 15:
+                continue
+
+            signals.append({
+                "text": body,
+                "category": "domain_knowledge",
+                "source_type": "pr_comment",
+                "reviewer": comment.get("author", "unknown"),
+                "repo": comment.get("repo", ""),
+            })
+        return signals

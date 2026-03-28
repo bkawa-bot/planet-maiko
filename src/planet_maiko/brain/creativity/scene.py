@@ -231,6 +231,9 @@ def generate(weather="clear", temperature_f=70, latitude=37.7, now=None):
     # Mood
     mood = f"{weather} {season} {time_bucket}"
 
+    # Creative note (placeholder - will be replaced by LLM tinting pass)
+    creative_note = None  # Set by LLM creativity pass when available
+
     return {
         "generated_at": now.isoformat() if isinstance(now, datetime) else str(now),
         "context": {
@@ -249,5 +252,6 @@ def generate(weather="clear", temperature_f=70, latitude=37.7, now=None):
             "specials": specials,
             "maiko_outfit": outfit,
             "mood": mood,
+            "creative_note": creative_note,
         },
     }
