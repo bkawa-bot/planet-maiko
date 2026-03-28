@@ -97,7 +97,7 @@ body {
 }
 
 [data-theme="light"] body { background-image: url('/world-day.svg'); }
-[data-theme="morning"] body { background-image: url('/world-day.svg'); }
+[data-theme="morning"] body { background-image: url('/world-morning.svg'); }
 [data-theme="sunset"] body { background-image: url('/world-sunset.svg'); }
 
 a { color: var(--pink); text-decoration: none; }
@@ -132,8 +132,12 @@ a:hover { text-decoration: underline; }
 }
 
 [data-theme="light"] .card { box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
-[data-theme="light"] .card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+[data-theme="light"] .card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.08); border-color: var(--pink); }
 [data-theme="sunset"] .card { box-shadow: 0 1px 6px rgba(0,0,0,0.15); }
+
+/* Extend hover glow to widgets */
+.home-widget { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+.home-widget:hover { border-color: var(--pink); box-shadow: 0 0 0 1px var(--pink-glow), 0 2px 8px rgba(0,0,0,0.15); }
 
 /* === Badges === */
 .badge {
@@ -193,6 +197,11 @@ a:hover { text-decoration: underline; }
   position: fixed; inset: 0; background: rgba(0,0,0,0.5);
   z-index: 500; display: flex; align-items: center; justify-content: center;
   padding: 20px; animation: fadeIn 0.15s ease;
+}
+
+.modal-overlay > div {
+  border: 1px solid var(--pink);
+  box-shadow: 0 0 0 1px var(--pink-glow), 0 20px 60px rgba(0,0,0,0.4);
 }
 
 .modal-header {

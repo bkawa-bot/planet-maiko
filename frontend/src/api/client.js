@@ -58,6 +58,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ status }),
     }),
+  generateTasks: (id) =>
+    request(`/projects/${id}/generate-tasks`, { method: "POST" }),
 
   // Config
   getConfig: () => request("/config"),

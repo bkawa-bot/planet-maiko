@@ -18,6 +18,7 @@ class Task(db.Model):
     tags = db.Column(db.JSON, default=list)
     extra = db.Column("metadata", db.JSON, default=dict)
     assigned_agent_id = db.Column(db.String(128), nullable=True)
+    due_date = db.Column(db.String(20), nullable=True)  # ISO date string YYYY-MM-DD
 
     source_pupdate = db.relationship("Pupdate", backref="tasks")
     project = db.relationship("Project", backref="tasks")
@@ -29,6 +30,7 @@ class Task(db.Model):
             "type": self.type,
             "status": self.status,
             "priority": self.priority,
+            "due_date": self.due_date,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "source_pupdate_id": self.source_pupdate_id,

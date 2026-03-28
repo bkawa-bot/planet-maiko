@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90" shape-rendering="crispEdges" preserveAspectRatio="xMidYMax slice">
+  <defs>
+    <linearGradient id="ms" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e8d8f0"/>
+      <stop offset="25%" stop-color="#f0c8d8"/>
+      <stop offset="50%" stop-color="#f8d8b0"/>
+      <stop offset="75%" stop-color="#f0e0a0"/>
+      <stop offset="100%" stop-color="#e8d090"/>
+    </linearGradient>
+    <radialGradient id="mg" cx="50%" cy="85%" r="40%">
+      <stop offset="0%" stop-color="#ffd080" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#ffd080" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Sky -->
+  <rect width="160" height="90" fill="url(#ms)"/>
+
+  <!-- Sunrise glow -->
+  <rect width="160" height="90" fill="url(#mg)"/>
+
+  <!-- Horizon glow lines -->
+  <rect x="0" y="62" width="160" height="1" fill="#f0c880" opacity="0.4"/>
+  <rect x="0" y="64" width="160" height="1" fill="#e8b870" opacity="0.3"/>
+
+  <!-- Sun (half rising) -->
+  <circle cx="80" cy="68" r="8" fill="#ffd060" opacity="0.8"/>
+  <circle cx="80" cy="68" r="12" fill="#ffd060" opacity="0.2"/>
+
+  <!-- Soft clouds -->
+  <ellipse cx="30" cy="25" rx="18" ry="4" fill="#f0e0f0" opacity="0.5"/>
+  <ellipse cx="120" cy="18" rx="15" ry="3" fill="#f8e0e0" opacity="0.4"/>
+  <ellipse cx="70" cy="32" rx="12" ry="3" fill="#f0e8f0" opacity="0.35"/>
+
+  <!-- Hills - dewy soft greens -->
+  <polygon points="0,90 0,68 20,62 45,58 70,60 95,56 120,60 140,58 160,62 160,90" fill="#8ab890" opacity="0.5"/>
+  <polygon points="0,90 0,72 15,68 40,65 65,67 90,63 115,66 135,64 160,68 160,90" fill="#6aaa78" opacity="0.65"/>
+  <polygon points="0,90 0,76 25,73 50,70 75,72 100,69 130,72 160,74 160,90" fill="#4a9a60" opacity="0.8"/>
+
+  <!-- Trees (silhouettes in morning mist) -->
+  <rect x="28" y="63" width="2" height="8" fill="#3a7a4a" opacity="0.5"/>
+  <polygon points="24,63 29,52 34,63" fill="#4a8a5a" opacity="0.45"/>
+  <rect x="105" y="65" width="2" height="7" fill="#3a7a4a" opacity="0.5"/>
+  <polygon points="101,65 106,55 111,65" fill="#4a8a5a" opacity="0.45"/>
+
+  <!-- Dew sparkles -->
+  <circle cx="45" cy="74" r="0.5" fill="#fff" opacity="0.7">
+    <animate attributeName="opacity" values="0.7;0.3;0.7" dur="3s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="72" cy="71" r="0.5" fill="#fff" opacity="0.5">
+    <animate attributeName="opacity" values="0.5;0.2;0.5" dur="4s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="95" cy="73" r="0.5" fill="#fff" opacity="0.6">
+    <animate attributeName="opacity" values="0.6;0.25;0.6" dur="3.5s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="55" cy="76" r="0.5" fill="#fff" opacity="0.5">
+    <animate attributeName="opacity" values="0.5;0.15;0.5" dur="2.8s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="120" cy="72" r="0.5" fill="#fff" opacity="0.6">
+    <animate attributeName="opacity" values="0.6;0.2;0.6" dur="3.2s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Morning flowers -->
+  <circle cx="38" cy="78" r="1" fill="#f0a0b0" opacity="0.7"/>
+  <circle cx="85" cy="76" r="1" fill="#d0a0f0" opacity="0.6"/>
+  <circle cx="62" cy="79" r="1" fill="#f0c080" opacity="0.7"/>
+  <circle cx="110" cy="77" r="0.8" fill="#a0d0f0" opacity="0.6"/>
+
+  <!-- Small house -->
+  <rect x="135" y="66" width="8" height="6" fill="#5a6a5a" opacity="0.4"/>
+  <polygon points="133,66 139,61 145,66" fill="#6a7a6a" opacity="0.4"/>
+  <rect x="138" y="68" width="2" height="2" fill="#f0d080" opacity="0.5"/>
+
+  <!-- Path -->
+  <polygon points="75,90 85,90 82,78 78,78" fill="#d8c8a0" opacity="0.3"/>
+</svg>

@@ -16,6 +16,7 @@ def _ensure_columns():
     """Add columns that db.create_all() won't add to existing tables."""
     migrations = [
         "ALTER TABLE tasks ADD COLUMN assigned_agent_id VARCHAR(128)",
+        "ALTER TABLE tasks ADD COLUMN due_date VARCHAR(20)",
         "ALTER TABLE custom_skills ADD COLUMN schedule_interval_minutes INTEGER",
         "ALTER TABLE custom_skills ADD COLUMN creates_pupdates BOOLEAN DEFAULT 0",
         "ALTER TABLE custom_skills ADD COLUMN last_run_at DATETIME",

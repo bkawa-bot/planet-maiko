@@ -5,7 +5,7 @@ import AssignAgentModal from "../components/AssignAgentModal";
 import {
   CheckSquare, Plus, FolderPlus, Pin, PinOff, ExternalLink,
   ChevronDown, ChevronRight, Folder, GitBranch, Clock, Bot,
-  Play, X, Download,
+  Play, X, Download, Sparkles, Trash2,
 } from "lucide-react";
 import "./Tasks.css";
 
@@ -23,7 +23,9 @@ export default function Tasks() {
   const [expanded, setExpanded] = useState(null);
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [assigningTask, setAssigningTask] = useState(null);
-  const [taskForm, setTaskForm] = useState({ title: "", type: "todo", priority: "normal", url: "", project_id: "" });
+  const [generatedTasks, setGeneratedTasks] = useState(null); // { project_id, tasks: [...] }
+  const [generating, setGenerating] = useState(null); // project_id being generated
+  const [taskForm, setTaskForm] = useState({ title: "", type: "todo", priority: "normal", url: "", project_id: "", due_date: "" });
   const [projectForm, setProjectForm] = useState({ title: "", description: "", priority: "normal" });
 
   const fetchData = async () => {
@@ -142,7 +144,10 @@ export default function Tasks() {
             </label>
           </div>
           <div className="form-row">
-            <label>URL <input type="text" value={taskForm.url} onChange={(e) => setTaskForm((f) => ({ ...f, url: e.target.value }))} placeholder="https://..." /></label>
+            <div className="form-row form-row-inline">
+              <label>URL <input type="text" value={taskForm.url} onChange={(e) => setTaskForm((f) => ({ ...f, url: e.target.value }))} placeholder="https://..." /></label>
+              <label>Due Date <input type="date" value={taskForm.due_date} onChange={(e) => setTaskForm((f) => ({ ...f, due_date: e.target.value }))} /></label>
+            </div>
           </div>
           <div className="form-actions">
             <button type="button" className="btn" onClick={() => setShowTaskForm(false)}>Cancel</button>
@@ -195,6 +200,21 @@ export default function Tasks() {
                   <div className="project-progress-bar">
                     <div className="project-progress-fill" style={{ width: `${pct}%` }} />
                   </div>
+                  <button className="btn btn-sm btn-action" onClick={async (e) => {
+                    e.stopPropagation();
+                    setGenerating(project.id);
+                    showToast("Maiko is thinking up tasks... 🐕", "normal");
+                    try {
+                      const result = await api.generateTasks(project.id);
+                      setGeneratedTasks(result);
+                      showToast(`Generated ${result.tasks.length} task ideas!`, "normal");
+                    } catch (err) {
+                      showToast(err.message || "Couldn't generate tasks", "high");
+                    }
+                    setGenerating(null);
+                  }} disabled={generating === project.id}>
+                    <Sparkles size={10} /> {generating === project.id ? "..." : "Generate"}
+                  </button>
                   {project.source_url && (
                     <a href={project.source_url} target="_blank" rel="noreferrer" className="btn btn-sm" onClick={(e) => e.stopPropagation()}>
                       <ExternalLink size={10} />
@@ -236,6 +256,63 @@ export default function Tasks() {
           onAssigned={fetchData}
         />
       )}
+
+      {/* Generated tasks review modal */}
+      {generatedTasks && (
+        <div className="modal-overlay" onClick={() => setGeneratedTasks(null)}>
+          <div className="generated-tasks-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <Sparkles size={14} />
+              <span>Review Generated Tasks</span>
+              <button className="btn btn-sm" onClick={() => setGeneratedTasks(null)} style={{ marginLeft: "auto" }}><X size={10} /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>
+                Maiko suggested these tasks. Remove any you don't want, then approve.
+              </p>
+              <div className="generated-task-list">
+                {generatedTasks.tasks.map((gt, i) => (
+                  <div key={i} className="generated-task-item card">
+                    <div className="generated-task-top">
+                      <span className={`badge ${gt.priority}`}>{gt.priority}</span>
+                      <span className="generated-task-title">{gt.title}</span>
+                      <button className="btn btn-sm btn-danger" onClick={() => {
+                        setGeneratedTasks((prev) => ({
+                          ...prev,
+                          tasks: prev.tasks.filter((_, j) => j !== i),
+                        }));
+                      }}><Trash2 size={9} /></button>
+                    </div>
+                    {gt.description && <div className="generated-task-desc">{gt.description}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="generated-tasks-footer">
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{generatedTasks.tasks.length} task(s)</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button className="btn" onClick={() => setGeneratedTasks(null)}>Cancel</button>
+                <button className="btn btn-primary" onClick={async () => {
+                  for (const gt of generatedTasks.tasks) {
+                    await api.createTask({
+                      id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                      title: gt.title,
+                      type: gt.type || "todo",
+                      priority: gt.priority || "normal",
+                      project_id: generatedTasks.project_id,
+                    });
+                  }
+                  showToast(`Created ${generatedTasks.tasks.length} task(s)! 🎉`, "normal");
+                  setGeneratedTasks(null);
+                  fetchData();
+                }}>
+                  <CheckSquare size={12} /> Approve & Create All
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -273,7 +350,8 @@ function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchD
           {t.project_id && <span className="tag tag-project">{t.project_id}</span>}
           {(t.metadata?.repo || t.extra?.repo) && <span className="tag"><GitBranch size={9} /> {t.metadata?.repo || t.extra?.repo}</span>}
           <span className="task-type-label">{t.type}</span>
-          {t.updated_at && <span className="task-time"><Clock size={9} /> {new Date(t.updated_at).toLocaleDateString()}</span>}
+          {t.due_date && <span className={`tag ${new Date(t.due_date) < new Date() ? "tag-overdue" : "tag-due"}`}><Clock size={9} /> {t.due_date}</span>}
+          {!t.due_date && t.updated_at && <span className="task-time"><Clock size={9} /> {new Date(t.updated_at).toLocaleDateString()}</span>}
           {t.assigned_agent_id && <span className="tag agent-assigned-chip"><Bot size={9} /> {t.assigned_agent_id.replace("agent-", "")}</span>}
         </div>
 
@@ -285,6 +363,17 @@ function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchD
               </div>
             )}
             <div className="task-inline-actions" onClick={(e) => e.stopPropagation()}>
+              <input
+                type="date"
+                className="task-due-input"
+                value={t.due_date || ""}
+                onChange={async (e) => {
+                  await api.updateTask(t.id, { due_date: e.target.value || null });
+                  showToast(e.target.value ? `Due: ${e.target.value}` : "Due date cleared", "normal");
+                  fetchData();
+                }}
+                title="Set due date"
+              />
               <select
                 className="task-project-select"
                 value={t.project_id || ""}

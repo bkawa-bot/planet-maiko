@@ -47,6 +47,7 @@ def create_task():
         url=data.get("url"),
         tags=data.get("tags", []),
         extra=data.get("metadata", {}),
+        due_date=data.get("due_date"),
     )
     db.session.add(task)
     db.session.commit()
@@ -59,7 +60,7 @@ def update_task(task_id):
     task = db.get_or_404(Task, task_id)
     data = request.get_json()
 
-    for field in ["title", "type", "priority", "url", "tags", "project_id", "assigned_agent_id"]:
+    for field in ["title", "type", "priority", "url", "tags", "project_id", "assigned_agent_id", "due_date"]:
         if field in data:
             setattr(task, field, data[field])
     if "metadata" in data:
