@@ -89,6 +89,7 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.context_selection import ContextSelection  # noqa: F401
         from planet_maiko.models.skill_result import SkillResult  # noqa: F401
         from planet_maiko.models.custom_skill import CustomSkill  # noqa: F401
+        from planet_maiko.models.tournament import Tournament, TournamentEntry  # noqa: F401
         db.create_all()
 
         # Schema migrations for existing DBs (SQLite ALTER TABLE is safe)

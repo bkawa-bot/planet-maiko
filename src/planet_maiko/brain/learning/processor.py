@@ -183,15 +183,32 @@ def compile_brief(repo=None, language=None, task_id=None, agent_profile_id=None,
     if not scoped:
         return "No active learnings yet."
 
-    # Score and rank by success rate (if we have history)
+    # Score and rank by success rate + tournament data
     success_rates = _get_learning_success_rates()
+
+    # Get tournament scores for this repo
+    try:
+        from planet_maiko.brain.learning.tournament import get_tournament_scores
+        tournament_scores = get_tournament_scores(repo=repo)
+    except Exception:
+        tournament_scores = {}
 
     def sort_key(l):
         rate_info = success_rates.get(l.id)
-        if rate_info and rate_info["total"] >= 2:
-            # Blend success rate with confidence
-            return -(rate_info["success_rate"] * 0.6 + l.confidence * 0.4)
-        # No history: fall back to confidence
+        t_info = tournament_scores.get(l.id)
+
+        ctx_rate = rate_info["success_rate"] if rate_info and rate_info["total"] >= 2 else None
+        t_score = t_info["avg_score"] if t_info and t_info["tournament_count"] >= 1 else None
+
+        # Blend available signals
+        if ctx_rate is not None and t_score is not None:
+            # All three signals: tournament (40%) + real outcomes (40%) + confidence (20%)
+            return -(t_score * 0.4 + ctx_rate * 0.4 + l.confidence * 0.2)
+        elif ctx_rate is not None:
+            return -(ctx_rate * 0.6 + l.confidence * 0.4)
+        elif t_score is not None:
+            return -(t_score * 0.5 + l.confidence * 0.5)
+        # Cold start: confidence only
         return -l.confidence
 
     scoped.sort(key=sort_key)
