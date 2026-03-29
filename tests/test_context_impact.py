@@ -83,7 +83,7 @@ Write ONLY the code. No explanation."""
 
 Write ONLY the code. No explanation."""
 
-    result = runtime.send(prompt, timeout=60)
+    result = runtime.send(prompt, timeout=180)
     return result
 
 
@@ -215,7 +215,8 @@ def main():
     print("Estimated cost: ~$0.15-0.30")
     print("Estimated time: ~2-3 minutes\n")
 
-    input("Press Enter to start (or Ctrl+C to cancel)...")
+    if sys.stdin.isatty():
+        input("Press Enter to start (or Ctrl+C to cancel)...")
 
     results = run_experiment()
 
