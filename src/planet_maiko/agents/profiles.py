@@ -75,7 +75,7 @@ def record_task_outcome(task_id, outcome):
 
     Args:
         task_id: the task that was completed
-        outcome: "success", "changes_requested", "failed", "cancelled"
+        outcome: "success", "changes_requested", "failed", "canceled"
     """
     selections = ContextSelection.query.filter_by(
         task_id=task_id, outcome=None

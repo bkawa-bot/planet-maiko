@@ -113,13 +113,23 @@ export default function Agents() {
                 <span className="badge high">{conflicts.length} warning(s)</span>
               </div>
               <div className="pack-awareness-list">
-                {conflicts.map((c) => (
-                  <div key={c.id} className="conflict-item">
-                    <AlertTriangle size={12} className="conflict-icon" />
-                    <span className="conflict-task">{c.task_id}</span>
-                    <span className="conflict-content">{c.content}</span>
-                  </div>
-                ))}
+                {conflicts.map((c) => {
+                  const isResolved = c.message_type === "conflict_resolved";
+                  const isDuplicate = c.message_type === "conflict_directive";
+                  return (
+                    <div key={c.id} className={`conflict-item ${isResolved ? "resolved" : ""}`}>
+                      {isResolved ? (
+                        <span className="conflict-status-icon">✅</span>
+                      ) : isDuplicate ? (
+                        <span className="conflict-status-icon">⚠️</span>
+                      ) : (
+                        <AlertTriangle size={12} className="conflict-icon" />
+                      )}
+                      <span className="conflict-task">{c.task_id}</span>
+                      <span className="conflict-content">{c.content}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

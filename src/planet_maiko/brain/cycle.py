@@ -41,8 +41,8 @@ def run(app):
         from planet_maiko.agents.monitor import process_agent_pupdates
         results["agents"] = process_agent_pupdates()
 
-        # Phase 2: Check for conflicts between active agents
-        from planet_maiko.brain.awareness.conflicts import detect_conflicts, send_conflict_warnings
+        # Phase 2: Check for conflicts between active agents + attempt A2A resolution
+        from planet_maiko.brain.awareness.conflicts import detect_conflicts, send_conflict_warnings, resolve_conflicts
         from planet_maiko.agents.coding_agent import list_prepared
         try:
             prepared = list_prepared()
@@ -52,10 +52,17 @@ def run(app):
             ]
             if len(worktrees) >= 2:
                 conflicts = detect_conflicts(worktrees)
-                warnings = send_conflict_warnings(conflicts) if conflicts else 0
-                results["awareness"] = {"conflicts": len(conflicts), "warnings_sent": warnings}
+                if conflicts:
+                    # Try A2A resolution first
+                    resolution = resolve_conflicts(conflicts)
+                    results["awareness"] = {
+                        "conflicts": len(conflicts),
+                        **resolution,
+                    }
+                else:
+                    results["awareness"] = {"conflicts": 0, "resolved": 0, "escalated": 0}
             else:
-                results["awareness"] = {"conflicts": 0, "warnings_sent": 0}
+                results["awareness"] = {"conflicts": 0, "resolved": 0, "escalated": 0}
         except Exception as e:
             logger.debug(f"Awareness check skipped: {e}")
             results["awareness"] = {"conflicts": 0, "warnings_sent": 0}

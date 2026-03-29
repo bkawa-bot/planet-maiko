@@ -193,3 +193,182 @@ def send_conflict_warnings(conflicts):
         logger.info(f"[awareness] Sent {warnings_sent} conflict warning(s)")
 
     return warnings_sent
+
+
+# Track resolved conflicts so we don't re-resolve every cycle
+_resolved_conflicts = set()
+
+
+def resolve_conflicts(conflicts):
+    """Attempt A2A resolution for detected conflicts.
+
+    For each conflict, asks both agents what they're doing,
+    then has them classify the overlap. Only escalates to the
+    user if it's a genuine conflict.
+
+    Returns:
+        dict with counts: {resolved, escalated, failed}
+    """
+    try:
+        from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
+        runtime = ClaudeCodeRuntime()
+        if not runtime.is_available():
+            return {"resolved": 0, "escalated": 0, "failed": 0, "skipped": "runtime unavailable"}
+    except Exception:
+        return {"resolved": 0, "escalated": 0, "failed": 0, "skipped": "runtime error"}
+
+    stats = {"resolved": 0, "escalated": 0, "failed": 0}
+
+    for conflict in conflicts:
+        agent_a, agent_b = conflict["agents"]
+        shared = conflict["shared_files"][:5]
+        files_str = ", ".join(shared)
+
+        # Skip if already resolved
+        conflict_key = f"{agent_a}:{agent_b}:{files_str}"
+        if conflict_key in _resolved_conflicts:
+            continue
+
+        logger.info(f"[awareness] Resolving conflict: {agent_a} <-> {agent_b} on {files_str}")
+
+        # Step 1: Ask each agent what they're doing
+        query_prompt = (
+            f"Two agents are editing the same files: {files_str}\n\n"
+            f"Briefly describe what you are changing in these files.\n\n"
+            f"Respond with JSON: {{\"summary\": \"brief description\", \"intent\": \"what you're trying to achieve\"}}"
+        )
+
+        summary_a = runtime.send_json(query_prompt, timeout=30)
+        summary_b = runtime.send_json(query_prompt, timeout=30)
+
+        if not summary_a.get("parsed") or not summary_b.get("parsed"):
+            stats["failed"] += 1
+            # Fall back to warning
+            send_conflict_warnings([conflict])
+            continue
+
+        desc_a = summary_a["parsed"].get("summary", "unknown work")
+        desc_b = summary_b["parsed"].get("summary", "unknown work")
+
+        # Step 2: Ask each to classify the other's work
+        classify_prompt = (
+            f"You are editing: {files_str}\n"
+            f"Your work: {desc_a}\n\n"
+            f"Another agent is also editing the same files.\n"
+            f"Their work: {desc_b}\n\n"
+            f"Classify this overlap:\n"
+            f'- "compatible": changes can coexist, safe to merge later\n'
+            f'- "duplicate": you are doing the same work, one should stop\n'
+            f'- "conflict": changes are incompatible, need human to decide\n\n'
+            f'Respond with JSON: {{"classification": "compatible|duplicate|conflict", "reason": "why"}}'
+        )
+
+        class_a = runtime.send_json(classify_prompt, timeout=30)
+
+        # Swap perspectives for agent B
+        classify_prompt_b = classify_prompt.replace(
+            f"Your work: {desc_a}", f"Your work: {desc_b}"
+        ).replace(
+            f"Their work: {desc_b}", f"Their work: {desc_a}"
+        )
+        class_b = runtime.send_json(classify_prompt_b, timeout=30)
+
+        result_a = (class_a.get("parsed") or {}).get("classification", "conflict")
+        result_b = (class_b.get("parsed") or {}).get("classification", "conflict")
+        reason_a = (class_a.get("parsed") or {}).get("reason", "")
+        reason_b = (class_b.get("parsed") or {}).get("reason", "")
+
+        logger.info(f"[awareness] Resolution: A={result_a}, B={result_b}")
+
+        # Step 3: Act on the resolution
+        _act_on_resolution(
+            agent_a, agent_b, result_a, result_b,
+            desc_a, desc_b, reason_a, reason_b,
+            files_str, conflict, stats,
+        )
+
+        _resolved_conflicts.add(conflict_key)
+
+    if stats["resolved"] or stats["escalated"]:
+        db.session.commit()
+
+    return stats
+
+
+def _act_on_resolution(agent_a, agent_b, result_a, result_b,
+                       desc_a, desc_b, reason_a, reason_b,
+                       files_str, conflict, stats):
+    """Take action based on both agents' classifications."""
+
+    if result_a == "compatible" and result_b == "compatible":
+        # Both agree it's fine — tell them to keep going, don't bother user
+        for task_id in [agent_a, agent_b]:
+            msg = AgentMessage(
+                task_id=task_id, direction="to_agent", sender="maiko",
+                message_type="conflict_resolved",
+                content=f"Checked with the other agent — your changes to {files_str} are compatible. Keep going! 🐾",
+            )
+            db.session.add(msg)
+        stats["resolved"] += 1
+        logger.info(f"[awareness] ✅ Compatible — no user notification needed")
+
+    elif "conflict" in (result_a, result_b):
+        # At least one says conflict — escalate to user
+        pupdate = Pupdate(
+            id=f"conflict-escalation-{agent_a}-{agent_b}-{int(datetime.now(timezone.utc).timestamp())}",
+            source="maiko",
+            source_id=f"conflict/{agent_a}/{agent_b}",
+            type="conflict_escalation",
+            priority="high",
+            title=f"Conflict: {agent_a} vs {agent_b} on {files_str}",
+            body=(
+                f"**Agent A** ({agent_a}): {desc_a}\n"
+                f"Classification: {result_a} — {reason_a}\n\n"
+                f"**Agent B** ({agent_b}): {desc_b}\n"
+                f"Classification: {result_b} — {reason_b}\n\n"
+                f"These agents need your help resolving this conflict."
+            ),
+            actionable=True,
+            action_hint="Resolve conflict",
+            tags=[agent_a, agent_b, "conflict"],
+        )
+        db.session.add(pupdate)
+        stats["escalated"] += 1
+        logger.info(f"[awareness] 🔴 Conflict escalated to user")
+
+    elif "duplicate" in (result_a, result_b):
+        # One or both say duplicate — notify user, suggest one stops
+        who_stops = agent_b if result_a == "duplicate" else agent_a
+        who_continues = agent_a if who_stops == agent_b else agent_b
+
+        # Tell the one who should stop
+        msg_stop = AgentMessage(
+            task_id=who_stops, direction="to_agent", sender="maiko",
+            message_type="conflict_directive",
+            content=f"Heads up — another agent ({who_continues}) is doing similar work on {files_str}. "
+                    f"Consider pausing to avoid duplicate effort. Check with your human!",
+        )
+        db.session.add(msg_stop)
+
+        # Tell the one who continues
+        msg_continue = AgentMessage(
+            task_id=who_continues, direction="to_agent", sender="maiko",
+            message_type="conflict_resolved",
+            content=f"The other agent ({who_stops}) has been notified about duplicate work on {files_str}. "
+                    f"You can keep going — they'll coordinate with you.",
+        )
+        db.session.add(msg_continue)
+
+        # Notify user
+        pupdate = Pupdate(
+            id=f"conflict-dup-{agent_a}-{agent_b}-{int(datetime.now(timezone.utc).timestamp())}",
+            source="maiko",
+            type="conflict_duplicate",
+            priority="normal",
+            title=f"Duplicate work detected: {agent_a} & {agent_b}",
+            body=f"Both agents are working on similar changes to {files_str}. Suggested {who_stops} pause.",
+            tags=[agent_a, agent_b, "duplicate"],
+        )
+        db.session.add(pupdate)
+        stats["escalated"] += 1
+        logger.info(f"[awareness] ⚠️ Duplicate — {who_stops} told to pause")

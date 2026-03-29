@@ -1,7 +1,7 @@
 """Coding agent orchestrator - prepares everything an agent needs to work.
 
 Planet Maiko doesn't control the agent runtime. It controls the
-orchestration around it:
+surrounding orchestration:
 
     1. Prepare - create worktree, write TASK.md and CLAUDE.md
     2. Notify - tell the user an agent task is ready to launch

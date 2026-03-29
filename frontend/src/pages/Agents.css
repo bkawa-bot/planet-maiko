@@ -33,8 +33,10 @@
   border-radius: var(--radius-xs); font-size: 12px;
 }
 .conflict-icon { color: var(--high); flex-shrink: 0; margin-top: 1px; }
+.conflict-status-icon { flex-shrink: 0; font-size: 14px; }
 .conflict-task { font-weight: 600; color: var(--text); white-space: nowrap; min-width: 80px; }
 .conflict-content { color: var(--text-dim); line-height: 1.4; }
+.conflict-item.resolved { background: rgba(125, 219, 163, 0.06); border-left: 3px solid var(--green); }
 
 /* === Agent Grid === */
 .agent-card { padding: 0; overflow: hidden; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
