@@ -18,6 +18,18 @@ from planet_maiko.database import db
 from planet_maiko.models.tournament import Tournament, TournamentEntry
 from planet_maiko.models.learning import Learning
 
+# Approved task tags (empty = free-form phase, collecting data)
+# Once you have enough data, populate this list and the LLM will pick from it.
+# Tags not in this list get flagged as "suggested_new_tags" for review.
+APPROVED_TAGS = []
+# Example after Phase 2:
+# APPROVED_TAGS = [
+#     "performance", "testing", "security", "api", "database",
+#     "refactoring", "new-feature", "bug-fix", "migration",
+#     "documentation", "config", "frontend", "auth",
+#     "error-handling", "observability",
+# ]
+
 logger = logging.getLogger(__name__)
 
 # Exploration: new rules get included in N tournaments regardless of score
@@ -41,24 +53,29 @@ def run_tournament(repo, pr_number, app):
         if not pr_data:
             return None
 
-        # Step 2: Create tournament record
+        # Step 2: Classify the task with tags
+        from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
+        runtime = ClaudeCodeRuntime()
+        tags_result = _classify_task(runtime, pr_data) if runtime.is_available() else {"tags": [], "suggested_new": []}
+
+        # Step 3: Create tournament record
         tournament = Tournament(
             pr_repo=repo,
             pr_number=pr_number,
             pr_title=pr_data["title"],
             pr_diff_summary=pr_data["diff_summary"][:2000],
+            task_tags=tags_result.get("tags", []),
+            suggested_new_tags=tags_result.get("suggested_new", []),
             task_description=pr_data["task"],
             status="running",
         )
         db.session.add(tournament)
         db.session.flush()
 
-        # Step 3: Build strategies
+        # Step 4: Build strategies
         strategies = _build_strategies(repo)
 
-        # Step 4: Run each strategy
-        from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
-        runtime = ClaudeCodeRuntime()
+        # Step 5: Run each strategy
         if not runtime.is_available():
             tournament.status = "failed"
             db.session.commit()
@@ -144,6 +161,53 @@ def _fetch_pr(repo, pr_number):
     except Exception as e:
         logger.error(f"[tournament] PR fetch error: {e}")
         return None
+
+
+def _classify_task(runtime, pr_data):
+    """Classify the PR into task tags using LLM.
+
+    Phase 1 (APPROVED_TAGS empty): free-form, collecting data.
+    Phase 2+ (APPROVED_TAGS populated): pick from list, flag new suggestions.
+    """
+    title = pr_data.get("title", "")
+    files = ", ".join(pr_data.get("files", [])[:10])
+    diff_preview = pr_data.get("diff_summary", "")[:500]
+
+    if APPROVED_TAGS:
+        tag_list = ", ".join(APPROVED_TAGS)
+        prompt = (
+            f"Classify this PR into 2-4 task type tags.\n\n"
+            f"Title: {title}\nFiles: {files}\nDiff preview: {diff_preview}\n\n"
+            f"Pick from this approved list: [{tag_list}]\n\n"
+            f"If this PR doesn't fit any existing tag, you may suggest ONE new tag.\n\n"
+            f'Respond with JSON: {{"tags": ["tag1", "tag2"], "suggested_new": ["new-tag-if-needed"]}}'
+        )
+    else:
+        prompt = (
+            f"Classify this PR into 2-4 task type tags (short, lowercase, hyphenated).\n\n"
+            f"Title: {title}\nFiles: {files}\nDiff preview: {diff_preview}\n\n"
+            f"Examples: performance, testing, security, api, database, refactoring, "
+            f"new-feature, bug-fix, migration, frontend, auth, error-handling\n\n"
+            f'Respond with JSON: {{"tags": ["tag1", "tag2"]}}'
+        )
+
+    result = runtime.send_json(prompt, timeout=30)
+
+    if result.get("parsed"):
+        tags = result["parsed"].get("tags", [])
+        suggested = result["parsed"].get("suggested_new", [])
+
+        # If we have approved tags, validate
+        if APPROVED_TAGS:
+            valid_tags = [t for t in tags if t in APPROVED_TAGS]
+            invalid_tags = [t for t in tags if t not in APPROVED_TAGS]
+            suggested = list(set(suggested + invalid_tags))
+            tags = valid_tags
+
+        logger.info(f"[tournament] Tags: {tags}" + (f" (suggested new: {suggested})" if suggested else ""))
+        return {"tags": tags, "suggested_new": suggested}
+
+    return {"tags": [], "suggested_new": []}
 
 
 def _build_strategies(repo):
@@ -258,10 +322,15 @@ def _update_scores_from_tournament(entries):
                 learning.confidence = max(0.0, learning.confidence - 0.005)
 
 
-def get_tournament_scores(repo=None):
-    """Get average tournament scores per learning for a repo.
+def get_tournament_scores(repo=None, task_tags=None):
+    """Get average tournament scores per learning, filtered by repo and/or task tags.
 
-    Used by compile_brief() to rank rules.
+    Used by compile_brief() to rank rules for specific task types.
+
+    Args:
+        repo: filter by repository
+        task_tags: list of tags to match (e.g. ["performance", "database"])
+                   Tournaments that share ANY tag are included.
 
     Returns:
         dict: learning_id → {"avg_score": float, "tournament_count": int}
@@ -272,19 +341,49 @@ def get_tournament_scores(repo=None):
 
     entries = query.filter(TournamentEntry.score.isnot(None)).all()
 
+    # If task_tags specified, weight entries by tag overlap
     scores = {}
     for entry in entries:
+        # Calculate tag relevance weight
+        weight = 1.0
+        if task_tags and entry.tournament and entry.tournament.task_tags:
+            overlap = set(task_tags) & set(entry.tournament.task_tags)
+            if overlap:
+                weight = 1.0 + (len(overlap) * 0.5)  # bonus for tag matches
+            else:
+                weight = 0.3  # low weight for no tag overlap
+
         for lid in (entry.learning_ids or []):
             if lid not in scores:
-                scores[lid] = {"total_score": 0, "count": 0}
-            scores[lid]["total_score"] += entry.score or 0
-            scores[lid]["count"] += 1
+                scores[lid] = {"total_score": 0, "total_weight": 0}
+            scores[lid]["total_score"] += (entry.score or 0) * weight
+            scores[lid]["total_weight"] += weight
 
     return {
         lid: {
-            "avg_score": data["total_score"] / data["count"] / 10,  # normalize to 0-1
-            "tournament_count": data["count"],
+            "avg_score": data["total_score"] / data["total_weight"] / 10,  # normalize to 0-1
+            "tournament_count": int(data["total_weight"]),
         }
         for lid, data in scores.items()
-        if data["count"] > 0
+        if data["total_weight"] > 0
     }
+
+
+def get_suggested_tags():
+    """Get all suggested new tags from tournaments (for review).
+
+    Returns tags that the LLM wanted to use but weren't in the approved list.
+    """
+    tournaments = Tournament.query.filter(
+        Tournament.suggested_new_tags.isnot(None)
+    ).all()
+
+    tag_counts = {}
+    for t in tournaments:
+        for tag in (t.suggested_new_tags or []):
+            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+    return sorted(
+        [{"tag": tag, "count": count} for tag, count in tag_counts.items()],
+        key=lambda x: -x["count"],
+    )

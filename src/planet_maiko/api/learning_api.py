@@ -195,3 +195,10 @@ def tournament_scores():
             })
 
     return jsonify(leaderboard)
+
+
+@learning_bp.route("/tournaments/suggested-tags", methods=["GET"])
+def suggested_tags():
+    """Get tags the LLM suggested that aren't in the approved list."""
+    from planet_maiko.brain.learning.tournament import get_suggested_tags
+    return jsonify(get_suggested_tags())

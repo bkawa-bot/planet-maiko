@@ -17,6 +17,8 @@ class Tournament(db.Model):
     pr_title = db.Column(db.String(512))
     pr_diff_summary = db.Column(db.Text)
     task_description = db.Column(db.Text)
+    task_tags = db.Column(db.JSON, default=list)  # e.g. ["performance", "database"]
+    suggested_new_tags = db.Column(db.JSON, default=list)  # tags LLM wanted but aren't in the approved list
 
     status = db.Column(db.String(20), default="pending")  # pending, running, completed, failed
     winning_strategy = db.Column(db.String(50), nullable=True)
@@ -33,6 +35,8 @@ class Tournament(db.Model):
             "pr_title": self.pr_title,
             "pr_diff_summary": self.pr_diff_summary,
             "task_description": self.task_description,
+            "task_tags": self.task_tags,
+            "suggested_new_tags": self.suggested_new_tags,
             "status": self.status,
             "winning_strategy": self.winning_strategy,
             "created_at": self.created_at.isoformat() if self.created_at else None,

@@ -20,6 +20,8 @@ def _ensure_columns():
         "ALTER TABLE custom_skills ADD COLUMN schedule_interval_minutes INTEGER",
         "ALTER TABLE custom_skills ADD COLUMN creates_pupdates BOOLEAN DEFAULT 0",
         "ALTER TABLE custom_skills ADD COLUMN last_run_at DATETIME",
+        "ALTER TABLE tournaments ADD COLUMN task_tags JSON",
+        "ALTER TABLE tournaments ADD COLUMN suggested_new_tags JSON",
     ]
     for sql in migrations:
         try:
