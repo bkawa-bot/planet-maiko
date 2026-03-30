@@ -341,17 +341,28 @@ def get_tournament_scores(repo=None, task_tags=None):
 
     entries = query.filter(TournamentEntry.score.isnot(None)).all()
 
-    # If task_tags specified, weight entries by tag overlap
+    now = datetime.now(timezone.utc)
+
+    # Weight entries by tag overlap AND recency (score decay)
     scores = {}
     for entry in entries:
-        # Calculate tag relevance weight
+        # Tag relevance weight
         weight = 1.0
         if task_tags and entry.tournament and entry.tournament.task_tags:
             overlap = set(task_tags) & set(entry.tournament.task_tags)
             if overlap:
-                weight = 1.0 + (len(overlap) * 0.5)  # bonus for tag matches
+                weight = 1.0 + (len(overlap) * 0.5)
             else:
-                weight = 0.3  # low weight for no tag overlap
+                weight = 0.3
+
+        # Recency decay: halve weight every 30 days
+        if entry.tournament and entry.tournament.created_at:
+            age = entry.tournament.created_at
+            if age.tzinfo is None:
+                age = age.replace(tzinfo=timezone.utc)
+            days_old = (now - age).days
+            decay = 1.0 / (1.0 + days_old / 30.0)
+            weight *= decay
 
         for lid in (entry.learning_ids or []):
             if lid not in scores:

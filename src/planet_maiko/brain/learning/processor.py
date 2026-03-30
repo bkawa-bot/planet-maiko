@@ -193,12 +193,16 @@ def compile_brief(repo=None, language=None, task_id=None, agent_profile_id=None,
     except Exception:
         tournament_scores = {}
 
+    # Safeguard: minimum tournament count before trusting scores
+    MIN_TOURNAMENTS_FOR_TRUST = 3
+
     def sort_key(l):
         rate_info = success_rates.get(l.id)
         t_info = tournament_scores.get(l.id)
 
         ctx_rate = rate_info["success_rate"] if rate_info and rate_info["total"] >= 2 else None
-        t_score = t_info["avg_score"] if t_info and t_info["tournament_count"] >= 1 else None
+        # Only trust tournament scores with enough data (prevents overfitting)
+        t_score = t_info["avg_score"] if t_info and t_info["tournament_count"] >= MIN_TOURNAMENTS_FOR_TRUST else None
 
         # Blend available signals
         if ctx_rate is not None and t_score is not None:
@@ -213,8 +217,22 @@ def compile_brief(repo=None, language=None, task_id=None, agent_profile_id=None,
 
     scoped.sort(key=sort_key)
 
-    # Take top N
-    selected = scoped[:max_learnings]
+    # Take top N, but reserve 2 slots for exploration (random untested rules)
+    import random as _random
+    explore_count = min(2, len(scoped))
+    main_count = max_learnings - explore_count
+
+    # Main selection: top ranked
+    main_selected = scoped[:main_count]
+
+    # Exploration: pick random rules NOT in the main selection
+    remaining = [l for l in scoped if l not in main_selected]
+    if remaining:
+        explore_selected = _random.sample(remaining, min(explore_count, len(remaining)))
+    else:
+        explore_selected = []
+
+    selected = main_selected + explore_selected
 
     # Record selection for tracking
     if task_id:
