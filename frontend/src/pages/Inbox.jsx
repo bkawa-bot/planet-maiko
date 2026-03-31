@@ -35,6 +35,8 @@ export default function Inbox() {
   const [expanded, setExpanded] = useState(null);
   const [moreMenu, setMoreMenu] = useState(null);
   const [focus, setFocus] = useState(null);
+  const [reviewResult, setReviewResult] = useState(null);
+  const [reviewing, setReviewing] = useState(null);
   const [brainStatus, setBrainStatus] = useState(null);
   const [tasks, setTasks] = useState([]);
 
@@ -172,7 +174,28 @@ export default function Inbox() {
                       </a>
                     )}
                     {p.type === "pr_review_requested" && (
-                      <button className="btn btn-sm btn-action"><Eye size={10} /> Review PR</button>
+                      <button className="btn btn-sm btn-action" onClick={async () => {
+                        setReviewing(p.id);
+                        showToast("Maiko is reviewing the PR... 🐕", "normal");
+                        try {
+                          const repo = p.metadata?.repo || "";
+                          const number = p.metadata?.number || "";
+                          const result = await api.runSkill("investigate", {
+                            context: {
+                              query: `Review PR #${number} in ${repo}: ${p.title}`,
+                              context: `URL: ${p.url || ""}\n${p.body || ""}`,
+                              pupdates: "[]", tasks: "[]", calendar: "[]",
+                            },
+                          });
+                          setReviewResult({ pupdate: p, ...result });
+                          showToast(result.success ? "Review ready! 📝" : "Couldn't review", result.success ? "normal" : "high");
+                        } catch (err) {
+                          showToast("Review failed: " + err.message, "high");
+                        }
+                        setReviewing(null);
+                      }} disabled={reviewing === p.id}>
+                        <Eye size={10} /> {reviewing === p.id ? "Reviewing..." : "Review PR"}
+                      </button>
                     )}
                     {(p.type === "pr_ci_failed" || p.type === "incident") && (
                       <button className="btn btn-sm btn-session"><Search size={10} /> Investigate</button>
@@ -263,6 +286,56 @@ export default function Inbox() {
         </div>
       </div>
     </div>
+
+    {/* PR Review Modal */}
+    {reviewResult && (
+      <div className="modal-overlay" onClick={() => setReviewResult(null)}>
+        <div className="review-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <Eye size={14} />
+            <span>PR Review</span>
+            <span style={{ fontWeight: 400, fontSize: 12, color: "var(--text-muted)", marginLeft: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {reviewResult.pupdate?.title}
+            </span>
+            <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+              {reviewResult.pupdate?.url && (
+                <a href={reviewResult.pupdate.url} target="_blank" rel="noreferrer" className="btn btn-sm">
+                  <ExternalLink size={10} /> Open PR
+                </a>
+              )}
+              <button className="btn btn-sm" onClick={() => setReviewResult(null)}>
+                <X size={10} />
+              </button>
+            </div>
+          </div>
+          <div className="modal-body">
+            {reviewResult.success ? (
+              <div className="review-content" dangerouslySetInnerHTML={{ __html: renderReviewMarkdown(reviewResult.output) }} />
+            ) : (
+              <div style={{ color: "var(--urgent)", fontSize: 13 }}>
+                {reviewResult.error || "Review failed"}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
+}
+
+function renderReviewMarkdown(text) {
+  if (!text) return "";
+  return text
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/^\- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/^(?!<[hulo])(.+)$/gm, '<p>$1</p>')
+    .replace(/<p><\/p>/g, '');
 }

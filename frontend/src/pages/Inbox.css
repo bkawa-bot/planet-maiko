@@ -167,6 +167,27 @@
 .more-dropdown .more-danger { color: var(--urgent); }
 .more-dropdown .more-danger:hover { background: rgba(255, 107, 127, 0.1); }
 
+/* PR Review modal */
+.review-modal {
+  background: var(--bg-card); border-radius: 16px;
+  max-width: 650px; width: 100%;
+  max-height: 80vh; display: flex; flex-direction: column;
+}
+
+.review-content { font-size: 13px; color: var(--text-dim); line-height: 1.7; }
+.review-content h1 { font-size: 18px; color: var(--text); margin: 16px 0 8px; }
+.review-content h2 { font-size: 15px; color: var(--pink); margin: 14px 0 6px; }
+.review-content h3 { font-size: 13px; color: var(--text); margin: 10px 0 4px; }
+.review-content p { margin: 6px 0; }
+.review-content strong { color: var(--text); }
+.review-content em { color: var(--pink); }
+.review-content code {
+  background: var(--bg); padding: 1px 5px; border-radius: 3px;
+  font-family: var(--font-mono); font-size: 11px; color: var(--peach);
+}
+.review-content ul { padding-left: 18px; margin: 6px 0; }
+.review-content li { margin: 3px 0; }
+
 /* Empty state */
 .empty-state {
   text-align: center; padding: 48px 20px;
