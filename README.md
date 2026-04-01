@@ -160,4 +160,7 @@ This is an open source project. Contributions welcome!
 
 ## License
 
-MIT
+[GNU LGPL v2.1](LICENSE) — Planet Maiko is free software. The core must stay open source.
+Plugins and extensions can be any license, including proprietary.
+
+Created by [Brigitte Pare](https://github.com/bkawa-bot) · Built with Claude

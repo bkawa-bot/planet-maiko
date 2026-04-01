@@ -7,7 +7,7 @@ name = "planet-maiko"
 version = "0.1.0"
 description = "Personal engineering intelligence dashboard"
 readme = "README.md"
-license = {text = "Proprietary"}
+license = {text = "LGPL-2.1-or-later"}
 requires-python = ">=3.10"
 dependencies = [
     "flask>=3.0",
