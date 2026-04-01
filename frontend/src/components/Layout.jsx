@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Outlet } from "react-router-dom";
-import Header from "./Header";
-import Footer from "./Footer";
+import Sidebar from "./Sidebar";
 import { showToast } from "./Toast";
 import { api } from "../api/client";
 import "./Layout.css";
@@ -15,7 +14,6 @@ function usePupdateWatcher() {
       try {
         const pupdates = await api.getPupdates();
         if (!initialized.current) {
-          // First load - just record what exists, don't toast
           pupdates.forEach((p) => knownIds.current.add(p.id));
           initialized.current = true;
           return;
@@ -41,11 +39,10 @@ export default function Layout() {
 
   return (
     <div className="layout">
-      <Header />
+      <Sidebar />
       <main className="main-content">
         <Outlet />
       </main>
-      <Footer />
     </div>
   );
 }
