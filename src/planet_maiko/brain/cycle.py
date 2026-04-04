@@ -86,7 +86,16 @@ def run(app):
         return results
 
 
+_status_cache = None
+_status_cache_at = 0
+
+
 def get_status():
+    """Get brain status for the dashboard. Cached for 5 seconds to reduce DB load."""
+    import time
+    global _status_cache, _status_cache_at
+    if _status_cache and (time.time() - _status_cache_at) < 5:
+        return _status_cache
     """Get brain status for the dashboard."""
     return {
         "last_cycle": _last_cycle.isoformat() if _last_cycle else None,
