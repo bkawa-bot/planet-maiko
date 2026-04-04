@@ -75,6 +75,8 @@ def update_task(task_id):
 def start_task(task_id):
     """Mark a task as in progress."""
     task = db.get_or_404(Task, task_id)
+    if task.status in ("done", "cancelled"):
+        return jsonify({"error": f"Cannot start a {task.status} task"}), 400
     task.status = "in_progress"
     task.updated_at = datetime.now(timezone.utc)
     db.session.commit()
@@ -85,6 +87,8 @@ def start_task(task_id):
 def complete_task(task_id):
     """Mark a task as done."""
     task = db.get_or_404(Task, task_id)
+    if task.status == "cancelled":
+        return jsonify({"error": "Cannot complete a cancelled task"}), 400
     task.status = "done"
     task.updated_at = datetime.now(timezone.utc)
     db.session.commit()
