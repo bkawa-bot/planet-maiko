@@ -36,6 +36,14 @@ def get_pupdate(pupdate_id):
 def create_pupdate():
     """Create a new pupdate."""
     data = request.get_json()
+    # Validate input lengths
+    if len(data.get("title", "")) > 500:
+        from flask import abort
+        abort(400, "Title too long (max 500 chars)")
+    if len(data.get("body", "") or "") > 10000:
+        from flask import abort
+        abort(400, "Body too long (max 10000 chars)")
+
     pupdate = Pupdate(
         id=data["id"],
         source=data["source"],
