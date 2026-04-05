@@ -1,3 +1,4 @@
+import os
 from flask import Blueprint, jsonify, request
 from planet_maiko.database import db
 from planet_maiko.models.agent_message import AgentMessage
@@ -165,6 +166,36 @@ def assign_agent():
         "agent": profile.to_dict(),
         "worktree": result,
     }), 201
+
+
+@agents_bp.route("/agents/open-terminal", methods=["POST"])
+def open_terminal():
+    """Open a terminal window at the given path."""
+    import subprocess
+    import sys
+
+    data = request.get_json()
+    path = data.get("path", "")
+
+    if not path or not os.path.isdir(path):
+        return jsonify({"error": "Invalid path"}), 400
+
+    try:
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", "-a", "Terminal", path])
+        elif sys.platform == "win32":
+            subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", f"cd /d {path}"], shell=True)
+        else:
+            # Linux — try common terminal emulators
+            for term in ["gnome-terminal", "xterm", "konsole", "xfce4-terminal"]:
+                try:
+                    subprocess.Popen([term, "--working-directory", path])
+                    break
+                except FileNotFoundError:
+                    continue
+        return jsonify({"status": "opened", "path": path})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @agents_bp.route("/skills/<skill_name>/run", methods=["POST"])

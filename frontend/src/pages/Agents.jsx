@@ -4,7 +4,7 @@ import { showToast } from "../components/Toast";
 import {
   Bot, MessageCircle, Moon, Bone, GitBranch, CheckSquare, Brain,
   HeartPulse, Plus, Star, Trophy, X, ChevronRight, AlertTriangle,
-  Flame, Play, Sparkles, Check, Clock, Zap, Target, TrendingUp,
+  Flame, Play, Sparkles, Check, Clock, Zap, Target, TrendingUp, Terminal, ExternalLink,
 } from "lucide-react";
 import LeaderboardWidget from "../components/LeaderboardWidget";
 import InfoButton from "../components/InfoButton";
@@ -206,6 +206,19 @@ export default function Agents() {
                     </div>
                   </div>
                   <div className="agent-actions">
+                    {a.working_path && (
+                      <button className="btn btn-sm" onClick={async () => {
+                        try {
+                          await api.openTerminal(a.working_path);
+                          showToast("Terminal opened", "normal");
+                        } catch (err) { showToast("Could not open terminal", "high"); }
+                      }} title="Open a terminal in the agent's worktree">
+                        <Terminal size={12} /> Terminal
+                      </button>
+                    )}
+                    <button className="btn btn-sm" onClick={() => window.open("https://claude.ai/code", "claude-rc", "width=1200,height=800")} title="Open Claude Code web UI to view/steer agent sessions">
+                      <ExternalLink size={12} /> View Session
+                    </button>
                     <button className="btn btn-sm" onClick={() => loadThread(a.task_id)}>
                       <MessageCircle size={12} /> Messages
                     </button>
