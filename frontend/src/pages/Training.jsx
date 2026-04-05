@@ -26,6 +26,7 @@ export default function Training() {
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
   const [expandedHistory, setExpandedHistory] = useState(null);
+  const [expandedOutput, setExpandedOutput] = useState(null);
 
   const fetchPRs = async () => {
     setLoadingPRs(true);
@@ -182,7 +183,7 @@ export default function Training() {
                       {entry.name === "baseline" ? "baseline (no learnings)" : entry.name}
                     </span>
                     {isWinner && <span className="training-winner-tag"><Award size={10} /> Winner</span>}
-                    <span className="training-entry-count">{entry.learning_ids?.length || 0} learnings</span>
+                    <span className="training-entry-count" title={entry.learning_ids?.join(", ")}>{entry.learning_ids?.length || 0} learnings</span>
                   </div>
                   <div className="training-score-row">
                     <div className="training-score-track">
@@ -193,6 +194,14 @@ export default function Training() {
                     </span>
                   </div>
                   {entry.reason && <div className="training-entry-reason">{entry.reason}</div>}
+                  {entry.output && (
+                    <div className="training-output-toggle" onClick={() => setExpandedOutput(expandedOutput === `${i}` ? null : `${i}`)}>
+                      {expandedOutput === `${i}` ? <ChevronDown size={10} /> : <ChevronRight size={10} />} View LLM output
+                    </div>
+                  )}
+                  {expandedOutput === `${i}` && entry.output && (
+                    <pre className="training-output-content">{entry.output}</pre>
+                  )}
                 </div>
               );
             })}

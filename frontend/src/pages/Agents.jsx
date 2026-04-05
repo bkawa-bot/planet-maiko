@@ -26,7 +26,7 @@ export default function Agents() {
   const [showArrival, setShowArrival] = useState(null);
   const [conflicts, setConflicts] = useState([]);
   const [showArchived, setShowArchived] = useState(false);
-  const [selectedProfile, setSelectedProfile] = useState(null);
+  const [allLearnings, setAllLearnings] = useState({});
 
   // Pack Insights (Gathering) state
   const [eodState, setEodState] = useState(null);
@@ -50,16 +50,18 @@ export default function Agents() {
 
   const fetchData = async () => {
     try {
-      const [p, a, act, conf] = await Promise.all([
+      const [p, a, act, conf, learnings] = await Promise.all([
         api.getProfiles(),
         api.getAgents(),
         api.getAgentActivity(),
         api.getConflicts().catch(() => []),
+        api.getLearnings().catch(() => []),
       ]);
       setProfiles(p);
       setAgents(a);
       setActivity(act);
       setConflicts(conf);
+      setAllLearnings(Object.fromEntries(learnings.map((l) => [l.id, l])));
     } catch (err) { console.error(err); }
     setLoading(false);
   };
@@ -387,6 +389,27 @@ export default function Agents() {
                         <span className="strategy-stat"><X size={10} /> {p.tasks_failed} failed</span>
                         <span className="strategy-stat"><Brain size={10} /> {p.context_set?.length || 0} learnings</span>
                       </div>
+
+                      {p.context_set?.length > 0 && (
+                        <div className="strategy-section context-set-section">
+                          <div className="strategy-section-label"><Brain size={10} /> Context Set</div>
+                          <div className="context-set-list">
+                            {p.context_set.map((lid) => {
+                              const l = allLearnings[lid];
+                              return l ? (
+                                <div key={lid} className="context-set-item">
+                                  <span className="context-set-cat">{l.category?.replace(/_/g, " ")}</span>
+                                  <span className="context-set-rule">{l.rule}</span>
+                                </div>
+                              ) : (
+                                <div key={lid} className="context-set-item">
+                                  <span className="context-set-rule" style={{ color: "var(--text-muted)" }}>Learning #{lid}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
 
                       <div className="strategy-card-actions">
                         {p.archived ? (
