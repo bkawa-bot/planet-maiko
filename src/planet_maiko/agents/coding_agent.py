@@ -153,6 +153,84 @@ def _write_mcp_json(working_path, task_id):
         json.dump(mcp_config, f, indent=2)
 
 
+def _write_claude_settings(working_path, task_id, agent_id):
+    """Write .claude/settings.json (hooks config) and .maiko-env.json (identity).
+
+    Checks the hooks config to determine which hooks are enabled before
+    including them in settings.json.
+    """
+    import json
+
+    # Resolve hooks directory (same pattern as _write_mcp_json)
+    hooks_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)
+    ))), "hooks")
+
+    # Fall back to looking relative to the working path
+    if not os.path.isdir(hooks_dir):
+        hooks_dir = os.path.join(working_path, "..", "..", "hooks")
+
+    # Normalize to absolute path with forward slashes for cross-platform compat
+    hooks_dir = os.path.abspath(hooks_dir)
+
+    # Load hooks config
+    try:
+        from planet_maiko.config import load_config
+        config = load_config()
+        hooks_config = config.get("hooks", {})
+    except Exception:
+        hooks_config = {"enabled": True}
+
+    if not hooks_config.get("enabled", True):
+        return
+
+    # Build hooks dict, only including enabled hooks
+    hooks = {}
+
+    if hooks_config.get("post_tool_use", True):
+        hooks["PostToolUse"] = [{
+            "matcher": "Bash",
+            "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/post_tool_use.py"}],
+        }]
+
+    if hooks_config.get("post_compact", True):
+        hooks["PostCompact"] = [{
+            "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/post_compact.py"}],
+        }]
+
+    if hooks_config.get("notification", True):
+        hooks["Notification"] = [{
+            "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/notification.py"}],
+        }]
+
+    if hooks_config.get("subagent_stop", True):
+        hooks["SubagentStop"] = [{
+            "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/subagent_stop.py"}],
+        }]
+
+    if not hooks:
+        return
+
+    settings = {"hooks": hooks}
+
+    # Write .claude/settings.json
+    claude_dir = os.path.join(working_path, ".claude")
+    os.makedirs(claude_dir, exist_ok=True)
+    with open(os.path.join(claude_dir, "settings.json"), "w") as f:
+        json.dump(settings, f, indent=2)
+
+    # Write .maiko-env.json for hook scripts to read
+    env_data = {
+        "task_id": task_id,
+        "agent_id": agent_id,
+        "api_url": "http://localhost:8420/api",
+    }
+    with open(os.path.join(working_path, ".maiko-env.json"), "w") as f:
+        json.dump(env_data, f, indent=2)
+
+    logger.info(f"[agent] Wrote Claude hooks settings for {agent_id} ({len(hooks)} hooks)")
+
+
 def _kickoff_agent(agent_id, worktree_path, task_id):
     """Start the agent via the configured runtime."""
     try:
@@ -238,6 +316,9 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     _write_mcp_json(working_path, task_id)
 
     agent_id = f"agent-{branch_name}"
+
+    # Write Claude Code hooks configuration
+    _write_claude_settings(working_path, task_id, agent_id)
 
     # Compile learning brief for this agent
     try:

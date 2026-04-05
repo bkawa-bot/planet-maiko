@@ -53,6 +53,13 @@ DEFAULT_CONFIG = {
         "latitude": None,   # e.g. 37.77 for San Francisco
         "longitude": None,  # e.g. -122.42 for San Francisco
     },
+    "hooks": {
+        "enabled": True,
+        "post_tool_use": True,
+        "post_compact": True,
+        "notification": True,
+        "subagent_stop": True,
+    },
     "setup_complete": False,
 }
 

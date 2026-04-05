@@ -416,3 +416,140 @@ def get_conflicts():
         .all()
     )
     return jsonify([m.to_dict() for m in conflict_msgs])
+
+
+# --- Hook Handlers ---
+# Called by Claude Code hook scripts (hooks/*.py) to report events back
+# to Planet Maiko. All endpoints are fire-and-forget from the hook side.
+
+@agents_bp.route("/hooks/post-tool-use", methods=["POST"])
+def hook_post_tool_use():
+    """Handle post-tool-use hook events (git commit, git push)."""
+    from datetime import datetime, timezone
+    from planet_maiko.models.pupdate import Pupdate
+    from planet_maiko.models.agent_profile import AgentProfile
+
+    data = request.get_json()
+    task_id = data.get("task_id", "")
+    agent_id = data.get("agent_id", "")
+    event = data.get("event", "tool_use")
+    message = data.get("message", "")
+
+    # Create an agent_update pupdate
+    pupdate = Pupdate(
+        id=f"hook-{agent_id}-{event}-{int(datetime.now(timezone.utc).timestamp())}",
+        source="agent",
+        source_id=f"agent/{agent_id}",
+        type="agent_update",
+        priority="low",
+        title=f"Agent {event.replace('_', ' ')}",
+        body=message,
+        tags=[task_id, "agent", "hook"],
+        extra={
+            "agent_id": agent_id,
+            "task_id": task_id,
+            "event": event,
+        },
+    )
+    db.session.add(pupdate)
+
+    # Update agent's last_active_at
+    profile = db.session.get(AgentProfile, agent_id)
+    if profile:
+        profile.last_active_at = datetime.now(timezone.utc)
+
+    db.session.commit()
+    return jsonify({"status": "ok"}), 201
+
+
+@agents_bp.route("/hooks/post-compact", methods=["POST"])
+def hook_post_compact():
+    """Handle post-compact hook: refresh agent's learning context."""
+    from planet_maiko.brain.learning.processor import compile_brief
+
+    data = request.get_json()
+    task_id = data.get("task_id", "")
+    agent_id = data.get("agent_id", "")
+
+    if not task_id:
+        return jsonify({"error": "task_id required"}), 400
+
+    # Compile a fresh brief for this agent
+    brief = compile_brief(agent_profile_id=agent_id)
+
+    if not brief or brief == "No active learnings yet.":
+        return jsonify({"status": "no_learnings"}), 200
+
+    # Send the brief as an inbox message
+    msg = AgentMessage(
+        task_id=task_id,
+        direction="to_agent",
+        sender="maiko",
+        content=f"Context refreshed after compaction. Here are the current coding guidelines:\n\n{brief}",
+        message_type="context_refresh",
+    )
+    db.session.add(msg)
+    db.session.commit()
+    return jsonify({"status": "ok", "brief_length": len(brief)}), 201
+
+
+@agents_bp.route("/hooks/notification", methods=["POST"])
+def hook_notification():
+    """Handle notification hook: create milestone pupdate."""
+    from datetime import datetime, timezone
+    from planet_maiko.models.pupdate import Pupdate
+
+    data = request.get_json()
+    task_id = data.get("task_id", "")
+    agent_id = data.get("agent_id", "")
+    title = data.get("title", "Agent notification")
+    body = data.get("body", "")
+
+    pupdate = Pupdate(
+        id=f"hook-notify-{agent_id}-{int(datetime.now(timezone.utc).timestamp())}",
+        source="agent",
+        source_id=f"agent/{agent_id}",
+        type="agent_milestone",
+        priority="normal",
+        title=title,
+        body=body,
+        actionable=True,
+        action_hint="Review agent milestone",
+        tags=[task_id, "agent", "milestone"],
+        extra={
+            "agent_id": agent_id,
+            "task_id": task_id,
+        },
+    )
+    db.session.add(pupdate)
+    db.session.commit()
+    return jsonify({"status": "ok"}), 201
+
+
+@agents_bp.route("/hooks/subagent-stop", methods=["POST"])
+def hook_subagent_stop():
+    """Handle subagent-stop hook: create low-priority pupdate."""
+    from datetime import datetime, timezone
+    from planet_maiko.models.pupdate import Pupdate
+
+    data = request.get_json()
+    task_id = data.get("task_id", "")
+    agent_id = data.get("agent_id", "")
+
+    pupdate = Pupdate(
+        id=f"hook-subagent-{agent_id}-{int(datetime.now(timezone.utc).timestamp())}",
+        source="agent",
+        source_id=f"agent/{agent_id}",
+        type="agent_update",
+        priority="low",
+        title="Subagent finished",
+        body=f"A subagent for {agent_id} completed its work.",
+        tags=[task_id, "agent", "subagent"],
+        extra={
+            "agent_id": agent_id,
+            "task_id": task_id,
+        },
+    )
+    db.session.add(pupdate)
+    db.session.commit()
+    return jsonify({"status": "ok"}), 201
