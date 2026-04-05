@@ -64,6 +64,11 @@
   background: var(--bg-card); color: var(--text); font-size: 10px;
 }
 
+/* Skill results history */
+.results-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.result-item { padding: 8px 12px; background: var(--bg-card-alt); border-radius: var(--radius-xs); cursor: pointer; transition: background 0.15s; }
+.result-item:hover { background: var(--bg-hover); }
+
 /* Shared */
 .empty-state { text-align: center; padding: 48px 20px; }
 .empty-icon { color: var(--text-muted); margin-bottom: 12px; }

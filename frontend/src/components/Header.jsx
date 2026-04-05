@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 import {
-  Home, Inbox, CheckSquare, Users, Brain, Lightbulb,
-  Bot, Flame, BookOpen, Wand2, Settings, Bell, Shield,
+  Home, Inbox, CheckSquare, Brain, Lightbulb,
+  Bot, Flame, Settings, Bell, Shield,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api/client";
@@ -11,13 +11,10 @@ const NAV_ITEMS = [
   { to: "/", icon: Home, label: "Home", end: true },
   { to: "/inbox", icon: Inbox, label: "Inbox", badgeKey: "pupdates" },
   { to: "/tasks", icon: CheckSquare, label: "Tasks", badgeKey: "tasks" },
-  { to: "/team", icon: Users, label: "Team" },
-  { to: "/brainstorm", icon: Brain, label: "Brainstorm" },
-  { to: "/suggestions", icon: Lightbulb, label: "Suggestions" },
   { to: "/agents", icon: Bot, label: "Agents" },
+  { to: "/brain", icon: Brain, label: "Brain" },
+  { to: "/ideas", icon: Lightbulb, label: "Ideas" },
   { to: "/gathering", icon: Flame, label: "Gathering" },
-  { to: "/skills", icon: Wand2, label: "Skills" },
-  { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
 const THEMES = [
@@ -127,6 +124,13 @@ export default function Header() {
           </span>
         )}
 
+        {/* Notification bell */}
+        <NavLink to="/inbox" className="header-icon-btn" title="Notifications">
+          <Bell size={16} />
+          {badges.pupdates > 0 && <span className="header-icon-badge">{badges.pupdates}</span>}
+        </NavLink>
+
+        {/* Theme toggle */}
         <div className="theme-wrapper" ref={themeRef}>
           <button
             className="theme-toggle"
@@ -149,6 +153,11 @@ export default function Header() {
             </div>
           )}
         </div>
+
+        {/* Settings gear */}
+        <NavLink to="/settings" className="header-icon-btn" title="Settings">
+          <Settings size={16} />
+        </NavLink>
       </div>
     </header>
   );

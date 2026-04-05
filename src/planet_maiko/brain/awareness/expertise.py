@@ -166,3 +166,42 @@ def should_rebuild():
     if _last_built is None:
         return True
     return (datetime.now(timezone.utc) - _last_built).days > 7
+
+
+def build_reviewer_profiles():
+    """Build reviewer focus profiles from signals.
+
+    Aggregates PR review signals by reviewer to determine each person's
+    focus areas (testing, security, etc.)
+
+    Returns: dict of {reviewer: {category: percentage}}
+    """
+    from planet_maiko.models.signal import Signal
+
+    signals = Signal.query.filter(
+        Signal.source_type == "pr_comment",
+        Signal.reviewer.isnot(None),
+        Signal.category != "pattern",  # Only classified signals
+    ).all()
+
+    # Count categories per reviewer
+    reviewer_counts = {}
+    for s in signals:
+        if not s.reviewer:
+            continue
+        if s.reviewer not in reviewer_counts:
+            reviewer_counts[s.reviewer] = {}
+        reviewer_counts[s.reviewer][s.category] = reviewer_counts[s.reviewer].get(s.category, 0) + 1
+
+    # Convert to percentages
+    profiles = {}
+    for reviewer, counts in reviewer_counts.items():
+        total = sum(counts.values())
+        if total == 0:
+            continue
+        profiles[reviewer] = {
+            cat: round(count / total, 2)
+            for cat, count in sorted(counts.items(), key=lambda x: -x[1])
+        }
+
+    return profiles

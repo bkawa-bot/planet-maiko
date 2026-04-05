@@ -1,6 +1,17 @@
 const API_BASE = import.meta.env.DEV ? "http://localhost:8420/api" : "/api";
 
+// Simple GET cache — avoids re-fetching when switching tabs
+const _cache = {};
+const CACHE_TTL = 5000; // 5 seconds
+
 async function request(path, options = {}) {
+  const isGet = !options.method || options.method === "GET";
+
+  // Return cached response for GETs within TTL
+  if (isGet && _cache[path] && (Date.now() - _cache[path].at) < CACHE_TTL) {
+    return _cache[path].data;
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
     ...options,
@@ -9,7 +20,14 @@ async function request(path, options = {}) {
     const error = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(error.error || res.statusText);
   }
-  return res.json();
+  const data = await res.json();
+
+  // Cache GET responses
+  if (isGet) {
+    _cache[path] = { data, at: Date.now() };
+  }
+
+  return data;
 }
 
 export const api = {
@@ -38,6 +56,7 @@ export const api = {
   startTask: (id) => request(`/tasks/${id}/start`, { method: "POST" }),
   completeTask: (id) => request(`/tasks/${id}/done`, { method: "POST" }),
   cancelTask: (id) => request(`/tasks/${id}/cancel`, { method: "POST" }),
+  importLinear: () => request("/tasks/import-linear", { method: "POST" }),
 
   // Projects
   getProjects: (params = {}) => {
@@ -57,11 +76,18 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ status }),
     }),
+  generateTasks: (id) =>
+    request(`/projects/${id}/generate-tasks`, { method: "POST" }),
+  generatePlan: (projectId) =>
+    request(`/projects/${projectId}/generate-plan`, { method: "POST" }),
 
   // Config
   getConfig: () => request("/config"),
   updateConfig: (data) =>
     request("/config", { method: "PUT", body: JSON.stringify(data) }),
+
+  discoverGithubRepos: () => request("/github/discover", { method: "POST" }),
+  testIntegration: (name) => request(`/config/test/${name}`, { method: "POST" }),
 
   // Pollers
   getPollerStatus: () => request("/pollers/status"),
@@ -78,6 +104,7 @@ export const api = {
     const query = new URLSearchParams(params).toString();
     return request(`/scene${query ? `?${query}` : ""}`);
   },
+  refreshScene: () => request("/scene/refresh", { method: "POST" }),
 
   // Focus
   getFocus: () => request("/focus"),
@@ -95,13 +122,15 @@ export const api = {
     return request(`/learnings/brief${query ? `?${query}` : ""}`);
   },
 
-  // EOD
-  getEodState: () => request("/eod"),
-  startEod: () => request("/eod/start", { method: "POST" }),
-  collectEod: () => request("/eod/collect", { method: "POST" }),
-  synthesizeEod: () => request("/eod/synthesize", { method: "POST" }),
-  finalizeEod: (decisions) =>
-    request("/eod/finalize", { method: "POST", body: JSON.stringify({ decisions }) }),
+  // Pack Insights
+  getPackInsightsState: () => request("/pack-insights"),
+  startPackInsights: () => request("/pack-insights/start", { method: "POST" }),
+  collectPackInsights: () => request("/pack-insights/collect", { method: "POST" }),
+  synthesizePackInsights: () => request("/pack-insights/synthesize", { method: "POST" }),
+  addPackInsightsLearning: (text, category) =>
+    request("/pack-insights/add", { method: "POST", body: JSON.stringify({ text, category }) }),
+  finalizePackInsights: (decisions) =>
+    request("/pack-insights/finalize", { method: "POST", body: JSON.stringify({ decisions }) }),
 
   // Agents
   getAgents: () => request("/agents"),
@@ -113,8 +142,17 @@ export const api = {
 
   // Skills
   getSkills: () => request("/skills"),
+  getSkill: (id) => request(`/skills/${id}`),
+  createSkill: (data) => request("/skills", { method: "POST", body: JSON.stringify(data) }),
+  updateSkill: (id, data) => request(`/skills/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteSkill: (id) => request(`/skills/${id}`, { method: "DELETE" }),
   runSkill: (name, data) =>
     request(`/skills/${name}/run`, { method: "POST", body: JSON.stringify(data) }),
+  getSkillResults: (skillName) => {
+    const query = skillName ? `?skill_name=${encodeURIComponent(skillName)}` : "";
+    return request(`/skill-results${query}`);
+  },
+  getSkillResult: (id) => request(`/skill-results/${id}`),
 
   // Suggestions
   runScan: (repos) =>
@@ -128,16 +166,42 @@ export const api = {
   getSignals: () => request("/signals"),
 
   // Learnings management
+  createLearning: (data) => request("/learnings", { method: "POST", body: JSON.stringify(data) }),
+  backfillKnowledge: (limit = 20) => request("/learnings/backfill", { method: "POST", body: JSON.stringify({ limit }) }),
   approveLearning: (id) => request(`/learnings/${id}/approve`, { method: "POST" }),
   dismissLearning: (id) => request(`/learnings/${id}/dismiss`, { method: "POST" }),
 
+  // Tournaments
+  getTournaments: () => request("/tournaments"),
+  getTournament: (id) => request(`/tournaments/${id}`),
+  runTournament: (repo, pr_number) =>
+    request("/tournaments/run", { method: "POST", body: JSON.stringify({ repo, pr_number }) }),
+  getTournamentScores: (repo) => {
+    const query = repo ? `?repo=${encodeURIComponent(repo)}` : "";
+    return request(`/tournaments/scores${query}`);
+  },
+
+  // Training
+  getTrainingPRs: () => request("/training/prs"),
+  getTrainingHistory: () => request("/training/history"),
+  runTraining: (data) => request("/training/run", { method: "POST", body: JSON.stringify(data) }),
+
   // Agent profiles
-  getProfiles: () => request("/profiles"),
+  getProfiles: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/profiles${query ? `?${query}` : ""}`);
+  },
   getProfile: (id) => request(`/profiles/${id}`),
   createProfile: (data) =>
     request("/profiles", { method: "POST", body: JSON.stringify(data) }),
   updateProfile: (id, data) =>
     request(`/profiles/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  archiveProfile: (id) => request(`/profiles/${id}/archive`, { method: "POST" }),
+  unarchiveProfile: (id) => request(`/profiles/${id}/unarchive`, { method: "POST" }),
   getAvatars: () => request("/profiles/avatars"),
   recommendAgent: (repo) => request(`/profiles/recommend?repo=${encodeURIComponent(repo || "")}`),
+
+  // Agent assignment
+  assignAgent: (data) =>
+    request("/agents/assign", { method: "POST", body: JSON.stringify(data) }),
 };

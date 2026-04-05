@@ -35,7 +35,14 @@ def correlate():
     Returns:
         dict with count of incidents created
     """
-    window_start = datetime.now(timezone.utc) - timedelta(minutes=CORRELATION_WINDOW_MINUTES)
+    from planet_maiko.config import load_config
+    config = load_config()
+    brain_config = config.get("brain", {})
+
+    window_minutes = brain_config.get("correlation_window_minutes", CORRELATION_WINDOW_MINUTES)
+    cause_chains = brain_config.get("incident_chains", CAUSE_CHAINS)
+
+    window_start = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
 
     recent = (
         Pupdate.query
@@ -67,7 +74,7 @@ def correlate():
         types_present = {p.type for p in pupdates}
 
         # Check each cause chain
-        for chain in CAUSE_CHAINS:
+        for chain in cause_chains:
             matching = types_present.intersection(chain)
             if len(matching) >= 2:
                 # Check we haven't already created this incident

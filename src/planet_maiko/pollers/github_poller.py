@@ -7,6 +7,18 @@ from planet_maiko.pollers.base import BasePoller
 logger = logging.getLogger(__name__)
 
 
+def _detect_language(file_path):
+    """Detect language from file extension."""
+    if not file_path:
+        return None
+    ext = file_path.rsplit(".", 1)[-1].lower() if "." in file_path else ""
+    return {
+        "py": "python", "java": "java", "js": "javascript", "ts": "typescript",
+        "jsx": "javascript", "tsx": "typescript", "rb": "ruby", "go": "go",
+        "rs": "rust", "kt": "kotlin", "swift": "swift",
+    }.get(ext)
+
+
 class GitHubPoller(BasePoller):
     """Polls GitHub for PR activity using the gh CLI.
 
@@ -23,7 +35,7 @@ class GitHubPoller(BasePoller):
 
     def _gh(self, args):
         """Run a gh CLI command and return parsed JSON."""
-        cmd = ["gh"] + args + ["--json"]
+        cmd = ["gh"] + args
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if result.returncode != 0:
             raise RuntimeError(f"gh command failed: {result.stderr.strip()}")
@@ -35,7 +47,7 @@ class GitHubPoller(BasePoller):
             "search", "prs",
             "--review-requested", username,
             "--state", "open",
-            "number,title,url,repository,author,createdAt,labels",
+            "--json", "number,title,url,repository,author,createdAt,labels",
         ])
 
     def _get_my_prs(self, username):
@@ -44,7 +56,7 @@ class GitHubPoller(BasePoller):
             "search", "prs",
             "--author", username,
             "--state", "open",
-            "number,title,url,repository,createdAt,labels",
+            "--json", "number,title,url,repository,author,createdAt,labels",
         ])
 
     def _get_pr_reviews(self, repo, pr_number):
@@ -87,7 +99,14 @@ class GitHubPoller(BasePoller):
         return []
 
     def _get_pr_comments(self, repo, pr_number):
-        """Get review comments (inline code feedback) for a PR."""
+        """Get review comments (inline code feedback) for a PR.
+
+        Fetches both issue-level comments and inline review comments
+        (which include file path information for language detection).
+        """
+        comments = []
+
+        # Issue-level comments (no file path)
         try:
             result = subprocess.run(
                 ["gh", "pr", "view", str(pr_number),
@@ -97,10 +116,29 @@ class GitHubPoller(BasePoller):
             )
             if result.returncode == 0:
                 data = json.loads(result.stdout)
-                return data.get("comments", [])
+                for c in data.get("comments", []):
+                    c["_type"] = "issue_comment"
+                    comments.append(c)
         except Exception:
             pass
-        return []
+
+        # Inline review comments (have file path via the API)
+        try:
+            inline = self._gh([
+                "api", f"repos/{repo}/pulls/{pr_number}/comments",
+                "--jq", ".",
+            ])
+            for c in inline:
+                comments.append({
+                    "author": {"login": c.get("user", {}).get("login", "unknown")},
+                    "body": c.get("body", ""),
+                    "path": c.get("path", ""),
+                    "_type": "review_comment",
+                })
+        except Exception:
+            pass
+
+        return comments
 
     def poll(self, config):
         """Fetch all relevant GitHub data."""
@@ -124,10 +162,12 @@ class GitHubPoller(BasePoller):
                 comments = self._get_pr_comments(repo, number)
                 for c in comments:
                     review_comments.append({
+                        "type": c.get("_type", "issue_comment"),
                         "repo": repo,
                         "pr_number": number,
                         "author": c.get("author", {}).get("login", "unknown"),
                         "body": c.get("body", ""),
+                        "file_path": c.get("path", ""),
                     })
 
         return {
@@ -171,6 +211,24 @@ class GitHubPoller(BasePoller):
             reviews = pr.get("_reviews", [])
             checks = pr.get("_checks", [])
             labels = [l.get("name", "") for l in pr.get("labels", [])]
+
+            # Always create a pupdate for open PRs (so the user sees them)
+            author = pr.get("author", {}).get("login", "unknown")
+            pupdates.append({
+                "source_id": f"open/{repo}#{number}",
+                "type": "my_pr_open",
+                "priority": "low",
+                "title": f"Open PR: {pr.get('title', '')}",
+                "body": f"Your PR {repo}#{number} is open",
+                "url": pr.get("url", ""),
+                "actionable": False,
+                "tags": [repo.split("/")[-1]] + labels,
+                "metadata": {
+                    "repo": repo,
+                    "number": number,
+                    "author": author,
+                },
+            })
 
             # Count review states
             approved = sum(1 for r in reviews if r.get("state") == "APPROVED")
@@ -242,18 +300,20 @@ class GitHubPoller(BasePoller):
         return pupdates
 
     def to_signals(self, raw_data):
-        """Extract learning signals from PR review comments."""
+        """Extract review comments as learning signals."""
         signals = []
-        for comment in raw_data.get("review_comments", []):
-            body = comment.get("body", "").strip()
-            if not body or len(body) < 15:
+        for item in raw_data.get("review_comments", []):
+            comment = item.get("body", "").strip()
+            if not comment or len(comment) < 20:
                 continue
-
             signals.append({
-                "text": body,
-                "category": "domain_knowledge",
+                "category": "pattern",  # Will be classified by batch classifier
+                "text": comment[:500],
                 "source_type": "pr_comment",
-                "reviewer": comment.get("author", "unknown"),
-                "repo": comment.get("repo", ""),
+                "reviewer": item.get("author", ""),
+                "severity": "suggestion",
+                "repo": item.get("repo", ""),
+                "file_path": item.get("file_path", ""),
+                "language": _detect_language(item.get("file_path", "")),
             })
         return signals

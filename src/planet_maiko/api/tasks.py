@@ -47,9 +47,14 @@ def create_task():
         url=data.get("url"),
         tags=data.get("tags", []),
         extra=data.get("metadata", {}),
+        due_date=data.get("due_date"),
     )
     db.session.add(task)
     db.session.commit()
+
+    from planet_maiko.plugins.loader import fire_hook
+    fire_hook("on_task_created", task)
+
     return jsonify(task.to_dict()), 201
 
 
@@ -59,7 +64,7 @@ def update_task(task_id):
     task = db.get_or_404(Task, task_id)
     data = request.get_json()
 
-    for field in ["title", "type", "priority", "url", "tags", "project_id"]:
+    for field in ["title", "type", "priority", "url", "tags", "project_id", "assigned_agent_id", "due_date"]:
         if field in data:
             setattr(task, field, data[field])
     if "metadata" in data:
@@ -74,6 +79,8 @@ def update_task(task_id):
 def start_task(task_id):
     """Mark a task as in progress."""
     task = db.get_or_404(Task, task_id)
+    if task.status in ("done", "cancelled"):
+        return jsonify({"error": f"Cannot start a {task.status} task"}), 400
     task.status = "in_progress"
     task.updated_at = datetime.now(timezone.utc)
     db.session.commit()
@@ -84,6 +91,8 @@ def start_task(task_id):
 def complete_task(task_id):
     """Mark a task as done."""
     task = db.get_or_404(Task, task_id)
+    if task.status == "cancelled":
+        return jsonify({"error": "Cannot complete a cancelled task"}), 400
     task.status = "done"
     task.updated_at = datetime.now(timezone.utc)
     db.session.commit()
@@ -98,3 +107,17 @@ def cancel_task(task_id):
     task.updated_at = datetime.now(timezone.utc)
     db.session.commit()
     return jsonify(task.to_dict())
+
+
+@tasks_bp.route("/tasks/import-linear", methods=["POST"])
+def import_from_linear():
+    """Import assigned issues from Linear as tasks with project associations."""
+    from planet_maiko.config import load_config
+    config = load_config()
+    api_key = config.get("linear", {}).get("api_key")
+    if not api_key:
+        return jsonify({"error": "Linear API key not configured. Set it in Settings."}), 400
+
+    from planet_maiko.pollers.linear_poller import LinearPoller
+    stats = LinearPoller.import_issues(api_key)
+    return jsonify(stats)

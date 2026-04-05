@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planet Maiko — Your Engineering Companion</title>
+  <meta name="description" content="A personal engineering companion that unifies notifications, triages with AI, and orchestrates self-specializing coding agents.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --bg: #1e2529;
+      --bg-card: #2d363c;
+      --text: #e8ecf0;
+      --text-dim: #8b9da8;
+      --text-muted: #5f7280;
+      --pink: #F891B4;
+      --teal: #5EC4C8;
+      --orange: #FF975B;
+      --mint: #7DDBA3;
+      --blue: #89CFF0;
+      --lavender: #C3A6E8;
+      --lemon: #F9E07F;
+      --border: #374148;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    a { color: var(--teal); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code { font-family: 'SF Mono', 'Fira Code', monospace; background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+
+    /* === Hero === */
+    .hero {
+      text-align: center;
+      padding: 80px 24px 60px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .hero-logo {
+      width: 80px;
+      height: 80px;
+      border-radius: 20px;
+      image-rendering: pixelated;
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-size: 2.8em;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+    .hero h1 span {
+      background: linear-gradient(90deg, var(--pink), var(--orange), var(--teal));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-sub {
+      font-size: 1.2em;
+      color: var(--text-dim);
+      margin-bottom: 32px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .hero-badges {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 40px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.8em;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+    }
+    .badge-pink { border-color: rgba(248,145,180,0.3); color: var(--pink); }
+    .badge-teal { border-color: rgba(94,196,200,0.3); color: var(--teal); }
+    .badge-orange { border-color: rgba(255,151,91,0.3); color: var(--orange); }
+    .badge-mint { border-color: rgba(125,219,163,0.3); color: var(--mint); }
+
+    .hero-cta {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-size: 0.95em;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--teal);
+      color: #1e2529;
+    }
+    .btn-primary:hover { opacity: 0.9; text-decoration: none; transform: translateY(-1px); }
+    .btn-secondary {
+      background: var(--bg-card);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { border-color: var(--teal); text-decoration: none; }
+
+    /* === Screenshot === */
+    .screenshot-section {
+      max-width: 1000px;
+      margin: 0 auto 80px;
+      padding: 0 24px;
+    }
+    .screenshot-placeholder {
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 0.9em;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+    }
+    .screenshot-placeholder img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 16px;
+    }
+
+    /* === Features === */
+    .features {
+      max-width: 1000px;
+      margin: 0 auto 80px;
+      padding: 0 24px;
+    }
+    .features h2 {
+      text-align: center;
+      font-size: 2em;
+      margin-bottom: 40px;
+    }
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      transition: all 0.2s;
+    }
+    .feature-card:hover {
+      border-color: var(--teal);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+    .feature-icon {
+      font-size: 1.6em;
+      margin-bottom: 12px;
+    }
+    .feature-card h3 {
+      font-size: 1.05em;
+      margin-bottom: 8px;
+    }
+    .feature-card p {
+      color: var(--text-dim);
+      font-size: 0.9em;
+      line-height: 1.5;
+    }
+
+    /* === Architecture === */
+    .architecture {
+      max-width: 800px;
+      margin: 0 auto 80px;
+      padding: 0 24px;
+    }
+    .architecture h2 {
+      text-align: center;
+      font-size: 2em;
+      margin-bottom: 16px;
+    }
+    .architecture-sub {
+      text-align: center;
+      color: var(--text-dim);
+      margin-bottom: 40px;
+    }
+    .arch-block {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    .arch-block h3 {
+      font-size: 1em;
+      margin-bottom: 8px;
+      color: var(--teal);
+    }
+    .arch-block p {
+      color: var(--text-dim);
+      font-size: 0.9em;
+    }
+    .arch-pipeline {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .pipe-step {
+      padding: 4px 12px;
+      border-radius: 8px;
+      font-size: 0.8em;
+      font-weight: 600;
+      background: rgba(94,196,200,0.1);
+      color: var(--teal);
+      border: 1px solid rgba(94,196,200,0.2);
+    }
+
+    /* === Tech Stack === */
+    .stack {
+      max-width: 800px;
+      margin: 0 auto 80px;
+      padding: 0 24px;
+    }
+    .stack h2 {
+      text-align: center;
+      font-size: 2em;
+      margin-bottom: 32px;
+    }
+    .stack-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    .stack-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+    }
+    .stack-item strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+    .stack-item span {
+      color: var(--text-muted);
+      font-size: 0.85em;
+    }
+
+    /* === Install === */
+    .install {
+      max-width: 700px;
+      margin: 0 auto 80px;
+      padding: 0 24px;
+    }
+    .install h2 {
+      text-align: center;
+      font-size: 2em;
+      margin-bottom: 32px;
+    }
+    .install-steps {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .install-step {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .install-step:last-child { border-bottom: none; }
+    .install-step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--teal);
+      color: #1e2529;
+      font-size: 0.8em;
+      font-weight: 700;
+      margin-right: 10px;
+    }
+    .install-step h4 {
+      display: inline;
+      font-size: 0.95em;
+    }
+    .install-step pre {
+      margin-top: 10px;
+      background: rgba(0,0,0,0.2);
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 0.85em;
+      overflow-x: auto;
+      color: var(--text-dim);
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+
+    /* === Footer === */
+    .footer {
+      text-align: center;
+      padding: 40px 24px;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.85em;
+    }
+    .footer a { color: var(--text-dim); }
+
+    /* === Screenshots Gallery === */
+    .gallery {
+      max-width: 1000px;
+      margin: 0 auto 80px;
+      padding: 0 24px;
+    }
+    .gallery h2 {
+      text-align: center;
+      font-size: 2em;
+      margin-bottom: 32px;
+    }
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+    }
+    .gallery-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .gallery-item img {
+      width: 100%;
+      aspect-ratio: 16/10;
+      object-fit: cover;
+    }
+    .gallery-caption {
+      padding: 12px 16px;
+      font-size: 0.85em;
+      color: var(--text-dim);
+    }
+    .gallery-placeholder {
+      width: 100%;
+      aspect-ratio: 16/10;
+      background: rgba(255,255,255,0.03);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 0.85em;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Hero -->
+  <section class="hero">
+    <img src="../frontend/public/icon.png" alt="Planet Maiko" class="hero-logo">
+    <h1><span>Planet Maiko</span></h1>
+    <p class="hero-sub">
+      A personal engineering companion that unifies your notifications, triages with AI, and orchestrates self-specializing coding agents.
+    </p>
+    <div class="hero-badges">
+      <span class="badge badge-teal">Self-Learning</span>
+      <span class="badge badge-pink">Focus Mode</span>
+      <span class="badge badge-orange">Agent Orchestration</span>
+      <span class="badge badge-mint">Open Source</span>
+    </div>
+    <div class="hero-cta">
+      <a href="https://github.com/bkawa-bot/planet-maiko" class="btn btn-primary">View on GitHub</a>
+      <a href="#install" class="btn btn-secondary">Get Started</a>
+    </div>
+  </section>
+
+  <!-- Main Screenshot -->
+  <section class="screenshot-section">
+    <div class="screenshot-placeholder">
+      <!-- Replace with: <img src="screenshots/home.png" alt="Planet Maiko Dashboard"> -->
+      Screenshot: Home Dashboard
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features">
+    <h2>Features</h2>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon" style="color: var(--blue)">&#9993;</div>
+        <h3>Unified Inbox</h3>
+        <p>GitHub PRs, Linear issues, Calendar events, and agent updates in one stream. Smart filtering by source, priority, and type.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="color: var(--teal)">&#9881;</div>
+        <h3>CPU-Style Brain</h3>
+        <p>5-phase processing pipeline: agent monitoring, conflict detection, incident correlation, rule-based triage, and learning. Rules handle 80% for free.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="color: var(--lavender)">&#9733;</div>
+        <h3>Self-Specializing Agents</h3>
+        <p>Agents are context strategies, not personas. Pups explore with random learning sets, seniors exploit proven ones. Tournament training with LLM-as-judge.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="color: var(--mint)">&#10003;</div>
+        <h3>Self-Learning System</h3>
+        <p>Signals from PR comments graduate into active rules. Tournament system validates against real merged PRs. Context optimization tracks what actually works.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="color: var(--pink)">&#9829;</div>
+        <h3>Focus Mode</h3>
+        <p>Gate notifications by your state: available, soft focus, deep focus, away. Held items escalate over time. Maiko respects your attention.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="color: var(--orange)">&#9883;</div>
+        <h3>Configurable Skills</h3>
+        <p>Morning briefs, brainstorms, investigations, repo analysis. Schedule skills to run automatically. Results become notifications from Maiko.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="color: var(--lemon)">&#9788;</div>
+        <h3>Live Scene Engine</h3>
+        <p>Dynamic pixel-art backgrounds based on real weather, time of day, season, and holidays. Live weather via Open-Meteo. Maiko changes outfits.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="color: var(--blue)">&#9875;</div>
+        <h3>Pluggable Everything</h3>
+        <p>Pollers, runtimes, rules, and skills are all plugin-based via Python entry points. Default runtime is Claude Code. Bring your own brain.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Screenshots Gallery -->
+  <section class="gallery">
+    <h2>Screenshots</h2>
+    <div class="gallery-grid">
+      <div class="gallery-item">
+        <div class="gallery-placeholder">Home (Night Theme)</div>
+        <div class="gallery-caption">Dashboard with focus tasks, notifications, live weather, and calendar</div>
+      </div>
+      <div class="gallery-item">
+        <div class="gallery-placeholder">Inbox</div>
+        <div class="gallery-caption">Unified notification stream with From Maiko suggestions</div>
+      </div>
+      <div class="gallery-item">
+        <div class="gallery-placeholder">Tasks</div>
+        <div class="gallery-caption">Projects and tasks with AI generation and agent assignment</div>
+      </div>
+      <div class="gallery-item">
+        <div class="gallery-placeholder">Agents</div>
+        <div class="gallery-caption">Active agents, profiles, message threads, and Pack Insights</div>
+      </div>
+      <div class="gallery-item">
+        <div class="gallery-placeholder">Brain (Knowledge)</div>
+        <div class="gallery-caption">Learned rules with confidence scores and approval workflow</div>
+      </div>
+      <div class="gallery-item">
+        <div class="gallery-placeholder">Sunset Theme</div>
+        <div class="gallery-caption">Civil twilight periwinkle theme with pixel-art dusk scene</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Architecture -->
+  <section class="architecture">
+    <h2>Architecture</h2>
+    <p class="architecture-sub">Modeled on a CPU — each brain cycle processes through a pipeline</p>
+
+    <div class="arch-block">
+      <h3>Brain Cycle (every 5 min)</h3>
+      <div class="arch-pipeline">
+        <span class="pipe-step">Agent Monitor</span>
+        <span class="pipe-step">Conflict Detection</span>
+        <span class="pipe-step">Correlator</span>
+        <span class="pipe-step">Pupdate Processor</span>
+        <span class="pipe-step">Learning</span>
+      </div>
+    </div>
+
+    <div class="arch-block">
+      <h3>Agent Context Loop</h3>
+      <p>Task arrives &rarr; compile learning brief for agent's specialization &rarr; agent works with personalized context &rarr; outcome recorded &rarr; specialization scores update &rarr; next task gets better-targeted learnings.</p>
+    </div>
+
+    <div class="arch-block">
+      <h3>Self-Learning Pipeline</h3>
+      <p>PR comments become signals &rarr; signals aggregate into learnings &rarr; learnings graduate at confidence thresholds &rarr; tournament system validates against real PRs &rarr; active rules compiled into agent briefs.</p>
+    </div>
+  </section>
+
+  <!-- Tech Stack -->
+  <section class="stack">
+    <h2>Tech Stack</h2>
+    <div class="stack-grid">
+      <div class="stack-item">
+        <strong>Backend</strong>
+        <span>Flask + SQLAlchemy + SQLite</span>
+      </div>
+      <div class="stack-item">
+        <strong>Frontend</strong>
+        <span>React 19 + Vite</span>
+      </div>
+      <div class="stack-item">
+        <strong>AI Runtime</strong>
+        <span>Claude Code (pluggable)</span>
+      </div>
+      <div class="stack-item">
+        <strong>Integrations</strong>
+        <span>GitHub, Linear, Calendar</span>
+      </div>
+      <div class="stack-item">
+        <strong>Weather</strong>
+        <span>Open-Meteo (free, no key)</span>
+      </div>
+      <div class="stack-item">
+        <strong>License</strong>
+        <span>LGPL v2.1</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Install -->
+  <section class="install" id="install">
+    <h2>Get Started</h2>
+    <div class="install-steps">
+      <div class="install-step">
+        <span class="install-step-num">1</span>
+        <h4>Clone & install</h4>
+        <pre>git clone https://github.com/bkawa-bot/planet-maiko.git
+cd planet-maiko
+pip install -e .</pre>
+      </div>
+      <div class="install-step">
+        <span class="install-step-num">2</span>
+        <h4>Install frontend</h4>
+        <pre>cd frontend
+npm install
+cd ..</pre>
+      </div>
+      <div class="install-step">
+        <span class="install-step-num">3</span>
+        <h4>Run (two terminals)</h4>
+        <pre># Terminal 1
+maiko serve
+
+# Terminal 2
+cd frontend && npm run dev</pre>
+      </div>
+      <div class="install-step">
+        <span class="install-step-num">4</span>
+        <h4>Open & configure</h4>
+        <pre>Open http://localhost:5173
+Go to Settings to connect GitHub, Linear, Calendar, and weather.</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>
+      Created by <a href="https://github.com/bkawa-bot">Brigitte Kawaguchi</a> &middot;
+      <a href="https://github.com/bkawa-bot/planet-maiko">GitHub</a> &middot;
+      LGPL v2.1
+    </p>
+  </footer>
+
+</body>
+</html>

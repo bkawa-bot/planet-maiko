@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { showToast } from "../components/Toast";
 import { Flame, Play, Sparkles, Check, Plus, X, Clock } from "lucide-react";
 import "./Gathering.css";
 
@@ -18,10 +19,10 @@ export default function Gathering() {
 
   useEffect(() => { fetchState(); }, []);
 
-  const handleStart = async () => { await api.startEod(); fetchState(); };
-  const handleCollect = async () => { await api.collectEod(); fetchState(); };
-  const handleSynthesize = async () => { await api.synthesizeEod(); fetchState(); };
-  const handleFinalize = async () => { await api.finalizeEod({}); fetchState(); };
+  const handleStart = async () => { await api.startEod(); showToast("Gathering the pack around the campfire... 🔥", "normal"); fetchState(); };
+  const handleCollect = async () => { await api.collectEod(); showToast("Learnings collected from the pack!", "normal"); fetchState(); };
+  const handleSynthesize = async () => { await api.synthesizeEod(); showToast("Maiko is synthesizing... ✨", "normal"); fetchState(); };
+  const handleFinalize = async () => { await api.finalizeEod({}); showToast("Learnings merged into the knowledge pool! 🎉", "normal"); fetchState(); };
 
   const handleAdd = async () => {
     if (!manualText.trim()) return;

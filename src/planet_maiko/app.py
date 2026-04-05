@@ -12,6 +12,25 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _ensure_columns():
+    """Add columns that db.create_all() won't add to existing tables."""
+    migrations = [
+        "ALTER TABLE tasks ADD COLUMN assigned_agent_id VARCHAR(128)",
+        "ALTER TABLE tasks ADD COLUMN due_date VARCHAR(20)",
+        "ALTER TABLE custom_skills ADD COLUMN schedule_interval_minutes INTEGER",
+        "ALTER TABLE custom_skills ADD COLUMN creates_pupdates BOOLEAN DEFAULT 0",
+        "ALTER TABLE custom_skills ADD COLUMN last_run_at DATETIME",
+        "ALTER TABLE tournaments ADD COLUMN task_tags JSON",
+        "ALTER TABLE tournaments ADD COLUMN suggested_new_tags JSON",
+    ]
+    for sql in migrations:
+        try:
+            db.session.execute(db.text(sql))
+        except Exception:
+            pass
+    db.session.commit()
+
+
 def create_app(start_scheduler=False):
     app = Flask(__name__)
 
@@ -44,10 +63,13 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.brain_api import brain_bp
     from planet_maiko.api.agents_api import agents_bp
     from planet_maiko.api.learning_api import learning_bp
-    from planet_maiko.api.eod_api import eod_bp
+    from planet_maiko.api.pack_insights_api import pack_insights_bp
     from planet_maiko.api.focus_api import focus_bp
     from planet_maiko.api.scene_api import scene_bp
+    from planet_maiko.api.expertise_api import expertise_bp
+    from planet_maiko.api.awareness_api import awareness_bp
     from planet_maiko.api.profiles_api import profiles_bp
+    from planet_maiko.api.training_api import training_bp
     app.register_blueprint(pupdates_bp, url_prefix="/api")
     app.register_blueprint(tasks_bp, url_prefix="/api")
     app.register_blueprint(projects_bp, url_prefix="/api")
@@ -55,10 +77,17 @@ def create_app(start_scheduler=False):
     app.register_blueprint(brain_bp, url_prefix="/api")
     app.register_blueprint(agents_bp, url_prefix="/api")
     app.register_blueprint(learning_bp, url_prefix="/api")
-    app.register_blueprint(eod_bp, url_prefix="/api")
+    app.register_blueprint(pack_insights_bp, url_prefix="/api")
     app.register_blueprint(focus_bp, url_prefix="/api")
     app.register_blueprint(scene_bp, url_prefix="/api")
+    app.register_blueprint(expertise_bp, url_prefix="/api")
+    app.register_blueprint(awareness_bp, url_prefix="/api")
     app.register_blueprint(profiles_bp, url_prefix="/api")
+    app.register_blueprint(training_bp, url_prefix="/api")
+
+    # Load plugins (entry_points + ~/.maiko/plugins/)
+    from planet_maiko.plugins.loader import load_plugins
+    load_plugins(app)
 
     # Create tables on first run
     with app.app_context():
@@ -70,7 +99,17 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.learning import Learning  # noqa: F401
         from planet_maiko.models.agent_profile import AgentProfile  # noqa: F401
         from planet_maiko.models.context_selection import ContextSelection  # noqa: F401
+        from planet_maiko.models.skill_result import SkillResult  # noqa: F401
+        from planet_maiko.models.custom_skill import CustomSkill  # noqa: F401
+        from planet_maiko.models.tournament import Tournament, TournamentEntry  # noqa: F401
         db.create_all()
+
+        # Schema migrations for existing DBs (SQLite ALTER TABLE is safe)
+        _ensure_columns()
+
+        # Seed default skills on first run
+        from planet_maiko.agents.skills import seed_defaults
+        seed_defaults()
 
     # Serve pre-built frontend static files
     frontend_dir = static_dir()

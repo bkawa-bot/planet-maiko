@@ -43,8 +43,10 @@ class PollerScheduler:
         self._stop_event = threading.Event()
 
     def start(self):
-        """Start all enabled pollers."""
+        """Start all enabled pollers, scheduled skills, and script pollers."""
         config = load_config()
+
+        # Start plugin pollers
         for name, poller in _get_pollers().items():
             integration_config = config.get(name, {})
             if not integration_config.get("enabled", False):
@@ -61,6 +63,12 @@ class PollerScheduler:
             self._threads[name] = thread
             thread.start()
             logger.info(f"[scheduler] Started {name} poller (every {interval}s)")
+
+        # Start scheduled skills
+        self._start_scheduled_skills()
+
+        # Start script pollers
+        self._start_script_pollers(config)
 
     def stop(self):
         """Signal all poller threads to stop."""
@@ -99,16 +107,118 @@ class PollerScheduler:
         with self.app.app_context():
             return poller.run(config, db.session)
 
+    def _start_scheduled_skills(self):
+        """Start threads for skills with schedule_interval_minutes set."""
+        try:
+            with self.app.app_context():
+                from planet_maiko.models.custom_skill import CustomSkill
+                skills = CustomSkill.query.filter(
+                    CustomSkill.schedule_interval_minutes.isnot(None)
+                ).all()
+
+                for skill in skills:
+                    interval = skill.schedule_interval_minutes * 60
+                    thread = threading.Thread(
+                        target=self._skill_loop,
+                        args=(skill.id, interval),
+                        daemon=True,
+                        name=f"skill-{skill.id}",
+                    )
+                    self._threads[f"skill:{skill.id}"] = thread
+                    thread.start()
+                    logger.info(f"[scheduler] Started skill '{skill.name}' (every {skill.schedule_interval_minutes}m)")
+        except Exception as e:
+            logger.debug(f"[scheduler] Scheduled skills skipped: {e}")
+
+    def _skill_loop(self, skill_id, interval):
+        """Run a scheduled skill on a loop."""
+        time.sleep(5)  # Initial delay
+        while not self._stop_event.is_set():
+            try:
+                from planet_maiko.pollers.skill_runner import run_scheduled_skill
+                run_scheduled_skill(skill_id, self.app)
+            except Exception as e:
+                logger.error(f"[scheduler] Skill {skill_id} error: {e}")
+            for _ in range(int(interval)):
+                if self._stop_event.is_set():
+                    break
+                time.sleep(1)
+
+    def _start_script_pollers(self, config):
+        """Start threads for script-based pollers from config."""
+        scripts = config.get("script_pollers", [])
+        for script_cfg in scripts:
+            if not script_cfg.get("enabled", True):
+                continue
+            name = script_cfg.get("name", "script")
+            script_path = script_cfg.get("script", "")
+            interval = script_cfg.get("interval_minutes", 30) * 60
+
+            if not script_path:
+                continue
+
+            thread = threading.Thread(
+                target=self._script_loop,
+                args=(name, script_path, interval),
+                daemon=True,
+                name=f"script-{name}",
+            )
+            self._threads[f"script:{name}"] = thread
+            thread.start()
+            logger.info(f"[scheduler] Started script poller '{name}' (every {interval // 60}m)")
+
+    def _script_loop(self, name, script_path, interval):
+        """Run an external script on a loop."""
+        import subprocess
+        time.sleep(5)
+        while not self._stop_event.is_set():
+            try:
+                result = subprocess.run(
+                    [script_path], capture_output=True, text=True, timeout=120,
+                )
+                if result.returncode != 0:
+                    logger.warning(f"[script:{name}] exited {result.returncode}: {result.stderr[:200]}")
+                elif result.stdout.strip():
+                    logger.info(f"[script:{name}] output: {result.stdout[:100]}")
+            except Exception as e:
+                logger.error(f"[script:{name}] error: {e}")
+            for _ in range(int(interval)):
+                if self._stop_event.is_set():
+                    break
+                time.sleep(1)
+
     def get_status(self):
-        """Get status of all pollers."""
+        """Get status of all pollers, scheduled skills, and script pollers."""
         config = load_config()
         status = {}
         for name in _get_pollers():
             integration_config = config.get(name, {})
             thread = self._threads.get(name)
             status[name] = {
+                "type": "poller",
                 "enabled": integration_config.get("enabled", False),
                 "running": thread.is_alive() if thread else False,
                 "interval_minutes": integration_config.get("poll_interval_minutes", 5),
             }
+
+        # Include scheduled skills
+        for key, thread in self._threads.items():
+            if key.startswith("skill:"):
+                skill_id = key.split(":", 1)[1]
+                status[key] = {
+                    "type": "scheduled_skill",
+                    "running": thread.is_alive(),
+                    "skill_id": skill_id,
+                }
+
+        # Include script pollers
+        for key, thread in self._threads.items():
+            if key.startswith("script:"):
+                script_name = key.split(":", 1)[1]
+                status[key] = {
+                    "type": "script_poller",
+                    "running": thread.is_alive(),
+                    "name": script_name,
+                }
+
         return status

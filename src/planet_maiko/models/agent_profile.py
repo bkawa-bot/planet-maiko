@@ -27,6 +27,15 @@ class AgentProfile(db.Model):
     # Specialization scores (JSON: {"api-service": 0.85, "search-service": 0.3})
     specializations = db.Column(db.JSON, default=dict)
 
+    # The agent's proven set of learning IDs — built via training and tournaments
+    context_set = db.Column(db.JSON, default=list)
+
+    # Lens: per-agent overrides (legacy, mostly unused)
+    lens = db.Column(db.JSON, default=dict)
+
+    archived = db.Column(db.Boolean, default=False)
+    archived_at = db.Column(db.DateTime, nullable=True)
+
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     last_active_at = db.Column(db.DateTime, nullable=True)
 
@@ -62,6 +71,8 @@ class AgentProfile(db.Model):
             "learnings_contributed": self.learnings_contributed,
             "success_rate": round(self.success_rate(), 2),
             "specializations": self.specializations,
+            "context_set": self.context_set or [],
+            "archived": self.archived or False,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_active_at": self.last_active_at.isoformat() if self.last_active_at else None,
         }

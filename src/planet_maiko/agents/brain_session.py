@@ -126,6 +126,26 @@ def run_skill(skill_name, context=None, working_dir=None):
     timeout = 600 if skill_name in ("investigate", "brainstorm", "repo-analysis") else 120
 
     result = runtime.send(prompt, working_dir=working_dir, timeout=timeout)
+
+    # Auto-save investigation results as pupdates for easy review
+    if skill_name == "investigate" and result.get("success"):
+        try:
+            investigation = Pupdate(
+                id=f"investigation-{int(datetime.now(timezone.utc).timestamp())}",
+                source="maiko",
+                type="investigation",
+                priority="normal",
+                title=f"Investigation: {(context or {}).get('query', 'Unknown')[:100]}",
+                body=result.get("output", "")[:5000],
+                actionable=True,
+                action_hint="Review investigation",
+                tags=["investigation", "maiko"],
+            )
+            db.session.add(investigation)
+            db.session.commit()
+        except Exception:
+            pass  # Don't fail the skill if pupdate creation fails
+
     return result
 
 

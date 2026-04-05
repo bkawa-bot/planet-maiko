@@ -1,0 +1,279 @@
+[
+  {
+    "name": "java_api_endpoint",
+    "task": "Write a Java Spring Boot REST controller method that fetches a user by ID from a UserRepository and returns their profile. The user might not exist.",
+    "check_description": "Handles null user with Optional or proper 404",
+    "relevant_rules": [
+      "Always use Optional<T> for nullable return types in Java",
+      "Check for null before accessing nested object properties",
+      "Use @Nullable annotation on method parameters that accept null",
+      "Return meaningful error messages in API responses, not stack traces",
+      "Return appropriate HTTP status codes (201 for created, 404 for not found)"
+    ],
+    "random_rules": [
+      "Validate and sanitize all user input before processing",
+      "Cache frequently accessed data with TTL-based expiration",
+      "Aim for at least 80% code coverage on critical paths",
+      "Use multi-stage Docker builds to reduce image size",
+      "Wrap external API calls in try/except with proper error handling"
+    ],
+    "configs": {
+      "no_rules": {
+        "passed": true,
+        "matched_keywords": [
+          "ResponseEntity",
+          "NotFound"
+        ],
+        "keyword_count": 2,
+        "output_length": 341,
+        "elapsed_seconds": 10.6,
+        "output_preview": "No existing Java files. I'll create the controller method:\n\n```java\n@GetMapping(\"/users/{id}/profile\")\npublic ResponseEntity<UserProfile> getUserProfile(@PathVariable Long id) {\n    return userRepository.findById(id)\n            .map(user -> ResponseEntity.ok(user.getProfile()))\n            .orElse(ResponseEntity.notFound().build());\n}\n```"
+      },
+      "5_relevant": {
+        "passed": true,
+        "matched_keywords": [
+          "Optional",
+          "optional",
+          "ResponseEntity",
+          "404"
+        ],
+        "keyword_count": 4,
+        "output_length": 1156,
+        "elapsed_seconds": 28.3,
+        "output_preview": "Here's the controller method:\n\n```java\npackage com.planetmaiko.controller;\n\nimport com.planetmaiko.model.User;\nimport com.planetmaiko.repository.UserRepository;\nimport org.springframework.http.ResponseEntity;\nimport org.springframework.web.bind.annotation.GetMapping;\nimport org.springframework.web.bind.annotation.PathVariable;\nimport org.springframework.web.bind.annotation.RequestMapping;\nimport o"
+      },
+      "5_random": {
+        "passed": true,
+        "matched_keywords": [
+          "ResponseEntity",
+          "NotFound"
+        ],
+        "keyword_count": 2,
+        "output_length": 285,
+        "elapsed_seconds": 4.3,
+        "output_preview": "```java\n@GetMapping(\"/users/{id}\")\npublic ResponseEntity<UserProfile> getUserProfile(@PathVariable @Positive Long id) {\n    return userRepository.findById(id)\n            .map(user -> ResponseEntity.ok(toUserProfile(user)))\n            .orElse(ResponseEntity.notFound().build());\n}\n```"
+      },
+      "all_50": {
+        "passed": true,
+        "matched_keywords": [
+          "Optional",
+          "optional",
+          "ResponseEntity",
+          "404",
+          "NotFound"
+        ],
+        "keyword_count": 5,
+        "output_length": 2320,
+        "elapsed_seconds": 47.9,
+        "output_preview": "Here's the controller:\n\n```java\npackage com.example.userprofile.controller;\n\nimport com.example.userprofile.dto.UserProfileResponse;\nimport com.example.userprofile.entity.User;\nimport com.example.userprofile.repository.UserRepository;\nimport io.swagger.v3.oas.annotations.Operation;\nimport io.swagger.v3.oas.annotations.responses.ApiResponse;\nimport io.swagger.v3.oas.annotations.responses.ApiRespons"
+      }
+    }
+  },
+  {
+    "name": "python_external_api",
+    "task": "Write a Python function that calls the OpenWeatherMap API to get the current temperature for a city, with proper error handling.",
+    "check_description": "Has error handling with timeout",
+    "relevant_rules": [
+      "Wrap external API calls in try/except with proper error handling",
+      "Always set timeouts on HTTP requests (default: 30s)",
+      "Log the full stack trace when catching unexpected exceptions",
+      "Use circuit breaker pattern for unreliable external services",
+      "Return meaningful error messages in API responses, not stack traces"
+    ],
+    "random_rules": [
+      "Use type hints in Python function signatures",
+      "Set resource limits on Kubernetes pods",
+      "Store passwords using bcrypt, never plain text",
+      "Use database migrations for schema changes, never raw ALTER TABLE",
+      "Always use transactions for multi-step database operations"
+    ],
+    "configs": {
+      "no_rules": {
+        "passed": true,
+        "matched_keywords": [
+          "timeout",
+          "error"
+        ],
+        "keyword_count": 2,
+        "output_length": 797,
+        "elapsed_seconds": 47.8,
+        "output_preview": "It looks like write permission needs to be granted. The file I'm creating is `src/planet_maiko/pollers/weather_poller.py` \u2014 a new `WeatherPoller` that follows the same `BasePoller` pattern as the existing calendar/github/linear pollers.\n\nThe poller:\n- **`poll(config)`** \u2014 calls `GET https://api.openweathermap.org/data/2.5/weather` with `q`, `appid`, and `units` params. Handles connection errors, t"
+      },
+      "5_relevant": {
+        "passed": true,
+        "matched_keywords": [
+          "try",
+          "except",
+          "timeout",
+          "error"
+        ],
+        "keyword_count": 4,
+        "output_length": 3858,
+        "elapsed_seconds": 48.9,
+        "output_preview": "The file write was denied. Here's the function I would create at `src/planet_maiko/pollers/weather.py`:\n\n```python\nimport logging\nimport time\nimport traceback\n\nimport requests\n\nlogger = logging.getLogger(__name__)\n\n# Circuit breaker state\n_circuit = {\"failures\": 0, \"open_until\": 0.0, \"threshold\": 3, \"cooldown\": 60}\n\n\ndef _circuit_open() -> bool:\n    if _circuit[\"failures\"] >= _circuit[\"threshold\"]"
+      },
+      "5_random": {
+        "passed": true,
+        "matched_keywords": [
+          "try",
+          "except",
+          "timeout",
+          "raise",
+          "error"
+        ],
+        "keyword_count": 5,
+        "output_length": 1776,
+        "elapsed_seconds": 32.8,
+        "output_preview": "It looks like write permissions haven't been granted. The file I'd create is `src/planet_maiko/weather.py` with this content:\n\n```python\nimport logging\nimport os\nfrom typing import Optional\n\nimport httpx\n\nlogger = logging.getLogger(__name__)\n\nOPENWEATHERMAP_BASE_URL = \"https://api.openweathermap.org/data/2.5/weather\"\n\n\nclass WeatherError(Exception):\n    \"\"\"Raised when the weather API request fails"
+      },
+      "all_50": {
+        "passed": true,
+        "matched_keywords": [
+          "try",
+          "except",
+          "timeout",
+          "raise",
+          "error"
+        ],
+        "keyword_count": 5,
+        "output_length": 5279,
+        "elapsed_seconds": 62.1,
+        "output_preview": "It looks like file write permission was denied. Could you approve the write permission so I can create the file? Alternatively, here's the code:\n\n**`src/planet_maiko/weather.py`**\n\n```python\n\"\"\"OpenWeatherMap API client for current temperature lookups.\"\"\"\n\nimport logging\nimport os\nfrom dataclasses import dataclass\nfrom typing import Optional\n\nimport requests\n\nlogger = logging.getLogger(__name__)\n\n"
+      }
+    }
+  },
+  {
+    "name": "database_bulk_insert",
+    "task": "Write a Python function that takes a list of user dictionaries and inserts them into a PostgreSQL database using psycopg2.",
+    "check_description": "Uses batch insert pattern",
+    "relevant_rules": [
+      "Use batch inserts for bulk operations (>10 rows)",
+      "Cache frequently accessed data with TTL-based expiration",
+      "Use async/await for I/O-bound operations",
+      "Add created_at and updated_at timestamps to all tables",
+      "Use UUIDs for primary keys in distributed systems"
+    ],
+    "random_rules": [
+      "Add aria-labels to interactive elements for accessibility",
+      "Use parameterized tests for input variation coverage",
+      "Add docstrings to all public functions",
+      "Use connection pooling for all database access",
+      "Rate limit authentication endpoints"
+    ],
+    "configs": {
+      "no_rules": {
+        "passed": true,
+        "matched_keywords": [
+          "batch",
+          "VALUES",
+          "commit"
+        ],
+        "keyword_count": 3,
+        "output_length": 2037,
+        "elapsed_seconds": 101.5,
+        "output_preview": "It seems file write permissions haven't been granted yet. Here's the function:\n\n```python\nimport psycopg2\nfrom psycopg2.extras import execute_values\n\n\ndef insert_users(conn_params: dict, users: list[dict]) -> int:\n    \"\"\"Insert user dictionaries into the PostgreSQL users table.\n\n    Args:\n        conn_params: Connection parameters for psycopg2.connect()\n            (e.g. host, port, dbname, user, "
+      },
+      "5_relevant": {
+        "passed": true,
+        "matched_keywords": [
+          "batch",
+          "VALUES",
+          "commit"
+        ],
+        "keyword_count": 3,
+        "output_length": 1329,
+        "elapsed_seconds": 58.5,
+        "output_preview": "Here's the function:\n\n```python\nimport uuid\nfrom datetime import datetime, timezone\n\nimport psycopg2\nfrom psycopg2.extras import execute_values\n\n\ndef insert_users(users: list[dict], dsn: str) -> list[str]:\n    \"\"\"Insert user dicts into the users table, returning generated UUIDs.\"\"\"\n    now = datetime.now(timezone.utc)\n    rows = []\n    generated_ids = []\n\n    for user in users:\n        user_id = s"
+      },
+      "5_random": {
+        "passed": true,
+        "matched_keywords": [
+          "VALUES",
+          "transaction",
+          "commit"
+        ],
+        "keyword_count": 3,
+        "output_length": 3578,
+        "elapsed_seconds": 63.8,
+        "output_preview": "Here's the code:\n\n```python\n\"\"\"Bulk user import into PostgreSQL using psycopg2 with connection pooling.\"\"\"\n\nfrom psycopg2 import sql\nfrom psycopg2.extras import execute_values\nfrom psycopg2.pool import ThreadedConnectionPool\n\n_pool: ThreadedConnectionPool | None = None\n\nREQUIRED_FIELDS = {\"name\", \"email\"}\nALLOWED_FIELDS = {\"name\", \"email\", \"role\", \"active\"}\n\n\ndef init_pool(dsn: str, minconn: int ="
+      },
+      "all_50": {
+        "passed": true,
+        "matched_keywords": [
+          "batch",
+          "VALUES",
+          "transaction"
+        ],
+        "keyword_count": 3,
+        "output_length": 4045,
+        "elapsed_seconds": 73.2,
+        "output_preview": "It looks like file write permissions aren't being granted. Here's the complete code for `src/planet_maiko/db_users.py`:\n\n```python\n\"\"\"Batch insert user records into PostgreSQL via psycopg2.\"\"\"\n\nfrom __future__ import annotations\n\nimport logging\nimport uuid\nfrom datetime import datetime, timezone\nfrom typing import Any, Optional\n\nimport psycopg2\nimport psycopg2.extras\nfrom psycopg2.pool import Thre"
+      }
+    }
+  },
+  {
+    "name": "auth_endpoint",
+    "task": "Write a Flask login endpoint that accepts username and password, checks against the database, and returns a JWT token.",
+    "check_description": "Addresses security concerns (hashing, injection, etc.)",
+    "relevant_rules": [
+      "Never log request bodies that may contain PII",
+      "Validate and sanitize all user input before processing",
+      "Use parameterized queries to prevent SQL injection",
+      "Store passwords using bcrypt, never plain text",
+      "Rate limit authentication endpoints",
+      "Always version public API endpoints with /v1/ prefix"
+    ],
+    "random_rules": [
+      "Always set timeouts on HTTP requests (default: 30s)",
+      "Use fixtures for test data setup, not inline construction",
+      "Cache frequently accessed data with TTL-based expiration",
+      "Add database indexes on columns used in WHERE clauses",
+      "Use multi-stage Docker builds to reduce image size"
+    ],
+    "configs": {
+      "no_rules": {
+        "passed": true,
+        "matched_keywords": [
+          "hash"
+        ],
+        "keyword_count": 1,
+        "output_length": 562,
+        "elapsed_seconds": 103.6,
+        "output_preview": "It seems the write permissions need to be approved. Could you approve the file writes? I need to create two new files and edit two existing ones:\n\n1. **`src/planet_maiko/models/user.py`** \u2014 User model with password hashing via `werkzeug.security`\n2. **`src/planet_maiko/api/auth.py`** \u2014 `POST /api/auth/login` endpoint that validates credentials and returns a JWT\n3. **`pyproject.toml`** \u2014 Add `PyJWT"
+      },
+      "5_relevant": {
+        "passed": true,
+        "matched_keywords": [
+          "bcrypt",
+          "hash",
+          "rate"
+        ],
+        "keyword_count": 3,
+        "output_length": 563,
+        "elapsed_seconds": 71.7,
+        "output_preview": "It seems file write permissions are being blocked. Could you grant write access so I can create the new files? I need to create:\n\n1. **`src/planet_maiko/models/user.py`** \u2014 User model with bcrypt password hashing\n2. **`src/planet_maiko/api/auth_api.py`** \u2014 Login endpoint at `/v1/auth/login` with rate limiting and JWT\n\nI also need to edit:\n\n3. **`app.py`** \u2014 Register the auth blueprint and import t"
+      },
+      "5_random": {
+        "passed": true,
+        "matched_keywords": [
+          "hash"
+        ],
+        "keyword_count": 1,
+        "output_length": 437,
+        "elapsed_seconds": 7491.3,
+        "output_preview": "I need your permission to write new files. Could you please approve the write permissions? I'm creating:\n\n- `src/planet_maiko/models/user.py` \u2014 User model with salted SHA-256 password hashing\n- `src/planet_maiko/api/auth_api.py` \u2014 `POST /api/auth/login` endpoint that validates credentials and returns a JWT\n- Updates to `app.py` to register the blueprint and model\n- `tests/conftest.py` and `tests/t"
+      },
+      "all_50": {
+        "passed": true,
+        "matched_keywords": [
+          "bcrypt",
+          "hash"
+        ],
+        "keyword_count": 2,
+        "output_length": 1057,
+        "elapsed_seconds": 170.5,
+        "output_preview": "It looks like write permissions need to be granted. I'll wait for approval on these files. Here's what I'm creating:\n\n**4 changes total:**\n\n1. **`models/user.py`** \u2014 New `User` model with UUID primary key, bcrypt password hashing (`set_password`/`check_password`), `created_at`/`updated_at`/`deleted_at` (soft delete), and `to_dict()` that excludes the password hash.\n\n2. **`api/auth_api.py`** \u2014 Auth"
+      }
+    }
+  }
+]

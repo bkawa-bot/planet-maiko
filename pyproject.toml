@@ -7,7 +7,7 @@ name = "planet-maiko"
 version = "0.1.0"
 description = "Personal engineering intelligence dashboard"
 readme = "README.md"
-license = {text = "Proprietary"}
+license = {text = "AGPL-3.0-or-later"}
 requires-python = ">=3.10"
 dependencies = [
     "flask>=3.0",
@@ -16,6 +16,9 @@ dependencies = [
     "pyyaml>=6.0",
     "requests>=2.31",
     "icalendar>=5.0",
+    "tree-sitter>=0.22",
+    "tree-sitter-java>=0.23",
+    "pywebview>=5.0",
 ]
 
 [project.optional-dependencies]
@@ -26,6 +29,7 @@ dev = [
 
 [project.scripts]
 maiko = "planet_maiko.cli.main:main"
+maiko-desktop = "planet_maiko.desktop:main"
 
 [project.entry-points."planet_maiko.pollers"]
 github = "planet_maiko.pollers.github_poller:GitHubPoller"
@@ -34,6 +38,11 @@ calendar = "planet_maiko.pollers.calendar_poller:CalendarPoller"
 
 [project.entry-points."planet_maiko.runtimes"]
 claude-code = "planet_maiko.agents.runtimes.claude_code:ClaudeCodeRuntime"
+
+# Plugins: pip packages register here to be auto-discovered on startup.
+# Local plugins go in ~/.maiko/plugins/ instead.
+# Example: my-plugin = "maiko_my_plugin:MyPlugin"
+[project.entry-points."planet_maiko.plugins"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

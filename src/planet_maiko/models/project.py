@@ -16,6 +16,10 @@ class Project(db.Model):
     source_id = db.Column(db.String(256), nullable=True)
     source_url = db.Column(db.String(1024), nullable=True)
     extra = db.Column("metadata", db.JSON, default=dict)
+    phases = db.Column(db.JSON, default=list)
+    # Each phase: {"number": 1, "title": "...", "status": "pending|active|done",
+    #              "repo": "...", "description": "...", "depends_on": []}
+    current_phase = db.Column(db.Integer, default=0)
 
     def to_dict(self):
         return {
@@ -30,4 +34,6 @@ class Project(db.Model):
             "source_id": self.source_id,
             "source_url": self.source_url,
             "metadata": self.extra,
+            "phases": self.phases,
+            "current_phase": self.current_phase,
         }

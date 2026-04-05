@@ -126,6 +126,37 @@ def edit_learning(learning_id):
     return jsonify(learning.to_dict())
 
 
+@learning_bp.route("/learnings/backfill", methods=["POST"])
+def backfill_learnings():
+    """Scan past PRs for review comments and create learnings.
+
+    Runs the full pipeline: bootstrap → classify → aggregate.
+    """
+    from planet_maiko.brain.learning.bootstrap import bootstrap_from_prs
+    from planet_maiko.brain.learning.classifier import classify_unclassified_signals
+    from planet_maiko.brain.learning.processor import process_signals
+
+    data = request.get_json(silent=True) or {}
+    limit = data.get("limit", 20)
+
+    signals_created = bootstrap_from_prs(limit=limit)
+
+    classified = 0
+    try:
+        classified = classify_unclassified_signals(batch_size=50)
+    except Exception:
+        pass
+
+    learning_results = process_signals()
+
+    return jsonify({
+        "signals_created": signals_created,
+        "classified": classified,
+        "new_learnings": learning_results.get("new_learnings", 0),
+        "graduated": learning_results.get("graduated", 0),
+    })
+
+
 @learning_bp.route("/learnings/brief", methods=["GET"])
 def learning_brief():
     """Compile active learnings into a brief for agents.
@@ -137,3 +168,68 @@ def learning_brief():
     language = request.args.get("language")
     brief = compile_brief(repo=repo, language=language)
     return jsonify({"brief": brief})
+
+
+# === Tournaments ===
+
+@learning_bp.route("/tournaments", methods=["GET"])
+def list_tournaments():
+    """List tournament history."""
+    from planet_maiko.models.tournament import Tournament
+    tournaments = Tournament.query.order_by(Tournament.created_at.desc()).limit(20).all()
+    return jsonify([t.to_dict() for t in tournaments])
+
+
+@learning_bp.route("/tournaments/<int:tournament_id>", methods=["GET"])
+def get_tournament(tournament_id):
+    """Get a tournament with its entries."""
+    from planet_maiko.models.tournament import Tournament
+    t = db.get_or_404(Tournament, tournament_id)
+    return jsonify(t.to_dict())
+
+
+@learning_bp.route("/tournaments/run", methods=["POST"])
+def run_tournament_endpoint():
+    """Manually trigger a tournament on a specific PR."""
+    from flask import current_app
+    from planet_maiko.brain.learning.tournament import run_tournament
+    data = request.get_json()
+    repo = data.get("repo")
+    pr_number = data.get("pr_number")
+    if not repo or not pr_number:
+        return jsonify({"error": "repo and pr_number required"}), 400
+
+    result = run_tournament(repo, int(pr_number), current_app._get_current_object())
+    if result:
+        return jsonify(result)
+    return jsonify({"error": "Tournament failed"}), 500
+
+
+@learning_bp.route("/tournaments/scores", methods=["GET"])
+def tournament_scores():
+    """Get rule leaderboard from tournament data."""
+    from planet_maiko.brain.learning.tournament import get_tournament_scores
+    repo = request.args.get("repo")
+    scores = get_tournament_scores(repo=repo)
+
+    # Enrich with rule text
+    leaderboard = []
+    for lid, info in sorted(scores.items(), key=lambda x: -x[1]["avg_score"]):
+        learning = db.session.get(Learning, lid)
+        if learning:
+            leaderboard.append({
+                "learning_id": lid,
+                "rule": learning.rule,
+                "category": learning.category,
+                "avg_score": round(info["avg_score"], 3),
+                "tournament_count": info["tournament_count"],
+            })
+
+    return jsonify(leaderboard)
+
+
+@learning_bp.route("/tournaments/suggested-tags", methods=["GET"])
+def suggested_tags():
+    """Get tags the LLM suggested that aren't in the approved list."""
+    from planet_maiko.brain.learning.tournament import get_suggested_tags
+    return jsonify(get_suggested_tags())

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
-import { ChevronDown, ChevronRight, Check, X, BookOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, MapPin, Search, Loader, FolderGit2 } from "lucide-react";
 import "./Settings.css";
 
 export default function Settings() {
@@ -8,23 +8,29 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pollerStatus, setPollerStatus] = useState({});
-  const [brainStatus, setBrainStatus] = useState(null);
-  const [brainRules, setBrainRules] = useState([]);
   const [message, setMessage] = useState("");
-  const [showKnowledge, setShowKnowledge] = useState(false);
-  const [learnings, setLearnings] = useState([]);
+
+  const [openSections, setOpenSections] = useState({ integrations: false, agents: false, scene: true });
+  const toggleSection = (key) => setOpenSections(s => ({ ...s, [key]: !s[key] }));
+
+  const [locationQuery, setLocationQuery] = useState("");
+  const [locationResolved, setLocationResolved] = useState("");
+  const [lookingUp, setLookingUp] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
 
   useEffect(() => {
     Promise.all([
       api.getConfig(),
       api.getPollerStatus(),
-      api.getBrainStatus(),
-      api.getBrainRules(),
-    ]).then(([cfg, status, brain, rules]) => {
+    ]).then(([cfg, status]) => {
       setConfig(cfg);
       setPollerStatus(status);
-      setBrainStatus(brain);
-      setBrainRules(rules);
+      // Restore resolved location display from config
+      if (cfg?.scene?.location_name && cfg?.scene?.latitude && cfg?.scene?.longitude) {
+        setLocationResolved(
+          `${cfg.scene.location_name} (${cfg.scene.latitude}, ${cfg.scene.longitude})`
+        );
+      }
       setLoading(false);
     }).catch((err) => {
       console.error("Failed to load settings:", err);
@@ -36,6 +42,10 @@ export default function Settings() {
     setSaving(true);
     try {
       await api.updateConfig(config);
+      // Clear weather cache if location is set
+      if (config?.scene?.latitude && config?.scene?.longitude) {
+        await api.refreshScene().catch(() => {});
+      }
       setMessage("Settings saved! Restart the server to apply poller changes.");
       setTimeout(() => setMessage(""), 5000);
     } catch (err) {
@@ -54,19 +64,34 @@ export default function Settings() {
     }
   };
 
-  const handleRunBrain = async () => {
+  const handleLocationLookup = async () => {
+    if (!locationQuery.trim()) return;
+    setLookingUp(true);
     try {
-      const result = await api.runBrainCycle();
-      const p = result.pupdates || {};
-      setMessage(
-        `Brain cycle complete: ${p.processed || 0} processed, ${p.tasks_created || 0} tasks created, ${p.dismissed || 0} dismissed`
+      const resp = await fetch(
+        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(locationQuery.trim())}&count=1&language=en&format=json`
       );
-      const status = await api.getBrainStatus();
-      setBrainStatus(status);
-      setTimeout(() => setMessage(""), 5000);
+      const data = await resp.json();
+      if (data.results && data.results.length > 0) {
+        const r = data.results[0];
+        const displayName = r.admin1 ? `${r.name}, ${r.admin1}` : r.name;
+        setConfig((c) => ({
+          ...c,
+          scene: {
+            ...c?.scene,
+            latitude: r.latitude,
+            longitude: r.longitude,
+            location_name: displayName,
+          },
+        }));
+        setLocationResolved(`${displayName} (${r.latitude}, ${r.longitude})`);
+      } else {
+        setLocationResolved("No results found");
+      }
     } catch (err) {
-      setMessage(`Brain cycle failed: ${err.message}`);
+      setLocationResolved("Lookup failed: " + err.message);
     }
+    setLookingUp(false);
   };
 
   const updateField = (integration, field, value) => {
@@ -84,256 +109,306 @@ export default function Settings() {
       <h2>Settings</h2>
       {message && <div className="settings-message">{message}</div>}
 
-      <section className="integration-section brain-section">
-        <h3>Brain</h3>
-        <div className="brain-status">
-          <div className="brain-stat">
-            <span className="brain-label">Cycles run:</span>
-            <span>{brainStatus?.cycle_count || 0}</span>
-          </div>
-          <div className="brain-stat">
-            <span className="brain-label">Last cycle:</span>
-            <span>
-              {brainStatus?.last_cycle
-                ? new Date(brainStatus.last_cycle).toLocaleString()
-                : "Never"}
-            </span>
-          </div>
-          <button className="btn-brain" onClick={handleRunBrain}>
-            Run Brain Cycle
-          </button>
+      {/* Integrations (collapsed by default) */}
+      <section className="settings-collapsible">
+        <div className="collapsible-header" onClick={() => toggleSection("integrations")}>
+          {openSections.integrations ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <span>Integrations</span>
         </div>
-        {brainRules.length > 0 && (
-          <div className="brain-rules">
-            <h4>Active Rules ({brainRules.length})</h4>
-            <ul className="rules-list">
-              {brainRules.map((r, i) => (
-                <li key={i}>
-                  <span className="rule-name">{r.name}</span>
-                  <span className="rule-action">{r.action}</span>
-                  <span className="rule-desc">{r.description}</span>
-                </li>
-              ))}
-            </ul>
+        {openSections.integrations && (
+          <div className="collapsible-body">
+            <div className="integration-section">
+              <h3>GitHub</h3>
+              <div className="setup-hint">
+                Requires the <code>gh</code> CLI to be installed and authenticated.
+                Run <code>gh auth login</code> in your terminal first, then enter your username below.
+              </div>
+              <div className="integration-fields">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={config.github?.enabled || false}
+                    onChange={(e) => updateField("github", "enabled", e.target.checked)}
+                  />
+                  Enabled
+                </label>
+                <label>
+                  Username
+                  <input
+                    type="text"
+                    value={config.github?.username || ""}
+                    onChange={(e) => updateField("github", "username", e.target.value)}
+                    placeholder="your-github-username"
+                  />
+                </label>
+                <label>
+                  Repos (comma-separated)
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input
+                      type="text"
+                      style={{ flex: 1 }}
+                      value={(config.github?.repos || []).join(", ")}
+                      onChange={(e) =>
+                        updateField(
+                          "github",
+                          "repos",
+                          e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+                        )
+                      }
+                      placeholder="org/repo1, org/repo2"
+                    />
+                    <button
+                      className="btn btn-sm"
+                      disabled={discovering || !config.github?.username}
+                      onClick={async () => {
+                        setDiscovering(true);
+                        try {
+                          const result = await api.discoverGithubRepos();
+                          if (result.repos?.length > 0) {
+                            const existing = new Set(config.github?.repos || []);
+                            const merged = [...existing, ...result.repos.filter(r => !existing.has(r))];
+                            updateField("github", "repos", merged);
+                            setMessage(`Found ${result.repos.length} repo(s) via ${result.source}`);
+                          } else {
+                            setMessage("No repos found. Make sure gh CLI is authenticated.");
+                          }
+                        } catch (err) {
+                          setMessage(err.message || "Discovery failed");
+                        }
+                        setDiscovering(false);
+                        setTimeout(() => setMessage(""), 5000);
+                      }}
+                      title="Auto-discover repos from your recent GitHub activity"
+                    >
+                      {discovering ? <Loader size={10} className="spin" /> : <FolderGit2 size={10} />}
+                      {discovering ? " Finding..." : " Discover"}
+                    </button>
+                  </div>
+                </label>
+                <label>
+                  Repository roots (local paths, comma-separated)
+                  <input
+                    type="text"
+                    value={(config.github?.repo_roots || []).join(", ")}
+                    onChange={(e) =>
+                      updateField(
+                        "github",
+                        "repo_roots",
+                        e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+                      )
+                    }
+                    placeholder="~/src, ~/projects"
+                  />
+                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                    Where your repos live on disk. Used for agent worktrees.
+                  </span>
+                </label>
+                <label>
+                  Poll interval (minutes)
+                  <input
+                    type="number"
+                    min="1"
+                    value={config.github?.poll_interval_minutes || 5}
+                    onChange={(e) =>
+                      updateField("github", "poll_interval_minutes", parseInt(e.target.value) || 5)
+                    }
+                  />
+                </label>
+                {pollerStatus.github && (
+                  <div className="poller-status">
+                    Status: {pollerStatus.github.running ? "Running" : "Stopped"}
+                    <button onClick={() => handleRunPoller("github")}>Run Now</button>
+                  </div>
+                )}
+                <button className="btn btn-sm" onClick={async () => {
+                  try {
+                    const result = await api.testIntegration("github");
+                    setMessage(result.status === "ok" ? `Connected as ${result.user}` : result.message);
+                  } catch (err) { setMessage(err.message || "Test failed"); }
+                  setTimeout(() => setMessage(""), 5000);
+                }}>Test Connection</button>
+              </div>
+            </div>
+
+            <div className="integration-section">
+              <h3>Linear</h3>
+              <div className="setup-hint">
+                Get your API key from Linear: <strong>Settings → API → Personal API keys → Create key</strong>.
+                Find your Team ID in the URL when viewing your team (e.g. <code>linear.app/team/<strong>TEAM-ID</strong>/...</code>).
+              </div>
+              <div className="integration-fields">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={config.linear?.enabled || false}
+                    onChange={(e) => updateField("linear", "enabled", e.target.checked)}
+                  />
+                  Enabled
+                </label>
+                <label>
+                  API Key
+                  <input
+                    type="password"
+                    value={config.linear?.api_key || ""}
+                    onChange={(e) => updateField("linear", "api_key", e.target.value)}
+                    placeholder="lin_api_..."
+                  />
+                </label>
+                <label>
+                  Team ID
+                  <input
+                    type="text"
+                    value={config.linear?.team_id || ""}
+                    onChange={(e) => updateField("linear", "team_id", e.target.value)}
+                  />
+                </label>
+                {pollerStatus.linear && (
+                  <div className="poller-status">
+                    Status: {pollerStatus.linear.running ? "Running" : "Stopped"}
+                    <button onClick={() => handleRunPoller("linear")}>Run Now</button>
+                  </div>
+                )}
+                <button className="btn btn-sm" onClick={async () => {
+                  try {
+                    const result = await api.testIntegration("linear");
+                    setMessage(result.status === "ok" ? `Connected as ${result.user}` : result.message);
+                  } catch (err) { setMessage(err.message || "Test failed"); }
+                  setTimeout(() => setMessage(""), 5000);
+                }}>Test Connection</button>
+              </div>
+            </div>
+
+            <div className="integration-section">
+              <h3>Calendar</h3>
+              <div className="setup-hint">
+                Add your calendar's iCal/ICS URL. For Google Calendar: <strong>Settings → Calendar → Integrate calendar → Secret address in iCal format</strong>.
+                For Outlook: <strong>Calendar settings → Shared calendars → Publish a calendar → ICS link</strong>.
+              </div>
+              <div className="integration-fields">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={config.calendar?.enabled || false}
+                    onChange={(e) => updateField("calendar", "enabled", e.target.checked)}
+                  />
+                  Enabled
+                </label>
+                <label>
+                  iCal URLs (one per line)
+                  <textarea
+                    value={(config.calendar?.ical_urls || []).join("\n")}
+                    onChange={(e) =>
+                      updateField(
+                        "calendar",
+                        "ical_urls",
+                        e.target.value.split("\n").map((s) => s.trim()).filter(Boolean)
+                      )
+                    }
+                    placeholder="https://calendar.google.com/..."
+                    rows={3}
+                  />
+                </label>
+                {pollerStatus.calendar && (
+                  <div className="poller-status">
+                    Status: {pollerStatus.calendar.running ? "Running" : "Stopped"}
+                    <button onClick={() => handleRunPoller("calendar")}>Run Now</button>
+                  </div>
+                )}
+              </div>
+            </div>
+
           </div>
         )}
       </section>
 
-      <section className="integration-section">
-        <h3>GitHub</h3>
-        <div className="integration-fields">
-          <label>
-            <input
-              type="checkbox"
-              checked={config.github?.enabled || false}
-              onChange={(e) => updateField("github", "enabled", e.target.checked)}
-            />
-            Enabled
-          </label>
-          <label>
-            Username
-            <input
-              type="text"
-              value={config.github?.username || ""}
-              onChange={(e) => updateField("github", "username", e.target.value)}
-              placeholder="your-github-username"
-            />
-          </label>
-          <label>
-            Repos (comma-separated)
-            <input
-              type="text"
-              value={(config.github?.repos || []).join(", ")}
-              onChange={(e) =>
-                updateField(
-                  "github",
-                  "repos",
-                  e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
-                )
-              }
-              placeholder="org/repo1, org/repo2"
-            />
-          </label>
-          <label>
-            Poll interval (minutes)
-            <input
-              type="number"
-              min="1"
-              value={config.github?.poll_interval_minutes || 5}
-              onChange={(e) =>
-                updateField("github", "poll_interval_minutes", parseInt(e.target.value) || 5)
-              }
-            />
-          </label>
-          {pollerStatus.github && (
-            <div className="poller-status">
-              Status: {pollerStatus.github.running ? "Running" : "Stopped"}
-              <button onClick={() => handleRunPoller("github")}>Run Now</button>
-            </div>
-          )}
+      {/* Agent Preferences */}
+      <section className="settings-collapsible">
+        <div className="collapsible-header" onClick={() => toggleSection("agents")}>
+          {openSections.agents ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <span>Agent Preferences</span>
         </div>
+        {openSections.agents && (
+          <div className="collapsible-body">
+            <div className="integration-section">
+              <div className="setup-hint">
+                Custom instructions added to every agent's context. Use this for your workflow preferences,
+                coding standards, or anything you want all agents to follow.
+              </div>
+              <div className="integration-fields">
+                <label>
+                  Custom Instructions
+                  <textarea
+                    rows={5}
+                    value={config.agents?.custom_instructions || ""}
+                    onChange={(e) => updateField("agents", "custom_instructions", e.target.value)}
+                    placeholder="e.g. Always write tests first. Use conventional commits. Follow the error handling patterns in src/utils/errors.py."
+                    style={{ fontFamily: "var(--font)", fontSize: 12 }}
+                  />
+                </label>
+                <label>
+                  Allowed Tools (pre-approved for Claude Code sessions)
+                  <input
+                    type="text"
+                    value={(config.brain?.allowed_tools || []).join(", ")}
+                    onChange={(e) => {
+                      const tools = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
+                      setConfig((c) => ({ ...c, brain: { ...c?.brain, allowed_tools: tools } }));
+                    }}
+                    placeholder="Bash, Read, Edit, Write, WebFetch, WebSearch, mcp__github"
+                  />
+                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                    Comma-separated. These tools won't require permission prompts when agents run.
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
-      <section className="integration-section">
-        <h3>Linear</h3>
-        <div className="integration-fields">
-          <label>
-            <input
-              type="checkbox"
-              checked={config.linear?.enabled || false}
-              onChange={(e) => updateField("linear", "enabled", e.target.checked)}
-            />
-            Enabled
-          </label>
-          <label>
-            API Key
-            <input
-              type="password"
-              value={config.linear?.api_key || ""}
-              onChange={(e) => updateField("linear", "api_key", e.target.value)}
-              placeholder="lin_api_..."
-            />
-          </label>
-          <label>
-            Team ID
-            <input
-              type="text"
-              value={config.linear?.team_id || ""}
-              onChange={(e) => updateField("linear", "team_id", e.target.value)}
-            />
-          </label>
-          {pollerStatus.linear && (
-            <div className="poller-status">
-              Status: {pollerStatus.linear.running ? "Running" : "Stopped"}
-              <button onClick={() => handleRunPoller("linear")}>Run Now</button>
+      {/* Scene & Weather (open by default) */}
+      <section className="settings-collapsible">
+        <div className="collapsible-header" onClick={() => toggleSection("scene")}>
+          {openSections.scene ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <span>Scene & Weather</span>
+        </div>
+        {openSections.scene && (
+          <div className="collapsible-body">
+            <p className="integration-note">
+              Enter your location to enable real weather data on the homepage. Uses the free Open-Meteo API (no key needed).
+            </p>
+            <div className="location-lookup">
+              <label>
+                <MapPin size={12} /> Location
+              </label>
+              <div className="location-lookup-row">
+                <input
+                  type="text"
+                  value={locationQuery}
+                  onChange={(e) => setLocationQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleLocationLookup(); }}
+                  placeholder="Zipcode or city name (e.g. 02101 or Boston)"
+                  className="location-input"
+                />
+                <button
+                  className="btn-lookup"
+                  onClick={handleLocationLookup}
+                  disabled={lookingUp || !locationQuery.trim()}
+                >
+                  <Search size={12} /> {lookingUp ? "Looking up..." : "Lookup"}
+                </button>
+              </div>
+              {locationResolved && (
+                <div className="location-resolved">{locationResolved}</div>
+              )}
             </div>
-          )}
-        </div>
-      </section>
-
-      <section className="integration-section">
-        <h3>Calendar</h3>
-        <div className="integration-fields">
-          <label>
-            <input
-              type="checkbox"
-              checked={config.calendar?.enabled || false}
-              onChange={(e) => updateField("calendar", "enabled", e.target.checked)}
-            />
-            Enabled
-          </label>
-          <label>
-            iCal URLs (one per line)
-            <textarea
-              value={(config.calendar?.ical_urls || []).join("\n")}
-              onChange={(e) =>
-                updateField(
-                  "calendar",
-                  "ical_urls",
-                  e.target.value.split("\n").map((s) => s.trim()).filter(Boolean)
-                )
-              }
-              placeholder="https://calendar.google.com/..."
-              rows={3}
-            />
-          </label>
-          {pollerStatus.calendar && (
-            <div className="poller-status">
-              Status: {pollerStatus.calendar.running ? "Running" : "Stopped"}
-              <button onClick={() => handleRunPoller("calendar")}>Run Now</button>
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="integration-section">
-        <h3>Slack</h3>
-        <div className="integration-fields">
-          <label>
-            <input
-              type="checkbox"
-              checked={config.slack?.enabled || false}
-              onChange={(e) => updateField("slack", "enabled", e.target.checked)}
-            />
-            Enabled
-          </label>
-          <label>
-            Bot Token
-            <input
-              type="password"
-              value={config.slack?.token || ""}
-              onChange={(e) => updateField("slack", "token", e.target.value)}
-              placeholder="xoxb-..."
-            />
-          </label>
-          <label>
-            Channels (comma-separated)
-            <input
-              type="text"
-              value={(config.slack?.channels || []).join(", ")}
-              onChange={(e) =>
-                updateField(
-                  "slack",
-                  "channels",
-                  e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
-                )
-              }
-              placeholder="#general, #engineering"
-            />
-          </label>
-        </div>
+          </div>
+        )}
       </section>
 
       <button className="btn-save" onClick={handleSave} disabled={saving}>
         {saving ? "Saving..." : "Save Settings"}
       </button>
-
-      {/* Advanced: Knowledge Pool */}
-      <section className="integration-section knowledge-section" style={{ marginTop: 24 }}>
-        <h3
-          className="knowledge-toggle"
-          onClick={async () => {
-            if (!showKnowledge) {
-              try { setLearnings(await api.getLearnings()); } catch (e) {}
-            }
-            setShowKnowledge(!showKnowledge);
-          }}
-          style={{ cursor: "pointer" }}
-        >
-          {showKnowledge ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          <BookOpen size={14} /> Configure Knowledge Pool
-          <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 400, marginLeft: 8 }}>Advanced</span>
-        </h3>
-
-        {showKnowledge && (
-          <div className="knowledge-pool-list">
-            {learnings.length === 0 ? (
-              <p style={{ color: "var(--text-muted)", fontSize: 12, padding: 12 }}>No learnings yet. They'll appear as the brain processes PR feedback and agent discoveries.</p>
-            ) : (
-              learnings.filter(l => l.status !== "dismissed").map((l) => (
-                <div key={l.id} className="knowledge-row">
-                  <span className={`badge ${l.status}`}>{l.status}</span>
-                  <span className="knowledge-category">{l.category?.replace(/_/g, " ")}</span>
-                  <span className="knowledge-rule">{l.rule}</span>
-                  <span className="knowledge-conf">{(l.confidence * 100).toFixed(0)}%</span>
-                  <div className="knowledge-btns">
-                    {l.status === "pending" && (
-                      <button className="btn btn-sm btn-approve" onClick={async () => {
-                        await api.approveLearning(l.id);
-                        setLearnings(await api.getLearnings());
-                      }}><Check size={10} /></button>
-                    )}
-                    <button className="btn btn-sm btn-danger" onClick={async () => {
-                      await api.dismissLearning(l.id);
-                      setLearnings(await api.getLearnings());
-                    }}><X size={10} /></button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </section>
     </div>
   );
 }

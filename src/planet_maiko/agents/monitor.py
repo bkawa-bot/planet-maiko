@@ -113,3 +113,45 @@ def get_stuck_agents():
     """
     activity = get_agent_activity()
     return [a for a in activity if a["status"] == "idle"]
+
+
+def check_heartbeats():
+    """Check for agents that haven't sent a pupdate recently. Send nudges."""
+    from planet_maiko.models.agent_profile import AgentProfile
+
+    threshold = datetime.now(timezone.utc) - timedelta(minutes=30)
+
+    # Find agents that are "working" but haven't sent a pupdate recently
+    active_profiles = AgentProfile.query.filter(
+        AgentProfile.last_active_at.isnot(None),
+        AgentProfile.last_active_at < threshold,
+        AgentProfile.breed != "completed",
+    ).all()
+
+    nudged = 0
+    for profile in active_profiles:
+        # Check if we already sent a nudge recently
+        recent_nudge = Pupdate.query.filter(
+            Pupdate.type == "agent_nudge",
+            Pupdate.source_id == f"nudge/{profile.id}",
+            Pupdate.timestamp > threshold,
+        ).first()
+
+        if not recent_nudge:
+            nudge = Pupdate(
+                id=f"nudge-{profile.id}-{int(datetime.now(timezone.utc).timestamp())}",
+                source="maiko",
+                source_id=f"nudge/{profile.id}",
+                type="agent_nudge",
+                priority="normal",
+                title=f"Nudge: {profile.display_name} — are you still working?",
+                body="No activity detected in 30+ minutes. Please report your status.",
+                tags=[profile.id, "nudge"],
+                extra={"agent_id": profile.id},
+            )
+            db.session.add(nudge)
+            nudged += 1
+
+    if nudged:
+        db.session.commit()
+    return nudged

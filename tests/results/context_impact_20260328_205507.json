@@ -1,0 +1,175 @@
+[
+  {
+    "name": "null_safety",
+    "task": "Write a Java method that fetches a user by ID from a database and returns their display name.",
+    "learning": "Always use Optional<T> for nullable return types in Java",
+    "check_description": "Uses Optional<T> for the return type",
+    "configs": {
+      "no_context": {
+        "passed": false,
+        "matched_keywords": [],
+        "output_length": 485,
+        "elapsed_seconds": 11.3,
+        "output_preview": "```java\npublic String getDisplayNameById(long userId) throws SQLException {\n    String sql = \"SELECT display_name FROM users WHERE id = ?\";\n    try (Connection conn = dataSource.getConnection();\n         PreparedStatement stmt = conn.prepareStatement(sql)) {\n        stmt.setLong(1, userId);\n        "
+      },
+      "global_rule": {
+        "passed": true,
+        "matched_keywords": [
+          "optional",
+          "Optional"
+        ],
+        "output_length": 723,
+        "elapsed_seconds": 16.3,
+        "output_preview": "Since there's no existing Java project, here's the standalone method:\n\n```java\nimport java.sql.Connection;\nimport java.sql.PreparedStatement;\nimport java.sql.ResultSet;\nimport java.sql.SQLException;\nimport java.util.Optional;\n\npublic Optional<String> fetchUserDisplayName(Connection connection, long "
+      },
+      "global_rule_with_history": {
+        "passed": true,
+        "matched_keywords": [
+          "optional",
+          "Optional"
+        ],
+        "output_length": 711,
+        "elapsed_seconds": 9.4,
+        "output_preview": "No existing Java files in the project. Here's the method:\n\n```java\nimport java.sql.Connection;\nimport java.sql.PreparedStatement;\nimport java.sql.ResultSet;\nimport java.sql.SQLException;\nimport java.util.Optional;\n\npublic Optional<String> fetchUserDisplayName(Connection connection, long userId) thro"
+      }
+    }
+  },
+  {
+    "name": "error_handling",
+    "task": "Write a Python function that calls an external REST API to get weather data and returns the temperature.",
+    "learning": "Wrap external API calls in try/except with proper error handling and timeouts",
+    "check_description": "Has try/except and timeout handling",
+    "configs": {
+      "no_context": {
+        "passed": false,
+        "matched_keywords": [],
+        "output_length": 347,
+        "elapsed_seconds": 8.4,
+        "output_preview": "```python\nimport requests\n\n\ndef get_temperature(city: str, api_key: str) -> float:\n    url = \"https://api.openweathermap.org/data/2.5/weather\"\n    params = {\"q\": city, \"appid\": api_key, \"units\": \"metric\"}\n    response = requests.get(url, params=params)\n    response.raise_for_status()\n    data = resp"
+      },
+      "global_rule": {
+        "passed": true,
+        "matched_keywords": [
+          "try"
+        ],
+        "output_length": 170,
+        "elapsed_seconds": 10.9,
+        "output_preview": "The file write was not permitted. Would you like me to try writing it to a different location, or would you like to approve the write to `weather.py` in the project root?"
+      },
+      "global_rule_with_history": {
+        "passed": true,
+        "matched_keywords": [
+          "try",
+          "except",
+          "timeout"
+        ],
+        "output_length": 1982,
+        "elapsed_seconds": 31.3,
+        "output_preview": "It looks like write permission was denied. Would you like me to just output the code here instead, or would you prefer to grant write access so I can create the file?\n\nHere's the function:\n\n```python\n\"\"\"Fetch weather data from an external REST API.\"\"\"\n\nimport logging\n\nimport requests\n\nlogger = loggi"
+      }
+    }
+  },
+  {
+    "name": "testing_style",
+    "task": "Write a Python test for a function that validates email addresses.",
+    "learning": "Use parameterized tests for input variation coverage instead of separate test methods",
+    "check_description": "Uses parameterized testing pattern",
+    "configs": {
+      "no_context": {
+        "passed": true,
+        "matched_keywords": [
+          "parametrize",
+          "param"
+        ],
+        "output_length": 1863,
+        "elapsed_seconds": 78.3,
+        "output_preview": "It seems file write permissions haven't been granted yet. Here are the two files I need to create:\n\n**`src/planet_maiko/validators.py`**\n\n```python\nimport re\n\n\ndef validate_email(email: str) -> bool:\n    \"\"\"Return True if the email address is valid, False otherwise.\"\"\"\n    if not isinstance(email, s"
+      },
+      "global_rule": {
+        "passed": true,
+        "matched_keywords": [
+          "parametrize",
+          "param"
+        ],
+        "output_length": 978,
+        "elapsed_seconds": 25.6,
+        "output_preview": "```python\nimport pytest\nimport re\n\n\ndef validate_email(email: str) -> bool:\n    \"\"\"Validate an email address.\"\"\"\n    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$'\n    if not isinstance(email, str):\n        return False\n    return bool(re.match(pattern, email))\n\n\n@pytest.mark.parametr"
+      },
+      "global_rule_with_history": {
+        "passed": true,
+        "matched_keywords": [
+          "parametrize",
+          "param",
+          "cases"
+        ],
+        "output_length": 1240,
+        "elapsed_seconds": 58.5,
+        "output_preview": "The file I'm trying to write to `tests/test_validate_email.py` contains:\n\n```python\nimport re\n\nimport pytest\n\n\ndef validate_email(email: str) -> bool:\n    if not isinstance(email, str) or not email:\n        return False\n    pattern = r\"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$\"\n    return boo"
+      }
+    }
+  },
+  {
+    "name": "security",
+    "task": "Write a Python logging function that records API request details for debugging.",
+    "learning": "Never log request bodies that may contain PII - sanitize or redact sensitive fields",
+    "check_description": "Sanitizes or mentions PII/sensitive data handling",
+    "configs": {
+      "no_context": {
+        "passed": false,
+        "matched_keywords": [],
+        "output_length": 522,
+        "elapsed_seconds": 66.8,
+        "output_preview": "I need write permission to create the file. Could you approve the write to `/Users/brigittempare/src/planet-maiko/src/planet_maiko/api/request_logger.py`?\n\nThe file will contain:\n- `log_api_request(app)` \u2014 registers Flask `before_request`/`after_request` hooks\n- Assigns a unique request ID, measures"
+      },
+      "global_rule": {
+        "passed": true,
+        "matched_keywords": [
+          "redact",
+          "PII",
+          "sensitive"
+        ],
+        "output_length": 557,
+        "elapsed_seconds": 56.3,
+        "output_preview": "It looks like file write permissions are being blocked. Could you grant write permission so I can create the file? The file I'm creating is `src/planet_maiko/api/request_logger.py` \u2014 a decorator-based request logger that:\n\n- Assigns a unique `request_id` per request\n- Logs method, path, query params"
+      },
+      "global_rule_with_history": {
+        "passed": false,
+        "error": "Timed out after 180s",
+        "elapsed_seconds": 4458.6
+      }
+    }
+  },
+  {
+    "name": "api_design",
+    "task": "Write a Flask endpoint that returns a list of products with pagination.",
+    "learning": "Always version public API endpoints with /v1/ prefix",
+    "check_description": "Includes API versioning in the route",
+    "configs": {
+      "no_context": {
+        "passed": false,
+        "error": "Timed out after 180s",
+        "elapsed_seconds": 180.0
+      },
+      "global_rule": {
+        "passed": true,
+        "matched_keywords": [
+          "/v1/",
+          "/v1"
+        ],
+        "output_length": 498,
+        "elapsed_seconds": 48.0,
+        "output_preview": "I need write permissions to create the new files. Could you approve the write access? I'm creating:\n\n1. **`src/planet_maiko/models/product.py`** \u2014 Product model with fields: id, name, description, price, category, in_stock, timestamps\n2. **`src/planet_maiko/api/products.py`** \u2014 Blueprint with `GET /"
+      },
+      "global_rule_with_history": {
+        "passed": true,
+        "matched_keywords": [
+          "/v1/",
+          "/v1"
+        ],
+        "output_length": 672,
+        "elapsed_seconds": 84.1,
+        "output_preview": "I need write permission to create the new files. Could you approve the file writes? I'm creating:\n\n1. **`src/planet_maiko/models/product.py`** \u2014 Product model with id, name, description, price, category, in_stock, created_at\n2. **`src/planet_maiko/api/products.py`** \u2014 Blueprint with `GET /v1/product"
+      }
+    }
+  }
+]

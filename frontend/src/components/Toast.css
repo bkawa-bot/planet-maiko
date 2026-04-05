@@ -6,29 +6,36 @@
 
 .toast {
   pointer-events: auto;
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 16px;
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  background: var(--bg-card); border: 1px solid var(--pink);
+  border-radius: var(--radius);
   box-shadow: 0 8px 24px rgba(0,0,0,0.4);
   animation: toastIn 0.3s ease;
-  max-width: 320px; font-size: 12px; color: var(--text);
+  max-width: 340px; font-size: 12px; color: var(--text);
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.15s;
 }
+
+.toast:hover { filter: brightness(1.1); transform: translateX(-2px); }
 
 .toast.priority-urgent { border-color: var(--urgent); }
 .toast.priority-high { border-color: var(--high); }
-.toast.priority-normal { border-color: var(--blue); }
+.toast.priority-normal { border-color: var(--pink); }
+.toast.priority-low { border-color: var(--blue); }
 
-.toast-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.toast-dot.urgent { background: var(--urgent); }
-.toast-dot.high { background: var(--high); }
-.toast-dot.normal { background: var(--blue); }
-.toast-dot.low { background: var(--low); }
+.toast-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.toast-dot.urgent { background: var(--urgent); box-shadow: 0 0 6px var(--urgent); }
+.toast-dot.high { background: var(--high); box-shadow: 0 0 6px var(--high); }
+.toast-dot.normal { background: var(--pink); box-shadow: 0 0 6px var(--pink); }
+.toast-dot.low { background: var(--blue); }
 
-.toast-message { flex: 1; }
+.toast-message { flex: 1; line-height: 1.4; }
 
 .toast-close {
   background: none; border: none; color: var(--text-muted);
-  font-size: 16px; cursor: pointer; padding: 0 2px; line-height: 1;
+  font-size: 16px; cursor: pointer; padding: 0 4px; line-height: 1;
 }
 .toast-close:hover { color: var(--text); }
+
+[data-theme="light"] .toast { box-shadow: 0 4px 16px rgba(0,0,0,0.1); }

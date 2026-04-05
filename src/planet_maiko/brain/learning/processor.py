@@ -10,6 +10,7 @@ Graduation thresholds vary by category:
 """
 
 import logging
+import os
 from datetime import datetime, timezone
 
 from planet_maiko.database import db
@@ -117,8 +118,50 @@ def process_signals():
         counts["processed"] += 1
 
     db.session.commit()
+
+    # Export coding guidelines if any learnings graduated
+    if counts["graduated"] > 0:
+        export_coding_guidelines()
+
     logger.info(f"[learning] Done: {counts}")
     return counts
+
+
+def export_coding_guidelines(output_path=None):
+    """Export active learnings to a coding guidelines markdown file.
+
+    Called after learning graduation to keep the guidelines file in sync.
+    """
+    if output_path is None:
+        from planet_maiko.paths import data_dir
+        output_path = os.path.join(data_dir(), "coding-guidelines.md")
+
+    learnings = Learning.query.filter_by(status="active").order_by(Learning.category, Learning.confidence.desc()).all()
+
+    if not learnings:
+        return
+
+    lines = ["# Coding Guidelines (Auto-Learned)\n"]
+    lines.append(f"*Updated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}*\n")
+    lines.append(f"*{len(learnings)} active rules from team feedback and PR reviews.*\n")
+
+    by_category = {}
+    for l in learnings:
+        by_category.setdefault(l.category, []).append(l)
+
+    for category, rules in sorted(by_category.items()):
+        lines.append(f"\n## {category.replace('_', ' ').title()}\n")
+        for r in rules:
+            confidence = "+" * min(5, int(r.confidence * 5))
+            lines.append(f"- [{confidence}] {r.rule}")
+            if r.scope_repo:
+                lines.append(f"  *(repo: {r.scope_repo})*")
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w") as f:
+        f.write("\n".join(lines))
+
+    logger.info(f"[learning] Exported {len(learnings)} guidelines to {output_path}")
 
 
 def _get_learning_success_rates():
@@ -169,8 +212,62 @@ def compile_brief(repo=None, language=None, task_id=None, agent_profile_id=None,
     Returns:
         str: markdown brief
     """
+    # If agent has a fixed context_set, use it directly (skip dynamic scoring)
+    if agent_profile_id:
+        try:
+            from planet_maiko.models.agent_profile import AgentProfile
+            profile = db.session.get(AgentProfile, agent_profile_id)
+            if profile and profile.context_set:
+                fixed_ids = profile.context_set
+                fixed_learnings = Learning.query.filter(
+                    Learning.id.in_(fixed_ids), Learning.status == "active"
+                ).all()
+                if fixed_learnings:
+                    # Record selection for tracking
+                    if task_id:
+                        from planet_maiko.models.context_selection import ContextSelection
+                        record = ContextSelection(
+                            task_id=task_id,
+                            agent_profile_id=agent_profile_id,
+                            repo=repo,
+                            learning_ids=[l.id for l in fixed_learnings],
+                            learning_count=len(fixed_learnings),
+                        )
+                        db.session.add(record)
+                        db.session.commit()
+
+                    by_category = {}
+                    for l in fixed_learnings:
+                        by_category.setdefault(l.category, []).append(l)
+                    lines = ["# Coding Guidelines (Learned)\n"]
+                    for category, rules in sorted(by_category.items()):
+                        lines.append(f"\n## {category.replace('_', ' ').title()}\n")
+                        for r in rules:
+                            confidence_bar = "+" * min(5, int(r.confidence * 5))
+                            lines.append(f"- [{confidence_bar}] {r.rule}")
+                    return "\n".join(lines)
+        except Exception:
+            pass  # Fall through to dynamic selection
+
     query = Learning.query.filter_by(status="active")
     learnings = query.order_by(Learning.confidence.desc()).all()
+
+    # Agent-aware scoring: boost/suppress based on agent specialization + lens
+    agent_specs = {}
+    agent_overrides = set()
+    agent_gaps = []
+    if agent_profile_id:
+        try:
+            from planet_maiko.models.agent_profile import AgentProfile
+            profile = db.session.get(AgentProfile, agent_profile_id)
+            if profile:
+                if profile.specializations:
+                    agent_specs = profile.specializations
+                lens = profile.lens or {}
+                agent_overrides = set(lens.get("overrides", []))
+                agent_gaps = lens.get("gaps", [])
+        except Exception:
+            pass
 
     # Filter by scope
     scoped = []
@@ -180,24 +277,80 @@ def compile_brief(repo=None, language=None, task_id=None, agent_profile_id=None,
         if repo_match and lang_match:
             scoped.append(l)
 
+    # Filter out overridden learnings (agent lens)
+    if agent_overrides:
+        scoped = [l for l in scoped if l.id not in agent_overrides]
+
     if not scoped:
         return "No active learnings yet."
 
-    # Score and rank by success rate (if we have history)
+    # Score and rank by success rate + tournament data
     success_rates = _get_learning_success_rates()
+
+    # Get tournament scores for this repo
+    try:
+        from planet_maiko.brain.learning.tournament import get_tournament_scores
+        tournament_scores = get_tournament_scores(repo=repo)
+    except Exception:
+        tournament_scores = {}
+
+    # Safeguard: minimum tournament count before trusting scores
+    MIN_TOURNAMENTS_FOR_TRUST = 3
 
     def sort_key(l):
         rate_info = success_rates.get(l.id)
-        if rate_info and rate_info["total"] >= 2:
-            # Blend success rate with confidence
-            return -(rate_info["success_rate"] * 0.6 + l.confidence * 0.4)
-        # No history: fall back to confidence
-        return -l.confidence
+        t_info = tournament_scores.get(l.id)
+
+        ctx_rate = rate_info["success_rate"] if rate_info and rate_info["total"] >= 2 else None
+        # Only trust tournament scores with enough data (prevents overfitting)
+        t_score = t_info["avg_score"] if t_info and t_info["tournament_count"] >= MIN_TOURNAMENTS_FOR_TRUST else None
+
+        # Base score from available signals
+        if ctx_rate is not None and t_score is not None:
+            base = -(t_score * 0.4 + ctx_rate * 0.4 + l.confidence * 0.2)
+        elif ctx_rate is not None:
+            base = -(ctx_rate * 0.6 + l.confidence * 0.4)
+        elif t_score is not None:
+            base = -(t_score * 0.5 + l.confidence * 0.5)
+        else:
+            base = -l.confidence
+
+        # Agent specialization adjustment
+        if agent_specs:
+            spec_key = f"{repo}:{l.category}" if repo else l.category
+            agent_score = agent_specs.get(spec_key)
+            if agent_score is not None:
+                if agent_score > 0.9:
+                    base += 0.15  # mastered — deprioritize
+                elif agent_score < 0.3:
+                    base -= 0.1  # weak — boost
+
+        # Gap boost: prioritize categories the agent is missing learnings for
+        if agent_gaps:
+            gap_categories = {g["category"] for g in agent_gaps}
+            if l.category in gap_categories:
+                base -= 0.2  # Strong boost for gap categories
+
+        return base
 
     scoped.sort(key=sort_key)
 
-    # Take top N
-    selected = scoped[:max_learnings]
+    # Take top N, but reserve 2 slots for exploration (random untested rules)
+    import random as _random
+    explore_count = min(2, len(scoped))
+    main_count = max_learnings - explore_count
+
+    # Main selection: top ranked
+    main_selected = scoped[:main_count]
+
+    # Exploration: pick random rules NOT in the main selection
+    remaining = [l for l in scoped if l not in main_selected]
+    if remaining:
+        explore_selected = _random.sample(remaining, min(explore_count, len(remaining)))
+    else:
+        explore_selected = []
+
+    selected = main_selected + explore_selected
 
     # Record selection for tracking
     if task_id:
