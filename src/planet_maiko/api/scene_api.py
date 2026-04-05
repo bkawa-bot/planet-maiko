@@ -20,7 +20,7 @@ scene_bp = Blueprint("scene", __name__)
 
 # Simple in-memory cache: {"data": {...}, "fetched_at": epoch_seconds}
 _weather_cache = {}
-_CACHE_TTL_SECONDS = 15 * 60  # 15 minutes
+_CACHE_TTL_SECONDS = 60 * 60  # 1 hour
 
 # WMO weather code -> our weather type
 # https://open-meteo.com/en/docs  (WMO Weather interpretation codes)

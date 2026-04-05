@@ -44,12 +44,31 @@ def bootstrap_from_prs(limit=20):
             for pr in prs:
                 for review in (pr.get("reviews") or []):
                     body = review.get("body", "").strip()
-                    if not body or len(body) < 20:
+                    if not body or len(body) < 30:
                         continue
 
-                    # Create a signal from the review comment
+                    # Skip low-quality comments (approvals, short acks, emoji-only)
+                    lower = body.lower()
+                    skip_phrases = [
+                        "lgtm", "looks good", "ship it", "approved", "nice work",
+                        "thanks", "thank you", "+1", "nit:", "nit", "merge",
+                    ]
+                    if any(lower.strip().startswith(p) for p in skip_phrases) and len(body) < 60:
+                        continue
+
+                    # Skip if it's just a question with no actionable feedback
+                    if body.strip().endswith("?") and len(body) < 80:
+                        continue
+
+                    # Dedup: skip if we already have a signal with this exact text
+                    existing = Signal.query.filter_by(
+                        text=body[:500], repo=repo, source_type="pr_comment"
+                    ).first()
+                    if existing:
+                        continue
+
                     signal = Signal(
-                        category="pattern",  # Generic -- will be classified later
+                        category="pattern",  # Will be classified by LLM later
                         text=body[:500],
                         source_type="pr_comment",
                         reviewer=review.get("author", {}).get("login", ""),

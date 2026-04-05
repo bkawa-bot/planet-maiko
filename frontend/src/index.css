@@ -66,15 +66,15 @@
 
 /* === Sunset theme === */
 [data-theme="sunset"] {
-  --bg: #1C2352; --bg-card: #3A2248; --bg-card-alt: #422850;
-  --bg-hover: #4C3060; --bg-selected: #56386A;
-  --text: #ECF0FA; --text-dim: #9199E8; --text-muted: #6A72B0;
-  --pink: #F0944A; --pink-soft: rgba(240, 148, 74, 0.15); --pink-glow: rgba(240, 148, 74, 0.08);
-  --blue: #7eb8d9; --blue-soft: rgba(126, 184, 217, 0.12);
-  --mint: #7dd4a0; --orange: #FFB07A; --lavender: #857CEB;
-  --peach: #ffb899; --creamsicle: #ffd0a8; --lemon: #f0c850;
-  --urgent: #ff6b7f; --high: #FFB07A; --normal: #F0944A; --low: #6A72B0; --green: #7dd4a0;
-  --border: #56386A; --border-subtle: #4C3060;
+  --bg: #1A1A2E; --bg-card: #2D2040; --bg-card-alt: #352548;
+  --bg-hover: #3E2D50; --bg-selected: #483558;
+  --text: #F0E6E8; --text-dim: #C4A0AA; --text-muted: #8A6878;
+  --pink: #E8855A; --pink-soft: rgba(232, 133, 90, 0.15); --pink-glow: rgba(232, 133, 90, 0.08);
+  --blue: #7EB8D9; --blue-soft: rgba(126, 184, 217, 0.12);
+  --mint: #7dd4a0; --orange: #F0A060; --lavender: #A088D0;
+  --peach: #F0B090; --creamsicle: #FFD0A8; --lemon: #F0C850;
+  --urgent: #FF6B7F; --high: #F0A060; --normal: #E8855A; --low: #8A6878; --green: #7dd4a0;
+  --border: #483558; --border-subtle: #3E2D50;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
