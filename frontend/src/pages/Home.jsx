@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import {
-  Shield, CheckSquare, Inbox, FolderOpen, Brain, Calendar,
+  Shield, CheckSquare, Inbox as InboxIcon, FolderOpen, Brain, Calendar,
   AlertCircle, Palette, Video, Sunrise, GitBranch, Clock,
   ExternalLink, ChevronRight, ChevronDown, Play, Pin, Bot,
+  Sparkles, GraduationCap, Wand2, Rocket,
 } from "lucide-react";
 import "./Home.css";
 import "./Tasks.css";
@@ -130,83 +131,171 @@ export default function Home() {
 
   const focusState = focus?.current_state || "available";
 
-  const isFirstRun = homeConfig && !homeConfig.github?.username && !(homeConfig.github?.repos?.length > 0);
+  const TOTAL_STEPS = 8;
+  const isFirstRun = homeConfig && !homeConfig.setup_complete;
+
+  const finishSetup = async () => {
+    const config = {};
+    if (setupUsername) config.github = { username: setupUsername, enabled: true, repos: setupRepos };
+    if (setupLatLon) config.scene = { latitude: setupLatLon.lat, longitude: setupLatLon.lon, location_name: setupLocationResolved };
+    config.setup_complete = true;
+    await api.updateConfig(config);
+    window.location.reload();
+  };
 
   if (isFirstRun) {
     return (
       <div className="home">
         <div className="setup-wizard">
-          <div className="setup-header">
-            <img src="/icon.png" alt="Maiko" style={{ width: 64, borderRadius: 16, imageRendering: "pixelated" }} />
-            <h1>Welcome to Planet Maiko</h1>
-            <p className="setup-sub">Let's get you set up. This takes about 2 minutes.</p>
+          {/* Progress dots */}
+          <div className="setup-progress">
+            {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+              <div key={i} className={`setup-dot ${i === setupStep ? "active" : ""} ${i < setupStep ? "done" : ""}`} />
+            ))}
           </div>
 
-          <div className="setup-steps">
-            {setupStep === 0 && (
-              <div className="setup-step">
-                <h3>1. GitHub Username</h3>
-                <p>Enter your GitHub username so Maiko can monitor your PRs and reviews.</p>
-                <input type="text" value={setupUsername} onChange={(e) => setSetupUsername(e.target.value)} placeholder="your-github-username" />
-                <button className="btn btn-primary" onClick={() => setSetupStep(1)} disabled={!setupUsername}>Next</button>
-              </div>
-            )}
+          {/* Step 0: Welcome */}
+          {setupStep === 0 && (
+            <div className="setup-step setup-step-centered">
+              <img src="/icon.png" alt="Maiko" style={{ width: 72, borderRadius: 16, imageRendering: "pixelated" }} />
+              <h1>Welcome to Planet Maiko</h1>
+              <p className="setup-sub">Your personal engineering companion. Maiko monitors your PRs, triages notifications, and orchestrates coding agents that learn from your team.</p>
+              <button className="btn btn-primary" onClick={() => setSetupStep(1)} style={{ marginTop: 16 }}>
+                <Rocket size={14} /> Get Started
+              </button>
+            </div>
+          )}
 
-            {setupStep === 1 && (
-              <div className="setup-step">
-                <h3>2. Your Repos</h3>
-                <p>Which repos should Maiko watch? You can auto-discover from your recent activity.</p>
-                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                  <button className="btn" onClick={async () => {
-                    setSetupDiscovering(true);
-                    try {
-                      // Save username first so discover works
-                      await api.updateConfig({ github: { username: setupUsername, enabled: true } });
-                      const result = await api.discoverGithubRepos();
-                      if (result.repos?.length) setSetupRepos(result.repos);
-                    } catch (e) {}
-                    setSetupDiscovering(false);
-                  }} disabled={setupDiscovering}>
-                    {setupDiscovering ? "Discovering..." : "Auto-Discover Repos"}
-                  </button>
-                </div>
-                <input type="text" value={setupRepos.join(", ")} onChange={(e) => setSetupRepos(e.target.value.split(",").map(s => s.trim()).filter(Boolean))} placeholder="org/repo1, org/repo2" />
-                <button className="btn btn-primary" onClick={() => setSetupStep(2)}>Next</button>
+          {/* Step 1: GitHub */}
+          {setupStep === 1 && (
+            <div className="setup-step">
+              <div className="setup-step-icon"><GitBranch size={28} /></div>
+              <h3>Connect GitHub</h3>
+              <p>Enter your GitHub username so Maiko can monitor your PRs and reviews. Requires <code>gh auth login</code> first.</p>
+              <input type="text" value={setupUsername} onChange={(e) => setSetupUsername(e.target.value)} placeholder="your-github-username" />
+              <div className="setup-actions">
+                <button className="setup-skip" onClick={() => setSetupStep(3)}>Skip</button>
+                <button className="btn btn-primary" onClick={() => setSetupStep(2)} disabled={!setupUsername}>Next</button>
               </div>
-            )}
+            </div>
+          )}
 
-            {setupStep === 2 && (
-              <div className="setup-step">
-                <h3>3. Your Location</h3>
-                <p>For live weather on your dashboard. Type your city or zipcode.</p>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input type="text" value={setupLocation} onChange={(e) => setSetupLocation(e.target.value)} placeholder="Boston" style={{ flex: 1 }} />
-                  <button className="btn" onClick={async () => {
-                    try {
-                      const resp = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(setupLocation)}&count=1&language=en&format=json`);
-                      const data = await resp.json();
-                      if (data.results?.length) {
-                        const r = data.results[0];
-                        setSetupLocationResolved(`${r.name}, ${r.admin1 || ""}`);
-                        setSetupLatLon({ lat: r.latitude, lon: r.longitude });
-                      }
-                    } catch (e) {}
-                  }}>Lookup</button>
-                </div>
-                {setupLocationResolved && <div style={{ fontSize: 12, color: "var(--green)", marginTop: 4 }}>{setupLocationResolved}</div>}
-                <button className="btn btn-primary" onClick={async () => {
-                  // Save everything
-                  await api.updateConfig({
-                    github: { username: setupUsername, enabled: true, repos: setupRepos },
-                    scene: setupLatLon ? { latitude: setupLatLon.lat, longitude: setupLatLon.lon, location_name: setupLocationResolved } : {},
-                  });
-                  window.location.reload();
-                }} style={{ marginTop: 12 }}>
-                  Finish Setup
-                </button>
+          {/* Step 2: Repos */}
+          {setupStep === 2 && (
+            <div className="setup-step">
+              <div className="setup-step-icon"><FolderOpen size={28} /></div>
+              <h3>Your Repos</h3>
+              <p>Which repos should Maiko watch? Auto-discover from your recent activity, or type them manually.</p>
+              <button className="btn" style={{ marginBottom: 8 }} onClick={async () => {
+                setSetupDiscovering(true);
+                try {
+                  await api.updateConfig({ github: { username: setupUsername, enabled: true } });
+                  const result = await api.discoverGithubRepos();
+                  if (result.repos?.length) {
+                    setSetupRepos(result.repos);
+                    setTimeout(() => setSetupStep(3), 800);
+                  }
+                } catch (e) {}
+                setSetupDiscovering(false);
+              }} disabled={setupDiscovering}>
+                {setupDiscovering ? "Discovering..." : "Auto-Discover Repos"}
+              </button>
+              <input type="text" value={setupRepos.join(", ")} onChange={(e) => setSetupRepos(e.target.value.split(",").map(s => s.trim()).filter(Boolean))} placeholder="org/repo1, org/repo2" />
+              {setupRepos.length > 0 && <div style={{ fontSize: 12, color: "var(--green)", marginTop: 4 }}>Found {setupRepos.length} repo(s)</div>}
+              <div className="setup-actions">
+                <button className="setup-skip" onClick={() => setSetupStep(1)}>Back</button>
+                <button className="btn btn-primary" onClick={() => setSetupStep(3)}>Next</button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {/* Step 3: Location */}
+          {setupStep === 3 && (
+            <div className="setup-step">
+              <div className="setup-step-icon"><Palette size={28} /></div>
+              <h3>Your Location</h3>
+              <p>For live weather on your dashboard. Clouds drift across the page when it's overcast, rain falls when it's stormy.</p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input type="text" value={setupLocation} onChange={(e) => setSetupLocation(e.target.value)} placeholder="Boston" style={{ flex: 1 }} />
+                <button className="btn" onClick={async () => {
+                  try {
+                    const resp = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(setupLocation)}&count=1&language=en&format=json`);
+                    const data = await resp.json();
+                    if (data.results?.length) {
+                      const r = data.results[0];
+                      setSetupLocationResolved(`${r.name}, ${r.admin1 || ""}`);
+                      setSetupLatLon({ lat: r.latitude, lon: r.longitude });
+                    }
+                  } catch (e) {}
+                }}>Lookup</button>
+              </div>
+              {setupLocationResolved && <div style={{ fontSize: 12, color: "var(--green)", marginTop: 4 }}>{setupLocationResolved}</div>}
+              <div className="setup-actions">
+                <button className="setup-skip" onClick={() => setSetupStep(4)}>Skip</button>
+                <button className="btn btn-primary" onClick={() => setSetupStep(4)}>Next</button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Tour — Inbox */}
+          {setupStep === 4 && (
+            <div className="setup-step setup-step-centered">
+              <div className="setup-step-icon tour-icon"><InboxIcon size={36} /></div>
+              <h3>Your Inbox</h3>
+              <p>All notifications from GitHub, Linear, Calendar, and Slack land here. Maiko triages them automatically — urgent stuff surfaces, noise gets filtered.</p>
+              <p className="setup-detail">Tabs let you filter by type: PRs, Calendar events, or messages From Maiko. You can dismiss, create tasks, or investigate with one click.</p>
+              <div className="setup-actions">
+                <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
+                <button className="btn btn-primary" onClick={() => setSetupStep(5)}>Next</button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 5: Tour — Agents */}
+          {setupStep === 5 && (
+            <div className="setup-step setup-step-centered">
+              <div className="setup-step-icon tour-icon"><Bot size={36} /></div>
+              <h3>Meet Your Agents</h3>
+              <p>Agents are coding assistants that work in isolated git worktrees. Each agent has a unique personality and a set of learnings tuned for specific task types.</p>
+              <p className="setup-detail">New agents ("pups") start with random learnings and improve through training. Over time, they specialize — one gets great at security tasks, another at frontend bugs.</p>
+              <div className="setup-actions">
+                <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
+                <button className="btn btn-primary" onClick={() => setSetupStep(6)}>Next</button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 6: Tour — Knowledge + Training */}
+          {setupStep === 6 && (
+            <div className="setup-step setup-step-centered">
+              <div className="setup-step-icon tour-icon"><Brain size={36} /></div>
+              <h3>Knowledge + Training</h3>
+              <p>Maiko learns coding patterns from your PR review comments. These "learnings" get injected into agent briefs so they follow your team's conventions.</p>
+              <p className="setup-detail">Use <strong>Knowledge &gt; Backfill from PRs</strong> to scan your existing PR history. Then use the <strong>Training</strong> page to teach agents on real merged PRs.</p>
+              <div className="setup-actions">
+                <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
+                <button className="btn btn-primary" onClick={() => setSetupStep(7)}>Next</button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 7: Tour — Done */}
+          {setupStep === 7 && (
+            <div className="setup-step setup-step-centered">
+              <div className="setup-step-icon tour-icon"><Sparkles size={36} /></div>
+              <h3>You're All Set!</h3>
+              <p>Here's what to do next:</p>
+              <ul className="setup-checklist">
+                <li><strong>Backfill knowledge</strong> — Go to Knowledge and click "Backfill from PRs"</li>
+                <li><strong>Create an agent</strong> — Visit Agents and click "New Agent"</li>
+                <li><strong>Train it</strong> — Go to Training, pick a merged PR, and run a session</li>
+                <li><strong>Run a morning brief</strong> — Hit the button on the Home page</li>
+              </ul>
+              <button className="btn btn-primary" onClick={finishSetup} style={{ marginTop: 16 }}>
+                <Rocket size={14} /> Go to Dashboard
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
