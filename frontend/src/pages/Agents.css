@@ -134,6 +134,21 @@
 .strategies-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
 .strategy-card.archived { opacity: 0.5; }
 .archived-tag { background: var(--bg); color: var(--text-muted); font-size: 9px; padding: 1px 5px; border-radius: 4px; }
+.context-set-section { max-height: 120px; overflow-y: auto; }
+.context-set-list { display: flex; flex-direction: column; gap: 3px; }
+.context-set-item {
+  display: flex; gap: 6px; align-items: baseline;
+  font-size: 11px; line-height: 1.4;
+}
+.context-set-cat {
+  font-size: 9px; color: var(--pink); font-weight: 600;
+  text-transform: uppercase; flex-shrink: 0; min-width: 60px;
+}
+.context-set-rule {
+  color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 .strategy-card-actions {
   padding: 8px 16px; border-top: 1px solid var(--border-subtle);
   display: flex; justify-content: flex-end;

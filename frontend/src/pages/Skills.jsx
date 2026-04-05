@@ -67,12 +67,26 @@ export default function Skills() {
     try {
       const pupdates = await api.getPupdates();
       const tasks = await api.getTasks();
+      // For repo-analysis, get the repo path from config
+      let working_dir;
+      if (name === "repo-analysis") {
+        try {
+          const cfg = await api.getConfig();
+          const repos = cfg?.github?.repos || [];
+          if (repos.length > 0) {
+            // Prompt for which repo (use first as default)
+            working_dir = prompt("Repo path to analyze:", repos[0]);
+            if (!working_dir) { setRunning(false); return; }
+          }
+        } catch (e) {}
+      }
       const res = await api.runSkill(name, {
         context: {
           pupdates: JSON.stringify(pupdates.slice(0, 15)),
           tasks: JSON.stringify(tasks.slice(0, 15)),
           calendar: "[]", query: "", context: "",
         },
+        working_dir,
       });
       setResult(res);
       showToast(res.success ? "Skill complete! ✨" : "Skill had trouble", res.success ? "normal" : "high");

@@ -112,6 +112,18 @@
 .training-entry-reason {
   margin-top: 6px; font-size: 11px; color: var(--text-dim); line-height: 1.4;
 }
+.training-output-toggle {
+  margin-top: 6px; font-size: 10px; color: var(--text-muted);
+  cursor: pointer; display: flex; align-items: center; gap: 4px;
+}
+.training-output-toggle:hover { color: var(--pink); }
+.training-output-content {
+  margin-top: 6px; padding: 10px; font-size: 11px;
+  background: var(--bg); border-radius: var(--radius-xs);
+  color: var(--text-dim); white-space: pre-wrap; word-break: break-word;
+  max-height: 300px; overflow-y: auto; line-height: 1.5;
+  font-family: var(--font-mono);
+}
 
 .training-summary {
   display: flex; align-items: center; gap: 8px;
