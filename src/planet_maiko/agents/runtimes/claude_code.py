@@ -52,7 +52,7 @@ class ClaudeCodeRuntime(AgentRuntime):
         except Exception:
             return []
 
-    def send(self, prompt, working_dir=None, timeout=300):
+    def send(self, prompt, working_dir=None, timeout=300, model=None):
         """Send a prompt to claude CLI in print mode.
 
         Uses --print for single prompt/response (no interactive session).
@@ -60,6 +60,10 @@ class ClaudeCodeRuntime(AgentRuntime):
         """
         claude_path = self._find_claude() or "claude"
         cmd = [claude_path, "--print", "--output-format", "text"]
+
+        # Model override for cost-aware routing
+        if model:
+            cmd.extend(["--model", model])
 
         # Pre-approve tools to avoid permission prompts
         allowed = self._get_allowed_tools()
@@ -106,7 +110,7 @@ class ClaudeCodeRuntime(AgentRuntime):
                 "error": "claude CLI not found. Install Claude Code first.",
             }
 
-    def send_json(self, prompt, working_dir=None, timeout=300):
+    def send_json(self, prompt, working_dir=None, timeout=300, model=None):
         """Send a prompt and parse the response as JSON.
 
         Wraps the prompt with instructions to return JSON.
@@ -117,7 +121,7 @@ class ClaudeCodeRuntime(AgentRuntime):
             "Respond with ONLY valid JSON, no markdown fencing, no explanation."
         )
 
-        result = self.send(json_prompt, working_dir=working_dir, timeout=timeout)
+        result = self.send(json_prompt, working_dir=working_dir, timeout=timeout, model=model)
 
         if not result["success"]:
             return result

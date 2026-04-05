@@ -27,13 +27,14 @@ class AgentRuntime(ABC):
         ...
 
     @abstractmethod
-    def send(self, prompt, working_dir=None, timeout=300):
+    def send(self, prompt, working_dir=None, timeout=300, model=None):
         """Send a prompt to the agent and get a response.
 
         Args:
             prompt: The instruction/question for the agent
             working_dir: Directory the agent should work in (optional)
             timeout: Max seconds to wait for a response
+            model: Model tier override (e.g. "haiku", "sonnet", "opus")
 
         Returns:
             dict with:

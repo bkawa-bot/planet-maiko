@@ -53,6 +53,10 @@ DEFAULT_CONFIG = {
         "latitude": None,   # e.g. 37.77 for San Francisco
         "longitude": None,  # e.g. -122.42 for San Francisco
     },
+    "routing": {
+        "enabled": True,
+        "default_model": "sonnet",
+    },
     "hooks": {
         "enabled": True,
         "post_tool_use": True,

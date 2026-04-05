@@ -116,7 +116,8 @@ def run_training():
 
 Write the actual code changes you would make. Include file paths, function signatures, and implementation details. Be specific."""
 
-        result = runtime.send(prompt, timeout=180)
+        from planet_maiko.agents.routing import resolve_model
+        result = runtime.send(prompt, timeout=180, model=resolve_model("training:entry"))
         entries.append({
             "name": combo["name"],
             "learning_ids": combo["ids"],
@@ -292,7 +293,8 @@ Entries:
 
 Respond with JSON: {{"scores": [{{"name": "entry_name", "score": N, "reason": "brief reason"}}]}}"""
 
-    result = runtime.send_json(prompt, timeout=120)
+    from planet_maiko.agents.routing import resolve_model
+    result = runtime.send_json(prompt, timeout=120, model=resolve_model("training:judge"))
 
     if result.get("parsed") and "scores" in result["parsed"]:
         for score_data in result["parsed"]["scores"]:

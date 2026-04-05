@@ -10,7 +10,7 @@ export default function Settings() {
   const [pollerStatus, setPollerStatus] = useState({});
   const [message, setMessage] = useState("");
 
-  const [openSections, setOpenSections] = useState({ integrations: false, agents: false, scene: true });
+  const [openSections, setOpenSections] = useState({ integrations: false, agents: false, routing: false, scene: true });
   const toggleSection = (key) => setOpenSections(s => ({ ...s, [key]: !s[key] }));
 
   const [locationQuery, setLocationQuery] = useState("");
@@ -358,6 +358,58 @@ export default function Settings() {
                   />
                   <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
                     Comma-separated. These tools won't require permission prompts when agents run.
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Model Routing */}
+      <section className="settings-collapsible">
+        <div className="collapsible-header" onClick={() => toggleSection("routing")}>
+          {openSections.routing ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <span>Model Routing</span>
+        </div>
+        {openSections.routing && (
+          <div className="collapsible-body">
+            <div className="integration-section">
+              <div className="setup-hint">
+                Route tasks to different model tiers to balance cost and quality.
+                Haiku handles quick classifications, Sonnet runs skills and planning,
+                Opus powers tournaments and coding agents.
+              </div>
+              <div className="integration-fields">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={config.routing?.enabled ?? true}
+                    onChange={(e) => updateField("routing", "enabled", e.target.checked)}
+                  />
+                  Enable cost-aware routing
+                </label>
+                <label>
+                  Default model
+                  <select
+                    value={config.routing?.default_model || "sonnet"}
+                    onChange={(e) => updateField("routing", "default_model", e.target.value)}
+                    style={{
+                      padding: "8px 12px",
+                      border: "1px solid var(--border)",
+                      borderRadius: "var(--radius-xs)",
+                      background: "var(--bg)",
+                      color: "var(--text)",
+                      fontSize: "0.85rem",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    <option value="haiku">Haiku (fastest, cheapest)</option>
+                    <option value="sonnet">Sonnet (balanced)</option>
+                    <option value="opus">Opus (highest quality)</option>
+                  </select>
+                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                    Used for task types that don't have an explicit routing rule.
                   </span>
                 </label>
               </div>

@@ -49,7 +49,8 @@ def classify_unclassified_signals(batch_size=20):
             "Return one category per comment, in order."
         )
 
-        result = runtime.send_json(prompt, timeout=30)
+        from planet_maiko.agents.routing import resolve_model
+        result = runtime.send_json(prompt, timeout=30, model=resolve_model("classify"))
 
         if result and "classifications" in result:
             classifications = result["classifications"]

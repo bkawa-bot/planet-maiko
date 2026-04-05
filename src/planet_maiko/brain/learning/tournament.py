@@ -82,7 +82,8 @@ def run_tournament(repo, pr_number, app):
 
 Write ONLY the code changes. No explanation."""
 
-        result = runtime.send(baseline_prompt, timeout=180)
+        from planet_maiko.agents.routing import resolve_model
+        result = runtime.send(baseline_prompt, timeout=180, model=resolve_model("tournament:entry"))
         baseline_entry = TournamentEntry(
             tournament_id=tournament.id,
             strategy="baseline",
@@ -109,7 +110,7 @@ Write ONLY the code changes. No explanation."""
 
 Write ONLY the code changes. No explanation."""
 
-            result = runtime.send(prompt, timeout=180)
+            result = runtime.send(prompt, timeout=180, model=resolve_model("tournament:entry"))
 
             entry = TournamentEntry(
                 tournament_id=tournament.id,
@@ -207,7 +208,8 @@ def _classify_task(runtime, pr_data):
             f'Respond with JSON: {{"tags": ["tag1", "tag2"]}}'
         )
 
-    result = runtime.send_json(prompt, timeout=30)
+    from planet_maiko.agents.routing import resolve_model
+    result = runtime.send_json(prompt, timeout=30, model=resolve_model("classify"))
 
     if result.get("parsed"):
         tags = result["parsed"].get("tags", [])
@@ -271,7 +273,8 @@ Consider: correct approach, similar patterns, relevant imports, proper error han
 Respond with JSON:
 {{"scores": [{{"strategy": "strategy_name", "score": N, "reason": "brief reason"}}]}}"""
 
-    result = runtime.send_json(prompt, timeout=120)
+    from planet_maiko.agents.routing import resolve_model
+    result = runtime.send_json(prompt, timeout=120, model=resolve_model("tournament:judge"))
 
     if result.get("parsed") and "scores" in result["parsed"]:
         for score_data in result["parsed"]["scores"]:
