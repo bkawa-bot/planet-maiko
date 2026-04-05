@@ -22,6 +22,7 @@ export default function BrainView() {
   const [addText, setAddText] = useState("");
   const [addCategory, setAddCategory] = useState("domain_knowledge");
   const [backfilling, setBackfilling] = useState(false);
+  const [expandedLearning, setExpandedLearning] = useState(null);
 
   const fetchLearnings = async () => {
     setKLoading(true);
@@ -33,6 +34,13 @@ export default function BrainView() {
 
   const handleApprove = async (id) => { await api.approveLearning(id); fetchLearnings(); };
   const handleDismiss = async (id) => { await api.dismissLearning(id); fetchLearnings(); };
+  const handleApproveAll = async () => {
+    for (const l of learnings.filter((l) => l.status === "pending")) {
+      await api.approveLearning(l.id);
+    }
+    showToast(`Approved ${pending.length} learnings`, "normal");
+    fetchLearnings();
+  };
 
   const handleAdd = async () => {
     if (!addText.trim()) return;
@@ -59,9 +67,14 @@ export default function BrainView() {
           <span className="kstat"><Brain size={12} /> {active.length} active</span>
           <span className="kstat"><Clock size={12} /> {pending.length} pending</span>
           <span className="kstat"><Layers size={12} /> {Object.keys(byCategory).length} categories</span>
+          {pending.length > 0 && (
+            <button className="btn btn-sm" onClick={handleApproveAll} style={{ marginLeft: "auto" }}>
+              <Check size={10} /> Approve All ({pending.length})
+            </button>
+          )}
           <button
             className="btn btn-sm"
-            style={{ marginLeft: "auto" }}
+            style={pending.length === 0 ? { marginLeft: "auto" } : {}}
             disabled={backfilling}
             onClick={async () => {
               setBackfilling(true);
@@ -133,7 +146,9 @@ export default function BrainView() {
                             <div className="confidence-bar" style={{ width: `${l.confidence * 100}%` }} />
                           </div>
                           <span className="signal-count">{l.signal_count} signals</span>
-                          <span className="learning-rule">{l.rule}</span>
+                          <span className={`learning-rule ${expandedLearning === l.id ? "expanded" : ""}`} onClick={(e) => { e.stopPropagation(); setExpandedLearning(expandedLearning === l.id ? null : l.id); }}>
+                            {l.rule}
+                          </span>
                           <div className="learning-btns">
                             {l.status === "pending" && (
                               <button className="btn btn-sm" onClick={() => handleApprove(l.id)}>

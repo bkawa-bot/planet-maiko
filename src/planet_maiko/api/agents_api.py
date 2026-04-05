@@ -94,11 +94,17 @@ def assign_agent():
     from planet_maiko.agents.coding_agent import prepare
 
     data = request.get_json()
-    task_id = data["task_id"]
-    profile_id = data["profile_id"]
+    task_id = data.get("task_id")
+    profile_id = data.get("profile_id")
     repo_path = data.get("repo_path", "")
     use_worktree = data.get("use_worktree", True)
     auto_kickoff = data.get("auto_kickoff", False)
+
+    if not task_id or not profile_id:
+        return jsonify({"error": "task_id and profile_id are required"}), 400
+
+    if not repo_path:
+        return jsonify({"error": "repo_path is required. Select a repo in the assign modal."}), 400
 
     task = db.get_or_404(Task, task_id)
     profile = db.get_or_404(AgentProfile, profile_id)

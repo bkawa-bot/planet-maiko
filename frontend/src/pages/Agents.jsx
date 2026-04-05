@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import {
-  Bot, MessageCircle, Moon, Bone, GitBranch, CheckSquare,
+  Bot, MessageCircle, Moon, Bone, GitBranch, CheckSquare, Brain,
   HeartPulse, Plus, Star, Trophy, X, ChevronRight, AlertTriangle,
   Flame, Play, Sparkles, Check, Clock, Zap, Target, TrendingUp,
 } from "lucide-react";
@@ -372,7 +372,7 @@ export default function Agents() {
                       <div className="strategy-stats-row">
                         <span className="strategy-stat"><CheckSquare size={10} /> {p.tasks_completed} done</span>
                         <span className="strategy-stat"><X size={10} /> {p.tasks_failed} failed</span>
-                        <span className="strategy-stat"><Target size={10} /> {repoCount} repo(s)</span>
+                        <span className="strategy-stat"><Brain size={10} /> {p.context_set?.length || 0} learnings</span>
                       </div>
 
                       <div className="strategy-card-actions">

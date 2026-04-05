@@ -82,7 +82,13 @@ export default function Training() {
           </ol>
           <h4>Pups vs Specialists</h4>
           <p>Pups (new agents) get 3 random combos to discover what works. Specialists test small tweaks to their proven set — adding a new learning or dropping a weak one.</p>
+          <h4>Automatic training</h4>
+          <p>This also happens automatically! When PRs merge through your configured repos, the brain cycle runs training sessions in the background. This page is for manual bootstrapping and exploration.</p>
         </InfoButton>
+      </div>
+
+      <div className="training-auto-note">
+        Training also runs automatically when PRs merge through your repos. Use this page to bootstrap new agents or test manually.
       </div>
 
       <div className="training-form">

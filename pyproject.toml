@@ -15,6 +15,7 @@ dependencies = [
     "flask-sqlalchemy>=3.1",
     "pyyaml>=6.0",
     "requests>=2.31",
+    "certifi",
     "icalendar>=5.0",
     "tree-sitter>=0.22",
     "tree-sitter-java>=0.23",
