@@ -187,4 +187,12 @@ Focus on actionable findings, not style preferences.""",
         "mcps": ["github"],
         "prompt": "Review a pull request.",
     },
+    {
+        "id": "agent-protocol",
+        "name": "Agent Protocol",
+        "description": "The instructions injected into every coding agent's CLAUDE.md. Edit this to change how agents communicate and work.",
+        "icon": "bot",
+        "mcps": [],
+        "prompt": "Agent protocol template — edit this from the Skills page to customize agent behavior.",
+    },
 ]
