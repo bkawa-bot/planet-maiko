@@ -181,6 +181,9 @@ export const api = {
     return request(`/tournaments/scores${query}`);
   },
 
+  // Agent terminal
+  openTerminal: (path) => request("/agents/open-terminal", { method: "POST", body: JSON.stringify({ path }) }),
+
   // Training
   getTrainingPRs: () => request("/training/prs"),
   getTrainingHistory: () => request("/training/history"),
