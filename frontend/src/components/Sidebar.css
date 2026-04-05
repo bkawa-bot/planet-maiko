@@ -4,21 +4,28 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 42px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
   z-index: 100;
-  background: rgba(30, 37, 41, 0.6);
+  background: linear-gradient(135deg, #0a1628 0%, #162244 50%, #1a3a48 100%);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.25);
 }
 
-[data-theme="light"] .topbar { background: rgba(248, 245, 240, 0.7); }
-[data-theme="morning"] .topbar { background: rgba(245, 239, 228, 0.7); }
-[data-theme="sunset"] .topbar { background: rgba(42, 31, 53, 0.7); }
+[data-theme="light"] .topbar { background: linear-gradient(135deg, #87CEEB 0%, #B0D8E8 50%, #B8D8B8 100%); box-shadow: 0 1px 8px rgba(0,0,0,0.1); }
+[data-theme="morning"] .topbar { background: linear-gradient(135deg, #F5C6AA 0%, #F0D8C0 50%, #F8E8D0 100%); box-shadow: 0 1px 8px rgba(0,0,0,0.1); }
+[data-theme="sunset"] .topbar { background: linear-gradient(135deg, #303870 0%, #5546FF 50%, #9A5040 100%); }
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 
 .topbar-logo {
   display: flex;
@@ -28,8 +35,8 @@
 }
 
 .topbar-icon {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 5px;
   image-rendering: pixelated;
 }
@@ -41,7 +48,7 @@
 }
 
 .topbar-planet {
-  font-size: 7px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 2.5px;
   color: var(--text-muted);
@@ -49,7 +56,7 @@
 }
 
 .topbar-maiko {
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 900;
   letter-spacing: 3px;
   font-family: var(--font-mono);
@@ -65,6 +72,36 @@
   align-items: center;
   gap: 4px;
 }
+
+.focus-wrapper { position: relative; }
+.focus-pill-topbar {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 10px;
+  cursor: pointer;
+  font-size: 11px; font-weight: 600; text-transform: capitalize;
+  font-family: var(--font);
+  transition: all 0.15s;
+}
+.focus-pill-topbar.available { background: #1a4a2e; color: #7DDBA3; border: 1px solid #2a6a42; }
+.focus-pill-topbar.soft_focus { background: #1a3450; color: #89CFF0; border: 1px solid #2a4a6a; }
+.focus-pill-topbar.deep_focus { background: #2a2250; color: #C3A6E8; border: 1px solid #3a3268; }
+.focus-pill-topbar.away { background: #2a2a30; color: #8b9da8; border: 1px solid #3a3a42; }
+
+[data-theme="light"] .focus-pill-topbar.available { background: #d4f0dc; color: #2a6a3e; border-color: #a8d8b4; }
+[data-theme="light"] .focus-pill-topbar.soft_focus { background: #d0e8f8; color: #2a5a80; border-color: #a0c8e0; }
+[data-theme="light"] .focus-pill-topbar.deep_focus { background: #e4d8f0; color: #5a3a80; border-color: #c0a8d8; }
+[data-theme="light"] .focus-pill-topbar.away { background: #e0dcd8; color: #6a6058; border-color: #c8c0b8; }
+
+[data-theme="morning"] .focus-pill-topbar.available { background: #d8f0dc; color: #2a6a3e; border-color: #b0d8b8; }
+[data-theme="morning"] .focus-pill-topbar.soft_focus { background: #d4e8f4; color: #2a5a78; border-color: #a8c8d8; }
+[data-theme="morning"] .focus-pill-topbar.deep_focus { background: #e0d4f0; color: #5a3878; border-color: #c0a8d0; }
+[data-theme="morning"] .focus-pill-topbar.away { background: #e0d8d0; color: #6a5a48; border-color: #c8c0b0; }
+
+[data-theme="sunset"] .focus-pill-topbar.available { background: #1a3a2e; color: #7dd4a0; border-color: #2a5a42; }
+[data-theme="sunset"] .focus-pill-topbar.soft_focus { background: #1a2a50; color: #7eb8d9; border-color: #2a3a68; }
+[data-theme="sunset"] .focus-pill-topbar.deep_focus { background: #2a1a48; color: #857CEB; border-color: #3a2a60; }
+[data-theme="sunset"] .focus-pill-topbar.away { background: #2a2440; color: #6A72B0; border-color: #3a3458; }
+.focus-pill-topbar:hover { opacity: 0.8; }
 
 .topbar-action {
   display: flex;
@@ -134,112 +171,64 @@
 }
 .dropdown-item:hover { background: var(--bg-hover); color: var(--text); }
 .dropdown-item.active { background: var(--pink-soft); color: var(--pink); }
+.dropdown-divider { height: 1px; background: var(--border-subtle); margin: 4px 0; }
+.dropdown-item.dropdown-info { font-size: 10px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+.dropdown-item.dropdown-info:hover { color: var(--pink); }
 
-/* === Planet nav — bottom left === */
-.planet-nav {
-  position: fixed;
-  bottom: 20px;
-  left: 20px;
-  z-index: 90;
-}
-
-/* The planet button */
-.planet-btn {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  border: 2px solid var(--border);
-  background: var(--bg-card);
-  font-size: 24px;
-  cursor: pointer;
+/* === Nav pills === */
+.topbar-nav {
   display: flex;
   align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  gap: 3px;
 }
 
-.planet-btn:hover {
-  transform: scale(1.1) rotate(15deg);
-  border-color: var(--pink);
-  box-shadow: 0 0 0 3px var(--pink-glow), 0 4px 24px rgba(0,0,0,0.25);
-}
-
-.planet-btn.open {
-  transform: scale(1.05) rotate(30deg);
-  border-color: var(--pink);
-  background: var(--pink-glow);
-}
-
-/* The radial orbit menu */
-.planet-orbit {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 0;
-  height: 0;
-}
-
-.orbit-item {
-  position: absolute;
+.nav-pill {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px 6px 8px;
-  border-radius: 20px;
-  background: rgba(30, 37, 41, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-subtle);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text-dim);
   text-decoration: none;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
   transition: all 0.15s;
-  animation: orbitIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+  position: relative;
 }
 
-[data-theme="light"] .orbit-item { background: rgba(253, 251, 247, 0.8); }
-[data-theme="morning"] .orbit-item { background: rgba(250, 246, 238, 0.8); }
-[data-theme="sunset"] .orbit-item { background: rgba(58, 45, 72, 0.7); }
-
-@keyframes orbitIn {
-  from {
-    opacity: 0;
-    transform: translate(0, 0) scale(0.3) !important;
-  }
-}
-
-.orbit-item:hover {
+.nav-pill:hover {
   color: var(--text);
-  border-color: var(--pink);
-  box-shadow: 0 0 0 2px var(--pink-glow), 0 4px 16px rgba(0,0,0,0.25);
-  transform: scale(1.08) !important;
+  background: rgba(255,255,255,0.06);
+  border-color: var(--border-subtle);
   text-decoration: none;
 }
 
-.orbit-item.active {
+[data-theme="light"] .nav-pill:hover { background: rgba(0,0,0,0.04); }
+[data-theme="morning"] .nav-pill:hover { background: rgba(0,0,0,0.04); }
+
+.nav-pill.active {
   color: var(--pink);
   background: var(--pink-glow);
-  border-color: var(--pink);
+  border-color: rgba(248, 145, 180, 0.2);
 }
 
-.orbit-emoji {
-  font-size: 16px;
+.nav-pill-icon {
+  flex-shrink: 0;
   transition: transform 0.2s;
 }
 
-.orbit-item:hover .orbit-emoji {
-  transform: scale(1.2);
+.nav-pill:hover .nav-pill-icon {
+  transform: scale(1.15);
 }
 
-.orbit-label {
+.nav-pill-label {
   font-weight: 500;
 }
 
-.orbit-badge {
+.nav-pill-badge {
   font-size: 7px;
   font-weight: 700;
   padding: 1px 4px;
@@ -248,5 +237,4 @@
   color: #fff;
   min-width: 12px;
   text-align: center;
-  margin-left: 2px;
 }

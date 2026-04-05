@@ -1,18 +1,15 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/Layout";
 import ToastContainer from "./components/Toast";
 import Home from "./pages/Home";
 import Inbox from "./pages/Inbox";
 import Tasks from "./pages/Tasks";
-import Projects from "./pages/Projects";
 import Settings from "./pages/Settings";
 import Agents from "./pages/Agents";
-import Knowledge from "./pages/Knowledge";
-import Gathering from "./pages/Gathering";
-import Suggestions from "./pages/Suggestions";
-import Team from "./pages/Team";
-import Brainstorm from "./pages/Brainstorm";
+import BrainView from "./pages/BrainView";
 import Skills from "./pages/Skills";
+import Tournaments from "./pages/Tournaments";
+import Training from "./pages/Training";
 import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
 
 function AppRoutes() {
@@ -24,15 +21,21 @@ function AppRoutes() {
         <Route path="/" element={<Home />} />
         <Route path="/inbox" element={<Inbox />} />
         <Route path="/tasks" element={<Tasks />} />
-        <Route path="/team" element={<Team />} />
-        <Route path="/brainstorm" element={<Brainstorm />} />
-        <Route path="/suggestions" element={<Suggestions />} />
         <Route path="/agents" element={<Agents />} />
-        <Route path="/gathering" element={<Gathering />} />
-        <Route path="/knowledge" element={<Knowledge />} />
+        <Route path="/knowledge" element={<BrainView />} />
         <Route path="/skills" element={<Skills />} />
+        <Route path="/tournaments" element={<Tournaments />} />
+        <Route path="/training" element={<Training />} />
         <Route path="/settings" element={<Settings />} />
-        <Route path="/projects" element={<Projects />} />
+        {/* Legacy routes */}
+        <Route path="/brain" element={<Navigate to="/knowledge" replace />} />
+        <Route path="/learn" element={<Navigate to="/knowledge" replace />} />
+        <Route path="/projects" element={<Navigate to="/tasks" replace />} />
+        <Route path="/team" element={<Navigate to="/knowledge" replace />} />
+        <Route path="/ideas" element={<Navigate to="/inbox" replace />} />
+        <Route path="/brainstorm" element={<Navigate to="/inbox" replace />} />
+        <Route path="/suggestions" element={<Navigate to="/inbox" replace />} />
+        <Route path="/gathering" element={<Navigate to="/agents" replace />} />
       </Route>
     </Routes>
   );

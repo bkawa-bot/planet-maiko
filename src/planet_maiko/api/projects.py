@@ -82,6 +82,50 @@ def update_status(project_id):
     return jsonify(project.to_dict())
 
 
+@projects_bp.route("/projects/<project_id>/generate-plan", methods=["POST"])
+def generate_plan(project_id):
+    """Use LLM to generate a multi-phase plan for a project."""
+    project = db.get_or_404(Project, project_id)
+
+    try:
+        from planet_maiko.agents.brain_session import BrainSession
+        session = BrainSession()
+        if not session.runtime or not session.runtime.is_available():
+            return jsonify({"error": "Runtime not available"}), 503
+
+        prompt = (
+            f"Break this project into 2-5 implementation phases.\n\n"
+            f"Project: {project.title}\n"
+            f"Description: {project.description or 'No description'}\n\n"
+            f"For each phase, provide:\n"
+            f"- title: short name\n"
+            f"- description: what to implement\n"
+            f"- repo: which repository (if known)\n\n"
+            f"Respond in JSON: {{\"phases\": [{{\"title\": \"...\", \"description\": \"...\", \"repo\": \"...\"}}]}}"
+        )
+
+        result = session.runtime.send_json(prompt, timeout=30)
+        if result and "phases" in result:
+            phases = []
+            for i, p in enumerate(result["phases"]):
+                phases.append({
+                    "number": i,
+                    "title": p.get("title", f"Phase {i+1}"),
+                    "description": p.get("description", ""),
+                    "repo": p.get("repo", ""),
+                    "status": "active" if i == 0 else "pending",
+                    "depends_on": [i-1] if i > 0 else [],
+                })
+            project.phases = phases
+            project.current_phase = 0
+            db.session.commit()
+            return jsonify({"phases": phases})
+
+        return jsonify({"error": "Could not generate plan"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @projects_bp.route("/projects/<project_id>/generate-tasks", methods=["POST"])
 def generate_tasks(project_id):
     """Use LLM to generate task breakdown from project description."""

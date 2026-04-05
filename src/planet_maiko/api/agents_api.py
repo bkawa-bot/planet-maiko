@@ -97,21 +97,56 @@ def assign_agent():
     task_id = data["task_id"]
     profile_id = data["profile_id"]
     repo_path = data.get("repo_path", "")
+    use_worktree = data.get("use_worktree", True)
+    auto_kickoff = data.get("auto_kickoff", False)
 
     task = db.get_or_404(Task, task_id)
     profile = db.get_or_404(AgentProfile, profile_id)
 
-    # Prepare worktree
+    # Build rich prompt from task + source pupdate + project
+    prompt_parts = [task.title]
+
+    # Pull in source context (Linear issue body, GitHub PR description, etc.)
+    if task.source_pupdate_id:
+        from planet_maiko.models.pupdate import Pupdate
+        source = db.session.get(Pupdate, task.source_pupdate_id)
+        if source and source.body:
+            prompt_parts.append(f"\n## Source Context\n\n{source.body}")
+        if source and source.url:
+            prompt_parts.append(f"\nSource URL: {source.url}")
+
+    # Pull in project description
+    if task.project_id:
+        from planet_maiko.models.project import Project
+        project = db.session.get(Project, task.project_id)
+        if project and project.description:
+            prompt_parts.append(f"\n## Project: {project.title}\n\n{project.description}")
+
+    # Add task metadata
+    if task.url:
+        prompt_parts.append(f"\nTask URL: {task.url}")
+    if task.tags:
+        prompt_parts.append(f"\nTags: {', '.join(task.tags)}")
+
+    # Add user's custom instructions if provided in request
+    user_prompt = data.get("custom_prompt", "")
+    if user_prompt:
+        prompt_parts.append(f"\n## Additional Instructions\n\n{user_prompt}")
+
+    full_prompt = "\n".join(prompt_parts)
+
     result = prepare(
         task_id=task_id,
         task_title=task.title,
-        prompt=task.title,
+        prompt=full_prompt,
         repo_path=repo_path,
         branch_prefix="maiko",
+        auto_kickoff=auto_kickoff,
+        use_worktree=use_worktree,
     )
 
     if not result:
-        return jsonify({"error": "Failed to prepare agent worktree"}), 500
+        return jsonify({"error": "Failed to prepare agent"}), 500
 
     # Link task to agent
     task.assigned_agent_id = profile_id
@@ -207,8 +242,8 @@ def process_agents():
 def prepare_agent():
     """Prepare a worktree for an agent task.
 
-    Does NOT launch the agent - just sets up the worktree with
-    TASK.md and CLAUDE.md, and notifies the user it's ready.
+    Does NOT launch the agent unless auto_kickoff is True - sets up the
+    worktree with TASK.md and CLAUDE.md, and notifies the user it's ready.
     """
     data = request.get_json()
     result = prepare(
@@ -217,6 +252,7 @@ def prepare_agent():
         prompt=data["prompt"],
         repo_path=data["repo_path"],
         branch_prefix=data.get("branch_prefix", "maiko"),
+        auto_kickoff=data.get("auto_kickoff", False),
     )
     if not result:
         return jsonify({"error": "Failed to prepare agent worktree"}), 500
@@ -281,13 +317,43 @@ def agent_sends_message(task_id):
     msg = AgentMessage(
         task_id=task_id,
         direction="from_agent",
-        sender="agent",
+        sender=data.get("sender", "agent"),
         content=data["content"],
         message_type=data.get("message_type", "message"),
     )
     db.session.add(msg)
+
+    # If feedback message, create a learning signal immediately
+    if data.get("message_type") == "feedback":
+        metadata = data.get("metadata", {})
+        category = metadata.get("feedback_category", "pattern")
+        severity = metadata.get("feedback_severity", "suggestion")
+
+        from planet_maiko.models.signal import Signal
+        signal = Signal(
+            category=category,
+            text=data["content"],
+            source_type="session_feedback",
+            severity=severity,
+            repo=_get_repo_for_task(task_id),
+        )
+        db.session.add(signal)
+
+        # Small immediate specialization penalty
+        from planet_maiko.agents.profiles import record_session_feedback
+        record_session_feedback(task_id, category, severity)
+
     db.session.commit()
     return jsonify(msg.to_dict()), 201
+
+
+def _get_repo_for_task(task_id):
+    """Extract repo from task metadata."""
+    from planet_maiko.models.task import Task
+    task = db.session.get(Task, task_id)
+    if task and task.extra:
+        return task.extra.get("repo")
+    return None
 
 
 @agents_bp.route("/agents/<task_id>/messages", methods=["GET"])

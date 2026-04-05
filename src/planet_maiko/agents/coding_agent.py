@@ -57,8 +57,8 @@ def _create_worktree(repo_path, branch_name):
         return None
 
 
-def _write_task_file(worktree_path, task_id, task_title, prompt):
-    """Write TASK.md in the worktree so the agent knows what to do."""
+def _write_task_file(working_path, task_id, task_title, prompt):
+    """Write TASK.md so the agent knows what to do."""
     content = f"""# Task: {task_title}
 
 **Task ID:** {task_id}
@@ -67,96 +67,189 @@ def _write_task_file(worktree_path, task_id, task_title, prompt):
 ## Instructions
 
 {prompt}
-
-## Communication with Planet Maiko
-
-### Check for messages (after each commit or before starting a new subtask)
-```bash
-maiko inbox
-```
-
-### Report progress
-```bash
-maiko report "Your status update"
-```
-
-### Reply to Maiko
-```bash
-maiko reply "Your response"
-```
-
-### When done
-```bash
-maiko task done
-```
-
-### If stuck
-```bash
-maiko task stuck -m "Describe what's blocking you"
-```
-
-## Rules
-
-- Work in this directory (a git worktree on its own branch)
-- Make small, focused commits as you go
-- **Check `maiko inbox` after each commit or before starting a new subtask** - Maiko may have new context or direction
-- If you get stuck, report it so the brain can help or reassign
-- When done, make sure tests pass, then report completion
 """
-    with open(os.path.join(worktree_path, "TASK.md"), "w") as f:
+    with open(os.path.join(working_path, "TASK.md"), "w", encoding="utf-8") as f:
         f.write(content)
 
 
-def _write_claude_md(worktree_path, task_id, task_title, maiko_port=8420):
-    """Write CLAUDE.md so Claude Code picks up context automatically."""
-    content = f"""# Agent Context
+def _write_claude_md(working_path, task_id, task_title, maiko_port=8420):
+    """Write CLAUDE.md with full agent protocol."""
+    custom_instructions = ""
+    try:
+        from planet_maiko.config import load_config
+        config = load_config()
+        custom_instructions = config.get("agents", {}).get("custom_instructions", "")
+    except Exception:
+        pass
 
-You are a coding agent working on a task for Planet Maiko.
+    branch_var = "$(git rev-parse --abbrev-ref HEAD)"
 
-## Your Task
-Read TASK.md in this directory for full instructions.
+    content = f"""# Planet Maiko — Agent Protocol
+
+You are a coding agent managed by Planet Maiko. Read TASK.md for your assignment.
 
 **Task:** {task_title}
 **Task ID:** {task_id}
 
-## Communication
+## 0. First Steps
 
-Planet Maiko runs at http://localhost:{maiko_port}. Use the `maiko` CLI to communicate:
-
-**Check your inbox after each commit or before starting a new subtask:**
+1. Read **TASK.md** in this directory — it has your full instructions.
+2. Get your branch name: `BRANCH={branch_var}`
+3. Announce yourself:
 ```bash
-maiko inbox
+maiko report "Starting work on {task_id}. Reading plan and exploring codebase."
+maiko task start
 ```
 
-Report progress and completion:
-```bash
-maiko report "What you did"
-maiko task done
+## 1. Communication
+
+All communication goes through the `maiko` CLI (connects to http://localhost:{maiko_port}).
+
+### Commands
+
+| Command | When to use |
+|---------|-------------|
+| `maiko report "message"` | After every major step — keeps your status fresh |
+| `maiko inbox` | After each commit or before starting a new subtask |
+| `maiko reply "message"` | When responding to a message from Maiko or the user |
+| `maiko feedback "message" --category testing` | When you discover something that should become a learning |
+| `maiko task done` | When the task is complete and tests pass |
+| `maiko task stuck -m "description"` | When you're blocked and need help |
+
+### Status Update Convention
+
+**Your report messages appear as speech bubbles on the dashboard.** Write them like you'd talk to the user if they walked by your desk — conversational, first person, one sentence.
+
+Good: "Tests passing, pushing to remote now!"
+Bad: "agent_status: build complete for task-123"
+
+### When to Report
+
+Send a `maiko report` after every major workflow step:
+- After reading the plan and exploring the codebase
+- After implementing a significant piece
+- After each build attempt (pass or fail)
+- After committing and pushing
+- After opening a PR
+- When blocked or waiting
+
+**Do NOT sit idle without reporting.** If you're blocked, say so immediately via `maiko task stuck`.
+
+## 2. Workflow
+
+```
+1. Read TASK.md → report "Reading the plan..."
+2. Explore codebase → report "Exploring the codebase and checking existing patterns."
+3. Implement changes → report "Implementing changes to X..."
+4. Run tests/build → report "Tests passing!" or "Build failed, fixing..."
+5. Commit & push → report "Changes pushed to branch."
+6. Open draft PR → report "Draft PR #N opened."
+7. Self-review the diff → report "Self-reviewing the diff..."
+8. Fix any issues found → commit & push
+9. Report "PR #{task_id} ready for review."
+10. maiko task done
 ```
 
-If you need to reply to a message from Maiko:
+## 3. Checking for Messages
+
+**Check `maiko inbox` after each commit or between subtasks.** Maiko may send:
+- Updated context or changed requirements
+- Answers to questions you asked
+- A nudge if you haven't reported in a while
+- A sleep signal (stop work and wait)
+
+If you receive a nudge, immediately report your current status.
+
+## 4. Post-Review Feedback
+
+After the user reviews your work and requests changes, extract learnings:
+
+For EACH specific pattern change the reviewer requested, send feedback:
 ```bash
-maiko reply "Your response"
+maiko feedback "Use orElseThrow instead of .get() on Optional" --category error_handling
 ```
 
-## Rules
+This feeds Maiko's learning system so future agents get better coding guidelines.
+Send one feedback per distinct code pattern (not per file — if the same pattern was applied in 3 files, that's 1 feedback).
+
+## 5. Rules
+
 - Stay focused on the task in TASK.md
-- Commit your work as you go
-- **Check `maiko inbox` after commits or between subtasks** - Maiko may send updated context or new direction
-- Report back when done or if you're stuck
+- Commit frequently with clear, descriptive messages
+- **Check `maiko inbox` after every commit** — Maiko may have new context
+- Match existing patterns in the files you're modifying
+- If stuck for more than a few minutes, report it — don't spin
+- When done, verify tests pass before reporting completion
+- NEVER commit agent scaffolding files (TASK.md, CLAUDE.md, .claude/ plans)
 """
-    claude_dir = os.path.join(worktree_path, ".claude")
+
+    if custom_instructions:
+        content += f"""
+## 6. Owner's Workflow Preferences
+
+{custom_instructions}
+"""
+    claude_dir = os.path.join(working_path, ".claude")
     os.makedirs(claude_dir, exist_ok=True)
-    # Write as CLAUDE.md in the project root for Claude Code to pick up
-    with open(os.path.join(worktree_path, "CLAUDE.md"), "w") as f:
+    with open(os.path.join(working_path, "CLAUDE.md"), "w", encoding="utf-8") as f:
         f.write(content)
 
 
-def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko"):
-    """Prepare a worktree for an agent to work in.
+def _kickoff_agent(agent_id, worktree_path, task_id):
+    """Start the agent via the configured runtime."""
+    try:
+        from planet_maiko.agents.brain_session import BrainSession
+        session = BrainSession()
+        if not session.runtime or not session.runtime.is_available():
+            return {"success": False, "error": "Runtime not available"}
 
-    This does NOT launch the agent. It sets up everything the agent
-    needs and returns instructions for the user to launch it.
+        # Read the task context
+        task_path = os.path.join(worktree_path, "TASK.md")
+        with open(task_path, "r") as f:
+            task_content = f.read()
+
+        result = session.runtime.send(
+            f"Work on this task in the current directory:\n\n{task_content}",
+            working_dir=worktree_path,
+            timeout=3600,
+        )
+        return {"success": True, "output": result[:500] if result else ""}
+    except Exception as e:
+        logger.error(f"[agent] Kickoff failed for {agent_id}: {e}")
+        return {"success": False, "error": str(e)}
+
+
+def _create_branch_only(repo_path, branch_name):
+    """Create a branch without a worktree — agent works in the main repo."""
+    try:
+        result = subprocess.run(
+            ["git", "checkout", "-b", branch_name],
+            cwd=repo_path, capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            # Branch might already exist
+            subprocess.run(
+                ["git", "checkout", branch_name],
+                cwd=repo_path, capture_output=True, text=True,
+            )
+        return repo_path  # Working dir is the repo itself
+    except Exception as e:
+        logger.error(f"[agent] Failed to create branch {branch_name}: {e}")
+        return None
+
+
+def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
+            auto_kickoff=False, use_worktree=True):
+    """Prepare for an agent to work on a task.
+
+    Two modes:
+    - use_worktree=True (default): creates a git worktree on a new branch.
+      Agent works in an isolated directory.
+    - use_worktree=False: creates a branch in the main repo. Agent works
+      in the repo directory directly (simpler but not isolated).
+
+    If auto_kickoff=True, the agent is started via the configured runtime
+    after preparation.
 
     Args:
         task_id: the task this agent will work on
@@ -164,6 +257,8 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko"):
         prompt: full instructions for the agent
         repo_path: path to the git repository
         branch_prefix: prefix for the branch name
+        auto_kickoff: if True, immediately start the agent via the runtime
+        use_worktree: if True, create a git worktree; if False, just create a branch
 
     Returns:
         dict with agent info and launch instructions, or None on failure
@@ -171,17 +266,41 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko"):
     slug = _slugify(task_id)
     branch_name = f"{branch_prefix}-{slug}"
 
-    worktree_path = _create_worktree(repo_path, branch_name)
-    if not worktree_path:
+    if use_worktree:
+        working_path = _create_worktree(repo_path, branch_name)
+    else:
+        working_path = _create_branch_only(repo_path, branch_name)
+
+    if not working_path:
         return None
 
     # Write task files
-    _write_task_file(worktree_path, task_id, task_title, prompt)
-    _write_claude_md(worktree_path, task_id, task_title)
+    _write_task_file(working_path, task_id, task_title, prompt)
+    _write_claude_md(working_path, task_id, task_title)
 
     agent_id = f"agent-{branch_name}"
 
-    # Create a pupdate to notify the user
+    # Compile learning brief for this agent
+    try:
+        from planet_maiko.brain.learning.processor import compile_brief
+        from planet_maiko.agents.profiles import create_profile
+
+        profile = create_profile(agent_id)
+        brief = compile_brief(
+            repo=repo_path,
+            task_id=task_id,
+            agent_profile_id=agent_id,
+        )
+
+        if brief and brief != "No active learnings yet.":
+            claude_path = os.path.join(working_path, "CLAUDE.md")
+            with open(claude_path, "a") as f:
+                f.write("\n\n" + brief)
+            logger.info(f"[agent] Injected learning brief ({len(brief)} chars) for {agent_id}")
+    except Exception as e:
+        logger.warning(f"[agent] Could not compile brief for {agent_id}: {e}")
+
+    mode = "worktree" if use_worktree else "branch"
     notify = Pupdate(
         id=f"agent-ready-{agent_id}",
         source="maiko",
@@ -189,35 +308,44 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko"):
         type="agent_ready",
         priority="normal",
         title=f"Agent ready: {task_title}",
-        body=f"Worktree prepared on branch `{branch_name}`. Launch your agent in:\n\n{worktree_path}",
+        body=f"Prepared on branch `{branch_name}` ({mode}). Launch your agent in:\n\n{working_path}",
         actionable=True,
         action_hint="Launch agent",
         tags=[task_id, "agent"],
         extra={
             "agent_id": agent_id,
             "branch": branch_name,
-            "worktree_path": worktree_path,
+            "working_path": working_path,
+            "mode": mode,
             "task_id": task_id,
         },
     )
     db.session.add(notify)
     db.session.commit()
 
-    logger.info(f"[orchestrator] Prepared agent {agent_id} at {worktree_path}")
+    logger.info(f"[orchestrator] Prepared agent {agent_id} at {working_path} ({mode})")
 
-    return {
+    result = {
         "agent_id": agent_id,
         "task_id": task_id,
         "branch": branch_name,
-        "worktree_path": worktree_path,
+        "working_path": working_path,
+        "mode": mode,
         "status": "ready",
         "prepared_at": datetime.now(timezone.utc).isoformat(),
         "launch_instructions": {
-            "claude_code": f"cd {worktree_path} && claude",
-            "aider": f"cd {worktree_path} && aider",
-            "manual": f"cd {worktree_path} && cat TASK.md",
+            "claude_code": f"cd {working_path} && claude",
+            "aider": f"cd {working_path} && aider",
+            "manual": f"cd {working_path} && cat TASK.md",
         },
     }
+
+    if auto_kickoff:
+        kickoff_result = _kickoff_agent(agent_id, working_path, task_id)
+        result["status"] = "running" if kickoff_result.get("success") else "ready"
+        result["kickoff_result"] = kickoff_result
+
+    return result
 
 
 def cleanup(repo_path, branch_name):

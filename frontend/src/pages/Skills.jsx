@@ -19,6 +19,8 @@ export default function Skills() {
   const [editPrompt, setEditPrompt] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [editMcps, setEditMcps] = useState("");
+  const [editSchedule, setEditSchedule] = useState("");
+  const [editCreatesPupdates, setEditCreatesPupdates] = useState(false);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -34,6 +36,8 @@ export default function Skills() {
       setEditPrompt(detail.prompt);
       setEditDesc(detail.description || "");
       setEditMcps((detail.mcps || []).join(", "));
+      setEditSchedule(detail.schedule_interval_minutes ? String(detail.schedule_interval_minutes) : "");
+      setEditCreatesPupdates(detail.creates_pupdates || false);
       setEditing(false);
       setResult(null);
     } catch (err) {
@@ -46,6 +50,8 @@ export default function Skills() {
       prompt: editPrompt,
       description: editDesc,
       mcps: editMcps.split(",").map(s => s.trim()).filter(Boolean),
+      schedule_interval_minutes: editSchedule ? parseInt(editSchedule) : null,
+      creates_pupdates: editCreatesPupdates,
     });
     showToast("Skill updated! ✏️", "normal");
     setEditing(false);
@@ -220,6 +226,25 @@ export default function Skills() {
                   <label>MCPs (comma-separated)
                     <input type="text" value={editMcps} onChange={e => setEditMcps(e.target.value)} />
                   </label>
+                  <div className="skill-form-row">
+                    <label>Schedule
+                      <select value={editSchedule} onChange={e => setEditSchedule(e.target.value)}>
+                        <option value="">Manual only</option>
+                        <option value="15">Every 15 min</option>
+                        <option value="30">Every 30 min</option>
+                        <option value="60">Every hour</option>
+                        <option value="360">Every 6 hours</option>
+                        <option value="720">Every 12 hours</option>
+                        <option value="1440">Daily</option>
+                      </select>
+                    </label>
+                    {editSchedule && (
+                      <label className="checkbox-label">
+                        <input type="checkbox" checked={editCreatesPupdates} onChange={e => setEditCreatesPupdates(e.target.checked)} />
+                        Creates pupdates from output
+                      </label>
+                    )}
+                  </div>
                   <label>Prompt
                     <textarea value={editPrompt} onChange={e => setEditPrompt(e.target.value)} rows={15} />
                   </label>

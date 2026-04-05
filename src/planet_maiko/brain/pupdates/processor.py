@@ -7,7 +7,7 @@ This is the brain's equivalent of fetch → decode → execute for pupdates:
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from planet_maiko.database import db
 from planet_maiko.models.pupdate import Pupdate
@@ -160,5 +160,24 @@ def process():
         counts["processed"] += 1
 
     db.session.commit()
+
+    # Auto-dismiss: informational pupdates older than 24h that are read
+    stale_threshold = datetime.now(timezone.utc) - timedelta(hours=24)
+    stale = Pupdate.query.filter(
+        Pupdate.read == True,
+        Pupdate.dismissed == False,
+        Pupdate.brain_processed == True,
+        Pupdate.priority.in_(["low", "normal"]),
+        Pupdate.timestamp < stale_threshold,
+    ).limit(20).all()
+
+    for p in stale:
+        p.dismissed = True
+        p.dismissed_at = datetime.now(timezone.utc)
+
+    if stale:
+        db.session.commit()
+        logger.info(f"[processor] Auto-dismissed {len(stale)} stale read pupdates")
+
     logger.info(f"Cycle complete: {counts}")
     return counts

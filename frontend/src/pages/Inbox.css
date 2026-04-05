@@ -116,9 +116,17 @@
 
 /* Right side — priority + chevron */
 .card-right {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 6px;
   flex-shrink: 0; align-self: center; margin-right: 12px;
 }
+.btn-dismiss-quick {
+  border: none; background: none; cursor: pointer;
+  padding: 3px; border-radius: var(--radius-xs);
+  color: var(--text-muted); display: flex; align-items: center;
+  opacity: 0; transition: all 0.15s;
+}
+.pupdate-card:hover .btn-dismiss-quick { opacity: 0.6; }
+.btn-dismiss-quick:hover { opacity: 1 !important; color: var(--urgent); background: rgba(255,107,127,0.1); }
 
 .card-chevron {
   color: var(--text-muted); transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -132,7 +140,12 @@
 .pupdate-card.expanded .card-title { white-space: normal; }
 .card-type { font-size: 10px; color: var(--text-muted); }
 .card-time { font-size: 10px; color: var(--text-muted); }
-.card-action-hint { font-size: 10px; color: var(--pink); font-weight: 500; }
+.card-action-hint {
+  font-size: 10px; color: var(--pink); font-weight: 500;
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-family: inherit;
+}
+.card-action-hint:hover { text-decoration: underline; }
 
 /* Inline actions — shown when card is expanded */
 .card-inline-actions {

@@ -43,6 +43,15 @@ class ClaudeCodeRuntime(AgentRuntime):
     def is_available(self):
         return self._find_claude() is not None
 
+    def _get_allowed_tools(self):
+        """Load allowed tools from config."""
+        try:
+            from planet_maiko.config import load_config
+            config = load_config()
+            return config.get("brain", {}).get("allowed_tools", [])
+        except Exception:
+            return []
+
     def send(self, prompt, working_dir=None, timeout=300):
         """Send a prompt to claude CLI in print mode.
 
@@ -50,7 +59,14 @@ class ClaudeCodeRuntime(AgentRuntime):
         This is used for brain triage and skill execution.
         """
         claude_path = self._find_claude() or "claude"
-        cmd = [claude_path, "--print", "--output-format", "text", prompt]
+        cmd = [claude_path, "--print", "--output-format", "text"]
+
+        # Pre-approve tools to avoid permission prompts
+        allowed = self._get_allowed_tools()
+        for tool in allowed:
+            cmd.extend(["--allowedTools", tool])
+
+        cmd.append(prompt)
 
         try:
             result = subprocess.run(

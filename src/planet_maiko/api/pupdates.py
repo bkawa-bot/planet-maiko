@@ -63,6 +63,10 @@ def create_pupdate():
 
     db.session.add(pupdate)
     db.session.commit()
+
+    from planet_maiko.plugins.loader import fire_hook
+    fire_hook("on_pupdate_created", pupdate)
+
     return jsonify(pupdate.to_dict()), 201
 
 

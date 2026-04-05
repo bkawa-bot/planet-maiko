@@ -1,11 +1,13 @@
-"""Tournament system — reinforcement learning for rule selection.
+"""Tournament system — reinforcement learning for agent context sets.
 
-Uses already-merged PRs as ground truth. Runs the same task with
-different rule subsets and uses LLM-as-judge to score which combo
-produced the best output. Results feed back into compile_brief().
+Uses already-merged PRs as ground truth. Each agent competes with
+their personalized compile_brief() and an LLM-as-judge scores the
+outputs against the actual PR diff. Results feed back into agent
+specialization scores.
 
-The "model" isn't weights — it's a rule selection policy learned
-from tournament outcomes.
+Since agents ARE context sets, tournaments are how we learn which
+agent's learning selection works best for different task types.
+A baseline (no learnings) entry is always included for comparison.
 """
 
 import json
@@ -19,25 +21,13 @@ from planet_maiko.models.tournament import Tournament, TournamentEntry
 from planet_maiko.models.learning import Learning
 
 # Approved task tags (empty = free-form phase, collecting data)
-# Once you have enough data, populate this list and the LLM will pick from it.
-# Tags not in this list get flagged as "suggested_new_tags" for review.
 APPROVED_TAGS = []
-# Example after Phase 2:
-# APPROVED_TAGS = [
-#     "performance", "testing", "security", "api", "database",
-#     "refactoring", "new-feature", "bug-fix", "migration",
-#     "documentation", "config", "frontend", "auth",
-#     "error-handling", "observability",
-# ]
 
 logger = logging.getLogger(__name__)
 
-# Exploration: new rules get included in N tournaments regardless of score
-EXPLORATION_TOURNAMENTS = 3
-
 
 def run_tournament(repo, pr_number, app):
-    """Run a tournament on a merged PR.
+    """Run a tournament on a merged PR — each agent competes.
 
     Args:
         repo: "org/repo-name"
@@ -72,21 +62,47 @@ def run_tournament(repo, pr_number, app):
         db.session.add(tournament)
         db.session.flush()
 
-        # Step 4: Build strategies
-        strategies = _build_strategies(repo)
+        # Step 4: Get all agent profiles and build their personalized briefs
+        from planet_maiko.models.agent_profile import AgentProfile
+        from planet_maiko.brain.learning.processor import compile_brief
 
-        # Step 5: Run each strategy
+        agents = AgentProfile.query.all()
+
         if not runtime.is_available():
             tournament.status = "failed"
             db.session.commit()
             return None
 
-        for strategy_name, learning_ids in strategies.items():
-            brief = _build_brief_from_ids(learning_ids)
+        # Step 5: Run each agent's context set + a baseline
+        # Baseline: no learnings (measures how much context helps)
+        baseline_prompt = f"""You are writing code for this task.
+
+## Task
+{pr_data['task']}
+
+Write ONLY the code changes. No explanation."""
+
+        result = runtime.send(baseline_prompt, timeout=180)
+        baseline_entry = TournamentEntry(
+            tournament_id=tournament.id,
+            strategy="baseline",
+            learning_ids=[],
+            agent_profile_id=None,
+            output=result.get("output", "")[:5000] if result.get("success") else "",
+        )
+        db.session.add(baseline_entry)
+
+        # Each agent competes with their personalized brief
+        for agent in agents:
+            brief = compile_brief(
+                repo=repo,
+                agent_profile_id=agent.id,
+            )
+            learning_ids = _extract_learning_ids_from_brief(brief, repo)
 
             prompt = f"""You are writing code for this task.
 
-{f"Follow these coding guidelines:{chr(10)}{brief}" if brief else ""}
+{f"Follow these coding guidelines:{chr(10)}{brief}" if brief and brief != "No active learnings yet." else ""}
 
 ## Task
 {pr_data['task']}
@@ -97,27 +113,27 @@ Write ONLY the code changes. No explanation."""
 
             entry = TournamentEntry(
                 tournament_id=tournament.id,
-                strategy=strategy_name,
+                strategy=agent.display_name,
                 learning_ids=learning_ids,
+                agent_profile_id=agent.id,
                 output=result.get("output", "")[:5000] if result.get("success") else "",
             )
             db.session.add(entry)
-            logger.info(f"[tournament] Strategy '{strategy_name}': {len(result.get('output', ''))} chars")
+            logger.info(f"[tournament] Agent '{agent.display_name}': {len(result.get('output', ''))} chars")
 
         db.session.flush()
 
-        # Step 5: LLM-as-judge scoring
+        # Step 6: LLM-as-judge scoring
         entries = TournamentEntry.query.filter_by(tournament_id=tournament.id).all()
         _score_entries(runtime, entries, pr_data["diff_summary"])
 
-        # Step 6: Record winner and update learning scores
+        # Step 7: Record winner and update specializations
         best = max(entries, key=lambda e: e.score or 0)
         tournament.winning_strategy = best.strategy
         tournament.status = "completed"
         tournament.completed_at = datetime.now(timezone.utc)
 
-        # Update learning success rates based on winning combo
-        _update_scores_from_tournament(entries)
+        _update_agent_scores(entries, repo, tags_result.get("tags", []))
 
         db.session.commit()
         logger.info(f"[tournament] Completed: winner='{best.strategy}' score={best.score}")
@@ -210,42 +226,20 @@ def _classify_task(runtime, pr_data):
     return {"tags": [], "suggested_new": []}
 
 
-def _build_strategies(repo):
-    """Build the 4 competition strategies."""
+def _extract_learning_ids_from_brief(brief, repo):
+    """Extract learning IDs that went into a compiled brief.
+
+    Since compile_brief() doesn't return IDs directly, we match by rule text.
+    """
+    if not brief or brief == "No active learnings yet.":
+        return []
+
     all_learnings = Learning.query.filter_by(status="active").all()
-
-    if not all_learnings:
-        return {"no_rules": []}
-
-    all_ids = [l.id for l in all_learnings]
-
-    # Strategy 1: Top 5 by confidence for this repo
-    scoped = [l for l in all_learnings if l.scope_repo is None or l.scope_repo == repo]
-    scoped.sort(key=lambda l: -l.confidence)
-    relevant_ids = [l.id for l in scoped[:5]]
-
-    # Strategy 2: 5 random rules
-    random_ids = random.sample(all_ids, min(5, len(all_ids)))
-
-    # Strategy 3: All rules
-    # Strategy 4: Exploration — include untested rules
-    from planet_maiko.models.tournament import TournamentEntry
-    tested_ids = set()
-    for entry in TournamentEntry.query.all():
-        for lid in (entry.learning_ids or []):
-            tested_ids.add(lid)
-
-    untested = [l.id for l in all_learnings if l.id not in tested_ids]
-    explore_ids = (untested[:3] + relevant_ids[:2]) if untested else relevant_ids
-
-    strategies = {
-        "relevant_5": relevant_ids,
-        "random_5": random_ids,
-        "all": all_ids,
-        "exploration": explore_ids,
-    }
-
-    return strategies
+    ids = []
+    for l in all_learnings:
+        if l.rule in brief:
+            ids.append(l.id)
+    return ids
 
 
 def _build_brief_from_ids(learning_ids):
@@ -292,11 +286,11 @@ Respond with JSON:
             entry.score = 5.0
 
 
-def _update_scores_from_tournament(entries):
-    """Update learning success rates based on tournament results.
+def _update_agent_scores(entries, repo, task_tags):
+    """Update agent specializations and learning confidence from tournament results.
 
-    Rules in the winning strategy get a positive signal.
-    Rules in losing strategies get a mild negative signal.
+    Winners get specialization boosts for the task categories.
+    Losers get mild decreases. Learning confidence also adjusts.
     """
     if not entries:
         return
@@ -305,21 +299,35 @@ def _update_scores_from_tournament(entries):
     if best_score == 0:
         return
 
+    from planet_maiko.models.agent_profile import AgentProfile
+
     for entry in entries:
         score = entry.score or 0
         is_winner = score >= best_score * 0.9  # within 90% of best
 
+        # Update learning confidence
         for lid in (entry.learning_ids or []):
             learning = db.session.get(Learning, lid)
             if not learning:
                 continue
-
             if is_winner:
-                # Winning combo: boost confidence slightly
                 learning.confidence = min(1.0, learning.confidence + 0.02)
             else:
-                # Losing combo: slight decrease (much smaller than boost)
                 learning.confidence = max(0.0, learning.confidence - 0.005)
+
+        # Update agent specializations
+        if entry.agent_profile_id and repo and task_tags:
+            profile = db.session.get(AgentProfile, entry.agent_profile_id)
+            if profile:
+                specs = dict(profile.specializations or {})
+                for tag in task_tags:
+                    spec_key = f"{repo}:{tag}"
+                    current = specs.get(spec_key, 0.0)
+                    if is_winner:
+                        specs[spec_key] = min(1.0, current + 0.05)
+                    else:
+                        specs[spec_key] = max(0.0, current - 0.01)
+                profile.specializations = specs
 
 
 def get_tournament_scores(repo=None, task_tags=None):

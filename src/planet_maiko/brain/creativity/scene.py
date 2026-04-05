@@ -61,6 +61,12 @@ HOLIDAYS = {
     "christmas": ((12, 15), (12, 31)),
     "valentine": ((2, 10), (2, 14)),
     "newyear": ((1, 1), (1, 3)),
+    "lunar_newyear": ((1, 22), (2, 10)),
+    "st_patricks": ((3, 14), (3, 17)),
+    "pride": ((6, 1), (6, 30)),
+    "independence_day": ((7, 1), (7, 4)),
+    "day_of_dead": ((10, 31), (11, 2)),
+    "thanksgiving": ((11, 22), (11, 28)),
 }
 
 def _detect_holiday(d):
@@ -112,6 +118,12 @@ OUTFIT_MAP = {
     "christmas": "santa_hat",
     "newyear": "party_hat",
     "valentine": "bow_tie",
+    "lunar_newyear": "red_envelope",
+    "st_patricks": "clover_hat",
+    "pride": "rainbow_scarf",
+    "independence_day": "party_hat",
+    "day_of_dead": "flower_crown",
+    "thanksgiving": "scarf",
 }
 
 WEATHER_OUTFITS = {
@@ -133,6 +145,12 @@ HOLIDAY_SPECIALS = {
     "christmas": ["christmas_tree", "lights", "snowman"],
     "valentine": ["hearts"],
     "newyear": ["fireworks"],
+    "lunar_newyear": ["lanterns", "dragon", "fireworks"],
+    "st_patricks": ["shamrocks", "rainbow"],
+    "pride": ["rainbow_flags", "confetti"],
+    "independence_day": ["fireworks", "flags"],
+    "day_of_dead": ["marigolds", "candles", "skulls"],
+    "thanksgiving": ["cornucopia", "autumn_leaves"],
 }
 
 SEASON_SPECIALS = {
@@ -141,6 +159,38 @@ SEASON_SPECIALS = {
     "autumn": ["falling_leaves"],
     "winter": ["aurora"],
 }
+
+
+_creative_note_cache = {"text": None, "expires": 0}
+
+
+def _generate_creative_note(weather, season, time_bucket, mood):
+    """Generate a one-sentence atmospheric description via LLM."""
+    import time
+    now = time.time()
+    if _creative_note_cache["text"] and now < _creative_note_cache["expires"]:
+        return _creative_note_cache["text"]
+
+    try:
+        from planet_maiko.agents.brain_session import BrainSession
+        session = BrainSession()
+        if not session.runtime or not session.runtime.is_available():
+            return None
+
+        prompt = (
+            f"Write a single atmospheric sentence (max 20 words) describing this scene: "
+            f"{weather} weather, {season}, {time_bucket}, mood: {mood}. "
+            f"Be poetic and cozy, like a Studio Ghibli film narrator."
+        )
+        result = session.runtime.send(prompt, timeout=10)
+        if result:
+            text = result.strip().strip('"')
+            _creative_note_cache["text"] = text
+            _creative_note_cache["expires"] = now + 900  # 15 min cache
+            return text
+    except Exception:
+        pass
+    return None
 
 
 def generate(weather="clear", temperature_f=70, latitude=37.7, now=None):
@@ -231,8 +281,8 @@ def generate(weather="clear", temperature_f=70, latitude=37.7, now=None):
     # Mood
     mood = f"{weather} {season} {time_bucket}"
 
-    # Creative note (placeholder - will be replaced by LLM tinting pass)
-    creative_note = None  # Set by LLM creativity pass when available
+    # Creative note via LLM tinting pass
+    creative_note = _generate_creative_note(weather, season, time_bucket, mood)
 
     return {
         "generated_at": now.isoformat() if isinstance(now, datetime) else str(now),

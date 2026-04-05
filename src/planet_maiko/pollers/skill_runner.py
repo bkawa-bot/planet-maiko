@@ -9,9 +9,78 @@ import hashlib
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
+
+
+def run_scheduled_skills():
+    """Check for due skills and execute them.
+
+    Called from the brain cycle to run any skills whose interval has elapsed.
+
+    Returns: list of skill names that were run
+    """
+    try:
+        from planet_maiko.models.custom_skill import CustomSkill
+    except ImportError:
+        return []
+
+    from planet_maiko.database import db
+
+    now = datetime.now(timezone.utc)
+    skills = CustomSkill.query.filter(
+        CustomSkill.schedule_interval_minutes.isnot(None),
+        CustomSkill.schedule_interval_minutes > 0,
+    ).all()
+
+    ran = []
+    for skill in skills:
+        interval = timedelta(minutes=skill.schedule_interval_minutes)
+        last_run = skill.last_run_at
+
+        if last_run and (now - last_run) < interval:
+            continue  # Not due yet
+
+        try:
+            from planet_maiko.agents.brain_session import run_skill, _get_runtime
+            runtime = _get_runtime()
+            if not runtime or not runtime.is_available():
+                continue
+
+            # Build minimal context
+            from planet_maiko.models.pupdate import Pupdate
+            from planet_maiko.models.task import Task
+            pupdates = Pupdate.query.filter_by(dismissed=False).order_by(Pupdate.timestamp.desc()).limit(15).all()
+            tasks = Task.query.filter(Task.status.in_(["new", "in_progress"])).limit(15).all()
+
+            context = {
+                "pupdates": json.dumps([p.to_dict() for p in pupdates]),
+                "tasks": json.dumps([t.to_dict() for t in tasks]),
+                "calendar": "[]",
+                "query": "",
+                "context": "",
+            }
+
+            result = run_skill(skill.id, context=context)
+            skill.last_run_at = now
+
+            # Create pupdate from output if configured
+            if skill.creates_pupdates and result and result.get("success"):
+                count = parse_skill_output_to_pupdates(skill, result["output"], db.session)
+                if count:
+                    logger.info(f"[skill_runner] Created {count} pupdate(s) from {skill.name}")
+
+            ran.append(skill.id)
+            logger.info(f"[skill_runner] Ran scheduled skill: {skill.id}")
+
+        except Exception as e:
+            logger.warning(f"[skill_runner] Failed to run {skill.id}: {e}")
+
+    if ran:
+        db.session.commit()
+
+    return ran
 
 
 def run_scheduled_skill(skill_id, app):

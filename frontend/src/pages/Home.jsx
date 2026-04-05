@@ -1,13 +1,29 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import {
   Shield, CheckSquare, Inbox, FolderOpen, Brain, Calendar,
-  AlertCircle, Palette, Video, Sunrise,
+  AlertCircle, Palette, Video, Sunrise, GitBranch, Clock,
+  ExternalLink, ChevronRight, ChevronDown, Play, Pin, Bot,
 } from "lucide-react";
 import "./Home.css";
+import "./Tasks.css";
+
+function relativeTime(timestamp) {
+  const now = Date.now();
+  const diff = now - new Date(timestamp).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
 
 export default function Home() {
+  const navigate = useNavigate();
   const [scene, setScene] = useState(null);
   const [stats, setStats] = useState({ pupdates: 0, unread: 0, tasks_new: 0, tasks_ip: 0, projects: 0 });
   const [focus, setFocus] = useState(null);
@@ -18,10 +34,23 @@ export default function Home() {
   const [morningBrief, setMorningBrief] = useState(null);
   const [briefLoading, setBriefLoading] = useState(false);
   const [showBrief, setShowBrief] = useState(false);
+  const [expandedFocus, setExpandedFocus] = useState(null);
+
+  const [homeConfig, setHomeConfig] = useState(null);
+  const [expandedFocusTask, setExpandedFocusTask] = useState(null);
+
+  // Setup wizard state
+  const [setupStep, setSetupStep] = useState(0);
+  const [setupUsername, setSetupUsername] = useState("");
+  const [setupRepos, setSetupRepos] = useState([]);
+  const [setupDiscovering, setSetupDiscovering] = useState(false);
+  const [setupLocation, setSetupLocation] = useState("");
+  const [setupLocationResolved, setSetupLocationResolved] = useState("");
+  const [setupLatLon, setSetupLatLon] = useState(null);
 
   const fetchAll = async () => {
     try {
-      const [sc, pupdates, tasksNew, tasksIp, projects, foc, brain, sched] = await Promise.all([
+      const [sc, pupdates, tasksNew, tasksIp, projects, foc, brain, sched, cfg] = await Promise.all([
         api.getScene(),
         api.getPupdates(),
         api.getTasks({ status: "new" }),
@@ -30,7 +59,9 @@ export default function Home() {
         api.getFocus().catch(() => null),
         api.getBrainStatus().catch(() => null),
         api.getSchedule().catch(() => null),
+        api.getConfig().catch(() => null),
       ]);
+      setHomeConfig(cfg);
       setScene(sc);
       setStats({
         pupdates: pupdates.length,
@@ -47,10 +78,14 @@ export default function Home() {
       // Calendar events from pupdates
       setCalendarEvents(pupdates.filter((p) => p.source === "calendar").slice(0, 5));
 
-      // Load most recent morning brief from skill_results
+      // Load most recent morning brief — only if from today
       if (!morningBrief) {
         api.getSkillResults("morning-brief").then((results) => {
-          if (results.length > 0) setMorningBrief(results[0].content);
+          if (results.length > 0) {
+            const briefDate = new Date(results[0].created_at).toDateString();
+            const today = new Date().toDateString();
+            if (briefDate === today) setMorningBrief(results[0].content);
+          }
         }).catch(() => {});
       }
     } catch (err) {
@@ -95,29 +130,123 @@ export default function Home() {
 
   const focusState = focus?.current_state || "available";
 
-  return (
-    <div className="home">
-      {/* Status Bar */}
-      <div className="home-status-bar">
-        <div className="status-left">
-          <span className="status-dot online" />
-          <span className="status-text">
-            Brain: {brainStatus?.cycle_count || 0} cycles
-            {brainStatus?.last_cycle && ` · Last: ${new Date(brainStatus.last_cycle).toLocaleTimeString()}`}
-          </span>
-        </div>
-        <div className="status-right">
-          <span className="status-stat"><Inbox size={12} /> {stats.unread} unread</span>
-          <span className="status-sep">·</span>
-          <span className="status-stat"><CheckSquare size={12} /> {stats.tasks_ip} active</span>
-          <span className="status-sep">·</span>
-          <span className="status-stat"><FolderOpen size={12} /> {stats.projects} projects</span>
-          <span className={`focus-pill ${focusState}`}>
-            <Shield size={12} /> {focusState.replace("_", " ")}
-          </span>
+  const isFirstRun = homeConfig && !homeConfig.github?.username && !(homeConfig.github?.repos?.length > 0);
+
+  if (isFirstRun) {
+    return (
+      <div className="home">
+        <div className="setup-wizard">
+          <div className="setup-header">
+            <img src="/icon.png" alt="Maiko" style={{ width: 64, borderRadius: 16, imageRendering: "pixelated" }} />
+            <h1>Welcome to Planet Maiko</h1>
+            <p className="setup-sub">Let's get you set up. This takes about 2 minutes.</p>
+          </div>
+
+          <div className="setup-steps">
+            {setupStep === 0 && (
+              <div className="setup-step">
+                <h3>1. GitHub Username</h3>
+                <p>Enter your GitHub username so Maiko can monitor your PRs and reviews.</p>
+                <input type="text" value={setupUsername} onChange={(e) => setSetupUsername(e.target.value)} placeholder="your-github-username" />
+                <button className="btn btn-primary" onClick={() => setSetupStep(1)} disabled={!setupUsername}>Next</button>
+              </div>
+            )}
+
+            {setupStep === 1 && (
+              <div className="setup-step">
+                <h3>2. Your Repos</h3>
+                <p>Which repos should Maiko watch? You can auto-discover from your recent activity.</p>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <button className="btn" onClick={async () => {
+                    setSetupDiscovering(true);
+                    try {
+                      // Save username first so discover works
+                      await api.updateConfig({ github: { username: setupUsername, enabled: true } });
+                      const result = await api.discoverGithubRepos();
+                      if (result.repos?.length) setSetupRepos(result.repos);
+                    } catch (e) {}
+                    setSetupDiscovering(false);
+                  }} disabled={setupDiscovering}>
+                    {setupDiscovering ? "Discovering..." : "Auto-Discover Repos"}
+                  </button>
+                </div>
+                <input type="text" value={setupRepos.join(", ")} onChange={(e) => setSetupRepos(e.target.value.split(",").map(s => s.trim()).filter(Boolean))} placeholder="org/repo1, org/repo2" />
+                <button className="btn btn-primary" onClick={() => setSetupStep(2)}>Next</button>
+              </div>
+            )}
+
+            {setupStep === 2 && (
+              <div className="setup-step">
+                <h3>3. Your Location</h3>
+                <p>For live weather on your dashboard. Type your city or zipcode.</p>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input type="text" value={setupLocation} onChange={(e) => setSetupLocation(e.target.value)} placeholder="Boston" style={{ flex: 1 }} />
+                  <button className="btn" onClick={async () => {
+                    try {
+                      const resp = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(setupLocation)}&count=1&language=en&format=json`);
+                      const data = await resp.json();
+                      if (data.results?.length) {
+                        const r = data.results[0];
+                        setSetupLocationResolved(`${r.name}, ${r.admin1 || ""}`);
+                        setSetupLatLon({ lat: r.latitude, lon: r.longitude });
+                      }
+                    } catch (e) {}
+                  }}>Lookup</button>
+                </div>
+                {setupLocationResolved && <div style={{ fontSize: 12, color: "var(--green)", marginTop: 4 }}>{setupLocationResolved}</div>}
+                <button className="btn btn-primary" onClick={async () => {
+                  // Save everything
+                  await api.updateConfig({
+                    github: { username: setupUsername, enabled: true, repos: setupRepos },
+                    scene: setupLatLon ? { latitude: setupLatLon.lat, longitude: setupLatLon.lon, location_name: setupLocationResolved } : {},
+                  });
+                  window.location.reload();
+                }} style={{ marginTop: 12 }}>
+                  Finish Setup
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+    );
+  }
 
+  return (
+    <div className="home">
+      {/* Page-level weather overlay */}
+      {scene?.context?.weather && scene.context.weather !== "clear" && (
+        <div className="page-weather-overlay">
+          {(scene.context.weather === "cloudy" || scene.context.weather === "rain") && (
+            <>
+              <img src="/cloud1.svg" className="page-cloud page-cloud-1" alt="" />
+              <img src="/cloud2.svg" className="page-cloud page-cloud-2" alt="" />
+              <img src="/cloud3.svg" className="page-cloud page-cloud-3" alt="" />
+              <img src="/cloud1.svg" className="page-cloud page-cloud-4" alt="" />
+              <img src="/cloud2.svg" className="page-cloud page-cloud-5" alt="" />
+              <img src="/cloud3.svg" className="page-cloud page-cloud-6" alt="" />
+              <img src="/cloud1.svg" className="page-cloud page-cloud-7" alt="" />
+            </>
+          )}
+          {scene.context.weather === "rain" && (
+            <div className="page-rain">
+              {Array.from({ length: 60 }).map((_, i) => (
+                <div key={i} className="page-raindrop" style={{ left: `${(i * 1.7) + Math.random()}%`, animationDelay: `${Math.random() * 1.2}s`, animationDuration: `${0.6 + Math.random() * 0.4}s` }} />
+              ))}
+            </div>
+          )}
+          {scene.context.weather === "snow" && (
+            <div className="page-snow">
+              {Array.from({ length: 40 }).map((_, i) => (
+                <div key={i} className="page-snowflake" style={{ left: `${i * 2.5 + Math.random() * 1.5}%`, animationDelay: `${Math.random() * 5}s`, animationDuration: `${3 + Math.random() * 3}s` }} />
+              ))}
+            </div>
+          )}
+          {scene.context.weather === "fog" && (
+            <div className="page-fog" />
+          )}
+        </div>
+      )}
       <div className="home-grid">
         {/* Main content */}
         <div className="home-main">
@@ -137,13 +266,63 @@ export default function Home() {
             </div>
             {schedule && schedule.blocks?.length > 0 ? (
               <div className="focus-tasks">
-                {schedule.blocks[0].tasks.slice(0, 3).map((t) => (
-                  <div key={t.id} className="focus-task">
-                    <span className={`badge ${t.priority}`}>{t.priority}</span>
-                    <span className="focus-task-title">{t.title}</span>
-                    <span className="badge" style={{fontSize: 9}}>{t.status.replace("_", " ")}</span>
-                  </div>
-                ))}
+                {schedule.blocks[0].tasks.slice(0, 5).map((t) => {
+                  const statusColor = {
+                    new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
+                    review: "#a78bfa", done: "#4ade80", cancelled: "#6b7280",
+                  }[t.status] || "var(--text-muted)";
+                  const statusIcon = {
+                    new: "\ud83d\udccb", in_progress: "\ud83d\udd27", waiting: "\u23f3",
+                    review: "\ud83d\udc40", done: "\u2705", cancelled: "\u26d4",
+                  }[t.status] || "\ud83d\udccb";
+                  const isExpanded = expandedFocusTask === t.id;
+                  return (
+                    <div key={t.id} className={`task-card ${isExpanded ? "expanded" : ""}`} onClick={() => setExpandedFocusTask(isExpanded ? null : t.id)} style={{ cursor: "pointer" }}>
+                      <div className="task-status-indicator" style={{ background: statusColor }} />
+                      <div className="task-icon" style={{ borderColor: statusColor }}>
+                        <span className="task-icon-emoji">{statusIcon}</span>
+                      </div>
+                      <div className="task-content">
+                        <div className="task-top">
+                          <span className="task-title">{t.title}</span>
+                          {(t.extra?.pinned || t.metadata?.pinned) && <Pin size={10} style={{ color: "var(--pink)", flexShrink: 0 }} />}
+                        </div>
+                        <div className="task-meta">
+                          <span className="task-status-label" style={{ color: statusColor }}>{t.status.replace("_", " ")}</span>
+                          {t.project_id && <span className="tag tag-project">{t.project_id}</span>}
+                          <span className="task-type-label">{t.type}</span>
+                          {t.due_date && <span className="tag tag-due"><Clock size={9} /> {t.due_date}</span>}
+                          {t.assigned_agent_id && <span className="tag"><Bot size={9} /> {t.assigned_agent_id.replace("agent-", "").slice(0, 12)}</span>}
+                        </div>
+                        {isExpanded && (
+                          <div className="focus-task-expanded" onClick={(e) => e.stopPropagation()}>
+                            {t.url && (
+                              <a href={t.url} target="_blank" rel="noreferrer" className="focus-task-link">
+                                <ExternalLink size={10} /> {t.url.replace(/^https?:\/\//, "").slice(0, 50)}
+                              </a>
+                            )}
+                            <div className="focus-task-actions">
+                              {t.status === "new" && (
+                                <button className="btn btn-sm btn-approve" onClick={async () => { await api.startTask(t.id); showToast("Task started", "normal"); }}>
+                                  <Play size={10} /> Start
+                                </button>
+                              )}
+                              {(t.status === "new" || t.status === "in_progress") && (
+                                <button className="btn btn-sm btn-create" onClick={async () => { await api.completeTask(t.id); showToast("Task done!", "normal"); }}>
+                                  <CheckSquare size={10} /> Done
+                                </button>
+                              )}
+                              <button className="btn btn-sm" onClick={() => navigate("/tasks")}>
+                                Open in Tasks
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {isExpanded ? <ChevronDown size={14} className="task-chevron open" /> : <ChevronRight size={14} className="task-chevron" />}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="home-card-empty">
@@ -160,17 +339,17 @@ export default function Home() {
           <div className="home-card">
             <div className="home-card-header">
               <AlertCircle size={14} /> Also Waiting
-              {recentPupdates.length > 0 && (
-                <span className="home-card-time">{recentPupdates.length} more</span>
-              )}
             </div>
             {recentPupdates.length > 0 ? (
               <div className="recent-list">
                 {recentPupdates.map((p) => (
-                  <div key={p.id} className={`recent-item ${p.read ? "read" : ""}`}>
+                  <div key={p.id} className={`recent-item ${p.read ? "read" : ""}`} onClick={() => navigate('/inbox')}>
                     <span className={`priority-dot-sm ${p.priority}`} />
                     <span className="recent-source">{p.source}</span>
                     <span className="recent-title">{p.title}</span>
+                    <span className="recent-type-tag">{p.type?.replace(/_/g, " ")}</span>
+                    <span className="recent-time">{relativeTime(p.timestamp)}</span>
+                    {p.action_hint && <span className="recent-hint">{p.action_hint}</span>}
                   </div>
                 ))}
               </div>
@@ -215,15 +394,23 @@ export default function Home() {
           <div className="home-widget scene-widget">
             <div className="widget-header"><Palette size={12} /> Scene</div>
             <div className="scene-info">
-              {scene?.context?.weather && (
-                <div className="scene-weather">
-                  {scene.context.weather === "clear" ? "☀️" :
-                   scene.context.weather === "rain" ? "🌧️" :
-                   scene.context.weather === "snow" ? "🌨️" :
-                   scene.context.weather === "cloudy" ? "☁️" :
-                   scene.context.weather === "fog" ? "🌫️" : "🌤️"}
-                  {" "}{scene.context.weather}
-                  {scene.context.temperature_f && ` · ${scene.context.temperature_f}°F`}
+              {homeConfig?.scene?.latitude ? (
+                <>
+                  {scene?.context?.weather && (
+                    <div className="scene-weather">
+                      {scene.context.weather === "clear" ? "☀️" :
+                       scene.context.weather === "rain" ? "🌧️" :
+                       scene.context.weather === "snow" ? "🌨️" :
+                       scene.context.weather === "cloudy" ? "☁️" :
+                       scene.context.weather === "fog" ? "🌫️" : "🌤️"}
+                      {" "}{scene.context.weather}
+                      {scene.context.temperature_f && ` · ${scene.context.temperature_f}°F`}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="scene-weather-fallback" onClick={() => navigate('/settings')} style={{ cursor: "pointer" }}>
+                  <span className="weather-fallback-text">Set your location for live weather</span>
                 </div>
               )}
               {scene?.scene?.creative_note ? (
@@ -304,6 +491,9 @@ export default function Home() {
 
 function renderMarkdown(text) {
   return text
+    .replace(/\u00e2\u20ac\u201d/g, '\u2014')  // fix mojibake em dash
+    .replace(/\u00e2\u20ac\u201c/g, '\u2014')
+    .replace(/\u00e2\u20ac\u2122/g, '\u2019')  // fix mojibake apostrophe
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
     .replace(/^# (.+)$/gm, '<h1>$1</h1>')

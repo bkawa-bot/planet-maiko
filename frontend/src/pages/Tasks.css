@@ -24,9 +24,9 @@
 /* Project groups */
 .project-group {
   margin-bottom: 10px; background: var(--bg-card);
-  border: 1px solid var(--border-subtle); border-radius: var(--radius);
+  border: 1px solid var(--border); border-radius: var(--radius);
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.12);
 }
 .project-group-header {
   display: flex; align-items: center; gap: 8px; padding: 10px 14px;
@@ -78,6 +78,28 @@
 
 .task-content { flex: 1; padding: 10px 12px; min-width: 0; }
 .task-top { display: flex; align-items: center; gap: 8px; }
+
+/* Always-visible quick actions on task cards */
+.task-quick-actions {
+  display: flex; gap: 2px; align-items: center;
+  margin-left: auto; flex-shrink: 0;
+  opacity: 0; transition: opacity 0.15s;
+}
+.task-card:hover .task-quick-actions,
+.task-card.expanded .task-quick-actions { opacity: 1; }
+.task-quick-actions .pinned { opacity: 1 !important; }
+.task-card:has(.btn-pin.pinned) .task-quick-actions { opacity: 1; }
+
+.btn-ghost {
+  border: none; background: none; cursor: pointer;
+  padding: 4px; border-radius: var(--radius-xs);
+  color: var(--text-muted); display: flex; align-items: center;
+  transition: all 0.15s;
+}
+.btn-ghost:hover { background: var(--bg-hover); color: var(--text); }
+.btn-pin.pinned { color: var(--pink); }
+.btn-quick-start:hover { color: var(--green); }
+.btn-quick-done:hover { color: var(--green); }
 .task-title { font-size: 13px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-card.expanded .task-title { white-space: normal; }
 .task-title a { color: var(--text); text-decoration: none; }

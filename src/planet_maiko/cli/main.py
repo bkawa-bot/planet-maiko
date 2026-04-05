@@ -154,15 +154,165 @@ def cmd_reply(args):
     print(f"Sent reply for {task_id}")
 
 
-def cmd_status(args):
-    """Check Planet Maiko's status."""
-    brain = api_request("/brain/status")
-    session = api_request("/brain/session")
+def cmd_feedback(args):
+    """Send in-session feedback about agent work."""
+    task_id = args.task or _detect_task_id()
+    if not task_id:
+        print("Error: Could not detect task ID. Use --task to specify.")
+        return
+    data = {
+        "content": args.message,
+        "message_type": "feedback",
+        "sender": "user",
+        "metadata": {
+            "feedback_category": args.category,
+            "feedback_severity": args.severity,
+        }
+    }
+    api_request(f"/agents/{task_id}/outbox", method="POST", data=data)
+    print(f"Feedback recorded for {task_id} [{args.category}]")
 
-    print(f"Brain cycles: {brain['cycle_count']}")
-    print(f"Last cycle:   {brain['last_cycle'] or 'Never'}")
-    print(f"Runtime:      {session['runtime']['name']}")
-    print(f"Available:    {session['available']}")
+
+def cmd_sleep(args):
+    """Put an agent to sleep."""
+    task_id = args.task or _detect_task_id()
+    if not task_id:
+        print("Error: Could not detect task ID. Use --task.")
+        return
+    data = {"content": "Going to sleep.", "message_type": "agent_sleep", "sender": "agent"}
+    api_request(f"/agents/{task_id}/outbox", method="POST", data=data)
+    print(f"Agent sleeping. Wake with: maiko wake agent-{task_id}")
+
+
+def cmd_wake(args):
+    """Wake a sleeping agent."""
+    agent_id = args.agent_id
+    # Send a wake pupdate
+    data = {
+        "id": f"wake-{agent_id}-{int(time.time())}",
+        "source": "maiko",
+        "type": "agent_wake",
+        "priority": "normal",
+        "title": f"Wake up, {agent_id}!",
+        "body": "Time to get back to work. Check your inbox for updates.",
+        "tags": [agent_id, "wake"],
+    }
+    api_request("/pupdates", method="POST", data=data)
+    print(f"Wake signal sent to {agent_id}")
+
+
+def cmd_status(args):
+    """Show system health status."""
+    import subprocess
+
+    print("=== Planet Maiko Status ===\n")
+
+    # Check backend
+    try:
+        data = api_request("/brain/status")
+        print(f"Backend: running on :8420")
+        print(f"  Brain cycles: {data.get('cycle_count', 0)}")
+        last = data.get('last_cycle')
+        print(f"  Last cycle: {last or 'never'}")
+    except SystemExit:
+        # api_request calls sys.exit on failure; catch it here to continue
+        print("Backend: NOT running (start with: maiko serve)")
+
+    # Check gh CLI
+    try:
+        result = subprocess.run(["gh", "auth", "status"], capture_output=True, text=True, timeout=5)
+        print(f"gh CLI: {'authenticated' if result.returncode == 0 else 'not authenticated'}")
+    except FileNotFoundError:
+        print("gh CLI: not installed")
+
+    # Check config
+    try:
+        from planet_maiko.config import load_config
+        config = load_config()
+        username = config.get("github", {}).get("username", "")
+        repos = config.get("github", {}).get("repos", [])
+        location = config.get("scene", {}).get("location_name", "")
+        print(f"Config: {'configured' if username else 'needs setup (run: maiko setup)'}")
+        if username:
+            print(f"  GitHub: {username} ({len(repos)} repo(s))")
+        if location:
+            print(f"  Location: {location}")
+    except Exception:
+        print("Config: error loading")
+
+    # Check database
+    try:
+        from planet_maiko.paths import data_dir
+        import os
+        db_path = os.path.join(data_dir(), "maiko.db")
+        if os.path.exists(db_path):
+            size_mb = os.path.getsize(db_path) / (1024 * 1024)
+            print(f"Database: {db_path} ({size_mb:.1f} MB)")
+        else:
+            print(f"Database: not created yet (start server first)")
+    except Exception:
+        print("Database: error checking")
+
+    print()
+
+
+def cmd_setup(args):
+    """Interactive first-time setup."""
+    from planet_maiko.config import load_config, save_config
+    import subprocess
+
+    print("=== Planet Maiko Setup ===\n")
+
+    config = load_config()
+
+    # GitHub username
+    current_user = config.get("github", {}).get("username", "")
+    username = input(f"GitHub username [{current_user}]: ").strip() or current_user
+    config.setdefault("github", {})["username"] = username
+    config["github"]["enabled"] = True
+
+    # Test gh CLI
+    try:
+        result = subprocess.run(["gh", "auth", "status"], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            print("  gh CLI: authenticated")
+        else:
+            print("  gh CLI: not authenticated. Run 'gh auth login' first.")
+    except FileNotFoundError:
+        print("  gh CLI: not installed. Install from https://cli.github.com/")
+
+    # Repos
+    current_repos = config.get("github", {}).get("repos", [])
+    repos_input = input(f"Repos (comma-separated) [{', '.join(current_repos)}]: ").strip()
+    if repos_input:
+        config["github"]["repos"] = [r.strip() for r in repos_input.split(",") if r.strip()]
+
+    # Repo roots
+    current_roots = config.get("github", {}).get("repo_roots", [])
+    roots_input = input(f"Repo roots (local paths) [{', '.join(current_roots)}]: ").strip()
+    if roots_input:
+        config["github"]["repo_roots"] = [r.strip() for r in roots_input.split(",") if r.strip()]
+
+    # Location
+    location = input("City/zipcode for weather (or Enter to skip): ").strip()
+    if location:
+        try:
+            import urllib.parse, json
+            url = f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(location)}&count=1&language=en&format=json"
+            with urllib.request.urlopen(url, timeout=10) as resp:
+                data = json.loads(resp.read())
+                if data.get("results"):
+                    r = data["results"][0]
+                    name = f"{r['name']}, {r.get('admin1', '')}"
+                    config.setdefault("scene", {})["latitude"] = r["latitude"]
+                    config["scene"]["longitude"] = r["longitude"]
+                    config["scene"]["location_name"] = name
+                    print(f"  Location: {name} ({r['latitude']}, {r['longitude']})")
+        except Exception as e:
+            print(f"  Could not resolve location: {e}")
+
+    save_config(config)
+    print(f"\nConfig saved. Start with: maiko serve")
 
 
 def cmd_serve(args):
@@ -171,6 +321,32 @@ def cmd_serve(args):
     print(f"Starting Planet Maiko on http://{args.host}:{args.port}")
     app = create_app(start_scheduler=True)
     app.run(host=args.host, port=args.port, debug=args.debug, use_reloader=False)
+
+
+def cmd_desktop(args):
+    """Launch Planet Maiko as a desktop application."""
+    from planet_maiko.desktop import main as desktop_main
+    print(f"Launching Planet Maiko desktop on http://{args.host}:{args.port}")
+    desktop_main(host=args.host, port=args.port)
+
+
+def cmd_seed(args):
+    """Populate the database with realistic test data."""
+    from planet_maiko.app import create_app
+    from planet_maiko.seed import seed_data
+    app = create_app(start_scheduler=False)
+    seed_data(app)
+    print("Seed data loaded.")
+
+
+def cmd_bootstrap(args):
+    """Bootstrap learnings from past PR reviews."""
+    from planet_maiko.app import create_app
+    app = create_app(start_scheduler=False)
+    with app.app_context():
+        from planet_maiko.brain.learning.bootstrap import bootstrap_from_prs
+        count = bootstrap_from_prs(limit=args.limit)
+        print(f"Created {count} signals from PR reviews.")
 
 
 def main():
@@ -209,6 +385,28 @@ def main():
     reply_parser.add_argument("--type", default="message", help="Message type")
     reply_parser.set_defaults(func=cmd_reply)
 
+    # maiko feedback
+    feedback_parser = subparsers.add_parser("feedback", help="Send in-session feedback about agent work")
+    feedback_parser.add_argument("message", help="Feedback message")
+    feedback_parser.add_argument("--category", default="pattern", help="Category: testing, security, error_handling, etc.")
+    feedback_parser.add_argument("--severity", default="suggestion", help="suggestion, warning, or blocking")
+    feedback_parser.add_argument("--task", help="Task ID (auto-detected if in worktree)")
+    feedback_parser.set_defaults(func=cmd_feedback)
+
+    # maiko sleep
+    sleep_parser = subparsers.add_parser("sleep", help="Put agent to sleep")
+    sleep_parser.add_argument("--task", help="Task ID (auto-detected from TASK.md if omitted)")
+    sleep_parser.set_defaults(func=cmd_sleep)
+
+    # maiko wake
+    wake_parser = subparsers.add_parser("wake", help="Wake a sleeping agent")
+    wake_parser.add_argument("agent_id", help="Agent ID to wake")
+    wake_parser.set_defaults(func=cmd_wake)
+
+    # maiko setup
+    setup_parser = subparsers.add_parser("setup", help="Interactive first-time setup")
+    setup_parser.set_defaults(func=cmd_setup)
+
     # maiko status
     status_parser = subparsers.add_parser("status", help="Check Planet Maiko status")
     status_parser.set_defaults(func=cmd_status)
@@ -219,6 +417,29 @@ def main():
     serve_parser.add_argument("--port", type=int, default=8420, help="Port to listen on")
     serve_parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     serve_parser.set_defaults(func=cmd_serve)
+
+    # maiko desktop
+    desktop_parser = subparsers.add_parser("desktop", help="Launch Planet Maiko as a desktop app")
+    desktop_parser.add_argument("--host", default="127.0.0.1", help="Host to bind to")
+    desktop_parser.add_argument("--port", type=int, default=8420, help="Port to listen on")
+    desktop_parser.set_defaults(func=cmd_desktop)
+
+    # maiko seed
+    seed_parser = subparsers.add_parser("seed", help="Populate database with test data")
+    seed_parser.set_defaults(func=cmd_seed)
+
+    # maiko bootstrap
+    bootstrap_parser = subparsers.add_parser("bootstrap", help="Seed learnings from past PR reviews")
+    bootstrap_parser.add_argument("--limit", type=int, default=20, help="Max PRs to scan")
+    bootstrap_parser.set_defaults(func=cmd_bootstrap)
+
+    # Let plugins register CLI commands
+    try:
+        from planet_maiko.plugins.loader import discover_plugins
+        for plugin in discover_plugins():
+            plugin.register_commands(subparsers)
+    except Exception:
+        pass  # plugins may not be available in all contexts
 
     args = parser.parse_args()
     if not args.command:

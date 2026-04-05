@@ -10,6 +10,7 @@ DEFAULT_CONFIG = {
         "enabled": True,
         "username": "",
         "repos": [],  # e.g. ["org/repo1", "org/repo2"]
+        "repo_roots": [],  # e.g. ["~/src", "~/projects"] — where your repos live on disk
         "poll_interval_minutes": 5,
     },
     "linear": {
@@ -29,9 +30,28 @@ DEFAULT_CONFIG = {
         "channels": [],
         "poll_interval_minutes": 120,
     },
+    "agents": {
+        "custom_instructions": "",  # Added to every agent's CLAUDE.md (your workflow preferences)
+    },
     "brain": {
         "runtime": "claude-code",  # or a custom runtime
         "llm_triage": True,  # use LLM for unmatched pupdates
+        # Tools to pre-approve for Claude Code sessions (avoids permission prompts)
+        # e.g. ["Bash", "Read", "Edit", "Write", "WebFetch", "WebSearch", "mcp__github"]
+        "allowed_tools": [],
+        "correlation_window_minutes": 30,
+        "incident_chains": [
+            ["pr_ci_failed", "deploy_rollback", "error_spike"],
+            ["deploy_blocked", "deploy_stuck"],
+            ["pr_ci_failed", "deploy_blocked"],
+            ["deploy_rollback", "error_spike"],
+            ["batch_job_failing", "error_spike"],
+            ["deploy_rollback", "batch_job_failing"],
+        ],
+    },
+    "scene": {
+        "latitude": None,   # e.g. 37.77 for San Francisco
+        "longitude": None,  # e.g. -122.42 for San Francisco
     },
 }
 

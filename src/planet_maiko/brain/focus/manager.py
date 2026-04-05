@@ -9,11 +9,7 @@ Focus states:
 Pupdates that don't pass the gate are "held" and delivered as a
 digest when the user exits focus mode.
 
-Flow score (0-1.0) can auto-detect focus from behavior:
-    +0.3: single-repo git activity recently
-    +0.2: dashboard silence >20 min
-    -0.3: rapid dashboard checks
-    +0.2: single active task
+Focus can be set explicitly or auto-triggered by calendar events.
 """
 
 import logging
@@ -49,12 +45,10 @@ ESCALATION_MINUTES = {
 _state = {
     "current_state": "available",
     "entered_at": None,
-    "trigger": None,  # "explicit" or "behavioral"
+    "trigger": None,  # "explicit" or "calendar"
     "duration_minutes": None,
     "expires_at": None,
-    "flow_score": 0.0,
     "held_count": 0,
-    "last_dashboard_request": None,
 }
 
 
@@ -70,7 +64,7 @@ def set_state(new_state, duration_minutes=None, trigger="explicit"):
     Args:
         new_state: available, soft_focus, deep_focus, away
         duration_minutes: auto-expire after this many minutes (optional)
-        trigger: "explicit" (user set it) or "behavioral" (auto-detected)
+        trigger: "explicit" (user set it) or "calendar" (auto from meeting)
     """
     if new_state not in GATE_MATRIX:
         raise ValueError(f"Invalid state: {new_state}. Must be one of: {list(GATE_MATRIX.keys())}")
@@ -162,35 +156,38 @@ def get_digest():
     }
 
 
-def record_dashboard_access():
-    """Record when the user checks the dashboard (for flow detection)."""
-    _state["last_dashboard_request"] = datetime.now(timezone.utc).isoformat()
-
-
-def compute_flow_score():
-    """Compute behavioral flow score (0-1.0).
-
-    Higher score = more focused. Used to auto-detect focus state.
-    """
-    score = 0.0
+def check_calendar_focus(pupdates):
+    """Auto-set focus based on upcoming meetings."""
     now = datetime.now(timezone.utc)
 
-    # Dashboard silence > 20 min = +0.2
-    if _state["last_dashboard_request"]:
-        last = datetime.fromisoformat(_state["last_dashboard_request"])
-        if (now - last).total_seconds() > 1200:
-            score += 0.2
-    else:
-        score += 0.2  # Never checked = focused
+    for p in pupdates:
+        if p.source != "calendar":
+            continue
+        start_str = (p.extra or {}).get("start")
+        end_str = (p.extra or {}).get("end")
+        if not start_str:
+            continue
 
-    # Rapid dashboard checks = -0.3
-    if _state["last_dashboard_request"]:
-        last = datetime.fromisoformat(_state["last_dashboard_request"])
-        if (now - last).total_seconds() < 300:
-            score -= 0.3
+        try:
+            start = datetime.fromisoformat(start_str)
+            # Meeting starting within 5 minutes
+            if timedelta(0) <= (start - now) <= timedelta(minutes=5):
+                current = get_state()
+                if current.get("current_state") == "available":
+                    set_state("soft_focus", trigger="calendar")
+                    return True
 
-    _state["flow_score"] = max(0.0, min(1.0, score))
-    return _state["flow_score"]
+            # Meeting ended (if end time exists)
+            if end_str:
+                end = datetime.fromisoformat(end_str)
+                if timedelta(0) <= (now - end) <= timedelta(minutes=2):
+                    current = get_state()
+                    if current.get("current_state") == "soft_focus":
+                        set_state("available", trigger="calendar")
+                        return True
+        except (ValueError, TypeError):
+            continue
+    return False
 
 
 def _check_expiry():

@@ -126,6 +126,37 @@ def edit_learning(learning_id):
     return jsonify(learning.to_dict())
 
 
+@learning_bp.route("/learnings/backfill", methods=["POST"])
+def backfill_learnings():
+    """Scan past PRs for review comments and create learnings.
+
+    Runs the full pipeline: bootstrap → classify → aggregate.
+    """
+    from planet_maiko.brain.learning.bootstrap import bootstrap_from_prs
+    from planet_maiko.brain.learning.classifier import classify_unclassified_signals
+    from planet_maiko.brain.learning.processor import process_signals
+
+    data = request.get_json(silent=True) or {}
+    limit = data.get("limit", 20)
+
+    signals_created = bootstrap_from_prs(limit=limit)
+
+    classified = 0
+    try:
+        classified = classify_unclassified_signals(batch_size=50)
+    except Exception:
+        pass
+
+    learning_results = process_signals()
+
+    return jsonify({
+        "signals_created": signals_created,
+        "classified": classified,
+        "new_learnings": learning_results.get("new_learnings", 0),
+        "graduated": learning_results.get("graduated", 0),
+    })
+
+
 @learning_bp.route("/learnings/brief", methods=["GET"])
 def learning_brief():
     """Compile active learnings into a brief for agents.

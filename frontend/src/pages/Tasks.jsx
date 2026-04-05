@@ -5,7 +5,7 @@ import AssignAgentModal from "../components/AssignAgentModal";
 import {
   CheckSquare, Plus, FolderPlus, Pin, PinOff, ExternalLink,
   ChevronDown, ChevronRight, Folder, GitBranch, Clock, Bot,
-  Play, X, Download, Sparkles, Trash2,
+  Play, X, Download, Sparkles, Trash2, Pencil, Brain,
 } from "lucide-react";
 import "./Tasks.css";
 
@@ -27,13 +27,24 @@ export default function Tasks() {
   const [generating, setGenerating] = useState(null); // project_id being generated
   const [taskForm, setTaskForm] = useState({ title: "", type: "todo", priority: "normal", url: "", project_id: "", due_date: "" });
   const [projectForm, setProjectForm] = useState({ title: "", description: "", priority: "normal" });
+  const [editingTask, setEditingTask] = useState(null);
+  const [editForm, setEditForm] = useState({ title: "", type: "todo", priority: "normal", project_id: "", url: "", due_date: "" });
+  const [askingMaiko, setAskingMaiko] = useState(null);
+  const [maikoQuery, setMaikoQuery] = useState("");
+  const [maikoResult, setMaikoResult] = useState(null);
+  const [maikoRunning, setMaikoRunning] = useState(false);
+
+  const [config, setConfig] = useState(null);
+  const [agentNames, setAgentNames] = useState({});
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [t, p] = await Promise.all([api.getTasks(), api.getProjects()]);
+      const [t, p, cfg, profiles] = await Promise.all([api.getTasks(), api.getProjects(), api.getConfig(), api.getProfiles()]);
       setTasks(t);
       setProjects(p);
+      setConfig(cfg);
+      setAgentNames(Object.fromEntries(profiles.map((a) => [a.id, a.display_name])));
     } catch (err) { console.error(err); }
     setLoading(false);
   };
@@ -93,85 +104,105 @@ export default function Tasks() {
         <button className="btn" onClick={() => { setShowProjectForm(!showProjectForm); setShowTaskForm(false); }}>
           <FolderPlus size={12} /> New Project
         </button>
-        <button className="btn" onClick={async () => {
-          showToast("Importing from Linear... 📥", "normal");
-          try {
-            const result = await api.importLinear();
-            showToast(`Imported ${result.tasks_created} task(s), ${result.projects_created} project(s)`, "normal");
-            fetchData();
-          } catch (err) {
-            showToast(err.message || "Import failed", "high");
-          }
-        }}>
-          <Download size={12} /> Import from Linear
-        </button>
+        {config?.linear?.enabled && (
+          <button className="btn" onClick={async () => {
+            showToast("Importing from Linear...", "normal");
+            try {
+              const result = await api.importLinear();
+              showToast(`Imported ${result.tasks_created} task(s), ${result.projects_created} project(s)`, "normal");
+              fetchData();
+            } catch (err) {
+              showToast(err.message || "Import failed", "high");
+            }
+          }}>
+            <Download size={12} /> Import from Linear
+          </button>
+        )}
       </div>
 
-      {/* Task creation form */}
+      {/* Task creation modal */}
       {showTaskForm && (
-        <form className="create-form card" onSubmit={handleCreateTask}>
-          <div className="form-row">
-            <label>
-              Title <span className="required">*</span>
-              <input type="text" value={taskForm.title} onChange={(e) => setTaskForm((f) => ({ ...f, title: e.target.value }))} autoFocus />
-            </label>
-          </div>
-          <div className="form-row form-row-inline">
-            <label>
-              Type
-              <select value={taskForm.type} onChange={(e) => setTaskForm((f) => ({ ...f, type: e.target.value }))}>
-                <option value="todo">Todo</option>
-                <option value="pr_review">PR Review</option>
-                <option value="investigation">Investigation</option>
-                <option value="follow_up">Follow Up</option>
-              </select>
-            </label>
-            <label>
-              Priority
-              <select value={taskForm.priority} onChange={(e) => setTaskForm((f) => ({ ...f, priority: e.target.value }))}>
-                <option value="low">Low</option>
-                <option value="normal">Normal</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
-              </select>
-            </label>
-            <label>
-              Project
-              <select value={taskForm.project_id} onChange={(e) => setTaskForm((f) => ({ ...f, project_id: e.target.value }))}>
-                <option value="">None</option>
-                {projects.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-              </select>
-            </label>
-          </div>
-          <div className="form-row">
-            <div className="form-row form-row-inline">
-              <label>URL <input type="text" value={taskForm.url} onChange={(e) => setTaskForm((f) => ({ ...f, url: e.target.value }))} placeholder="https://..." /></label>
-              <label>Due Date <input type="date" value={taskForm.due_date} onChange={(e) => setTaskForm((f) => ({ ...f, due_date: e.target.value }))} /></label>
+        <div className="modal-overlay" onClick={() => setShowTaskForm(false)}>
+          <div className="generated-tasks-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <Plus size={14} />
+              <span>New Task</span>
+              <button className="btn btn-sm" onClick={() => setShowTaskForm(false)} style={{ marginLeft: "auto" }}><X size={10} /></button>
             </div>
+            <form className="modal-body" onSubmit={handleCreateTask}>
+              <div className="form-row">
+                <label>
+                  Title <span className="required">*</span>
+                  <input type="text" value={taskForm.title} onChange={(e) => setTaskForm((f) => ({ ...f, title: e.target.value }))} autoFocus />
+                </label>
+              </div>
+              <div className="form-row form-row-inline">
+                <label>
+                  Type
+                  <select value={taskForm.type} onChange={(e) => setTaskForm((f) => ({ ...f, type: e.target.value }))}>
+                    <option value="todo">Todo</option>
+                    <option value="pr_review">PR Review</option>
+                    <option value="investigation">Investigation</option>
+                    <option value="follow_up">Follow Up</option>
+                  </select>
+                </label>
+                <label>
+                  Priority
+                  <select value={taskForm.priority} onChange={(e) => setTaskForm((f) => ({ ...f, priority: e.target.value }))}>
+                    <option value="low">Low</option>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </label>
+                <label>
+                  Project
+                  <select value={taskForm.project_id} onChange={(e) => setTaskForm((f) => ({ ...f, project_id: e.target.value }))}>
+                    <option value="">None</option>
+                    {projects.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="form-row">
+                <div className="form-row form-row-inline">
+                  <label>URL <input type="text" value={taskForm.url} onChange={(e) => setTaskForm((f) => ({ ...f, url: e.target.value }))} placeholder="https://..." /></label>
+                  <label>Due Date <input type="date" value={taskForm.due_date} onChange={(e) => setTaskForm((f) => ({ ...f, due_date: e.target.value }))} /></label>
+                </div>
+              </div>
+              <div className="form-actions">
+                <button type="button" className="btn" onClick={() => setShowTaskForm(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Create Task</button>
+              </div>
+            </form>
           </div>
-          <div className="form-actions">
-            <button type="button" className="btn" onClick={() => setShowTaskForm(false)}>Cancel</button>
-            <button type="submit" className="btn btn-primary">Create Task</button>
-          </div>
-        </form>
+        </div>
       )}
 
-      {/* Project creation form */}
+      {/* Project creation modal */}
       {showProjectForm && (
-        <form className="create-form card" onSubmit={handleCreateProject}>
-          <div className="form-row">
-            <label>Title <span className="required">*</span>
-              <input type="text" value={projectForm.title} onChange={(e) => setProjectForm((f) => ({ ...f, title: e.target.value }))} autoFocus />
-            </label>
+        <div className="modal-overlay" onClick={() => setShowProjectForm(false)}>
+          <div className="generated-tasks-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <FolderPlus size={14} />
+              <span>New Project</span>
+              <button className="btn btn-sm" onClick={() => setShowProjectForm(false)} style={{ marginLeft: "auto" }}><X size={10} /></button>
+            </div>
+            <form className="modal-body" onSubmit={handleCreateProject}>
+              <div className="form-row">
+                <label>Title <span className="required">*</span>
+                  <input type="text" value={projectForm.title} onChange={(e) => setProjectForm((f) => ({ ...f, title: e.target.value }))} autoFocus />
+                </label>
+              </div>
+              <div className="form-row">
+                <label>Description <textarea value={projectForm.description} onChange={(e) => setProjectForm((f) => ({ ...f, description: e.target.value }))} rows={2} /></label>
+              </div>
+              <div className="form-actions">
+                <button type="button" className="btn" onClick={() => setShowProjectForm(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Create Project</button>
+              </div>
+            </form>
           </div>
-          <div className="form-row">
-            <label>Description <textarea value={projectForm.description} onChange={(e) => setProjectForm((f) => ({ ...f, description: e.target.value }))} rows={2} /></label>
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn" onClick={() => setShowProjectForm(false)}>Cancel</button>
-            <button type="submit" className="btn btn-primary">Create Project</button>
-          </div>
-        </form>
+        </div>
       )}
 
       {activeTasks.length === 0 && !showTaskForm && !showProjectForm ? (
@@ -213,7 +244,13 @@ export default function Tasks() {
                     }
                     setGenerating(null);
                   }} disabled={generating === project.id}>
-                    <Sparkles size={10} /> {generating === project.id ? "..." : "Generate"}
+                    <Sparkles size={10} /> {generating === project.id ? "..." : "Generate Tasks"}
+                  </button>
+                  <button className="btn btn-sm btn-action" onClick={(e) => {
+                    e.stopPropagation();
+                    setAskingMaiko({ id: project.id, title: project.title, type: "project", status: "active", project_id: project.id });
+                  }}>
+                    <Brain size={10} /> Ask Maiko
                   </button>
                   {project.source_url && (
                     <a href={project.source_url} target="_blank" rel="noreferrer" className="btn btn-sm" onClick={(e) => e.stopPropagation()}>
@@ -222,7 +259,7 @@ export default function Tasks() {
                   )}
                 </div>
                 {!collapsed && (pts.length > 0
-                  ? pts.map((t) => renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask))
+                  ? pts.map((t) => renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask, setEditingTask, setEditForm, setAskingMaiko, agentNames))
                   : <div className="project-empty">No tasks yet. Create one and assign it to this project.</div>
                 )}
               </div>
@@ -231,7 +268,7 @@ export default function Tasks() {
 
           {/* Ungrouped tasks */}
           {ungrouped.filter((t) => t.status !== "done" && t.status !== "cancelled").map((t) =>
-            renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask)
+            renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask, setEditingTask, setEditForm, setAskingMaiko, agentNames)
           )}
 
           {/* Done tasks (collapsed) */}
@@ -242,7 +279,7 @@ export default function Tasks() {
                 <span>Completed ({tasks.filter((t) => t.status === "done" || t.status === "cancelled").length})</span>
               </div>
               {!collapsedGroups["_done"] && tasks.filter((t) => t.status === "done" || t.status === "cancelled").map((t) =>
-                renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask)
+                renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask, setEditingTask, setEditForm, setAskingMaiko, agentNames)
               )}
             </div>
           )}
@@ -313,11 +350,158 @@ export default function Tasks() {
           </div>
         </div>
       )}
+
+      {/* Edit task modal */}
+      {editingTask && (
+        <div className="modal-overlay" onClick={() => setEditingTask(null)}>
+          <div className="generated-tasks-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <Pencil size={14} />
+              <span>Edit Task</span>
+              <button className="btn btn-sm" onClick={() => setEditingTask(null)} style={{ marginLeft: "auto" }}><X size={10} /></button>
+            </div>
+            <form className="modal-body" onSubmit={async (e) => {
+              e.preventDefault();
+              await api.updateTask(editingTask.id, editForm);
+              showToast("Task updated", "normal");
+              setEditingTask(null);
+              fetchData();
+            }}>
+              <div className="form-row">
+                <label>
+                  Title <span className="required">*</span>
+                  <input type="text" value={editForm.title} onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))} autoFocus />
+                </label>
+              </div>
+              <div className="form-row form-row-inline">
+                <label>
+                  Type
+                  <select value={editForm.type} onChange={(e) => setEditForm((f) => ({ ...f, type: e.target.value }))}>
+                    <option value="todo">Todo</option>
+                    <option value="pr_review">PR Review</option>
+                    <option value="investigation">Investigation</option>
+                    <option value="follow_up">Follow Up</option>
+                  </select>
+                </label>
+                <label>
+                  Priority
+                  <select value={editForm.priority} onChange={(e) => setEditForm((f) => ({ ...f, priority: e.target.value }))}>
+                    <option value="low">Low</option>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </label>
+                <label>
+                  Project
+                  <select value={editForm.project_id} onChange={(e) => setEditForm((f) => ({ ...f, project_id: e.target.value }))}>
+                    <option value="">None</option>
+                    {projects.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="form-row">
+                <div className="form-row form-row-inline">
+                  <label>URL <input type="text" value={editForm.url} onChange={(e) => setEditForm((f) => ({ ...f, url: e.target.value }))} placeholder="https://..." /></label>
+                  <label>Due Date <input type="date" value={editForm.due_date} onChange={(e) => setEditForm((f) => ({ ...f, due_date: e.target.value }))} /></label>
+                </div>
+              </div>
+              <div className="form-actions">
+                <button type="button" className="btn" onClick={() => setEditingTask(null)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Ask Maiko modal */}
+      {askingMaiko && (
+        <div className="modal-overlay" onClick={() => { setAskingMaiko(null); setMaikoQuery(""); setMaikoResult(null); }}>
+          <div className="generated-tasks-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <Brain size={14} />
+              <span>Ask Maiko about: {askingMaiko.title}</span>
+              <button className="btn btn-sm" onClick={() => { setAskingMaiko(null); setMaikoQuery(""); setMaikoResult(null); }} style={{ marginLeft: "auto" }}><X size={10} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="form-row">
+                <label>
+                  What would you like Maiko to investigate?
+                  <input
+                    type="text"
+                    value={maikoQuery}
+                    onChange={(e) => setMaikoQuery(e.target.value)}
+                    placeholder="e.g. What's the best approach for this?"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && maikoQuery.trim() && !maikoRunning) {
+                        e.preventDefault();
+                        (async () => {
+                          setMaikoRunning(true);
+                          setMaikoResult(null);
+                          try {
+                            const res = await api.runSkill("investigate", {
+                              context: {
+                                query: maikoQuery,
+                                context: `Task: ${askingMaiko.title}\nType: ${askingMaiko.type}\nStatus: ${askingMaiko.status}\nProject: ${askingMaiko.project_id || "none"}`,
+                                pupdates: "[]", tasks: "[]", calendar: "[]",
+                              },
+                            });
+                            setMaikoResult(res);
+                          } catch (err) {
+                            setMaikoResult({ error: err.message || "Something went wrong" });
+                          }
+                          setMaikoRunning(false);
+                        })();
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={!maikoQuery.trim() || maikoRunning}
+                  onClick={async () => {
+                    setMaikoRunning(true);
+                    setMaikoResult(null);
+                    try {
+                      const res = await api.runSkill("investigate", {
+                        context: {
+                          query: maikoQuery,
+                          context: `Task: ${askingMaiko.title}\nType: ${askingMaiko.type}\nStatus: ${askingMaiko.status}\nProject: ${askingMaiko.project_id || "none"}`,
+                          pupdates: "[]", tasks: "[]", calendar: "[]",
+                        },
+                      });
+                      setMaikoResult(res);
+                    } catch (err) {
+                      setMaikoResult({ error: err.message || "Something went wrong" });
+                    }
+                    setMaikoRunning(false);
+                  }}
+                >
+                  <Brain size={12} /> {maikoRunning ? "Thinking..." : "Ask Maiko"}
+                </button>
+              </div>
+              {maikoResult && (
+                <div className="md-content" style={{ marginTop: 12 }}>
+                  {maikoResult.error
+                    ? <p style={{ color: "var(--urgent)" }}>{maikoResult.error}</p>
+                    : <pre style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{typeof maikoResult === "string" ? maikoResult : JSON.stringify(maikoResult, null, 2)}</pre>
+                  }
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask) {
+function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask, setEditingTask, setEditForm, setAskingMaiko, agentNames) {
   const isExpanded = expanded === t.id;
   const statusColor = {
     new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
@@ -344,6 +528,30 @@ function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchD
           <span className="task-title">
             {t.url ? <a href={t.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{t.title}</a> : t.title}
           </span>
+          <div className="task-quick-actions" onClick={(e) => e.stopPropagation()}>
+            <button
+              className={`btn-ghost btn-pin ${(t.extra?.pinned || t.metadata?.pinned) ? "pinned" : ""}`}
+              onClick={async () => {
+                const extra = { ...(t.extra || t.metadata || {}), pinned: !(t.extra?.pinned || t.metadata?.pinned) };
+                await api.updateTask(t.id, { extra });
+                showToast(extra.pinned ? "Pinned to focus" : "Unpinned", "normal");
+                fetchData();
+              }}
+              title={t.extra?.pinned || t.metadata?.pinned ? "Unpin from focus" : "Pin to focus"}
+            >
+              {(t.extra?.pinned || t.metadata?.pinned) ? <PinOff size={12} /> : <Pin size={12} />}
+            </button>
+            {t.status === "new" && (
+              <button className="btn-ghost btn-quick-start" onClick={(e) => handleAction(e, t.id, "start")} title="Start">
+                <Play size={12} />
+              </button>
+            )}
+            {t.status === "in_progress" && (
+              <button className="btn-ghost btn-quick-done" onClick={(e) => handleAction(e, t.id, "done")} title="Done">
+                <CheckSquare size={12} />
+              </button>
+            )}
+          </div>
         </div>
         <div className="task-meta">
           <span className="task-status-label" style={{ color: statusColor }}>{t.status.replace("_", " ")}</span>
@@ -352,7 +560,7 @@ function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchD
           <span className="task-type-label">{t.type}</span>
           {t.due_date && <span className={`tag ${new Date(t.due_date) < new Date() ? "tag-overdue" : "tag-due"}`}><Clock size={9} /> {t.due_date}</span>}
           {!t.due_date && t.updated_at && <span className="task-time"><Clock size={9} /> {new Date(t.updated_at).toLocaleDateString()}</span>}
-          {t.assigned_agent_id && <span className="tag agent-assigned-chip"><Bot size={9} /> {t.assigned_agent_id.replace("agent-", "")}</span>}
+          {t.assigned_agent_id && <span className="tag agent-assigned-chip"><Bot size={9} /> {agentNames[t.assigned_agent_id] || t.assigned_agent_id.replace("agent-", "")}</span>}
         </div>
 
         {isExpanded && (
@@ -403,6 +611,22 @@ function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchD
                   <ExternalLink size={10} /> Open
                 </a>
               )}
+              <button className="btn btn-sm btn-action" onClick={() => {
+                setEditForm({
+                  title: t.title || "",
+                  type: t.type || "todo",
+                  priority: t.priority || "normal",
+                  project_id: t.project_id || "",
+                  url: t.url || "",
+                  due_date: t.due_date || "",
+                });
+                setEditingTask(t);
+              }}>
+                <Pencil size={10} /> Edit
+              </button>
+              <button className="btn btn-sm btn-action" onClick={() => setAskingMaiko(t)}>
+                <Brain size={10} /> Ask Maiko
+              </button>
               {t.status !== "done" && t.status !== "cancelled" && !t.assigned_agent_id && (
                 <button className="btn btn-sm btn-action" onClick={() => setAssigningTask(t)}>
                   <Bot size={10} /> Assign Agent

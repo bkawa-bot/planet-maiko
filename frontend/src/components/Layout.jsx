@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
+import Footer from "./Footer";
 import { showToast } from "./Toast";
 import { api } from "../api/client";
 import "./Layout.css";
@@ -43,6 +44,7 @@ export default function Layout() {
       <main className="main-content">
         <Outlet />
       </main>
+      <Footer />
     </div>
   );
 }

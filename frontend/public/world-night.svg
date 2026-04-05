@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90" shape-rendering="crispEdges" preserveAspectRatio="xMidYMax slice">
   <defs>
     <linearGradient id="ns" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#1e2529"/>
-      <stop offset="40%" stop-color="#1a2540"/>
-      <stop offset="65%" stop-color="#162244"/>
-      <stop offset="100%" stop-color="#14203a"/>
+      <stop offset="0%" stop-color="#0a0a20"/>
+      <stop offset="40%" stop-color="#101838"/>
+      <stop offset="65%" stop-color="#182848"/>
+      <stop offset="100%" stop-color="#182848"/>
     </linearGradient>
   </defs>
 
@@ -63,11 +63,17 @@
     <rect x="22" y="22" width="2" height="1"/>
   </g>
 
+  <!-- Aurora borealis bands -->
+  <rect x="0" y="35" width="160" height="4" fill="#40E0A0" opacity="0.15"/>
+  <rect x="10" y="40" width="140" height="3" fill="#30C8B0" opacity="0.12"/>
+  <rect x="20" y="44" width="120" height="3" fill="#40E0A0" opacity="0.10"/>
+  <rect x="5" y="48" width="150" height="2" fill="#30C8B0" opacity="0.08"/>
+
   <!-- Back hill -->
-  <polygon fill="#1a3a28" points="0,64 5,64 5,62 11,62 11,60 18,60 18,58 26,58 26,56 36,56 36,54 48,54 48,53 60,53 60,52 75,52 75,53 85,53 85,55 93,55 93,54 103,54 103,53 118,53 118,55 126,55 126,57 134,57 134,59 141,59 141,61 148,61 148,63 155,63 155,65 160,65 160,90 0,90"/>
+  <polygon fill="#1a2840" points="0,64 5,64 5,62 11,62 11,60 18,60 18,58 26,58 26,56 36,56 36,54 48,54 48,53 60,53 60,52 75,52 75,53 85,53 85,55 93,55 93,54 103,54 103,53 118,53 118,55 126,55 126,57 134,57 134,59 141,59 141,61 148,61 148,63 155,63 155,65 160,65 160,90 0,90"/>
 
   <!-- Tree silhouettes on back hill -->
-  <g fill="#0e2418">
+  <g fill="#0a1828">
     <!-- Pine at x=40 -->
     <rect x="42" y="47" width="1" height="1"/>
     <rect x="41" y="48" width="3" height="1"/>
@@ -103,10 +109,10 @@
   </g>
 
   <!-- Mid hill -->
-  <polygon fill="#133020" points="0,74 7,74 7,72 15,72 15,70 24,70 24,68 34,68 34,66 46,66 46,64 60,64 60,63 75,63 75,62 92,62 92,63 106,63 106,65 118,65 118,67 130,67 130,69 140,69 140,71 148,71 148,73 155,73 155,75 160,75 160,90 0,90"/>
+  <polygon fill="#132438" points="0,74 7,74 7,72 15,72 15,70 24,70 24,68 34,68 34,66 46,66 46,64 60,64 60,63 75,63 75,62 92,62 92,63 106,63 106,65 118,65 118,67 130,67 130,69 140,69 140,71 148,71 148,73 155,73 155,75 160,75 160,90 0,90"/>
 
   <!-- Tree silhouettes on mid hill -->
-  <g fill="#0a1810">
+  <g fill="#081420">
     <rect x="31" y="64" width="1" height="1"/>
     <rect x="30" y="65" width="3" height="1"/>
     <rect x="30" y="66" width="3" height="1"/>
@@ -123,15 +129,15 @@
 
   <!-- Tiny house on mid hill -->
   <g>
-    <rect x="83" y="60" width="4" height="1" fill="#1a3a28"/>
-    <rect x="82" y="61" width="6" height="1" fill="#133020"/>
-    <rect x="82" y="62" width="6" height="2" fill="#102818"/>
+    <rect x="83" y="60" width="4" height="1" fill="#1a2840"/>
+    <rect x="82" y="61" width="6" height="1" fill="#132438"/>
+    <rect x="82" y="62" width="6" height="2" fill="#0e1c30"/>
     <rect x="83" y="62" width="2" height="1" fill="#ffcc60" opacity="0.7"/>
     <rect x="86" y="62" width="1" height="1" fill="#ffcc60" opacity="0.5"/>
   </g>
 
   <!-- Front hill -->
-  <polygon fill="#0c2418" points="0,80 10,80 10,78 22,78 22,77 35,77 35,76 50,76 50,75 68,75 68,74 85,74 85,73 105,73 105,74 120,74 120,75 133,75 133,76 143,76 143,77 150,77 150,79 160,79 160,90 0,90"/>
+  <polygon fill="#0c1c30" points="0,80 10,80 10,78 22,78 22,77 35,77 35,76 50,76 50,75 68,75 68,74 85,74 85,73 105,73 105,74 120,74 120,75 133,75 133,76 143,76 143,77 150,77 150,79 160,79 160,90 0,90"/>
 
   <!-- Fireflies -->
   <g fill="#eee880">
@@ -159,7 +165,7 @@
   </g>
 
   <!-- Path on front hill -->
-  <g fill="#1a3028" opacity="0.4">
+  <g fill="#0e1c30" opacity="0.4">
     <rect x="88" y="90" width="2" height="1"/>
     <rect x="87" y="88" width="2" height="2"/>
     <rect x="86" y="86" width="2" height="2"/>

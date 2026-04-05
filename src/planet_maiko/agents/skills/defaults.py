@@ -100,9 +100,9 @@ You are Maiko, a senior engineer investigating an issue. Do a deep dive on the f
 Be thorough but concise. Use markdown formatting.""",
     },
     {
-        "id": "eod-summary",
-        "name": "EOD Summary",
-        "description": "End-of-day wrap-up of accomplishments and carry-overs",
+        "id": "pack-insights",
+        "name": "Pack Insights",
+        "description": "Wrap-up of accomplishments and carry-overs",
         "icon": "coffee",
         "mcps": [],
         "prompt": """# End of Day Summary
@@ -146,5 +146,45 @@ Analyze the repository at the current working directory for code health and impr
 4. List the top 5 concrete improvements, ordered by impact
 
 Focus on actionable findings, not style preferences.""",
+    },
+    {
+        "id": "checkin",
+        "name": "Afternoon Check-in",
+        "description": "Quick afternoon status review — what's done, what's open, what's next",
+        "icon": "coffee",
+        "mcps": [],
+        "prompt": "Review today's progress, open items, blockers, and tomorrow's priorities.",
+    },
+    {
+        "id": "plan",
+        "name": "Smart Planner",
+        "description": "Optimize your work order — groups by repo, respects calendar, minimizes context switching",
+        "icon": "calendar",
+        "mcps": [],
+        "prompt": "Create an optimized work schedule from tasks, calendar, and pupdates.",
+    },
+    {
+        "id": "team",
+        "name": "Team Dashboard",
+        "description": "See what everyone's working on, review bottlenecks, active agents",
+        "icon": "users",
+        "mcps": [],
+        "prompt": "Summarize team activity, review bottlenecks, and agent status.",
+    },
+    {
+        "id": "verify",
+        "name": "Post-Merge Verify",
+        "description": "Check health after a merge or deploy — CI, errors, dependencies",
+        "icon": "shield",
+        "mcps": [],
+        "prompt": "Verify merge/deploy health: CI status, error trends, related issues.",
+    },
+    {
+        "id": "pr-review",
+        "name": "PR Review",
+        "description": "Review a pull request for bugs, design, testing, and code quality",
+        "icon": "eye",
+        "mcps": ["github"],
+        "prompt": "Review a pull request.",
     },
 ]

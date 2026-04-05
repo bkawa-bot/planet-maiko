@@ -3,11 +3,34 @@
 Skills are stored in the database (custom_skills table) so users
 can view, edit, and create their own. Default skills are seeded
 on first run.
+
+Prompt resolution order:
+  1. Database (user-edited)
+  2. Prompt file (src/planet_maiko/prompts/{skill_id}.md)
+  3. Hardcoded fallback (prompts.py)
 """
 
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+_PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent / "prompts"  # -> planet_maiko/prompts/
+
+
+def _load_prompt_file(skill_id):
+    """Load a prompt template from the prompts directory.
+
+    Returns the file contents as a string, or None if the file
+    doesn't exist or can't be read.
+    """
+    prompt_path = _PROMPTS_DIR / f"{skill_id}.md"
+    try:
+        if prompt_path.is_file():
+            return prompt_path.read_text(encoding="utf-8")
+    except Exception:
+        logger.debug("Could not load prompt file %s", prompt_path)
+    return None
 
 
 def seed_defaults():
@@ -37,17 +60,25 @@ def seed_defaults():
 def get_skill_prompt(skill_name, context):
     """Build a full prompt for a skill with injected context.
 
-    Tries database first, falls back to hardcoded prompts.
+    Resolution order: database -> prompt file -> hardcoded fallback.
     """
+    template = None
+
+    # 1. Try database
     try:
         from planet_maiko.models.custom_skill import CustomSkill
         skill = CustomSkill.query.get(skill_name)
         if skill:
             template = skill.prompt
-        else:
-            from planet_maiko.agents.skills.prompts import SKILL_PROMPTS
-            template = SKILL_PROMPTS.get(skill_name)
     except Exception:
+        pass
+
+    # 2. Try prompt file
+    if template is None:
+        template = _load_prompt_file(skill_name)
+
+    # 3. Fall back to hardcoded prompts
+    if template is None:
         from planet_maiko.agents.skills.prompts import SKILL_PROMPTS
         template = SKILL_PROMPTS.get(skill_name)
 

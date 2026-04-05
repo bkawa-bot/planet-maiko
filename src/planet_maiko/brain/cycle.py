@@ -4,11 +4,12 @@ Each cycle runs all registered processors in order,
 just like a CPU executes its pipeline on each clock tick.
 
 Processor pipeline:
-    1. agents:     process agent pupdates (auto-complete tasks)
-    2. awareness:  detect conflicts between active agents (A2A)
-    3. correlator: group related pupdates into incidents
-    4. pupdates:   match pupdates against rules + triage
-    5. learning:   aggregate signals into learnings
+    1. agents:        process agent pupdates (auto-complete tasks)
+    2. awareness:     detect conflicts between active agents (A2A)
+    3. correlator:    group related pupdates into incidents
+    4. pupdates:      match pupdates against rules + triage
+    4.5 classifier:   batch classify unclassified PR feedback signals
+    5. learning:      aggregate signals into learnings
 """
 
 import logging
@@ -67,6 +68,19 @@ def run(app):
             logger.debug(f"Awareness check skipped: {e}")
             results["awareness"] = {"conflicts": 0, "warnings_sent": 0}
 
+        # Phase 2.5: Auto-focus from calendar events
+        from planet_maiko.brain.focus.manager import check_calendar_focus
+        from planet_maiko.models.pupdate import Pupdate
+        try:
+            recent_pupdates = Pupdate.query.filter(
+                Pupdate.brain_processed == False,
+            ).all()
+            calendar_changed = check_calendar_focus(recent_pupdates)
+            results["calendar_focus"] = {"changed": calendar_changed}
+        except Exception as e:
+            logger.debug(f"Calendar focus check skipped: {e}")
+            results["calendar_focus"] = {"changed": False}
+
         # Phase 3: Correlate related pupdates into incidents
         from planet_maiko.brain.pupdates.correlator import correlate
         results["correlator"] = correlate()
@@ -75,9 +89,129 @@ def run(app):
         from planet_maiko.brain.pupdates.processor import process as process_pupdates
         results["pupdates"] = process_pupdates()
 
+        # Tier 2: LLM triage for unmatched pupdates
+        try:
+            from planet_maiko.config import load_config
+            config = load_config()
+            if config.get("brain", {}).get("llm_triage", False):
+                unmatched = Pupdate.query.filter(
+                    Pupdate.brain_processed == False,
+                    Pupdate.dismissed == False,
+                    Pupdate.read == False,
+                ).limit(5).all()
+
+                if unmatched:
+                    from planet_maiko.agents.brain_session import _get_runtime, triage_pupdate
+                    runtime = _get_runtime()
+                    if runtime and runtime.is_available():
+                        from planet_maiko.database import db
+                        for p in unmatched:
+                            try:
+                                decision = triage_pupdate(p)
+                                if decision:
+                                    action = decision.get("action", "skip")
+                                    if action == "dismiss":
+                                        p.dismissed = True
+                                        p.dismissed_at = datetime.now(timezone.utc)
+                                    elif action == "mark_read":
+                                        p.read = True
+                                    elif action == "create_task":
+                                        from planet_maiko.models.task import Task
+                                        task = Task(
+                                            id=f"task-{p.id}",
+                                            title=decision.get("task_title", p.title),
+                                            type=decision.get("task_type", "todo"),
+                                            priority=decision.get("task_priority", p.priority),
+                                            source_pupdate_id=p.id,
+                                            url=p.url,
+                                            tags=p.tags or [],
+                                        )
+                                        db.session.add(task)
+                                p.brain_processed = True
+                            except Exception as e:
+                                logger.warning(f"[cycle] LLM triage failed for {p.id}: {e}")
+                        db.session.commit()
+                        results["llm_triage"] = {"processed": len(unmatched)}
+        except Exception as e:
+            logger.warning(f"[cycle] LLM triage phase error: {e}")
+
         # Phase 4: Aggregate feedback signals into learnings
         from planet_maiko.brain.learning.processor import process_signals
         results["learning"] = process_signals()
+
+        # Phase 4.5: Batch classify unclassified signals
+        try:
+            from planet_maiko.brain.learning.classifier import classify_unclassified_signals
+            classified = classify_unclassified_signals(batch_size=20)
+            results["classification"] = {"classified": classified}
+        except Exception as e:
+            logger.warning(f"[cycle] Classification error: {e}")
+
+        # Phase 5: Tournaments — auto-run on recently merged PRs
+        try:
+            from planet_maiko.brain.learning.tournament import run_tournament
+            from planet_maiko.models.pupdate import Pupdate as TournamentPupdate
+
+            merged_prs = TournamentPupdate.query.filter(
+                TournamentPupdate.type == "pr_merged",
+                TournamentPupdate.brain_processed == True,  # noqa: E712
+                ~TournamentPupdate.tags.contains("tournament_run"),
+            ).order_by(TournamentPupdate.timestamp.desc()).limit(3).all()
+
+            tournament_results = {"triggered": 0, "failed": 0}
+            for p in merged_prs:
+                repo = p.extra.get("repo") if p.extra else None
+                pr_number = p.extra.get("number") if p.extra else None
+                if repo and pr_number:
+                    try:
+                        run_tournament(repo, int(pr_number), app)
+                        # New list to avoid SQLAlchemy JSON mutation tracking issue
+                        p.tags = list(p.tags or []) + ["tournament_run"]
+                        tournament_results["triggered"] += 1
+                    except Exception as e:
+                        logger.warning(f"Tournament failed for {repo}#{pr_number}: {e}")
+                        tournament_results["failed"] += 1
+
+            if merged_prs:
+                from planet_maiko.database import db as cycle_db
+                cycle_db.session.commit()
+
+            results["tournaments"] = tournament_results
+        except Exception as e:
+            logger.warning(f"[cycle] Tournament phase error: {e}")
+            results["tournaments"] = {"triggered": 0, "failed": 0, "error": str(e)}
+
+        # Phase 6: Heartbeats — nudge silent agents
+        try:
+            from planet_maiko.agents.monitor import check_heartbeats
+            nudged = check_heartbeats()
+            results["heartbeats"] = {"nudged": nudged}
+        except Exception as e:
+            logger.warning(f"[cycle] Heartbeat check error: {e}")
+            results["heartbeats"] = {"nudged": 0, "error": str(e)}
+
+        # Phase 7: Project driver — auto-advance project phases
+        try:
+            from planet_maiko.brain.projects.driver import drive_projects
+            driver_result = drive_projects()
+            results["projects"] = driver_result
+        except Exception as e:
+            logger.warning(f"[cycle] Project driver error: {e}")
+            results["projects"] = {"advanced": 0, "completed": 0, "error": str(e)}
+
+        # Phase 8: Scheduled skills
+        try:
+            from planet_maiko.pollers.skill_runner import run_scheduled_skills
+            ran_skills = run_scheduled_skills()
+            results["scheduled_skills"] = ran_skills
+        except Exception as e:
+            logger.warning(f"[cycle] Skill runner error: {e}")
+            results["scheduled_skills"] = []
+
+        # Fire plugin hooks for all completed phases
+        from planet_maiko.plugins.loader import fire_hook
+        for phase_name, phase_results in results.items():
+            fire_hook("on_brain_cycle", phase_name, phase_results, app)
 
         _last_cycle = datetime.now(timezone.utc)
         _cycle_count += 1

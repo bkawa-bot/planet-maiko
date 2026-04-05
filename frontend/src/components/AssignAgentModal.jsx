@@ -17,15 +17,33 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
   const [recommendations, setRecommendations] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [repoPath, setRepoPath] = useState("");
+  const [repoRoots, setRepoRoots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [assigning, setAssigning] = useState(false);
+  const [useWorktree, setUseWorktree] = useState(true);
+  const [autoKickoff, setAutoKickoff] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState("");
 
   useEffect(() => {
     const repo = task.metadata?.repo || task.extra?.repo || "";
-    setRepoPath(repo);
-    api.recommendAgent(repo).then((recs) => {
+    Promise.all([
+      api.recommendAgent(repo),
+      api.getConfig(),
+    ]).then(([recs, cfg]) => {
       setRecommendations(recs);
-      if (recs.length > 0) setSelectedId(recs[0].profile.id);
+      const validRecs = recs.filter(r => r.profile);
+      if (validRecs.length > 0) setSelectedId(validRecs[0].profile.id);
+
+      // Auto-fill repo path from repo_roots config
+      const roots = cfg?.github?.repo_roots || [];
+      setRepoRoots(roots);
+      if (roots.length === 1 && repo) {
+        // Single root + known repo name: auto-resolve
+        const repoShort = repo.includes("/") ? repo.split("/").pop() : repo;
+        setRepoPath(`${roots[0]}/${repoShort}`);
+      } else if (roots.length === 1) {
+        setRepoPath(roots[0]);
+      }
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [task]);
@@ -55,6 +73,9 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
         task_id: task.id,
         profile_id: selectedId,
         repo_path: repoPath,
+        use_worktree: useWorktree,
+        auto_kickoff: autoKickoff,
+        custom_prompt: customPrompt || undefined,
       });
       const agent = recommendations.find((r) => r.profile.id === selectedId);
       showToast(`${agent?.profile.display_name || "Agent"} assigned! Worktree ready.`, "normal");
@@ -80,9 +101,14 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
             <p className="assign-loading">Finding the best match...</p>
           ) : (
             <>
+              {recommendations.some((rec) => rec.gap_detected) && (
+                <div style={{ padding: "8px 12px", marginBottom: 8, background: "var(--pink-soft)", borderRadius: "var(--radius-xs)", fontSize: 12, color: "var(--pink)" }}>
+                  {recommendations.find((rec) => rec.gap_detected)?.reasons?.[0] || "No experienced agent for this task."}
+                </div>
+              )}
               <div className="assign-section-label">Recommended Agents</div>
               <div className="assign-agent-list">
-                {recommendations.map((rec) => (
+                {recommendations.filter((rec) => rec.profile).map((rec) => (
                   <div
                     key={rec.profile.id}
                     className={`assign-agent-option ${selectedId === rec.profile.id ? "selected" : ""}`}
@@ -107,13 +133,49 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
                 <Plus size={10} /> Or create a new agent
               </button>
 
-              <div className="assign-section-label" style={{ marginTop: 16 }}>Repo Path</div>
+              <div className="assign-section-label" style={{ marginTop: 16 }}>Repository Path</div>
               <input
                 className="assign-repo-input"
                 type="text"
                 value={repoPath}
                 onChange={(e) => setRepoPath(e.target.value)}
-                placeholder="/path/to/your/repo"
+                placeholder={repoRoots.length ? `${repoRoots[0]}/repo-name` : "/path/to/your/repo"}
+              />
+              {!repoPath && repoRoots.length === 0 && (
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
+                  Set repository roots in Settings to auto-fill this field.
+                </div>
+              )}
+
+              <div className="assign-section-label" style={{ marginTop: 16 }}>Options</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text-dim)", cursor: "pointer" }}>
+                  <input type="checkbox" checked={useWorktree} onChange={(e) => setUseWorktree(e.target.checked)} />
+                  Use git worktree
+                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                    Agent works in an isolated copy of the repo
+                  </span>
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text-dim)", cursor: "pointer" }}>
+                  <input type="checkbox" checked={autoKickoff} onChange={(e) => setAutoKickoff(e.target.checked)} />
+                  Auto-start agent
+                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                    Launch the agent immediately after setup
+                  </span>
+                </label>
+              </div>
+
+              <div className="assign-section-label" style={{ marginTop: 16 }}>Additional Instructions (optional)</div>
+              <textarea
+                style={{
+                  width: "100%", minHeight: 60, padding: "8px 10px", fontSize: 12,
+                  border: "1px solid var(--border)", borderRadius: "var(--radius-xs)",
+                  background: "var(--bg)", color: "var(--text)", fontFamily: "var(--font)",
+                  resize: "vertical",
+                }}
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                placeholder="e.g. Write tests first. Use the existing error handling patterns in src/utils/errors.py. Follow the PR template."
               />
             </>
           )}
@@ -122,7 +184,7 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
         <div className="assign-footer">
           <button className="btn" onClick={onClose}>Cancel</button>
           <button className="btn btn-primary" onClick={handleAssign} disabled={assigning || !selectedId || !repoPath}>
-            <Rocket size={12} /> {assigning ? "Preparing..." : "Assign & Prepare"}
+            <Rocket size={12} /> {assigning ? "Preparing..." : autoKickoff ? "Assign & Launch" : "Assign & Prepare"}
           </button>
         </div>
       </div>

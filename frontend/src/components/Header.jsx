@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 import {
-  Home, Inbox, CheckSquare, Users, Brain, Lightbulb,
-  Bot, Flame, BookOpen, Wand2, Settings, Bell, Shield,
+  Home, Inbox, CheckSquare, Brain, Lightbulb,
+  Bot, Flame, Settings, Bell, Shield,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api/client";
@@ -11,12 +11,10 @@ const NAV_ITEMS = [
   { to: "/", icon: Home, label: "Home", end: true },
   { to: "/inbox", icon: Inbox, label: "Inbox", badgeKey: "pupdates" },
   { to: "/tasks", icon: CheckSquare, label: "Tasks", badgeKey: "tasks" },
-  { to: "/team", icon: Users, label: "Team" },
-  { to: "/brainstorm", icon: Brain, label: "Brainstorm" },
-  { to: "/suggestions", icon: Lightbulb, label: "Suggestions" },
   { to: "/agents", icon: Bot, label: "Agents" },
+  { to: "/brain", icon: Brain, label: "Brain" },
+  { to: "/ideas", icon: Lightbulb, label: "Ideas" },
   { to: "/gathering", icon: Flame, label: "Gathering" },
-  { to: "/skills", icon: Wand2, label: "Skills" },
 ];
 
 const THEMES = [

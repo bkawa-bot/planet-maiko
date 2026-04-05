@@ -1,34 +1,40 @@
 .footer {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 24px;
+  align-items: center; gap: 16px;
+  justify-content: center;
+  padding: 4px 24px;
   font-size: 10px;
   color: var(--text-muted);
-  border-top: 1px solid var(--border);
-  background: var(--bg-card);
+  border-top: 1px solid var(--border-subtle);
+  background: rgba(45, 54, 60, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
+  bottom: 0; left: 0; right: 0;
+  z-index: 100; height: 28px;
 }
+[data-theme="light"] .footer { background: rgba(242, 248, 242, 0.85); }
+[data-theme="morning"] .footer { background: rgba(250, 246, 238, 0.85); }
+[data-theme="sunset"] .footer { background: rgba(28, 35, 82, 0.85); }
 
-.footer-left, .footer-right {
-  display: flex; align-items: center; gap: 12px;
+.footer-section {
+  display: flex; align-items: center; gap: 5px;
+  cursor: pointer; padding: 2px 6px; border-radius: var(--radius-xs);
+  transition: all 0.15s;
 }
+.footer-section:hover { background: var(--bg-hover); color: var(--text-dim); }
 
 .footer-dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--green); animation: pulse 2s ease-in-out infinite;
-  box-shadow: 0 0 4px var(--green);
+  width: 5px; height: 5px; border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
 }
+.footer-dot.brain { background: var(--green); box-shadow: 0 0 4px var(--green); }
 
-.footer-sep { color: var(--border); margin: 0 2px; }
+.footer-focus { text-transform: capitalize; }
+.footer-focus.available { color: var(--green); }
+.footer-focus.soft_focus { color: var(--lemon); }
+.footer-focus.deep_focus { color: var(--urgent); }
+.footer-focus.away { color: var(--low); }
 
-.footer-indicator { display: flex; align-items: center; gap: 4px; }
-
-.sys-dot {
-  width: 6px; height: 6px; border-radius: 50%;
-}
-.sys-dot.brain { background: var(--green); box-shadow: 0 0 4px var(--green); }
+.footer-bug { text-decoration: none; color: var(--text-muted); margin-left: auto; }
+.footer-bug:hover { color: var(--urgent); }

@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from planet_maiko.brain.focus.manager import get_state, set_state, get_digest, get_held, record_dashboard_access
+from planet_maiko.brain.focus.manager import get_state, set_state, get_digest, get_held
 
 focus_bp = Blueprint("focus", __name__)
 
@@ -7,7 +7,6 @@ focus_bp = Blueprint("focus", __name__)
 @focus_bp.route("/focus", methods=["GET"])
 def focus_state():
     """Get current focus state."""
-    record_dashboard_access()
     return jsonify(get_state())
 
 

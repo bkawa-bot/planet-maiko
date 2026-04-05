@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
-import { ExternalLink, X, Eye, Search, Inbox as InboxIcon, ClipboardCheck, FolderKanban, CheckSquare, MoreHorizontal, MessageCircle, Pencil, GitBranch, Calendar as CalendarIcon, Bot, Lightbulb, AlertTriangle, MessageSquare, ChevronRight } from "lucide-react";
+import { ExternalLink, X, Eye, Search, Inbox as InboxIcon, ClipboardCheck, FolderKanban, CheckSquare, MoreHorizontal, MessageCircle, Pencil, GitBranch, Calendar as CalendarIcon, Bot, Lightbulb, AlertTriangle, MessageSquare, ChevronRight, Brain, Play, Loader, RefreshCw, FileText, Folder } from "lucide-react";
 import "./Inbox.css";
+import "./Brainstorm.css";
+import "./Suggestions.css";
 
 const TABS = [
-  { id: "all", label: "All", filter: (p) => p.type !== "approval" },
+  { id: "all", label: "All", filter: (p) => p.type !== "approval" && p.type !== "suggestion" },
   { id: "prs", label: "PRs", filter: (p) => p.type?.startsWith("pr_") },
   { id: "calendar", label: "Calendar", filter: (p) => p.source === "calendar" },
-  { id: "approvals", label: "Approvals", filter: (p) => p.type === "approval" || p.metadata?.needs_approval },
-  { id: "system", label: "System", filter: (p) => p.source === "maiko" || p.source === "agent" },
+  { id: "from_maiko", label: "From Maiko", filter: (p) => p.source === "maiko" || p.source === "agent" || p.type === "suggestion" || p.type === "approval" },
+  { id: "system", label: "System", filter: (p) => p.source === "system" || p.source === "scheduler" },
 ];
 
 const PRIORITY_ORDER = { urgent: 0, high: 1, normal: 2, low: 3 };
@@ -39,6 +41,42 @@ export default function Inbox() {
   const [reviewing, setReviewing] = useState(null);
   const [brainStatus, setBrainStatus] = useState(null);
   const [tasks, setTasks] = useState([]);
+
+  // Brainstorm state
+  const [bsResult, setBsResult] = useState(null);
+  const [bsRunning, setBsRunning] = useState(false);
+  const [bsLastRun, setBsLastRun] = useState(null);
+  const [scanning, setScanning] = useState(false);
+
+  const runBrainstorm = async () => {
+    setBsRunning(true);
+    setBsResult(null);
+    showToast("Maiko is thinking...", "normal");
+    try {
+      const res = await api.runSkill("brainstorm", {
+        context: {
+          pupdates: JSON.stringify(pupdates.slice(0, 20), null, 2),
+          tasks: JSON.stringify(tasks.slice(0, 20), null, 2),
+        },
+      });
+      setBsResult(res);
+      setBsLastRun(new Date());
+      showToast(res.success ? "Brainstorm complete!" : "Brainstorm had trouble", res.success ? "normal" : "high");
+    } catch (err) {
+      setBsResult({ success: false, error: err.message, output: "" });
+      showToast("Something went wrong", "high");
+    }
+    setBsRunning(false);
+  };
+
+  const handleScan = async () => {
+    setScanning(true);
+    try {
+      await api.runScan();
+      await fetchPupdates();
+    } catch (err) { console.error(err); }
+    setScanning(false);
+  };
 
   const fetchPupdates = async () => {
     setLoading(true);
@@ -81,6 +119,46 @@ export default function Inbox() {
     }
   };
 
+  const handleReviewPR = async (p) => {
+    setReviewing(p.id);
+    showToast("Maiko is reviewing the PR...", "normal");
+    try {
+      const repo = p.metadata?.repo || "";
+      const number = p.metadata?.number || "";
+      const result = await api.runSkill("investigate", {
+        context: {
+          query: `Review PR #${number} in ${repo}: ${p.title}`,
+          context: `URL: ${p.url || ""}\n${p.body || ""}`,
+          pupdates: "[]", tasks: "[]", calendar: "[]",
+        },
+      });
+      // Check for permission/tool blocked errors in the output
+      const output = result.output || result.error || "";
+      const blockedMatch = output.match(/blocked by permissions|permission.*denied|not allowed|allowedTools/i);
+      const toolMatch = output.match(/`?(Bash|WebFetch|WebSearch|mcp__\w+|gh)`?/g);
+      if (!result.success && (blockedMatch || toolMatch)) {
+        const tools = toolMatch ? [...new Set(toolMatch.map(t => t.replace(/`/g, "")))].join(", ") : "Bash, WebFetch";
+        setReviewResult({
+          pupdate: p,
+          success: false,
+          output: `The agent needs tool permissions to review this PR.\n\nAdd these to **Settings > Agent Preferences > Allowed Tools**:\n\n\`${tools}\`\n\nThen try again.`,
+        });
+        showToast("Agent needs tool permissions — check the review panel", "high");
+      } else {
+        setReviewResult({ pupdate: p, ...result });
+        showToast(result.success ? "Review ready!" : "Couldn't review", result.success ? "normal" : "high");
+      }
+    } catch (err) {
+      setReviewResult({
+        pupdate: p,
+        success: false,
+        output: `Review failed: ${err.message}\n\nMake sure the backend is running and Claude Code is installed.`,
+      });
+      showToast("Review failed: " + err.message, "high");
+    }
+    setReviewing(null);
+  };
+
   const currentFilter = TABS.find((t) => t.id === tab)?.filter || (() => true);
   const filtered = pupdates.filter(currentFilter);
 
@@ -101,10 +179,9 @@ export default function Inbox() {
             onClick={() => setTab(t.id)}
           >
             {t.label}
-            {tabCounts[t.id] > 0 && <span className="tab-badge">{tabCounts[t.id]}</span>}
           </button>
         ))}
-        {filtered.length > 0 && tab !== "approvals" && (
+        {filtered.length > 0 && tab !== "from_maiko" && (
           <button
             className="btn btn-sm btn-danger"
             style={{ marginLeft: "auto" }}
@@ -118,23 +195,143 @@ export default function Inbox() {
         )}
       </div>
 
-      {loading ? (
+      {tab === "from_maiko" ? (
+        <div style={{ padding: "8px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <button className="btn btn-sm" onClick={handleScan} disabled={scanning}>
+              <RefreshCw size={10} className={scanning ? "spin" : ""} /> {scanning ? "Scanning..." : "Run Scan"}
+            </button>
+            <button className="btn btn-sm" onClick={async () => {
+              setBsRunning(true);
+              setBsResult(null);
+              showToast("Maiko is thinking...", "normal");
+              try {
+                const res = await api.runSkill("brainstorm", {
+                  context: {
+                    pupdates: JSON.stringify(pupdates.slice(0, 20), null, 2),
+                    tasks: JSON.stringify(tasks.slice(0, 20), null, 2),
+                  },
+                });
+                setBsResult(res);
+                setBsLastRun(new Date());
+                if (res.success) {
+                  await api.createPupdate({
+                    id: "bs-" + Date.now(),
+                    source: "maiko",
+                    type: "brainstorm_result",
+                    title: "Brainstorm Results",
+                    body: res.output,
+                    priority: "normal",
+                  });
+                  await fetchPupdates();
+                  showToast("Brainstorm complete!", "normal");
+                } else {
+                  showToast("Brainstorm had trouble", "high");
+                }
+              } catch (err) {
+                setBsResult({ success: false, error: err.message, output: "" });
+                showToast("Something went wrong", "high");
+              }
+              setBsRunning(false);
+            }} disabled={bsRunning}>
+              <Brain size={10} /> {bsRunning ? "Running..." : "Run Brainstorm"}
+            </button>
+          </div>
+          {filtered.length === 0 ? (
+            <div className="empty-state">
+              <InboxIcon size={36} className="empty-icon" />
+              <div className="empty-title">Nothing from Maiko yet</div>
+              <div className="empty-sub">Run a scan or brainstorm to get suggestions, approvals, and ideas</div>
+            </div>
+          ) : (
+            <div className="card-list card-list-container">
+              {filtered.map((p) => (
+                <div
+                  key={p.id}
+                  className={`card pupdate-card ${p.priority} ${p.read ? "read" : ""} ${expanded === p.id ? "expanded" : ""}`}
+                  onClick={() => toggleExpand(p)}
+                >
+                  <div className="card-left-bar" />
+                  <div className="card-source-icon">
+                    {sourceIcon(p.source)}
+                  </div>
+                  <div className="card-content">
+                    <div className="card-top">
+                      <span className="card-source">{p.source}</span>
+                      <span className="card-title">
+                        {p.url ? <a href={p.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{p.title}</a> : p.title}
+                      </span>
+                    </div>
+                    <div className="card-meta">
+                      <span className="card-type">{p.type?.replace(/_/g, " ")}</span>
+                      <span className="card-time">{new Date(p.timestamp).toLocaleString()}</span>
+                      {p.actionable && <button className="card-action-hint" onClick={(e) => { e.stopPropagation(); toggleExpand(p); }}>{p.action_hint}</button>}
+                    </div>
+
+                    {expanded === p.id && p.body && (
+                      <div className="rich-body">{p.body}</div>
+                    )}
+
+                    {expanded === p.id && (
+                      <div className="card-inline-actions" onClick={(e) => e.stopPropagation()}>
+                        {p.type === "pr_review_requested" && (
+                          <button className="btn btn-sm btn-action" onClick={() => handleReviewPR(p)} disabled={reviewing === p.id}>
+                            <Eye size={10} /> {reviewing === p.id ? "Reviewing..." : "Review PR"}
+                          </button>
+                        )}
+                        {(p.type === "pr_ci_failed" || p.type === "incident") && (
+                          <button className="btn btn-sm btn-session"><Search size={10} /> Investigate</button>
+                        )}
+                        {p.type !== "suggestion" && (
+                          <button className="btn btn-sm btn-create" onClick={async () => {
+                            try {
+                              await api.createTask({
+                                id: `task-${p.id}`,
+                                title: p.title,
+                                type: "todo",
+                                priority: p.priority,
+                                source_pupdate_id: p.id,
+                                url: p.url || "",
+                                tags: p.tags || [],
+                              });
+                              showToast(`Task created: ${p.title.slice(0, 40)}...`, "normal");
+                              handleMarkRead(p.id);
+                            } catch (err) {
+                              showToast("Couldn't create task", "high");
+                            }
+                          }}><CheckSquare size={10} /> Create Task</button>
+                        )}
+                        {(p.type === "approval" || p.metadata?.needs_approval) && (
+                          <button className="btn btn-sm btn-approve"><FolderKanban size={10} /> Create Project</button>
+                        )}
+                        <button className="btn btn-sm btn-danger" onClick={(e) => handleDismiss(e, p.id)}>
+                          <X size={10} /> Dismiss
+                        </button>
+                        {p.tags?.length > 0 && (
+                          <div className="card-tags-inline">
+                            {p.tags.map((t) => <span key={t} className="tag">{t}</span>)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="card-right">
+                    <button className="btn-ghost btn-dismiss-quick" onClick={(e) => handleDismiss(e, p.id)} title="Dismiss"><X size={12} /></button>
+                    <span className={`card-priority badge ${p.priority}`}>{p.priority}</span>
+                    <ChevronRight size={14} className={`card-chevron ${expanded === p.id ? "open" : ""}`} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : loading ? (
         <p className="page-empty">Loading...</p>
       ) : filtered.length === 0 ? (
         <div className="empty-state">
-          {tab === "approvals" ? (
-            <>
-              <ClipboardCheck size={36} className="empty-icon" />
-              <div className="empty-title">Nothing waiting for approval</div>
-              <div className="empty-sub">Project plans, suggested plans, and drafts will appear here</div>
-            </>
-          ) : (
-            <>
-              <InboxIcon size={36} className="empty-icon" />
-              <div className="empty-title">Nothing here</div>
-              <div className="empty-sub">All clear in this category!</div>
-            </>
-          )}
+          <InboxIcon size={36} className="empty-icon" />
+          <div className="empty-title">Nothing here</div>
+          <div className="empty-sub">All clear in this category!</div>
         </div>
       ) : (
         <div className="card-list card-list-container">
@@ -158,7 +355,7 @@ export default function Inbox() {
                 <div className="card-meta">
                   <span className="card-type">{p.type?.replace(/_/g, " ")}</span>
                   <span className="card-time">{new Date(p.timestamp).toLocaleString()}</span>
-                  {p.actionable && <span className="card-action-hint">{p.action_hint}</span>}
+                  {p.actionable && <button className="card-action-hint" onClick={(e) => { e.stopPropagation(); toggleExpand(p); }}>{p.action_hint}</button>}
                 </div>
 
                 {expanded === p.id && p.body && (
@@ -168,31 +365,9 @@ export default function Inbox() {
                 {/* Inline actions — show when expanded */}
                 {expanded === p.id && (
                   <div className="card-inline-actions" onClick={(e) => e.stopPropagation()}>
-                    {p.url && (
-                      <a href={p.url} target="_blank" rel="noreferrer" className="btn btn-sm">
-                        <ExternalLink size={10} /> Open
-                      </a>
-                    )}
                     {p.type === "pr_review_requested" && (
                       <button className="btn btn-sm btn-action" onClick={async () => {
-                        setReviewing(p.id);
-                        showToast("Maiko is reviewing the PR... 🐕", "normal");
-                        try {
-                          const repo = p.metadata?.repo || "";
-                          const number = p.metadata?.number || "";
-                          const result = await api.runSkill("investigate", {
-                            context: {
-                              query: `Review PR #${number} in ${repo}: ${p.title}`,
-                              context: `URL: ${p.url || ""}\n${p.body || ""}`,
-                              pupdates: "[]", tasks: "[]", calendar: "[]",
-                            },
-                          });
-                          setReviewResult({ pupdate: p, ...result });
-                          showToast(result.success ? "Review ready! 📝" : "Couldn't review", result.success ? "normal" : "high");
-                        } catch (err) {
-                          showToast("Review failed: " + err.message, "high");
-                        }
-                        setReviewing(null);
+                        handleReviewPR(p);
                       }} disabled={reviewing === p.id}>
                         <Eye size={10} /> {reviewing === p.id ? "Reviewing..." : "Review PR"}
                       </button>
@@ -200,7 +375,7 @@ export default function Inbox() {
                     {(p.type === "pr_ci_failed" || p.type === "incident") && (
                       <button className="btn btn-sm btn-session"><Search size={10} /> Investigate</button>
                     )}
-                    {p.actionable && p.action_hint?.toLowerCase().includes("task") && (
+                    {p.type !== "suggestion" && (
                       <button className="btn btn-sm btn-create" onClick={async () => {
                         try {
                           await api.createTask({
