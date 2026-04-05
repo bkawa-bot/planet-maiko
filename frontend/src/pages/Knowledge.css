@@ -41,7 +41,9 @@
 .confidence-bar { height: 100%; background: var(--pink); border-radius: 2px; }
 
 .signal-count { font-size: 10px; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
-.learning-rule { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.learning-rule { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.learning-rule:hover { color: var(--pink); }
+.learning-rule.expanded { white-space: normal; overflow: visible; text-overflow: unset; }
 .learning-btns { display: flex; gap: 3px; flex-shrink: 0; }
 
 /* Add learning */

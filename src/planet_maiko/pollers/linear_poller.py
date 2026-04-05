@@ -68,11 +68,13 @@ class LinearPoller(BasePoller):
 
     def _query(self, api_key, query):
         """Execute a GraphQL query against the Linear API."""
+        import certifi
         resp = requests.post(
             LINEAR_API,
             json={"query": query},
             headers={"Authorization": api_key, "Content-Type": "application/json"},
             timeout=30,
+            verify=certifi.where(),
         )
         resp.raise_for_status()
         data = resp.json()
