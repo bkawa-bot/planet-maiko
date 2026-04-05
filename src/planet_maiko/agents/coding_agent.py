@@ -195,6 +195,37 @@ Send one feedback per distinct code pattern (not per file — if the same patter
         f.write(content)
 
 
+def _write_mcp_json(working_path, task_id):
+    """Write .mcp.json so the maiko-channel auto-loads when claude starts."""
+    import json
+
+    # Find the channel script path relative to the planet-maiko install
+    channel_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)
+    ))), "channel", "index.js")
+
+    # Fall back to looking relative to the working path
+    if not os.path.exists(channel_path):
+        channel_path = os.path.join(working_path, "..", "..", "channel", "index.js")
+
+    mcp_config = {
+        "mcpServers": {
+            "maiko-channel": {
+                "command": "node",
+                "args": [channel_path],
+                "env": {
+                    "MAIKO_TASK_ID": task_id,
+                    "MAIKO_API_URL": "http://localhost:8420/api",
+                    "MAIKO_POLL_MS": "5000",
+                },
+            }
+        }
+    }
+
+    with open(os.path.join(working_path, ".mcp.json"), "w") as f:
+        json.dump(mcp_config, f, indent=2)
+
+
 def _kickoff_agent(agent_id, worktree_path, task_id):
     """Start the agent via the configured runtime."""
     try:
@@ -277,6 +308,7 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     # Write task files
     _write_task_file(working_path, task_id, task_title, prompt)
     _write_claude_md(working_path, task_id, task_title)
+    _write_mcp_json(working_path, task_id)
 
     agent_id = f"agent-{branch_name}"
 
@@ -334,7 +366,8 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
         "status": "ready",
         "prepared_at": datetime.now(timezone.utc).isoformat(),
         "launch_instructions": {
-            "claude_code": f"cd {working_path} && claude",
+            "claude_code": f"cd {working_path} && claude --dangerously-load-development-channels server:maiko-channel",
+            "claude_code_simple": f"cd {working_path} && claude",
             "aider": f"cd {working_path} && aider",
             "manual": f"cd {working_path} && cat TASK.md",
         },
