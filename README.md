@@ -45,7 +45,16 @@ pip install -e .
 cd frontend
 npm install
 cd ..
+
+# Agent channel (for real-time agent communication)
+cd channel
+npm install
+cd ..
 ```
+
+> **Mac users:** If you see SSL errors with Linear or other integrations, run:
+> `pip install --upgrade certifi` and ensure your Python has certificates installed
+> (run `open /Applications/Python\ 3.12/Install\ Certificates.command` if needed).
 
 ### Run
 
@@ -102,16 +111,24 @@ Train agents manually on the Training page, or let the brain cycle do it automat
 
 ### Agent Communication
 
-Agents get **prepared** in git worktrees with `TASK.md` and `CLAUDE.md`, then you launch them:
+Agents get **prepared** in git worktrees with `TASK.md`, `CLAUDE.md`, and `.mcp.json`, then you launch them:
 
 ```bash
 # Planet Maiko prepares the worktree
 POST /api/agents/prepare
 
-# You launch the agent
-cd .maiko-worktrees/maiko-fix-auth && claude
+# Launch with real-time Maiko channel (recommended)
+cd .maiko-worktrees/maiko-fix-auth
+claude --dangerously-load-development-channels server:maiko-channel
 
-# Agent checks inbox and reports back
+# Or launch without the channel (uses polling fallback)
+cd .maiko-worktrees/maiko-fix-auth && claude
+```
+
+**With the channel:** Maiko pushes messages directly into the Claude session — nudges, questions, sleep signals arrive instantly. The agent replies via the `reply` tool.
+
+**Without the channel:** The agent polls manually using the CLI:
+```bash
 maiko inbox
 maiko report "Fixed the retry logic"
 maiko task done
