@@ -21,7 +21,7 @@ def list_tasks():
     if project_id:
         query = query.filter_by(project_id=project_id)
 
-    tasks = query.order_by(Task.created_at.desc()).all()
+    tasks = query.order_by(Task.created_at.asc()).all()
     return jsonify([t.to_dict() for t in tasks])
 
 
