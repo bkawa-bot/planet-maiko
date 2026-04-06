@@ -230,9 +230,22 @@ def get_status():
     global _status_cache, _status_cache_at
     if _status_cache and (time.time() - _status_cache_at) < 5:
         return _status_cache
+    # Count pending items
+    pending = {}
+    try:
+        from planet_maiko.models.pupdate import Pupdate
+        from planet_maiko.models.signal import Signal
+        from planet_maiko.models.learning import Learning
+        pending["unprocessed_pupdates"] = Pupdate.query.filter_by(brain_processed=False, dismissed=False).count()
+        pending["unclassified_signals"] = Signal.query.filter_by(category="pattern", aggregated=False).count()
+        pending["pending_learnings"] = Learning.query.filter_by(status="pending").count()
+    except Exception:
+        pass
+
     _status_cache = {
         "last_cycle": _last_cycle.isoformat() if _last_cycle else None,
         "cycle_count": _cycle_count,
+        "pending": pending,
     }
     _status_cache_at = time.time()
     return _status_cache

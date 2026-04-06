@@ -37,6 +37,11 @@ export default function Footer() {
         <span className="footer-dot brain" />
         <Brain size={10} />
         <span>{brainStatus?.cycle_count ? `${brainStatus.cycle_count} cycles` : "active"}</span>
+        {brainStatus?.pending && Object.values(brainStatus.pending).some(v => v > 0) && (
+          <span className="footer-pending" title={`${brainStatus.pending.unprocessed_pupdates || 0} pupdates, ${brainStatus.pending.unclassified_signals || 0} signals, ${brainStatus.pending.pending_learnings || 0} learnings`}>
+            {Object.values(brainStatus.pending).reduce((a, b) => a + b, 0)} pending
+          </span>
+        )}
       </div>
 
       <div className="footer-section">

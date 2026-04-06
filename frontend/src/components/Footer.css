@@ -36,5 +36,10 @@
 .footer-focus.deep_focus { color: var(--urgent); }
 .footer-focus.away { color: var(--low); }
 
+.footer-pending {
+  font-size: 9px; padding: 1px 5px; border-radius: 8px;
+  background: var(--pink-soft); color: var(--pink); font-weight: 600;
+}
+
 .footer-bug { text-decoration: none; color: var(--text-muted); margin-left: auto; }
 .footer-bug:hover { color: var(--urgent); }
