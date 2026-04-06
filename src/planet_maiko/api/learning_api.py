@@ -128,36 +128,79 @@ def edit_learning(learning_id):
 
 @learning_bp.route("/learnings/backfill", methods=["POST"])
 def backfill_learnings():
-    """Scan past PRs for review comments and create learnings.
-
-    Runs the full pipeline: bootstrap → classify → aggregate.
-    """
+    """Scan past PRs, synthesize comments into clean learnings via LLM."""
     from planet_maiko.brain.learning.bootstrap import bootstrap_from_prs
-    from planet_maiko.brain.learning.classifier import classify_unclassified_signals
     from planet_maiko.brain.learning.processor import process_signals
 
     data = request.get_json(silent=True) or {}
     limit = data.get("limit", 20)
 
+    # Step 1: Pull raw PR comments as signals
     signals_created = bootstrap_from_prs(limit=limit)
 
-    classified = 0
-    classify_error = None
-    try:
-        classified = classify_unclassified_signals(batch_size=50)
-    except Exception as e:
-        classify_error = str(e)
+    if signals_created == 0:
+        return jsonify({
+            "signals_created": 0, "synthesized": 0,
+            "new_learnings": 0, "graduated": 0,
+        })
 
+    # Step 2: LLM synthesis — transform raw comments into clean learnings
+    synthesized = 0
+    synth_error = None
+    try:
+        from planet_maiko.models.signal import Signal as BackfillSignal
+        from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
+        from planet_maiko.agents.routing import resolve_model
+
+        raw = BackfillSignal.query.filter_by(
+            source_type="pr_comment", aggregated=False
+        ).all()
+
+        if raw:
+            # Build batch prompt
+            comments = []
+            for i, s in enumerate(raw[:20]):
+                comments.append(f"{i+1}. [{s.repo or 'unknown'}] {s.text[:300]}")
+
+            prompt = f"""Synthesize these PR review comments into clean, actionable coding rules.
+
+For each comment, extract the core lesson as a short rule (one sentence).
+Also classify each into a category.
+
+Comments:
+{chr(10).join(comments)}
+
+Categories: security, error_handling, testing, performance, api_design,
+architecture, null_safety, style, naming, docs, pattern, domain_knowledge
+
+Respond as JSON: {{"rules": [{{"index": 1, "rule": "Always validate input lengths at API boundaries", "category": "security"}}, ...]}}"""
+
+            runtime = ClaudeCodeRuntime()
+            result = runtime.send_json(prompt, timeout=90, model=resolve_model("classify"))
+
+            if result.get("parsed") and "rules" in result["parsed"]:
+                for rule_data in result["parsed"]["rules"]:
+                    idx = rule_data.get("index", 0) - 1
+                    if 0 <= idx < len(raw):
+                        raw[idx].text = rule_data.get("rule", raw[idx].text)
+                        raw[idx].category = rule_data.get("category", "pattern")
+                        synthesized += 1
+
+                db.session.commit()
+    except Exception as e:
+        synth_error = str(e)
+
+    # Step 3: Aggregate into learnings
     learning_results = process_signals()
 
     result = {
         "signals_created": signals_created,
-        "classified": classified,
+        "synthesized": synthesized,
         "new_learnings": learning_results.get("new_learnings", 0),
         "graduated": learning_results.get("graduated", 0),
     }
-    if classify_error:
-        result["classify_note"] = f"LLM classification unavailable: {classify_error}. Signals saved but not categorized yet."
+    if synth_error:
+        result["synth_note"] = f"LLM synthesis issue: {synth_error}"
     return jsonify(result)
 
 
