@@ -42,6 +42,42 @@ def run(app):
         from planet_maiko.agents.monitor import process_agent_pupdates
         results["agents"] = process_agent_pupdates()
 
+        # Phase 1.5: Auto-complete review tasks when PRs are approved/merged
+        try:
+            from planet_maiko.models.pupdate import Pupdate as ReviewPupdate
+            from planet_maiko.models.task import Task as ReviewTask
+            from planet_maiko.database import db as review_db
+
+            approved_prs = ReviewPupdate.query.filter(
+                ReviewPupdate.type.in_(["pr_approved", "pr_merged"]),
+                ReviewPupdate.brain_processed == False,
+            ).all()
+
+            completed_count = 0
+            for p in approved_prs:
+                repo = (p.extra or {}).get("repo", "")
+                pr_number = (p.extra or {}).get("number", "")
+                if repo and pr_number:
+                    # Find matching review tasks
+                    review_tasks = ReviewTask.query.filter(
+                        ReviewTask.type == "review",
+                        ReviewTask.status.in_(["new", "in_progress"]),
+                    ).all()
+                    for task in review_tasks:
+                        task_repo = (task.extra or {}).get("repo", "")
+                        task_number = str((task.extra or {}).get("number", ""))
+                        # Match by repo+number or by URL containing the PR
+                        if (task_repo == repo and task_number == str(pr_number)) or \
+                           (task.url and f"/{pr_number}" in task.url and repo.split("/")[-1] in (task.url or "")):
+                            task.status = "done"
+                            completed_count += 1
+
+            if completed_count:
+                review_db.session.commit()
+            results["auto_complete_reviews"] = {"completed": completed_count}
+        except Exception as e:
+            logger.debug(f"Review auto-complete skipped: {e}")
+
         # Phase 2: Check for conflicts between active agents + attempt A2A resolution
         from planet_maiko.brain.awareness.conflicts import detect_conflicts, send_conflict_warnings, resolve_conflicts
         from planet_maiko.agents.coding_agent import list_prepared
