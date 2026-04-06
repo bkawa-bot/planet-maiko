@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import AssignAgentModal from "../components/AssignAgentModal";
 import {
-  CheckSquare, Plus, FolderPlus, Pin, PinOff, ExternalLink,
+  CheckSquare, Plus, FolderPlus, FolderOpen, Pin, PinOff, ExternalLink,
   ChevronDown, ChevronRight, Folder, GitBranch, Clock, Bot,
   Play, X, Download, Sparkles, Trash2, Pencil, Brain,
 } from "lucide-react";
