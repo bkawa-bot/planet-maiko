@@ -164,4 +164,10 @@ Rules:
     if not isinstance(tasks, list):
         tasks = [tasks]
 
+    # Save to project metadata so they survive page navigation
+    meta = dict(project.extra or {}) if project.extra else {}
+    meta["generated_tasks"] = tasks
+    project.extra = meta
+    db.session.commit()
+
     return jsonify({"tasks": tasks, "project_id": project_id})

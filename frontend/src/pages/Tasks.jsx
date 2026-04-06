@@ -247,6 +247,14 @@ export default function Tasks() {
                   }} disabled={generating === project.id}>
                     <Sparkles size={10} /> {generating === project.id ? "..." : "Generate Tasks"}
                   </button>
+                  {(project.metadata?.generated_tasks || project.extra?.generated_tasks)?.length > 0 && (
+                    <button className="btn btn-sm btn-approve" onClick={(e) => {
+                      e.stopPropagation();
+                      setGeneratedTasks({ project_id: project.id, tasks: project.metadata?.generated_tasks || project.extra?.generated_tasks });
+                    }}>
+                      <Sparkles size={10} /> Review ({(project.metadata?.generated_tasks || project.extra?.generated_tasks).length} ideas)
+                    </button>
+                  )}
                   <button className="btn btn-sm btn-action" onClick={(e) => {
                     e.stopPropagation();
                     setAskingMaiko({ id: project.id, title: project.title, type: "project", status: "active", project_id: project.id });
@@ -342,7 +350,11 @@ export default function Tasks() {
                       metadata: gt.description ? { description: gt.description } : undefined,
                     });
                   }
-                  showToast(`Created ${generatedTasks.tasks.length} task(s)! 🎉`, "normal");
+                  // Clear generated tasks from project metadata
+                  try {
+                    await api.updateProject(generatedTasks.project_id, { metadata: { generated_tasks: null } });
+                  } catch (e) {}
+                  showToast(`Created ${generatedTasks.tasks.length} task(s)!`, "normal");
                   setGeneratedTasks(null);
                   fetchData();
                 }}>
