@@ -244,6 +244,97 @@ def run(app):
             logger.warning(f"[cycle] Skill runner error: {e}")
             results["scheduled_skills"] = []
 
+        # Phase 9: Auto-investigate CI failures and incidents
+        try:
+            from planet_maiko.models.pupdate import Pupdate as InvestPupdate
+            investigate_types = ["pr_ci_failed", "incident", "error_spike"]
+            to_investigate = InvestPupdate.query.filter(
+                InvestPupdate.type.in_(investigate_types),
+                InvestPupdate.brain_processed == True,
+                InvestPupdate.dismissed == False,
+                ~InvestPupdate.tags.contains("auto_investigated"),
+            ).limit(2).all()
+
+            investigated = 0
+            if to_investigate:
+                from planet_maiko.agents.brain_session import run_skill
+                for p in to_investigate:
+                    try:
+                        run_skill("investigate", context={
+                            "query": f"Investigate: {p.title}",
+                            "context": f"Source: {p.source}\nURL: {p.url or ''}\n{p.body or ''}",
+                            "pupdates": "[]", "tasks": "[]", "calendar": "[]",
+                        })
+                        p.tags = list(p.tags or []) + ["auto_investigated"]
+                        investigated += 1
+                    except Exception:
+                        pass
+                from planet_maiko.database import db as inv_db
+                inv_db.session.commit()
+            results["auto_investigate"] = {"investigated": investigated}
+        except Exception as e:
+            logger.debug(f"Auto-investigate skipped: {e}")
+
+        # Phase 10: Auto-morning-brief (first cycle of the day)
+        try:
+            from planet_maiko.models.skill_result import SkillResult
+            today = datetime.now(timezone.utc).date()
+            existing_brief = SkillResult.query.filter(
+                SkillResult.skill_name == "morning-brief",
+                SkillResult.created_at >= datetime(today.year, today.month, today.day, tzinfo=timezone.utc),
+            ).first()
+
+            if not existing_brief:
+                from planet_maiko.agents.brain_session import run_skill as run_brief
+                brief_result = run_brief("morning-brief", context={
+                    "pupdates": "[]", "tasks": "[]", "calendar": "[]",
+                })
+                if brief_result and brief_result.get("success"):
+                    sr = SkillResult(
+                        skill_name="morning-brief",
+                        title=f"Morning Brief — {today.strftime('%B %d')}",
+                        content=brief_result["output"],
+                    )
+                    from planet_maiko.database import db as brief_db
+                    brief_db.session.add(sr)
+                    brief_db.session.commit()
+                    results["morning_brief"] = {"generated": True}
+                else:
+                    results["morning_brief"] = {"generated": False}
+            else:
+                results["morning_brief"] = {"already_exists": True}
+        except Exception as e:
+            logger.debug(f"Auto morning brief skipped: {e}")
+
+        # Phase 11: Auto-brainstorm (Tuesdays and Thursdays)
+        try:
+            from planet_maiko.models.skill_result import SkillResult as BrainstormResult
+            today_weekday = datetime.now(timezone.utc).weekday()  # 0=Mon, 1=Tue, 3=Thu
+            if today_weekday in (1, 3):  # Tuesday or Thursday
+                today = datetime.now(timezone.utc).date()
+                existing = BrainstormResult.query.filter(
+                    BrainstormResult.skill_name == "brainstorm",
+                    BrainstormResult.created_at >= datetime(today.year, today.month, today.day, tzinfo=timezone.utc),
+                ).first()
+
+                if not existing:
+                    from planet_maiko.agents.brain_session import run_skill as run_brainstorm
+                    bs_result = run_brainstorm("brainstorm", context={
+                        "pupdates": "[]", "tasks": "[]", "calendar": "[]",
+                    })
+                    if bs_result and bs_result.get("success"):
+                        sr = BrainstormResult(
+                            skill_name="brainstorm",
+                            title=f"Brainstorm — {today.strftime('%B %d')}",
+                            content=bs_result["output"],
+                        )
+                        from planet_maiko.database import db as bs_db
+                        bs_db.session.add(sr)
+                        bs_db.session.commit()
+                        results["brainstorm"] = {"generated": True}
+        except Exception as e:
+            logger.debug(f"Auto brainstorm skipped: {e}")
+
         # Fire plugin hooks for all completed phases
         from planet_maiko.plugins.loader import fire_hook
         for phase_name, phase_results in results.items():
