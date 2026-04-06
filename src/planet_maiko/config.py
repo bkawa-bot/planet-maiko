@@ -32,6 +32,7 @@ DEFAULT_CONFIG = {
     },
     "agents": {
         "custom_instructions": "",  # Added to every agent's CLAUDE.md (your workflow preferences)
+        "branch_prefix": "maiko",   # Prefix for auto-generated branch names (e.g. maiko/fix-auth-bug)
     },
     "brain": {
         "runtime": "claude-code",  # or a custom runtime

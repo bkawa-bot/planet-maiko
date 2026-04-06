@@ -359,6 +359,18 @@ export default function Settings() {
                   />
                 </label>
                 <label>
+                  Branch Prefix
+                  <input
+                    type="text"
+                    value={config.agents?.branch_prefix || "maiko"}
+                    onChange={(e) => updateField("agents", "branch_prefix", e.target.value)}
+                    placeholder="maiko"
+                  />
+                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                    Auto-generated branches will be: prefix/task-title-slug
+                  </span>
+                </label>
+                <label>
                   Allowed Tools (pre-approved for Claude Code sessions)
                   <input
                     type="text"

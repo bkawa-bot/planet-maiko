@@ -361,8 +361,22 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     Returns:
         dict with agent info and launch instructions, or None on failure
     """
-    slug = _slugify(task_id)
-    branch_name = f"{branch_prefix}-{slug}"
+    # Build a descriptive branch name from the task title
+    slug = _slugify(task_title, max_len=50)
+    if not slug:
+        slug = _slugify(task_id)
+
+    # Use configured prefix, or the one passed in (from custom branch name field)
+    if branch_prefix == "maiko":
+        try:
+            from planet_maiko.config import load_config
+            cfg_prefix = load_config().get("agents", {}).get("branch_prefix", "maiko")
+            if cfg_prefix:
+                branch_prefix = cfg_prefix
+        except Exception:
+            pass
+
+    branch_name = f"{branch_prefix}/{slug}"
 
     if use_worktree:
         working_path = _create_worktree(repo_path, branch_name)
