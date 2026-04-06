@@ -59,6 +59,25 @@ class GitHubPoller(BasePoller):
             "--json", "number,title,url,repository,author,createdAt,labels",
         ])
 
+    def _get_merged_prs_for_repos(self, repos):
+        """Get recently merged PRs across all configured repos (for training)."""
+        merged = []
+        for repo in repos:
+            try:
+                result = subprocess.run(
+                    ["gh", "pr", "list", "--repo", repo, "--state", "merged",
+                     "--limit", "5", "--json", "number,title,url,author,mergedAt,labels"],
+                    capture_output=True, text=True, timeout=15,
+                )
+                if result.returncode == 0:
+                    prs = json.loads(result.stdout)
+                    for pr in prs:
+                        pr["_repo"] = repo
+                    merged.extend(prs)
+            except Exception:
+                pass
+        return merged
+
     def _get_pr_reviews(self, repo, pr_number):
         """Get reviews for a specific PR."""
         try:
@@ -149,6 +168,8 @@ class GitHubPoller(BasePoller):
 
         review_requests = self._get_review_requests(username)
         my_prs = self._get_my_prs(username)
+        repos = config.get("repos", [])
+        merged_prs = self._get_merged_prs_for_repos(repos)
 
         # For each of the user's PRs, check review and CI status + comments
         review_comments = []
@@ -173,6 +194,7 @@ class GitHubPoller(BasePoller):
         return {
             "review_requests": review_requests,
             "my_prs": my_prs,
+            "merged_prs": merged_prs,
             "review_comments": review_comments,
         }
 
@@ -296,6 +318,29 @@ class GitHubPoller(BasePoller):
                         "failed_checks": check_names,
                     },
                 })
+
+        # Merged PRs (from all configured repos — for training + task completion)
+        for pr in raw_data.get("merged_prs", []):
+            repo = pr.get("_repo", "")
+            number = pr.get("number")
+            author = pr.get("author", {}).get("login", "unknown") if isinstance(pr.get("author"), dict) else "unknown"
+            labels = [l.get("name", "") for l in pr.get("labels", [])] if pr.get("labels") else []
+            pupdates.append({
+                "source_id": f"merged/{repo}#{number}",
+                "type": "pr_merged",
+                "priority": "low",
+                "title": f"PR merged: {pr.get('title', '')}",
+                "body": f"{author} merged {repo}#{number}",
+                "url": pr.get("url", ""),
+                "actionable": False,
+                "tags": [repo.split("/")[-1]] + labels,
+                "metadata": {
+                    "repo": repo,
+                    "number": number,
+                    "author": author,
+                    "merged_at": pr.get("mergedAt"),
+                },
+            })
 
         return pupdates
 

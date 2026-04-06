@@ -85,7 +85,13 @@ class PollerScheduler:
                     created = poller.run(config, db.session)
                     if created:
                         logger.info(f"[scheduler] {name}: {created} new pupdate(s)")
-                        # Run brain cycle after new pupdates arrive
+
+                    # Run brain cycle if there's new data OR unprocessed items
+                    from planet_maiko.models.pupdate import Pupdate as SchedulerPupdate
+                    unprocessed = SchedulerPupdate.query.filter_by(
+                        brain_processed=False, dismissed=False
+                    ).count()
+                    if created or unprocessed > 0:
                         from planet_maiko.brain.cycle import run as brain_cycle
                         brain_cycle(self.app)
             except Exception as e:
