@@ -215,36 +215,51 @@ def resume_session():
 
 @agents_bp.route("/agents/open-terminal", methods=["POST"])
 def open_terminal():
-    """Open a terminal with claude and an initial prompt at the given path."""
+    """Open a terminal — attach to tmux session if running, or start fresh."""
     import subprocess
     import sys
+    import shutil
 
     data = request.get_json()
     path = data.get("path", "")
-    start_agent = data.get("start_agent", True)
+    task_id = data.get("task_id", "")
 
     if not path or not os.path.isdir(path):
         return jsonify({"error": "Invalid path"}), 400
 
-    initial_prompt = "Read TASK.md and CLAUDE.md in this directory. Begin working on the task following the protocol. Report your status as you go."
-    cmd = f'cd {path} && claude "{initial_prompt}"' if start_agent else f'cd {path}'
+    tmux_path = shutil.which("tmux")
+    session_name = f"maiko-{task_id}" if task_id else ""
+
+    # Check if tmux session exists
+    has_tmux_session = False
+    if tmux_path and session_name:
+        result = subprocess.run(
+            [tmux_path, "has-session", "-t", session_name],
+            capture_output=True,
+        )
+        has_tmux_session = result.returncode == 0
+
+    if has_tmux_session:
+        # Attach to existing tmux session in a new terminal
+        attach_cmd = f"tmux attach -t {session_name}"
+    else:
+        # Start fresh with claude
+        initial_prompt = "Read TASK.md and CLAUDE.md in this directory. Begin working on the task following the protocol."
+        attach_cmd = f'cd {path} && claude "{initial_prompt}"'
 
     try:
         if sys.platform == "darwin":
-            subprocess.Popen([
-                "osascript", "-e",
-                f'tell application "Terminal" to do script "{cmd}"',
-            ])
+            subprocess.Popen(["osascript", "-e", f'tell application "Terminal" to do script "{attach_cmd}"'])
         elif sys.platform == "win32":
-            subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", cmd], shell=True)
+            subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", attach_cmd], shell=True)
         else:
-            for term in ["gnome-terminal", "xterm", "konsole", "xfce4-terminal"]:
+            for term in ["gnome-terminal", "xterm", "konsole"]:
                 try:
-                    subprocess.Popen([term, "--", "bash", "-c", cmd])
+                    subprocess.Popen([term, "--", "bash", "-c", attach_cmd])
                     break
                 except FileNotFoundError:
                     continue
-        return jsonify({"status": "opened", "path": path})
+        return jsonify({"status": "opened", "path": path, "tmux_attached": has_tmux_session})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

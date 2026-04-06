@@ -213,8 +213,8 @@ export default function Agents() {
                       const path = a.working_path || a.extra?.working_path;
                       if (path) {
                         try {
-                          await api.openTerminal(path);
-                          showToast(`Launch claude in the terminal to start the agent`, "normal");
+                          await api.openTerminal(path, a.task_id);
+                          showToast("Launching agent...", "normal");
                         } catch (err) { showToast("Could not open terminal", "high"); }
                       } else {
                         showToast(`Checkout branch: git checkout ${a.branch} && claude`, "normal");
@@ -230,8 +230,8 @@ export default function Agents() {
                         // No session yet — try opening terminal in worktree
                         if (a.working_path) {
                           try {
-                            await api.openTerminal(a.working_path);
-                            showToast("Terminal opened", "normal");
+                            await api.openTerminal(a.working_path, a.task_id);
+                            showToast("Attaching to session...", "normal");
                           } catch (e) { showToast("Could not open session", "high"); }
                         } else {
                           showToast("No session found — agent may not have started yet", "normal");

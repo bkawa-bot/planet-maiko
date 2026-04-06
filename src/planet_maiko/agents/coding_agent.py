@@ -232,39 +232,44 @@ def _write_claude_settings(working_path, task_id, agent_id):
 
 
 def _kickoff_agent(agent_id, worktree_path, task_id):
-    """Start the agent by opening a terminal with claude and an initial prompt."""
-    import sys
+    """Start the agent in a detached tmux session. View with 'View Session'."""
     import shutil
 
     claude_path = shutil.which("claude")
     if not claude_path:
         return {"success": False, "error": "claude CLI not found"}
 
-    # Initial prompt tells Claude to read the task and start working
+    tmux_path = shutil.which("tmux")
     initial_prompt = "Read TASK.md and CLAUDE.md in this directory. Begin working on the task following the protocol. Report your status as you go."
-    launch_cmd = f'cd {worktree_path} && claude "{initial_prompt}"'
+    session_name = f"maiko-{task_id}"
 
     try:
-        if sys.platform == "darwin":
+        if tmux_path:
+            # Launch in detached tmux session
             subprocess.Popen([
-                "osascript", "-e",
-                f'tell application "Terminal" to do script "{launch_cmd}"',
+                tmux_path, "new-session", "-d", "-s", session_name,
+                "-c", worktree_path,
+                f'{claude_path} "{initial_prompt}"',
             ])
-        elif sys.platform == "win32":
-            subprocess.Popen(
-                ["cmd", "/c", "start", "cmd", "/k", launch_cmd],
-                shell=True,
-            )
+            logger.info(f"[agent] Launched in tmux session '{session_name}' for {agent_id}")
+            return {"success": True, "working_path": worktree_path, "tmux_session": session_name}
         else:
-            for term in ["gnome-terminal", "xterm", "konsole"]:
-                try:
-                    subprocess.Popen([term, "--", "bash", "-c", launch_cmd])
-                    break
-                except FileNotFoundError:
-                    continue
-
-        logger.info(f"[agent] Launched claude in terminal for {agent_id} at {worktree_path}")
-        return {"success": True, "working_path": worktree_path}
+            # Fallback: open visible terminal
+            import sys
+            launch_cmd = f'cd {worktree_path} && claude "{initial_prompt}"'
+            if sys.platform == "darwin":
+                subprocess.Popen(["osascript", "-e", f'tell application "Terminal" to do script "{launch_cmd}"'])
+            elif sys.platform == "win32":
+                subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", launch_cmd], shell=True)
+            else:
+                for term in ["gnome-terminal", "xterm", "konsole"]:
+                    try:
+                        subprocess.Popen([term, "--", "bash", "-c", launch_cmd])
+                        break
+                    except FileNotFoundError:
+                        continue
+            logger.info(f"[agent] Launched in terminal for {agent_id} (tmux not available)")
+            return {"success": True, "working_path": worktree_path}
     except Exception as e:
         logger.error(f"[agent] Kickoff failed for {agent_id}: {e}")
         return {"success": False, "error": str(e)}

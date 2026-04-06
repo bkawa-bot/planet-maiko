@@ -185,7 +185,7 @@ export const api = {
   shutdown: () => request("/system/shutdown", { method: "POST" }),
 
   // Agent terminal & sessions
-  openTerminal: (path) => request("/agents/open-terminal", { method: "POST", body: JSON.stringify({ path }) }),
+  openTerminal: (path, taskId) => request("/agents/open-terminal", { method: "POST", body: JSON.stringify({ path, task_id: taskId }) }),
   getAgentSession: (taskId) => request(`/agents/${taskId}/session`),
   resumeAgentSession: (taskId) => request("/agents/resume-session", { method: "POST", body: JSON.stringify({ task_id: taskId }) }),
 
