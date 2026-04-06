@@ -84,8 +84,8 @@ def run(app):
         try:
             prepared = list_prepared()
             worktrees = [
-                {"task_id": a.get("task_id", ""), "worktree_path": a.get("worktree_path", "")}
-                for a in prepared if a.get("worktree_path")
+                {"task_id": a.get("task_id", ""), "worktree_path": a.get("working_path", "")}
+                for a in prepared if a.get("working_path")
             ]
             if len(worktrees) >= 2:
                 conflicts = detect_conflicts(worktrees)

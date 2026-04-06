@@ -495,7 +495,7 @@ def list_prepared():
             "agent_id": p.extra.get("agent_id"),
             "task_id": p.extra.get("task_id"),
             "branch": p.extra.get("branch"),
-            "worktree_path": p.extra.get("worktree_path"),
+            "working_path": p.extra.get("working_path"),
             "prepared_at": p.timestamp.isoformat() if p.timestamp else None,
         }
         for p in agents
