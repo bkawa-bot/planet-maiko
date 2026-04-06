@@ -321,7 +321,7 @@ def _finalize_branch(repo_path):
         return
     try:
         subprocess.run(
-            ["git", "add", "TASK.md", "CLAUDE.md", ".mcp.json", ".maiko-env.json"],
+            ["git", "add", "-f", "TASK.md", "CLAUDE.md", ".mcp.json", ".maiko-env.json", ".claude/"],
             cwd=repo_path, capture_output=True, text=True,
         )
         subprocess.run(
@@ -363,9 +363,12 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
         dict with agent info and launch instructions, or None on failure
     """
     # Build a descriptive branch name from the task title
-    slug = _slugify(task_title, max_len=50)
+    import time as _time
+    slug = _slugify(task_title, max_len=40)
     if not slug:
         slug = _slugify(task_id)
+    # Add short timestamp to avoid collisions
+    slug = f"{slug}-{str(int(_time.time()))[-4:]}"
 
     # Use configured prefix, or the one passed in (from custom branch name field)
     if branch_prefix == "maiko":
@@ -426,7 +429,7 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
 
     mode = "worktree" if use_worktree else "branch"
     notify = Pupdate(
-        id=f"agent-ready-{agent_id}",
+        id=f"agent-ready-{task_id}-{int(datetime.now(timezone.utc).timestamp())}",
         source="maiko",
         source_id=f"agent/{agent_id}",
         type="agent_ready",
