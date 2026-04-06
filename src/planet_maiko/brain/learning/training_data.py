@@ -145,20 +145,20 @@ def _get_review_comments(repo, pr_number):
     """Fetch inline review comments for a PR (with diff hunks)."""
     try:
         result = subprocess.run(
-            ["gh", "api", f"repos/{repo}/pulls/{pr_number}/comments",
-             "--jq", ".[].{body, diff_hunk, path, position, user: .user.login}"],
+            ["gh", "api", f"repos/{repo}/pulls/{pr_number}/comments"],
             capture_output=True, text=True, timeout=15,
         )
         if result.returncode == 0 and result.stdout.strip():
-            # Parse NDJSON output from --jq
-            comments = []
-            for line in result.stdout.strip().split("\n"):
-                if line.strip():
-                    try:
-                        comments.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        pass
-            return comments
+            raw = json.loads(result.stdout)
+            return [
+                {
+                    "body": c.get("body", ""),
+                    "diff_hunk": c.get("diff_hunk", ""),
+                    "path": c.get("path", ""),
+                    "position": c.get("position"),
+                }
+                for c in raw
+            ]
     except Exception as e:
         logger.debug(f"[training-data] No review comments for {repo}#{pr_number}: {e}")
     return []
