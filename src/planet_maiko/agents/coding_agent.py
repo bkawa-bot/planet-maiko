@@ -244,9 +244,19 @@ def _kickoff_agent(agent_id, worktree_path, task_id, branch_name=None):
     initial_prompt = "Read TASK.md and CLAUDE.md in this directory. Begin working on the task following the protocol. Report your status as you go."
     session_name = f"maiko-{task_id}"
 
+    # Pre-approve the MCP channel + user's configured tools
+    allowed_tools = ["mcp__maiko-channel"]
+    try:
+        from planet_maiko.config import load_config
+        user_tools = load_config().get("brain", {}).get("allowed_tools", [])
+        allowed_tools.extend(user_tools)
+    except Exception:
+        pass
+    tools_flags = " ".join(f'--allowedTools "{t}"' for t in allowed_tools)
+
     # Build the launch command — checkout branch first if needed
     checkout = f"git checkout {branch_name} && " if branch_name else ""
-    launch_cmd = f'{checkout}cd {worktree_path} && claude "{initial_prompt}"'
+    launch_cmd = f'{checkout}cd {worktree_path} && claude {tools_flags} "{initial_prompt}"'
 
     try:
         if tmux_path:
