@@ -4,7 +4,8 @@
       <stop offset="0%" stop-color="#0C0E2A"/>
       <stop offset="20%" stop-color="#1A1E4A"/>
       <stop offset="35%" stop-color="#3A3E8A"/>
-      <stop offset="55%" stop-color="#9A5040"/>
+      <stop offset="48%" stop-color="#8A4068"/>
+      <stop offset="58%" stop-color="#D06070"/>
       <stop offset="70%" stop-color="#e87030"/>
       <stop offset="85%" stop-color="#f0c040"/>
       <stop offset="100%" stop-color="#f0c040"/>

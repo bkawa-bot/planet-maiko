@@ -131,7 +131,7 @@ export default function Home() {
 
   const focusState = focus?.current_state || "available";
 
-  const TOTAL_STEPS = 8;
+  const TOTAL_STEPS = 9;
   const isFirstRun = homeConfig && !homeConfig.setup_complete;
 
   const finishSetup = async () => {
@@ -242,8 +242,8 @@ export default function Home() {
             <div className="setup-step setup-step-centered">
               <div className="setup-step-icon tour-icon"><InboxIcon size={36} /></div>
               <h3>Your Inbox</h3>
-              <p>All notifications from GitHub, Linear, Calendar, and Slack land here. Maiko triages them automatically — urgent stuff surfaces, noise gets filtered.</p>
-              <p className="setup-detail">Tabs let you filter by type: PRs, Calendar events, or messages From Maiko. You can dismiss, create tasks, or investigate with one click.</p>
+              <p>All your notifications land here — PRs, calendar events, CI alerts, and whatever integrations you connect. Maiko triages them automatically.</p>
+              <p className="setup-detail">Tabs filter by type. You can dismiss, create tasks, or have Maiko investigate with one click.</p>
               <div className="setup-actions">
                 <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
                 <button className="btn btn-primary" onClick={() => setSetupStep(5)}>Next</button>
@@ -251,13 +251,19 @@ export default function Home() {
             </div>
           )}
 
-          {/* Step 5: Tour — Agents */}
+          {/* Step 5: Tour — Focus Mode */}
           {setupStep === 5 && (
             <div className="setup-step setup-step-centered">
-              <div className="setup-step-icon tour-icon"><Bot size={36} /></div>
-              <h3>Meet Your Agents</h3>
-              <p>Agents are coding assistants that work in isolated git worktrees. Each agent has a unique personality and a set of learnings tuned for specific task types.</p>
-              <p className="setup-detail">New agents ("pups") start with random learnings and improve through training. Over time, they specialize — one gets great at security tasks, another at frontend bugs.</p>
+              <div className="setup-step-icon tour-icon"><Shield size={36} /></div>
+              <h3>Focus Mode</h3>
+              <p>Control which notifications reach you based on how deep in the zone you are. Find it in the top-right of the nav bar.</p>
+              <ul className="setup-checklist">
+                <li><strong>Available</strong> — everything comes through</li>
+                <li><strong>Soft focus</strong> — only high priority and above</li>
+                <li><strong>Deep focus</strong> — only critical and urgent</li>
+                <li><strong>Away</strong> — minimal interruptions</li>
+              </ul>
+              <p className="setup-detail">Held notifications are collected and released as a digest when you switch back.</p>
               <div className="setup-actions">
                 <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
                 <button className="btn btn-primary" onClick={() => setSetupStep(6)}>Next</button>
@@ -265,13 +271,13 @@ export default function Home() {
             </div>
           )}
 
-          {/* Step 6: Tour — Knowledge + Training */}
+          {/* Step 6: Tour — Agents */}
           {setupStep === 6 && (
             <div className="setup-step setup-step-centered">
-              <div className="setup-step-icon tour-icon"><Brain size={36} /></div>
-              <h3>Knowledge + Training</h3>
-              <p>Maiko learns coding patterns from your PR review comments. These "learnings" get injected into agent briefs so they follow your team's conventions.</p>
-              <p className="setup-detail">Use <strong>Knowledge &gt; Backfill from PRs</strong> to scan your existing PR history. Then use the <strong>Training</strong> page to teach agents on real merged PRs.</p>
+              <div className="setup-step-icon tour-icon"><Bot size={36} /></div>
+              <h3>Meet Your Agents</h3>
+              <p>Agents are coding assistants that each carry a personalized set of learnings tuned for specific task types. They work in isolated git worktrees.</p>
+              <p className="setup-detail">New agents ("pups") explore with random learnings. Through training, they specialize and rank up.</p>
               <div className="setup-actions">
                 <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
                 <button className="btn btn-primary" onClick={() => setSetupStep(7)}>Next</button>
@@ -279,17 +285,31 @@ export default function Home() {
             </div>
           )}
 
-          {/* Step 7: Tour — Done */}
+          {/* Step 7: Tour — Knowledge + Training */}
           {setupStep === 7 && (
+            <div className="setup-step setup-step-centered">
+              <div className="setup-step-icon tour-icon"><Brain size={36} /></div>
+              <h3>Knowledge + Training</h3>
+              <p>Maiko learns coding patterns from your PR review comments. These get injected into agent briefs so they follow your team's conventions.</p>
+              <p className="setup-detail">Use <strong>Knowledge &gt; Backfill from PRs</strong> to scan your history. Then <strong>Training</strong> to teach agents on real merged PRs.</p>
+              <div className="setup-actions">
+                <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
+                <button className="btn btn-primary" onClick={() => setSetupStep(8)}>Next</button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 8: Tour — Done */}
+          {setupStep === 8 && (
             <div className="setup-step setup-step-centered">
               <div className="setup-step-icon tour-icon"><Sparkles size={36} /></div>
               <h3>You're All Set!</h3>
               <p>Here's what to do next:</p>
               <ul className="setup-checklist">
+                <li><strong>Connect integrations</strong> — Go to Settings to add Linear, Calendar, or other services</li>
                 <li><strong>Backfill knowledge</strong> — Go to Knowledge and click "Backfill from PRs"</li>
                 <li><strong>Create an agent</strong> — Visit Agents and click "New Agent"</li>
                 <li><strong>Train it</strong> — Go to Training, pick a merged PR, and run a session</li>
-                <li><strong>Run a morning brief</strong> — Hit the button on the Home page</li>
               </ul>
               <button className="btn btn-primary" onClick={finishSetup} style={{ marginTop: 16 }}>
                 <Rocket size={14} /> Go to Dashboard
@@ -355,7 +375,7 @@ export default function Home() {
             </div>
             {schedule && schedule.blocks?.length > 0 ? (
               <div className="focus-tasks">
-                {schedule.blocks[0].tasks.slice(0, 5).map((t) => {
+                {schedule.blocks[0].tasks.slice(0, 3).map((t) => {
                   const statusColor = {
                     new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
                     review: "#a78bfa", done: "#4ade80", cancelled: "#6b7280",

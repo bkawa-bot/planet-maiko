@@ -27,6 +27,7 @@ export default function Agents() {
   const [conflicts, setConflicts] = useState([]);
   const [showArchived, setShowArchived] = useState(false);
   const [allLearnings, setAllLearnings] = useState({});
+  const [contextSetModal, setContextSetModal] = useState(null);
 
   // Pack Insights (Gathering) state
   const [eodState, setEodState] = useState(null);
@@ -218,9 +219,9 @@ export default function Agents() {
                         <Terminal size={12} /> Terminal
                       </button>
                     )}
-                    <button className="btn btn-sm" onClick={() => window.open("https://claude.ai/code", "claude-rc", "width=1200,height=800")} title="Open Claude Code web UI to view/steer agent sessions">
+                    <a className="btn btn-sm" href="https://claude.ai/code" target="_blank" rel="noreferrer" title="Open Claude Code web UI to view/steer agent sessions">
                       <ExternalLink size={12} /> View Session
-                    </button>
+                    </a>
                     <button className="btn btn-sm" onClick={() => loadThread(a.task_id)}>
                       <MessageCircle size={12} /> Messages
                     </button>
@@ -387,29 +388,11 @@ export default function Agents() {
                       <div className="strategy-stats-row">
                         <span className="strategy-stat"><CheckSquare size={10} /> {p.tasks_completed} done</span>
                         <span className="strategy-stat"><X size={10} /> {p.tasks_failed} failed</span>
-                        <span className="strategy-stat"><Brain size={10} /> {p.context_set?.length || 0} learnings</span>
+                        <span className="strategy-stat" style={{ cursor: p.context_set?.length ? "pointer" : "default", color: p.context_set?.length ? "var(--pink)" : undefined }} onClick={(e) => { if (p.context_set?.length) { e.stopPropagation(); setContextSetModal(p); } }}>
+                          <Brain size={10} /> {p.context_set?.length || 0} learnings
+                        </span>
                       </div>
 
-                      {p.context_set?.length > 0 && (
-                        <div className="strategy-section context-set-section">
-                          <div className="strategy-section-label"><Brain size={10} /> Context Set</div>
-                          <div className="context-set-list">
-                            {p.context_set.map((lid) => {
-                              const l = allLearnings[lid];
-                              return l ? (
-                                <div key={lid} className="context-set-item">
-                                  <span className="context-set-cat">{l.category?.replace(/_/g, " ")}</span>
-                                  <span className="context-set-rule">{l.rule}</span>
-                                </div>
-                              ) : (
-                                <div key={lid} className="context-set-item">
-                                  <span className="context-set-rule" style={{ color: "var(--text-muted)" }}>Learning #{lid}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
 
                       <div className="strategy-card-actions">
                         {p.archived ? (
@@ -431,6 +414,31 @@ export default function Agents() {
                 })}
               </div>
             )}
+
+          {contextSetModal && (
+            <div className="modal-overlay" onClick={() => setContextSetModal(null)}>
+              <div className="info-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                  <Brain size={16} /> {contextSetModal.display_name}'s Context Set
+                  <span style={{ flex: 1 }} />
+                  <button className="btn btn-sm" onClick={() => setContextSetModal(null)} style={{ border: "none", padding: 4 }}><X size={14} /></button>
+                </div>
+                <div className="modal-body">
+                  <div className="context-set-list">
+                    {(contextSetModal.context_set || []).map((lid) => {
+                      const l = allLearnings[lid];
+                      return (
+                        <div key={lid} className="context-set-item">
+                          <span className="context-set-cat">{l?.category?.replace(/_/g, " ") || "unknown"}</span>
+                          <span className="context-set-rule" style={{ whiteSpace: "normal" }}>{l?.rule || `Learning #${lid}`}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           </div>
         );

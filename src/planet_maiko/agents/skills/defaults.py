@@ -173,7 +173,7 @@ Focus on actionable findings, not style preferences.""",
     },
     {
         "id": "verify",
-        "name": "Post-Merge Verify",
+        "name": "Verify Changes",
         "description": "Check health after a merge or deploy — CI, errors, dependencies",
         "icon": "shield",
         "mcps": [],

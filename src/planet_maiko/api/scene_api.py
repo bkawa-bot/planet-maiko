@@ -91,9 +91,12 @@ def _fetch_weather(lat, lon):
         logger.info("Fetched weather from Open-Meteo: %s", data)
         return data
 
-    except Exception:
-        logger.warning("Failed to fetch weather from Open-Meteo, using defaults")
-        return None
+    except Exception as e:
+        logger.warning(f"Failed to fetch weather from Open-Meteo: {e}")
+        # Cache the fallback too so we don't keep retrying on failure
+        data = {"weather": "clear", "temperature_f": 70}
+        _weather_cache[cache_key] = {"data": data, "fetched_at": time.time()}
+        return data
 
 
 def _get_weather_for_scene():

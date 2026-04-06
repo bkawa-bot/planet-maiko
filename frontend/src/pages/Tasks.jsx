@@ -330,9 +330,10 @@ export default function Tasks() {
               <div style={{ display: "flex", gap: 6 }}>
                 <button className="btn" onClick={() => setGeneratedTasks(null)}>Cancel</button>
                 <button className="btn btn-primary" onClick={async () => {
-                  for (const gt of generatedTasks.tasks) {
+                  for (let idx = 0; idx < generatedTasks.tasks.length; idx++) {
+                    const gt = generatedTasks.tasks[idx];
                     await api.createTask({
-                      id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                      id: `task-${Date.now()}-${String(idx).padStart(3, "0")}`,
                       title: gt.title,
                       type: gt.type || "todo",
                       priority: gt.priority || "normal",
@@ -482,7 +483,7 @@ export default function Tasks() {
                     setMaikoRunning(false);
                   }}
                 >
-                  <Brain size={12} /> {maikoRunning ? "Thinking..." : "Ask Maiko"}
+                  <Brain size={12} /> {maikoRunning ? "Maiko will get back to you in your inbox!" : "Ask Maiko"}
                 </button>
               </div>
               {maikoResult && (

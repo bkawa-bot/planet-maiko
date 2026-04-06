@@ -142,15 +142,24 @@ def assign_agent():
 
     full_prompt = "\n".join(prompt_parts)
 
-    result = prepare(
-        task_id=task_id,
-        task_title=task.title,
-        prompt=full_prompt,
-        repo_path=repo_path,
-        branch_prefix="maiko",
-        auto_kickoff=auto_kickoff,
-        use_worktree=use_worktree,
-    )
+    # Validate repo path exists and is a git repo
+    if not os.path.isdir(repo_path):
+        return jsonify({"error": f"Repository path not found: {repo_path}"}), 400
+    if not os.path.isdir(os.path.join(repo_path, ".git")):
+        return jsonify({"error": f"Not a git repository: {repo_path}"}), 400
+
+    try:
+        result = prepare(
+            task_id=task_id,
+            task_title=task.title,
+            prompt=full_prompt,
+            repo_path=repo_path,
+            branch_prefix="maiko",
+            auto_kickoff=auto_kickoff,
+            use_worktree=use_worktree,
+        )
+    except Exception as e:
+        return jsonify({"error": f"Agent preparation failed: {str(e)}"}), 500
 
     if not result:
         return jsonify({"error": "Failed to prepare agent"}), 500

@@ -253,7 +253,9 @@ def recommend_agent(repo=None, task_type=None, categories=None):
         list of {profile, score, reasons, gap_detected} sorted by score descending.
         If gap_detected is True for all, suggests creating a new agent.
     """
-    profiles = AgentProfile.query.all()
+    profiles = AgentProfile.query.filter(
+        (AgentProfile.archived == False) | (AgentProfile.archived == None)
+    ).all()
 
     if not profiles:
         return [{"gap_detected": True, "reason": "No agents exist yet"}]
