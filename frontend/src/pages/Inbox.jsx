@@ -301,9 +301,20 @@ export default function Inbox() {
                             }
                           }}><CheckSquare size={10} /> Create Task</button>
                         )}
-                        {(p.type === "approval" || p.metadata?.needs_approval) && (
-                          <button className="btn btn-sm btn-approve"><FolderKanban size={10} /> Create Project</button>
-                        )}
+                        <button className="btn btn-sm btn-approve" onClick={async () => {
+                          try {
+                            await api.createProject({
+                              id: `proj-${p.id}`,
+                              title: p.title,
+                              description: p.body || "",
+                              priority: p.priority || "normal",
+                            });
+                            showToast(`Project created: ${p.title.slice(0, 40)}...`, "normal");
+                            handleMarkRead(p.id);
+                          } catch (err) {
+                            showToast("Couldn't create project", "high");
+                          }
+                        }}><FolderKanban size={10} /> Create Project</button>
                         <button className="btn btn-sm btn-danger" onClick={(e) => handleDismiss(e, p.id)}>
                           <X size={10} /> Dismiss
                         </button>
@@ -394,9 +405,20 @@ export default function Inbox() {
                         }
                       }}><CheckSquare size={10} /> Create Task</button>
                     )}
-                    {(p.type === "approval" || p.metadata?.needs_approval) && (
-                      <button className="btn btn-sm btn-approve"><FolderKanban size={10} /> Create Project</button>
-                    )}
+                    <button className="btn btn-sm btn-approve" onClick={async () => {
+                      try {
+                        await api.createProject({
+                          id: `proj-${p.id}`,
+                          title: p.title,
+                          description: p.body || "",
+                          priority: p.priority || "normal",
+                        });
+                        showToast(`Project created: ${p.title.slice(0, 40)}...`, "normal");
+                        handleMarkRead(p.id);
+                      } catch (err) {
+                        showToast("Couldn't create project", "high");
+                      }
+                    }}><FolderKanban size={10} /> Create Project</button>
                     <button className="btn btn-sm btn-danger" onClick={(e) => handleDismiss(e, p.id)}>
                       <X size={10} /> Dismiss
                     </button>

@@ -100,6 +100,7 @@ def assign_agent():
     repo_path = data.get("repo_path", "")
     use_worktree = data.get("use_worktree", True)
     auto_kickoff = data.get("auto_kickoff", False)
+    branch_name = data.get("branch_name")
 
     if not task_id or not profile_id:
         return jsonify({"error": "task_id and profile_id are required"}), 400
@@ -154,7 +155,7 @@ def assign_agent():
             task_title=task.title,
             prompt=full_prompt,
             repo_path=repo_path,
-            branch_prefix="maiko",
+            branch_prefix=branch_name or "maiko",
             auto_kickoff=auto_kickoff,
             use_worktree=use_worktree,
         )

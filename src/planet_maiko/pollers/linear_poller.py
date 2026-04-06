@@ -110,7 +110,7 @@ class LinearPoller(BasePoller):
                 "type": "linear_assigned",
                 "priority": priority,
                 "title": f"{identifier}: {title}",
-                "body": f"Status: {state_name}",
+                "body": issue.get("description") or f"Status: {state_name}",
                 "url": issue.get("url", ""),
                 "actionable": True,
                 "action_hint": "Create task",

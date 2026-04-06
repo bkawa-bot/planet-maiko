@@ -80,7 +80,11 @@ export default function BrainView() {
               setBackfilling(true);
               try {
                 const result = await api.backfillKnowledge();
-                showToast(`Created ${result.signals_created} signals, ${result.new_learnings} new learnings`, "normal");
+                if (result.signals_created === 0) {
+                  showToast("No new PR comments found. Add review comments to your PRs first.", "normal");
+                } else {
+                  showToast(`Created ${result.signals_created} signals, ${result.new_learnings} new learnings`, "normal");
+                }
                 fetchLearnings();
               } catch (err) {
                 showToast("Backfill failed: " + err.message, "high");

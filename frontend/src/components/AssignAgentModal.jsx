@@ -23,6 +23,7 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
   const [useWorktree, setUseWorktree] = useState(true);
   const [autoKickoff, setAutoKickoff] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
+  const [branchName, setBranchName] = useState("");
 
   useEffect(() => {
     const repo = task.metadata?.repo || task.extra?.repo || "";
@@ -76,6 +77,7 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
         use_worktree: useWorktree,
         auto_kickoff: autoKickoff,
         custom_prompt: customPrompt || undefined,
+        branch_name: branchName || undefined,
       });
       const agent = recommendations.find((r) => r.profile.id === selectedId);
       showToast(`${agent?.profile.display_name || "Agent"} assigned! Worktree ready.`, "normal");
@@ -146,6 +148,15 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
                   Set repository roots in Settings to auto-fill this field.
                 </div>
               )}
+
+              <div className="assign-section-label" style={{ marginTop: 16 }}>Branch Name (optional)</div>
+              <input
+                className="assign-repo-input"
+                type="text"
+                value={branchName}
+                onChange={(e) => setBranchName(e.target.value)}
+                placeholder="maiko/fix-auth-bug (auto-generated if blank)"
+              />
 
               <div className="assign-section-label" style={{ marginTop: 16 }}>Options</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

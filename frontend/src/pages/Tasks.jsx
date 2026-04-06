@@ -33,6 +33,7 @@ export default function Tasks() {
   const [maikoQuery, setMaikoQuery] = useState("");
   const [maikoResult, setMaikoResult] = useState(null);
   const [maikoRunning, setMaikoRunning] = useState(false);
+  const [detailTask, setDetailTask] = useState(null);
 
   const [config, setConfig] = useState(null);
   const [agentNames, setAgentNames] = useState({});
@@ -259,7 +260,7 @@ export default function Tasks() {
                   )}
                 </div>
                 {!collapsed && (pts.length > 0
-                  ? pts.map((t) => renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask, setEditingTask, setEditForm, setAskingMaiko, agentNames))
+                  ? pts.map((t) => renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask, setEditingTask, setEditForm, setAskingMaiko, agentNames, setDetailTask))
                   : <div className="project-empty">No tasks yet. Create one and assign it to this project.</div>
                 )}
               </div>
@@ -268,7 +269,7 @@ export default function Tasks() {
 
           {/* Ungrouped tasks */}
           {ungrouped.filter((t) => t.status !== "done" && t.status !== "cancelled").map((t) =>
-            renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask, setEditingTask, setEditForm, setAskingMaiko, agentNames)
+            renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask, setEditingTask, setEditForm, setAskingMaiko, agentNames, setDetailTask)
           )}
 
           {/* Done tasks (collapsed) */}
@@ -279,7 +280,7 @@ export default function Tasks() {
                 <span>Completed ({tasks.filter((t) => t.status === "done" || t.status === "cancelled").length})</span>
               </div>
               {!collapsedGroups["_done"] && tasks.filter((t) => t.status === "done" || t.status === "cancelled").map((t) =>
-                renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask, setEditingTask, setEditForm, setAskingMaiko, agentNames)
+                renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask, setEditingTask, setEditForm, setAskingMaiko, agentNames, setDetailTask)
               )}
             </div>
           )}
@@ -338,6 +339,7 @@ export default function Tasks() {
                       type: gt.type || "todo",
                       priority: gt.priority || "normal",
                       project_id: generatedTasks.project_id,
+                      metadata: gt.description ? { description: gt.description } : undefined,
                     });
                   }
                   showToast(`Created ${generatedTasks.tasks.length} task(s)! 🎉`, "normal");
@@ -498,11 +500,40 @@ export default function Tasks() {
           </div>
         </div>
       )}
+
+      {detailTask && (
+        <div className="modal-overlay" onClick={() => setDetailTask(null)}>
+          <div className="info-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <FolderOpen size={14} /> {detailTask.title}
+              <span style={{ flex: 1 }} />
+              <button className="btn btn-sm" onClick={() => setDetailTask(null)} style={{ border: "none", padding: 4 }}><X size={14} /></button>
+            </div>
+            <div className="modal-body" style={{ fontSize: 13, lineHeight: 1.6, color: "var(--text-dim)" }}>
+              {(detailTask.extra?.description || detailTask.metadata?.description) && (
+                <div style={{ whiteSpace: "pre-wrap", marginBottom: 12 }}>
+                  {detailTask.extra?.description || detailTask.metadata?.description}
+                </div>
+              )}
+              {detailTask.url && (
+                <a href={detailTask.url} target="_blank" rel="noreferrer" style={{ display: "block", marginBottom: 8 }}>
+                  <ExternalLink size={10} /> {detailTask.url}
+                </a>
+              )}
+              {detailTask.tags?.length > 0 && (
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {detailTask.tags.map((tag) => <span key={tag} className="tag">{tag}</span>)}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask, setEditingTask, setEditForm, setAskingMaiko, agentNames) {
+function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask, setEditingTask, setEditForm, setAskingMaiko, agentNames, setDetailTask) {
   const isExpanded = expanded === t.id;
   const statusColor = {
     new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
@@ -625,6 +656,11 @@ function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchD
               }}>
                 <Pencil size={10} /> Edit
               </button>
+              {(t.extra?.description || t.metadata?.description || t.body) && (
+                <button className="btn btn-sm btn-action" onClick={() => setDetailTask(t)}>
+                  <FolderOpen size={10} /> Details
+                </button>
+              )}
               <button className="btn btn-sm btn-action" onClick={() => setAskingMaiko(t)}>
                 <Brain size={10} /> Ask Maiko
               </button>
