@@ -50,9 +50,6 @@
   border-left: none; border-right: none; border-top: none;
 }
 .project-group .pupdate-card:last-child { border-bottom: none; }
-  border: 1.5px solid var(--border); margin: 8px 0 8px 8px;
-  transition: border-color 0.2s;
-}
 
 .task-content { flex: 1; padding: 10px 12px; min-width: 0; }
 .task-top { display: flex; align-items: center; gap: 8px; }
@@ -63,10 +60,10 @@
   margin-left: auto; flex-shrink: 0;
   opacity: 0; transition: opacity 0.15s;
 }
-.task-card:hover .task-quick-actions,
-.task-card.expanded .task-quick-actions { opacity: 1; }
+.pupdate-card:hover .task-quick-actions,
+.pupdate-card.expanded .task-quick-actions { opacity: 1; }
 .task-quick-actions .pinned { opacity: 1 !important; }
-.task-card:has(.btn-pin.pinned) .task-quick-actions { opacity: 1; }
+.btn-pin.pinned { opacity: 1; }
 
 .btn-ghost {
   border: none; background: none; cursor: pointer;
@@ -79,7 +76,7 @@
 .btn-quick-start:hover { color: var(--green); }
 .btn-quick-done:hover { color: var(--green); }
 .task-title { font-size: 13px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.task-card.expanded .task-title { white-space: normal; }
+.pupdate-card.expanded .card-title { white-space: normal; }
 .task-title a { color: var(--text); text-decoration: none; }
 .task-title a:hover { color: var(--pink); }
 
