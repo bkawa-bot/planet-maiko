@@ -86,10 +86,12 @@ def process_signals():
             signal.learning_id = learning.id
             counts["updated_learnings"] += 1
 
-            # Check graduation
+            # Check graduation (don't graduate unclassified "pattern" signals)
             threshold = GRADUATION_THRESHOLDS.get(learning.category, 3)
             if learning.signal_count >= threshold and learning.status == "pending":
-                if learning.category in NEEDS_APPROVAL:
+                if learning.category == "pattern" and learning.source == "auto":
+                    pass  # Wait for LLM classification before graduating
+                elif learning.category in NEEDS_APPROVAL:
                     logger.info(f"[learning] Ready for approval: {learning.rule[:60]}")
                 else:
                     learning.status = "active"

@@ -158,6 +158,7 @@ def assign_agent():
             branch_prefix=branch_name or "maiko",
             auto_kickoff=auto_kickoff,
             use_worktree=use_worktree,
+            agent_profile_id=profile_id,
         )
     except Exception as e:
         return jsonify({"error": f"Agent preparation failed: {str(e)}"}), 500

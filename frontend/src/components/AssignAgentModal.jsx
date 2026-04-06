@@ -105,7 +105,7 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
             <>
               {recommendations.some((rec) => rec.gap_detected) && (
                 <div style={{ padding: "8px 12px", marginBottom: 8, background: "var(--pink-soft)", borderRadius: "var(--radius-xs)", fontSize: 12, color: "var(--pink)" }}>
-                  {recommendations.find((rec) => rec.gap_detected)?.reasons?.[0] || "No experienced agent for this task."}
+                  No experienced agent for this task type. Consider creating a new agent or picking an exploration candidate below.
                 </div>
               )}
               <div className="assign-section-label">Recommended Agents</div>

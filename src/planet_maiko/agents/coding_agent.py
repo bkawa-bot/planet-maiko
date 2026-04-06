@@ -317,7 +317,7 @@ def _finalize_branch(repo_path):
 
 
 def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
-            auto_kickoff=False, use_worktree=True):
+            auto_kickoff=False, use_worktree=True, agent_profile_id=None):
     """Prepare for an agent to work on a task.
 
     Two modes:
@@ -357,7 +357,8 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     _write_claude_md(working_path, task_id, task_title)
     _write_mcp_json(working_path, task_id)
 
-    agent_id = f"agent-{branch_name}"
+    # Use existing profile if provided, otherwise generate an ID
+    agent_id = agent_profile_id or f"agent-{branch_name}"
 
     # Write Claude Code hooks configuration
     _write_claude_settings(working_path, task_id, agent_id)
@@ -367,7 +368,9 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
         from planet_maiko.brain.learning.processor import compile_brief
         from planet_maiko.agents.profiles import create_profile
 
-        profile = create_profile(agent_id)
+        # Only create a profile if one wasn't provided
+        if not agent_profile_id:
+            create_profile(agent_id)
         brief = compile_brief(
             repo=repo_path,
             task_id=task_id,

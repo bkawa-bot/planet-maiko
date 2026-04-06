@@ -5,6 +5,9 @@
 .main-content {
   margin-top: 58px;
   padding: 20px 28px 40px;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .idle-modal {

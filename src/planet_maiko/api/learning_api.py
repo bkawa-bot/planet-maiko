@@ -150,9 +150,12 @@ def backfill_learnings():
 
     learning_results = process_signals()
 
-    result["classified"] = classified
-    result["new_learnings"] = learning_results.get("new_learnings", 0)
-    result["graduated"] = learning_results.get("graduated", 0)
+    result = {
+        "signals_created": signals_created,
+        "classified": classified,
+        "new_learnings": learning_results.get("new_learnings", 0),
+        "graduated": learning_results.get("graduated", 0),
+    }
     if classify_error:
         result["classify_note"] = f"LLM classification unavailable: {classify_error}. Signals saved but not categorized yet."
     return jsonify(result)
