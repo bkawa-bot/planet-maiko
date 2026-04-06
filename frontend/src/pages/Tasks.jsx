@@ -8,6 +8,7 @@ import {
   Play, X, Download, Sparkles, Trash2, Pencil, Brain,
 } from "lucide-react";
 import "./Tasks.css";
+import "./Inbox.css";
 
 const STATUS_COLORS = {
   new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
@@ -552,57 +553,43 @@ function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchD
     review: "#a78bfa", done: "#4ade80", cancelled: "#6b7280",
   }[t.status] || "var(--text-muted)";
 
-  const statusAction = {
-    new: { icon: Play, next: "start", title: "Start task" },
-    in_progress: { icon: CheckSquare, next: "done", title: "Mark done" },
-    waiting: { icon: Clock, next: null, title: "Waiting" },
-    review: { icon: Eye, next: null, title: "In review" },
-    done: { icon: CheckSquare, next: null, title: "Done" },
-    cancelled: { icon: X, next: null, title: "Cancelled" },
-  }[t.status] || { icon: Play, next: null, title: t.status };
-  const StatusIcon = statusAction.icon;
+  const statusIcon = {
+    new: Play, in_progress: GitBranch, waiting: Clock,
+    review: Eye, done: CheckSquare, cancelled: X,
+  }[t.status] || CheckSquare;
+  const StatusIconComp = statusIcon;
+
+  const priorityClass = t.priority || "normal";
 
   return (
     <div
       key={t.id}
-      className={`task-card ${t.status === "done" || t.status === "cancelled" ? "dimmed" : ""} ${isExpanded ? "expanded" : ""}`}
+      className={`card pupdate-card ${priorityClass} ${t.status === "done" || t.status === "cancelled" ? "read" : ""} ${isExpanded ? "expanded" : ""}`}
       onClick={() => setExpanded(isExpanded ? null : t.id)}
     >
-      <div
-        className={`task-status-circle status-${t.status}`}
-        onClick={(e) => { if (statusAction.next) { handleAction(e, t.id, statusAction.next); } }}
-        title={statusAction.title}
-        style={{ cursor: statusAction.next ? "pointer" : "default" }}
+      <div className="card-left-bar" style={{ background: statusColor }} />
+      <div className="card-source-icon" onClick={(e) => {
+        e.stopPropagation();
+        if (t.status === "new") handleAction(e, t.id, "start");
+        else if (t.status === "in_progress") handleAction(e, t.id, "done");
+      }} style={{ cursor: t.status === "new" || t.status === "in_progress" ? "pointer" : "default" }}
+        title={t.status === "new" ? "Click to start" : t.status === "in_progress" ? "Click to mark done" : t.status.replace("_", " ")}
       >
-        <StatusIcon size={14} />
+        <StatusIconComp size={14} />
       </div>
-      <div className="task-content">
-        <div className="task-top">
-          <span className="task-title">
+      <div className="card-content">
+        <div className="card-top">
+          <span className="card-source" style={{ color: statusColor }}>{t.status.replace("_", " ")}</span>
+          <span className="card-title">
             {t.url ? <a href={t.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{t.title}</a> : t.title}
           </span>
-          <div className="task-quick-actions" onClick={(e) => e.stopPropagation()}>
-            <button
-              className={`btn-ghost btn-pin ${(t.extra?.pinned || t.metadata?.pinned) ? "pinned" : ""}`}
-              onClick={async () => {
-                const extra = { ...(t.extra || t.metadata || {}), pinned: !(t.extra?.pinned || t.metadata?.pinned) };
-                await api.updateTask(t.id, { extra });
-                showToast(extra.pinned ? "Pinned to focus" : "Unpinned", "normal");
-                fetchData();
-              }}
-              title={t.extra?.pinned || t.metadata?.pinned ? "Unpin from focus" : "Pin to focus"}
-            >
-              {(t.extra?.pinned || t.metadata?.pinned) ? <PinOff size={12} /> : <Pin size={12} />}
-            </button>
-          </div>
         </div>
-        <div className="task-meta">
-          <span className="task-status-label" style={{ color: statusColor }}>{t.status.replace("_", " ")}</span>
+        <div className="card-meta">
+          <span className="card-type">{t.type}</span>
           {t.project_id && <span className="tag tag-project">{t.project_id}</span>}
           {(t.metadata?.repo || t.extra?.repo) && <span className="tag"><GitBranch size={9} /> {t.metadata?.repo || t.extra?.repo}</span>}
-          <span className="task-type-label">{t.type}</span>
-          {t.due_date && <span className={`tag ${new Date(t.due_date) < new Date() ? "tag-overdue" : "tag-due"}`}><Clock size={9} /> {t.due_date}</span>}
-          {!t.due_date && t.updated_at && <span className="task-time"><Clock size={9} /> {new Date(t.updated_at).toLocaleDateString()}</span>}
+          {t.due_date && <span className="card-time"><Clock size={9} /> {t.due_date}</span>}
+          {!t.due_date && t.updated_at && <span className="card-time"><Clock size={9} /> {new Date(t.updated_at).toLocaleDateString()}</span>}
           {t.assigned_agent_id && <span className="tag agent-assigned-chip"><Bot size={9} /> {agentNames[t.assigned_agent_id] || t.assigned_agent_id.replace("agent-", "")}</span>}
         </div>
 
@@ -684,7 +671,22 @@ function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchD
           </>
         )}
       </div>
-      <ChevronRight size={14} className={`task-chevron ${isExpanded ? "open" : ""}`} />
+      <div className="card-right" onClick={(e) => e.stopPropagation()}>
+        <button
+          className={`btn-ghost btn-pin ${(t.extra?.pinned || t.metadata?.pinned) ? "pinned" : ""}`}
+          onClick={async () => {
+            const extra = { ...(t.extra || t.metadata || {}), pinned: !(t.extra?.pinned || t.metadata?.pinned) };
+            await api.updateTask(t.id, { extra });
+            showToast(extra.pinned ? "Pinned to focus" : "Unpinned", "normal");
+            fetchData();
+          }}
+          title={t.extra?.pinned || t.metadata?.pinned ? "Unpin from focus" : "Pin to focus"}
+        >
+          {(t.extra?.pinned || t.metadata?.pinned) ? <PinOff size={12} /> : <Pin size={12} />}
+        </button>
+        <span className={`card-priority badge ${priorityClass}`}>{t.priority}</span>
+        <ChevronRight size={14} className={`card-chevron ${isExpanded ? "open" : ""}`} />
+      </div>
     </div>
   );
 }

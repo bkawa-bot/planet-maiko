@@ -15,9 +15,9 @@
 .form-actions { display: flex; gap: 6px; justify-content: flex-end; }
 .required { color: var(--urgent); }
 
-/* === Card list container — frosted glass backdrop === */
+/* === Card list container === */
 .tasks-page > .project-group:first-of-type,
-.tasks-page > .task-card:first-of-type {
+.tasks-page > .pupdate-card:first-of-type {
   margin-top: 4px;
 }
 
@@ -42,48 +42,14 @@
 }
 .project-progress-fill { height: 100%; background: var(--green); border-radius: 2px; transition: width 0.3s; }
 
-/* Task cards */
-.task-card {
-  display: flex; gap: 0; padding: 0; cursor: pointer;
-  background: var(--bg-card); border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm); margin-bottom: 6px; overflow: hidden;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.task-card:hover {
-  border-color: var(--pink);
-  box-shadow: 0 0 0 1px var(--pink-glow), 0 2px 8px rgba(0,0,0,0.15);
-  transform: translateX(2px);
-}
-.task-card.dimmed { opacity: 0.45; }
-.task-card.dimmed:hover { transform: none; box-shadow: none; border-color: var(--border-subtle); }
+/* Task cards reuse .pupdate-card from Inbox.css */
 
-/* Inside project groups */
-.project-group .task-card {
+/* Inside project groups — tighter spacing */
+.project-group .pupdate-card {
   margin: 0; border-radius: 0;
   border-left: none; border-right: none; border-top: none;
 }
-.project-group .task-card:last-child { border-bottom: none; }
-
-/* Status circle — replaces the old icon + action buttons */
-.task-status-circle {
-  display: flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px; flex-shrink: 0;
-  border-radius: 50%; margin: 10px 0 10px 10px;
-  transition: all 0.2s;
-}
-.task-status-circle:hover { transform: scale(1.1); }
-.task-status-circle.status-new { background: rgba(156, 163, 175, 0.15); color: var(--text-muted); }
-.task-status-circle.status-new:hover { background: rgba(96, 165, 250, 0.2); color: #60a5fa; }
-.task-status-circle.status-in_progress { background: rgba(96, 165, 250, 0.15); color: #60a5fa; animation: statusPulse 2s ease-in-out infinite; }
-.task-status-circle.status-waiting { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
-.task-status-circle.status-review { background: rgba(167, 139, 250, 0.15); color: #a78bfa; }
-.task-status-circle.status-done { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
-.task-status-circle.status-cancelled { background: rgba(107, 114, 128, 0.1); color: #6b7280; }
-
-@keyframes statusPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.3); }
-  50% { box-shadow: 0 0 0 4px rgba(96, 165, 250, 0); }
-}
+.project-group .pupdate-card:last-child { border-bottom: none; }
   border: 1.5px solid var(--border); margin: 8px 0 8px 8px;
   transition: border-color 0.2s;
 }
