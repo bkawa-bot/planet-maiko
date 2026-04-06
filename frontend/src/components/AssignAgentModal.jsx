@@ -20,7 +20,7 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
   const [repoRoots, setRepoRoots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [assigning, setAssigning] = useState(false);
-  const [useWorktree, setUseWorktree] = useState(true);
+  const [useWorktree, setUseWorktree] = useState(false);
   const [autoKickoff, setAutoKickoff] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
   const [branchName, setBranchName] = useState("");

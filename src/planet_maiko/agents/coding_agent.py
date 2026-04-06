@@ -256,22 +256,64 @@ def _kickoff_agent(agent_id, worktree_path, task_id):
 
 
 def _create_branch_only(repo_path, branch_name):
-    """Create a branch without a worktree — agent works in the main repo."""
+    """Create a branch for agent work, then switch back to the original branch.
+
+    The task files get committed to the new branch, but the repo is left
+    on its original branch so it doesn't block the user's workflow.
+    """
     try:
+        # Remember current branch
+        current = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=repo_path, capture_output=True, text=True,
+        ).stdout.strip()
+
         result = subprocess.run(
             ["git", "checkout", "-b", branch_name],
             cwd=repo_path, capture_output=True, text=True,
         )
         if result.returncode != 0:
-            # Branch might already exist
-            subprocess.run(
+            result = subprocess.run(
                 ["git", "checkout", branch_name],
                 cwd=repo_path, capture_output=True, text=True,
             )
-        return repo_path  # Working dir is the repo itself
+            if result.returncode != 0:
+                logger.error(f"[agent] Could not create or checkout branch {branch_name}")
+                return None
+
+        # Store original branch so we can switch back after file writing
+        _branch_return_to[repo_path] = current
+        return repo_path
     except Exception as e:
         logger.error(f"[agent] Failed to create branch {branch_name}: {e}")
         return None
+
+
+# Track which branch to return to after preparing files
+_branch_return_to = {}
+
+
+def _finalize_branch(repo_path):
+    """Commit task files and switch back to the original branch."""
+    original = _branch_return_to.pop(repo_path, None)
+    if not original:
+        return
+    try:
+        subprocess.run(
+            ["git", "add", "TASK.md", "CLAUDE.md", ".mcp.json", ".maiko-env.json"],
+            cwd=repo_path, capture_output=True, text=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "Maiko: prepare agent task files", "--no-verify"],
+            cwd=repo_path, capture_output=True, text=True,
+        )
+        subprocess.run(
+            ["git", "checkout", original],
+            cwd=repo_path, capture_output=True, text=True,
+        )
+        logger.info(f"[agent] Task files committed, switched back to {original}")
+    except Exception as e:
+        logger.warning(f"[agent] Could not switch back to {original}: {e}")
 
 
 def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
@@ -340,6 +382,10 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     except Exception as e:
         logger.warning(f"[agent] Could not compile brief for {agent_id}: {e}")
 
+    # If branch-only mode, commit task files and switch back to original branch
+    if not use_worktree:
+        _finalize_branch(working_path)
+
     mode = "worktree" if use_worktree else "branch"
     notify = Pupdate(
         id=f"agent-ready-{agent_id}",
@@ -348,7 +394,7 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
         type="agent_ready",
         priority="normal",
         title=f"Agent ready: {task_title}",
-        body=f"Prepared on branch `{branch_name}` ({mode}). Launch your agent in:\n\n{working_path}",
+        body=f"Prepared on branch `{branch_name}` ({mode}).\n\n{'Launch in: ' + working_path if use_worktree else 'Checkout: git checkout ' + branch_name}",
         actionable=True,
         action_hint="Launch agent",
         tags=[task_id, "agent"],
