@@ -181,6 +181,9 @@ export const api = {
     return request(`/tournaments/scores${query}`);
   },
 
+  // System
+  shutdown: () => request("/system/shutdown", { method: "POST" }),
+
   // Agent terminal & sessions
   openTerminal: (path) => request("/agents/open-terminal", { method: "POST", body: JSON.stringify({ path }) }),
   getAgentSession: (taskId) => request(`/agents/${taskId}/session`),

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Footer from "./Footer";
@@ -35,8 +35,60 @@ function usePupdateWatcher() {
   }, []);
 }
 
+const IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
+const IDLE_CHECK_MS = 60 * 1000; // check every minute
+
+function useIdleDetection() {
+  const lastActivity = useRef(Date.now());
+  const [showIdlePrompt, setShowIdlePrompt] = useState(false);
+  const prompted = useRef(false);
+
+  const resetActivity = useCallback(() => {
+    lastActivity.current = Date.now();
+    if (prompted.current) {
+      prompted.current = false;
+      setShowIdlePrompt(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const events = ["mousedown", "keydown", "scroll", "touchstart"];
+    events.forEach((e) => window.addEventListener(e, resetActivity));
+    return () => events.forEach((e) => window.removeEventListener(e, resetActivity));
+  }, [resetActivity]);
+
+  useEffect(() => {
+    const check = () => {
+      const idle = Date.now() - lastActivity.current;
+      if (idle >= IDLE_TIMEOUT_MS && !prompted.current) {
+        prompted.current = true;
+        setShowIdlePrompt(true);
+      }
+    };
+    const interval = setInterval(check, IDLE_CHECK_MS);
+    return () => clearInterval(interval);
+  }, []);
+
+  return { showIdlePrompt, setShowIdlePrompt, resetActivity };
+}
+
 export default function Layout() {
   usePupdateWatcher();
+  const { showIdlePrompt, setShowIdlePrompt, resetActivity } = useIdleDetection();
+
+  const handleStillWorking = () => {
+    resetActivity();
+    setShowIdlePrompt(false);
+  };
+
+  const handleShutdown = async () => {
+    try {
+      await api.shutdown();
+    } catch (e) {}
+    setShowIdlePrompt(false);
+    document.title = "Planet Maiko (stopped)";
+    showToast("Maiko is going to sleep. Restart with: maiko serve", "normal");
+  };
 
   return (
     <div className="layout">
@@ -45,6 +97,26 @@ export default function Layout() {
         <Outlet />
       </main>
       <Footer />
+
+      {showIdlePrompt && (
+        <div className="modal-overlay">
+          <div className="idle-modal">
+            <div style={{ fontSize: 32, textAlign: "center", marginBottom: 12 }}>🐕💤</div>
+            <h3 style={{ textAlign: "center", marginBottom: 8 }}>Still working?</h3>
+            <p style={{ textAlign: "center", fontSize: 13, color: "var(--text-dim)", marginBottom: 16 }}>
+              Maiko hasn't seen any activity for 2 hours. Want to keep the server running, or let Maiko sleep?
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+              <button className="btn btn-primary" onClick={handleStillWorking}>
+                I'm still here!
+              </button>
+              <button className="btn" onClick={handleShutdown}>
+                Let Maiko sleep
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

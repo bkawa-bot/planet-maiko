@@ -34,6 +34,26 @@ def get_schedule():
     return jsonify(compute_schedule())
 
 
+@brain_bp.route("/system/shutdown", methods=["POST"])
+def shutdown():
+    """Gracefully shut down the server (power saving mode)."""
+    import threading
+    from flask import current_app
+
+    # Stop the scheduler first
+    scheduler = current_app.config.get("SCHEDULER")
+    if scheduler:
+        scheduler.stop()
+
+    def _shutdown():
+        import time, os, signal
+        time.sleep(1)  # Let the response send first
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    threading.Thread(target=_shutdown, daemon=True).start()
+    return jsonify({"status": "shutting_down"})
+
+
 @brain_bp.route("/brain/guardrails/<action>", methods=["GET"])
 def check_guardrail(action):
     """Check permission level for an action."""
