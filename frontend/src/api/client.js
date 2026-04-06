@@ -192,6 +192,9 @@ export const api = {
   resumeAgentSession: (taskId) => request("/agents/resume-session", { method: "POST", body: JSON.stringify({ task_id: taskId }) }),
 
   // Training
+  exportTrainingDataset: (data) => request("/training/export-dataset", { method: "POST", body: JSON.stringify(data || {}) }),
+  getTrainingDatasets: () => request("/training/datasets"),
+  getTrainingDatasetStats: () => request("/training/dataset-stats"),
   getTrainingPRs: () => request("/training/prs"),
   getTrainingHistory: () => request("/training/history"),
   runTraining: (data) => request("/training/run", { method: "POST", body: JSON.stringify(data) }),

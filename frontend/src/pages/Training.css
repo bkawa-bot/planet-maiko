@@ -152,3 +152,31 @@
 .training-history-pr-title { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .training-history-winner { font-size: 10px; color: var(--lemon); display: flex; align-items: center; gap: 3px; }
 .training-history-date { font-size: 10px; color: var(--text-muted); }
+
+/* Dataset section */
+.training-dataset-section {
+  margin-top: 24px; padding: 16px;
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+.training-dataset-header {
+  font-size: 14px; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+}
+.training-dataset-stats {
+  display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;
+}
+.training-dataset-stats .kstat {
+  font-size: 12px; display: flex; align-items: center; gap: 4px;
+}
+.training-dataset-list {
+  margin-top: 12px; display: flex; flex-direction: column; gap: 4px;
+}
+.training-dataset-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 6px 10px; background: var(--bg); border-radius: var(--radius-xs);
+  font-size: 12px;
+}
+.training-dataset-name { font-family: var(--font-mono); color: var(--text-dim); flex: 1; }
+.training-dataset-count { color: var(--pink); font-weight: 600; }
+.training-dataset-size { color: var(--text-muted); }

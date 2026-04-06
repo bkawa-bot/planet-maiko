@@ -17,6 +17,45 @@ logger = logging.getLogger(__name__)
 training_bp = Blueprint("training", __name__)
 
 
+@training_bp.route("/training/export-dataset", methods=["POST"])
+def export_dataset():
+    """Extract training data from PR review history."""
+    from planet_maiko.brain.learning.training_data import extract_training_data
+    from planet_maiko.config import load_config
+
+    data = request.get_json(silent=True) or {}
+    config = load_config()
+    repos = data.get("repos") or config.get("github", {}).get("repos", [])
+    limit = data.get("limit_per_repo", 200)
+
+    if not repos:
+        return jsonify({"error": "No repos configured"}), 400
+
+    result = extract_training_data(repos=repos, limit_per_repo=limit)
+    return jsonify(result)
+
+
+@training_bp.route("/training/datasets", methods=["GET"])
+def get_datasets():
+    """List generated training datasets."""
+    from planet_maiko.brain.learning.training_data import list_datasets
+    return jsonify(list_datasets())
+
+
+@training_bp.route("/training/dataset-stats", methods=["GET"])
+def dataset_stats():
+    """Get stats for a specific dataset."""
+    from planet_maiko.brain.learning.training_data import list_datasets, get_dataset_stats
+    datasets = list_datasets()
+    if not datasets:
+        return jsonify({"total": 0})
+    # Return stats for the most recent dataset
+    latest = datasets[0]
+    stats = get_dataset_stats(latest["path"])
+    stats["filename"] = latest["filename"]
+    return jsonify(stats)
+
+
 @training_bp.route("/training/history", methods=["GET"])
 def training_history():
     """List past training sessions."""

@@ -3,8 +3,8 @@ import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import InfoButton from "../components/InfoButton";
 import {
-  GraduationCap, Bot, GitPullRequest, Play, Loader, RefreshCw,
-  Award, ChevronDown, ChevronRight, CheckSquare, Clock, X,
+  GraduationCap, Bot, GitPullRequest, Play, Loader, RefreshCw, Database,
+  Award, ChevronDown, ChevronRight, CheckSquare, Clock, X, Download,
 } from "lucide-react";
 import "./Training.css";
 
@@ -27,6 +27,9 @@ export default function Training() {
   const [history, setHistory] = useState([]);
   const [expandedHistory, setExpandedHistory] = useState(null);
   const [expandedOutput, setExpandedOutput] = useState(null);
+  const [extracting, setExtracting] = useState(false);
+  const [datasets, setDatasets] = useState([]);
+  const [datasetStats, setDatasetStats] = useState(null);
 
   const fetchPRs = async () => {
     setLoadingPRs(true);
@@ -40,10 +43,16 @@ export default function Training() {
 
   const fetchHistory = () => api.getTrainingHistory().then(setHistory).catch(() => {});
 
+  const fetchDatasets = () => {
+    api.getTrainingDatasets().then(setDatasets).catch(() => {});
+    api.getTrainingDatasetStats().then(setDatasetStats).catch(() => {});
+  };
+
   useEffect(() => {
     fetchPRs();
     api.getProfiles().then(setProfiles).catch(() => {});
     fetchHistory();
+    fetchDatasets();
   }, []);
 
   const handleRun = async () => {
@@ -265,6 +274,63 @@ export default function Training() {
           })}
         </div>
       )}
+      {/* Training Data Extraction */}
+      <div className="training-dataset-section">
+        <div className="training-dataset-header">
+          <Database size={14} /> LoRA Training Data
+          <InfoButton title={<><Database size={16} /> Training Data</>}>
+            <p>Extract real code + review comment pairs from your PR history as training data for LoRA fine-tuning.</p>
+            <h4>What it does</h4>
+            <p>Scans merged PRs in your configured repos. For each PR with review comments, it pairs the code that was reviewed with the reviewer's feedback. Clean merges become "PASS" examples.</p>
+            <h4>How much data do you need?</h4>
+            <p>A few hundred examples is enough for a decent LoRA. With years of PR history across multiple repos, you'll likely have thousands.</p>
+          </InfoButton>
+        </div>
+
+        <div className="training-dataset-stats">
+          {datasetStats && datasetStats.total > 0 ? (
+            <>
+              <span className="kstat"><Database size={12} /> {datasetStats.total} examples</span>
+              <span className="kstat" style={{ color: "var(--urgent)" }}>{datasetStats.violations} violations</span>
+              <span className="kstat" style={{ color: "var(--green)" }}>{datasetStats.passes} passes</span>
+              {datasetStats.filename && <span className="kstat">{datasetStats.filename}</span>}
+            </>
+          ) : (
+            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>No training data extracted yet</span>
+          )}
+        </div>
+
+        <button
+          className="btn btn-primary"
+          disabled={extracting}
+          onClick={async () => {
+            setExtracting(true);
+            showToast("Extracting training data from PR history...", "normal");
+            try {
+              const result = await api.exportTrainingDataset();
+              showToast(`Extracted ${result.pairs} training pairs (${result.violations} violations, ${result.passes} passes) from ${result.repos_scanned} repos`, "normal");
+              fetchDatasets();
+            } catch (err) {
+              showToast("Extraction failed: " + err.message, "high");
+            }
+            setExtracting(false);
+          }}
+        >
+          {extracting ? <><Loader size={12} className="spin" /> Extracting...</> : <><Download size={12} /> Extract from PRs</>}
+        </button>
+
+        {datasets.length > 0 && (
+          <div className="training-dataset-list">
+            {datasets.map((d) => (
+              <div key={d.filename} className="training-dataset-item">
+                <span className="training-dataset-name">{d.filename}</span>
+                <span className="training-dataset-count">{d.examples} examples</span>
+                <span className="training-dataset-size">{(d.size_bytes / 1024).toFixed(0)} KB</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
