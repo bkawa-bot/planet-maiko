@@ -37,9 +37,8 @@ DEFAULT_CONFIG = {
     "brain": {
         "runtime": "claude-code",  # or a custom runtime
         "llm_triage": True,  # use LLM for unmatched pupdates
-        # Tools to pre-approve for Claude Code sessions (avoids permission prompts)
-        # e.g. ["Bash", "Read", "Edit", "Write", "WebFetch", "WebSearch", "mcp__github"]
-        "allowed_tools": [],
+        # Tools pre-approved for Claude Code sessions (avoids permission prompts)
+        "allowed_tools": ["Bash", "Read", "Edit", "Write", "Glob", "Grep", "mcp__maiko-channel"],
         "correlation_window_minutes": 30,
         "incident_chains": [
             ["pr_ci_failed", "deploy_rollback", "error_spike"],

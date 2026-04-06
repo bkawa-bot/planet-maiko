@@ -307,7 +307,7 @@ export default function Home() {
               <h3>You're All Set!</h3>
               <p>Here's what to do next:</p>
               <ul className="setup-checklist">
-                <li><strong>Connect integrations</strong> — Go to Settings to add Linear, Calendar, or other services</li>
+                <li><strong>Connect integrations</strong> — Go to Settings to add Linear, Calendar, or other services. Agent tools (Bash, Read, Edit, etc.) are pre-configured — customize in Settings &gt; Agent Preferences.</li>
                 <li><strong>Backfill knowledge</strong> — Go to Knowledge and click "Backfill from PRs"</li>
                 <li><strong>Create an agent</strong> — Visit Agents and click "New Agent"</li>
                 <li><strong>Train it</strong> — Go to Training, pick a merged PR, and run a session</li>

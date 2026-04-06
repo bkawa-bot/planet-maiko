@@ -372,18 +372,33 @@ export default function Settings() {
                 </label>
                 <label>
                   Allowed Tools (pre-approved for Claude Code sessions)
-                  <input
-                    type="text"
-                    value={(config.brain?.allowed_tools || []).join(", ")}
-                    onChange={(e) => {
-                      const tools = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
-                      setConfig((c) => ({ ...c, brain: { ...c?.brain, allowed_tools: tools } }));
-                    }}
-                    placeholder="Bash, Read, Edit, Write, WebFetch, WebSearch, mcp__github"
-                  />
-                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                    Comma-separated. These tools won't require permission prompts when agents run.
-                  </span>
+                  <div className="repo-list">
+                    {(config.brain?.allowed_tools || []).map((tool, i) => (
+                      <div key={i} className="repo-list-item">
+                        <span>{tool}</span>
+                        <button className="btn-ghost" onClick={() => {
+                          const updated = (config.brain?.allowed_tools || []).filter((_, j) => j !== i);
+                          setConfig((c) => ({ ...c, brain: { ...c?.brain, allowed_tools: updated } }));
+                        }} title="Remove"><span style={{ fontSize: 14, color: "var(--urgent)" }}>&times;</span></button>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                    <input
+                      type="text"
+                      style={{ flex: 1 }}
+                      placeholder="Tool name (e.g. Bash, Edit, mcp__github)"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && e.target.value.trim()) {
+                          const val = e.target.value.trim();
+                          const tools = config.brain?.allowed_tools || [];
+                          if (!tools.includes(val)) setConfig((c) => ({ ...c, brain: { ...c?.brain, allowed_tools: [...tools, val] } }));
+                          e.target.value = "";
+                        }
+                      }}
+                    />
+                    <span style={{ fontSize: 10, color: "var(--text-muted)", alignSelf: "center" }}>Press Enter to add</span>
+                  </div>
                 </label>
               </div>
             </div>
