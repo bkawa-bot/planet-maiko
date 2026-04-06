@@ -535,6 +535,11 @@ export default function Home() {
               )}
               <div className="scene-tags">
                 {scene?.context?.season && <span className="scene-tag">{scene.context.season}</span>}
+                {scene?.context?.moon_phase && <span className="scene-tag">{{
+                  new: "🌑", waxing_crescent: "🌒", first_quarter: "🌓",
+                  waxing_gibbous: "🌔", full: "🌕", waning_gibbous: "🌖",
+                  last_quarter: "🌗", waning_crescent: "🌘",
+                }[scene.context.moon_phase] || "🌙"} {scene.context.moon_phase.replace("_", " ")}</span>}
                 {scene?.scene?.maiko_outfit && scene.scene.maiko_outfit !== "default" && (
                   <span className="scene-tag">maiko: {scene.scene.maiko_outfit}</span>
                 )}

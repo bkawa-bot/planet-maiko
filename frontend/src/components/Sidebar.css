@@ -19,7 +19,7 @@
 
 [data-theme="light"] .topbar { background: linear-gradient(135deg, #87CEEB 0%, #B0D8E8 50%, #B8D8B8 100%); box-shadow: 0 1px 8px rgba(0,0,0,0.1); }
 [data-theme="morning"] .topbar { background: linear-gradient(135deg, #F5C6AA 0%, #F0D8C0 50%, #F8E8D0 100%); box-shadow: 0 1px 8px rgba(0,0,0,0.1); }
-[data-theme="sunset"] .topbar { background: linear-gradient(135deg, #1A1A2E 0%, #2D2040 40%, #5A3040 100%); }
+[data-theme="sunset"] .topbar { background: linear-gradient(135deg, #1A1A2E 0%, #2D2040 35%, #6A3058 70%, #A04070 100%); }
 
 .topbar-left {
   display: flex;

@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90" shape-rendering="crispEdges" preserveAspectRatio="xMidYMax slice">
   <defs>
     <linearGradient id="ds" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#B8DCE8"/>
+      <stop offset="0%" stop-color="#6AAED0"/>
       <stop offset="40%" stop-color="#B8E0F0"/>
       <stop offset="58%" stop-color="#c8dff0"/>
       <stop offset="75%" stop-color="#96cce6"/>
