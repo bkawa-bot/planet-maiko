@@ -215,26 +215,32 @@ def resume_session():
 
 @agents_bp.route("/agents/open-terminal", methods=["POST"])
 def open_terminal():
-    """Open a terminal window at the given path."""
+    """Open a terminal with claude and an initial prompt at the given path."""
     import subprocess
     import sys
 
     data = request.get_json()
     path = data.get("path", "")
+    start_agent = data.get("start_agent", True)
 
     if not path or not os.path.isdir(path):
         return jsonify({"error": "Invalid path"}), 400
 
+    initial_prompt = "Read TASK.md and CLAUDE.md in this directory. Begin working on the task following the protocol. Report your status as you go."
+    cmd = f'cd {path} && claude "{initial_prompt}"' if start_agent else f'cd {path}'
+
     try:
         if sys.platform == "darwin":
-            subprocess.Popen(["open", "-a", "Terminal", path])
+            subprocess.Popen([
+                "osascript", "-e",
+                f'tell application "Terminal" to do script "{cmd}"',
+            ])
         elif sys.platform == "win32":
-            subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", f"cd /d {path}"], shell=True)
+            subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", cmd], shell=True)
         else:
-            # Linux — try common terminal emulators
             for term in ["gnome-terminal", "xterm", "konsole", "xfce4-terminal"]:
                 try:
-                    subprocess.Popen([term, "--working-directory", path])
+                    subprocess.Popen([term, "--", "bash", "-c", cmd])
                     break
                 except FileNotFoundError:
                     continue

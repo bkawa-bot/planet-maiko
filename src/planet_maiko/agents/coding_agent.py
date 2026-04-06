@@ -232,7 +232,7 @@ def _write_claude_settings(working_path, task_id, agent_id):
 
 
 def _kickoff_agent(agent_id, worktree_path, task_id):
-    """Start the agent by opening a terminal with claude in the worktree."""
+    """Start the agent by opening a terminal with claude and an initial prompt."""
     import sys
     import shutil
 
@@ -240,21 +240,25 @@ def _kickoff_agent(agent_id, worktree_path, task_id):
     if not claude_path:
         return {"success": False, "error": "claude CLI not found"}
 
+    # Initial prompt tells Claude to read the task and start working
+    initial_prompt = "Read TASK.md and CLAUDE.md in this directory. Begin working on the task following the protocol. Report your status as you go."
+    launch_cmd = f'cd {worktree_path} && claude "{initial_prompt}"'
+
     try:
         if sys.platform == "darwin":
             subprocess.Popen([
                 "osascript", "-e",
-                f'tell application "Terminal" to do script "cd {worktree_path} && claude"',
+                f'tell application "Terminal" to do script "{launch_cmd}"',
             ])
         elif sys.platform == "win32":
             subprocess.Popen(
-                ["cmd", "/c", "start", "cmd", "/k", f"cd /d {worktree_path} && claude"],
+                ["cmd", "/c", "start", "cmd", "/k", launch_cmd],
                 shell=True,
             )
         else:
             for term in ["gnome-terminal", "xterm", "konsole"]:
                 try:
-                    subprocess.Popen([term, "--", "bash", "-c", f"cd {worktree_path} && claude"])
+                    subprocess.Popen([term, "--", "bash", "-c", launch_cmd])
                     break
                 except FileNotFoundError:
                     continue
@@ -434,8 +438,7 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
         "status": "ready",
         "prepared_at": datetime.now(timezone.utc).isoformat(),
         "launch_instructions": {
-            "claude_code": f"cd {working_path} && claude --dangerously-load-development-channels server:maiko-channel",
-            "claude_code_simple": f"cd {working_path} && claude",
+            "claude_code": f'cd {working_path} && claude "Read TASK.md and CLAUDE.md. Begin working on the task."',
             "aider": f"cd {working_path} && aider",
             "manual": f"cd {working_path} && cat TASK.md",
         },
