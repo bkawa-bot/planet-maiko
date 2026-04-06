@@ -4,7 +4,7 @@ import { showToast } from "../components/Toast";
 import AssignAgentModal from "../components/AssignAgentModal";
 import {
   CheckSquare, Plus, FolderPlus, FolderOpen, Pin, PinOff, ExternalLink,
-  ChevronDown, ChevronRight, Folder, GitBranch, Clock, Bot,
+  ChevronDown, ChevronRight, Folder, GitBranch, Clock, Bot, Eye,
   Play, X, Download, Sparkles, Trash2, Pencil, Brain,
 } from "lucide-react";
 import "./Tasks.css";
@@ -668,6 +668,11 @@ function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchD
               }}>
                 <Pencil size={10} /> Edit
               </button>
+              {(t.type === "review" || t.type === "pr_review") && t.url && (
+                <a href={t.url} target="_blank" rel="noreferrer" className="btn btn-sm btn-action" onClick={(e) => e.stopPropagation()}>
+                  <Eye size={10} /> Review PR
+                </a>
+              )}
               {(t.extra?.description || t.metadata?.description || t.body) && (
                 <button className="btn btn-sm btn-action" onClick={() => setDetailTask(t)}>
                   <FolderOpen size={10} /> Details

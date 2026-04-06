@@ -209,16 +209,19 @@ export default function Agents() {
                     </div>
                   </div>
                   <div className="agent-actions">
-                    {a.working_path && (
-                      <button className="btn btn-sm" onClick={async () => {
+                    <button className="btn btn-sm btn-approve" onClick={async () => {
+                      const path = a.working_path || a.extra?.working_path;
+                      if (path) {
                         try {
-                          await api.openTerminal(a.working_path);
-                          showToast("Terminal opened", "normal");
+                          await api.openTerminal(path);
+                          showToast(`Launch claude in the terminal to start the agent`, "normal");
                         } catch (err) { showToast("Could not open terminal", "high"); }
-                      }} title="Open a terminal in the agent's worktree">
-                        <Terminal size={12} /> Terminal
-                      </button>
-                    )}
+                      } else {
+                        showToast(`Checkout branch: git checkout ${a.branch} && claude`, "normal");
+                      }
+                    }} title="Open a terminal to launch the agent">
+                      <Play size={12} /> Launch
+                    </button>
                     <button className="btn btn-sm" onClick={async () => {
                       try {
                         const result = await api.resumeAgentSession(a.task_id);

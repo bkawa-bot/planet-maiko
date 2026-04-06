@@ -232,24 +232,35 @@ def _write_claude_settings(working_path, task_id, agent_id):
 
 
 def _kickoff_agent(agent_id, worktree_path, task_id):
-    """Start the agent via the configured runtime."""
+    """Start the agent by opening a terminal with claude in the worktree."""
+    import sys
+    import shutil
+
+    claude_path = shutil.which("claude")
+    if not claude_path:
+        return {"success": False, "error": "claude CLI not found"}
+
     try:
-        from planet_maiko.agents.brain_session import BrainSession
-        session = BrainSession()
-        if not session.runtime or not session.runtime.is_available():
-            return {"success": False, "error": "Runtime not available"}
+        if sys.platform == "darwin":
+            subprocess.Popen([
+                "osascript", "-e",
+                f'tell application "Terminal" to do script "cd {worktree_path} && claude"',
+            ])
+        elif sys.platform == "win32":
+            subprocess.Popen(
+                ["cmd", "/c", "start", "cmd", "/k", f"cd /d {worktree_path} && claude"],
+                shell=True,
+            )
+        else:
+            for term in ["gnome-terminal", "xterm", "konsole"]:
+                try:
+                    subprocess.Popen([term, "--", "bash", "-c", f"cd {worktree_path} && claude"])
+                    break
+                except FileNotFoundError:
+                    continue
 
-        # Read the task context
-        task_path = os.path.join(worktree_path, "TASK.md")
-        with open(task_path, "r") as f:
-            task_content = f.read()
-
-        result = session.runtime.send(
-            f"Work on this task in the current directory:\n\n{task_content}",
-            working_dir=worktree_path,
-            timeout=3600,
-        )
-        return {"success": True, "output": result[:500] if result else ""}
+        logger.info(f"[agent] Launched claude in terminal for {agent_id} at {worktree_path}")
+        return {"success": True, "working_path": worktree_path}
     except Exception as e:
         logger.error(f"[agent] Kickoff failed for {agent_id}: {e}")
         return {"success": False, "error": str(e)}
