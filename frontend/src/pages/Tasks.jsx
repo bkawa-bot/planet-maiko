@@ -552,10 +552,15 @@ function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchD
     review: "#a78bfa", done: "#4ade80", cancelled: "#6b7280",
   }[t.status] || "var(--text-muted)";
 
-  const statusIcon = {
-    new: "📋", in_progress: "🔧", waiting: "⏳",
-    review: "👀", done: "✅", cancelled: "⛔",
-  }[t.status] || "📋";
+  const statusAction = {
+    new: { icon: Play, next: "start", title: "Start task" },
+    in_progress: { icon: CheckSquare, next: "done", title: "Mark done" },
+    waiting: { icon: Clock, next: null, title: "Waiting" },
+    review: { icon: Eye, next: null, title: "In review" },
+    done: { icon: CheckSquare, next: null, title: "Done" },
+    cancelled: { icon: X, next: null, title: "Cancelled" },
+  }[t.status] || { icon: Play, next: null, title: t.status };
+  const StatusIcon = statusAction.icon;
 
   return (
     <div
@@ -563,9 +568,13 @@ function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchD
       className={`task-card ${t.status === "done" || t.status === "cancelled" ? "dimmed" : ""} ${isExpanded ? "expanded" : ""}`}
       onClick={() => setExpanded(isExpanded ? null : t.id)}
     >
-      <div className="task-status-indicator" style={{ background: statusColor }} />
-      <div className="task-icon" style={{ borderColor: statusColor }}>
-        <span className="task-icon-emoji">{statusIcon}</span>
+      <div
+        className={`task-status-circle status-${t.status}`}
+        onClick={(e) => { if (statusAction.next) { handleAction(e, t.id, statusAction.next); } }}
+        title={statusAction.title}
+        style={{ cursor: statusAction.next ? "pointer" : "default" }}
+      >
+        <StatusIcon size={14} />
       </div>
       <div className="task-content">
         <div className="task-top">
@@ -585,16 +594,6 @@ function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchD
             >
               {(t.extra?.pinned || t.metadata?.pinned) ? <PinOff size={12} /> : <Pin size={12} />}
             </button>
-            {t.status === "new" && (
-              <button className="btn-ghost btn-quick-start" onClick={(e) => handleAction(e, t.id, "start")} title="Start">
-                <Play size={12} />
-              </button>
-            )}
-            {t.status === "in_progress" && (
-              <button className="btn-ghost btn-quick-done" onClick={(e) => handleAction(e, t.id, "done")} title="Done">
-                <CheckSquare size={12} />
-              </button>
-            )}
           </div>
         </div>
         <div className="task-meta">
@@ -640,16 +639,6 @@ function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchD
                   <option key={p.id} value={p.id}>{p.title}</option>
                 ))}
               </select>
-              {t.status === "new" && (
-                <button className="btn btn-sm btn-approve" onClick={(e) => handleAction(e, t.id, "start")}>
-                  <Play size={10} /> Start
-                </button>
-              )}
-              {(t.status === "new" || t.status === "in_progress") && (
-                <button className="btn btn-sm btn-create" onClick={(e) => handleAction(e, t.id, "done")}>
-                  <CheckSquare size={10} /> Done
-                </button>
-              )}
               {t.url && (
                 <a href={t.url} target="_blank" rel="noreferrer" className="btn btn-sm" onClick={(e) => e.stopPropagation()}>
                   <ExternalLink size={10} /> Open

@@ -64,17 +64,29 @@
 }
 .project-group .task-card:last-child { border-bottom: none; }
 
-.task-status-indicator { width: 3px; flex-shrink: 0; }
-
-/* Task icon */
-.task-icon {
+/* Status circle — replaces the old icon + action buttons */
+.task-status-circle {
   display: flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; flex-shrink: 0;
-  background: var(--bg-card-alt); border-radius: 8px;
+  border-radius: 50%; margin: 10px 0 10px 10px;
+  transition: all 0.2s;
+}
+.task-status-circle:hover { transform: scale(1.1); }
+.task-status-circle.status-new { background: rgba(156, 163, 175, 0.15); color: var(--text-muted); }
+.task-status-circle.status-new:hover { background: rgba(96, 165, 250, 0.2); color: #60a5fa; }
+.task-status-circle.status-in_progress { background: rgba(96, 165, 250, 0.15); color: #60a5fa; animation: statusPulse 2s ease-in-out infinite; }
+.task-status-circle.status-waiting { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+.task-status-circle.status-review { background: rgba(167, 139, 250, 0.15); color: #a78bfa; }
+.task-status-circle.status-done { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+.task-status-circle.status-cancelled { background: rgba(107, 114, 128, 0.1); color: #6b7280; }
+
+@keyframes statusPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.3); }
+  50% { box-shadow: 0 0 0 4px rgba(96, 165, 250, 0); }
+}
   border: 1.5px solid var(--border); margin: 8px 0 8px 8px;
   transition: border-color 0.2s;
 }
-.task-icon-emoji { font-size: 14px; }
 
 .task-content { flex: 1; padding: 10px 12px; min-width: 0; }
 .task-top { display: flex; align-items: center; gap: 8px; }
