@@ -86,7 +86,7 @@ class PollerScheduler:
                     if created:
                         logger.info(f"[scheduler] {name}: {created} new pupdate(s)")
                         # Run brain cycle after new pupdates arrive
-                        from brain.cycle import run as brain_cycle
+                        from planet_maiko.brain.cycle import run as brain_cycle
                         brain_cycle(self.app)
             except Exception as e:
                 logger.error(f"[scheduler] {name} poll error: {e}")
