@@ -82,8 +82,10 @@ export default function BrainView() {
                 const result = await api.backfillKnowledge();
                 if (result.signals_created === 0) {
                   showToast("No new PR comments found. Add review comments to your PRs first.", "normal");
+                } else if (result.classify_note) {
+                  showToast(`Created ${result.signals_created} signals. ${result.classify_note}`, "high");
                 } else {
-                  showToast(`Created ${result.signals_created} signals, ${result.new_learnings} new learnings`, "normal");
+                  showToast(`Created ${result.signals_created} signals, ${result.classified} classified, ${result.new_learnings} new learnings`, "normal");
                 }
                 fetchLearnings();
               } catch (err) {

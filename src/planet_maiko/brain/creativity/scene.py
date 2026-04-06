@@ -172,21 +172,22 @@ def _generate_creative_note(weather, season, time_bucket, mood):
         return _creative_note_cache["text"]
 
     try:
-        from planet_maiko.agents.brain_session import BrainSession
-        session = BrainSession()
-        if not session.runtime or not session.runtime.is_available():
+        from planet_maiko.agents.brain_session import _get_runtime
+        runtime = _get_runtime()
+        if not runtime or not runtime.is_available():
             return None
 
+        from planet_maiko.agents.routing import resolve_model
         prompt = (
             f"Write a single atmospheric sentence (max 20 words) describing this scene: "
             f"{weather} weather, {season}, {time_bucket}, mood: {mood}. "
             f"Be poetic and cozy, like a Studio Ghibli film narrator."
         )
-        result = session.runtime.send(prompt, timeout=10)
-        if result:
-            text = result.strip().strip('"')
+        result = runtime.send(prompt, timeout=15, model=resolve_model("scene"))
+        if result and result.get("success") and result.get("output"):
+            text = result["output"].strip().strip('"')
             _creative_note_cache["text"] = text
-            _creative_note_cache["expires"] = now + 900  # 15 min cache
+            _creative_note_cache["expires"] = now + 3600  # 1 hour cache
             return text
     except Exception:
         pass

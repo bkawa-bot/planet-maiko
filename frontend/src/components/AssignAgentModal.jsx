@@ -79,8 +79,8 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
         custom_prompt: customPrompt || undefined,
         branch_name: branchName || undefined,
       });
-      const agent = recommendations.find((r) => r.profile.id === selectedId);
-      showToast(`${agent?.profile.display_name || "Agent"} assigned! Worktree ready.`, "normal");
+      const agent = recommendations.find((r) => r.profile && r.profile.id === selectedId);
+      showToast(`${agent?.profile?.display_name || "Agent"} assigned! Worktree ready.`, "normal");
       onAssigned();
       onClose();
     } catch (err) {

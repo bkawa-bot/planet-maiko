@@ -142,19 +142,20 @@ def backfill_learnings():
     signals_created = bootstrap_from_prs(limit=limit)
 
     classified = 0
+    classify_error = None
     try:
         classified = classify_unclassified_signals(batch_size=50)
-    except Exception:
-        pass
+    except Exception as e:
+        classify_error = str(e)
 
     learning_results = process_signals()
 
-    return jsonify({
-        "signals_created": signals_created,
-        "classified": classified,
-        "new_learnings": learning_results.get("new_learnings", 0),
-        "graduated": learning_results.get("graduated", 0),
-    })
+    result["classified"] = classified
+    result["new_learnings"] = learning_results.get("new_learnings", 0)
+    result["graduated"] = learning_results.get("graduated", 0)
+    if classify_error:
+        result["classify_note"] = f"LLM classification unavailable: {classify_error}. Signals saved but not categorized yet."
+    return jsonify(result)
 
 
 @learning_bp.route("/learnings/brief", methods=["GET"])

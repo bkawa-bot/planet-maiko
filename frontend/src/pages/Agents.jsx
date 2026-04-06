@@ -219,11 +219,18 @@ export default function Agents() {
                         <Terminal size={12} /> Terminal
                       </button>
                     )}
-                    <a className="btn btn-sm" href="https://claude.ai/code" target="_blank" rel="noreferrer" title="Open Claude Code web UI to view/steer agent sessions">
-                      <ExternalLink size={12} /> View Session
-                    </a>
+                    {a.working_path && (
+                      <button className="btn btn-sm" onClick={async () => {
+                        try {
+                          await api.openTerminal(a.working_path);
+                          showToast("Session opened in terminal", "normal");
+                        } catch (err) { showToast("Could not open terminal", "high"); }
+                      }} title="Open agent session in a terminal">
+                        <ExternalLink size={12} /> View Session
+                      </button>
+                    )}
                     <button className="btn btn-sm" onClick={() => loadThread(a.task_id)}>
-                      <MessageCircle size={12} /> Messages
+                      <MessageCircle size={12} /> Channel Log
                     </button>
                   </div>
                 </div>
@@ -253,7 +260,7 @@ export default function Agents() {
                   <div className="agent-actions">
                     <button className="btn btn-sm btn-comms"><Bone size={12} /> Nudge</button>
                     <button className="btn btn-sm" onClick={() => loadThread(a.task_id)}>
-                      <MessageCircle size={12} /> Messages
+                      <MessageCircle size={12} /> Channel Log
                     </button>
                     <button className="btn btn-sm"><Moon size={12} /> Sleep</button>
                   </div>

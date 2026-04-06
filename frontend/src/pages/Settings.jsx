@@ -141,22 +141,9 @@ export default function Settings() {
                     placeholder="your-github-username"
                   />
                 </label>
-                <label>
-                  Repos (comma-separated)
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <input
-                      type="text"
-                      style={{ flex: 1 }}
-                      value={(config.github?.repos || []).join(", ")}
-                      onChange={(e) =>
-                        updateField(
-                          "github",
-                          "repos",
-                          e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
-                        )
-                      }
-                      placeholder="org/repo1, org/repo2"
-                    />
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Repos</span>
                     <button
                       className="btn btn-sm"
                       disabled={discovering || !config.github?.username}
@@ -168,7 +155,7 @@ export default function Settings() {
                             const existing = new Set(config.github?.repos || []);
                             const merged = [...existing, ...result.repos.filter(r => !existing.has(r))];
                             updateField("github", "repos", merged);
-                            setMessage(`Found ${result.repos.length} repo(s) via ${result.source}`);
+                            setMessage(`Found ${result.repos.length} repo(s)`);
                           } else {
                             setMessage("No repos found. Make sure gh CLI is authenticated.");
                           }
@@ -178,13 +165,39 @@ export default function Settings() {
                         setDiscovering(false);
                         setTimeout(() => setMessage(""), 5000);
                       }}
-                      title="Auto-discover repos from your recent GitHub activity"
                     >
                       {discovering ? <Loader size={10} className="spin" /> : <FolderGit2 size={10} />}
-                      {discovering ? " Finding..." : " Discover"}
+                      {discovering ? " Finding..." : " Auto-Discover"}
                     </button>
                   </div>
-                </label>
+                  <div className="repo-list">
+                    {(config.github?.repos || []).map((repo, i) => (
+                      <div key={i} className="repo-list-item">
+                        <span>{repo}</span>
+                        <button className="btn-ghost" onClick={() => {
+                          const updated = (config.github?.repos || []).filter((_, j) => j !== i);
+                          updateField("github", "repos", updated);
+                        }} title="Remove"><span style={{ fontSize: 14, color: "var(--urgent)" }}>&times;</span></button>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                    <input
+                      type="text"
+                      style={{ flex: 1 }}
+                      placeholder="org/repo-name"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && e.target.value.trim()) {
+                          const val = e.target.value.trim();
+                          const repos = config.github?.repos || [];
+                          if (!repos.includes(val)) updateField("github", "repos", [...repos, val]);
+                          e.target.value = "";
+                        }
+                      }}
+                    />
+                    <span style={{ fontSize: 10, color: "var(--text-muted)", alignSelf: "center" }}>Press Enter to add</span>
+                  </div>
+                </div>
                 <label>
                   Repository roots (local paths, comma-separated)
                   <input
@@ -376,9 +389,9 @@ export default function Settings() {
           <div className="collapsible-body">
             <div className="integration-section">
               <div className="setup-hint">
-                Route tasks to different model tiers to balance cost and quality.
-                Haiku handles quick classifications, Sonnet runs skills and planning,
-                Opus powers tournaments and coding agents.
+                Route tasks to different models to balance cost and quality.
+                Haiku is cheapest for simple classifications, Sonnet is balanced for skills,
+                Opus is best for coding and judging.
               </div>
               <div className="integration-fields">
                 <label>
@@ -391,27 +404,51 @@ export default function Settings() {
                 </label>
                 <label>
                   Default model
-                  <select
-                    value={config.routing?.default_model || "sonnet"}
-                    onChange={(e) => updateField("routing", "default_model", e.target.value)}
-                    style={{
-                      padding: "8px 12px",
-                      border: "1px solid var(--border)",
-                      borderRadius: "var(--radius-xs)",
-                      background: "var(--bg)",
-                      color: "var(--text)",
-                      fontSize: "0.85rem",
-                      fontFamily: "inherit",
-                    }}
-                  >
-                    <option value="haiku">Haiku (fastest, cheapest)</option>
-                    <option value="sonnet">Sonnet (balanced)</option>
-                    <option value="opus">Opus (highest quality)</option>
+                  <select value={config.routing?.default_model || "sonnet"} onChange={(e) => updateField("routing", "default_model", e.target.value)} className="routing-select">
+                    <option value="haiku">Haiku</option>
+                    <option value="sonnet">Sonnet</option>
+                    <option value="opus">Opus</option>
                   </select>
-                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                    Used for task types that don't have an explicit routing rule.
-                  </span>
                 </label>
+              </div>
+              <div className="routing-rules-table">
+                <div className="routing-rules-header">
+                  <span>Task Type</span>
+                  <span>Model</span>
+                </div>
+                {[
+                  { key: "triage", label: "Triage (pupdate classification)", tier: "haiku" },
+                  { key: "classify", label: "Signal classification", tier: "haiku" },
+                  { key: "scene", label: "Scene creative note", tier: "haiku" },
+                  { key: "conflict_query", label: "Conflict detection", tier: "haiku" },
+                  { key: "skill", label: "Skills (default)", tier: "sonnet" },
+                  { key: "skill:morning-brief", label: "Morning Brief", tier: "sonnet" },
+                  { key: "skill:pr-review", label: "PR Review", tier: "sonnet" },
+                  { key: "skill:investigate", label: "Investigate", tier: "sonnet" },
+                  { key: "project_plan", label: "Project planning", tier: "sonnet" },
+                  { key: "profile_judge", label: "Task outcome judging", tier: "sonnet" },
+                  { key: "tournament:entry", label: "Tournament entries", tier: "opus" },
+                  { key: "tournament:judge", label: "Tournament judging", tier: "opus" },
+                  { key: "training:entry", label: "Training entries", tier: "opus" },
+                  { key: "training:judge", label: "Training judging", tier: "opus" },
+                  { key: "coding_agent", label: "Coding agents", tier: "opus" },
+                ].map(({ key, label, tier }) => (
+                  <div key={key} className="routing-rule-row">
+                    <span className="routing-rule-label">{label}</span>
+                    <select
+                      className="routing-select"
+                      value={(config.routing?.rules || {})[key] || tier}
+                      onChange={(e) => {
+                        const rules = { ...(config.routing?.rules || {}), [key]: e.target.value };
+                        setConfig((c) => ({ ...c, routing: { ...c?.routing, rules } }));
+                      }}
+                    >
+                      <option value="haiku">Haiku</option>
+                      <option value="sonnet">Sonnet</option>
+                      <option value="opus">Opus</option>
+                    </select>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
