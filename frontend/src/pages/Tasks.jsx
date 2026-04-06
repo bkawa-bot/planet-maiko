@@ -3,9 +3,9 @@ import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import AssignAgentModal from "../components/AssignAgentModal";
 import {
-  CheckSquare, Plus, FolderPlus, FolderOpen, Pin, PinOff, ExternalLink,
+  CheckSquare, Square, Plus, FolderPlus, FolderOpen, Pin, PinOff, ExternalLink,
   ChevronDown, ChevronRight, Folder, GitBranch, Clock, Bot, Eye,
-  Play, X, Download, Sparkles, Trash2, Pencil, Brain,
+  Play, X, Download, Sparkles, Trash2, Pencil, Brain, Circle,
 } from "lucide-react";
 import "./Tasks.css";
 import "./Inbox.css";
@@ -29,7 +29,7 @@ export default function Tasks() {
   const [taskForm, setTaskForm] = useState({ title: "", type: "todo", priority: "normal", url: "", project_id: "", due_date: "" });
   const [projectForm, setProjectForm] = useState({ title: "", description: "", priority: "normal" });
   const [editingTask, setEditingTask] = useState(null);
-  const [editForm, setEditForm] = useState({ title: "", type: "todo", priority: "normal", project_id: "", url: "", due_date: "" });
+  const [editForm, setEditForm] = useState({ title: "", type: "todo", priority: "normal", status: "new", project_id: "", url: "", due_date: "" });
   const [askingMaiko, setAskingMaiko] = useState(null);
   const [maikoQuery, setMaikoQuery] = useState("");
   const [maikoResult, setMaikoResult] = useState(null);
@@ -391,6 +391,17 @@ export default function Tasks() {
               </div>
               <div className="form-row form-row-inline">
                 <label>
+                  Status
+                  <select value={editForm.status} onChange={(e) => setEditForm((f) => ({ ...f, status: e.target.value }))}>
+                    <option value="new">New</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="waiting">Waiting</option>
+                    <option value="review">Review</option>
+                    <option value="done">Done</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </label>
+                <label>
                   Type
                   <select value={editForm.type} onChange={(e) => setEditForm((f) => ({ ...f, type: e.target.value }))}>
                     <option value="todo">Todo</option>
@@ -554,9 +565,9 @@ function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchD
   }[t.status] || "var(--text-muted)";
 
   const statusIcon = {
-    new: Play, in_progress: GitBranch, waiting: Clock,
+    new: Circle, in_progress: Square, waiting: Clock,
     review: Eye, done: CheckSquare, cancelled: X,
-  }[t.status] || CheckSquare;
+  }[t.status] || Circle;
   const StatusIconComp = statusIcon;
 
   const priorityClass = t.priority || "normal";
@@ -636,6 +647,7 @@ function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchD
                   title: t.title || "",
                   type: t.type || "todo",
                   priority: t.priority || "normal",
+                  status: t.status || "new",
                   project_id: t.project_id || "",
                   url: t.url || "",
                   due_date: t.due_date || "",

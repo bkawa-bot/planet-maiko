@@ -64,7 +64,7 @@ def update_task(task_id):
     task = db.get_or_404(Task, task_id)
     data = request.get_json()
 
-    for field in ["title", "type", "priority", "url", "tags", "project_id", "assigned_agent_id", "due_date"]:
+    for field in ["title", "type", "status", "priority", "url", "tags", "project_id", "assigned_agent_id", "due_date"]:
         if field in data:
             setattr(task, field, data[field])
     if "metadata" in data:

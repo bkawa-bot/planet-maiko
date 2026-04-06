@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import "./Home.css";
 import "./Tasks.css";
+import "./Inbox.css";
 
 function relativeTime(timestamp) {
   const now = Date.now();
@@ -380,28 +381,30 @@ export default function Home() {
                     new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
                     review: "#a78bfa", done: "#4ade80", cancelled: "#6b7280",
                   }[t.status] || "var(--text-muted)";
-                  const statusIcon = {
-                    new: "\ud83d\udccb", in_progress: "\ud83d\udd27", waiting: "\u23f3",
-                    review: "\ud83d\udc40", done: "\u2705", cancelled: "\u26d4",
-                  }[t.status] || "\ud83d\udccb";
+                  const FocusIcon = {
+                    new: Play, in_progress: CheckSquare, waiting: Clock,
+                    review: Calendar, done: CheckSquare, cancelled: Shield,
+                  }[t.status] || CheckSquare;
                   const isExpanded = expandedFocusTask === t.id;
                   return (
-                    <div key={t.id} className={`task-card ${isExpanded ? "expanded" : ""}`} onClick={() => setExpandedFocusTask(isExpanded ? null : t.id)} style={{ cursor: "pointer" }}>
-                      <div className="task-status-indicator" style={{ background: statusColor }} />
-                      <div className="task-icon" style={{ borderColor: statusColor }}>
-                        <span className="task-icon-emoji">{statusIcon}</span>
+                    <div key={t.id} className={`card pupdate-card ${t.priority || "normal"} ${isExpanded ? "expanded" : ""}`} onClick={() => setExpandedFocusTask(isExpanded ? null : t.id)} style={{ cursor: "pointer" }}>
+                      <div className="card-left-bar" style={{ background: statusColor }} />
+                      <div className="card-source-icon" onClick={(e) => {
+                        e.stopPropagation();
+                        if (t.status === "new") { api.startTask(t.id); showToast("Started", "normal"); }
+                        else if (t.status === "in_progress") { api.completeTask(t.id); showToast("Done!", "normal"); }
+                      }} style={{ cursor: t.status === "new" || t.status === "in_progress" ? "pointer" : "default" }}>
+                        <FocusIcon size={14} />
                       </div>
-                      <div className="task-content">
-                        <div className="task-top">
-                          <span className="task-title">{t.title}</span>
+                      <div className="card-content">
+                        <div className="card-top">
+                          <span className="card-source" style={{ color: statusColor }}>{t.status.replace("_", " ")}</span>
+                          <span className="card-title">{t.title}</span>
                           {(t.extra?.pinned || t.metadata?.pinned) && <Pin size={10} style={{ color: "var(--pink)", flexShrink: 0 }} />}
                         </div>
-                        <div className="task-meta">
-                          <span className="task-status-label" style={{ color: statusColor }}>{t.status.replace("_", " ")}</span>
-                          {t.project_id && <span className="tag tag-project">{t.project_id}</span>}
-                          <span className="task-type-label">{t.type}</span>
-                          {t.due_date && <span className="tag tag-due"><Clock size={9} /> {t.due_date}</span>}
-                          {t.assigned_agent_id && <span className="tag"><Bot size={9} /> {t.assigned_agent_id.replace("agent-", "").slice(0, 12)}</span>}
+                        <div className="card-meta">
+                          {t.type && <span className="card-type">{t.type}</span>}
+                          {t.due_date && <span className="card-time"><Clock size={9} /> {t.due_date}</span>}
                         </div>
                         {isExpanded && (
                           <div className="focus-task-expanded" onClick={(e) => e.stopPropagation()}>
@@ -411,16 +414,6 @@ export default function Home() {
                               </a>
                             )}
                             <div className="focus-task-actions">
-                              {t.status === "new" && (
-                                <button className="btn btn-sm btn-approve" onClick={async () => { await api.startTask(t.id); showToast("Task started", "normal"); }}>
-                                  <Play size={10} /> Start
-                                </button>
-                              )}
-                              {(t.status === "new" || t.status === "in_progress") && (
-                                <button className="btn btn-sm btn-create" onClick={async () => { await api.completeTask(t.id); showToast("Task done!", "normal"); }}>
-                                  <CheckSquare size={10} /> Done
-                                </button>
-                              )}
                               <button className="btn btn-sm" onClick={() => navigate("/tasks")}>
                                 Open in Tasks
                               </button>
