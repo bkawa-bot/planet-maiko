@@ -68,9 +68,20 @@ export default function BrainView() {
           <span className="kstat"><Clock size={12} /> {pending.length} pending</span>
           <span className="kstat"><Layers size={12} /> {Object.keys(byCategory).length} categories</span>
           {pending.length > 0 && (
-            <button className="btn btn-sm" onClick={handleApproveAll} style={{ marginLeft: "auto" }}>
-              <Check size={10} /> Approve All ({pending.length})
-            </button>
+            <>
+              <button className="btn btn-sm" onClick={handleApproveAll} style={{ marginLeft: "auto" }}>
+                <Check size={10} /> Approve All ({pending.length})
+              </button>
+              <button className="btn btn-sm btn-danger" onClick={async () => {
+                for (const l of learnings.filter((l) => l.status === "pending")) {
+                  await api.dismissLearning(l.id);
+                }
+                showToast(`Dismissed ${pending.length} learnings`, "normal");
+                fetchLearnings();
+              }}>
+                <X size={10} /> Dismiss All
+              </button>
+            </>
           )}
           <button
             className="btn btn-sm"
