@@ -56,6 +56,44 @@ def dataset_stats():
     return jsonify(stats)
 
 
+@training_bp.route("/training/train-agent", methods=["POST"])
+def train_agent_endpoint():
+    """Train a LoRA adapter for an agent using extracted PR data."""
+    from planet_maiko.brain.learning.trainer import train_agent, check_requirements
+
+    data = request.get_json(silent=True) or {}
+    agent_id = data.get("agent_profile_id")
+
+    if not agent_id:
+        return jsonify({"error": "agent_profile_id required"}), 400
+
+    # Check if training is possible
+    reqs = check_requirements()
+    if not reqs["ready"]:
+        return jsonify({
+            "error": "Training backend not available",
+            "recommendation": reqs.get("recommendation", ""),
+            "details": reqs,
+        }), 503
+
+    result = train_agent(
+        agent_profile_id=agent_id,
+        dataset_path=data.get("dataset_path"),
+        repo=data.get("repo"),
+        config=data.get("config"),
+    )
+
+    status = 200 if result.get("success") else 500
+    return jsonify(result), status
+
+
+@training_bp.route("/training/check-requirements", methods=["GET"])
+def check_training_requirements():
+    """Check if LoRA training is available on this machine."""
+    from planet_maiko.brain.learning.trainer import check_requirements
+    return jsonify(check_requirements())
+
+
 @training_bp.route("/training/history", methods=["GET"])
 def training_history():
     """List past training sessions."""

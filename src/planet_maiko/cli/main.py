@@ -349,6 +349,65 @@ def cmd_bootstrap(args):
         print(f"Created {count} signals from PR reviews.")
 
 
+def cmd_train(args):
+    """Train a LoRA adapter for an agent."""
+    from planet_maiko.brain.learning.trainer import train_agent, check_requirements
+
+    if args.check:
+        reqs = check_requirements()
+        print(f"Backend: {reqs.get('backend', 'none')}")
+        print(f"Ready: {reqs.get('ready', False)}")
+        if not reqs.get("ready"):
+            print(f"Install: {reqs.get('recommendation', '')}")
+        return
+
+    from planet_maiko.app import create_app
+    app = create_app(start_scheduler=False)
+    with app.app_context():
+        if args.all:
+            from planet_maiko.models.agent_profile import AgentProfile
+            profiles = AgentProfile.query.filter(
+                (AgentProfile.archived == False) | (AgentProfile.archived == None)
+            ).all()
+            for p in profiles:
+                print(f"\nTraining {p.display_name}...")
+                result = train_agent(p.id)
+                if result.get("success"):
+                    print(f"  Done: {result['adapter_path']} ({result['duration_seconds']}s)")
+                else:
+                    print(f"  Failed: {result.get('error')}")
+        elif args.agent:
+            result = train_agent(args.agent)
+            if result.get("success"):
+                print(f"Done: {result['adapter_path']} ({result['examples']} examples, {result['duration_seconds']}s)")
+            else:
+                print(f"Failed: {result.get('error')}")
+                if result.get("install_hint"):
+                    print(f"Install: {result['install_hint']}")
+        else:
+            print("Specify an agent ID or --all. Use --check to verify requirements.")
+
+
+def cmd_extract_training_data(args):
+    """Extract training data from PR review history."""
+    from planet_maiko.config import load_config
+    from planet_maiko.brain.learning.training_data import extract_training_data
+
+    config = load_config()
+    repos = config.get("github", {}).get("repos", [])
+    if not repos:
+        print("No repos configured. Set them in Settings > GitHub.")
+        return
+
+    print(f"Extracting from {len(repos)} repos (limit {args.limit} PRs each)...")
+    result = extract_training_data(repos=repos, limit_per_repo=args.limit)
+    print(f"Extracted {result['pairs']} training pairs:")
+    print(f"  Violations: {result['violations']}")
+    print(f"  Passes: {result['passes']}")
+    if result.get("file_path"):
+        print(f"  Saved to: {result['file_path']}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="maiko",
@@ -432,6 +491,18 @@ def main():
     bootstrap_parser = subparsers.add_parser("bootstrap", help="Seed learnings from past PR reviews")
     bootstrap_parser.add_argument("--limit", type=int, default=20, help="Max PRs to scan")
     bootstrap_parser.set_defaults(func=cmd_bootstrap)
+
+    # maiko train
+    train_parser = subparsers.add_parser("train", help="Train a LoRA adapter for an agent")
+    train_parser.add_argument("agent", nargs="?", help="Agent ID or display name (omit for --check)")
+    train_parser.add_argument("--check", action="store_true", help="Check if training is available")
+    train_parser.add_argument("--all", action="store_true", help="Train all agents")
+    train_parser.set_defaults(func=cmd_train)
+
+    # maiko extract-training-data
+    extract_parser = subparsers.add_parser("extract-training-data", help="Extract training data from PR history")
+    extract_parser.add_argument("--limit", type=int, default=200, help="Max PRs per repo")
+    extract_parser.set_defaults(func=cmd_extract_training_data)
 
     # Let plugins register CLI commands
     try:

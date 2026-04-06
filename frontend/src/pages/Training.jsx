@@ -331,6 +331,73 @@ export default function Training() {
           </div>
         )}
       </div>
+
+      {/* LoRA Model Training */}
+      <div className="training-dataset-section">
+        <div className="training-dataset-header">
+          <GraduationCap size={14} /> Train LoRA Model
+          <InfoButton title={<><GraduationCap size={16} /> LoRA Training</>}>
+            <p>Train a small LoRA adapter on your PR review data. The adapter encodes your team's coding patterns so compliance checks run locally — free and fast.</p>
+            <h4>Requirements</h4>
+            <p>Apple Silicon Mac with MLX (<code>pip install mlx mlx-lm</code>) or NVIDIA GPU with PyTorch. Your M3 Max 36GB is perfect.</p>
+            <h4>How it works</h4>
+            <ol>
+              <li>Select an agent to train</li>
+              <li>Training data from the dataset above is formatted for the model</li>
+              <li>LoRA fine-tuning runs locally (~30 min)</li>
+              <li>Adapter saved to agent's profile — used for future compliance checks</li>
+            </ol>
+          </InfoButton>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+          <select
+            className="training-select"
+            value={selectedAgent}
+            onChange={(e) => setSelectedAgent(e.target.value)}
+          >
+            <option value="">Choose an agent to train...</option>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.display_name} — {p.extra?.trained_on_examples ? `v${p.extra?.train_version || 1} (${p.extra.trained_on_examples} examples)` : "untrained"}
+              </option>
+            ))}
+          </select>
+          <button
+            className="btn btn-primary"
+            disabled={!selectedAgent || !datasets.length || running}
+            onClick={async () => {
+              setRunning(true);
+              showToast("Training LoRA adapter... this may take 20-30 minutes", "normal");
+              try {
+                const result = await api.trainAgent({ agent_profile_id: selectedAgent });
+                if (result.success) {
+                  showToast(`Training complete! Adapter saved (${result.examples} examples, ${result.duration_seconds}s)`, "normal");
+                  api.getProfiles().then(setProfiles).catch(() => {});
+                } else {
+                  showToast(result.error || "Training failed", "high");
+                  if (result.install_hint) showToast(`Install: ${result.install_hint}`, "normal");
+                }
+              } catch (err) {
+                showToast("Training failed: " + err.message, "high");
+              }
+              setRunning(false);
+            }}
+          >
+            {running ? <><Loader size={12} className="spin" /> Training...</> : <><GraduationCap size={12} /> Train Model</>}
+          </button>
+        </div>
+
+        {!datasets.length && (
+          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            Extract training data from PRs first (above), then train a model.
+          </div>
+        )}
+
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+          Requires: <code>pip install mlx mlx-lm</code> (Mac) or <code>pip install torch unsloth</code> (NVIDIA)
+        </div>
+      </div>
     </div>
   );
 }
