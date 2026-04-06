@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "MCP channel for Planet Maiko agent communication",
   "type": "module",
-  "main": "index.js",
+  "main": "index.mjs",
   "scripts": {
     "start": "node index.js"
   },

@@ -129,11 +129,11 @@ def _write_mcp_json(working_path, task_id):
     # Find the channel script path relative to the planet-maiko install
     channel_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__)
-    ))), "channel", "index.js")
+    ))), "channel", "index.mjs")
 
     # Fall back to looking relative to the working path
     if not os.path.exists(channel_path):
-        channel_path = os.path.join(working_path, "..", "..", "channel", "index.js")
+        channel_path = os.path.join(working_path, "..", "..", "channel", "index.mjs")
 
     mcp_config = {
         "mcpServers": {
