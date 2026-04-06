@@ -181,8 +181,10 @@ export const api = {
     return request(`/tournaments/scores${query}`);
   },
 
-  // Agent terminal
+  // Agent terminal & sessions
   openTerminal: (path) => request("/agents/open-terminal", { method: "POST", body: JSON.stringify({ path }) }),
+  getAgentSession: (taskId) => request(`/agents/${taskId}/session`),
+  resumeAgentSession: (taskId) => request("/agents/resume-session", { method: "POST", body: JSON.stringify({ task_id: taskId }) }),
 
   // Training
   getTrainingPRs: () => request("/training/prs"),

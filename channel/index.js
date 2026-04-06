@@ -164,9 +164,29 @@ async function pollMessages() {
   }
 }
 
+// --- Report session ID ---
+
+async function reportSessionId() {
+  const sessionId = process.env.CLAUDE_SESSION_ID;
+  if (!sessionId || !TASK_ID) return;
+
+  try {
+    await fetch(`${API_URL}/agents/${TASK_ID}/session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId }),
+    });
+  } catch (err) {
+    // Non-blocking
+  }
+}
+
 // --- Start ---
 
 await mcp.connect(new StdioServerTransport());
+
+// Report session ID to Maiko
+reportSessionId();
 
 // Start polling for messages
 setInterval(pollMessages, POLL_MS);

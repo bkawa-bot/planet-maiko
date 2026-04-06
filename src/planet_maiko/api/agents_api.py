@@ -178,6 +178,40 @@ def assign_agent():
     }), 201
 
 
+@agents_bp.route("/agents/resume-session", methods=["POST"])
+def resume_session():
+    """Open a terminal that resumes an agent's Claude Code session."""
+    import subprocess
+    import sys
+
+    data = request.get_json()
+    task_id = data.get("task_id", "")
+    session_id = _agent_sessions.get(task_id)
+
+    if not session_id:
+        return jsonify({"error": "No session ID found for this agent. The agent may not have started yet."}), 404
+
+    cmd = f"claude --resume {session_id}"
+
+    try:
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", "-a", "Terminal.app", "--args", "-e", cmd])
+            # Terminal.app doesn't support --args well, use osascript instead
+            subprocess.Popen(["osascript", "-e", f'tell application "Terminal" to do script "{cmd}"'])
+        elif sys.platform == "win32":
+            subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", cmd], shell=True)
+        else:
+            for term in ["gnome-terminal", "xterm", "konsole"]:
+                try:
+                    subprocess.Popen([term, "--", "bash", "-c", cmd])
+                    break
+                except FileNotFoundError:
+                    continue
+        return jsonify({"status": "opened", "session_id": session_id, "command": cmd})
+    except Exception as e:
+        return jsonify({"error": str(e), "command": cmd}), 500
+
+
 @agents_bp.route("/agents/open-terminal", methods=["POST"])
 def open_terminal():
     """Open a terminal window at the given path."""
@@ -413,6 +447,26 @@ def get_all_messages(task_id):
         .all()
     )
     return jsonify([m.to_dict() for m in messages])
+
+
+# In-memory session ID store (task_id -> session_id)
+_agent_sessions = {}
+
+
+@agents_bp.route("/agents/<task_id>/session", methods=["POST"])
+def register_session(task_id):
+    """Register a Claude Code session ID for an agent task."""
+    data = request.get_json()
+    session_id = data.get("session_id")
+    if session_id:
+        _agent_sessions[task_id] = session_id
+    return jsonify({"status": "ok"})
+
+
+@agents_bp.route("/agents/<task_id>/session", methods=["GET"])
+def get_session(task_id):
+    """Get the Claude Code session ID for an agent task."""
+    return jsonify({"session_id": _agent_sessions.get(task_id)})
 
 
 @agents_bp.route("/agents/conflicts", methods=["GET"])

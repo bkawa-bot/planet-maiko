@@ -219,16 +219,24 @@ export default function Agents() {
                         <Terminal size={12} /> Terminal
                       </button>
                     )}
-                    {a.working_path && (
-                      <button className="btn btn-sm" onClick={async () => {
-                        try {
-                          await api.openTerminal(a.working_path);
-                          showToast("Session opened in terminal", "normal");
-                        } catch (err) { showToast("Could not open terminal", "high"); }
-                      }} title="Open agent session in a terminal">
-                        <ExternalLink size={12} /> View Session
-                      </button>
-                    )}
+                    <button className="btn btn-sm" onClick={async () => {
+                      try {
+                        const result = await api.resumeAgentSession(a.task_id);
+                        showToast(`Resuming session in terminal`, "normal");
+                      } catch (err) {
+                        // No session yet — try opening terminal in worktree
+                        if (a.working_path) {
+                          try {
+                            await api.openTerminal(a.working_path);
+                            showToast("Terminal opened", "normal");
+                          } catch (e) { showToast("Could not open session", "high"); }
+                        } else {
+                          showToast("No session found — agent may not have started yet", "normal");
+                        }
+                      }
+                    }} title="Resume the agent's Claude Code session in a terminal">
+                      <ExternalLink size={12} /> View Session
+                    </button>
                     <button className="btn btn-sm" onClick={() => loadThread(a.task_id)}>
                       <MessageCircle size={12} /> Channel Log
                     </button>
