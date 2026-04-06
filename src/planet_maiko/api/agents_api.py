@@ -223,6 +223,7 @@ def open_terminal():
     data = request.get_json()
     path = data.get("path", "")
     task_id = data.get("task_id", "")
+    branch = data.get("branch", "")
 
     if not path or not os.path.isdir(path):
         return jsonify({"error": "Invalid path"}), 400
@@ -240,12 +241,11 @@ def open_terminal():
         has_tmux_session = result.returncode == 0
 
     if has_tmux_session:
-        # Attach to existing tmux session in a new terminal
         attach_cmd = f"tmux attach -t {session_name}"
     else:
-        # Start fresh with claude
+        checkout = f"git checkout {branch} && " if branch else ""
         initial_prompt = "Read TASK.md and CLAUDE.md in this directory. Begin working on the task following the protocol."
-        attach_cmd = f'cd {path} && claude "{initial_prompt}"'
+        attach_cmd = f'{checkout}cd {path} && claude "{initial_prompt}"'
 
     try:
         if sys.platform == "darwin":

@@ -213,7 +213,7 @@ export default function Agents() {
                       const path = a.working_path || a.extra?.working_path;
                       if (path) {
                         try {
-                          await api.openTerminal(path, a.task_id);
+                          await api.openTerminal(path, a.task_id, a.branch);
                           showToast("Launching agent...", "normal");
                         } catch (err) { showToast("Could not open terminal", "high"); }
                       } else {
@@ -230,7 +230,7 @@ export default function Agents() {
                         // No session yet — try opening terminal in worktree
                         if (a.working_path) {
                           try {
-                            await api.openTerminal(a.working_path, a.task_id);
+                            await api.openTerminal(a.working_path, a.task_id, a.branch);
                             showToast("Attaching to session...", "normal");
                           } catch (e) { showToast("Could not open session", "high"); }
                         } else {

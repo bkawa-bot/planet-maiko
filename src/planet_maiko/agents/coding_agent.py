@@ -231,9 +231,10 @@ def _write_claude_settings(working_path, task_id, agent_id):
     logger.info(f"[agent] Wrote Claude hooks settings for {agent_id} ({len(hooks)} hooks)")
 
 
-def _kickoff_agent(agent_id, worktree_path, task_id):
+def _kickoff_agent(agent_id, worktree_path, task_id, branch_name=None):
     """Start the agent in a detached tmux session. View with 'View Session'."""
     import shutil
+    import sys
 
     claude_path = shutil.which("claude")
     if not claude_path:
@@ -243,20 +244,20 @@ def _kickoff_agent(agent_id, worktree_path, task_id):
     initial_prompt = "Read TASK.md and CLAUDE.md in this directory. Begin working on the task following the protocol. Report your status as you go."
     session_name = f"maiko-{task_id}"
 
+    # Build the launch command — checkout branch first if needed
+    checkout = f"git checkout {branch_name} && " if branch_name else ""
+    launch_cmd = f'{checkout}cd {worktree_path} && claude "{initial_prompt}"'
+
     try:
         if tmux_path:
-            # Launch in detached tmux session
             subprocess.Popen([
                 tmux_path, "new-session", "-d", "-s", session_name,
                 "-c", worktree_path,
-                f'{claude_path} "{initial_prompt}"',
+                "bash", "-c", launch_cmd,
             ])
             logger.info(f"[agent] Launched in tmux session '{session_name}' for {agent_id}")
             return {"success": True, "working_path": worktree_path, "tmux_session": session_name}
         else:
-            # Fallback: open visible terminal
-            import sys
-            launch_cmd = f'cd {worktree_path} && claude "{initial_prompt}"'
             if sys.platform == "darwin":
                 subprocess.Popen(["osascript", "-e", f'tell application "Terminal" to do script "{launch_cmd}"'])
             elif sys.platform == "win32":
@@ -268,7 +269,7 @@ def _kickoff_agent(agent_id, worktree_path, task_id):
                         break
                     except FileNotFoundError:
                         continue
-            logger.info(f"[agent] Launched in terminal for {agent_id} (tmux not available)")
+            logger.info(f"[agent] Launched in terminal for {agent_id}")
             return {"success": True, "working_path": worktree_path}
     except Exception as e:
         logger.error(f"[agent] Kickoff failed for {agent_id}: {e}")
@@ -464,7 +465,7 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     }
 
     if auto_kickoff:
-        kickoff_result = _kickoff_agent(agent_id, working_path, task_id)
+        kickoff_result = _kickoff_agent(agent_id, working_path, task_id, branch_name=branch_name if not use_worktree else None)
         result["status"] = "running" if kickoff_result.get("success") else "ready"
         result["kickoff_result"] = kickoff_result
 
