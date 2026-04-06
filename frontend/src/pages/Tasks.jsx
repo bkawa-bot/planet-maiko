@@ -26,6 +26,8 @@ export default function Tasks() {
   const [assigningTask, setAssigningTask] = useState(null);
   const [generatedTasks, setGeneratedTasks] = useState(null); // { project_id, tasks: [...] }
   const [generating, setGenerating] = useState(null); // project_id being generated
+  const [planning, setPlanning] = useState(null); // project_id being planned
+  const [viewingPlan, setViewingPlan] = useState(null); // project object to view plan
   const [taskForm, setTaskForm] = useState({ title: "", type: "todo", priority: "normal", url: "", project_id: "", due_date: "" });
   const [projectForm, setProjectForm] = useState({ title: "", description: "", priority: "normal" });
   const [editingTask, setEditingTask] = useState(null);
@@ -233,10 +235,30 @@ export default function Tasks() {
                   <div className="project-progress-bar">
                     <div className="project-progress-fill" style={{ width: `${pct}%` }} />
                   </div>
+                  {project.description && project.description.length > 50 && (
+                    <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); setViewingPlan(project); }} title="View project plan">
+                      <FolderOpen size={10} /> Plan
+                    </button>
+                  )}
+                  <button className="btn btn-sm btn-action" onClick={async (e) => {
+                    e.stopPropagation();
+                    setPlanning(project.id);
+                    showToast("Maiko is creating a plan...", "normal");
+                    try {
+                      const result = await api.generatePlan(project.id);
+                      showToast("Plan generated!", "normal");
+                      fetchData();
+                    } catch (err) {
+                      showToast(err.message || "Couldn't generate plan", "high");
+                    }
+                    setPlanning(null);
+                  }} disabled={planning === project.id}>
+                    <Brain size={10} /> {planning === project.id ? "Planning..." : "Plan"}
+                  </button>
                   <button className="btn btn-sm btn-action" onClick={async (e) => {
                     e.stopPropagation();
                     setGenerating(project.id);
-                    showToast("Maiko is thinking up tasks... 🐕", "normal");
+                    showToast("Maiko is generating tasks...", "normal");
                     try {
                       const result = await api.generateTasks(project.id);
                       setGeneratedTasks(result);
@@ -520,6 +542,23 @@ export default function Tasks() {
                   }
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewingPlan && (
+        <div className="modal-overlay" onClick={() => setViewingPlan(null)}>
+          <div className="info-modal" style={{ maxWidth: 650, maxHeight: "80vh" }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <Brain size={14} /> Plan: {viewingPlan.title}
+              <span style={{ flex: 1 }} />
+              <button className="btn btn-sm" onClick={() => setViewingPlan(null)} style={{ border: "none", padding: 4 }}><X size={14} /></button>
+            </div>
+            <div className="modal-body" style={{ overflow: "auto" }}>
+              <div className="md-content" style={{ fontSize: 13, lineHeight: 1.7, color: "var(--text-dim)", whiteSpace: "pre-wrap" }}>
+                {viewingPlan.description || "No plan generated yet. Click 'Plan' on the project header to generate one."}
+              </div>
             </div>
           </div>
         </div>

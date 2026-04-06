@@ -126,6 +126,44 @@ def generate_plan(project_id):
         return jsonify({"error": str(e)}), 500
 
 
+@projects_bp.route("/projects/<project_id>/generate-plan", methods=["POST"])
+def generate_plan(project_id):
+    """Use LLM to generate a project plan — scope, approach, risks, phases."""
+    project = db.get_or_404(Project, project_id)
+
+    from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
+    from planet_maiko.agents.routing import resolve_model
+
+    prompt = f"""Create a concise project plan for this work.
+
+Project: {project.title}
+Description: {project.description or "No description provided."}
+
+Write a plan covering:
+1. **Summary** — 2-3 sentences on what this project does
+2. **Approach** — how to implement it (key technical decisions)
+3. **Phases** — break into 2-4 phases (e.g. "Phase 1: Core logic", "Phase 2: Tests & polish")
+4. **Risks** — 1-3 things that could go wrong
+5. **Scope** — what's in scope and explicitly out of scope
+
+Keep it concise and actionable. Use markdown formatting."""
+
+    runtime = ClaudeCodeRuntime()
+    result = runtime.send(prompt, timeout=90, model=resolve_model("project_plan"))
+
+    if not result.get("success") or not result.get("output"):
+        return jsonify({"error": result.get("error", "Failed to generate plan")}), 500
+
+    plan = result["output"]
+
+    # Save plan to project description (append or replace)
+    project.description = plan
+    project.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    return jsonify({"plan": plan, "project_id": project_id})
+
+
 @projects_bp.route("/projects/<project_id>/generate-tasks", methods=["POST"])
 def generate_tasks(project_id):
     """Use LLM to generate task breakdown from project description."""
@@ -137,7 +175,8 @@ def generate_tasks(project_id):
     prompt = f"""Break down this project into concrete tasks. Return ONLY valid JSON — an array of task objects.
 
 Project: {project.title}
-Description: {project.description or "No description provided."}
+Plan/Description:
+{project.description or "No description provided."}
 
 Return JSON array like:
 [
