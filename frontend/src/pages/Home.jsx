@@ -357,6 +357,53 @@ export default function Home() {
           )}
         </div>
       )}
+
+      {/* Seasonal overlays */}
+      {scene?.context?.season && (
+        <div className="page-weather-overlay">
+          {/* Spring: butterflies + flowers */}
+          {scene.context.season === "spring" && (
+            <>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <img key={`bf-${i}`} src="/butterfly.svg" className={`page-butterfly page-butterfly-${i + 1}`} alt="" />
+              ))}
+              {Array.from({ length: 5 }).map((_, i) => (
+                <img key={`fl-${i}`} src={i % 2 === 0 ? "/flower1.svg" : "/flower2.svg"} className="page-flower" style={{ left: `${10 + i * 18}%`, bottom: 32 }} alt="" />
+              ))}
+            </>
+          )}
+
+          {/* Summer: fireflies (evening/night only) */}
+          {scene.context.season === "summer" && scene.context.time_bucket !== "day" && (
+            <>
+              {Array.from({ length: 12 }).map((_, i) => (
+                <div key={`ff-${i}`} className="page-firefly" style={{ left: `${5 + Math.random() * 85}%`, top: `${10 + Math.random() * 60}%`, animationDelay: `${Math.random() * 4}s`, animationDuration: `${2 + Math.random() * 3}s` }} />
+              ))}
+            </>
+          )}
+
+          {/* Autumn: falling leaves */}
+          {scene.context.season === "autumn" && (
+            <>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <img key={`lf-${i}`} src="/leaf.svg" className="page-leaf" style={{ left: `${i * 12 + Math.random() * 5}%`, animationDelay: `${Math.random() * 6}s`, animationDuration: `${4 + Math.random() * 4}s` }} alt="" />
+              ))}
+            </>
+          )}
+
+          {/* Night: planets + shooting stars */}
+          {scene.context.time_bucket === "night" && (
+            <>
+              <img src="/planet1.svg" className="page-planet page-planet-1" alt="" />
+              <img src="/planet2.svg" className="page-planet page-planet-2" alt="" />
+              {Array.from({ length: 15 }).map((_, i) => (
+                <div key={`st-${i}`} className="page-star" style={{ left: `${Math.random() * 95}%`, top: `${Math.random() * 40}%`, animationDelay: `${Math.random() * 5}s` }} />
+              ))}
+              <div className="page-shooting-star" />
+            </>
+          )}
+        </div>
+      )}
       <div className="home-grid">
         {/* Main content */}
         <div className="home-main">

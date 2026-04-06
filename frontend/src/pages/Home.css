@@ -291,7 +291,104 @@
 
 .scene-weather { font-size: 11px; color: var(--text-dim); text-transform: capitalize; }
 .scene-info { display: flex; flex-direction: column; gap: 6px; }
-.scene-weather { font-size: 11px; color: var(--text-dim); }
+
+/* === Seasonal overlays === */
+
+/* Butterflies (spring) */
+.page-butterfly {
+  position: absolute; width: 20px;
+  image-rendering: pixelated; opacity: 0.3;
+  animation: butterflyFloat ease-in-out infinite;
+}
+.page-butterfly-1 { top: 15%; left: -20px; animation-duration: 30s; }
+.page-butterfly-2 { top: 25%; left: -20px; animation-duration: 40s; animation-delay: 10s; opacity: 0.25; }
+.page-butterfly-3 { top: 10%; left: -20px; animation-duration: 35s; animation-delay: 20s; opacity: 0.2; }
+
+@keyframes butterflyFloat {
+  0% { transform: translate(0, 0) scaleX(1); }
+  25% { transform: translate(30vw, -20px) scaleX(-1); }
+  50% { transform: translate(55vw, 15px) scaleX(1); }
+  75% { transform: translate(80vw, -10px) scaleX(-1); }
+  100% { transform: translate(105vw, 5px) scaleX(1); }
+}
+
+/* Flowers (spring) */
+.page-flower {
+  position: absolute; width: 12px;
+  image-rendering: pixelated; opacity: 0.25;
+  animation: flowerSway 4s ease-in-out infinite;
+}
+@keyframes flowerSway {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+
+/* Fireflies (summer nights) */
+.page-firefly {
+  position: absolute;
+  width: 4px; height: 4px; border-radius: 50%;
+  background: #F0E060;
+  box-shadow: 0 0 6px 2px rgba(240, 224, 96, 0.4);
+  animation: fireflyGlow ease-in-out infinite;
+}
+@keyframes fireflyGlow {
+  0%, 100% { opacity: 0; transform: translate(0, 0); }
+  20% { opacity: 0.7; }
+  50% { opacity: 0.3; transform: translate(10px, -8px); }
+  80% { opacity: 0.8; transform: translate(-5px, 5px); }
+}
+
+/* Falling leaves (autumn) */
+.page-leaf {
+  position: absolute; top: -12px;
+  width: 10px; image-rendering: pixelated;
+  opacity: 0.25;
+  animation: leafFall ease-in-out infinite;
+}
+@keyframes leafFall {
+  0% { transform: translate(0, -12px) rotate(0deg); opacity: 0; }
+  10% { opacity: 0.3; }
+  50% { transform: translate(20px, 45vh) rotate(180deg); opacity: 0.25; }
+  100% { transform: translate(-10px, 95vh) rotate(360deg); opacity: 0; }
+}
+
+/* Planets (night) */
+.page-planet {
+  position: absolute; image-rendering: pixelated; opacity: 0.15;
+}
+.page-planet-1 { width: 24px; top: 8%; right: 15%; }
+.page-planet-2 { width: 18px; top: 20%; right: 35%; opacity: 0.1; }
+
+/* Twinkling stars (night) */
+.page-star {
+  position: absolute;
+  width: 2px; height: 2px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.6);
+  animation: starTwinkle 3s ease-in-out infinite;
+}
+@keyframes starTwinkle {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.8; }
+}
+
+/* Shooting star (night — rare, slow) */
+.page-shooting-star {
+  position: absolute;
+  top: 12%; right: -50px;
+  width: 2px; height: 2px;
+  background: white;
+  box-shadow: -20px 0 8px 1px rgba(255, 255, 255, 0.3), -40px 0 4px rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  animation: shootingStar 12s linear infinite;
+  animation-delay: 8s;
+  opacity: 0;
+}
+@keyframes shootingStar {
+  0% { transform: translate(0, 0); opacity: 0; }
+  2% { opacity: 0.8; }
+  8% { transform: translate(-40vw, 15vh); opacity: 0; }
+  100% { opacity: 0; }
+}
 .scene-weather-fallback {
   font-size: 11px; color: var(--text-muted); padding: 4px 0;
 }
