@@ -201,6 +201,9 @@ export const api = {
   getTrainingHistory: () => request("/training/history"),
   runTraining: (data) => request("/training/run", { method: "POST", body: JSON.stringify(data) }),
 
+  // Chat
+  chat: (message) => request("/chat", { method: "POST", body: JSON.stringify({ message }) }),
+
   // Agent profiles
   getProfiles: (params = {}) => {
     const query = new URLSearchParams(params).toString();

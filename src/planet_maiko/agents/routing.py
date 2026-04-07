@@ -10,6 +10,7 @@ DEFAULT_ROUTING = {
     "conflict_query": "haiku",
 
     # Sonnet tier
+    "chat": "sonnet",
     "skill": "sonnet",
     "skill:morning-brief": "sonnet",
     "skill:brainstorm": "sonnet",

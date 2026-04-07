@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/Layout";
 import ToastContainer from "./components/Toast";
+import AskMaiko from "./components/AskMaiko";
 import Home from "./pages/Home";
 import Inbox from "./pages/Inbox";
 import Tasks from "./pages/Tasks";
@@ -46,6 +47,7 @@ export default function App() {
     <BrowserRouter>
       <AppRoutes />
       <ToastContainer />
+      <AskMaiko />
     </BrowserRouter>
   );
 }
