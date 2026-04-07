@@ -93,6 +93,9 @@ def chat():
 
     context = _gather_context()
 
+    # Release the DB connection before the long LLM call to avoid SQLite locks
+    db.session.close()
+
     prompt = f"""{MAIKO_SYSTEM_PROMPT}
 
 ## Current System State
