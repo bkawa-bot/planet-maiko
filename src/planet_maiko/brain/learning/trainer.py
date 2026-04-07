@@ -167,7 +167,7 @@ def _prepare_training_file(dataset_path, output_dir, config):
                 # Convert to chat format
                 chat = {
                     "messages": [
-                        {"role": "system", "content": "You are a code compliance checker. Review the code and report any violations of coding standards, or respond PASS if the code is clean."},
+                        {"role": "system", "content": "You are a code review assistant. Given a code change with its file path and PR context, identify violations of coding standards, missing edge cases, security issues, or other problems. Respond PASS if the code is clean."},
                         {"role": "user", "content": pair["input"]},
                         {"role": "assistant", "content": pair["output"]},
                     ]

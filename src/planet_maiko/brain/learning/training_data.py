@@ -99,8 +99,14 @@ def _extract_from_repo(repo, limit):
                 if any(lower.startswith(p) for p in ["lgtm", "looks good", "nice", "great", "+1", "approved"]):
                     continue
 
+                # Build contextual input: file path, PR context, then code
+                context_parts = [f"File: {path}"]
+                if title:
+                    context_parts.append(f"PR: {title}")
+                context_parts.append(f"```\n{code_hunk}\n```")
+
                 pairs.append({
-                    "input": code_hunk,
+                    "input": "\n".join(context_parts),
                     "output": f"VIOLATION: {body}",
                     "repo": repo,
                     "file_path": path,
@@ -112,9 +118,12 @@ def _extract_from_repo(repo, limit):
             # PRs with no review comments → pass examples (clean merge)
             diff = _get_pr_diff(repo, number)
             if diff and len(diff) > 50:
-                # Take first 2000 chars of diff as a pass example
+                # Build contextual input for pass examples too
+                context_parts = [f"PR: {title}"]
+                context_parts.append(f"```\n{diff[:2000]}\n```")
+
                 pairs.append({
-                    "input": diff[:2000],
+                    "input": "\n".join(context_parts),
                     "output": "PASS",
                     "repo": repo,
                     "pr_number": number,
