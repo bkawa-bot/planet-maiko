@@ -85,6 +85,20 @@ def check_training_requirements():
     return jsonify(check_requirements())
 
 
+@training_bp.route("/training/generate-from-rules", methods=["POST"])
+def generate_from_rules_endpoint():
+    """Generate training data from active learnings (rules + synthetic examples)."""
+    from planet_maiko.brain.learning.rule_training_data import generate_rule_dataset
+
+    data = request.get_json(silent=True) or {}
+    examples = data.get("examples_per_rule", 50)
+
+    result = generate_rule_dataset(examples_per_rule=examples)
+
+    status = 200 if result.get("success") else 500
+    return jsonify(result), status
+
+
 @training_bp.route("/training/generate-synthetic", methods=["POST"])
 def generate_synthetic_endpoint():
     """Generate synthetic training data by sending diffs to Opus."""

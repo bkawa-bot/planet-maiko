@@ -432,6 +432,31 @@ def cmd_generate_synthetic(args):
         print(f"Failed: {result.get('error')}")
 
 
+def cmd_generate_rules(args):
+    """Generate training data from active learnings."""
+    from planet_maiko.app import create_app
+    app = create_app(start_scheduler=False)
+    with app.app_context():
+        from planet_maiko.brain.learning.rule_training_data import generate_rule_dataset
+
+        print(f"Generating training data from active learnings ({args.examples} examples per rule)...")
+        print("For each rule: real signals + synthetic violations + synthetic passes")
+        print()
+
+        result = generate_rule_dataset(examples_per_rule=args.examples)
+
+        if result.get("success"):
+            print(f"Generated {result['pairs']} training pairs from {result['rules_processed']} rules:")
+            print(f"  Violations: {result['violations']}")
+            print(f"  Passes: {result['passes']}")
+            if result['errors']:
+                print(f"  Errors: {result['errors']}")
+            if result.get("file_path"):
+                print(f"  Saved to: {result['file_path']}")
+        else:
+            print(f"Failed: {result.get('error')}")
+
+
 def cmd_review(args):
     """Review code using a trained LoRA adapter."""
     from planet_maiko.brain.learning.trainer import review_code
@@ -553,6 +578,11 @@ def main():
     extract_parser = subparsers.add_parser("extract-training-data", help="Extract training data from PR history")
     extract_parser.add_argument("--limit", type=int, default=200, help="Max PRs per repo")
     extract_parser.set_defaults(func=cmd_extract_training_data)
+
+    # maiko generate-rules
+    rules_parser = subparsers.add_parser("generate-rules", help="Generate training data from active learnings")
+    rules_parser.add_argument("--examples", type=int, default=50, help="Examples per rule (default 50)")
+    rules_parser.set_defaults(func=cmd_generate_rules)
 
     # maiko generate-synthetic
     synth_parser = subparsers.add_parser("generate-synthetic", help="Generate synthetic training data via Opus")

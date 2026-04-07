@@ -197,6 +197,7 @@ export const api = {
   getTrainingDatasetStats: () => request("/training/dataset-stats"),
   trainAgent: (data) => request("/training/train-agent", { method: "POST", body: JSON.stringify(data) }),
   checkTrainingRequirements: () => request("/training/check-requirements"),
+  generateFromRules: (data) => request("/training/generate-from-rules", { method: "POST", body: JSON.stringify(data || {}) }),
   generateSynthetic: (data) => request("/training/generate-synthetic", { method: "POST", body: JSON.stringify(data || {}) }),
 
   // Chat
