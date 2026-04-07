@@ -56,13 +56,23 @@ Send a `maiko report` after every major workflow step:
 2. Explore codebase → report "Exploring the codebase and checking existing patterns."
 3. Implement changes → report "Implementing changes to X..."
 4. Run tests/build → report "Tests passing!" or "Build failed, fixing..."
-5. Commit & push → report "Changes pushed to branch."
-6. Open draft PR → report "Draft PR #N opened."
-7. Self-review the diff → report "Self-reviewing the diff..."
-8. Fix any issues found → commit & push
-9. Report "PR #{task_id} ready for review."
-10. maiko task done
+5. Compliance review → run `maiko review <changed-files>` on each file you modified
+6. Fix any violations found by the review
+7. Commit & push → report "Changes pushed to branch."
+8. Open draft PR → report "Draft PR #N opened."
+9. Self-review the diff → report "Self-reviewing the diff..."
+10. Fix any issues found → commit & push
+11. Report "PR #{task_id} ready for review."
+12. maiko task done
 ```
+
+### Compliance Review (Step 5)
+
+Before committing, run `maiko review` on each file you changed:
+```bash
+maiko review src/path/to/changed_file.py
+```
+This runs your changes through a local model trained on the team's review patterns. If it reports VIOLATION, fix the issue before committing. If it says PASS or the command is not available, proceed normally.
 
 ## 3. Checking for Messages
 

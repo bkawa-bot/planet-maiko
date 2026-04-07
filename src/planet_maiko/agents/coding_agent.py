@@ -57,6 +57,41 @@ def _create_worktree(repo_path, branch_name):
         return None
 
 
+def _install_pre_commit_hook(working_path):
+    """Install git pre-commit hook that runs LoRA compliance review."""
+    import shutil
+    import stat
+
+    hooks_src = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)
+    ))), "hooks", "pre_commit_review.py")
+
+    if not os.path.exists(hooks_src):
+        return
+
+    # Find the git hooks directory for this worktree
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            capture_output=True, text=True, cwd=working_path, timeout=5,
+        )
+        git_dir = result.stdout.strip()
+        if not os.path.isabs(git_dir):
+            git_dir = os.path.join(working_path, git_dir)
+        hooks_dir = os.path.join(git_dir, "hooks")
+        os.makedirs(hooks_dir, exist_ok=True)
+
+        hook_path = os.path.join(hooks_dir, "pre-commit")
+        # Write a wrapper that calls our review script
+        with open(hook_path, "w", encoding="utf-8") as f:
+            f.write(f"#!/bin/sh\npython3 {hooks_src}\n")
+        os.chmod(hook_path, os.stat(hook_path).st_mode | stat.S_IEXEC)
+
+        logger.info(f"[agent] Installed pre-commit review hook in {hooks_dir}")
+    except Exception as e:
+        logger.debug(f"[agent] Could not install pre-commit hook: {e}")
+
+
 def _write_task_file(working_path, task_id, task_title, prompt):
     """Write TASK.md so the agent knows what to do."""
     content = f"""# Task: {task_title}
@@ -410,6 +445,9 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
 
     # Write Claude Code hooks configuration
     _write_claude_settings(working_path, task_id, agent_id)
+
+    # Install git pre-commit hook for LoRA compliance review
+    _install_pre_commit_hook(working_path)
 
     # Compile learning brief for this agent
     try:
