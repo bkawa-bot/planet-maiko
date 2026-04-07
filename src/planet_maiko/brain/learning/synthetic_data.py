@@ -18,22 +18,28 @@ logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 5  # Diffs per LLM call
 
-REVIEW_PROMPT = """You are a senior code reviewer. For each code change below, provide a structured review.
+REVIEW_PROMPT = """You are a senior code reviewer producing structured training data. For each code change below, produce a clean review verdict.
+
+Some changes include the original reviewer's comment. When present, use it as your primary signal — rewrite it as a clean, structured verdict. When no reviewer comment is provided, the code merged cleanly — confirm it's clean or flag any issues you see.
 
 For EACH change, respond with:
 - "PASS" if the code is clean and follows good practices
-- "VIOLATION: [category] description" if there's an issue
+- "VIOLATION: [category] specific, actionable description of the issue and how to fix it"
 
 Categories: security, performance, error_handling, testing, style, naming, architecture, bug, null_safety
 
-Be specific and actionable. Focus on real issues, not nitpicks. If the code is genuinely fine, say PASS.
+Rules:
+- If a reviewer flagged it, trust them — structure their feedback, don't dismiss it
+- Be specific: name the function, variable, or pattern that's wrong
+- Be actionable: say what to do instead
+- One verdict per change, even if there are multiple issues (pick the most important)
 
 {diffs}
 
 Respond with ONLY a JSON array, one entry per change:
 [
   {{"index": 0, "verdict": "PASS"}},
-  {{"index": 1, "verdict": "VIOLATION: [security] SQL query built with string concatenation — use parameterized queries to prevent injection"}},
+  {{"index": 1, "verdict": "VIOLATION: [security] SQL query built with string concatenation in build_query() — use parameterized queries to prevent injection"}},
   ...
 ]"""
 
@@ -99,10 +105,19 @@ def generate_synthetic_dataset(input_dataset=None, output_dir=None, limit=None):
         batch = raw_pairs[i:i + BATCH_SIZE]
         batches += 1
 
-        # Build the diffs section
+        # Build the diffs section with full context
         diffs_text = ""
         for j, pair in enumerate(batch):
-            diffs_text += f"\n--- Change {j} ---\n{pair['input']}\n"
+            diffs_text += f"\n--- Change {j} ---\n"
+            if pair.get("pr_title"):
+                diffs_text += f"PR: {pair['pr_title']}\n"
+            if pair.get("file_path"):
+                diffs_text += f"File: {pair['file_path']}\n"
+            diffs_text += f"{pair['input']}\n"
+            # Include original reviewer comment if this was a violation
+            original = pair.get("output", "")
+            if original.startswith("VIOLATION:"):
+                diffs_text += f"Original reviewer comment: {original[len('VIOLATION:'):].strip()}\n"
 
         prompt = REVIEW_PROMPT.format(diffs=diffs_text)
 
