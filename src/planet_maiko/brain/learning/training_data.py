@@ -36,35 +36,52 @@ def extract_training_data(repos, limit_per_repo=200, output_dir=None):
     os.makedirs(output_dir, exist_ok=True)
 
     all_pairs = []
+    pairs_by_repo = {}
 
     for repo in repos:
         logger.info(f"[training-data] Scanning {repo}...")
         repo_pairs = _extract_from_repo(repo, limit_per_repo)
         all_pairs.extend(repo_pairs)
+        pairs_by_repo[repo] = repo_pairs
         logger.info(f"[training-data] {repo}: {len(repo_pairs)} training pairs")
 
     if not all_pairs:
         logger.warning("[training-data] No training pairs found")
         return {"pairs": 0, "violations": 0, "passes": 0, "file_path": None}
 
-    # Write JSONL
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    file_path = os.path.join(output_dir, f"dataset-{timestamp}.jsonl")
-    with open(file_path, "w", encoding="utf-8") as f:
+
+    # Write per-repo datasets
+    repo_files = {}
+    for repo, repo_pairs in pairs_by_repo.items():
+        if not repo_pairs:
+            continue
+        safe_name = repo.replace("/", "--")
+        repo_path = os.path.join(output_dir, f"{safe_name}-{timestamp}.jsonl")
+        with open(repo_path, "w", encoding="utf-8") as f:
+            for pair in repo_pairs:
+                f.write(json.dumps(pair, ensure_ascii=False) + "\n")
+        repo_files[repo] = repo_path
+        logger.info(f"[training-data] Wrote {len(repo_pairs)} pairs to {repo_path}")
+
+    # Write combined dataset
+    combined_path = os.path.join(output_dir, f"combined-{timestamp}.jsonl")
+    with open(combined_path, "w", encoding="utf-8") as f:
         for pair in all_pairs:
             f.write(json.dumps(pair, ensure_ascii=False) + "\n")
 
     violations = sum(1 for p in all_pairs if not p["output"].startswith("PASS"))
     passes = sum(1 for p in all_pairs if p["output"].startswith("PASS"))
 
-    logger.info(f"[training-data] Wrote {len(all_pairs)} pairs to {file_path}")
+    logger.info(f"[training-data] Wrote {len(all_pairs)} combined pairs to {combined_path}")
     logger.info(f"[training-data] {violations} violations, {passes} passes")
 
     return {
         "pairs": len(all_pairs),
         "violations": violations,
         "passes": passes,
-        "file_path": file_path,
+        "file_path": combined_path,
+        "repo_files": repo_files,
         "repos_scanned": len(repos),
     }
 

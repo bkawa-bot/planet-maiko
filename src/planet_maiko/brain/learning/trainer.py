@@ -84,13 +84,25 @@ def train_agent(agent_profile_id, dataset_path=None, repo=None, config=None):
             "install_hint": "pip install mlx mlx-lm" if sys.platform == "darwin" else "pip install torch unsloth",
         }
 
-    # Find training data
+    # Find training data — prefer repo-specific dataset if repo is specified
     if not dataset_path:
         data_path = os.path.join(data_dir(), "training-data")
         if os.path.isdir(data_path):
-            files = sorted([f for f in os.listdir(data_path) if f.endswith(".jsonl")], reverse=True)
-            if files:
-                dataset_path = os.path.join(data_path, files[0])
+            files = sorted(os.listdir(data_path), reverse=True)
+            if repo:
+                # Look for repo-specific dataset first
+                safe_name = repo.replace("/", "--")
+                repo_files = [f for f in files if f.startswith(safe_name) and f.endswith(".jsonl")]
+                if repo_files:
+                    dataset_path = os.path.join(data_path, repo_files[0])
+                    logger.info(f"[lora-train] Using repo-specific dataset for {repo}")
+            if not dataset_path:
+                # Fall back to combined dataset, then any dataset
+                combined = [f for f in files if f.startswith("combined-") and f.endswith(".jsonl")]
+                any_jsonl = [f for f in files if f.endswith(".jsonl")]
+                pick = combined[0] if combined else (any_jsonl[0] if any_jsonl else None)
+                if pick:
+                    dataset_path = os.path.join(data_path, pick)
 
     if not dataset_path or not os.path.exists(dataset_path):
         return {"success": False, "error": "No training data found. Extract from PRs first."}
