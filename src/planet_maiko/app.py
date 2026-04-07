@@ -22,6 +22,8 @@ def _ensure_columns():
         "ALTER TABLE custom_skills ADD COLUMN last_run_at DATETIME",
         "ALTER TABLE tournaments ADD COLUMN task_tags JSON",
         "ALTER TABLE tournaments ADD COLUMN suggested_new_tags JSON",
+        "ALTER TABLE signals ADD COLUMN code_context TEXT",
+        "ALTER TABLE signals ADD COLUMN incorporated_at DATETIME",
     ]
     for sql in migrations:
         try:

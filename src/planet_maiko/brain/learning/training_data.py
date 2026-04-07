@@ -45,6 +45,15 @@ def extract_training_data(repos, limit_per_repo=200, output_dir=None):
         pairs_by_repo[repo] = repo_pairs
         logger.info(f"[training-data] {repo}: {len(repo_pairs)} training pairs")
 
+    # Pull unincorporated feedback signals into training data
+    signal_pairs, signal_ids = _extract_from_signals()
+    if signal_pairs:
+        all_pairs.extend(signal_pairs)
+        for pair in signal_pairs:
+            repo = pair.get("repo", "signals")
+            pairs_by_repo.setdefault(repo, []).append(pair)
+        logger.info(f"[training-data] {len(signal_pairs)} pairs from feedback signals")
+
     if not all_pairs:
         logger.warning("[training-data] No training pairs found")
         return {"pairs": 0, "violations": 0, "passes": 0, "file_path": None}
@@ -76,10 +85,16 @@ def extract_training_data(repos, limit_per_repo=200, output_dir=None):
     logger.info(f"[training-data] Wrote {len(all_pairs)} combined pairs to {combined_path}")
     logger.info(f"[training-data] {violations} violations, {passes} passes")
 
+    # Mark incorporated signals
+    if signal_ids:
+        _mark_signals_incorporated(signal_ids)
+        logger.info(f"[training-data] Marked {len(signal_ids)} signals as incorporated")
+
     return {
         "pairs": len(all_pairs),
         "violations": violations,
         "passes": passes,
+        "signals_incorporated": len(signal_ids) if signal_ids else 0,
         "file_path": combined_path,
         "repo_files": repo_files,
         "repos_scanned": len(repos),
@@ -155,6 +170,59 @@ def _extract_from_repo(repo, limit):
                 logger.debug(f"[training-data] PR #{number}: clean merge → pass example")
 
     return pairs
+
+
+def _extract_from_signals():
+    """Pull unincorporated feedback signals that have code context."""
+    try:
+        from planet_maiko.models.signal import Signal
+        from planet_maiko.database import db
+
+        signals = Signal.query.filter(
+            Signal.code_context.isnot(None),
+            Signal.code_context != "",
+            Signal.incorporated_at.is_(None),
+        ).all()
+
+        pairs = []
+        signal_ids = []
+        for s in signals:
+            context_parts = []
+            if s.file_path:
+                context_parts.append(f"File: {s.file_path}")
+            if s.repo:
+                context_parts.append(f"Repo: {s.repo}")
+            context_parts.append(f"```\n{s.code_context}\n```")
+
+            pairs.append({
+                "input": "\n".join(context_parts),
+                "output": f"VIOLATION: [{s.category}] {s.text}",
+                "repo": s.repo or "unknown",
+                "file_path": s.file_path or "",
+                "source": "signal",
+                "signal_id": s.id,
+            })
+            signal_ids.append(s.id)
+
+        return pairs, signal_ids
+    except Exception as e:
+        logger.debug(f"[training-data] Could not extract from signals: {e}")
+        return [], []
+
+
+def _mark_signals_incorporated(signal_ids):
+    """Mark signals as incorporated into a training dataset."""
+    try:
+        from planet_maiko.models.signal import Signal
+        from planet_maiko.database import db
+
+        Signal.query.filter(Signal.id.in_(signal_ids)).update(
+            {"incorporated_at": datetime.now(timezone.utc)},
+            synchronize_session=False,
+        )
+        db.session.commit()
+    except Exception as e:
+        logger.warning(f"[training-data] Could not mark signals incorporated: {e}")
 
 
 def _split_diff_by_file(diff_text):

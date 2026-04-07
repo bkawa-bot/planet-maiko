@@ -434,11 +434,20 @@ def agent_sends_message(task_id):
     )
     db.session.add(msg)
 
-    # If feedback message, create a learning signal immediately
+    # If feedback message, create a training signal with code context
     if data.get("message_type") == "feedback":
         metadata = data.get("metadata", {})
         category = metadata.get("feedback_category", "pattern")
         severity = metadata.get("feedback_severity", "suggestion")
+
+        # Grab the most recent agent output as code context
+        recent_agent_msg = (
+            AgentMessage.query
+            .filter_by(task_id=task_id, direction="from_agent")
+            .order_by(AgentMessage.created_at.desc())
+            .first()
+        )
+        code_context = recent_agent_msg.content[:3000] if recent_agent_msg else None
 
         from planet_maiko.models.signal import Signal
         signal = Signal(
@@ -447,6 +456,8 @@ def agent_sends_message(task_id):
             source_type="session_feedback",
             severity=severity,
             repo=_get_repo_for_task(task_id),
+            file_path=metadata.get("file_path"),
+            code_context=code_context,
         )
         db.session.add(signal)
 
