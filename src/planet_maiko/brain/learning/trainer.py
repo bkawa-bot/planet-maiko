@@ -196,43 +196,13 @@ def _train_mlx(train_file, adapter_path, config):
     logger.info("[lora-train] Using MLX backend (Apple Silicon)")
 
     try:
-        import yaml
-    except ImportError:
-        yaml = None
-
-    try:
         data_dir = os.path.dirname(train_file)
-
-        # Write LoRA config YAML (mlx-lm reads rank/alpha from config, not CLI flags)
-        lora_config = {
-            "lora_layers": 16,
-            "lora_parameters": {
-                "rank": config["lora_rank"],
-                "alpha": config["lora_alpha"],
-                "dropout": 0.0,
-                "scale": float(config["lora_alpha"]) / float(config["lora_rank"]),
-            },
-        }
-        config_path = os.path.join(data_dir, "lora_config.yaml")
-        if yaml:
-            with open(config_path, "w") as f:
-                yaml.dump(lora_config, f)
-        else:
-            # Write YAML manually if pyyaml not installed
-            with open(config_path, "w") as f:
-                f.write(f"lora_layers: 16\n")
-                f.write(f"lora_parameters:\n")
-                f.write(f"  rank: {config['lora_rank']}\n")
-                f.write(f"  alpha: {config['lora_alpha']}\n")
-                f.write(f"  dropout: 0.0\n")
-                f.write(f"  scale: {float(config['lora_alpha']) / float(config['lora_rank'])}\n")
 
         cmd = [
             sys.executable, "-m", "mlx_lm.lora",
             "--model", config["base_model"],
             "--data", data_dir,
             "--adapter-path", adapter_path,
-            "--lora-config", config_path,
             "--train",
             "--iters", str(config["epochs"] * 100),
             "--batch-size", str(config["batch_size"]),
