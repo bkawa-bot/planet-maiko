@@ -83,3 +83,25 @@ def check_training_requirements():
     """Check if LoRA training is available on this machine."""
     from planet_maiko.brain.learning.trainer import check_requirements
     return jsonify(check_requirements())
+
+
+@training_bp.route("/training/review", methods=["POST"])
+def review_code_endpoint():
+    """Review code using a trained LoRA adapter."""
+    from planet_maiko.brain.learning.trainer import review_code
+
+    data = request.get_json(silent=True) or {}
+    code = data.get("code", "").strip()
+
+    if not code:
+        return jsonify({"error": "code required"}), 400
+
+    result = review_code(
+        code=code,
+        agent_profile_id=data.get("agent_profile_id"),
+        adapter_path=data.get("adapter_path"),
+        file_path=data.get("file_path"),
+    )
+
+    status = 200 if result.get("success") else 500
+    return jsonify(result), status

@@ -314,3 +314,84 @@ def check_requirements():
             info["pytorch_installed"] = False
 
     return info
+
+
+def review_code(code, agent_profile_id=None, adapter_path=None, file_path=None):
+    """Run code through a trained LoRA adapter and return the review.
+
+    Args:
+        code: the code to review
+        agent_profile_id: look up adapter from agent profile
+        adapter_path: explicit adapter path (overrides profile lookup)
+        file_path: optional file path for context
+
+    Returns:
+        dict with {output, adapter_path, success}
+    """
+    backend = get_backend()
+    if not backend:
+        return {"success": False, "error": "No backend available"}
+
+    # Find adapter
+    if not adapter_path and agent_profile_id:
+        try:
+            from flask import current_app
+            from planet_maiko.database import db
+            from planet_maiko.models.agent_profile import AgentProfile
+            profile = db.session.get(AgentProfile, agent_profile_id)
+            if profile and profile.extra:
+                adapter_path = profile.extra.get("adapter_path")
+        except Exception:
+            pass
+
+    if not adapter_path:
+        # Fall back to most recent adapter
+        from planet_maiko.paths import data_dir
+        models_dir = os.path.join(data_dir(), "models")
+        if os.path.isdir(models_dir):
+            adapters = sorted(os.listdir(models_dir), reverse=True)
+            if adapters:
+                adapter_path = os.path.join(models_dir, adapters[0])
+
+    if not adapter_path or not os.path.isdir(adapter_path):
+        return {"success": False, "error": "No trained adapter found. Run training first."}
+
+    # Build prompt
+    context_parts = []
+    if file_path:
+        context_parts.append(f"File: {file_path}")
+    context_parts.append(f"```\n{code}\n```")
+    prompt_text = "\n".join(context_parts)
+
+    config = DEFAULT_TRAINING_CONFIG
+
+    if backend == "mlx":
+        return _infer_mlx(prompt_text, adapter_path, config)
+    else:
+        return {"success": False, "error": f"Inference not yet supported on {backend}"}
+
+
+def _infer_mlx(prompt_text, adapter_path, config):
+    """Run inference with MLX."""
+    try:
+        cmd = [
+            sys.executable, "-m", "mlx_lm.generate",
+            "--model", config["base_model"],
+            "--adapter-path", adapter_path,
+            "--max-tokens", "512",
+            "--prompt", prompt_text,
+        ]
+
+        result = subprocess.run(
+            cmd, capture_output=True, text=True,
+            timeout=120, encoding="utf-8", errors="replace",
+        )
+
+        if result.returncode == 0:
+            output = result.stdout.strip()
+            return {"success": True, "output": output, "adapter_path": adapter_path}
+        else:
+            return {"success": False, "error": result.stderr[:500] or f"Exit code {result.returncode}"}
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}

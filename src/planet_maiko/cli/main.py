@@ -408,6 +408,32 @@ def cmd_extract_training_data(args):
         print(f"  Saved to: {result['file_path']}")
 
 
+def cmd_review(args):
+    """Review code using a trained LoRA adapter."""
+    from planet_maiko.brain.learning.trainer import review_code
+
+    # Read code from file or stdin
+    if args.file:
+        with open(args.file) as f:
+            code = f.read()
+        file_path = args.file
+    else:
+        print("Paste code to review (Ctrl+D when done):")
+        code = sys.stdin.read()
+        file_path = None
+
+    result = review_code(
+        code=code,
+        agent_profile_id=args.agent,
+        file_path=file_path,
+    )
+
+    if result.get("success"):
+        print(f"\n{result['output']}")
+    else:
+        print(f"Error: {result.get('error')}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="maiko",
@@ -503,6 +529,12 @@ def main():
     extract_parser = subparsers.add_parser("extract-training-data", help="Extract training data from PR history")
     extract_parser.add_argument("--limit", type=int, default=200, help="Max PRs per repo")
     extract_parser.set_defaults(func=cmd_extract_training_data)
+
+    # maiko review
+    review_parser = subparsers.add_parser("review", help="Review code using a trained LoRA adapter")
+    review_parser.add_argument("file", nargs="?", help="File to review (reads stdin if omitted)")
+    review_parser.add_argument("--agent", help="Agent ID (uses most recent adapter if omitted)")
+    review_parser.set_defaults(func=cmd_review)
 
     # Let plugins register CLI commands
     try:
