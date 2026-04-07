@@ -1,23 +1,28 @@
 #!/usr/bin/env python3
 """Git pre-commit hook: runs staged diff through the LoRA compliance model.
 
-Installed by Planet Maiko into agent worktrees. If the model finds
-violations, the commit is blocked and the violations are printed.
+Installed by Planet Maiko into agent worktrees. All changed files are
+batched into a single model call to avoid loading the 8B model per file.
 
 Uses only stdlib + maiko CLI. Non-blocking if the model isn't available.
 """
 
 import json
 import os
+import re
 import subprocess
 import sys
+
+
+# Skip non-code files
+SKIP_EXTENSIONS = {".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".lock", ".css", ".svg", ".png", ".jpg", ".gif"}
 
 
 def main():
     # Check if we're in a maiko agent worktree
     env_path = os.path.join(os.getcwd(), ".maiko-env.json")
     if not os.path.exists(env_path):
-        sys.exit(0)  # Not a maiko worktree, allow commit
+        sys.exit(0)
 
     with open(env_path) as f:
         env = json.load(f)
@@ -29,51 +34,57 @@ def main():
     )
     diff = result.stdout.strip()
     if not diff or len(diff) < 50:
-        sys.exit(0)  # No meaningful diff
+        sys.exit(0)
 
-    # Split into per-file diffs and review each
-    import re
+    # Split into per-file diffs
     file_diffs = re.split(r"(?=^diff --git )", diff, flags=re.MULTILINE)
 
-    violations = []
+    files_to_review = []
     for file_diff in file_diffs:
         file_diff = file_diff.strip()
         if not file_diff.startswith("diff --git"):
             continue
 
-        # Extract file path
         match = re.search(r" b/(.+)$", file_diff.split("\n", 1)[0])
         file_path = match.group(1) if match else "unknown"
 
-        # Skip non-code files
-        if any(file_path.endswith(ext) for ext in [".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".lock", ".css"]):
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext in SKIP_EXTENSIONS:
             continue
 
-        # Run review via maiko CLI
-        try:
-            review = subprocess.run(
-                ["maiko", "review", "--agent", env.get("agent_id", "")],
-                input=file_diff,
-                capture_output=True, text=True, timeout=120,
-            )
-            output = review.stdout.strip()
-            if output and "VIOLATION" in output:
-                violations.append({"file": file_path, "review": output})
-        except Exception:
-            continue  # Don't block on errors
+        files_to_review.append({"file_path": file_path, "diff": file_diff})
 
-    if violations:
+    if not files_to_review:
+        sys.exit(0)
+
+    # Batch all files into a single review call via stdin
+    batch_input = ""
+    for f in files_to_review:
+        batch_input += f"--- {f['file_path']} ---\n{f['diff']}\n\n"
+
+    try:
+        review = subprocess.run(
+            ["maiko", "review", "--agent", env.get("agent_id", "")],
+            input=batch_input,
+            capture_output=True, text=True, timeout=180,
+        )
+        output = review.stdout.strip()
+
+        if not output or "VIOLATION" not in output:
+            sys.exit(0)
+
+        # Found violations
         print("\n=== LoRA Compliance Review ===\n")
-        for v in violations:
-            print(f"  {v['file']}:")
-            for line in v["review"].split("\n"):
-                print(f"    {line}")
-            print()
-        print(f"{len(violations)} violation(s) found. Fix before committing.")
+        for line in output.split("\n"):
+            if line.strip():
+                print(f"  {line}")
+        print()
+        print("Fix violations before committing.")
         print("To bypass: git commit --no-verify\n")
         sys.exit(1)
 
-    sys.exit(0)
+    except Exception:
+        sys.exit(0)  # Don't block on errors
 
 
 if __name__ == "__main__":

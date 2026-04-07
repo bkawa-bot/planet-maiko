@@ -467,7 +467,8 @@ def cmd_review(args):
             code = f.read()
         file_path = args.file
     else:
-        print("Paste code to review (Ctrl+D when done):")
+        if sys.stdin.isatty():
+            print("Paste code to review (Ctrl+D when done):", file=sys.stderr)
         code = sys.stdin.read()
         file_path = None
 

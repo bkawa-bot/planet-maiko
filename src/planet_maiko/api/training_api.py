@@ -85,6 +85,29 @@ def check_training_requirements():
     return jsonify(check_requirements())
 
 
+@training_bp.route("/training/progress", methods=["GET"])
+def training_progress():
+    """Poll training progress from the most recent adapter's progress.json."""
+    import os
+    from planet_maiko.paths import data_dir
+
+    models_dir = os.path.join(data_dir(), "models")
+    if not os.path.isdir(models_dir):
+        return jsonify({"status": "idle"})
+
+    adapters = sorted(os.listdir(models_dir), reverse=True)
+    for adapter in adapters:
+        progress_path = os.path.join(models_dir, adapter, "progress.json")
+        if os.path.exists(progress_path):
+            try:
+                with open(progress_path) as f:
+                    return jsonify(json.load(f))
+            except Exception:
+                pass
+
+    return jsonify({"status": "idle"})
+
+
 @training_bp.route("/training/generate-from-rules", methods=["POST"])
 def generate_from_rules_endpoint():
     """Generate training data from active learnings (rules + synthetic examples)."""

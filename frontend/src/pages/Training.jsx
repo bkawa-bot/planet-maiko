@@ -16,6 +16,7 @@ export default function Training() {
   const [datasets, setDatasets] = useState([]);
   const [datasetStats, setDatasetStats] = useState(null);
   const [selectedDataset, setSelectedDataset] = useState("");
+  const [progress, setProgress] = useState(null);
 
   const fetchDatasets = () => {
     api.getTrainingDatasets().then(setDatasets).catch(() => {});
@@ -26,6 +27,18 @@ export default function Training() {
     api.getProfiles().then(setProfiles).catch(() => {});
     fetchDatasets();
   }, []);
+
+  // Poll training progress while running
+  useEffect(() => {
+    if (!running) { setProgress(null); return; }
+    const interval = setInterval(() => {
+      api.getTrainingProgress().then((p) => {
+        if (p.status === "training") setProgress(p);
+        else if (p.status === "done" || p.status === "failed") setProgress(p);
+      }).catch(() => {});
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [running]);
 
   return (
     <div className="training-page">
@@ -204,6 +217,20 @@ export default function Training() {
             {running ? <><Loader size={12} className="spin" /> Training...</> : <><GraduationCap size={12} /> Train Model</>}
           </button>
         </div>
+
+        {/* Training progress */}
+        {running && progress && progress.status === "training" && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+              <span>Iteration {progress.iteration}/{progress.total_iters} ({progress.percent}%)</span>
+              <span>Loss: {progress.loss?.toFixed(3)}</span>
+              {progress.tokens_sec && <span>{progress.tokens_sec.toFixed(0)} tok/s</span>}
+            </div>
+            <div className="training-score-track" style={{ height: 8 }}>
+              <div className="training-score-fill" style={{ width: `${progress.percent}%`, background: "var(--pink)", transition: "width 0.5s" }} />
+            </div>
+          </div>
+        )}
 
         {!datasets.length && (
           <div style={{ fontSize: 12, color: "var(--text-muted)" }}>

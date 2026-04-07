@@ -212,24 +212,60 @@ def _train_mlx(train_file, adapter_path, config):
 
         logger.info(f"[lora-train] Running: {' '.join(cmd)}")
 
+        total_iters = config["epochs"] * 100
+        progress_path = os.path.join(adapter_path, "progress.json")
+        os.makedirs(adapter_path, exist_ok=True)
+
         output_lines = []
         process = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace",
         )
 
+        import re as _re
         for line in process.stdout:
             line = line.strip()
-            if line:
-                logger.info(f"[lora-train] {line}")
-                output_lines.append(line)
+            if not line:
+                continue
+            logger.info(f"[lora-train] {line}")
+            output_lines.append(line)
+
+            # Parse progress from mlx-lm output (e.g. "Iter 50: Train loss 0.712, ...")
+            m = _re.search(r"Iter\s+(\d+).*?loss\s+([\d.]+)", line, _re.IGNORECASE)
+            if m:
+                iteration = int(m.group(1))
+                loss = float(m.group(2))
+                # Also look for tokens/sec
+                tok_m = _re.search(r"([\d.]+)\s*Tokens/sec", line, _re.IGNORECASE)
+                tokens_sec = float(tok_m.group(1)) if tok_m else None
+
+                progress = {
+                    "iteration": iteration,
+                    "total_iters": total_iters,
+                    "loss": loss,
+                    "tokens_sec": tokens_sec,
+                    "percent": round(iteration / total_iters * 100, 1),
+                    "status": "training",
+                }
+                try:
+                    with open(progress_path, "w") as pf:
+                        json.dump(progress, pf)
+                except Exception:
+                    pass
 
         process.wait()
+
+        # Write final status
+        try:
+            final = {"status": "done" if process.returncode == 0 else "failed", "percent": 100}
+            with open(progress_path, "w") as pf:
+                json.dump(final, pf)
+        except Exception:
+            pass
 
         if process.returncode == 0:
             return {"success": True, "backend": "mlx"}
         else:
-            # Include last few lines of output for debugging
             tail = "\n".join(output_lines[-5:]) if output_lines else "no output"
             return {"success": False, "error": f"MLX training exited with code {process.returncode}:\n{tail}"}
 
@@ -369,6 +405,57 @@ def review_code(code, agent_profile_id=None, adapter_path=None, file_path=None):
         return _infer_mlx(prompt_text, adapter_path, config)
     else:
         return {"success": False, "error": f"Inference not yet supported on {backend}"}
+
+
+def review_batch(files, agent_profile_id=None, adapter_path=None):
+    """Review multiple files in a single model load.
+
+    Args:
+        files: list of {"code": str, "file_path": str} dicts
+        agent_profile_id: look up adapter from agent profile
+        adapter_path: explicit adapter path
+
+    Returns:
+        dict with {results: [{file_path, output}], success}
+    """
+    if not files:
+        return {"success": True, "results": []}
+
+    # Build combined prompt
+    parts = []
+    for i, f in enumerate(files):
+        header = f"--- File {i}: {f.get('file_path', 'unknown')} ---"
+        parts.append(f"{header}\n```\n{f['code']}\n```")
+
+    combined = "\n\n".join(parts)
+    combined += "\n\nFor EACH file above, respond with the file number and either PASS or VIOLATION with a description. One line per file."
+
+    result = review_code(
+        code=combined,
+        agent_profile_id=agent_profile_id,
+        adapter_path=adapter_path,
+    )
+
+    if not result.get("success"):
+        return result
+
+    # Parse per-file results from output
+    output = result.get("output", "")
+    results = []
+    for i, f in enumerate(files):
+        # Find the line for this file in the output
+        file_result = "PASS"  # default
+        for line in output.split("\n"):
+            if f"File {i}" in line or f.get("file_path", "") in line:
+                if "VIOLATION" in line:
+                    file_result = line.strip()
+                break
+        results.append({
+            "file_path": f.get("file_path", "unknown"),
+            "output": file_result,
+        })
+
+    return {"success": True, "results": results, "adapter_path": result.get("adapter_path")}
 
 
 def _infer_mlx(prompt_text, adapter_path, config):
