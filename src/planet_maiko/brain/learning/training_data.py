@@ -116,22 +116,43 @@ def _extract_from_repo(repo, limit):
                 logger.debug(f"[training-data] PR #{number}: violation from review on {path}")
         else:
             # PRs with no review comments → pass examples (clean merge)
+            # Split into per-file hunks so PASS examples match violation shape
             diff = _get_pr_diff(repo, number)
             if diff and len(diff) > 50:
-                # Build contextual input for pass examples too
-                context_parts = [f"PR: {title}"]
-                context_parts.append(f"```\n{diff[:2000]}\n```")
+                for file_path, hunk in _split_diff_by_file(diff):
+                    if len(hunk) < 30:
+                        continue
+                    context_parts = [f"File: {file_path}"]
+                    if title:
+                        context_parts.append(f"PR: {title}")
+                    context_parts.append(f"```\n{hunk}\n```")
 
-                pairs.append({
-                    "input": "\n".join(context_parts),
-                    "output": "PASS",
-                    "repo": repo,
-                    "pr_number": number,
-                    "pr_title": title,
-                })
+                    pairs.append({
+                        "input": "\n".join(context_parts),
+                        "output": "PASS",
+                        "repo": repo,
+                        "file_path": file_path,
+                        "pr_number": number,
+                        "pr_title": title,
+                    })
                 logger.debug(f"[training-data] PR #{number}: clean merge → pass example")
 
     return pairs
+
+
+def _split_diff_by_file(diff_text):
+    """Split a unified diff into (file_path, hunk) pairs."""
+    import re
+    chunks = re.split(r"(?=^diff --git )", diff_text, flags=re.MULTILINE)
+    for chunk in chunks:
+        chunk = chunk.strip()
+        if not chunk.startswith("diff --git"):
+            continue
+        # Extract file path from "diff --git a/path b/path"
+        first_line = chunk.split("\n", 1)[0]
+        match = re.search(r" b/(.+)$", first_line)
+        file_path = match.group(1) if match else "unknown"
+        yield file_path, chunk
 
 
 def _get_merged_prs(repo, limit):
