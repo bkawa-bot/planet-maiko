@@ -126,19 +126,44 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None, 
             rules_processed += 1
             continue
 
-        # Step 3: Build prompt with real examples as reference
+        # Step 3: Build prompt with real examples and inferred context
         real_examples_section = ""
         if real_with_code:
             examples_text = ""
             for s in real_with_code[:3]:  # Show up to 3 real examples
-                examples_text += f"\n- Code: {s.code_context[:300]}\n  Feedback: {s.text}\n"
-            real_examples_section = f"Here are real examples of this rule being violated in the team's codebase:\n{examples_text}\nUse these as reference for the style and severity of violations."
+                label = ""
+                if s.file_path:
+                    label = f" ({s.file_path})"
+                examples_text += f"\n- Code{label}: {s.code_context[:300]}\n  Feedback: {s.text}\n"
+            real_examples_section = f"Here are real examples of this rule being violated in the team's codebase:\n{examples_text}\nUse these as reference for the language, style, and severity of violations. Generate examples in the SAME language and framework as these real examples."
 
+        # Build scope info — explicit fields + inferred from signals
         scope_info = ""
         if learning.scope_repo:
             scope_info += f"Repo: {learning.scope_repo}\n"
-        if learning.scope_language:
-            scope_info += f"Language: {learning.scope_language}\n"
+
+        # Infer language from scope or signal file paths
+        language = learning.scope_language
+        if not language:
+            extensions = [os.path.splitext(s.file_path)[1] for s in real_signals if s.file_path]
+            ext_map = {".py": "Python", ".js": "JavaScript", ".ts": "TypeScript", ".tsx": "TypeScript/React",
+                       ".jsx": "JavaScript/React", ".java": "Java", ".go": "Go", ".rb": "Ruby",
+                       ".rs": "Rust", ".kt": "Kotlin", ".swift": "Swift", ".cs": "C#", ".cpp": "C++"}
+            for ext in extensions:
+                if ext in ext_map:
+                    language = ext_map[ext]
+                    break
+
+        if language:
+            scope_info += f"Language: {language}\n"
+            scope_info += f"Generate all code examples in {language}.\n"
+        else:
+            scope_info += "Infer the appropriate language from the real examples below, or use Python if no examples are available.\n"
+
+        # Include repo names from signals for framework context
+        repos = list({s.repo for s in real_signals if s.repo})
+        if repos:
+            scope_info += f"Repos this rule applies to: {', '.join(repos)}\n"
 
         # Release DB before LLM call
         db.session.close()
