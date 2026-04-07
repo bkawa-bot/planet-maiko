@@ -28,9 +28,9 @@ DEFAULT_TRAINING_CONFIG = {
     "lora_rank": 16,
     "lora_alpha": 16,
     "epochs": 3,
-    "batch_size": 4,
+    "batch_size": 1,
     "learning_rate": 1e-4,
-    "max_seq_length": 2048,
+    "max_seq_length": 1024,
 }
 
 
@@ -207,6 +207,7 @@ def _train_mlx(train_file, adapter_path, config):
             "--iters", str(config["epochs"] * 100),
             "--batch-size", str(config["batch_size"]),
             "--learning-rate", str(config["learning_rate"]),
+            "--max-seq-length", str(config["max_seq_length"]),
         ]
 
         logger.info(f"[lora-train] Running: {' '.join(cmd)}")
