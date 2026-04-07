@@ -30,6 +30,7 @@ export default function Training() {
   const [extracting, setExtracting] = useState(false);
   const [datasets, setDatasets] = useState([]);
   const [datasetStats, setDatasetStats] = useState(null);
+  const [selectedDataset, setSelectedDataset] = useState("");
 
   const fetchPRs = async () => {
     setLoadingPRs(true);
@@ -350,16 +351,28 @@ export default function Training() {
           </InfoButton>
         </div>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
           <select
             className="training-select"
             value={selectedAgent}
             onChange={(e) => setSelectedAgent(e.target.value)}
           >
-            <option value="">Choose an agent to train...</option>
+            <option value="">Choose an agent...</option>
             {profiles.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.display_name} — {p.extra?.trained_on_examples ? `v${p.extra?.train_version || 1} (${p.extra.trained_on_examples} examples)` : "untrained"}
+              </option>
+            ))}
+          </select>
+          <select
+            className="training-select"
+            value={selectedDataset}
+            onChange={(e) => setSelectedDataset(e.target.value)}
+          >
+            <option value="">Latest dataset (auto)</option>
+            {datasets.map((d) => (
+              <option key={d.filename} value={d.path}>
+                {d.filename.replace(".jsonl", "")} ({d.examples} examples)
               </option>
             ))}
           </select>
@@ -370,7 +383,9 @@ export default function Training() {
               setRunning(true);
               showToast("Training LoRA adapter... this may take 20-30 minutes", "normal");
               try {
-                const result = await api.trainAgent({ agent_profile_id: selectedAgent });
+                const payload = { agent_profile_id: selectedAgent };
+                if (selectedDataset) payload.dataset_path = selectedDataset;
+                const result = await api.trainAgent(payload);
                 if (result.success) {
                   showToast(`Training complete! Adapter saved (${result.examples} examples, ${result.duration_seconds}s)`, "normal");
                   api.getProfiles().then(setProfiles).catch(() => {});
