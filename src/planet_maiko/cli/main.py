@@ -408,6 +408,30 @@ def cmd_extract_training_data(args):
         print(f"  Saved to: {result['file_path']}")
 
 
+def cmd_generate_synthetic(args):
+    """Generate synthetic training data using Opus."""
+    from planet_maiko.brain.learning.synthetic_data import generate_synthetic_dataset
+
+    print(f"Generating synthetic training data (limit: {args.limit or 'all'})...")
+    print("This sends diffs to Opus in batches of 5 for structured review.")
+    print()
+
+    result = generate_synthetic_dataset(
+        input_dataset=args.input,
+        limit=args.limit,
+    )
+
+    if result.get("success"):
+        print(f"Generated {result['pairs']} training pairs:")
+        print(f"  Violations: {result['violations']}")
+        print(f"  Passes: {result['passes']}")
+        print(f"  Batches: {result['batches']} ({result['errors']} errors)")
+        if result.get("file_path"):
+            print(f"  Saved to: {result['file_path']}")
+    else:
+        print(f"Failed: {result.get('error')}")
+
+
 def cmd_review(args):
     """Review code using a trained LoRA adapter."""
     from planet_maiko.brain.learning.trainer import review_code
@@ -529,6 +553,12 @@ def main():
     extract_parser = subparsers.add_parser("extract-training-data", help="Extract training data from PR history")
     extract_parser.add_argument("--limit", type=int, default=200, help="Max PRs per repo")
     extract_parser.set_defaults(func=cmd_extract_training_data)
+
+    # maiko generate-synthetic
+    synth_parser = subparsers.add_parser("generate-synthetic", help="Generate synthetic training data via Opus")
+    synth_parser.add_argument("--input", help="Input JSONL dataset (uses latest if omitted)")
+    synth_parser.add_argument("--limit", type=int, help="Max pairs to process")
+    synth_parser.set_defaults(func=cmd_generate_synthetic)
 
     # maiko review
     review_parser = subparsers.add_parser("review", help="Review code using a trained LoRA adapter")

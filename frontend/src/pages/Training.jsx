@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import InfoButton from "../components/InfoButton";
 import {
-  GraduationCap, Loader, Database, Download,
+  GraduationCap, Loader, Database, Download, Sparkles,
 } from "lucide-react";
 import "./Training.css";
 
@@ -12,6 +12,7 @@ export default function Training() {
   const [selectedAgent, setSelectedAgent] = useState("");
   const [running, setRunning] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [datasets, setDatasets] = useState([]);
   const [datasetStats, setDatasetStats] = useState(null);
   const [selectedDataset, setSelectedDataset] = useState("");
@@ -99,6 +100,52 @@ export default function Training() {
           </div>
         )}
       </div>
+
+      {/* Synthetic Data Generation */}
+      {datasets.length > 0 && (
+        <div className="training-dataset-section">
+          <div className="training-dataset-header">
+            <Sparkles size={14} /> Enrich with Opus
+            <InfoButton title={<><Sparkles size={16} /> Synthetic Data</>}>
+              <p>Sends your extracted diffs to Claude Opus for structured code review. Produces cleaner, more consistent training labels than raw PR comments.</p>
+              <h4>How it works</h4>
+              <ol>
+                <li>Takes diffs from your latest extracted dataset</li>
+                <li>Batches 5 diffs per API call</li>
+                <li>Opus reviews each and returns PASS or VIOLATION with category and description</li>
+                <li>Outputs a new "synthetic" dataset ready for LoRA training</li>
+              </ol>
+              <h4>Cost</h4>
+              <p>~$10-15 per 500 pairs, ~$25-30 per 1,000. Runs through your configured model routing.</p>
+            </InfoButton>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button
+              className="btn btn-primary"
+              disabled={generating || !datasets.length}
+              onClick={async () => {
+                setGenerating(true);
+                showToast("Generating synthetic training data via Opus... this may take a few minutes", "normal");
+                try {
+                  const result = await api.generateSynthetic();
+                  if (result.success) {
+                    showToast(`Generated ${result.pairs} pairs (${result.violations} violations, ${result.passes} passes) in ${result.batches} batches`, "normal");
+                    fetchDatasets();
+                  } else {
+                    showToast(result.error || "Generation failed", "high");
+                  }
+                } catch (err) {
+                  showToast("Generation failed: " + err.message, "high");
+                }
+                setGenerating(false);
+              }}
+            >
+              {generating ? <><Loader size={12} className="spin" /> Generating...</> : <><Sparkles size={12} /> Generate with Opus</>}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* LoRA Model Training */}
       <div className="training-dataset-section">

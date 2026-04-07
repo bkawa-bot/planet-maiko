@@ -85,6 +85,25 @@ def check_training_requirements():
     return jsonify(check_requirements())
 
 
+@training_bp.route("/training/generate-synthetic", methods=["POST"])
+def generate_synthetic_endpoint():
+    """Generate synthetic training data by sending diffs to Opus."""
+    from planet_maiko.brain.learning.synthetic_data import generate_synthetic_dataset
+
+    data = request.get_json(silent=True) or {}
+
+    # Release DB before long-running LLM calls
+    db.session.close()
+
+    result = generate_synthetic_dataset(
+        input_dataset=data.get("input_dataset"),
+        limit=data.get("limit"),
+    )
+
+    status = 200 if result.get("success") else 500
+    return jsonify(result), status
+
+
 @training_bp.route("/training/review", methods=["POST"])
 def review_code_endpoint():
     """Review code using a trained LoRA adapter."""

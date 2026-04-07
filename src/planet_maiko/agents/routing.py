@@ -27,6 +27,7 @@ DEFAULT_ROUTING = {
     "tournament:judge": "opus",
     "training:entry": "opus",
     "training:judge": "opus",
+    "synthetic_data": "opus",
     "coding_agent": "opus",
 }
 
