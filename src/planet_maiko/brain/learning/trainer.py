@@ -294,7 +294,8 @@ def check_requirements():
         info["recommendation"] = "Install MLX: pip install mlx mlx-lm"
         try:
             import mlx
-            info["mlx_version"] = mlx.__version__
+            from importlib.metadata import version
+            info["mlx_version"] = version("mlx")
             info["mlx_installed"] = True
         except ImportError:
             info["mlx_installed"] = False
