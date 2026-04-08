@@ -116,9 +116,9 @@ export default function BrainView() {
               <li><strong>Approval</strong> — high-stakes categories (security, API design, architecture) start as "pending" and need your approval before going active.</li>
             </ol>
             <h4>What confidence means</h4>
-            <p>Each learning has a confidence score (the colored bar). It starts low and increases with each confirming signal. Tournament results also adjust confidence — learnings in winning agent sets get boosted.</p>
+            <p>Each learning has a confidence score (the colored bar). It starts low and increases with each confirming signal. If the pre-commit hook flags code and the developer bypasses it, confidence decreases.</p>
             <h4>How learnings are used</h4>
-            <p>When an agent starts a task, <em>compile_brief()</em> selects the most relevant active learnings based on the repo, task type, and agent specialization. These become the agent's coding guidelines.</p>
+            <p>Active learnings become training data for the LoRA compliance model. Run <code>maiko retrain</code> to generate synthetic examples and fine-tune the model on your team's rules.</p>
           </InfoButton>
         </div>
 

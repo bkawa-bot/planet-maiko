@@ -50,6 +50,31 @@ Respond with ONLY a JSON object:
 }}"""
 
 
+def get_covered_rule_ids(output_dir=None):
+    """Return set of learning IDs that already have training data in existing JSONL files."""
+    from planet_maiko.paths import data_dir
+
+    if output_dir is None:
+        output_dir = os.path.join(data_dir(), "training-data")
+    if not os.path.isdir(output_dir):
+        return set()
+
+    covered = set()
+    for fname in os.listdir(output_dir):
+        if fname.startswith("rules-") and fname.endswith(".jsonl"):
+            fpath = os.path.join(output_dir, fname)
+            try:
+                with open(fpath, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.strip():
+                            pair = json.loads(line)
+                            if "rule_id" in pair:
+                                covered.add(pair["rule_id"])
+            except Exception:
+                continue
+    return covered
+
+
 def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None, rule_ids=None):
     """Generate training data from active learnings.
 

@@ -79,7 +79,31 @@ def process_signals():
         learning = Learning.query.filter_by(aggregation_key=agg_key).first()
 
         if learning:
-            # Update existing learning
+            # Handle negative signals from LoRA hook feedback
+            if signal.source_type == "lora_hook" and signal.severity == "rejected":
+                learning.confidence = max(0.0, learning.confidence - CONFIDENCE_PER_SIGNAL)
+                learning.last_signal_at = datetime.now(timezone.utc)
+                signal.learning_id = learning.id
+                counts["updated_learnings"] += 1
+
+                # Auto-dismiss if confidence is very low and rejections dominate
+                if learning.confidence < 0.1 and learning.status == "active":
+                    # Count accepted vs rejected signals for this learning
+                    reject_count = Signal.query.filter_by(
+                        learning_id=learning.id, source_type="lora_hook", severity="rejected"
+                    ).count()
+                    accept_count = Signal.query.filter_by(
+                        learning_id=learning.id, source_type="lora_hook", severity="suggestion"
+                    ).count()
+                    if reject_count > accept_count:
+                        learning.status = "dismissed"
+                        logger.info(f"[learning] Auto-dismissed (too many rejections): {learning.rule[:60]}")
+
+                signal.aggregated = True
+                counts["processed"] += 1
+                continue
+
+            # Update existing learning (positive signal)
             learning.signal_count += 1
             learning.confidence = min(1.0, learning.confidence + CONFIDENCE_PER_SIGNAL)
             learning.last_signal_at = datetime.now(timezone.utc)
@@ -166,110 +190,24 @@ def export_coding_guidelines(output_path=None):
     logger.info(f"[learning] Exported {len(learnings)} guidelines to {output_path}")
 
 
-def _get_learning_success_rates():
-    """Compute success rate for each learning based on context selection history.
+def compile_brief(repo=None, language=None, max_learnings=15, **_kwargs):
+    """Compile active learnings into a markdown brief.
 
-    Returns:
-        dict: learning_id → {"success_rate": float, "total": int}
-    """
-    from planet_maiko.models.context_selection import ContextSelection
-
-    selections = ContextSelection.query.filter(
-        ContextSelection.outcome.isnot(None)
-    ).all()
-
-    # Count successes and totals per learning
-    stats = {}  # learning_id → {"successes": int, "total": int}
-    for sel in selections:
-        is_success = sel.outcome == "success"
-        for lid in (sel.learning_ids or []):
-            if lid not in stats:
-                stats[lid] = {"successes": 0, "total": 0}
-            stats[lid]["total"] += 1
-            if is_success:
-                stats[lid]["successes"] += 1
-
-    rates = {}
-    for lid, s in stats.items():
-        rates[lid] = {
-            "success_rate": s["successes"] / s["total"] if s["total"] > 0 else 0.5,
-            "total": s["total"],
-        }
-    return rates
-
-
-def compile_brief(repo=None, language=None, task_id=None, agent_profile_id=None, max_learnings=15):
-    """Compile active learnings into a markdown brief for agents.
-
-    Selects the top learnings by success rate (from context selection history),
-    scoped to the relevant repo/language. Records the selection for tracking.
+    Simple confidence-ranked selection scoped by repo/language.
+    LoRA handles rule enforcement via model weights — this brief is
+    for reference or non-LoRA agents only.
 
     Args:
         repo: scope to learnings for this repo (plus globals)
         language: scope to learnings for this language (plus globals)
-        task_id: if provided, records which learnings were selected (for tracking)
-        agent_profile_id: if provided, associates the selection with an agent
-        max_learnings: maximum learnings to include in the brief
+        max_learnings: maximum learnings to include
 
     Returns:
         str: markdown brief
     """
-    # If agent has a fixed context_set, use it directly (skip dynamic scoring)
-    if agent_profile_id:
-        try:
-            from planet_maiko.models.agent_profile import AgentProfile
-            profile = db.session.get(AgentProfile, agent_profile_id)
-            if profile and profile.context_set:
-                fixed_ids = profile.context_set
-                fixed_learnings = Learning.query.filter(
-                    Learning.id.in_(fixed_ids), Learning.status == "active"
-                ).all()
-                if fixed_learnings:
-                    # Record selection for tracking
-                    if task_id:
-                        from planet_maiko.models.context_selection import ContextSelection
-                        record = ContextSelection(
-                            task_id=task_id,
-                            agent_profile_id=agent_profile_id,
-                            repo=repo,
-                            learning_ids=[l.id for l in fixed_learnings],
-                            learning_count=len(fixed_learnings),
-                        )
-                        db.session.add(record)
-                        db.session.commit()
-
-                    by_category = {}
-                    for l in fixed_learnings:
-                        by_category.setdefault(l.category, []).append(l)
-                    lines = ["# Coding Guidelines (Learned)\n"]
-                    for category, rules in sorted(by_category.items()):
-                        lines.append(f"\n## {category.replace('_', ' ').title()}\n")
-                        for r in rules:
-                            confidence_bar = "+" * min(5, int(r.confidence * 5))
-                            lines.append(f"- [{confidence_bar}] {r.rule}")
-                    return "\n".join(lines)
-        except Exception:
-            pass  # Fall through to dynamic selection
-
-    query = Learning.query.filter_by(status="active")
-    learnings = query.order_by(Learning.confidence.desc()).all()
-
-    # Agent-aware scoring: boost/suppress based on agent specialization + lens
-    agent_specs = {}
-    agent_overrides = set()
-    agent_gaps = []
-    if agent_profile_id:
-        try:
-            from planet_maiko.models.agent_profile import AgentProfile
-            profile = db.session.get(AgentProfile, agent_profile_id)
-            if profile:
-                if profile.specializations:
-                    agent_specs = profile.specializations
-                lens = profile.lens or {}
-                agent_overrides = set(lens.get("overrides", []))
-                agent_gaps = lens.get("gaps", [])
-        except Exception:
-            pass
+    learnings = Learning.query.filter_by(status="active").order_by(
+        Learning.confidence.desc()
+    ).all()
 
     # Filter by scope
     scoped = []
@@ -279,95 +217,11 @@ def compile_brief(repo=None, language=None, task_id=None, agent_profile_id=None,
         if repo_match and lang_match:
             scoped.append(l)
 
-    # Filter out overridden learnings (agent lens)
-    if agent_overrides:
-        scoped = [l for l in scoped if l.id not in agent_overrides]
-
     if not scoped:
         return "No active learnings yet."
 
-    # Score and rank by success rate + tournament data
-    success_rates = _get_learning_success_rates()
+    selected = scoped[:max_learnings]
 
-    # Get tournament scores for this repo
-    try:
-        from planet_maiko.brain.learning.tournament import get_tournament_scores
-        tournament_scores = get_tournament_scores(repo=repo)
-    except Exception:
-        tournament_scores = {}
-
-    # Safeguard: minimum tournament count before trusting scores
-    MIN_TOURNAMENTS_FOR_TRUST = 3
-
-    def sort_key(l):
-        rate_info = success_rates.get(l.id)
-        t_info = tournament_scores.get(l.id)
-
-        ctx_rate = rate_info["success_rate"] if rate_info and rate_info["total"] >= 2 else None
-        # Only trust tournament scores with enough data (prevents overfitting)
-        t_score = t_info["avg_score"] if t_info and t_info["tournament_count"] >= MIN_TOURNAMENTS_FOR_TRUST else None
-
-        # Base score from available signals
-        if ctx_rate is not None and t_score is not None:
-            base = -(t_score * 0.4 + ctx_rate * 0.4 + l.confidence * 0.2)
-        elif ctx_rate is not None:
-            base = -(ctx_rate * 0.6 + l.confidence * 0.4)
-        elif t_score is not None:
-            base = -(t_score * 0.5 + l.confidence * 0.5)
-        else:
-            base = -l.confidence
-
-        # Agent specialization adjustment
-        if agent_specs:
-            spec_key = f"{repo}:{l.category}" if repo else l.category
-            agent_score = agent_specs.get(spec_key)
-            if agent_score is not None:
-                if agent_score > 0.9:
-                    base += 0.15  # mastered — deprioritize
-                elif agent_score < 0.3:
-                    base -= 0.1  # weak — boost
-
-        # Gap boost: prioritize categories the agent is missing learnings for
-        if agent_gaps:
-            gap_categories = {g["category"] for g in agent_gaps}
-            if l.category in gap_categories:
-                base -= 0.2  # Strong boost for gap categories
-
-        return base
-
-    scoped.sort(key=sort_key)
-
-    # Take top N, but reserve 2 slots for exploration (random untested rules)
-    import random as _random
-    explore_count = min(2, len(scoped))
-    main_count = max_learnings - explore_count
-
-    # Main selection: top ranked
-    main_selected = scoped[:main_count]
-
-    # Exploration: pick random rules NOT in the main selection
-    remaining = [l for l in scoped if l not in main_selected]
-    if remaining:
-        explore_selected = _random.sample(remaining, min(explore_count, len(remaining)))
-    else:
-        explore_selected = []
-
-    selected = main_selected + explore_selected
-
-    # Record selection for tracking
-    if task_id:
-        from planet_maiko.models.context_selection import ContextSelection
-        record = ContextSelection(
-            task_id=task_id,
-            agent_profile_id=agent_profile_id,
-            repo=repo,
-            learning_ids=[l.id for l in selected],
-            learning_count=len(selected),
-        )
-        db.session.add(record)
-        db.session.commit()
-
-    # Group by category
     by_category = {}
     for l in selected:
         by_category.setdefault(l.category, []).append(l)
@@ -376,12 +230,7 @@ def compile_brief(repo=None, language=None, task_id=None, agent_profile_id=None,
     for category, rules in sorted(by_category.items()):
         lines.append(f"\n## {category.replace('_', ' ').title()}\n")
         for r in rules:
-            rate_info = success_rates.get(r.id)
-            if rate_info and rate_info["total"] >= 2:
-                rate_pct = f"{rate_info['success_rate']*100:.0f}%"
-                lines.append(f"- [{rate_pct}] {r.rule}")
-            else:
-                confidence_bar = "+" * min(5, int(r.confidence * 5))
-                lines.append(f"- [{confidence_bar}] {r.rule}")
+            confidence_bar = "+" * min(5, int(r.confidence * 5))
+            lines.append(f"- [{confidence_bar}] {r.rule}")
 
     return "\n".join(lines)

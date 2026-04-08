@@ -457,6 +457,113 @@ def cmd_generate_rules(args):
             print(f"Failed: {result.get('error')}")
 
 
+def cmd_retrain(args):
+    """Retrain LoRA adapter with feedback loop: resolve → generate → train."""
+    from planet_maiko.app import create_app
+    app = create_app(start_scheduler=False)
+    with app.app_context():
+        repo = args.repo
+        safe_repo = repo.replace("/", "--") if repo else "default"
+        agent_id = f"lora-{safe_repo}"
+
+        # Step 1: Resolve & sync feedback
+        if not args.skip_feedback:
+            from planet_maiko.brain.learning.feedback import resolve_pending_feedback, sync_feedback_to_server
+            from planet_maiko.brain.learning.processor import process_signals
+
+            print("Step 1/3: Resolving feedback...")
+            repo_path = args.repo_path
+            fb = resolve_pending_feedback(repo=repo, repo_path=repo_path)
+            print(f"  Resolved: {fb['accepted']} accepted, {fb['rejected']} rejected, {fb['still_pending']} pending")
+
+            sync = sync_feedback_to_server()
+            print(f"  Synced {sync['synced']} signals to database")
+
+            result = process_signals()
+            if result["graduated"]:
+                print(f"  {result['graduated']} learnings graduated")
+            if result["new_learnings"]:
+                print(f"  {result['new_learnings']} new learnings created")
+        else:
+            print("Step 1/3: Skipping feedback resolution")
+
+        # Step 2: Generate training data (incremental)
+        if not args.skip_datagen:
+            from planet_maiko.brain.learning.rule_training_data import generate_rule_dataset, get_covered_rule_ids
+            from planet_maiko.models.learning import Learning
+
+            print("\nStep 2/3: Generating training data...")
+
+            # Find rules that don't have training data yet
+            covered = get_covered_rule_ids()
+            all_active = Learning.query.filter_by(status="active").all()
+            new_ids = [l.id for l in all_active if l.id not in covered]
+
+            if new_ids:
+                print(f"  {len(new_ids)} new rules to synthesize ({len(covered)} already covered)")
+                result = generate_rule_dataset(
+                    examples_per_rule=args.examples,
+                    rule_ids=new_ids,
+                )
+                if result.get("success"):
+                    print(f"  Generated {result['pairs']} pairs from {result['rules_processed']} rules")
+                    if result.get("file_path"):
+                        print(f"  Saved to: {result['file_path']}")
+                else:
+                    print(f"  Warning: {result.get('error')}")
+            else:
+                print(f"  All {len(covered)} active rules already have training data")
+                if args.force:
+                    print("  --force: regenerating all rules")
+                    result = generate_rule_dataset(examples_per_rule=args.examples)
+                    if result.get("success"):
+                        print(f"  Generated {result['pairs']} pairs from {result['rules_processed']} rules")
+        else:
+            print("\nStep 2/3: Skipping data generation")
+
+        # Step 3: Train LoRA
+        print(f"\nStep 3/3: Training LoRA adapter ({agent_id})...")
+        from planet_maiko.brain.learning.trainer import train_agent
+        result = train_agent(agent_profile_id=agent_id, repo=repo)
+
+        if result.get("success"):
+            print(f"  Done: {result['adapter_path']}")
+            print(f"  {result['examples']} examples, {result['duration_seconds']}s")
+            print(f"\nAdapter ready. Pre-commit hook will pick it up automatically.")
+        else:
+            print(f"  Failed: {result.get('error')}")
+            if result.get("install_hint"):
+                print(f"  Install: {result['install_hint']}")
+
+
+def cmd_eval(args):
+    """Evaluate a LoRA adapter's precision/recall on held-out data."""
+    from planet_maiko.brain.learning.lora_eval import evaluate_adapter
+
+    print("Evaluating adapter...")
+    result = evaluate_adapter(
+        adapter_path=args.adapter,
+        repo=args.repo,
+        holdout_fraction=args.holdout,
+    )
+
+    if not result.get("success"):
+        print(f"Error: {result.get('error')}")
+        return
+
+    print(f"\n=== LoRA Evaluation ===")
+    print(f"Adapter: {result['adapter_path']}")
+    print(f"Test examples: {result['test_count']}")
+    print(f"Precision: {result['precision']:.1%}")
+    print(f"Recall:    {result['recall']:.1%}")
+    print(f"F1:        {result['f1']:.1%}")
+
+    if args.per_category and result.get("per_category"):
+        print(f"\nPer-category breakdown:")
+        for cat, metrics in sorted(result["per_category"].items()):
+            print(f"  {cat:20s}  P={metrics['precision']:.0%}  R={metrics['recall']:.0%}  F1={metrics['f1']:.0%}  n={metrics['count']}")
+
+
 def cmd_review(args):
     """Review code using a trained LoRA adapter."""
     from planet_maiko.brain.learning.trainer import review_code
@@ -590,6 +697,24 @@ def main():
     synth_parser.add_argument("--input", help="Input JSONL dataset (uses latest if omitted)")
     synth_parser.add_argument("--limit", type=int, help="Max pairs to process")
     synth_parser.set_defaults(func=cmd_generate_synthetic)
+
+    # maiko retrain
+    retrain_parser = subparsers.add_parser("retrain", help="Retrain LoRA adapter with feedback loop")
+    retrain_parser.add_argument("repo", nargs="?", help="Repo name (e.g. org/repo)")
+    retrain_parser.add_argument("--repo-path", help="Local repo path for git log resolution")
+    retrain_parser.add_argument("--skip-feedback", action="store_true", help="Skip feedback resolution step")
+    retrain_parser.add_argument("--skip-datagen", action="store_true", help="Skip training data generation")
+    retrain_parser.add_argument("--force", action="store_true", help="Regenerate data for all rules, not just new ones")
+    retrain_parser.add_argument("--examples", type=int, default=50, help="Examples per rule (default 50)")
+    retrain_parser.set_defaults(func=cmd_retrain)
+
+    # maiko eval
+    eval_parser = subparsers.add_parser("eval", help="Evaluate a LoRA adapter")
+    eval_parser.add_argument("--adapter", help="Adapter path (uses most recent if omitted)")
+    eval_parser.add_argument("--repo", help="Filter test data to this repo")
+    eval_parser.add_argument("--holdout", type=float, default=0.2, help="Fraction of data to hold out for testing (default 0.2)")
+    eval_parser.add_argument("--per-category", action="store_true", help="Show per-category breakdown")
+    eval_parser.set_defaults(func=cmd_eval)
 
     # maiko review
     review_parser = subparsers.add_parser("review", help="Review code using a trained LoRA adapter")

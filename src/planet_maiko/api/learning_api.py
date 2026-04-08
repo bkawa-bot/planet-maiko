@@ -40,6 +40,7 @@ def create_signal():
         repo=data.get("repo"),
         language=data.get("language"),
         file_path=data.get("file_path"),
+        code_context=data.get("code_context"),
     )
     db.session.add(signal)
     db.session.commit()
