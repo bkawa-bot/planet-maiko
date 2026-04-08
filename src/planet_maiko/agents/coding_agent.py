@@ -180,7 +180,7 @@ def _write_mcp_json(working_path, task_id):
                 "env": {
                     "MAIKO_TASK_ID": task_id,
                     "MAIKO_API_URL": "http://localhost:8420/api",
-                    "MAIKO_POLL_MS": "5000",
+                    "MAIKO_POLL_MS": "15000",
                 },
             }
         }

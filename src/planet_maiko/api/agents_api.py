@@ -395,7 +395,7 @@ def cleanup_agent():
 
 @agents_bp.route("/agents/<task_id>/inbox", methods=["GET"])
 def get_agent_inbox(task_id):
-    """Get messages for an agent (agent polls this).
+    """Get messages for an agent (channel polls this every ~15s).
 
     Query params:
         unread_only: "true" to only return unread messages (default: true)
@@ -406,6 +406,10 @@ def get_agent_inbox(task_id):
 
     query = AgentMessage.query.filter_by(task_id=task_id, direction="to_agent")
     if unread_only:
+        # Quick count check to avoid loading objects when nothing is unread
+        count = query.filter_by(read=False).count()
+        if count == 0:
+            return jsonify([])
         query = query.filter_by(read=False)
 
     messages = query.order_by(AgentMessage.created_at.asc()).all()
