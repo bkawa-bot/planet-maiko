@@ -8,7 +8,7 @@
  * Environment variables:
  *   MAIKO_API_URL  — Planet Maiko API base URL (default: http://localhost:8420/api)
  *   MAIKO_TASK_ID  — The task ID this agent is working on (required)
- *   MAIKO_POLL_MS  — Polling interval in ms (default: 15000)
+ *   MAIKO_POLL_MS  — Polling interval in ms (default: 60000)
  *
  * Usage:
  *   MAIKO_TASK_ID=task-123 claude --dangerously-load-development-channels server:maiko-channel
@@ -34,7 +34,7 @@ import {
 
 const API_URL = process.env.MAIKO_API_URL || "http://localhost:8420/api";
 const TASK_ID = process.env.MAIKO_TASK_ID;
-const POLL_MS = parseInt(process.env.MAIKO_POLL_MS || "15000", 10);
+const POLL_MS = parseInt(process.env.MAIKO_POLL_MS || "60000", 10);
 
 if (!TASK_ID) {
   console.error("MAIKO_TASK_ID environment variable is required");
