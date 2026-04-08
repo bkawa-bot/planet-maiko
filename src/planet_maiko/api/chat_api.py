@@ -45,7 +45,7 @@ def _gather_context():
 
     # Recent pupdates
     pupdates = Pupdate.query.filter_by(dismissed=False).order_by(
-        Pupdate.created_at.desc()
+        Pupdate.timestamp.desc()
     ).limit(10).all()
     if pupdates:
         lines = []
