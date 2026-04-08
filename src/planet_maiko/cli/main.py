@@ -160,10 +160,36 @@ def cmd_feedback(args):
     if not task_id:
         print("Error: Could not detect task ID. Use --task to specify.")
         return
+
+    # Create a Signal directly with code context if provided
+    signal_data = {
+        "category": args.category,
+        "text": args.message,
+        "source_type": "session_feedback",
+        "severity": args.severity,
+    }
+
+    # Read code from --code flag or --file
+    if args.code:
+        signal_data["code_context"] = args.code
+    elif args.file:
+        try:
+            with open(args.file) as f:
+                signal_data["code_context"] = f.read()[:3000]
+            signal_data["file_path"] = args.file
+        except Exception:
+            pass
+
+    try:
+        api_request("/signals", method="POST", data=signal_data)
+    except SystemExit:
+        pass  # Server might not be running — still send via outbox
+
+    # Also send via agent outbox for dashboard visibility
     data = {
         "content": args.message,
         "message_type": "feedback",
-        "sender": "user",
+        "sender": "agent",
         "metadata": {
             "feedback_category": args.category,
             "feedback_severity": args.severity,
@@ -632,6 +658,8 @@ def main():
     feedback_parser.add_argument("message", help="Feedback message")
     feedback_parser.add_argument("--category", default="pattern", help="Category: testing, security, error_handling, etc.")
     feedback_parser.add_argument("--severity", default="suggestion", help="suggestion, warning, or blocking")
+    feedback_parser.add_argument("--code", help="Code snippet showing the pattern (before/after)")
+    feedback_parser.add_argument("--file", help="File path to include as code context")
     feedback_parser.add_argument("--task", help="Task ID (auto-detected if in worktree)")
     feedback_parser.set_defaults(func=cmd_feedback)
 

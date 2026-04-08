@@ -225,10 +225,16 @@ def _write_claude_settings(working_path, task_id, agent_id):
     hooks = {}
 
     if hooks_config.get("post_tool_use", True):
-        hooks["PostToolUse"] = [{
-            "matcher": "Bash",
-            "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/post_tool_use.py"}],
-        }]
+        hooks["PostToolUse"] = [
+            {
+                "matcher": "Bash",
+                "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/post_tool_use.py"}],
+            },
+            {
+                "matcher": "Bash",
+                "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/lora_review_hook.py"}],
+            },
+        ]
 
     if hooks_config.get("post_compact", True):
         hooks["PostCompact"] = [{
@@ -457,8 +463,8 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     # Write Claude Code hooks configuration
     _write_claude_settings(working_path, task_id, agent_id)
 
-    # Install git pre-commit hook for LoRA compliance review
-    _install_pre_commit_hook(working_path)
+    # LoRA compliance review is now handled by Claude Code PostToolUse hook
+    # (lora_review_hook.py), registered in _write_claude_settings above.
 
     # Compile learning brief for this agent
     try:

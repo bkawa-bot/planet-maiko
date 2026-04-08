@@ -66,13 +66,12 @@ Send a `maiko report` after every major workflow step:
 12. maiko task done
 ```
 
-### Compliance Review (Step 5)
+### Compliance Review (Automatic)
 
-Before committing, run `maiko review` on each file you changed:
+A LoRA compliance model reviews your commits automatically via a Claude Code hook. If it finds violations after you commit, you'll get feedback directly — fix the issues and commit again. You can also run a manual check before committing:
 ```bash
 maiko review src/path/to/changed_file.py
 ```
-This runs your changes through a local model trained on the team's review patterns. If it reports VIOLATION, fix the issue before committing. If it says PASS or the command is not available, proceed normally.
 
 ## 3. Checking for Messages
 
@@ -88,12 +87,21 @@ If you receive a nudge, immediately report your current status.
 
 After the user reviews your work and requests changes, extract learnings:
 
-For EACH specific pattern change the reviewer requested, send feedback:
+For EACH specific pattern change the reviewer requested, send feedback **with a code snippet**:
 ```bash
-maiko feedback "Use orElseThrow instead of .get() on Optional" --category error_handling
+maiko feedback "Use orElseThrow instead of .get() on Optional" \
+  --category error_handling \
+  --code "// Before: user.get()\n// After: user.orElseThrow(() -> new NotFoundException())"
 ```
 
-This feeds Maiko's learning system so future agents get better coding guidelines.
+Or reference a file directly:
+```bash
+maiko feedback "Always use connection pooling for batch DB operations" \
+  --category performance \
+  --file src/services/BatchProcessor.java
+```
+
+The code snippet becomes training data for the LoRA model, so include the before/after pattern when possible.
 Send one feedback per distinct code pattern (not per file — if the same pattern was applied in 3 files, that's 1 feedback).
 
 ## 5. Rules
