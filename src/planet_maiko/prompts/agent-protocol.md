@@ -24,11 +24,12 @@ All communication goes through the `maiko` CLI (connects to http://localhost:{ma
 | Command | When to use |
 |---------|-------------|
 | `maiko report "message"` | After every major step — keeps your status fresh |
-| `maiko inbox` | After each commit or before starting a new subtask |
 | `maiko reply "message"` | When responding to a message from Maiko or the user |
 | `maiko feedback "message" --category testing` | When you discover something that should become a learning |
 | `maiko task done` | When the task is complete and tests pass |
 | `maiko task stuck -m "description"` | When you're blocked and need help |
+
+**You do NOT need to poll for messages.** The maiko-channel MCP server delivers messages to you automatically as notifications. Just respond when you receive one.
 
 ### Status Update Convention
 
@@ -73,9 +74,9 @@ A LoRA compliance model reviews your commits automatically via a Claude Code hoo
 maiko review src/path/to/changed_file.py
 ```
 
-## 3. Checking for Messages
+## 3. Messages
 
-**Check `maiko inbox` after each commit or between subtasks.** Maiko may send:
+Messages from Maiko arrive automatically via the channel — you'll see them as notifications. No need to poll. Maiko may send:
 - Updated context or changed requirements
 - Answers to questions you asked
 - A nudge if you haven't reported in a while
@@ -108,7 +109,7 @@ Send one feedback per distinct code pattern (not per file — if the same patter
 
 - Stay focused on the task in TASK.md
 - Commit frequently with clear, descriptive messages
-- **Check `maiko inbox` after every commit** — Maiko may have new context
+- Watch for channel notifications — Maiko may send new context
 - Match existing patterns in the files you're modifying
 - If stuck for more than a few minutes, report it — don't spin
 - When done, verify tests pass before reporting completion
