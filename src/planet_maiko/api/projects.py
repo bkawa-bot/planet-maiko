@@ -104,6 +104,10 @@ Write a plan covering:
 
 Keep it concise and actionable. Use markdown formatting."""
 
+    # Release DB before long LLM call to avoid SQLite locks
+    project_id_saved = project.id
+    db.session.close()
+
     runtime = ClaudeCodeRuntime()
     result = runtime.send(prompt, timeout=90, model=resolve_model("project_plan"))
 
@@ -112,7 +116,8 @@ Keep it concise and actionable. Use markdown formatting."""
 
     plan = result["output"]
 
-    # Save plan to project description (append or replace)
+    # Re-fetch project after session was closed, then save plan
+    project = db.get_or_404(Project, project_id)
     project.description = plan
     project.updated_at = datetime.now(timezone.utc)
     db.session.commit()
@@ -147,6 +152,9 @@ Rules:
 - Set type: todo, bug, feature, or review
 - Keep titles concise (under 80 chars)
 - Order by suggested execution sequence"""
+
+    # Release DB before long LLM call to avoid SQLite locks
+    db.session.close()
 
     from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
     runtime = ClaudeCodeRuntime()

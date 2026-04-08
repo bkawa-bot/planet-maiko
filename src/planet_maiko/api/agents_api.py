@@ -190,14 +190,12 @@ def resume_session():
     session_id = _agent_sessions.get(task_id)
 
     if not session_id:
-        return jsonify({"error": "No session ID found for this agent. The agent may not have started yet."}), 404
+        return jsonify({"error": "No session ID found for this agent. Launch the agent first."}), 404
 
     cmd = f"claude --resume {session_id}"
 
     try:
         if sys.platform == "darwin":
-            subprocess.Popen(["open", "-a", "Terminal.app", "--args", "-e", cmd])
-            # Terminal.app doesn't support --args well, use osascript instead
             subprocess.Popen(["osascript", "-e", f'tell application "Terminal" to do script "{cmd}"'])
         elif sys.platform == "win32":
             subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", cmd], shell=True)
@@ -219,6 +217,7 @@ def open_terminal():
     import subprocess
     import sys
     import shutil
+    import uuid
 
     data = request.get_json()
     path = data.get("path", "")
@@ -253,7 +252,13 @@ def open_terminal():
         tools_flags = " ".join(f'--allowedTools "{t}"' for t in allowed_tools)
         checkout = f"git checkout {branch} && " if branch else ""
         initial_prompt = "Read TASK.md and CLAUDE.md in this directory. Begin working on the task following the protocol."
-        attach_cmd = f'{checkout}cd {path} && claude {tools_flags} "{initial_prompt}"'
+
+        # Generate a session ID upfront so we can resume later
+        session_id = str(uuid.uuid4())
+        if task_id:
+            _agent_sessions[task_id] = session_id
+
+        attach_cmd = f'{checkout}cd {path} && claude --session-id {session_id} {tools_flags} "{initial_prompt}"'
 
     try:
         if sys.platform == "darwin":
@@ -267,7 +272,7 @@ def open_terminal():
                     break
                 except FileNotFoundError:
                     continue
-        return jsonify({"status": "opened", "path": path, "tmux_attached": has_tmux_session})
+        return jsonify({"status": "opened", "path": path, "tmux_attached": has_tmux_session, "session_id": _agent_sessions.get(task_id)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

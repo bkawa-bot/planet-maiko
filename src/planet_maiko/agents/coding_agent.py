@@ -161,10 +161,12 @@ def _write_mcp_json(working_path, task_id):
     """Write .mcp.json so the maiko-channel auto-loads when claude starts."""
     import json
 
-    # Find the channel script path relative to the planet-maiko install
-    channel_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+    # Find the channel script path relative to the planet-maiko repo root
+    # __file__ is src/planet_maiko/agents/coding_agent.py — go up 4 levels to repo root
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__)
-    ))), "channel", "index.mjs")
+    ))))
+    channel_path = os.path.join(repo_root, "channel", "index.mjs")
 
     # Fall back to looking relative to the working path
     if not os.path.exists(channel_path):
@@ -196,10 +198,10 @@ def _write_claude_settings(working_path, task_id, agent_id):
     """
     import json
 
-    # Resolve hooks directory (same pattern as _write_mcp_json)
-    hooks_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+    # Resolve hooks directory — same repo root as _write_mcp_json
+    hooks_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__)
-    ))), "hooks")
+    )))), "hooks")
 
     # Fall back to looking relative to the working path
     if not os.path.isdir(hooks_dir):
@@ -230,16 +232,19 @@ def _write_claude_settings(working_path, task_id, agent_id):
 
     if hooks_config.get("post_compact", True):
         hooks["PostCompact"] = [{
+            "matcher": "",
             "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/post_compact.py"}],
         }]
 
     if hooks_config.get("notification", True):
         hooks["Notification"] = [{
+            "matcher": "",
             "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/notification.py"}],
         }]
 
     if hooks_config.get("subagent_stop", True):
         hooks["SubagentStop"] = [{
+            "matcher": "",
             "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/subagent_stop.py"}],
         }]
 
@@ -270,6 +275,7 @@ def _kickoff_agent(agent_id, worktree_path, task_id, branch_name=None):
     """Start the agent in a detached tmux session. View with 'View Session'."""
     import shutil
     import sys
+    import uuid
 
     claude_path = shutil.which("claude")
     if not claude_path:
@@ -278,6 +284,11 @@ def _kickoff_agent(agent_id, worktree_path, task_id, branch_name=None):
     tmux_path = shutil.which("tmux")
     initial_prompt = "Read TASK.md and CLAUDE.md in this directory. Begin working on the task following the protocol. Report your status as you go."
     session_name = f"maiko-{task_id}"
+
+    # Generate a session ID upfront so we can resume later via "View Session"
+    session_id = str(uuid.uuid4())
+    from planet_maiko.api.agents_api import _agent_sessions
+    _agent_sessions[task_id] = session_id
 
     # Pre-approve the MCP channel + user's configured tools
     allowed_tools = ["mcp__maiko-channel"]
@@ -291,7 +302,7 @@ def _kickoff_agent(agent_id, worktree_path, task_id, branch_name=None):
 
     # Build the launch command — checkout branch first if needed
     checkout = f"git checkout {branch_name} && " if branch_name else ""
-    launch_cmd = f'{checkout}cd {worktree_path} && claude {tools_flags} "{initial_prompt}"'
+    launch_cmd = f'{checkout}cd {worktree_path} && claude --session-id {session_id} {tools_flags} "{initial_prompt}"'
 
     try:
         if tmux_path:

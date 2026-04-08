@@ -56,6 +56,7 @@ DEFAULT_CONFIG = {
     "routing": {
         "enabled": True,
         "default_model": "sonnet",
+        "thinking_budget": "medium",  # low, medium, high — controls Claude's reasoning depth
     },
     "hooks": {
         "enabled": True,

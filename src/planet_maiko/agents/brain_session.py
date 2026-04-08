@@ -90,6 +90,8 @@ Respond with JSON:
 task_title and task_priority are only needed if action is "create_task"."""
 
     from planet_maiko.agents.routing import resolve_model
+    # Release DB before LLM call to avoid SQLite locks
+    db.session.close()
     result = runtime.send_json(prompt, timeout=30, model=resolve_model("triage"))
 
     if not result["success"] or not result.get("parsed"):
@@ -127,6 +129,8 @@ def run_skill(skill_name, context=None, working_dir=None):
     timeout = 600 if skill_name in ("investigate", "brainstorm", "repo-analysis") else 120
 
     from planet_maiko.agents.routing import resolve_model
+    # Release DB before long LLM call to avoid SQLite locks
+    db.session.close()
     result = runtime.send(prompt, working_dir=working_dir, timeout=timeout, model=resolve_model(f"skill:{skill_name}"))
 
     # Auto-save investigation results as pupdates for easy review

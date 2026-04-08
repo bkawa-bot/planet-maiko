@@ -175,15 +175,21 @@ architecture, null_safety, style, naming, docs, pattern, domain_knowledge
 
 Respond as JSON: {{"rules": [{{"index": 1, "rule": "Always validate input lengths at API boundaries", "category": "security"}}, ...]}}"""
 
+            # Release DB before long LLM call to avoid SQLite locks
+            signal_ids = [s.id for s in raw]
+            db.session.close()
+
             runtime = ClaudeCodeRuntime()
             result = runtime.send_json(prompt, timeout=90, model=resolve_model("classify"))
 
             if result.get("parsed") and "rules" in result["parsed"]:
+                from planet_maiko.models.signal import Signal as RefetchSignal
+                refetched = RefetchSignal.query.filter(RefetchSignal.id.in_(signal_ids)).all()
                 for rule_data in result["parsed"]["rules"]:
                     idx = rule_data.get("index", 0) - 1
-                    if 0 <= idx < len(raw):
-                        raw[idx].text = rule_data.get("rule", raw[idx].text)
-                        raw[idx].category = rule_data.get("category", "pattern")
+                    if 0 <= idx < len(refetched):
+                        refetched[idx].text = rule_data.get("rule", refetched[idx].text)
+                        refetched[idx].category = rule_data.get("category", "pattern")
                         synthesized += 1
 
                 db.session.commit()

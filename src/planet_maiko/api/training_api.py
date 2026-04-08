@@ -1,5 +1,6 @@
 """Training API — LoRA fine-tuning from PR review history."""
 
+import json
 import logging
 
 from flask import Blueprint, jsonify, request

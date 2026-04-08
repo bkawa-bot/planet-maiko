@@ -361,12 +361,9 @@ export default function Home() {
       {/* Seasonal overlays */}
       {scene?.context?.season && (
         <div className="page-weather-overlay">
-          {/* Spring: butterflies + flowers */}
+          {/* Spring: flowers */}
           {scene.context.season === "spring" && (
             <>
-              {Array.from({ length: 3 }).map((_, i) => (
-                <img key={`bf-${i}`} src="/butterfly.svg" className={`page-butterfly page-butterfly-${i + 1}`} alt="" />
-              ))}
               {Array.from({ length: 5 }).map((_, i) => (
                 <img key={`fl-${i}`} src={i % 2 === 0 ? "/flower1.svg" : "/flower2.svg"} className="page-flower" style={{ left: `${10 + i * 18}%`, bottom: 32 }} alt="" />
               ))}

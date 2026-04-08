@@ -28,10 +28,10 @@ export default function Tasks() {
   const [generating, setGenerating] = useState(null); // project_id being generated
   const [planning, setPlanning] = useState(null); // project_id being planned
   const [viewingPlan, setViewingPlan] = useState(null); // project object to view plan
-  const [taskForm, setTaskForm] = useState({ title: "", type: "todo", priority: "normal", url: "", project_id: "", due_date: "" });
+  const [taskForm, setTaskForm] = useState({ title: "", description: "", type: "todo", priority: "normal", url: "", project_id: "", due_date: "" });
   const [projectForm, setProjectForm] = useState({ title: "", description: "", priority: "normal" });
   const [editingTask, setEditingTask] = useState(null);
-  const [editForm, setEditForm] = useState({ title: "", type: "todo", priority: "normal", status: "new", project_id: "", url: "", due_date: "" });
+  const [editForm, setEditForm] = useState({ title: "", description: "", type: "todo", priority: "normal", status: "new", project_id: "", url: "", due_date: "" });
   const [askingMaiko, setAskingMaiko] = useState(null);
   const [maikoQuery, setMaikoQuery] = useState("");
   const [maikoResult, setMaikoResult] = useState(null);
@@ -66,8 +66,11 @@ export default function Tasks() {
   const handleCreateTask = async (e) => {
     e.preventDefault();
     if (!taskForm.title.trim()) return;
-    await api.createTask({ id: `task-${Date.now()}`, ...taskForm });
-    setTaskForm({ title: "", type: "todo", priority: "normal", url: "", project_id: "" });
+    const { description, ...rest } = taskForm;
+    const payload = { id: `task-${Date.now()}`, ...rest };
+    if (description) payload.metadata = { description };
+    await api.createTask(payload);
+    setTaskForm({ title: "", description: "", type: "todo", priority: "normal", url: "", project_id: "", due_date: "" });
     setShowTaskForm(false);
     fetchData();
   };
@@ -138,6 +141,12 @@ export default function Tasks() {
                 <label>
                   Title <span className="required">*</span>
                   <input type="text" value={taskForm.title} onChange={(e) => setTaskForm((f) => ({ ...f, title: e.target.value }))} autoFocus />
+                </label>
+              </div>
+              <div className="form-row">
+                <label>
+                  Description
+                  <textarea rows={3} value={taskForm.description} onChange={(e) => setTaskForm((f) => ({ ...f, description: e.target.value }))} placeholder="Optional details..." />
                 </label>
               </div>
               <div className="form-row form-row-inline">
@@ -400,7 +409,11 @@ export default function Tasks() {
             </div>
             <form className="modal-body" onSubmit={async (e) => {
               e.preventDefault();
-              await api.updateTask(editingTask.id, editForm);
+              const { description, ...rest } = editForm;
+              const payload = { ...rest };
+              const existingMeta = editingTask.extra || editingTask.metadata || {};
+              payload.metadata = { ...existingMeta, description: description || "" };
+              await api.updateTask(editingTask.id, payload);
               showToast("Task updated", "normal");
               setEditingTask(null);
               fetchData();
@@ -409,6 +422,12 @@ export default function Tasks() {
                 <label>
                   Title <span className="required">*</span>
                   <input type="text" value={editForm.title} onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))} autoFocus />
+                </label>
+              </div>
+              <div className="form-row">
+                <label>
+                  Description
+                  <textarea rows={3} value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} placeholder="Optional details..." />
                 </label>
               </div>
               <div className="form-row form-row-inline">
@@ -684,6 +703,7 @@ function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchD
               <button className="btn btn-sm btn-action" onClick={() => {
                 setEditForm({
                   title: t.title || "",
+                  description: t.extra?.description || t.metadata?.description || "",
                   type: t.type || "todo",
                   priority: t.priority || "normal",
                   status: t.status || "new",

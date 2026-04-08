@@ -52,6 +52,14 @@ class ClaudeCodeRuntime(AgentRuntime):
         except Exception:
             return []
 
+    def _get_thinking_budget(self):
+        """Load thinking budget from config."""
+        try:
+            from planet_maiko.config import load_config
+            return load_config().get("routing", {}).get("thinking_budget", "medium")
+        except Exception:
+            return "medium"
+
     def send(self, prompt, working_dir=None, timeout=300, model=None):
         """Send a prompt to claude CLI in print mode.
 
@@ -64,6 +72,11 @@ class ClaudeCodeRuntime(AgentRuntime):
         # Model override for cost-aware routing
         if model:
             cmd.extend(["--model", model])
+
+        # Effort level (controls Claude's reasoning depth)
+        budget = self._get_thinking_budget()
+        if budget in ("low", "medium", "high", "max"):
+            cmd.extend(["--effort", budget])
 
         # Pre-approve tools to avoid permission prompts
         allowed = self._get_allowed_tools()
