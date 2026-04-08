@@ -187,12 +187,19 @@ def resume_session():
 
     data = request.get_json()
     task_id = data.get("task_id", "")
-    session_id = _agent_sessions.get(task_id)
+    session_info = _agent_sessions.get(task_id)
 
-    if not session_id:
+    if not session_info:
         return jsonify({"error": "No session ID found for this agent. Launch the agent first."}), 404
 
-    cmd = f"claude --resume {session_id}"
+    session_id = session_info["session_id"]
+    working_path = session_info.get("working_path", "")
+
+    # cd into the worktree first, then resume
+    if working_path:
+        cmd = f"cd {working_path} && claude --resume {session_id}"
+    else:
+        cmd = f"claude --resume {session_id}"
 
     try:
         if sys.platform == "darwin":
@@ -256,7 +263,7 @@ def open_terminal():
         # Generate a session ID upfront so we can resume later
         session_id = str(uuid.uuid4())
         if task_id:
-            _agent_sessions[task_id] = session_id
+            _agent_sessions[task_id] = {"session_id": session_id, "working_path": path}
 
         attach_cmd = f'{checkout}cd {path} && claude --session-id {session_id} {tools_flags} "{initial_prompt}"'
 
@@ -272,7 +279,8 @@ def open_terminal():
                     break
                 except FileNotFoundError:
                     continue
-        return jsonify({"status": "opened", "path": path, "tmux_attached": has_tmux_session, "session_id": _agent_sessions.get(task_id)})
+        info = _agent_sessions.get(task_id, {})
+        return jsonify({"status": "opened", "path": path, "tmux_attached": has_tmux_session, "session_id": info.get("session_id") if isinstance(info, dict) else info})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -495,7 +503,7 @@ def get_all_messages(task_id):
     return jsonify([m.to_dict() for m in messages])
 
 
-# In-memory session ID store (task_id -> session_id)
+# In-memory session store (task_id -> {session_id, working_path})
 _agent_sessions = {}
 
 
@@ -505,14 +513,18 @@ def register_session(task_id):
     data = request.get_json()
     session_id = data.get("session_id")
     if session_id:
-        _agent_sessions[task_id] = session_id
+        _agent_sessions[task_id] = {
+            "session_id": session_id,
+            "working_path": data.get("working_path", ""),
+        }
     return jsonify({"status": "ok"})
 
 
 @agents_bp.route("/agents/<task_id>/session", methods=["GET"])
 def get_session(task_id):
     """Get the Claude Code session ID for an agent task."""
-    return jsonify({"session_id": _agent_sessions.get(task_id)})
+    info = _agent_sessions.get(task_id, {})
+    return jsonify({"session_id": info.get("session_id") if isinstance(info, dict) else info})
 
 
 @agents_bp.route("/agents/conflicts", methods=["GET"])

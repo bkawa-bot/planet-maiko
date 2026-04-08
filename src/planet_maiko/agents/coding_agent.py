@@ -294,7 +294,7 @@ def _kickoff_agent(agent_id, worktree_path, task_id, branch_name=None):
     # Generate a session ID upfront so we can resume later via "View Session"
     session_id = str(uuid.uuid4())
     from planet_maiko.api.agents_api import _agent_sessions
-    _agent_sessions[task_id] = session_id
+    _agent_sessions[task_id] = {"session_id": session_id, "working_path": worktree_path}
 
     # Pre-approve the MCP channel + user's configured tools
     allowed_tools = ["mcp__maiko-channel"]
