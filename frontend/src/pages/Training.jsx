@@ -20,6 +20,7 @@ export default function Training() {
   const [adapters, setAdapters] = useState([]);
   const [assignAgent, setAssignAgent] = useState("");
   const [assignAdapter, setAssignAdapter] = useState("");
+  const [showLegacy, setShowLegacy] = useState(false);
 
   const fetchDatasets = () => {
     api.getTrainingDatasets().then(setDatasets).catch(() => {});
@@ -48,126 +49,88 @@ export default function Training() {
     <div className="training-page">
       <div className="training-header">
         <h2><GraduationCap size={18} /> Training</h2>
-        <InfoButton title={<><GraduationCap size={16} /> LoRA Training</>}>
-          <p>Train small LoRA adapters on your team's real PR review history. Each adapter encodes coding patterns so agents can run compliance checks locally — free and fast.</p>
-          <h4>How it works</h4>
+        <InfoButton title={<><GraduationCap size={16} /> LoRA Training Workflow</>}>
+          <p>Train a local LoRA adapter that reviews code at commit time. The adapter learns from your team's <em>graduated learnings</em> (rules that emerged from PR comments).</p>
+          <h4>The flow</h4>
           <ol>
-            <li><strong>Extract training data</strong> — scans merged PRs for review comments (violations) and clean merges (passes).</li>
-            <li><strong>Pick a dataset</strong> — per-repo for specialized agents, or combined for generalists.</li>
-            <li><strong>Train an agent</strong> — LoRA fine-tuning runs locally via MLX (Apple Silicon) or PyTorch (NVIDIA).</li>
-            <li><strong>Adapter saved</strong> — linked to the agent's profile for future use.</li>
+            <li><strong>Backfill</strong> (Knowledge page) — scans PRs, classifies comments into Learnings.</li>
+            <li><strong>Generate from Rules</strong> (Step 1 below) — turns each active Learning into balanced training pairs via Claude Opus.</li>
+            <li><strong>Train Model</strong> (Step 2 below) — fine-tunes a LoRA adapter on the dataset.</li>
+            <li><strong>Assign</strong> (Step 3) — links the adapter to an agent profile.</li>
           </ol>
+          <p><em>"Extract from PRs" is the legacy approach — it pulls raw PR diffs as training data. Most users should use "Generate from Rules" instead.</em></p>
         </InfoButton>
       </div>
 
-      {/* Training Data Extraction */}
+      {/* Step 1: Generate from Rules */}
       <div className="training-dataset-section">
         <div className="training-dataset-header">
-          <Database size={14} /> Training Data
-          <InfoButton title={<><Database size={16} /> Training Data</>}>
-            <p>Extract real code + review comment pairs from your PR history as training data for LoRA fine-tuning.</p>
-            <h4>What it does</h4>
-            <p>Scans merged PRs in your configured repos. For each PR with review comments, it pairs the code that was reviewed with the reviewer's feedback. Clean merges become "PASS" examples.</p>
-            <h4>How much data do you need?</h4>
-            <p>300-500 pairs per repo is a good baseline. 1,000+ is the sweet spot. The extraction creates per-repo datasets so you can train repo-specific adapters.</p>
+          <Sparkles size={14} /> Step 1 — Generate Training Data from Rules
+          <InfoButton title={<><Sparkles size={16} /> Step 1: Generate from Rules</>}>
+            <p>Turns your <strong>active Learnings</strong> (graduated rules from PR comments) into balanced training pairs via Claude Opus.</p>
+            <h4>How it works</h4>
+            <ol>
+              <li>Takes each active Learning (e.g. "Always use parameterized queries")</li>
+              <li>Pulls real signals — actual code from your team that triggered this rule</li>
+              <li>Generates ~25 synthetic violations + ~25 synthetic passes</li>
+            </ol>
+            <h4>Cost</h4>
+            <p>One Opus call per rule. 20 rules ≈ $5-10.</p>
+            <h4>If you have no rules</h4>
+            <p>Go to the Knowledge page and click "Backfill from PRs" first to generate Learnings.</p>
           </InfoButton>
         </div>
 
-        <div className="training-dataset-stats">
-          {datasetStats && datasetStats.total > 0 ? (
-            <>
-              <span className="kstat"><Database size={12} /> {datasetStats.total} examples</span>
-              <span className="kstat" style={{ color: "var(--urgent)" }}>{datasetStats.violations} violations</span>
-              <span className="kstat" style={{ color: "var(--green)" }}>{datasetStats.passes} passes</span>
-              {datasetStats.filename && <span className="kstat">{datasetStats.filename}</span>}
-            </>
-          ) : (
-            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>No training data extracted yet</span>
-          )}
-        </div>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>
+          Generates synthetic violation/pass examples for each active Learning. This is the recommended way to create training data.
+        </p>
 
         <button
           className="btn btn-primary"
-          disabled={extracting}
+          disabled={generating}
           onClick={async () => {
-            setExtracting(true);
-            showToast("Extracting training data from PR history...", "normal");
+            setGenerating(true);
+            showToast("Generating training data from rules... one Opus call per learning", "normal");
             try {
-              const result = await api.exportTrainingDataset();
-              showToast(`Extracted ${result.pairs} training pairs (${result.violations} violations, ${result.passes} passes) from ${result.repos_scanned} repos`, "normal");
-              fetchDatasets();
+              const result = await api.generateFromRules();
+              if (result.success) {
+                showToast(`Generated ${result.pairs} pairs from ${result.rules_processed} rules (${result.violations} violations, ${result.passes} passes)`, "normal");
+                fetchDatasets();
+              } else {
+                showToast(result.error || "Generation failed", "high");
+              }
             } catch (err) {
-              showToast("Extraction failed: " + err.message, "high");
+              showToast("Generation failed: " + err.message, "high");
             }
-            setExtracting(false);
+            setGenerating(false);
           }}
         >
-          {extracting ? <><Loader size={12} className="spin" /> Extracting...</> : <><Download size={12} /> Extract from PRs</>}
+          {generating ? <><Loader size={12} className="spin" /> Generating...</> : <><Sparkles size={12} /> Generate from Rules</>}
         </button>
 
+        {/* Existing datasets */}
         {datasets.length > 0 && (
-          <div className="training-dataset-list">
-            {datasets.map((d) => (
-              <div key={d.filename} className="training-dataset-item">
-                <span className="training-dataset-name">{d.filename}</span>
-                <span className="training-dataset-count">{d.examples} examples</span>
-                <span className="training-dataset-size">{(d.size_bytes / 1024).toFixed(0)} KB</span>
-              </div>
-            ))}
-          </div>
+          <>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 16, marginBottom: 6 }}>
+              Existing datasets
+            </div>
+            <div className="training-dataset-list">
+              {datasets.map((d) => (
+                <div key={d.filename} className="training-dataset-item">
+                  <span className="training-dataset-name">{d.filename}</span>
+                  <span className="training-dataset-count">{d.examples} examples</span>
+                  <span className="training-dataset-size">{(d.size_bytes / 1024).toFixed(0)} KB</span>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
-      {/* Rule-Based Training Data */}
+      {/* Step 2: Train LoRA Model */}
       <div className="training-dataset-section">
         <div className="training-dataset-header">
-          <Sparkles size={14} /> Generate from Rules
-          <InfoButton title={<><Sparkles size={16} /> Rule-Based Training Data</>}>
-            <p>Generates focused training data from your active learnings. For each rule, it combines real feedback signals with synthetic examples generated by Claude Opus.</p>
-            <h4>How it works</h4>
-            <ol>
-              <li>Takes each active learning (e.g. "Always use parameterized queries")</li>
-              <li>Pulls real signals — actual code from your team that triggered this rule</li>
-              <li>Generates ~25 synthetic violation examples (realistic code that breaks the rule)</li>
-              <li>Generates ~25 synthetic pass examples (clean code that follows the rule)</li>
-            </ol>
-            <h4>Why this is better</h4>
-            <p>Every training example is tied to a specific rule your team cares about. Balanced pass/fail ratio per rule. ~50 examples per rule saturates the pattern. 20 rules = 1,000 focused pairs.</p>
-            <h4>Cost</h4>
-            <p>One Opus call per rule. 20 rules ~ $5-10.</p>
-          </InfoButton>
-        </div>
-
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button
-            className="btn btn-primary"
-            disabled={generating}
-            onClick={async () => {
-              setGenerating(true);
-              showToast("Generating training data from rules... one Opus call per learning", "normal");
-              try {
-                const result = await api.generateFromRules();
-                if (result.success) {
-                  showToast(`Generated ${result.pairs} pairs from ${result.rules_processed} rules (${result.violations} violations, ${result.passes} passes)`, "normal");
-                  fetchDatasets();
-                } else {
-                  showToast(result.error || "Generation failed", "high");
-                }
-              } catch (err) {
-                showToast("Generation failed: " + err.message, "high");
-              }
-              setGenerating(false);
-            }}
-          >
-            {generating ? <><Loader size={12} className="spin" /> Generating...</> : <><Sparkles size={12} /> Generate from Rules</>}
-          </button>
-        </div>
-      </div>
-
-      {/* LoRA Model Training */}
-      <div className="training-dataset-section">
-        <div className="training-dataset-header">
-          <GraduationCap size={14} /> Train LoRA Model
+          <GraduationCap size={14} /> Step 2 — Train LoRA Model
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
@@ -247,11 +210,11 @@ export default function Training() {
         </div>
       </div>
 
-      {/* Assign Existing Adapter */}
+      {/* Step 3: Assign Existing Adapter */}
       {adapters.length > 0 && (
         <div className="training-dataset-section">
           <div className="training-dataset-header">
-            <Link2 size={14} /> Assign Adapter to Agent
+            <Link2 size={14} /> Step 3 — Assign Adapter to Agent
           </div>
 
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -299,6 +262,59 @@ export default function Training() {
           </div>
         </div>
       )}
+
+      {/* Legacy: Extract from PRs (raw, noisy) */}
+      <div className="training-dataset-section" style={{ opacity: 0.7 }}>
+        <div
+          className="training-dataset-header"
+          style={{ cursor: "pointer" }}
+          onClick={() => setShowLegacy(!showLegacy)}
+        >
+          <Database size={14} /> Legacy: Extract from PRs
+          <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 8 }}>
+            (raw approach — most users should use Step 1 instead)
+          </span>
+        </div>
+
+        {showLegacy && (
+          <>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8, marginBottom: 12 }}>
+              Scrapes raw PR review comments and pairs them with the diffs as training data. Output is noisy because every reviewer comment becomes a "VIOLATION" example, even casual ones. Kept here for completeness.
+            </p>
+
+            <div className="training-dataset-stats">
+              {datasetStats && datasetStats.total > 0 ? (
+                <>
+                  <span className="kstat"><Database size={12} /> {datasetStats.total} examples</span>
+                  <span className="kstat" style={{ color: "var(--urgent)" }}>{datasetStats.violations} violations</span>
+                  <span className="kstat" style={{ color: "var(--green)" }}>{datasetStats.passes} passes</span>
+                </>
+              ) : (
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>No raw extracted data yet</span>
+              )}
+            </div>
+
+            <button
+              className="btn btn-sm"
+              disabled={extracting}
+              onClick={async () => {
+                setExtracting(true);
+                showToast("Extracting raw training data from PR history...", "normal");
+                try {
+                  const result = await api.exportTrainingDataset();
+                  showToast(`Extracted ${result.pairs} pairs (${result.violations} violations, ${result.passes} passes) from ${result.repos_scanned} repos`, "normal");
+                  fetchDatasets();
+                } catch (err) {
+                  showToast("Extraction failed: " + err.message, "high");
+                }
+                setExtracting(false);
+              }}
+            >
+              {extracting ? <><Loader size={12} className="spin" /> Extracting...</> : <><Download size={12} /> Extract Raw Data</>}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

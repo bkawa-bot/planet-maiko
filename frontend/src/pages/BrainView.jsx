@@ -23,6 +23,8 @@ export default function BrainView() {
   const [addCategory, setAddCategory] = useState("domain_knowledge");
   const [backfilling, setBackfilling] = useState(false);
   const [expandedLearning, setExpandedLearning] = useState(null);
+  const [showBackfillModal, setShowBackfillModal] = useState(false);
+  const [backfillLimit, setBackfillLimit] = useState(20);
 
   const fetchLearnings = async () => {
     setKLoading(true);
@@ -87,32 +89,7 @@ export default function BrainView() {
             className="btn btn-sm"
             style={pending.length === 0 ? { marginLeft: "auto" } : {}}
             disabled={backfilling}
-            onClick={async () => {
-              setBackfilling(true);
-              try {
-                const result = await api.backfillKnowledge();
-                const perRepo = result.per_repo || [];
-                const errored = perRepo.filter((r) => r.error);
-                const summary = perRepo
-                  .map((r) => r.error
-                    ? `${r.repo}: error (${r.error.slice(0, 40)})`
-                    : `${r.repo}: ${r.signals_created}/${r.prs_scanned} PRs`)
-                  .join("\n");
-
-                if (result.signals_created === 0 && errored.length === 0) {
-                  showToast("No new PR comments found.\n" + summary, "normal");
-                } else if (result.signals_created === 0) {
-                  showToast("Backfill errors:\n" + summary, "high");
-                } else {
-                  const note = errored.length ? ` (${errored.length} repo errors)` : "";
-                  showToast(`Synthesized ${result.synthesized} into ${result.new_learnings} learnings${note}\n${summary}`, errored.length ? "high" : "normal");
-                }
-                fetchLearnings();
-              } catch (err) {
-                showToast("Backfill failed: " + err.message, "high");
-              }
-              setBackfilling(false);
-            }}
+            onClick={() => setShowBackfillModal(true)}
           >
             {backfilling ? <><Loader size={10} className="spin" /> Scanning...</> : <><Download size={10} /> Backfill from PRs</>}
           </button>
@@ -212,6 +189,74 @@ export default function BrainView() {
           </div>
         </div>
       </div>
+
+      {/* Backfill modal */}
+      {showBackfillModal && (
+        <div className="modal-overlay" onClick={() => setShowBackfillModal(false)}>
+          <div className="generated-tasks-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <Download size={14} />
+              <span>Backfill from PRs</span>
+              <button className="btn btn-sm" onClick={() => setShowBackfillModal(false)} style={{ marginLeft: "auto" }}><X size={10} /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>
+                Scans recent merged PRs in your configured repos for review comments. Each comment becomes a raw signal that gets classified and aggregated into learnings.
+              </p>
+              <div className="form-row">
+                <label>
+                  PRs per repo to scan
+                  <input
+                    type="number"
+                    min="1"
+                    max="500"
+                    value={backfillLimit}
+                    onChange={(e) => setBackfillLimit(parseInt(e.target.value) || 20)}
+                    autoFocus
+                  />
+                </label>
+              </div>
+              <div className="form-actions">
+                <button type="button" className="btn" onClick={() => setShowBackfillModal(false)}>Cancel</button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={backfilling}
+                  onClick={async () => {
+                    setShowBackfillModal(false);
+                    setBackfilling(true);
+                    try {
+                      const result = await api.backfillKnowledge(backfillLimit);
+                      const perRepo = result.per_repo || [];
+                      const errored = perRepo.filter((r) => r.error);
+                      const summary = perRepo
+                        .map((r) => r.error
+                          ? `${r.repo}: error (${r.error.slice(0, 40)})`
+                          : `${r.repo}: ${r.signals_created}/${r.prs_scanned} PRs`)
+                        .join("\n");
+
+                      if (result.signals_created === 0 && errored.length === 0) {
+                        showToast("No new PR comments found.\n" + summary, "normal");
+                      } else if (result.signals_created === 0) {
+                        showToast("Backfill errors:\n" + summary, "high");
+                      } else {
+                        const note = errored.length ? ` (${errored.length} repo errors)` : "";
+                        showToast(`Synthesized ${result.synthesized} into ${result.new_learnings} learnings${note}\n${summary}`, errored.length ? "high" : "normal");
+                      }
+                      fetchLearnings();
+                    } catch (err) {
+                      showToast("Backfill failed: " + err.message, "high");
+                    }
+                    setBackfilling(false);
+                  }}
+                >
+                  {backfilling ? <><Loader size={12} className="spin" /> Scanning...</> : <><Download size={12} /> Scan {backfillLimit} PRs</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
