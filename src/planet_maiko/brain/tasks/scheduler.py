@@ -87,6 +87,9 @@ def compute_schedule():
                     "status": t.status,
                     "score": score,
                     "type": t.type,
+                    "url": t.url,
+                    "due_date": t.due_date,
+                    "extra": t.extra or {},
                 }
                 for t, score in scored
             ],
