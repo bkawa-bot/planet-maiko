@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import {
   BookOpen, Brain, Clock, Layers, Check, X, Edit3,
-  ChevronDown, ChevronRight, Plus, Shield, Download, Loader,
+  ChevronDown, ChevronRight, Plus, Shield, Download, Loader, Sparkles,
 } from "lucide-react";
 import InfoButton from "../components/InfoButton";
 import "./Knowledge.css";
@@ -27,6 +27,8 @@ export default function BrainView() {
   const [backfillLimit, setBackfillLimit] = useState(20);
   const [backfillRepo, setBackfillRepo] = useState("");
   const [configuredRepos, setConfiguredRepos] = useState([]);
+  const [tab, setTab] = useState("pool");
+  const [synthesizing, setSynthesizing] = useState(false);
 
   const fetchLearnings = async () => {
     setKLoading(true);
@@ -58,20 +60,75 @@ export default function BrainView() {
     fetchLearnings();
   };
 
-  const active = learnings.filter((l) => l.status === "active");
-  const pending = learnings.filter((l) => l.status === "pending");
-  const visible = learnings.filter((l) => l.status !== "dismissed" && l.category !== "pattern");
+  const active = learnings.filter((l) => l.status === "active" && l.category !== "pattern");
+  const pending = learnings.filter((l) => l.status === "pending" && l.category !== "pattern");
+  const unsynthesized = learnings.filter((l) => l.category === "pattern" && l.status !== "dismissed");
+
+  let visible;
+  if (tab === "unsynthesized") {
+    visible = unsynthesized;
+  } else {
+    visible = learnings.filter((l) => l.status !== "dismissed" && l.category !== "pattern");
+  }
 
   const byCategory = {};
   for (const l of visible) {
     (byCategory[l.category] = byCategory[l.category] || []).push(l);
   }
 
+  const handleSynthesize = async () => {
+    setSynthesizing(true);
+    showToast(`Synthesizing ${unsynthesized.length} learnings...`, "normal");
+    try {
+      const result = await fetch("http://localhost:8420/api/learnings/classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batch_size: 50 }),
+      }).then((r) => r.json());
+      showToast(`Reclassified ${result.classified_learnings || 0} learnings, ${result.classified_signals || 0} signals`, "normal");
+      fetchLearnings();
+    } catch (err) {
+      showToast("Synthesis failed: " + err.message, "high");
+    }
+    setSynthesizing(false);
+  };
+
   const toggleCategory = (cat) => setCollapsed((c) => ({ ...c, [cat]: !c[cat] }));
 
   return (
     <div className="brain-view-page">
       <div className="knowledge-page">
+        {/* Tabs */}
+        <div className="knowledge-tabs">
+          <button
+            className={`inbox-tab ${tab === "pool" ? "active" : ""}`}
+            onClick={() => setTab("pool")}
+          >
+            Knowledge Pool
+          </button>
+          <button
+            className={`inbox-tab ${tab === "unsynthesized" ? "active" : ""}`}
+            onClick={() => setTab("unsynthesized")}
+          >
+            Unsynthesized {unsynthesized.length > 0 && <span className="tab-badge">{unsynthesized.length}</span>}
+          </button>
+        </div>
+
+        {tab === "unsynthesized" && unsynthesized.length > 0 && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 0", marginBottom: 8 }}>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, flex: 1 }}>
+              These are raw signals from PR comments waiting to be classified into proper categories. They run through the brain cycle automatically, or you can synthesize them now.
+            </p>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={synthesizing}
+              onClick={handleSynthesize}
+            >
+              {synthesizing ? <><Loader size={10} className="spin" /> Synthesizing...</> : <><Sparkles size={10} /> Synthesize Now</>}
+            </button>
+          </div>
+        )}
+
         <div className="knowledge-stats">
           <span className="kstat"><Brain size={12} /> {active.length} active</span>
           <span className="kstat"><Clock size={12} /> {pending.length} pending</span>
