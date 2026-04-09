@@ -33,6 +33,9 @@ class AgentProfile(db.Model):
     # Lens: per-agent overrides (legacy, mostly unused)
     lens = db.Column(db.JSON, default=dict)
 
+    # Flexible metadata (adapter_path, trained_on_examples, etc.)
+    extra = db.Column(db.JSON, default=dict)
+
     archived = db.Column(db.Boolean, default=False)
     archived_at = db.Column(db.DateTime, nullable=True)
 
@@ -72,6 +75,7 @@ class AgentProfile(db.Model):
             "success_rate": round(self.success_rate(), 2),
             "specializations": self.specializations,
             "context_set": self.context_set or [],
+            "extra": self.extra or {},
             "archived": self.archived or False,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_active_at": self.last_active_at.isoformat() if self.last_active_at else None,
