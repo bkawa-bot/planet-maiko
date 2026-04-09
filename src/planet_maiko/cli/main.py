@@ -371,8 +371,13 @@ def cmd_bootstrap(args):
     app = create_app(start_scheduler=False)
     with app.app_context():
         from planet_maiko.brain.learning.bootstrap import bootstrap_from_prs
-        count = bootstrap_from_prs(limit=args.limit)
-        print(f"Created {count} signals from PR reviews.")
+        result = bootstrap_from_prs(limit=args.limit)
+        print(f"\nCreated {result['total_created']} signals total.\n")
+        for r in result["per_repo"]:
+            if r["error"]:
+                print(f"  {r['repo']:50s}  ERROR: {r['error']}")
+            else:
+                print(f"  {r['repo']:50s}  {r['prs_scanned']} PRs scanned, {r['signals_created']} signals")
 
 
 def cmd_train(args):

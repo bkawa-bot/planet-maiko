@@ -91,12 +91,21 @@ export default function BrainView() {
               setBackfilling(true);
               try {
                 const result = await api.backfillKnowledge();
-                if (result.signals_created === 0) {
-                  showToast("No new PR comments found. Add review comments to your PRs first.", "normal");
-                } else if (result.synth_note) {
-                  showToast(`Found ${result.signals_created} comments. ${result.synth_note}`, "high");
+                const perRepo = result.per_repo || [];
+                const errored = perRepo.filter((r) => r.error);
+                const summary = perRepo
+                  .map((r) => r.error
+                    ? `${r.repo}: error (${r.error.slice(0, 40)})`
+                    : `${r.repo}: ${r.signals_created}/${r.prs_scanned} PRs`)
+                  .join("\n");
+
+                if (result.signals_created === 0 && errored.length === 0) {
+                  showToast("No new PR comments found.\n" + summary, "normal");
+                } else if (result.signals_created === 0) {
+                  showToast("Backfill errors:\n" + summary, "high");
                 } else {
-                  showToast(`Synthesized ${result.synthesized} comments into ${result.new_learnings} learnings`, "normal");
+                  const note = errored.length ? ` (${errored.length} repo errors)` : "";
+                  showToast(`Synthesized ${result.synthesized} into ${result.new_learnings} learnings${note}\n${summary}`, errored.length ? "high" : "normal");
                 }
                 fetchLearnings();
               } catch (err) {

@@ -159,12 +159,15 @@ def backfill_learnings():
     limit = data.get("limit", 20)
 
     # Step 1: Pull raw PR comments as signals
-    signals_created = bootstrap_from_prs(limit=limit)
+    bootstrap_result = bootstrap_from_prs(limit=limit)
+    signals_created = bootstrap_result["total_created"]
+    per_repo = bootstrap_result["per_repo"]
 
     if signals_created == 0:
         return jsonify({
             "signals_created": 0, "synthesized": 0,
             "new_learnings": 0, "graduated": 0,
+            "per_repo": per_repo,
         })
 
     # Step 2: LLM synthesis — transform raw comments into clean learnings
@@ -227,6 +230,7 @@ Respond as JSON: {{"rules": [{{"index": 1, "rule": "Always validate input length
         "synthesized": synthesized,
         "new_learnings": learning_results.get("new_learnings", 0),
         "graduated": learning_results.get("graduated", 0),
+        "per_repo": per_repo,
     }
     if synth_error:
         result["synth_note"] = f"LLM synthesis issue: {synth_error}"
