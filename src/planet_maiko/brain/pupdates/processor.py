@@ -55,9 +55,30 @@ def _execute_dismiss(pupdate):
 
 
 def _execute_mark_read(pupdate):
-    """Mark a pupdate as read."""
+    """Mark a pupdate as read.
+
+    For pr_approved/pr_merged, also complete the matching review task.
+    """
     pupdate.read = True
+
+    if pupdate.type in ("pr_approved", "pr_merged") and pupdate.url:
+        _complete_review_task(pupdate.url)
+
     logger.info(f"  -> marked read: {pupdate.title}")
+
+
+def _complete_review_task(pr_url):
+    """Find and complete any open review task matching this PR URL."""
+    review_tasks = Task.query.filter(
+        Task.url == pr_url,
+        Task.type.in_(["review", "pr_review"]),
+        Task.status.in_(["new", "in_progress"]),
+    ).all()
+
+    for task in review_tasks:
+        task.status = "done"
+        task.updated_at = datetime.now(timezone.utc)
+        logger.info(f"  -> auto-completed review task: {task.id}")
 
 
 def _execute_create_task(pupdate, rule):

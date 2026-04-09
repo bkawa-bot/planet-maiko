@@ -107,8 +107,14 @@ DEFAULT_RULES = [
     },
     {
         "name": "read_approved_prs",
-        "description": "Mark approved PRs as read (informational)",
+        "description": "Mark approved PRs as read and complete review task",
         "match": {"type": "pr_approved"},
+        "action": ACTION_MARK_READ,
+    },
+    {
+        "name": "read_merged_prs",
+        "description": "Mark merged PRs as read and complete review task",
+        "match": {"type": "pr_merged"},
         "action": ACTION_MARK_READ,
     },
     {
