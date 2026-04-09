@@ -112,6 +112,7 @@ def _extract_from_repo(repo, limit):
     for pr in prs:
         number = pr.get("number")
         title = pr.get("title", "")
+        has_feedback = False
 
         # Get inline review comments (with file positions)
         comments = _get_review_comments(repo, number)
@@ -126,9 +127,7 @@ def _extract_from_repo(repo, limit):
                 if not code_hunk or not body or len(body) < 15:
                     continue
 
-                # Skip approval/praise comments
-                lower = body.lower()
-                if any(lower.startswith(p) for p in ["lgtm", "looks good", "nice", "great", "+1", "approved"]):
+                if _is_approval_comment(body):
                     continue
 
                 # Build contextual input: file path, PR context, then code
@@ -145,9 +144,43 @@ def _extract_from_repo(repo, limit):
                     "pr_number": number,
                     "pr_title": title,
                 })
-                logger.debug(f"[training-data] PR #{number}: violation from review on {path}")
-        else:
-            # PRs with no review comments → pass examples (clean merge)
+                has_feedback = True
+                logger.debug(f"[training-data] PR #{number}: violation from inline comment on {path}")
+
+        # Get review bodies (the overall review comment submitted with approve/request changes)
+        reviews = _get_review_bodies(repo, number)
+        if reviews:
+            diff = _get_pr_diff(repo, number)
+            if diff and len(diff) > 50:
+                for review_body in reviews:
+                    if _is_approval_comment(review_body):
+                        continue
+
+                    # Pair each review body with per-file diffs so the model
+                    # sees the code that prompted the feedback
+                    for file_path, hunk in _split_diff_by_file(diff):
+                        if len(hunk) < 30:
+                            continue
+                        context_parts = [f"File: {file_path}"]
+                        if title:
+                            context_parts.append(f"PR: {title}")
+                        context_parts.append(f"```\n{hunk}\n```")
+                        context_parts.append(f"Review context: {review_body[:500]}")
+
+                        pairs.append({
+                            "input": "\n".join(context_parts),
+                            "output": f"VIOLATION: {review_body}",
+                            "repo": repo,
+                            "file_path": file_path,
+                            "pr_number": number,
+                            "pr_title": title,
+                            "source": "review_body",
+                        })
+                    has_feedback = True
+                    logger.debug(f"[training-data] PR #{number}: violation from review body")
+
+        if not has_feedback:
+            # PRs with no feedback at all → pass examples (clean merge)
             # Split into per-file hunks so PASS examples match violation shape
             diff = _get_pr_diff(repo, number)
             if diff and len(diff) > 50:
@@ -259,6 +292,48 @@ def _get_merged_prs(repo, limit):
             return json.loads(result.stdout)
     except Exception as e:
         logger.warning(f"[training-data] Failed to list PRs for {repo}: {e}")
+    return []
+
+
+def _is_approval_comment(body):
+    """Return True if the comment is approval/praise noise, not actionable feedback."""
+    lower = body.strip().lower()
+    if any(lower.startswith(p) for p in ["lgtm", "looks good", "nice", "great", "+1", "approved"]):
+        return True
+    approval_phrases = ["lgtm", "looks good to me", "ship it", "no concerns", "no issues"]
+    if any(p in lower for p in approval_phrases) and len(body) < 100:
+        return True
+    # Bot comments and boilerplate
+    if any(p in lower for p in [
+        "<!-- sidekick", "<!-- model", "<sub>", "review complete. no comments",
+        "no actionable rule", "have feedback for sidekick", "react to this review",
+    ]):
+        return True
+    return False
+
+
+def _get_review_bodies(repo, pr_number):
+    """Fetch review bodies (the overall comment submitted with a review).
+
+    Filters to reviews that have substantive body text and are not
+    pure approvals. Returns list of body strings.
+    """
+    try:
+        result = subprocess.run(
+            ["gh", "api", f"repos/{repo}/pulls/{pr_number}/reviews",
+             "--jq", '[.[] | select(.body != null and .body != "") | .body]'],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            bodies = json.loads(result.stdout)
+            # Filter out short/empty bodies, pure approvals, and bot comments
+            return [b for b in bodies
+                    if len(b.strip()) >= 30
+                    and not _is_approval_comment(b)
+                    and not b.strip().startswith("<!--")
+                    and not b.strip().startswith("<sub>")]
+    except Exception as e:
+        logger.debug(f"[training-data] No review bodies for {repo}#{pr_number}: {e}")
     return []
 
 

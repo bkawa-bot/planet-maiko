@@ -174,12 +174,22 @@ def _prepare_training_file(dataset_path, output_dir, config):
 
     system_prompt = "You are a code review assistant. Given a code change with its file path and PR context, identify violations of coding standards, missing edge cases, security issues, or other problems. Respond PASS if the code is clean."
 
-    # Collect all source files: main dataset + corrections
+    # Collect all source files: main dataset + corrections + global rules
     source_files = [dataset_path]
-    corrections_path = os.path.join(os.path.dirname(dataset_path), "corrections.jsonl")
+    training_dir = os.path.dirname(dataset_path)
+
+    corrections_path = os.path.join(training_dir, "corrections.jsonl")
     if os.path.exists(corrections_path):
         source_files.append(corrections_path)
         logger.info(f"[lora-train] Including corrections from {corrections_path}")
+
+    # Include rules-*.jsonl files (contain training data from global + repo-scoped learnings)
+    if os.path.isdir(training_dir):
+        for fname in sorted(os.listdir(training_dir)):
+            fpath = os.path.join(training_dir, fname)
+            if fname.startswith("rules-") and fname.endswith(".jsonl") and fpath not in source_files:
+                source_files.append(fpath)
+                logger.info(f"[lora-train] Including rule-based training data from {fname}")
 
     with open(train_file, "w", encoding="utf-8") as f_out:
         for source in source_files:

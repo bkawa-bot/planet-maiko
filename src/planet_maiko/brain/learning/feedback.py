@@ -206,7 +206,9 @@ def add_corrective_pass(code, file_path=None, repo=None, model_output=None):
     """Record a false positive as a corrective PASS training pair.
 
     Writes directly to a training data file so the next retrain
-    learns that this code is clean.
+    learns that this code is clean. Also emits a Signal so the
+    learnings pipeline can track and potentially auto-dismiss
+    rules that produce too many false positives.
 
     Args:
         code: the code that was incorrectly flagged
@@ -241,8 +243,178 @@ def add_corrective_pass(code, file_path=None, repo=None, model_output=None):
     with open(corrections_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(pair, ensure_ascii=False) + "\n")
 
+    # Emit a Signal so the learnings pipeline can track false positive rates
+    _emit_signal(
+        category=_extract_category(model_output or ""),
+        text=model_output or "False positive — model flagged clean code",
+        source_type="lora_correction",
+        severity="rejected",
+        repo=repo,
+        file_path=file_path,
+        code_context=code[:2000],
+    )
+
     logger.info(f"[feedback] Recorded corrective PASS for {file_path or 'stdin'}")
     return {"success": True, "file_path": corrections_path}
+
+
+def add_corrective_violation(code, violation, category=None, file_path=None, repo=None):
+    """Record a false negative as a corrective VIOLATION training pair.
+
+    Use when the model said PASS but should have caught something.
+    Also emits a Signal so the learnings pipeline can aggregate it
+    into a Learning — if enough misses of the same type accumulate,
+    it graduates into an active rule and generates synthetic training data.
+
+    Args:
+        code: the diff chunk that was incorrectly passed
+        violation: description of what should have been caught
+        category: violation category (auto-detected from violation text if omitted)
+        file_path: optional file path for context
+        repo: optional repo name
+
+    Returns:
+        dict with {success, file_path}
+    """
+    from planet_maiko.paths import data_dir
+
+    if not category:
+        category = _extract_category(f"[{violation}]") if "[" in violation else "pattern"
+
+    training_dir = os.path.join(data_dir(), "training-data")
+    os.makedirs(training_dir, exist_ok=True)
+    corrections_path = os.path.join(training_dir, "corrections.jsonl")
+
+    context_parts = []
+    if file_path:
+        context_parts.append(f"File: {file_path}")
+    context_parts.append(f"```\n{code.strip()}\n```")
+
+    output = f"VIOLATION: [{category}] {violation}"
+
+    pair = {
+        "input": "\n".join(context_parts),
+        "output": output,
+        "repo": repo or "",
+        "file_path": file_path or "",
+        "source": "correction",
+        "category": category,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    with open(corrections_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(pair, ensure_ascii=False) + "\n")
+
+    # Emit a Signal so the learnings pipeline can aggregate into rules
+    _emit_signal(
+        category=category,
+        text=violation,
+        source_type="lora_correction",
+        severity="suggestion",
+        repo=repo,
+        file_path=file_path,
+        code_context=code[:2000],
+    )
+
+    logger.info(f"[feedback] Recorded corrective VIOLATION [{category}] for {file_path or 'stdin'}")
+    return {"success": True, "file_path": corrections_path}
+
+
+def _emit_signal(category, text, source_type, severity, repo=None, file_path=None, code_context=None):
+    """Try to create a Signal in the DB. Fails silently if no app context."""
+    try:
+        from planet_maiko.database import db
+        from planet_maiko.models.signal import Signal
+
+        signal = Signal(
+            category=category,
+            text=text,
+            source_type=source_type,
+            severity=severity,
+            repo=repo,
+            file_path=file_path,
+            code_context=code_context,
+        )
+        db.session.add(signal)
+        db.session.commit()
+        logger.info(f"[feedback] Emitted {source_type} signal: [{category}] {text[:60]}")
+    except Exception as e:
+        # CLI context without Flask app — write to a sidecar file for later sync
+        logger.debug(f"[feedback] Could not emit signal to DB (no app context): {e}")
+        _queue_signal_for_sync(category, text, source_type, severity, repo, file_path, code_context)
+
+
+def _queue_signal_for_sync(category, text, source_type, severity, repo, file_path, code_context):
+    """Queue a signal to disk so the server can pick it up later."""
+    queue_path = os.path.join(_feedback_dir(), "signal-queue.jsonl")
+    os.makedirs(os.path.dirname(queue_path), exist_ok=True)
+
+    entry = {
+        "category": category,
+        "text": text,
+        "source_type": source_type,
+        "severity": severity,
+        "repo": repo,
+        "file_path": file_path,
+        "code_context": code_context,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    with open(queue_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+    logger.info(f"[feedback] Queued signal for later sync: [{category}] {text[:60]}")
+
+
+def drain_signal_queue():
+    """Import queued signals from disk into the database.
+
+    Called during `maiko train` to pick up signals emitted by CLI
+    commands (lora-feedback, lora-miss) that ran outside Flask.
+
+    Returns:
+        dict with {imported, errors}
+    """
+    queue_path = os.path.join(_feedback_dir(), "signal-queue.jsonl")
+    if not os.path.exists(queue_path):
+        return {"imported": 0, "errors": 0}
+
+    with open(queue_path, "r", encoding="utf-8") as f:
+        entries = [json.loads(line) for line in f if line.strip()]
+
+    if not entries:
+        return {"imported": 0, "errors": 0}
+
+    from planet_maiko.database import db
+    from planet_maiko.models.signal import Signal
+
+    imported = 0
+    errors = 0
+
+    for entry in entries:
+        try:
+            signal = Signal(
+                category=entry["category"],
+                text=entry["text"],
+                source_type=entry["source_type"],
+                severity=entry.get("severity", "suggestion"),
+                repo=entry.get("repo"),
+                file_path=entry.get("file_path"),
+                code_context=entry.get("code_context"),
+            )
+            db.session.add(signal)
+            imported += 1
+        except Exception as e:
+            logger.warning(f"[feedback] Failed to import queued signal: {e}")
+            errors += 1
+
+    db.session.commit()
+
+    # Clear the queue
+    os.remove(queue_path)
+
+    logger.info(f"[feedback] Drained signal queue: {imported} imported, {errors} errors")
+    return {"imported": imported, "errors": errors}
 
 
 def _extract_category(model_output):
