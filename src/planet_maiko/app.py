@@ -24,6 +24,8 @@ def _ensure_columns():
         "ALTER TABLE tournaments ADD COLUMN suggested_new_tags JSON",
         "ALTER TABLE signals ADD COLUMN code_context TEXT",
         "ALTER TABLE signals ADD COLUMN incorporated_at DATETIME",
+        "ALTER TABLE custom_skills ADD COLUMN user_edited BOOLEAN DEFAULT 0",
+        "ALTER TABLE agent_profiles ADD COLUMN extra JSON DEFAULT '{}'",
     ]
     for sql in migrations:
         try:
