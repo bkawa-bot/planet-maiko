@@ -63,6 +63,7 @@ def update_skill(skill_id):
         skill.description = data["description"]
     if "prompt" in data:
         skill.prompt = data["prompt"]
+        skill.user_edited = True
     if "mcps" in data:
         skill.mcps = data["mcps"]
     if "icon" in data:

@@ -202,6 +202,49 @@ def sync_feedback_to_server():
     return {"synced": synced, "errors": errors}
 
 
+def add_corrective_pass(code, file_path=None, repo=None, model_output=None):
+    """Record a false positive as a corrective PASS training pair.
+
+    Writes directly to a training data file so the next retrain
+    learns that this code is clean.
+
+    Args:
+        code: the code that was incorrectly flagged
+        file_path: optional file path for context
+        repo: optional repo name
+        model_output: the incorrect model output (for logging)
+
+    Returns:
+        dict with {success, file_path}
+    """
+    from planet_maiko.paths import data_dir
+
+    training_dir = os.path.join(data_dir(), "training-data")
+    os.makedirs(training_dir, exist_ok=True)
+    corrections_path = os.path.join(training_dir, "corrections.jsonl")
+
+    context_parts = []
+    if file_path:
+        context_parts.append(f"File: {file_path}")
+    context_parts.append(f"```\n{code.strip()}\n```")
+
+    pair = {
+        "input": "\n".join(context_parts),
+        "output": "PASS",
+        "repo": repo or "",
+        "file_path": file_path or "",
+        "source": "correction",
+        "corrected_output": model_output or "",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    with open(corrections_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(pair, ensure_ascii=False) + "\n")
+
+    logger.info(f"[feedback] Recorded corrective PASS for {file_path or 'stdin'}")
+    return {"success": True, "file_path": corrections_path}
+
+
 def _extract_category(model_output):
     """Extract category from model output like 'VIOLATION: [security] ...'"""
     if "[" in model_output and "]" in model_output:

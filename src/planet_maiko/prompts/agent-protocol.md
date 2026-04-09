@@ -74,6 +74,19 @@ A LoRA compliance model reviews your commits automatically via a Claude Code hoo
 maiko review src/path/to/changed_file.py
 ```
 
+### Reporting False Positives
+
+If the LoRA model flags code that is actually correct, **report it** so the model improves:
+```bash
+# Flag a file as a false positive
+maiko lora-feedback --file src/path/to/clean_file.java --output "VIOLATION: [naming] ..."
+
+# Or pipe code directly
+echo "clean code here" | maiko lora-feedback --repo org/repo
+```
+
+This records a corrective PASS training pair — the next retrain will learn from it. **Do not silently bypass false positives** — always report them so the model gets better.
+
 ## 3. Messages
 
 Messages from Maiko arrive automatically via the channel — you'll see them as notifications. No need to poll. Maiko may send:

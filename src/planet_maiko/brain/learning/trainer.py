@@ -172,21 +172,31 @@ def _prepare_training_file(dataset_path, output_dir, config):
     os.makedirs(output_dir, exist_ok=True)
     train_file = os.path.join(output_dir, "train.jsonl")
 
-    with open(dataset_path) as f_in, open(train_file, "w", encoding="utf-8") as f_out:
-        for line in f_in:
-            try:
-                pair = json.loads(line)
-                # Convert to chat format
-                chat = {
-                    "messages": [
-                        {"role": "system", "content": "You are a code review assistant. Given a code change with its file path and PR context, identify violations of coding standards, missing edge cases, security issues, or other problems. Respond PASS if the code is clean."},
-                        {"role": "user", "content": pair["input"]},
-                        {"role": "assistant", "content": pair["output"]},
-                    ]
-                }
-                f_out.write(json.dumps(chat, ensure_ascii=False) + "\n")
-            except (json.JSONDecodeError, KeyError):
-                continue
+    system_prompt = "You are a code review assistant. Given a code change with its file path and PR context, identify violations of coding standards, missing edge cases, security issues, or other problems. Respond PASS if the code is clean."
+
+    # Collect all source files: main dataset + corrections
+    source_files = [dataset_path]
+    corrections_path = os.path.join(os.path.dirname(dataset_path), "corrections.jsonl")
+    if os.path.exists(corrections_path):
+        source_files.append(corrections_path)
+        logger.info(f"[lora-train] Including corrections from {corrections_path}")
+
+    with open(train_file, "w", encoding="utf-8") as f_out:
+        for source in source_files:
+            with open(source) as f_in:
+                for line in f_in:
+                    try:
+                        pair = json.loads(line)
+                        chat = {
+                            "messages": [
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": pair["input"]},
+                                {"role": "assistant", "content": pair["output"]},
+                            ]
+                        }
+                        f_out.write(json.dumps(chat, ensure_ascii=False) + "\n")
+                    except (json.JSONDecodeError, KeyError):
+                        continue
 
     return train_file
 
@@ -461,12 +471,27 @@ def review_batch(files, agent_profile_id=None, adapter_path=None):
 def _infer_mlx(prompt_text, adapter_path, config):
     """Run inference with MLX."""
     try:
+        # Format as chat using the same template the model was trained on.
+        # mlx_lm.generate expects a raw string, so we apply the Llama 3.1
+        # chat template manually to match the training data format.
+        chat_prompt = (
+            "<|begin_of_text|>"
+            "<|start_header_id|>system<|end_header_id|>\n\n"
+            "You are a code review assistant. Given a code change with its "
+            "file path and PR context, identify violations of coding standards, "
+            "missing edge cases, security issues, or other problems. Respond "
+            "PASS if the code is clean.<|eot_id|>"
+            "<|start_header_id|>user<|end_header_id|>\n\n"
+            f"{prompt_text}<|eot_id|>"
+            "<|start_header_id|>assistant<|end_header_id|>\n\n"
+        )
+
         cmd = [
             sys.executable, "-m", "mlx_lm.generate",
             "--model", config["base_model"],
             "--adapter-path", adapter_path,
             "--max-tokens", "512",
-            "--prompt", prompt_text,
+            "--prompt", chat_prompt,
         ]
 
         result = subprocess.run(

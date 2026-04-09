@@ -64,16 +64,16 @@ def get_skill_prompt(skill_name, context):
     """
     template = None
 
-    # 1. Try database
+    # 1. Try database (only if user has edited it)
     try:
         from planet_maiko.models.custom_skill import CustomSkill
         skill = CustomSkill.query.get(skill_name)
-        if skill:
+        if skill and skill.user_edited:
             template = skill.prompt
     except Exception:
         pass
 
-    # 2. Try prompt file
+    # 2. Try prompt file (authoritative for default skills unless user-edited)
     if template is None:
         template = _load_prompt_file(skill_name)
 

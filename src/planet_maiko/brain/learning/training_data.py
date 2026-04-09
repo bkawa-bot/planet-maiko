@@ -194,9 +194,15 @@ def _extract_from_signals():
                 context_parts.append(f"Repo: {s.repo}")
             context_parts.append(f"```\n{s.code_context}\n```")
 
+            # Rejected signals = false positives → train as PASS
+            if s.severity == "rejected":
+                output = "PASS"
+            else:
+                output = f"VIOLATION: [{s.category}] {s.text}"
+
             pairs.append({
                 "input": "\n".join(context_parts),
-                "output": f"VIOLATION: [{s.category}] {s.text}",
+                "output": output,
                 "repo": s.repo or "unknown",
                 "file_path": s.file_path or "",
                 "source": "signal",

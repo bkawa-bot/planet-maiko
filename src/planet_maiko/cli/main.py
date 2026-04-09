@@ -590,6 +590,43 @@ def cmd_eval(args):
             print(f"  {cat:20s}  P={metrics['precision']:.0%}  R={metrics['recall']:.0%}  F1={metrics['f1']:.0%}  n={metrics['count']}")
 
 
+def cmd_lora_feedback(args):
+    """Report a LoRA false positive — records a corrective PASS training pair."""
+    from planet_maiko.brain.learning.feedback import add_corrective_pass
+
+    # Read code from --file or stdin
+    if args.file:
+        with open(args.file) as f:
+            code = f.read()
+        file_path = args.file
+    elif args.code:
+        code = args.code
+        file_path = None
+    else:
+        if sys.stdin.isatty():
+            print("Paste the code that was incorrectly flagged (Ctrl+D when done):", file=sys.stderr)
+        code = sys.stdin.read()
+        file_path = None
+
+    if not code.strip():
+        print("Error: No code provided.", file=sys.stderr)
+        sys.exit(1)
+
+    result = add_corrective_pass(
+        code=code,
+        file_path=file_path,
+        repo=args.repo,
+        model_output=args.output,
+    )
+
+    if result.get("success"):
+        print(f"Recorded corrective PASS → {result['file_path']}")
+        print("This will be picked up on the next retrain.")
+    else:
+        print(f"Error: {result.get('error')}", file=sys.stderr)
+        sys.exit(1)
+
+
 def cmd_review(args):
     """Review code using a trained LoRA adapter."""
     from planet_maiko.brain.learning.trainer import review_code
@@ -749,6 +786,14 @@ def main():
     review_parser.add_argument("file", nargs="?", help="File to review (reads stdin if omitted)")
     review_parser.add_argument("--agent", help="Agent ID (uses most recent adapter if omitted)")
     review_parser.set_defaults(func=cmd_review)
+
+    # maiko lora-feedback
+    lora_fb_parser = subparsers.add_parser("lora-feedback", help="Report a LoRA false positive (corrective PASS)")
+    lora_fb_parser.add_argument("--file", "-f", help="File that was incorrectly flagged")
+    lora_fb_parser.add_argument("--code", "-c", help="Code snippet that was incorrectly flagged")
+    lora_fb_parser.add_argument("--repo", help="Repo name (e.g. org/repo)")
+    lora_fb_parser.add_argument("--output", "-o", help="The incorrect model output (for logging)")
+    lora_fb_parser.set_defaults(func=cmd_lora_feedback)
 
     # Let plugins register CLI commands
     try:

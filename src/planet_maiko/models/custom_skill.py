@@ -21,6 +21,7 @@ class CustomSkill(db.Model):
     mcps = db.Column(db.JSON, default=list)  # ["slack", "figma", "linear"]
     icon = db.Column(db.String(20), default="wand")  # lucide icon name
     is_default = db.Column(db.Boolean, default=False)  # shipped with Maiko
+    user_edited = db.Column(db.Boolean, default=False)  # True once user edits the prompt
     schedule_interval_minutes = db.Column(db.Integer, nullable=True)  # null = manual only
     creates_pupdates = db.Column(db.Boolean, default=False)  # parse output into pupdates
     last_run_at = db.Column(db.DateTime, nullable=True)
@@ -37,6 +38,7 @@ class CustomSkill(db.Model):
             "mcps": self.mcps,
             "icon": self.icon,
             "is_default": self.is_default,
+            "user_edited": self.user_edited,
             "schedule_interval_minutes": self.schedule_interval_minutes,
             "creates_pupdates": self.creates_pupdates,
             "last_run_at": self.last_run_at.isoformat() if self.last_run_at else None,
