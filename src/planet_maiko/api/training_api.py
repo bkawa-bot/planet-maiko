@@ -109,6 +109,52 @@ def training_progress():
     return jsonify({"status": "idle"})
 
 
+@training_bp.route("/training/adapters", methods=["GET"])
+def list_adapters():
+    """List all trained LoRA adapters."""
+    import os
+    from planet_maiko.paths import data_dir
+
+    models_dir = os.path.join(data_dir(), "models")
+    if not os.path.isdir(models_dir):
+        return jsonify([])
+
+    adapters = []
+    for name in sorted(os.listdir(models_dir), reverse=True):
+        path = os.path.join(models_dir, name)
+        if not os.path.isdir(path):
+            continue
+        has_weights = os.path.exists(os.path.join(path, "adapters.safetensors"))
+        adapters.append({
+            "name": name,
+            "path": path,
+            "has_weights": has_weights,
+        })
+
+    return jsonify(adapters)
+
+
+@training_bp.route("/training/assign-adapter", methods=["POST"])
+def assign_adapter():
+    """Assign an existing adapter to an agent profile."""
+    from planet_maiko.models.agent_profile import AgentProfile
+
+    data = request.get_json()
+    profile_id = data.get("agent_profile_id")
+    adapter_path = data.get("adapter_path")
+
+    if not profile_id or not adapter_path:
+        return jsonify({"error": "agent_profile_id and adapter_path required"}), 400
+
+    profile = db.get_or_404(AgentProfile, profile_id)
+    extra = profile.extra or {}
+    extra["adapter_path"] = adapter_path
+    profile.extra = extra
+    db.session.commit()
+
+    return jsonify({"status": "ok", "agent": profile_id, "adapter_path": adapter_path})
+
+
 @training_bp.route("/training/generate-from-rules", methods=["POST"])
 def generate_from_rules_endpoint():
     """Generate training data from active learnings (rules + synthetic examples)."""

@@ -200,6 +200,8 @@ export const api = {
   getTrainingProgress: () => request("/training/progress"),
   generateFromRules: (data) => request("/training/generate-from-rules", { method: "POST", body: JSON.stringify(data || {}) }),
   generateSynthetic: (data) => request("/training/generate-synthetic", { method: "POST", body: JSON.stringify(data || {}) }),
+  getAdapters: () => request("/training/adapters"),
+  assignAdapter: (data) => request("/training/assign-adapter", { method: "POST", body: JSON.stringify(data) }),
 
   // Chat
   chat: (message) => request("/chat", { method: "POST", body: JSON.stringify({ message }) }),

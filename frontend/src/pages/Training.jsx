@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import InfoButton from "../components/InfoButton";
 import {
-  GraduationCap, Loader, Database, Download, Sparkles,
+  GraduationCap, Loader, Database, Download, Sparkles, Link2,
 } from "lucide-react";
 import "./Training.css";
 
@@ -17,6 +17,9 @@ export default function Training() {
   const [datasetStats, setDatasetStats] = useState(null);
   const [selectedDataset, setSelectedDataset] = useState("");
   const [progress, setProgress] = useState(null);
+  const [adapters, setAdapters] = useState([]);
+  const [assignAgent, setAssignAgent] = useState("");
+  const [assignAdapter, setAssignAdapter] = useState("");
 
   const fetchDatasets = () => {
     api.getTrainingDatasets().then(setDatasets).catch(() => {});
@@ -25,6 +28,7 @@ export default function Training() {
 
   useEffect(() => {
     api.getProfiles().then(setProfiles).catch(() => {});
+    api.getAdapters().then(setAdapters).catch(() => {});
     fetchDatasets();
   }, []);
 
@@ -242,6 +246,59 @@ export default function Training() {
           Requires: <code>pip install mlx mlx-lm</code> (Mac) or <code>pip install torch unsloth</code> (NVIDIA)
         </div>
       </div>
+
+      {/* Assign Existing Adapter */}
+      {adapters.length > 0 && (
+        <div className="training-dataset-section">
+          <div className="training-dataset-header">
+            <Link2 size={14} /> Assign Adapter to Agent
+          </div>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <select
+              className="training-select"
+              value={assignAgent}
+              onChange={(e) => setAssignAgent(e.target.value)}
+            >
+              <option value="">Choose an agent...</option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.display_name} {p.extra?.adapter_path ? `(current: ${p.extra.adapter_path.split("/").pop()})` : "(no adapter)"}
+                </option>
+              ))}
+            </select>
+            <select
+              className="training-select"
+              value={assignAdapter}
+              onChange={(e) => setAssignAdapter(e.target.value)}
+            >
+              <option value="">Choose an adapter...</option>
+              {adapters.filter((a) => a.has_weights).map((a) => (
+                <option key={a.name} value={a.path}>{a.name}</option>
+              ))}
+            </select>
+            <button
+              className="btn btn-primary"
+              disabled={!assignAgent || !assignAdapter}
+              onClick={async () => {
+                try {
+                  await api.assignAdapter({ agent_profile_id: assignAgent, adapter_path: assignAdapter });
+                  showToast("Adapter assigned to agent", "normal");
+                  api.getProfiles().then(setProfiles).catch(() => {});
+                } catch (err) {
+                  showToast("Failed: " + err.message, "high");
+                }
+              }}
+            >
+              <Link2 size={12} /> Assign
+            </button>
+          </div>
+
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+            Link an existing trained adapter to an agent profile. The agent's pre-commit review will use this adapter.
+          </div>
+        </div>
+      )}
     </div>
   );
 }
