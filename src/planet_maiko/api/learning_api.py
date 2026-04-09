@@ -129,8 +129,10 @@ def edit_learning(learning_id):
 
 @learning_bp.route("/learnings/classify", methods=["POST"])
 def classify_pending():
-    """Manually classify pending pattern signals via LLM (clean up backlog)."""
-    from planet_maiko.brain.learning.classifier import classify_unclassified_signals
+    """Manually synthesize pending pattern signals AND learnings via LLM."""
+    from planet_maiko.brain.learning.classifier import (
+        classify_unclassified_signals, classify_pattern_learnings
+    )
     from planet_maiko.brain.learning.processor import process_signals
 
     data = request.get_json(silent=True) or {}
@@ -139,11 +141,16 @@ def classify_pending():
     # Release DB before LLM call
     db.session.close()
 
-    classified = classify_unclassified_signals(batch_size=batch_size)
+    # First: classify any unaggregated signals
+    classified_signals = classify_unclassified_signals(batch_size=batch_size)
     learning_results = process_signals()
 
+    # Then: reclassify any existing pattern-category learnings
+    classified_learnings = classify_pattern_learnings(batch_size=batch_size)
+
     return jsonify({
-        "classified": classified,
+        "classified_signals": classified_signals,
+        "classified_learnings": classified_learnings,
         "new_learnings": learning_results.get("new_learnings", 0),
         "graduated": learning_results.get("graduated", 0),
     })

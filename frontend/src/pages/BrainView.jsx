@@ -60,7 +60,7 @@ export default function BrainView() {
 
   const active = learnings.filter((l) => l.status === "active");
   const pending = learnings.filter((l) => l.status === "pending");
-  const visible = learnings.filter((l) => l.status !== "dismissed");
+  const visible = learnings.filter((l) => l.status !== "dismissed" && l.category !== "pattern");
 
   const byCategory = {};
   for (const l of visible) {

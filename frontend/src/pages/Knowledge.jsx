@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { showToast } from "../components/Toast";
 import {
   BookOpen, Brain, Clock, Layers, Check, X, Edit3,
-  ChevronDown, ChevronRight, Plus, Shield,
+  ChevronDown, ChevronRight, Plus, Shield, Sparkles, Loader,
 } from "lucide-react";
 import "./Knowledge.css";
 
@@ -20,6 +21,7 @@ export default function Knowledge() {
   const [collapsed, setCollapsed] = useState({});
   const [addText, setAddText] = useState("");
   const [addCategory, setAddCategory] = useState("domain_knowledge");
+  const [synthesizing, setSynthesizing] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -42,12 +44,37 @@ export default function Knowledge() {
     fetchData();
   };
 
-  const active = learnings.filter((l) => l.status === "active");
-  const pending = learnings.filter((l) => l.status === "pending");
+  const active = learnings.filter((l) => l.status === "active" && l.category !== "pattern");
+  const pending = learnings.filter((l) => l.status === "pending" && l.category !== "pattern");
+  const unsynthesized = learnings.filter((l) => l.category === "pattern" && l.status !== "dismissed");
 
-  // Group by category
+  const handleSynthesize = async () => {
+    setSynthesizing(true);
+    showToast(`Synthesizing ${unsynthesized.length} learnings...`, "normal");
+    try {
+      const result = await fetch("http://localhost:8420/api/learnings/classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batch_size: 50 }),
+      }).then((r) => r.json());
+      showToast(`Reclassified ${result.classified_learnings} learnings, ${result.classified_signals} signals`, "normal");
+      fetchData();
+    } catch (err) {
+      showToast("Synthesis failed: " + err.message, "high");
+    }
+    setSynthesizing(false);
+  };
+
+  // Group by category — exclude pattern from main pool tab
   const byCategory = {};
-  const items = tab === "pending" ? pending : learnings.filter((l) => l.status !== "dismissed");
+  let items;
+  if (tab === "pending") {
+    items = pending;
+  } else if (tab === "unsynthesized") {
+    items = unsynthesized;
+  } else {
+    items = learnings.filter((l) => l.status !== "dismissed" && l.category !== "pattern");
+  }
   for (const l of items) {
     (byCategory[l.category] = byCategory[l.category] || []).push(l);
   }
@@ -66,7 +93,25 @@ export default function Knowledge() {
         <button className={`inbox-tab ${tab === "pending" ? "active" : ""}`} onClick={() => setTab("pending")}>
           Needs Review {pending.length > 0 && <span className="tab-badge">{pending.length}</span>}
         </button>
+        <button className={`inbox-tab ${tab === "unsynthesized" ? "active" : ""}`} onClick={() => setTab("unsynthesized")}>
+          Unsynthesized {unsynthesized.length > 0 && <span className="tab-badge">{unsynthesized.length}</span>}
+        </button>
       </div>
+
+      {tab === "unsynthesized" && unsynthesized.length > 0 && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 0" }}>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, flex: 1 }}>
+            These are raw signals from PR comments waiting to be classified into proper categories.
+          </p>
+          <button
+            className="btn btn-primary btn-sm"
+            disabled={synthesizing}
+            onClick={handleSynthesize}
+          >
+            {synthesizing ? <><Loader size={10} className="spin" /> Synthesizing...</> : <><Sparkles size={10} /> Synthesize Now</>}
+          </button>
+        </div>
+      )}
 
       {/* Stats row */}
       {tab === "pool" && (

@@ -312,18 +312,6 @@ export default function Tasks() {
             renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask, setEditingTask, setEditForm, setAskingMaiko, agentNames, setDetailTask)
           )}
 
-          {/* Done tasks (collapsed) */}
-          {tasks.filter((t) => t.status === "done" || t.status === "cancelled").length > 0 && (
-            <div className="done-section">
-              <div className="done-header" onClick={() => toggleGroup("_done")}>
-                {collapsedGroups["_done"] ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                <span>Completed ({tasks.filter((t) => t.status === "done" || t.status === "cancelled").length})</span>
-              </div>
-              {!collapsedGroups["_done"] && tasks.filter((t) => t.status === "done" || t.status === "cancelled").map((t) =>
-                renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask, setEditingTask, setEditForm, setAskingMaiko, agentNames, setDetailTask)
-              )}
-            </div>
-          )}
         </>
       )}
 

@@ -89,24 +89,20 @@ def start_task(task_id):
 
 @tasks_bp.route("/tasks/<task_id>/done", methods=["POST"])
 def complete_task(task_id):
-    """Mark a task as done."""
+    """Mark a task as done — deletes it from the active list."""
     task = db.get_or_404(Task, task_id)
-    if task.status == "cancelled":
-        return jsonify({"error": "Cannot complete a cancelled task"}), 400
-    task.status = "done"
-    task.updated_at = datetime.now(timezone.utc)
+    db.session.delete(task)
     db.session.commit()
-    return jsonify(task.to_dict())
+    return jsonify({"status": "deleted", "id": task_id})
 
 
 @tasks_bp.route("/tasks/<task_id>/cancel", methods=["POST"])
 def cancel_task(task_id):
-    """Cancel a task."""
+    """Cancel a task — deletes it from the active list."""
     task = db.get_or_404(Task, task_id)
-    task.status = "cancelled"
-    task.updated_at = datetime.now(timezone.utc)
+    db.session.delete(task)
     db.session.commit()
-    return jsonify(task.to_dict())
+    return jsonify({"status": "deleted", "id": task_id})
 
 
 @tasks_bp.route("/tasks/import-linear", methods=["POST"])

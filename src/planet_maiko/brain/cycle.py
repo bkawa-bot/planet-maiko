@@ -175,11 +175,17 @@ def run(app):
         from planet_maiko.brain.learning.processor import process_signals
         results["learning"] = process_signals()
 
-        # Phase 4.5: Batch classify unclassified signals
+        # Phase 4.5: Batch classify unclassified signals + pattern learnings
         try:
-            from planet_maiko.brain.learning.classifier import classify_unclassified_signals
+            from planet_maiko.brain.learning.classifier import (
+                classify_unclassified_signals, classify_pattern_learnings
+            )
             classified = classify_unclassified_signals(batch_size=20)
-            results["classification"] = {"classified": classified}
+            reclassified = classify_pattern_learnings(batch_size=20)
+            results["classification"] = {
+                "classified_signals": classified,
+                "classified_learnings": reclassified,
+            }
         except Exception as e:
             logger.warning(f"[cycle] Classification error: {e}")
 
