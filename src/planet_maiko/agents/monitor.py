@@ -40,9 +40,8 @@ def get_agent_activity():
     now = datetime.now(timezone.utc)
 
     for p in agent_pupdates:
-        # Find the task_id from tags
-        task_tags = [t for t in (p.tags or []) if t.startswith("task-")]
-        agent_key = task_tags[0] if task_tags else p.id
+        # The first tag is the task_id (set by agent CLI and hooks)
+        agent_key = (p.tags or [None])[0] or p.id
 
         if agent_key not in agents:
             last_seen = p.timestamp
@@ -62,6 +61,20 @@ def get_agent_activity():
             }
 
         agents[agent_key]["pupdate_count"] += 1
+
+    # Enrich with agent profile names where available
+    try:
+        from planet_maiko.models.task import Task
+        from planet_maiko.models.agent_profile import AgentProfile
+        for a in agents.values():
+            task = db.session.get(Task, a["task_id"])
+            if task and task.assigned_agent_id:
+                profile = db.session.get(AgentProfile, task.assigned_agent_id)
+                if profile:
+                    a["agent_name"] = profile.display_name
+                    a["agent_id"] = profile.id
+    except Exception:
+        pass
 
     return list(agents.values())
 

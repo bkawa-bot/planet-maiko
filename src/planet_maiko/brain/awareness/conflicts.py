@@ -121,11 +121,23 @@ def _extract_methods_heuristic(diff_output):
 
 
 def _is_config_file(filepath):
-    """Check whether a file path looks like a config file."""
+    """Check whether a file path looks like a shared config file worth flagging.
+
+    Excludes generated/lock files that commonly show up in diffs but
+    aren't real conflict sources.
+    """
+    name = os.path.basename(filepath).lower()
+
+    # Skip generated/lock files
+    skip = {"package-lock.json", "yarn.lock", "pnpm-lock.yaml", "poetry.lock",
+            "composer.lock", "gemfile.lock", ".gitignore", "tsconfig.json"}
+    if name in skip:
+        return False
+
     return any(
         filepath.endswith(ext)
-        for ext in (".yaml", ".yml", ".json", ".toml", ".env", ".config")
-    )
+        for ext in (".yaml", ".yml", ".toml", ".env", ".config")
+    ) or name in ("pom.xml", "build.gradle", "settings.gradle")
 
 
 def _get_workspace_snapshot(worktree_path):
@@ -143,13 +155,17 @@ def _get_workspace_snapshot(worktree_path):
         return None
 
     try:
-        # --- Layer 1: committed diff ---
+        # Use committed + staged diffs only. Unstaged changes are noise
+        # (editor temp files, uncommitted experiments, etc.) and cause
+        # false positive conflict warnings.
+
+        # --- Layer 1: committed diff vs main branch ---
         committed_files = _run_git(
-            ["diff", "--name-only", "HEAD~1..HEAD"], cwd=worktree_path,
+            ["diff", "--name-only", "origin/main...HEAD"], cwd=worktree_path,
         )
         if not committed_files:
             committed_files = _run_git(
-                ["diff", "--name-only", "origin/main...HEAD"], cwd=worktree_path,
+                ["diff", "--name-only", "HEAD~1..HEAD"], cwd=worktree_path,
             )
 
         # --- Layer 2: staged but uncommitted ---
@@ -157,13 +173,8 @@ def _get_workspace_snapshot(worktree_path):
             ["diff", "--cached", "--name-only"], cwd=worktree_path,
         )
 
-        # --- Layer 3: unstaged working-tree changes ---
-        unstaged_files = _run_git(
-            ["diff", "--name-only"], cwd=worktree_path,
-        )
-
-        # Merge and deduplicate file lists
-        all_files = list(dict.fromkeys(committed_files + staged_files + unstaged_files))
+        # Merge and deduplicate (no unstaged layer)
+        all_files = list(dict.fromkeys(committed_files + staged_files))
 
         # --- Method extraction per file ---
         methods = {}
@@ -257,61 +268,40 @@ def detect_conflicts(agent_worktrees):
         for f in snap.get("files", []):
             file_to_agents.setdefault(f, []).append(agent_id)
 
-    # Union-Find clustering
-    uf = UnionFind()
-    for f, agents in file_to_agents.items():
-        for i in range(1, len(agents)):
-            uf.union(agents[0], agents[i])
-
-    # Group into clusters
-    clusters = defaultdict(set)
-    for agent_id in snapshots:
-        clusters[uf.find(agent_id)].add(agent_id)
-
-    # Generate conflicts per cluster
+    # Direct pairwise conflicts only — no transitive clustering.
+    # If A and B share file X, and B and C share file Y, that does NOT
+    # mean A and C are in conflict.
     conflicts = []
-    for cluster_agents in clusters.values():
-        if len(cluster_agents) < 2:
+
+    for f, involved in file_to_agents.items():
+        if len(involved) < 2:
             continue
 
-        # Find shared files within cluster
-        shared_files = set()
-        for f, agents in file_to_agents.items():
-            cluster_overlap = set(agents) & cluster_agents
-            if len(cluster_overlap) >= 2:
-                shared_files.add(f)
+        # Check method overlap (AST-based or heuristic)
+        methods_by_agent = {}
+        for a in involved:
+            methods_by_agent[a] = set(snapshots[a].get("methods", {}).get(f, []))
 
-        # Determine severity per shared file
-        for f in shared_files:
-            involved = [a for a in file_to_agents[f] if a in cluster_agents]
+        all_methods = set()
+        overlapping_methods = set()
+        for a, methods in methods_by_agent.items():
+            overlapping_methods |= (all_methods & methods)
+            all_methods |= methods
 
-            # Check method overlap (AST-based or heuristic)
-            methods_by_agent = {}
-            for a in involved:
-                methods_by_agent[a] = set(snapshots[a].get("methods", {}).get(f, []))
+        if _is_config_file(f):
+            severity = "hard"
+        elif overlapping_methods:
+            severity = "hard"
+        else:
+            severity = "soft"
 
-            # Check for method-level overlap
-            all_methods = set()
-            overlapping_methods = set()
-            for a, methods in methods_by_agent.items():
-                overlapping_methods |= (all_methods & methods)
-                all_methods |= methods
-
-            if _is_config_file(f):
-                severity = "hard"
-            elif overlapping_methods:
-                severity = "hard"
-            else:
-                severity = "soft"
-
-            conflicts.append({
-                "agents": involved,
-                "file": f,
-                "severity": severity,
-                "overlapping_methods": list(overlapping_methods),
-                "cluster_size": len(cluster_agents),
-                "detected_at": datetime.now(timezone.utc).isoformat(),
-            })
+        conflicts.append({
+            "agents": involved,
+            "file": f,
+            "severity": severity,
+            "overlapping_methods": list(overlapping_methods),
+            "detected_at": datetime.now(timezone.utc).isoformat(),
+        })
 
     return conflicts
 
