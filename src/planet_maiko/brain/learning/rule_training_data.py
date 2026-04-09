@@ -50,8 +50,21 @@ Respond with ONLY a JSON object:
 }}"""
 
 
-def get_covered_rule_ids(output_dir=None):
-    """Return set of learning IDs that already have training data in existing JSONL files."""
+def _safe_repo_name(repo):
+    """Convert repo name to a filesystem-safe string."""
+    if not repo:
+        return ""
+    return repo.replace("/", "--").replace("\\", "--")
+
+
+def get_covered_rule_ids(output_dir=None, repo=None):
+    """Return set of learning IDs that already have training data.
+
+    Args:
+        output_dir: directory to scan (default: data_dir/training-data)
+        repo: if provided, only count rules from datasets matching this repo
+              (filename starts with rules-{safe_repo}-)
+    """
     from planet_maiko.paths import data_dir
 
     if output_dir is None:
@@ -59,29 +72,47 @@ def get_covered_rule_ids(output_dir=None):
     if not os.path.isdir(output_dir):
         return set()
 
+    safe_repo = _safe_repo_name(repo) if repo else None
+
     covered = set()
     for fname in os.listdir(output_dir):
-        if fname.startswith("rules-") and fname.endswith(".jsonl"):
-            fpath = os.path.join(output_dir, fname)
-            try:
-                with open(fpath, "r", encoding="utf-8") as f:
-                    for line in f:
-                        if line.strip():
-                            pair = json.loads(line)
-                            if "rule_id" in pair:
-                                covered.add(pair["rule_id"])
-            except Exception:
+        if not (fname.startswith("rules-") and fname.endswith(".jsonl")):
+            continue
+        # If filtering by repo, only look at matching files
+        if safe_repo and not fname.startswith(f"rules-{safe_repo}-"):
+            continue
+        # If not filtering, only look at global files (no repo prefix in name)
+        # to keep coverage scoped correctly
+        if not safe_repo:
+            # Skip files that look repo-prefixed (rules-org--repo-...)
+            stem = fname[len("rules-"):-len(".jsonl")]
+            # If the stem starts with a non-timestamp segment, it's repo-scoped
+            first = stem.split("-", 1)[0]
+            if not first.isdigit():
                 continue
+
+        fpath = os.path.join(output_dir, fname)
+        try:
+            with open(fpath, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        pair = json.loads(line)
+                        if "rule_id" in pair:
+                            covered.add(pair["rule_id"])
+        except Exception:
+            continue
     return covered
 
 
-def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None, rule_ids=None):
+def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None, rule_ids=None, repo=None):
     """Generate training data from active learnings.
 
     Args:
         examples_per_rule: total examples per rule (split ~50/50 violations/passes)
         output_dir: where to save JSONL
         rule_ids: specific learning IDs to process (None = all active)
+        repo: if provided, filter to learnings scoped to this repo (or global)
+              and prefix the output filename with the repo name
 
     Returns:
         dict with {success, pairs, rules_processed, file_path}
@@ -92,6 +123,7 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None, 
     from planet_maiko.models.signal import Signal
     from planet_maiko.agents.brain_session import _get_runtime
     from planet_maiko.agents.routing import resolve_model
+    from sqlalchemy import or_
 
     if output_dir is None:
         output_dir = os.path.join(data_dir(), "training-data")
@@ -101,6 +133,9 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None, 
     query = Learning.query.filter_by(status="active")
     if rule_ids:
         query = query.filter(Learning.id.in_(rule_ids))
+    if repo:
+        # Include rules scoped to this repo + global rules (scope_repo IS NULL)
+        query = query.filter(or_(Learning.scope_repo == repo, Learning.scope_repo.is_(None)))
     learnings = query.all()
 
     if not learnings:
@@ -246,9 +281,14 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None, 
     if not all_pairs:
         return {"success": False, "error": "No training pairs generated."}
 
-    # Write dataset
+    # Write dataset (include repo prefix when scoped)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    output_path = os.path.join(output_dir, f"rules-{timestamp}.jsonl")
+    if repo:
+        safe_repo = _safe_repo_name(repo)
+        filename = f"rules-{safe_repo}-{timestamp}.jsonl"
+    else:
+        filename = f"rules-{timestamp}.jsonl"
+    output_path = os.path.join(output_dir, filename)
     with open(output_path, "w", encoding="utf-8") as f:
         for pair in all_pairs:
             f.write(json.dumps(pair, ensure_ascii=False) + "\n")

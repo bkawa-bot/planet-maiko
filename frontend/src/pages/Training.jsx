@@ -20,21 +20,26 @@ export default function Training() {
   const [assignAdapter, setAssignAdapter] = useState("");
   const [coverage, setCoverage] = useState(null);
   const [showUncovered, setShowUncovered] = useState(false);
+  const [filterRepo, setFilterRepo] = useState("");
 
   const fetchDatasets = () => {
     api.getTrainingDatasets().then(setDatasets).catch(() => {});
   };
 
-  const fetchCoverage = () => {
-    api.getRuleCoverage().then(setCoverage).catch(() => {});
+  const fetchCoverage = (repo) => {
+    api.getRuleCoverage(repo).then(setCoverage).catch(() => {});
   };
 
   useEffect(() => {
     api.getProfiles().then(setProfiles).catch(() => {});
     api.getAdapters().then(setAdapters).catch(() => {});
     fetchDatasets();
-    fetchCoverage();
   }, []);
+
+  // Refetch coverage whenever the repo filter changes
+  useEffect(() => {
+    fetchCoverage(filterRepo);
+  }, [filterRepo]);
 
   // Poll training progress while running
   useEffect(() => {
@@ -84,10 +89,30 @@ export default function Training() {
           </InfoButton>
         </div>
 
+        {/* Repo filter */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+          <label style={{ fontSize: 12, color: "var(--text-muted)" }}>Scope:</label>
+          <select
+            className="training-select"
+            value={filterRepo}
+            onChange={(e) => setFilterRepo(e.target.value)}
+          >
+            <option value="">All repos (global dataset)</option>
+            {coverage?.available_repos?.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+          {filterRepo && (
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              Includes rules scoped to <strong>{filterRepo}</strong> + global rules
+            </span>
+          )}
+        </div>
+
         {/* Coverage stats */}
         {coverage && (
           <div className="training-dataset-stats" style={{ marginBottom: 12 }}>
-            <span className="kstat"><Sparkles size={12} /> {coverage.active_count} active rules</span>
+            <span className="kstat"><Sparkles size={12} /> {coverage.active_count} active rules{filterRepo && " for this scope"}</span>
             <span className="kstat" style={{ color: "var(--green)" }}>
               {coverage.covered_count} in training data
             </span>
@@ -127,9 +152,9 @@ export default function Training() {
             onClick={async () => {
               setGenerating(true);
               const count = coverage?.uncovered_count || 0;
-              showToast(`Generating training data for ${count} new rules...`, "normal");
+              showToast(`Generating training data for ${count} new rules${filterRepo ? ` (${filterRepo})` : ""}...`, "normal");
               try {
-                const result = await api.generateFromRules();
+                const result = await api.generateFromRules({ repo: filterRepo || undefined });
                 if (result.success) {
                   if (result.message) {
                     showToast(result.message, "normal");
@@ -137,7 +162,7 @@ export default function Training() {
                     showToast(`Generated ${result.pairs} pairs from ${result.rules_processed} rules`, "normal");
                   }
                   fetchDatasets();
-                  fetchCoverage();
+                  fetchCoverage(filterRepo);
                 } else {
                   showToast(result.error || "Generation failed", "high");
                 }
@@ -154,15 +179,15 @@ export default function Training() {
             className="btn btn-sm"
             disabled={generating || !coverage || coverage.active_count === 0}
             onClick={async () => {
-              if (!confirm(`Regenerate ALL ${coverage?.active_count || 0} rules from scratch? This will make new Opus calls for every rule.`)) return;
+              if (!confirm(`Regenerate ALL ${coverage?.active_count || 0} rules from scratch${filterRepo ? ` for ${filterRepo}` : ""}? This will make new Opus calls for every rule.`)) return;
               setGenerating(true);
               showToast(`Regenerating all ${coverage?.active_count} rules...`, "normal");
               try {
-                const result = await api.generateFromRules({ force: true });
+                const result = await api.generateFromRules({ force: true, repo: filterRepo || undefined });
                 if (result.success) {
                   showToast(`Generated ${result.pairs} pairs from ${result.rules_processed} rules`, "normal");
                   fetchDatasets();
-                  fetchCoverage();
+                  fetchCoverage(filterRepo);
                 } else {
                   showToast(result.error || "Generation failed", "high");
                 }
