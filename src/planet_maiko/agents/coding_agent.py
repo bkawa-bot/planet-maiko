@@ -432,17 +432,20 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     # Add short timestamp to avoid collisions
     slug = f"{slug}-{str(int(_time.time()))[-4:]}"
 
-    # Use configured prefix, or the one passed in (from custom branch name field)
-    if branch_prefix == "maiko":
-        try:
-            from planet_maiko.config import load_config
-            cfg_prefix = load_config().get("agents", {}).get("branch_prefix", "maiko")
-            if cfg_prefix:
-                branch_prefix = cfg_prefix
-        except Exception:
-            pass
-
-    branch_name = f"{branch_prefix}/{slug}"
+    # If the user typed a full branch name (contains /), use it as-is.
+    # Otherwise treat it as a prefix and append the auto-generated slug.
+    if "/" in branch_prefix:
+        branch_name = branch_prefix
+    else:
+        if branch_prefix == "maiko":
+            try:
+                from planet_maiko.config import load_config
+                cfg_prefix = load_config().get("agents", {}).get("branch_prefix", "maiko")
+                if cfg_prefix:
+                    branch_prefix = cfg_prefix
+            except Exception:
+                pass
+        branch_name = f"{branch_prefix}/{slug}"
 
     if use_worktree:
         working_path = _create_worktree(repo_path, branch_name)
