@@ -127,6 +127,28 @@ def edit_learning(learning_id):
     return jsonify(learning.to_dict())
 
 
+@learning_bp.route("/learnings/classify", methods=["POST"])
+def classify_pending():
+    """Manually classify pending pattern signals via LLM (clean up backlog)."""
+    from planet_maiko.brain.learning.classifier import classify_unclassified_signals
+    from planet_maiko.brain.learning.processor import process_signals
+
+    data = request.get_json(silent=True) or {}
+    batch_size = data.get("batch_size", 50)
+
+    # Release DB before LLM call
+    db.session.close()
+
+    classified = classify_unclassified_signals(batch_size=batch_size)
+    learning_results = process_signals()
+
+    return jsonify({
+        "classified": classified,
+        "new_learnings": learning_results.get("new_learnings", 0),
+        "graduated": learning_results.get("graduated", 0),
+    })
+
+
 @learning_bp.route("/learnings/backfill", methods=["POST"])
 def backfill_learnings():
     """Scan past PRs, synthesize comments into clean learnings via LLM."""

@@ -52,19 +52,24 @@ def classify_unclassified_signals(batch_size=20):
         from planet_maiko.agents.routing import resolve_model
         result = runtime.send_json(prompt, timeout=30, model=resolve_model("classify"))
 
-        if result and "classifications" in result:
-            classifications = result["classifications"]
-            classified = 0
-            for i, signal in enumerate(signals):
-                if i < len(classifications):
-                    cat = classifications[i].strip().lower()
-                    if cat in VALID_CATEGORIES:
-                        signal.category = cat
-                        classified += 1
+        # send_json returns {success, output, parsed} — the actual JSON is in parsed
+        parsed = result.get("parsed") if isinstance(result, dict) else None
+        if not parsed or "classifications" not in parsed:
+            logger.warning(f"[classifier] No classifications in response: {result.get('error') if isinstance(result, dict) else result}")
+            return 0
 
-            db.session.commit()
-            logger.info(f"[classifier] Classified {classified}/{len(signals)} signals")
-            return classified
+        classifications = parsed["classifications"]
+        classified = 0
+        for i, signal in enumerate(signals):
+            if i < len(classifications):
+                cat = str(classifications[i]).strip().lower()
+                if cat in VALID_CATEGORIES:
+                    signal.category = cat
+                    classified += 1
+
+        db.session.commit()
+        logger.info(f"[classifier] Classified {classified}/{len(signals)} signals")
+        return classified
 
     except Exception as e:
         logger.warning(f"[classifier] Batch classification failed: {e}")
