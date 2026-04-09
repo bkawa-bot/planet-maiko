@@ -182,24 +182,45 @@ def assign_agent():
 
 @agents_bp.route("/agents/resume-session", methods=["POST"])
 def resume_session():
-    """Open a terminal that resumes an agent's Claude Code session."""
+    """Attach to a running agent session, or open a terminal in its worktree.
+
+    Priority:
+    1. tmux attach (if agent is running in a tmux session)
+    2. Open terminal in the worktree (user can interact with running claude or start new)
+    3. claude --resume (only if session is NOT actively running)
+    """
     import subprocess
     import sys
+    import shutil
 
     data = request.get_json()
     task_id = data.get("task_id", "")
     session_info = _agent_sessions.get(task_id)
 
     if not session_info:
-        return jsonify({"error": "No session ID found for this agent. Launch the agent first."}), 404
+        return jsonify({"error": "No session found. Launch the agent first."}), 404
 
     session_id = session_info["session_id"]
     working_path = session_info.get("working_path", "")
 
-    # cd into the worktree first, then resume
-    if working_path:
-        cmd = f"cd {working_path} && claude --resume {session_id}"
+    # 1. Try tmux attach
+    tmux_path = shutil.which("tmux")
+    session_name = f"maiko-{task_id}"
+    has_tmux = False
+    if tmux_path:
+        result = subprocess.run(
+            [tmux_path, "has-session", "-t", session_name],
+            capture_output=True,
+        )
+        has_tmux = result.returncode == 0
+
+    if has_tmux:
+        cmd = f"tmux attach -t {session_name}"
+    elif working_path and os.path.isdir(working_path):
+        # 2. Open terminal in worktree — agent may still be running there
+        cmd = f"cd {working_path} && echo 'Agent worktree: {working_path}' && exec $SHELL"
     else:
+        # 3. Fallback: try resume (works if session finished and was saved)
         cmd = f"claude --resume {session_id}"
 
     try:
@@ -214,9 +235,9 @@ def resume_session():
                     break
                 except FileNotFoundError:
                     continue
-        return jsonify({"status": "opened", "session_id": session_id, "command": cmd})
+        return jsonify({"status": "opened", "session_id": session_id, "tmux": has_tmux, "working_path": working_path})
     except Exception as e:
-        return jsonify({"error": str(e), "command": cmd}), 500
+        return jsonify({"error": str(e)}), 500
 
 
 @agents_bp.route("/agents/open-terminal", methods=["POST"])
