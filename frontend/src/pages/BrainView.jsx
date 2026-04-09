@@ -25,6 +25,8 @@ export default function BrainView() {
   const [expandedLearning, setExpandedLearning] = useState(null);
   const [showBackfillModal, setShowBackfillModal] = useState(false);
   const [backfillLimit, setBackfillLimit] = useState(20);
+  const [backfillRepo, setBackfillRepo] = useState("");
+  const [configuredRepos, setConfiguredRepos] = useState([]);
 
   const fetchLearnings = async () => {
     setKLoading(true);
@@ -32,7 +34,12 @@ export default function BrainView() {
     setKLoading(false);
   };
 
-  useEffect(() => { fetchLearnings(); }, []);
+  useEffect(() => {
+    fetchLearnings();
+    api.getConfig().then((c) => {
+      setConfiguredRepos(c?.github?.repos || []);
+    }).catch(() => {});
+  }, []);
 
   const handleApprove = async (id) => { await api.approveLearning(id); fetchLearnings(); };
   const handleDismiss = async (id) => { await api.dismissLearning(id); fetchLearnings(); };
@@ -201,11 +208,25 @@ export default function BrainView() {
             </div>
             <div className="modal-body">
               <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>
-                Scans recent merged PRs in your configured repos for review comments. Each comment becomes a raw signal that gets classified and aggregated into learnings.
+                Scans recent merged PRs for review comments. Each comment becomes a raw signal that gets classified and aggregated into learnings.
               </p>
               <div className="form-row">
                 <label>
-                  PRs per repo to scan
+                  Repo
+                  <select
+                    value={backfillRepo}
+                    onChange={(e) => setBackfillRepo(e.target.value)}
+                  >
+                    <option value="">All configured repos</option>
+                    {configuredRepos.map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="form-row">
+                <label>
+                  PRs to scan {backfillRepo ? "" : "per repo"}
                   <input
                     type="number"
                     min="1"
@@ -226,7 +247,7 @@ export default function BrainView() {
                     setShowBackfillModal(false);
                     setBackfilling(true);
                     try {
-                      const result = await api.backfillKnowledge(backfillLimit);
+                      const result = await api.backfillKnowledge(backfillLimit, backfillRepo || null);
                       const perRepo = result.per_repo || [];
                       const errored = perRepo.filter((r) => r.error);
                       const summary = perRepo
@@ -250,7 +271,7 @@ export default function BrainView() {
                     setBackfilling(false);
                   }}
                 >
-                  {backfilling ? <><Loader size={12} className="spin" /> Scanning...</> : <><Download size={12} /> Scan {backfillLimit} PRs</>}
+                  {backfilling ? <><Loader size={12} className="spin" /> Scanning...</> : <><Download size={12} /> Scan {backfillLimit} PRs{backfillRepo ? ` in ${backfillRepo.split("/").pop()}` : ""}</>}
                 </button>
               </div>
             </div>

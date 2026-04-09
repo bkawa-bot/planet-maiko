@@ -11,21 +11,26 @@ from planet_maiko.config import load_config
 logger = logging.getLogger(__name__)
 
 
-def bootstrap_from_prs(limit=20):
+def bootstrap_from_prs(limit=20, repos=None):
     """Scan recent merged PRs and extract review comments as signals.
 
     Uses gh CLI to fetch PR review comments. Each comment becomes a signal
     with 0.5x confidence weight (historical, not live).
 
+    Args:
+        limit: max PRs to scan per repo
+        repos: list of repos to scan (None = all configured repos)
+
     Returns:
         dict with: total_created, per_repo (list of {repo, prs_scanned,
                    signals_created, error})
     """
-    config = load_config()
-    repos = config.get("github", {}).get("repos", [])
+    if repos is None:
+        config = load_config()
+        repos = config.get("github", {}).get("repos", [])
 
     if not repos:
-        logger.warning("[bootstrap] No repos configured")
+        logger.warning("[bootstrap] No repos configured or specified")
         return {"total_created": 0, "per_repo": []}
 
     total_created = 0

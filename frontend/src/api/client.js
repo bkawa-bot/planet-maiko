@@ -169,7 +169,7 @@ export const api = {
 
   // Learnings management
   createLearning: (data) => request("/learnings", { method: "POST", body: JSON.stringify(data) }),
-  backfillKnowledge: (limit = 20) => request("/learnings/backfill", { method: "POST", body: JSON.stringify({ limit }) }),
+  backfillKnowledge: (limit = 20, repo = null) => request("/learnings/backfill", { method: "POST", body: JSON.stringify(repo ? { limit, repo } : { limit }) }),
   approveLearning: (id) => request(`/learnings/${id}/approve`, { method: "POST" }),
   dismissLearning: (id) => request(`/learnings/${id}/dismiss`, { method: "POST" }),
 

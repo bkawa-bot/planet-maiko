@@ -157,9 +157,11 @@ def backfill_learnings():
 
     data = request.get_json(silent=True) or {}
     limit = data.get("limit", 20)
+    repo = data.get("repo")  # optional: scan only this one repo
 
     # Step 1: Pull raw PR comments as signals
-    bootstrap_result = bootstrap_from_prs(limit=limit)
+    repos = [repo] if repo else None
+    bootstrap_result = bootstrap_from_prs(limit=limit, repos=repos)
     signals_created = bootstrap_result["total_created"]
     per_repo = bootstrap_result["per_repo"]
 
