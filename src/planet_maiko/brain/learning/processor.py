@@ -44,6 +44,25 @@ NEEDS_APPROVAL = {"api_design", "architecture", "security"}
 CONFIDENCE_PER_SIGNAL = 0.1
 
 
+JUNK_PATTERNS = [
+    "<!-- sidekick",
+    "<!-- model",
+    "<sub>",
+    "review complete. no comments",
+    "no actionable rule",
+    "mission approval",
+    "feedback? react with",
+    "have feedback for sidekick",
+    "react to this review",
+]
+
+
+def _is_junk_signal(text):
+    """Return True if the signal text is bot boilerplate or HTML noise."""
+    lower = text.strip().lower()
+    return any(p in lower for p in JUNK_PATTERNS)
+
+
 def _make_aggregation_key(signal):
     """Build a key for grouping similar signals."""
     # Normalize: first 80 chars of text, lowered
@@ -70,9 +89,15 @@ def process_signals():
 
     logger.info(f"[learning] Processing {len(unprocessed)} signal(s)...")
 
-    counts = {"processed": 0, "new_learnings": 0, "updated_learnings": 0, "graduated": 0}
+    counts = {"processed": 0, "new_learnings": 0, "updated_learnings": 0, "graduated": 0, "skipped_junk": 0}
 
     for signal in unprocessed:
+        # Skip bot comments, boilerplate, and HTML fragments
+        if _is_junk_signal(signal.text):
+            signal.aggregated = True
+            counts["skipped_junk"] += 1
+            continue
+
         agg_key = _make_aggregation_key(signal)
 
         # Find existing learning with this aggregation key

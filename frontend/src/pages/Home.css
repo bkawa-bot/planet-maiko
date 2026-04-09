@@ -94,6 +94,7 @@
 }
 [data-theme="light"] .home-card { background: rgba(242, 248, 242, 0.75); }
 [data-theme="morning"] .home-card { background: rgba(250, 246, 238, 0.75); }
+[data-theme="afternoon"] .home-card { background: rgba(250, 229, 184, 0.78); }
 [data-theme="sunset"] .home-card { background: rgba(58, 34, 72, 0.65); }
 
 .home-card-header {
@@ -189,6 +190,7 @@
 }
 [data-theme="light"] .home-widget { background: rgba(242, 248, 242, 0.75); }
 [data-theme="morning"] .home-widget { background: rgba(250, 246, 238, 0.75); }
+[data-theme="afternoon"] .home-widget { background: rgba(250, 229, 184, 0.78); }
 [data-theme="sunset"] .home-widget { background: rgba(58, 34, 72, 0.65); }
 
 .widget-header {

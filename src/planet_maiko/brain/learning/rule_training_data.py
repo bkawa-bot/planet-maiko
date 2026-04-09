@@ -78,17 +78,19 @@ def get_covered_rule_ids(output_dir=None, repo=None):
     for fname in os.listdir(output_dir):
         if not (fname.startswith("rules-") and fname.endswith(".jsonl")):
             continue
-        # If filtering by repo, only look at matching files
-        if safe_repo and not fname.startswith(f"rules-{safe_repo}-"):
-            continue
-        # If not filtering, only look at global files (no repo prefix in name)
-        # to keep coverage scoped correctly
-        if not safe_repo:
-            # Skip files that look repo-prefixed (rules-org--repo-...)
-            stem = fname[len("rules-"):-len(".jsonl")]
-            # If the stem starts with a non-timestamp segment, it's repo-scoped
-            first = stem.split("-", 1)[0]
-            if not first.isdigit():
+
+        stem = fname[len("rules-"):-len(".jsonl")]
+        first = stem.split("-", 1)[0]
+        is_global_file = first.isdigit()  # e.g. rules-20260408-024435.jsonl
+
+        if safe_repo:
+            # Include repo-specific files AND global files (global rules apply everywhere)
+            is_repo_file = fname.startswith(f"rules-{safe_repo}-")
+            if not is_repo_file and not is_global_file:
+                continue
+        else:
+            # No repo filter — only look at global files
+            if not is_global_file:
                 continue
 
         fpath = os.path.join(output_dir, fname)

@@ -18,6 +18,7 @@ const THEMES = [
   { id: "dark", label: "Night", emoji: "🌙" },
   { id: "light", label: "Day", emoji: "☀️" },
   { id: "morning", label: "Morning", emoji: "🌅" },
+  { id: "afternoon", label: "Afternoon", emoji: "🍦" },
   { id: "sunset", label: "Sunset", emoji: "🌇" },
   { id: "auto", label: "Auto", emoji: "🔄" },
 ];
@@ -25,7 +26,7 @@ const THEMES = [
 function getAutoTheme() {
   const hour = new Date().getHours();
   if (hour >= 5 && hour < 12) return "morning";
-  if (hour >= 12 && hour < 17) return "light";
+  if (hour >= 12 && hour < 17) return "afternoon";
   if (hour >= 17 && hour < 20) return "sunset";
   return "dark";
 }

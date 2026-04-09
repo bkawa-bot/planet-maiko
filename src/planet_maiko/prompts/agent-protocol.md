@@ -87,6 +87,24 @@ echo "clean code here" | maiko lora-feedback --repo org/repo
 
 This records a corrective PASS training pair — the next retrain will learn from it. **Do not silently bypass false positives** — always report them so the model gets better.
 
+### Reporting False Negatives
+
+If during your review you spot an issue that the LoRA model *should* have caught but didn't (it said PASS when there was a real problem), **report it** so the model learns:
+```bash
+# Pipe the diff chunk and describe the missed violation
+git diff -- src/path/to/file.java | maiko lora-miss -v "Missing null check on response field" --category error_handling
+
+# Or provide code inline
+maiko lora-miss -c 'executor.submit(task)' -v "Unbounded executor with no shutdown hook" --category architecture
+
+# From a file
+maiko lora-miss -f /tmp/chunk.diff -v "Test injects mock but never verifies it" --category testing --repo org/repo
+```
+
+Valid categories: `security`, `error_handling`, `testing`, `performance`, `api_design`, `architecture`, `null_safety`, `style`, `naming`, `pattern`, `domain_knowledge`, `gotcha`, `team`.
+
+This records a corrective VIOLATION training pair. **If you notice something the model missed, always report it** — this is how the model gets smarter over time.
+
 ## 3. Messages
 
 Messages from Maiko arrive automatically via the channel — you'll see them as notifications. No need to poll. Maiko may send:

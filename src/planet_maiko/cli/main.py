@@ -499,7 +499,7 @@ def cmd_retrain(args):
 
         # Step 1: Resolve & sync feedback
         if not args.skip_feedback:
-            from planet_maiko.brain.learning.feedback import resolve_pending_feedback, sync_feedback_to_server
+            from planet_maiko.brain.learning.feedback import resolve_pending_feedback, sync_feedback_to_server, drain_signal_queue
             from planet_maiko.brain.learning.processor import process_signals
 
             print("Step 1/3: Resolving feedback...")
@@ -509,6 +509,10 @@ def cmd_retrain(args):
 
             sync = sync_feedback_to_server()
             print(f"  Synced {sync['synced']} signals to database")
+
+            drained = drain_signal_queue()
+            if drained["imported"]:
+                print(f"  Imported {drained['imported']} queued signals from CLI corrections")
 
             result = process_signals()
             if result["graduated"]:
@@ -526,8 +530,16 @@ def cmd_retrain(args):
             print("\nStep 2/3: Generating training data...")
 
             # Find rules that don't have training data yet
-            covered = get_covered_rule_ids()
-            all_active = Learning.query.filter_by(status="active").all()
+            # Include both repo-scoped and global rules
+            covered = get_covered_rule_ids(repo=repo)
+            from sqlalchemy import or_
+            if repo:
+                all_active = Learning.query.filter(
+                    Learning.status == "active",
+                    or_(Learning.scope_repo == repo, Learning.scope_repo.is_(None)),
+                ).all()
+            else:
+                all_active = Learning.query.filter_by(status="active").all()
             new_ids = [l.id for l in all_active if l.id not in covered]
 
             if new_ids:
@@ -535,6 +547,7 @@ def cmd_retrain(args):
                 result = generate_rule_dataset(
                     examples_per_rule=args.examples,
                     rule_ids=new_ids,
+                    repo=repo,
                 )
                 if result.get("success"):
                     print(f"  Generated {result['pairs']} pairs from {result['rules_processed']} rules")
@@ -546,7 +559,7 @@ def cmd_retrain(args):
                 print(f"  All {len(covered)} active rules already have training data")
                 if args.force:
                     print("  --force: regenerating all rules")
-                    result = generate_rule_dataset(examples_per_rule=args.examples)
+                    result = generate_rule_dataset(examples_per_rule=args.examples, repo=repo)
                     if result.get("success"):
                         print(f"  Generated {result['pairs']} pairs from {result['rules_processed']} rules")
         else:
@@ -632,9 +645,100 @@ def cmd_lora_feedback(args):
         sys.exit(1)
 
 
+def cmd_dedup(args):
+    """Merge semantically duplicate learnings."""
+    from planet_maiko.app import create_app
+    app = create_app()
+
+    with app.app_context():
+        from planet_maiko.brain.learning.classifier import dedup_learnings, promote_global_rules
+        prefix = "[DRY RUN] " if args.dry_run else ""
+
+        print("Phase 1: Within-repo dedup...")
+        result = dedup_learnings(dry_run=args.dry_run)
+        print(f"{prefix}Groups checked: {result['groups_checked']}")
+        print(f"{prefix}Merges: {result['merges']}")
+        print(f"{prefix}Dismissed: {result['dismissed']}")
+
+        if args.promote_global:
+            print("\nPhase 2: Cross-repo promotion to global rules...")
+            promo = promote_global_rules(dry_run=args.dry_run)
+            print(f"{prefix}Groups checked: {promo['groups_checked']}")
+            print(f"{prefix}Promoted to global: {promo['promoted']}")
+            print(f"{prefix}Dismissed (merged into global): {promo['dismissed']}")
+
+
+def cmd_add_rule(args):
+    """Manually add a learning rule."""
+    from planet_maiko.app import create_app
+    app = create_app()
+
+    with app.app_context():
+        from planet_maiko.database import db
+        from planet_maiko.models.learning import Learning
+
+        learning = Learning(
+            rule=args.rule,
+            category=args.category,
+            scope_repo=args.repo,  # None = global
+            scope_language=args.language,
+            confidence=1.0,
+            source="manual",
+            status="active",
+        )
+        db.session.add(learning)
+        db.session.commit()
+
+        scope = args.repo or "global (all repos)"
+        print(f"Added [{args.category}] rule (scope: {scope}):")
+        print(f"  {args.rule}")
+
+
+def cmd_lora_miss(args):
+    """Report a LoRA false negative — records a corrective VIOLATION training pair."""
+    from planet_maiko.brain.learning.feedback import add_corrective_violation
+
+    # Read code from --file or stdin
+    if args.file:
+        with open(args.file) as f:
+            code = f.read()
+        file_path = args.file
+    elif args.code:
+        code = args.code
+        file_path = None
+    else:
+        if sys.stdin.isatty():
+            print("Paste the diff chunk the model missed (Ctrl+D when done):", file=sys.stderr)
+        code = sys.stdin.read()
+        file_path = None
+
+    if not code.strip():
+        print("Error: No code provided.", file=sys.stderr)
+        sys.exit(1)
+
+    result = add_corrective_violation(
+        code=code,
+        violation=args.violation,
+        category=args.category,
+        file_path=file_path,
+        repo=args.repo,
+    )
+
+    if result.get("success"):
+        print(f"Recorded corrective VIOLATION → {result['file_path']}")
+        print("This will be picked up on the next retrain.")
+    else:
+        print(f"Error: {result.get('error')}", file=sys.stderr)
+        sys.exit(1)
+
+
 def cmd_review(args):
     """Review code using a trained LoRA adapter."""
     from planet_maiko.brain.learning.trainer import review_code
+
+    if args.pr:
+        _review_pr(args)
+        return
 
     # Read code from file or stdin
     if args.file:
@@ -657,6 +761,112 @@ def cmd_review(args):
         print(f"\n{result['output']}")
     else:
         print(f"Error: {result.get('error')}")
+
+
+SKIP_EXTENSIONS = {".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".lock", ".css", ".svg", ".png", ".jpg", ".gif", ".xml"}
+
+
+def _parse_pr_url(url):
+    """Extract owner/repo and PR number from a GitHub PR URL.
+
+    Accepts:
+        https://github.com/Org/Repo/pull/123
+        https://github.example.com/Org/Repo/pull/123
+        Org/Repo#123
+    """
+    import re
+
+    # Full URL form
+    m = re.match(r"https?://[^/]+/([^/]+/[^/]+)/pull/(\d+)", url)
+    if m:
+        return m.group(1), int(m.group(2))
+
+    # Short form: Org/Repo#123
+    m = re.match(r"([^/]+/[^/]+)#(\d+)", url)
+    if m:
+        return m.group(1), int(m.group(2))
+
+    return None, None
+
+
+def _review_pr(args):
+    """Review each file in a GitHub PR individually through the LoRA model."""
+    import os
+    import re
+    import subprocess
+    from planet_maiko.brain.learning.trainer import review_code
+
+    repo, pr_number = _parse_pr_url(args.pr)
+    if not repo or not pr_number:
+        print(f"Error: Could not parse PR URL: {args.pr}", file=sys.stderr)
+        sys.exit(1)
+
+    # Fetch diff via gh CLI
+    cmd = ["gh", "pr", "diff", str(pr_number), "--repo", repo]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    if result.returncode != 0:
+        print(f"Error fetching PR diff: {result.stderr.strip()}", file=sys.stderr)
+        sys.exit(1)
+
+    diff = result.stdout
+
+    # Split into per-file diffs, skip non-code files
+    file_diffs = re.split(r"(?=^diff --git )", diff, flags=re.MULTILINE)
+    code_files = []
+    for fd in file_diffs:
+        fd = fd.strip()
+        if not fd.startswith("diff --git"):
+            continue
+        match = re.search(r" b/(.+)$", fd.split("\n", 1)[0])
+        fp = match.group(1) if match else "unknown"
+        ext = os.path.splitext(fp)[1].lower()
+        if ext in SKIP_EXTENSIONS:
+            continue
+        code_files.append((fp, fd))
+
+    if not code_files:
+        print("No code files to review in this PR.")
+        return
+
+    print(f"Reviewing {len(code_files)} files from {repo}#{pr_number}...\n")
+
+    passed = 0
+    flagged = 0
+
+    for fp, fd in code_files:
+        r = review_code(code=fd, adapter_path=None, agent_profile_id=args.agent, file_path=fp)
+
+        if not r.get("success"):
+            short = fp.rsplit("/", 1)[-1]
+            print(f"  ERROR | {short}: {r.get('error', 'unknown error')}")
+            continue
+
+        # Strip mlx_lm noise from output
+        output = r.get("output", "")
+        verdict_lines = []
+        for line in output.split("\n"):
+            line_s = line.strip()
+            if not line_s:
+                continue
+            if line_s.startswith(("Calling `python", "Prompt:", "Generation:", "Peak memory:")) or line_s == "==========":
+                continue
+            verdict_lines.append(line_s)
+        verdict = "\n".join(verdict_lines)
+
+        short = fp.rsplit("/", 1)[-1]
+        if verdict.startswith("PASS"):
+            passed += 1
+            print(f"  \033[32mPASS\033[0m | {short}")
+        else:
+            flagged += 1
+            # Print first line as summary, rest indented
+            lines = verdict.split("\n")
+            print(f"  \033[31mFLAG\033[0m | {short}: {lines[0]}")
+            for extra in lines[1:]:
+                if extra.strip():
+                    print(f"         {extra}")
+
+    print(f"\n--- {passed}/{passed + flagged} files passed ---")
 
 
 def main():
@@ -789,6 +999,7 @@ def main():
     # maiko review
     review_parser = subparsers.add_parser("review", help="Review code using a trained LoRA adapter")
     review_parser.add_argument("file", nargs="?", help="File to review (reads stdin if omitted)")
+    review_parser.add_argument("--pr", help="GitHub PR URL or Org/Repo#123 — reviews each file individually")
     review_parser.add_argument("--agent", help="Agent ID (uses most recent adapter if omitted)")
     review_parser.set_defaults(func=cmd_review)
 
@@ -799,6 +1010,30 @@ def main():
     lora_fb_parser.add_argument("--repo", help="Repo name (e.g. org/repo)")
     lora_fb_parser.add_argument("--output", "-o", help="The incorrect model output (for logging)")
     lora_fb_parser.set_defaults(func=cmd_lora_feedback)
+
+    # maiko lora-miss
+    lora_miss_parser = subparsers.add_parser("lora-miss", help="Report a LoRA false negative (model missed a violation)")
+    lora_miss_parser.add_argument("--violation", "-v", required=True, help="Description of what should have been caught")
+    lora_miss_parser.add_argument("--file", "-f", help="File containing the diff chunk")
+    lora_miss_parser.add_argument("--code", "-c", help="Inline diff chunk the model missed")
+    lora_miss_parser.add_argument("--category", help="Violation category (e.g. testing, security, architecture)")
+    lora_miss_parser.add_argument("--repo", help="Repo name (e.g. org/repo)")
+    lora_miss_parser.set_defaults(func=cmd_lora_miss)
+
+    # maiko dedup
+    dedup_parser = subparsers.add_parser("dedup", help="Merge semantically duplicate learnings")
+    dedup_parser.add_argument("--dry-run", action="store_true", help="Report what would be merged without applying")
+    dedup_parser.add_argument("--promote-global", action="store_true", help="Also promote cross-repo duplicates to global rules")
+    dedup_parser.set_defaults(func=cmd_dedup)
+
+    # maiko add-rule
+    rule_parser = subparsers.add_parser("add-rule", help="Manually add a learning rule")
+    rule_parser.add_argument("rule", help="The rule text")
+    rule_parser.add_argument("--category", "-c", default="domain_knowledge",
+                             help="Category (default: domain_knowledge)")
+    rule_parser.add_argument("--repo", help="Scope to a specific repo (omit for global)")
+    rule_parser.add_argument("--language", help="Scope to a specific language")
+    rule_parser.set_defaults(func=cmd_add_rule)
 
     # Let plugins register CLI commands
     try:

@@ -15,6 +15,7 @@
 }
 [data-theme="light"] .footer { background: rgba(242, 248, 242, 0.85); }
 [data-theme="morning"] .footer { background: rgba(250, 246, 238, 0.85); }
+[data-theme="afternoon"] .footer { background: rgba(250, 229, 184, 0.88); }
 [data-theme="sunset"] .footer { background: rgba(28, 35, 82, 0.85); }
 
 .footer-section {
