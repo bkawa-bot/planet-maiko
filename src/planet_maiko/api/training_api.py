@@ -155,15 +155,72 @@ def assign_adapter():
     return jsonify({"status": "ok", "agent": profile_id, "adapter_path": adapter_path})
 
 
+@training_bp.route("/training/rule-coverage", methods=["GET"])
+def rule_coverage():
+    """Show which active rules are already in training data and which aren't."""
+    from planet_maiko.models.learning import Learning
+    from planet_maiko.brain.learning.rule_training_data import get_covered_rule_ids
+
+    covered = get_covered_rule_ids()
+    active = Learning.query.filter_by(status="active").all()
+
+    covered_list = []
+    uncovered_list = []
+    for l in active:
+        entry = {
+            "id": l.id,
+            "rule": l.rule,
+            "category": l.category,
+            "scope_repo": l.scope_repo,
+            "confidence": l.confidence,
+        }
+        if l.id in covered:
+            covered_list.append(entry)
+        else:
+            uncovered_list.append(entry)
+
+    return jsonify({
+        "active_count": len(active),
+        "covered_count": len(covered_list),
+        "uncovered_count": len(uncovered_list),
+        "covered": covered_list,
+        "uncovered": uncovered_list,
+    })
+
+
 @training_bp.route("/training/generate-from-rules", methods=["POST"])
 def generate_from_rules_endpoint():
-    """Generate training data from active learnings (rules + synthetic examples)."""
-    from planet_maiko.brain.learning.rule_training_data import generate_rule_dataset
+    """Generate training data from active learnings (incremental by default)."""
+    from planet_maiko.brain.learning.rule_training_data import generate_rule_dataset, get_covered_rule_ids
+    from planet_maiko.models.learning import Learning
 
     data = request.get_json(silent=True) or {}
     examples = data.get("examples_per_rule", 50)
+    force = data.get("force", False)
 
-    result = generate_rule_dataset(examples_per_rule=examples)
+    # Release DB before long LLM call
+    db.session.close()
+
+    if force:
+        result = generate_rule_dataset(examples_per_rule=examples)
+    else:
+        # Incremental: only generate for rules not already covered
+        covered = get_covered_rule_ids()
+        active = Learning.query.filter_by(status="active").all()
+        new_ids = [l.id for l in active if l.id not in covered]
+
+        if not new_ids:
+            return jsonify({
+                "success": True,
+                "pairs": 0,
+                "rules_processed": 0,
+                "violations": 0,
+                "passes": 0,
+                "errors": 0,
+                "message": "All active rules are already in training data. Use force=true to regenerate.",
+            })
+
+        result = generate_rule_dataset(examples_per_rule=examples, rule_ids=new_ids)
 
     status = 200 if result.get("success") else 500
     return jsonify(result), status

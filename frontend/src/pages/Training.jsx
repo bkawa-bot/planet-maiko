@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import InfoButton from "../components/InfoButton";
 import {
-  GraduationCap, Loader, Database, Download, Sparkles, Link2,
+  GraduationCap, Loader, Sparkles, Link2,
 } from "lucide-react";
 import "./Training.css";
 
@@ -11,26 +11,29 @@ export default function Training() {
   const [profiles, setProfiles] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [running, setRunning] = useState(false);
-  const [extracting, setExtracting] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [datasets, setDatasets] = useState([]);
-  const [datasetStats, setDatasetStats] = useState(null);
   const [selectedDataset, setSelectedDataset] = useState("");
   const [progress, setProgress] = useState(null);
   const [adapters, setAdapters] = useState([]);
   const [assignAgent, setAssignAgent] = useState("");
   const [assignAdapter, setAssignAdapter] = useState("");
-  const [showLegacy, setShowLegacy] = useState(false);
+  const [coverage, setCoverage] = useState(null);
+  const [showUncovered, setShowUncovered] = useState(false);
 
   const fetchDatasets = () => {
     api.getTrainingDatasets().then(setDatasets).catch(() => {});
-    api.getTrainingDatasetStats().then(setDatasetStats).catch(() => {});
+  };
+
+  const fetchCoverage = () => {
+    api.getRuleCoverage().then(setCoverage).catch(() => {});
   };
 
   useEffect(() => {
     api.getProfiles().then(setProfiles).catch(() => {});
     api.getAdapters().then(setAdapters).catch(() => {});
     fetchDatasets();
+    fetchCoverage();
   }, []);
 
   // Poll training progress while running
@@ -81,32 +84,103 @@ export default function Training() {
           </InfoButton>
         </div>
 
-        <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>
-          Generates synthetic violation/pass examples for each active Learning. This is the recommended way to create training data.
-        </p>
+        {/* Coverage stats */}
+        {coverage && (
+          <div className="training-dataset-stats" style={{ marginBottom: 12 }}>
+            <span className="kstat"><Sparkles size={12} /> {coverage.active_count} active rules</span>
+            <span className="kstat" style={{ color: "var(--green)" }}>
+              {coverage.covered_count} in training data
+            </span>
+            <span className="kstat" style={{ color: coverage.uncovered_count > 0 ? "var(--pink)" : "var(--text-muted)" }}>
+              {coverage.uncovered_count} new {coverage.uncovered_count > 0 && "→ ready to generate"}
+            </span>
+          </div>
+        )}
 
-        <button
-          className="btn btn-primary"
-          disabled={generating}
-          onClick={async () => {
-            setGenerating(true);
-            showToast("Generating training data from rules... one Opus call per learning", "normal");
-            try {
-              const result = await api.generateFromRules();
-              if (result.success) {
-                showToast(`Generated ${result.pairs} pairs from ${result.rules_processed} rules (${result.violations} violations, ${result.passes} passes)`, "normal");
-                fetchDatasets();
-              } else {
-                showToast(result.error || "Generation failed", "high");
+        {/* Uncovered rules expandable list */}
+        {coverage && coverage.uncovered_count > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <button
+              className="btn btn-sm"
+              style={{ background: "transparent" }}
+              onClick={() => setShowUncovered(!showUncovered)}
+            >
+              {showUncovered ? "▼" : "▶"} New rules to be generated ({coverage.uncovered_count})
+            </button>
+            {showUncovered && (
+              <div style={{ marginTop: 6, padding: 8, background: "var(--bg-soft)", borderRadius: 4, fontSize: 11 }}>
+                {coverage.uncovered.map((r) => (
+                  <div key={r.id} style={{ padding: "3px 0", borderBottom: "1px solid var(--border-soft)" }}>
+                    <span style={{ color: "var(--text-muted)" }}>[{r.category}]</span> {r.rule}
+                    {r.scope_repo && <span style={{ marginLeft: 6, fontSize: 10, color: "var(--text-muted)" }}>({r.scope_repo})</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            className="btn btn-primary"
+            disabled={generating || (coverage && coverage.uncovered_count === 0)}
+            onClick={async () => {
+              setGenerating(true);
+              const count = coverage?.uncovered_count || 0;
+              showToast(`Generating training data for ${count} new rules...`, "normal");
+              try {
+                const result = await api.generateFromRules();
+                if (result.success) {
+                  if (result.message) {
+                    showToast(result.message, "normal");
+                  } else {
+                    showToast(`Generated ${result.pairs} pairs from ${result.rules_processed} rules`, "normal");
+                  }
+                  fetchDatasets();
+                  fetchCoverage();
+                } else {
+                  showToast(result.error || "Generation failed", "high");
+                }
+              } catch (err) {
+                showToast("Generation failed: " + err.message, "high");
               }
-            } catch (err) {
-              showToast("Generation failed: " + err.message, "high");
-            }
-            setGenerating(false);
-          }}
-        >
-          {generating ? <><Loader size={12} className="spin" /> Generating...</> : <><Sparkles size={12} /> Generate from Rules</>}
-        </button>
+              setGenerating(false);
+            }}
+          >
+            {generating ? <><Loader size={12} className="spin" /> Generating...</> : <><Sparkles size={12} /> Generate New Rules ({coverage?.uncovered_count || 0})</>}
+          </button>
+
+          <button
+            className="btn btn-sm"
+            disabled={generating || !coverage || coverage.active_count === 0}
+            onClick={async () => {
+              if (!confirm(`Regenerate ALL ${coverage?.active_count || 0} rules from scratch? This will make new Opus calls for every rule.`)) return;
+              setGenerating(true);
+              showToast(`Regenerating all ${coverage?.active_count} rules...`, "normal");
+              try {
+                const result = await api.generateFromRules({ force: true });
+                if (result.success) {
+                  showToast(`Generated ${result.pairs} pairs from ${result.rules_processed} rules`, "normal");
+                  fetchDatasets();
+                  fetchCoverage();
+                } else {
+                  showToast(result.error || "Generation failed", "high");
+                }
+              } catch (err) {
+                showToast("Generation failed: " + err.message, "high");
+              }
+              setGenerating(false);
+            }}
+          >
+            Regenerate All
+          </button>
+        </div>
+
+        {coverage && coverage.uncovered_count === 0 && coverage.active_count > 0 && (
+          <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+            All active rules are already in training data. New rules will appear here as they graduate from PR comments.
+          </p>
+        )}
 
         {/* Existing datasets */}
         {datasets.length > 0 && (
@@ -263,58 +337,6 @@ export default function Training() {
         </div>
       )}
 
-      {/* Legacy: Extract from PRs (raw, noisy) */}
-      <div className="training-dataset-section" style={{ opacity: 0.7 }}>
-        <div
-          className="training-dataset-header"
-          style={{ cursor: "pointer" }}
-          onClick={() => setShowLegacy(!showLegacy)}
-        >
-          <Database size={14} /> Legacy: Extract from PRs
-          <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 8 }}>
-            (raw approach — most users should use Step 1 instead)
-          </span>
-        </div>
-
-        {showLegacy && (
-          <>
-            <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8, marginBottom: 12 }}>
-              Scrapes raw PR review comments and pairs them with the diffs as training data. Output is noisy because every reviewer comment becomes a "VIOLATION" example, even casual ones. Kept here for completeness.
-            </p>
-
-            <div className="training-dataset-stats">
-              {datasetStats && datasetStats.total > 0 ? (
-                <>
-                  <span className="kstat"><Database size={12} /> {datasetStats.total} examples</span>
-                  <span className="kstat" style={{ color: "var(--urgent)" }}>{datasetStats.violations} violations</span>
-                  <span className="kstat" style={{ color: "var(--green)" }}>{datasetStats.passes} passes</span>
-                </>
-              ) : (
-                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>No raw extracted data yet</span>
-              )}
-            </div>
-
-            <button
-              className="btn btn-sm"
-              disabled={extracting}
-              onClick={async () => {
-                setExtracting(true);
-                showToast("Extracting raw training data from PR history...", "normal");
-                try {
-                  const result = await api.exportTrainingDataset();
-                  showToast(`Extracted ${result.pairs} pairs (${result.violations} violations, ${result.passes} passes) from ${result.repos_scanned} repos`, "normal");
-                  fetchDatasets();
-                } catch (err) {
-                  showToast("Extraction failed: " + err.message, "high");
-                }
-                setExtracting(false);
-              }}
-            >
-              {extracting ? <><Loader size={12} className="spin" /> Extracting...</> : <><Download size={12} /> Extract Raw Data</>}
-            </button>
-          </>
-        )}
-      </div>
     </div>
   );
 }
