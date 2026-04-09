@@ -80,8 +80,6 @@ export const api = {
     request(`/projects/${id}/generate-plan`, { method: "POST" }),
   generateTasks: (id) =>
     request(`/projects/${id}/generate-tasks`, { method: "POST" }),
-  generatePlan: (projectId) =>
-    request(`/projects/${projectId}/generate-plan`, { method: "POST" }),
 
   // Config
   getConfig: () => request("/config"),
@@ -172,6 +170,7 @@ export const api = {
   backfillKnowledge: (limit = 20, repo = null) => request("/learnings/backfill", { method: "POST", body: JSON.stringify(repo ? { limit, repo } : { limit }) }),
   approveLearning: (id) => request(`/learnings/${id}/approve`, { method: "POST" }),
   dismissLearning: (id) => request(`/learnings/${id}/dismiss`, { method: "POST" }),
+  classifyLearnings: (batchSize = 50) => request("/learnings/classify", { method: "POST", body: JSON.stringify({ batch_size: batchSize }) }),
 
   // System
   shutdown: () => request("/system/shutdown", { method: "POST" }),

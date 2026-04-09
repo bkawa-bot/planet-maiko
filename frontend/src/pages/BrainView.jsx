@@ -43,13 +43,27 @@ export default function BrainView() {
     }).catch(() => {});
   }, []);
 
+  const active = learnings.filter((l) => l.status === "active" && l.category !== "pattern");
+  const pending = learnings.filter((l) => l.status === "pending" && l.category !== "pattern");
+  const unsynthesized = learnings.filter((l) => l.category === "pattern" && l.status !== "dismissed");
+
+  const visible = tab === "unsynthesized"
+    ? unsynthesized
+    : learnings.filter((l) => l.status !== "dismissed" && l.category !== "pattern");
+
+  const byCategory = {};
+  for (const l of visible) {
+    (byCategory[l.category] = byCategory[l.category] || []).push(l);
+  }
+
   const handleApprove = async (id) => { await api.approveLearning(id); fetchLearnings(); };
   const handleDismiss = async (id) => { await api.dismissLearning(id); fetchLearnings(); };
   const handleApproveAll = async () => {
-    for (const l of learnings.filter((l) => l.status === "pending")) {
+    const count = pending.length;
+    for (const l of pending) {
       await api.approveLearning(l.id);
     }
-    showToast(`Approved ${pending.length} learnings`, "normal");
+    showToast(`Approved ${count} learnings`, "normal");
     fetchLearnings();
   };
 
@@ -60,31 +74,11 @@ export default function BrainView() {
     fetchLearnings();
   };
 
-  const active = learnings.filter((l) => l.status === "active" && l.category !== "pattern");
-  const pending = learnings.filter((l) => l.status === "pending" && l.category !== "pattern");
-  const unsynthesized = learnings.filter((l) => l.category === "pattern" && l.status !== "dismissed");
-
-  let visible;
-  if (tab === "unsynthesized") {
-    visible = unsynthesized;
-  } else {
-    visible = learnings.filter((l) => l.status !== "dismissed" && l.category !== "pattern");
-  }
-
-  const byCategory = {};
-  for (const l of visible) {
-    (byCategory[l.category] = byCategory[l.category] || []).push(l);
-  }
-
   const handleSynthesize = async () => {
     setSynthesizing(true);
     showToast(`Synthesizing ${unsynthesized.length} learnings...`, "normal");
     try {
-      const result = await fetch("http://localhost:8420/api/learnings/classify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ batch_size: 50 }),
-      }).then((r) => r.json());
+      const result = await api.classifyLearnings(50);
       showToast(`Reclassified ${result.classified_learnings || 0} learnings, ${result.classified_signals || 0} signals`, "normal");
       fetchLearnings();
     } catch (err) {
@@ -139,10 +133,11 @@ export default function BrainView() {
                 <Check size={10} /> Approve All ({pending.length})
               </button>
               <button className="btn btn-sm btn-danger" onClick={async () => {
-                for (const l of learnings.filter((l) => l.status === "pending")) {
+                const count = pending.length;
+                for (const l of pending) {
                   await api.dismissLearning(l.id);
                 }
-                showToast(`Dismissed ${pending.length} learnings`, "normal");
+                showToast(`Dismissed ${count} learnings`, "normal");
                 fetchLearnings();
               }}>
                 <X size={10} /> Dismiss All
