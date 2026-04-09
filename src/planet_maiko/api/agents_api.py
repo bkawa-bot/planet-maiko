@@ -180,14 +180,35 @@ def assign_agent():
     }), 201
 
 
+def _find_claude_session_file(working_path, session_id):
+    """Find the Claude Code session JSONL file for a given worktree + session ID.
+
+    Claude stores sessions at ~/.claude/projects/{escaped-path}/{session_id}.jsonl
+    where escaped-path replaces /, \\, and : each independently with -.
+    On Windows, "C:\\Users\\foo" becomes "C--Users-foo" (double dash from : + \\).
+    """
+    if not working_path or not session_id:
+        return None
+    abs_path = os.path.abspath(working_path)
+    escaped = abs_path.replace(":", "-").replace("\\", "-").replace("/", "-")
+    candidates = [
+        os.path.expanduser(f"~/.claude/projects/{escaped}/{session_id}.jsonl"),
+        os.path.expanduser(f"~/.config/claude/projects/{escaped}/{session_id}.jsonl"),
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return None
+
+
 @agents_bp.route("/agents/resume-session", methods=["POST"])
 def resume_session():
-    """Attach to a running agent session, or open a terminal in its worktree.
+    """Attach to a running agent session for live viewing.
 
     Priority:
-    1. tmux attach (if agent is running in a tmux session)
-    2. Open terminal in the worktree (user can interact with running claude or start new)
-    3. claude --resume (only if session is NOT actively running)
+    1. tmux attach (if agent is running in a tmux session — best experience)
+    2. Tail Claude's session JSONL file with jq pretty-printing (live read-only view)
+    3. Open terminal in worktree (last-resort fallback)
     """
     import subprocess
     import sys
@@ -203,7 +224,7 @@ def resume_session():
     session_id = session_info["session_id"]
     working_path = session_info.get("working_path", "")
 
-    # 1. Try tmux attach
+    # 1. Try tmux attach (best experience — full interactive view)
     tmux_path = shutil.which("tmux")
     session_name = f"maiko-{task_id}"
     has_tmux = False
@@ -214,14 +235,33 @@ def resume_session():
         )
         has_tmux = result.returncode == 0
 
+    mode = None
     if has_tmux:
         cmd = f"tmux attach -t {session_name}"
-    elif working_path and os.path.isdir(working_path):
-        # 2. Open terminal in worktree — agent may still be running there
-        cmd = f"cd {working_path} && echo 'Agent worktree: {working_path}' && exec $SHELL"
+        mode = "tmux"
     else:
-        # 3. Fallback: try resume (works if session finished and was saved)
-        cmd = f"claude --resume {session_id}"
+        # 2. Tail the Claude session JSONL file
+        session_file = _find_claude_session_file(working_path, session_id)
+        if session_file and shutil.which("jq"):
+            # Pretty-print user/assistant messages and tool uses as they stream
+            cmd = (
+                f"echo 'Live tailing agent session: {session_id}' && "
+                f"echo '(Press Ctrl+C to stop)' && echo '' && "
+                f"tail -f {session_file} | jq -r 'select(.type==\"user\" or .type==\"assistant\") | "
+                f"\"[\" + .type + \"] \" + (if .message.content then "
+                f"(.message.content | if type==\"array\" then map(if .type==\"text\" then .text "
+                f"elif .type==\"tool_use\" then \"<\" + .name + \">\" else \"\" end) | join(\"\\n\") else . end) "
+                f"else \"\" end)'"
+            )
+            mode = "tail"
+        elif session_file:
+            cmd = f"echo 'Live tailing agent session ({session_id})' && echo '' && tail -f {session_file}"
+            mode = "tail-raw"
+        elif working_path and os.path.isdir(working_path):
+            cmd = f"cd {working_path} && echo 'No live session file found. Worktree:' && pwd && exec $SHELL"
+            mode = "worktree"
+        else:
+            return jsonify({"error": "No session file or worktree found."}), 404
 
     try:
         if sys.platform == "darwin":
@@ -235,7 +275,12 @@ def resume_session():
                     break
                 except FileNotFoundError:
                     continue
-        return jsonify({"status": "opened", "session_id": session_id, "tmux": has_tmux, "working_path": working_path})
+        return jsonify({
+            "status": "opened",
+            "session_id": session_id,
+            "mode": mode,
+            "working_path": working_path,
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
