@@ -26,7 +26,7 @@ CAUSE_CHAINS = [
 ]
 
 # Types to skip (internal, not real events)
-SKIP_TYPES = {"eod_signal", "agent_learnings", "agent_update", "agent_done", "agent_ready"}
+SKIP_TYPES = {"agent_learnings", "agent_update", "agent_done", "agent_ready"}
 
 
 def correlate():

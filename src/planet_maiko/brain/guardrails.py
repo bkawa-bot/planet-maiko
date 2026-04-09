@@ -29,7 +29,7 @@ NEEDS_CONFIRMATION = {
     "dismiss_urgent",
     "delete_task",
     "stop_agent",
-    "finalize_eod",
+    "finalize_pack_insights",
 }
 
 

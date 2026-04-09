@@ -29,24 +29,24 @@ export default function Agents() {
   const [allLearnings, setAllLearnings] = useState({});
   const [contextSetModal, setContextSetModal] = useState(null);
 
-  // Pack Insights (Gathering) state
-  const [eodState, setEodState] = useState(null);
+  // Pack Insights state
+  const [packState, setPackState] = useState(null);
   const [manualText, setManualText] = useState("");
   const [manualCategory, setManualCategory] = useState("domain_knowledge");
-  const EOD_CATEGORIES = ["domain_knowledge", "pattern", "gotcha", "team"];
+  const PACK_CATEGORIES = ["domain_knowledge", "pattern", "gotcha", "team"];
 
-  const handleEodStart = async () => { await api.startPackInsights(); showToast("Gathering the pack...", "normal"); fetchEod(); };
-  const handleEodCollect = async () => { await api.collectPackInsights(); showToast("Learnings collected!", "normal"); fetchEod(); };
-  const handleEodSynthesize = async () => { await api.synthesizePackInsights(); showToast("Synthesizing...", "normal"); fetchEod(); };
-  const handleEodFinalize = async () => { await api.finalizePackInsights({}); showToast("Merged into knowledge pool!", "normal"); fetchEod(); };
-  const handleEodAdd = async () => {
+  const handlePackStart = async () => { await api.startPackInsights(); showToast("Gathering the pack...", "normal"); fetchPack(); };
+  const handlePackCollect = async () => { await api.collectPackInsights(); showToast("Learnings collected!", "normal"); fetchPack(); };
+  const handlePackSynthesize = async () => { await api.synthesizePackInsights(); showToast("Synthesizing...", "normal"); fetchPack(); };
+  const handlePackFinalize = async () => { await api.finalizePackInsights({}); showToast("Merged into knowledge pool!", "normal"); fetchPack(); };
+  const handlePackAdd = async () => {
     if (!manualText.trim()) return;
     await api.addPackInsightsLearning(manualText, manualCategory);
     setManualText("");
-    fetchEod();
+    fetchPack();
   };
-  const fetchEod = async () => {
-    try { setEodState(await api.getPackInsightsState()); } catch (err) { console.error(err); }
+  const fetchPack = async () => {
+    try { setPackState(await api.getPackInsightsState()); } catch (err) { console.error(err); }
   };
 
   const fetchData = async () => {
@@ -67,7 +67,7 @@ export default function Agents() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); fetchEod(); }, []);
+  useEffect(() => { fetchData(); fetchPack(); }, []);
 
   const handleCreateAgent = async () => {
     try {
@@ -463,7 +463,7 @@ export default function Agents() {
       })()}
 
       {tab === "insights" && (() => {
-        const status = eodState?.status || "idle";
+        const status = packState?.status || "idle";
         return (
           <div className="gathering-panel">
             <div className="pipeline">
@@ -482,7 +482,7 @@ export default function Agents() {
             {status === "idle" && (
               <div className="panel-center">
                 <p>Start a session to collect learnings from the pack</p>
-                <button className="btn btn-primary" onClick={handleEodStart}>
+                <button className="btn btn-primary" onClick={handlePackStart}>
                   <Flame size={12} /> Start Pack Insights
                 </button>
               </div>
@@ -491,7 +491,7 @@ export default function Agents() {
             {status === "gathering" && (
               <div className="panel-center">
                 <p>Gathering signal sent. Click collect when agents have reported.</p>
-                <button className="btn btn-primary" onClick={handleEodCollect}>
+                <button className="btn btn-primary" onClick={handlePackCollect}>
                   <Play size={12} /> Collect from Pack
                 </button>
               </div>
@@ -501,15 +501,15 @@ export default function Agents() {
               <>
                 <div className="add-learning-row">
                   <input value={manualText} onChange={(e) => setManualText(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleEodAdd()}
+                    onKeyDown={(e) => e.key === "Enter" && handlePackAdd()}
                     placeholder="What did you learn today?" />
                   <select value={manualCategory} onChange={(e) => setManualCategory(e.target.value)}>
-                    {EOD_CATEGORIES.map((c) => <option key={c} value={c}>{c.replace(/_/g, " ")}</option>)}
+                    {PACK_CATEGORIES.map((c) => <option key={c} value={c}>{c.replace(/_/g, " ")}</option>)}
                   </select>
-                  <button className="btn" onClick={handleEodAdd}><Check size={12} /></button>
+                  <button className="btn" onClick={handlePackAdd}><Check size={12} /></button>
                 </div>
                 <div className="learning-items">
-                  {(eodState.collected || []).map((item, i) => (
+                  {(packState.collected || []).map((item, i) => (
                     <div key={i} className="learning-item">
                       <div className="learning-text">{item.text}</div>
                       <div className="learning-tags">
@@ -520,33 +520,33 @@ export default function Agents() {
                   ))}
                 </div>
                 <div className="panel-footer">
-                  <span className="count-text">{eodState.collected?.length || 0} learnings</span>
-                  <button className="btn btn-primary" onClick={handleEodSynthesize}>
+                  <span className="count-text">{packState.collected?.length || 0} learnings</span>
+                  <button className="btn btn-primary" onClick={handlePackSynthesize}>
                     <Sparkles size={12} /> Synthesize
                   </button>
                 </div>
               </>
             )}
 
-            {status === "synthesized" && eodState.synthesis && (
+            {status === "synthesized" && packState.synthesis && (
               <>
                 <div className="synthesis-report card" style={{ borderLeft: "3px solid var(--pink)" }}>
                   <div className="synthesis-header">Maiko's Synthesis</div>
                   <ul className="synthesis-bullets">
-                    <li>{eodState.synthesis.duplicates_merged} duplicates merged</li>
-                    <li>{eodState.synthesis.already_known?.length || 0} already known</li>
-                    <li>{eodState.synthesis.unique_learnings?.length || 0} new learnings</li>
-                    <li>{eodState.synthesis.proposed_rules?.length || 0} proposed rules</li>
+                    <li>{packState.synthesis.duplicates_merged} duplicates merged</li>
+                    <li>{packState.synthesis.already_known?.length || 0} already known</li>
+                    <li>{packState.synthesis.unique_learnings?.length || 0} new learnings</li>
+                    <li>{packState.synthesis.proposed_rules?.length || 0} proposed rules</li>
                   </ul>
                 </div>
-                {eodState.synthesis.proposed_rules?.map((r, i) => (
+                {packState.synthesis.proposed_rules?.map((r, i) => (
                   <div key={i} className="card" style={{ borderLeft: "3px solid var(--blue)", marginTop: 8 }}>
                     <span className="tag">{r.category}</span>
                     <div style={{ marginTop: 4, fontSize: 12, color: "var(--text)" }}>{r.text}</div>
                   </div>
                 ))}
                 <div className="panel-footer" style={{ marginTop: 12 }}>
-                  <button className="btn btn-primary" onClick={handleEodFinalize}>
+                  <button className="btn btn-primary" onClick={handlePackFinalize}>
                     <Check size={12} /> Finalize & Merge
                   </button>
                 </div>

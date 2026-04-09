@@ -9,7 +9,6 @@ import Settings from "./pages/Settings";
 import Agents from "./pages/Agents";
 import BrainView from "./pages/BrainView";
 import Skills from "./pages/Skills";
-import Tournaments from "./pages/Tournaments";
 import Training from "./pages/Training";
 import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
 
@@ -25,7 +24,6 @@ function AppRoutes() {
         <Route path="/agents" element={<Agents />} />
         <Route path="/knowledge" element={<BrainView />} />
         <Route path="/skills" element={<Skills />} />
-        <Route path="/tournaments" element={<Tournaments />} />
         <Route path="/training" element={<Training />} />
         <Route path="/settings" element={<Settings />} />
         {/* Legacy routes */}
@@ -37,6 +35,7 @@ function AppRoutes() {
         <Route path="/brainstorm" element={<Navigate to="/inbox" replace />} />
         <Route path="/suggestions" element={<Navigate to="/inbox" replace />} />
         <Route path="/gathering" element={<Navigate to="/agents" replace />} />
+        <Route path="/tournaments" element={<Navigate to="/agents" replace />} />
       </Route>
     </Routes>
   );

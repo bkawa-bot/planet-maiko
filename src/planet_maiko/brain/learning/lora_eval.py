@@ -1,7 +1,7 @@
 """LoRA adapter evaluation — precision/recall/F1 on held-out training data.
 
 Splits training data into train/test sets, runs inference on the test set,
-and computes metrics. This replaces tournaments for LoRA quality measurement.
+and computes precision/recall/F1 metrics for LoRA quality measurement.
 
 Usage:
     from planet_maiko.brain.learning.lora_eval import evaluate_adapter

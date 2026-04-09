@@ -12,7 +12,6 @@ Tests the complete flow:
 9. Verify lens (overrides, gaps, territory) updated
 10. Run brain cycle and verify all phases execute
 11. Test project driver auto-advancement
-12. Test tournament auto-trigger on merged PR
 """
 
 import json

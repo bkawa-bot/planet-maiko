@@ -173,16 +173,6 @@ export const api = {
   approveLearning: (id) => request(`/learnings/${id}/approve`, { method: "POST" }),
   dismissLearning: (id) => request(`/learnings/${id}/dismiss`, { method: "POST" }),
 
-  // Tournaments
-  getTournaments: () => request("/tournaments"),
-  getTournament: (id) => request(`/tournaments/${id}`),
-  runTournament: (repo, pr_number) =>
-    request("/tournaments/run", { method: "POST", body: JSON.stringify({ repo, pr_number }) }),
-  getTournamentScores: (repo) => {
-    const query = repo ? `?repo=${encodeURIComponent(repo)}` : "";
-    return request(`/tournaments/scores${query}`);
-  },
-
   // System
   shutdown: () => request("/system/shutdown", { method: "POST" }),
 

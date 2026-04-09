@@ -454,8 +454,6 @@ export default function Settings() {
                   { key: "skill:investigate", label: "Investigate", tier: "sonnet" },
                   { key: "project_plan", label: "Project planning", tier: "sonnet" },
                   { key: "profile_judge", label: "Task outcome judging", tier: "sonnet" },
-                  { key: "tournament:entry", label: "Tournament entries", tier: "opus" },
-                  { key: "tournament:judge", label: "Tournament judging", tier: "opus" },
                   { key: "training:entry", label: "Training entries", tier: "opus" },
                   { key: "training:judge", label: "Training judging", tier: "opus" },
                   { key: "coding_agent", label: "Coding agents", tier: "opus" },

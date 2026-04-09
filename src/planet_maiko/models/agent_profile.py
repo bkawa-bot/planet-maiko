@@ -27,7 +27,7 @@ class AgentProfile(db.Model):
     # Specialization scores (JSON: {"api-service": 0.85, "search-service": 0.3})
     specializations = db.Column(db.JSON, default=dict)
 
-    # The agent's proven set of learning IDs — built via training and tournaments
+    # The agent's proven set of learning IDs — built via training
     context_set = db.Column(db.JSON, default=list)
 
     # Lens: per-agent overrides (legacy, mostly unused)

@@ -23,8 +23,6 @@ DEFAULT_ROUTING = {
     "profile_judge": "sonnet",
 
     # Opus tier
-    "tournament:entry": "opus",
-    "tournament:judge": "opus",
     "training:entry": "opus",
     "training:judge": "opus",
     "synthetic_data": "opus",

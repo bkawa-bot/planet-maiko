@@ -189,41 +189,7 @@ def run(app):
         except Exception as e:
             logger.warning(f"[cycle] Classification error: {e}")
 
-        # Phase 5: Tournaments — auto-run on recently merged PRs
-        try:
-            from planet_maiko.brain.learning.tournament import run_tournament
-            from planet_maiko.models.pupdate import Pupdate as TournamentPupdate
-
-            merged_prs = TournamentPupdate.query.filter(
-                TournamentPupdate.type == "pr_merged",
-                TournamentPupdate.brain_processed == True,  # noqa: E712
-                ~TournamentPupdate.tags.contains("tournament_run"),
-            ).order_by(TournamentPupdate.timestamp.desc()).limit(3).all()
-
-            tournament_results = {"triggered": 0, "failed": 0}
-            for p in merged_prs:
-                repo = p.extra.get("repo") if p.extra else None
-                pr_number = p.extra.get("number") if p.extra else None
-                if repo and pr_number:
-                    try:
-                        run_tournament(repo, int(pr_number), app)
-                        # New list to avoid SQLAlchemy JSON mutation tracking issue
-                        p.tags = list(p.tags or []) + ["tournament_run"]
-                        tournament_results["triggered"] += 1
-                    except Exception as e:
-                        logger.warning(f"Tournament failed for {repo}#{pr_number}: {e}")
-                        tournament_results["failed"] += 1
-
-            if merged_prs:
-                from planet_maiko.database import db as cycle_db
-                cycle_db.session.commit()
-
-            results["tournaments"] = tournament_results
-        except Exception as e:
-            logger.warning(f"[cycle] Tournament phase error: {e}")
-            results["tournaments"] = {"triggered": 0, "failed": 0, "error": str(e)}
-
-        # Phase 6: Heartbeats — nudge silent agents
+        # Phase 5: Heartbeats — nudge silent agents
         try:
             from planet_maiko.agents.monitor import check_heartbeats
             nudged = check_heartbeats()
@@ -232,7 +198,7 @@ def run(app):
             logger.warning(f"[cycle] Heartbeat check error: {e}")
             results["heartbeats"] = {"nudged": 0, "error": str(e)}
 
-        # Phase 7: Project driver — auto-advance project phases
+        # Phase 6: Project driver — auto-advance project phases
         try:
             from planet_maiko.brain.projects.driver import drive_projects
             driver_result = drive_projects()
@@ -241,7 +207,7 @@ def run(app):
             logger.warning(f"[cycle] Project driver error: {e}")
             results["projects"] = {"advanced": 0, "completed": 0, "error": str(e)}
 
-        # Phase 8: Scheduled skills
+        # Phase 7: Scheduled skills
         try:
             from planet_maiko.pollers.skill_runner import run_scheduled_skills
             ran_skills = run_scheduled_skills()
@@ -250,7 +216,7 @@ def run(app):
             logger.warning(f"[cycle] Skill runner error: {e}")
             results["scheduled_skills"] = []
 
-        # Phase 9: Auto-investigate CI failures and incidents
+        # Phase 8: Auto-investigate CI failures and incidents
         try:
             from planet_maiko.models.pupdate import Pupdate as InvestPupdate
             investigate_types = ["pr_ci_failed", "incident", "error_spike"]
@@ -281,7 +247,7 @@ def run(app):
         except Exception as e:
             logger.debug(f"Auto-investigate skipped: {e}")
 
-        # Phase 10: Auto-morning-brief (first cycle of the day)
+        # Phase 9: Auto-morning-brief (first cycle of the day)
         try:
             from planet_maiko.models.skill_result import SkillResult
             today = datetime.now(timezone.utc).date()
@@ -312,7 +278,7 @@ def run(app):
         except Exception as e:
             logger.debug(f"Auto morning brief skipped: {e}")
 
-        # Phase 11: Auto-brainstorm (Tuesdays and Thursdays)
+        # Phase 10: Auto-brainstorm (Tuesdays and Thursdays)
         try:
             from planet_maiko.models.skill_result import SkillResult as BrainstormResult
             today_weekday = datetime.now(timezone.utc).weekday()  # 0=Mon, 1=Tue, 3=Thu

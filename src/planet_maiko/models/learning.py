@@ -24,7 +24,7 @@ class Learning(db.Model):
     confidence = db.Column(db.Float, default=0.0)  # 0.0 to 1.0
     signal_count = db.Column(db.Integer, default=0)
 
-    source = db.Column(db.String(20), default="auto")  # auto, manual, eod
+    source = db.Column(db.String(20), default="auto")  # auto, manual, promoted
     status = db.Column(db.String(20), default="pending", index=True)
     # Status: pending, active, dismissed
 

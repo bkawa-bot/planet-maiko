@@ -13,19 +13,20 @@ logger = logging.getLogger(__name__)
 
 
 def _ensure_columns():
-    """Add columns that db.create_all() won't add to existing tables."""
+    """Add columns and drop dead tables that db.create_all() won't manage."""
     migrations = [
         "ALTER TABLE tasks ADD COLUMN assigned_agent_id VARCHAR(128)",
         "ALTER TABLE tasks ADD COLUMN due_date VARCHAR(20)",
         "ALTER TABLE custom_skills ADD COLUMN schedule_interval_minutes INTEGER",
         "ALTER TABLE custom_skills ADD COLUMN creates_pupdates BOOLEAN DEFAULT 0",
         "ALTER TABLE custom_skills ADD COLUMN last_run_at DATETIME",
-        "ALTER TABLE tournaments ADD COLUMN task_tags JSON",
-        "ALTER TABLE tournaments ADD COLUMN suggested_new_tags JSON",
         "ALTER TABLE signals ADD COLUMN code_context TEXT",
         "ALTER TABLE signals ADD COLUMN incorporated_at DATETIME",
         "ALTER TABLE custom_skills ADD COLUMN user_edited BOOLEAN DEFAULT 0",
         "ALTER TABLE agent_profiles ADD COLUMN extra JSON DEFAULT '{}'",
+        # Tournament system removed — drop legacy tables if present
+        "DROP TABLE IF EXISTS tournament_entries",
+        "DROP TABLE IF EXISTS tournaments",
     ]
     for sql in migrations:
         try:
@@ -107,7 +108,6 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.context_selection import ContextSelection  # noqa: F401
         from planet_maiko.models.skill_result import SkillResult  # noqa: F401
         from planet_maiko.models.custom_skill import CustomSkill  # noqa: F401
-        from planet_maiko.models.tournament import Tournament, TournamentEntry  # noqa: F401
         db.create_all()
 
         # Schema migrations for existing DBs (SQLite ALTER TABLE is safe)

@@ -40,7 +40,7 @@ class MaikoPlugin:
             phase: name of the phase that just ran
                    ("agents", "awareness", "correlator", "pupdates",
                     "llm_triage", "learning", "classification",
-                    "tournaments", "heartbeats", "projects", "scheduled_skills")
+                    "heartbeats", "projects", "scheduled_skills")
             results: dict of results from this phase
             app: Flask app (for app context if needed)
         """

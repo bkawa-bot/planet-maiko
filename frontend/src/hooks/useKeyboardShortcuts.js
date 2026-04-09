@@ -6,7 +6,7 @@ const VIEW_KEYS = {
   "2": "/inbox",
   "3": "/tasks",
   "4": "/agents",
-  "5": "/brain",
+  "5": "/knowledge",
   "6": "/settings",
 };
 
