@@ -140,8 +140,8 @@ def _discover_plugin_rules():
                     logger.info(f"[rules] Loaded {len(rules)} rule(s) from plugin '{ep.name}'")
             except Exception as e:
                 logger.warning(f"[rules] Failed to load rules from '{ep.name}': {e}")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"[rules] No plugin rules entry points: {e}")
     return plugin_rules
 
 
@@ -158,10 +158,10 @@ def _discover_poller_rules():
                 rules = poller.get_rules()
                 if rules:
                     poller_rules.extend(rules)
-            except Exception:
-                pass
-    except Exception:
-        pass
+            except Exception as e:
+                logger.warning(f"[rules] Failed to load rules from poller '{ep.name}': {e}")
+    except Exception as e:
+        logger.debug(f"[rules] No poller rules entry points: {e}")
     return poller_rules
 
 

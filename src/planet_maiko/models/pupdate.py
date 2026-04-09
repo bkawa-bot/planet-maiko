@@ -10,7 +10,7 @@ class Pupdate(db.Model):
     source = db.Column(db.String(50), nullable=False)  # e.g. "github", "linear", "calendar"
     source_id = db.Column(db.String(256), nullable=True)  # dedup key from the source
     type = db.Column(db.String(100), nullable=False)  # e.g. "pr_review_requested", "linear_assigned"
-    priority = db.Column(db.String(20), default="normal")  # low, normal, high, urgent
+    priority = db.Column(db.String(20), default="normal", index=True)  # low, normal, high, urgent
     title = db.Column(db.String(512), nullable=False)
     body = db.Column(db.Text, nullable=True)
     url = db.Column(db.String(1024), nullable=True)

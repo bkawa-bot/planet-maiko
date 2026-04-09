@@ -18,7 +18,7 @@ class Learning(db.Model):
     category = db.Column(db.String(50), nullable=False, index=True)
 
     # Scope: which repos/languages this applies to (null = global)
-    scope_repo = db.Column(db.String(256), nullable=True)
+    scope_repo = db.Column(db.String(256), nullable=True, index=True)
     scope_language = db.Column(db.String(50), nullable=True)
 
     confidence = db.Column(db.Float, default=0.0)  # 0.0 to 1.0

@@ -1041,8 +1041,9 @@ def main():
         from planet_maiko.plugins.loader import discover_plugins
         for plugin in discover_plugins():
             plugin.register_commands(subparsers)
-    except Exception:
-        pass  # plugins may not be available in all contexts
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug(f"[cli] Plugin command registration skipped: {e}")
 
     args = parser.parse_args()
     if not args.command:

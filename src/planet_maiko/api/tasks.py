@@ -8,10 +8,12 @@ tasks_bp = Blueprint("tasks", __name__)
 
 @tasks_bp.route("/tasks", methods=["GET"])
 def list_tasks():
-    """List tasks with optional filtering by status, priority, or project."""
+    """List tasks with optional filtering and pagination."""
     status = request.args.get("status")
     priority = request.args.get("priority")
     project_id = request.args.get("project_id")
+    limit = min(int(request.args.get("limit", 200)), 500)
+    offset = int(request.args.get("offset", 0))
 
     query = Task.query
     if status:
@@ -21,7 +23,7 @@ def list_tasks():
     if project_id:
         query = query.filter_by(project_id=project_id)
 
-    tasks = query.order_by(Task.created_at.asc()).all()
+    tasks = query.order_by(Task.created_at.asc()).limit(limit).offset(offset).all()
     return jsonify([t.to_dict() for t in tasks])
 
 

@@ -103,8 +103,9 @@ def training_progress():
             try:
                 with open(progress_path) as f:
                     return jsonify(json.load(f))
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"[training] Could not read progress.json for {adapter}: {e}")
 
     return jsonify({"status": "idle"})
 

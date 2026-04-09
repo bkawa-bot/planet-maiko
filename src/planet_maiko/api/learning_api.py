@@ -51,9 +51,11 @@ def create_signal():
 
 @learning_bp.route("/learnings", methods=["GET"])
 def list_learnings():
-    """List learnings, optionally filtered by status or category."""
+    """List learnings, optionally filtered by status or category, with pagination."""
     status = request.args.get("status")
     category = request.args.get("category")
+    limit = min(int(request.args.get("limit", 200)), 500)
+    offset = int(request.args.get("offset", 0))
 
     query = Learning.query
     if status:
@@ -61,7 +63,7 @@ def list_learnings():
     if category:
         query = query.filter_by(category=category)
 
-    learnings = query.order_by(Learning.confidence.desc()).all()
+    learnings = query.order_by(Learning.confidence.desc()).limit(limit).offset(offset).all()
     return jsonify([l.to_dict() for l in learnings])
 
 

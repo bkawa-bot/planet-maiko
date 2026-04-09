@@ -25,7 +25,7 @@ def get_project(project_id):
     project = db.get_or_404(Project, project_id)
     data = project.to_dict()
     data["tasks"] = [t.to_dict() for t in project.tasks]
-    return data
+    return jsonify(data)
 
 
 @projects_bp.route("/projects", methods=["POST"])

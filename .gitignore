@@ -30,3 +30,6 @@ Thumbs.db
 
 # Maiko runtime
 .maiko-worktrees/
+
+# Claude Code local working state (worktrees, settings, agent traces)
+.claude/

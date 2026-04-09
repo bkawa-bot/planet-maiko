@@ -8,10 +8,12 @@ pupdates_bp = Blueprint("pupdates", __name__)
 
 @pupdates_bp.route("/pupdates", methods=["GET"])
 def list_pupdates():
-    """List active pupdates, with optional filtering."""
+    """List active pupdates, with optional filtering and pagination."""
     source = request.args.get("source")
     priority = request.args.get("priority")
     show_dismissed = request.args.get("dismissed", "false").lower() == "true"
+    limit = min(int(request.args.get("limit", 200)), 500)
+    offset = int(request.args.get("offset", 0))
 
     query = Pupdate.query
     if not show_dismissed:
@@ -21,7 +23,7 @@ def list_pupdates():
     if priority:
         query = query.filter_by(priority=priority)
 
-    pupdates = query.order_by(Pupdate.timestamp.desc()).all()
+    pupdates = query.order_by(Pupdate.timestamp.desc()).limit(limit).offset(offset).all()
     return jsonify([p.to_dict() for p in pupdates])
 
 

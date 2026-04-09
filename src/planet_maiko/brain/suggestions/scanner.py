@@ -19,6 +19,14 @@ from planet_maiko.models.task import Task
 
 logger = logging.getLogger(__name__)
 
+# Stuck-task thresholds (days). After STUCK_TASK_DAYS without updates, an
+# in-progress task is suggested. After STUCK_TASK_HIGH_DAYS, the suggestion
+# is escalated to high priority. STALE_TASK_DAYS is how long a "new" task
+# can sit before we suggest starting or cancelling.
+STUCK_TASK_DAYS = 3
+STUCK_TASK_HIGH_DAYS = 7
+STALE_TASK_DAYS = 5
+
 
 def quick_scan(repos=None):
     """Run a quick scan for common issues (no LLM needed).
@@ -87,7 +95,7 @@ def _scan_stuck_tasks():
             if updated.tzinfo is None:
                 updated = updated.replace(tzinfo=timezone.utc)
             days_stuck = (now - updated).days
-            if days_stuck >= 3:
+            if days_stuck >= STUCK_TASK_DAYS:
                 suggestions.append({
                     "id": f"sug-stuck-task-{t.id}",
                     "source_id": f"maiko/suggestion/stuck_task/{t.id}",
@@ -95,7 +103,7 @@ def _scan_stuck_tasks():
                     "title": f"Task stuck: {t.title} ({days_stuck}d in progress)",
                     "body": f"This task has been in progress for {days_stuck} days without updates.",
                     "action_hint": "Check on task",
-                    "priority": "normal" if days_stuck < 7 else "high",
+                    "priority": "normal" if days_stuck < STUCK_TASK_HIGH_DAYS else "high",
                     "effort": "small",
                     "tags": ["suggestion", t.id],
                 })
@@ -107,7 +115,7 @@ def _scan_stuck_tasks():
             if created.tzinfo is None:
                 created = created.replace(tzinfo=timezone.utc)
             days_old = (now - created).days
-            if days_old >= 5:
+            if days_old >= STALE_TASK_DAYS:
                 suggestions.append({
                     "id": f"sug-stale-task-{t.id}",
                     "source_id": f"maiko/suggestion/stale_task/{t.id}",

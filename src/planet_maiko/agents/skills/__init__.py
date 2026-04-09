@@ -70,8 +70,8 @@ def get_skill_prompt(skill_name, context):
         skill = CustomSkill.query.get(skill_name)
         if skill and skill.user_edited:
             template = skill.prompt
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"[skills] Could not check DB for user-edited prompt of {skill_name}: {e}")
 
     # 2. Try prompt file (authoritative for default skills unless user-edited)
     if template is None:
@@ -114,8 +114,8 @@ def list_skills():
         skills = CustomSkill.query.order_by(CustomSkill.is_default.desc(), CustomSkill.name).all()
         if skills:
             return [s.to_dict() for s in skills]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"[skills] DB lookup failed, falling back to hardcoded prompts: {e}")
 
     from planet_maiko.agents.skills.prompts import SKILL_PROMPTS
     return [

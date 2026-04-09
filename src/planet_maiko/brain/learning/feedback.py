@@ -106,8 +106,8 @@ def resolve_pending_feedback(repo=None, repo_path=None):
                     cwd=repo_path, capture_output=True, text=True, timeout=10,
                 )
                 was_committed = bool(result.stdout.strip())
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"[feedback] git log probe failed for {file_path}: {e}")
 
         if was_committed:
             entry["status"] = "accepted"

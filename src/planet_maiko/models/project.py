@@ -8,8 +8,8 @@ class Project(db.Model):
     id = db.Column(db.String(128), primary_key=True)
     title = db.Column(db.String(512), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    status = db.Column(db.String(50), default="planning")  # planning, approved, active, paused, done
-    priority = db.Column(db.String(20), default="normal")
+    status = db.Column(db.String(50), default="planning", index=True)  # planning, approved, active, paused, done
+    priority = db.Column(db.String(20), default="normal", index=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     source_type = db.Column(db.String(50), nullable=True)  # e.g. "linear", "github", "manual"
