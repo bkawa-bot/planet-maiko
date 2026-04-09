@@ -11,6 +11,7 @@ results back through the database (pupdates, tasks, etc.).
 
 import json
 import logging
+import uuid
 from datetime import datetime, timezone
 
 from planet_maiko.config import load_config
@@ -137,7 +138,7 @@ def run_skill(skill_name, context=None, working_dir=None):
     if skill_name == "investigate" and result.get("success"):
         try:
             investigation = Pupdate(
-                id=f"investigation-{int(datetime.now(timezone.utc).timestamp())}",
+                id=f"investigation-{uuid.uuid4().hex[:8]}",
                 source="maiko",
                 type="investigation",
                 priority="normal",

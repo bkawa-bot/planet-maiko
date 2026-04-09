@@ -19,7 +19,8 @@ import urllib.request
 import urllib.error
 
 import os
-MAIKO_API = os.environ.get("MAIKO_API", "http://localhost:8420/api")
+from planet_maiko.config import MAIKO_PORT, maiko_api_url
+MAIKO_API = maiko_api_url()
 
 
 def api_request(path, method="GET", data=None):
@@ -236,7 +237,7 @@ def cmd_status(args):
     # Check backend
     try:
         data = api_request("/brain/status")
-        print(f"Backend: running on :8420")
+        print(f"Backend: running on :{MAIKO_PORT}")
         print(f"  Brain cycles: {data.get('cycle_count', 0)}")
         last = data.get('last_cycle')
         print(f"  Last cycle: {last or 'never'}")
@@ -936,14 +937,14 @@ def main():
     # maiko serve
     serve_parser = subparsers.add_parser("serve", help="Start Planet Maiko server")
     serve_parser.add_argument("--host", default="127.0.0.1", help="Host to bind to")
-    serve_parser.add_argument("--port", type=int, default=8420, help="Port to listen on")
+    serve_parser.add_argument("--port", type=int, default=MAIKO_PORT, help="Port to listen on")
     serve_parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     serve_parser.set_defaults(func=cmd_serve)
 
     # maiko desktop
     desktop_parser = subparsers.add_parser("desktop", help="Launch Planet Maiko as a desktop app")
     desktop_parser.add_argument("--host", default="127.0.0.1", help="Host to bind to")
-    desktop_parser.add_argument("--port", type=int, default=8420, help="Port to listen on")
+    desktop_parser.add_argument("--port", type=int, default=MAIKO_PORT, help="Port to listen on")
     desktop_parser.set_defaults(func=cmd_desktop)
 
     # maiko seed

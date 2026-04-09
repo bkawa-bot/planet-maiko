@@ -5,6 +5,19 @@ from planet_maiko.paths import config_path as _config_path
 
 CONFIG_PATH = _config_path()
 
+# Default port for the Maiko API server.
+# Override with MAIKO_PORT env var, or pass --port to `maiko serve`.
+MAIKO_PORT = int(os.environ.get("MAIKO_PORT", "8420"))
+
+
+def maiko_api_url():
+    """Return the local Maiko API base URL.
+
+    Honors MAIKO_API env var override (full URL), otherwise builds one
+    from MAIKO_PORT. Used by the CLI, agent runtime injection, etc.
+    """
+    return os.environ.get("MAIKO_API", f"http://localhost:{MAIKO_PORT}/api")
+
 DEFAULT_CONFIG = {
     "user": {
         "name": "",  # Your name (Maiko addresses you by this)

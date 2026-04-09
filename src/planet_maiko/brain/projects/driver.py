@@ -1,6 +1,7 @@
 """Project driver — auto-advances projects through phases."""
 
 import logging
+import uuid
 from planet_maiko.database import db
 from planet_maiko.models.project import Project
 from planet_maiko.models.task import Task
@@ -76,7 +77,7 @@ def drive_projects():
 def _notify_phase_advanced(project, phase, phase_idx):
     """Create a pupdate notifying that a project phase advanced."""
     notify = Pupdate(
-        id=f"phase-{project.id}-{phase_idx}-{int(datetime.now(timezone.utc).timestamp())}",
+        id=f"phase-{project.id}-{phase_idx}-{uuid.uuid4().hex[:8]}",
         source="maiko",
         type="project_phase_advanced",
         priority="normal",
@@ -91,7 +92,7 @@ def _notify_phase_advanced(project, phase, phase_idx):
 def _notify_project_done(project):
     """Create a pupdate notifying that a project completed."""
     notify = Pupdate(
-        id=f"project-done-{project.id}-{int(datetime.now(timezone.utc).timestamp())}",
+        id=f"project-done-{project.id}-{uuid.uuid4().hex[:8]}",
         source="maiko",
         type="project_completed",
         priority="normal",

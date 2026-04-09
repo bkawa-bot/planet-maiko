@@ -1,4 +1,5 @@
 import os
+import uuid
 from flask import Blueprint, jsonify, request
 from planet_maiko.database import db
 from planet_maiko.models.agent_message import AgentMessage
@@ -630,7 +631,7 @@ def hook_post_tool_use():
 
     # Create an agent_update pupdate
     pupdate = Pupdate(
-        id=f"hook-{agent_id}-{event}-{int(datetime.now(timezone.utc).timestamp())}",
+        id=f"hook-{agent_id}-{event}-{uuid.uuid4().hex[:8]}",
         source="agent",
         source_id=f"agent/{agent_id}",
         type="agent_update",
@@ -699,7 +700,7 @@ def hook_notification():
     body = data.get("body", "")
 
     pupdate = Pupdate(
-        id=f"hook-notify-{agent_id}-{int(datetime.now(timezone.utc).timestamp())}",
+        id=f"hook-notify-{agent_id}-{uuid.uuid4().hex[:8]}",
         source="agent",
         source_id=f"agent/{agent_id}",
         type="agent_milestone",
@@ -730,7 +731,7 @@ def hook_subagent_stop():
     agent_id = data.get("agent_id", "")
 
     pupdate = Pupdate(
-        id=f"hook-subagent-{agent_id}-{int(datetime.now(timezone.utc).timestamp())}",
+        id=f"hook-subagent-{agent_id}-{uuid.uuid4().hex[:8]}",
         source="agent",
         source_id=f"agent/{agent_id}",
         type="agent_update",

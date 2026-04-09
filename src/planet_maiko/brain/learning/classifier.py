@@ -236,6 +236,7 @@ def dedup_learnings(batch_size=15, dry_run=False):
                 result = runtime.send_json(prompt, timeout=120, model=resolve_model("classify"))
                 parsed = result.get("parsed") if isinstance(result, dict) else None
                 if not parsed or "groups" not in parsed:
+                    logger.warning(f"[dedup] LLM response missing 'groups' key for {key}: {parsed}")
                     continue
 
                 id_to_learning = {l.id: l for l in chunk}
@@ -377,6 +378,7 @@ def promote_global_rules(batch_size=15, dry_run=False):
                 result = runtime.send_json(prompt, timeout=120, model=resolve_model("classify"))
                 parsed = result.get("parsed") if isinstance(result, dict) else None
                 if not parsed or "global_groups" not in parsed:
+                    logger.warning(f"[promote] LLM response missing 'global_groups' key for {cat}: {parsed}")
                     continue
 
                 id_to_learning = {l.id: l for l in chunk}

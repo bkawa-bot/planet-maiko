@@ -17,7 +17,9 @@ the Planet Maiko API, either directly or through the `maiko` CLI:
 
 import logging
 import os
+import re
 import subprocess
+import uuid
 from datetime import datetime, timezone
 
 from planet_maiko.database import db
@@ -107,12 +109,16 @@ def _write_task_file(working_path, task_id, task_title, prompt):
         f.write(content)
 
 
-def _write_claude_md(working_path, task_id, task_title, maiko_port=8420):
+def _write_claude_md(working_path, task_id, task_title, maiko_port=None):
     """Write CLAUDE.md with full agent protocol.
 
     Loads the protocol template from the agent-protocol skill prompt file,
     which can be customized from the Skills page.
     """
+    if maiko_port is None:
+        from planet_maiko.config import MAIKO_PORT
+        maiko_port = MAIKO_PORT
+
     custom_instructions = ""
     try:
         from planet_maiko.config import load_config
@@ -172,6 +178,7 @@ def _write_mcp_json(working_path, task_id):
     if not os.path.exists(channel_path):
         channel_path = os.path.join(working_path, "..", "..", "channel", "index.mjs")
 
+    from planet_maiko.config import maiko_api_url
     mcp_config = {
         "mcpServers": {
             "maiko-channel": {
@@ -179,7 +186,7 @@ def _write_mcp_json(working_path, task_id):
                 "args": [channel_path],
                 "env": {
                     "MAIKO_TASK_ID": task_id,
-                    "MAIKO_API_URL": "http://localhost:8420/api",
+                    "MAIKO_API_URL": maiko_api_url(),
                     "MAIKO_POLL_MS": "60000",
                 },
             }
@@ -266,10 +273,11 @@ def _write_claude_settings(working_path, task_id, agent_id):
         json.dump(settings, f, indent=2)
 
     # Write .maiko-env.json for hook scripts to read
+    from planet_maiko.config import maiko_api_url
     env_data = {
         "task_id": task_id,
         "agent_id": agent_id,
-        "api_url": "http://localhost:8420/api",
+        "api_url": maiko_api_url(),
     }
     with open(os.path.join(working_path, ".maiko-env.json"), "w") as f:
         json.dump(env_data, f, indent=2)
@@ -277,15 +285,29 @@ def _write_claude_settings(working_path, task_id, agent_id):
     logger.info(f"[agent] Wrote Claude hooks settings for {agent_id} ({len(hooks)} hooks)")
 
 
+# Branch names: git already forbids most metacharacters but defense in depth.
+_SAFE_BRANCH_RE = re.compile(r"^[A-Za-z0-9_./-]+$")
+# Path validation: catch shell metacharacters but allow real path chars
+# (letters, digits, spaces, dot, dash, underscore, slash, backslash, colon, paren).
+_UNSAFE_PATH_CHARS = re.compile(r'[;&|`$<>!"*?\n\r]')
+
+
 def _kickoff_agent(agent_id, worktree_path, task_id, branch_name=None):
     """Start the agent in a detached tmux session. View with 'View Session'."""
     import shutil
     import sys
-    import uuid
 
     claude_path = shutil.which("claude")
     if not claude_path:
         return {"success": False, "error": "claude CLI not found"}
+
+    # branch_name and worktree_path are interpolated into shell commands across
+    # tmux/osascript/cmd/bash launchers below — validate to prevent injection
+    # from a hostile branch name like `main; rm -rf ~`.
+    if branch_name and not _SAFE_BRANCH_RE.match(branch_name):
+        return {"success": False, "error": f"Unsafe branch name: {branch_name!r}"}
+    if _UNSAFE_PATH_CHARS.search(worktree_path):
+        return {"success": False, "error": f"Unsafe worktree path: {worktree_path!r}"}
 
     tmux_path = shutil.which("tmux")
     initial_prompt = "Read TASK.md and CLAUDE.md in this directory. Begin working on the task following the protocol. Report your status as you go."
@@ -497,7 +519,7 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
 
     mode = "worktree" if use_worktree else "branch"
     notify = Pupdate(
-        id=f"agent-ready-{task_id}-{int(datetime.now(timezone.utc).timestamp())}",
+        id=f"agent-ready-{task_id}-{uuid.uuid4().hex[:8]}",
         source="maiko",
         source_id=f"agent/{agent_id}",
         type="agent_ready",

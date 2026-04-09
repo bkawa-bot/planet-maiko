@@ -300,47 +300,21 @@ def _train_mlx(train_file, adapter_path, config):
 
 
 def _train_pytorch(train_file, adapter_path, config, device):
-    """Train using PyTorch (CUDA or MPS)."""
-    logger.info(f"[lora-train] Using PyTorch backend ({device})")
+    """Train using PyTorch (CUDA or MPS).
 
-    try:
-        # Use a training script that works with both CUDA and MPS
-        train_script = f"""
-import json, torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from peft import LoraConfig, get_peft_model
-from trl import SFTTrainer, SFTConfig
-
-model_name = "{config['base_model']}"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16)
-
-lora_config = LoraConfig(r={config['lora_rank']}, lora_alpha={config['lora_alpha']}, target_modules=["q_proj", "v_proj"])
-model = get_peft_model(model, lora_config)
-
-# Load data
-data = []
-with open("{train_file.replace(os.sep, '/')}") as f:
-    for line in f:
-        data.append(json.loads(line))
-
-trainer = SFTConfig(output_dir="{adapter_path.replace(os.sep, '/')}", num_train_epochs={config['epochs']}, per_device_train_batch_size={config['batch_size']}, learning_rate={config['learning_rate']})
-# ... simplified, actual implementation would use SFTTrainer properly
-model.save_pretrained("{adapter_path.replace(os.sep, '/')}")
-print("TRAINING_COMPLETE")
-"""
-        result = subprocess.run(
-            [sys.executable, "-c", train_script],
-            capture_output=True, text=True, timeout=7200,
-        )
-
-        if "TRAINING_COMPLETE" in result.stdout:
-            return {"success": True, "backend": f"pytorch-{device}"}
-        else:
-            return {"success": False, "error": result.stderr[:500]}
-
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    Not implemented — only the MLX backend (Apple Silicon) is supported.
+    To add a PyTorch path, wire up a real SFTTrainer call here. The
+    previous stub built a script string with f-string interpolation,
+    which both swallowed errors and risked code injection.
+    """
+    return {
+        "success": False,
+        "error": (
+            f"PyTorch backend ({device}) is not implemented. Only MLX (Apple Silicon) "
+            "is currently supported. Install mlx-lm on a Mac, or contribute a PyTorch "
+            "implementation in src/planet_maiko/brain/learning/trainer.py::_train_pytorch."
+        ),
+    }
 
 
 def check_requirements():

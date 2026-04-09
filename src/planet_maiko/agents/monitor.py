@@ -9,6 +9,7 @@ source="agent". The monitor processes these to:
 """
 
 import logging
+import uuid
 from datetime import datetime, timezone, timedelta
 
 from planet_maiko.database import db
@@ -152,7 +153,7 @@ def check_heartbeats():
 
         if not recent_nudge:
             nudge = Pupdate(
-                id=f"nudge-{profile.id}-{int(datetime.now(timezone.utc).timestamp())}",
+                id=f"nudge-{profile.id}-{uuid.uuid4().hex[:8]}",
                 source="maiko",
                 source_id=f"nudge/{profile.id}",
                 type="agent_nudge",

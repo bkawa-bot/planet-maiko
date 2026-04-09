@@ -12,6 +12,7 @@ Edge types:
 import logging
 import os
 import subprocess
+import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
 
@@ -492,7 +493,7 @@ def _act_on_resolution(agent_a, agent_b, result_a, result_b,
     elif "conflict" in (result_a, result_b):
         # At least one says conflict -- escalate to user
         pupdate = Pupdate(
-            id=f"conflict-escalation-{agent_a}-{agent_b}-{int(datetime.now(timezone.utc).timestamp())}",
+            id=f"conflict-escalation-{agent_a}-{agent_b}-{uuid.uuid4().hex[:8]}",
             source="maiko",
             source_id=f"conflict/{agent_a}/{agent_b}",
             type="conflict_escalation",
@@ -538,7 +539,7 @@ def _act_on_resolution(agent_a, agent_b, result_a, result_b,
 
         # Notify user
         pupdate = Pupdate(
-            id=f"conflict-dup-{agent_a}-{agent_b}-{int(datetime.now(timezone.utc).timestamp())}",
+            id=f"conflict-dup-{agent_a}-{agent_b}-{uuid.uuid4().hex[:8]}",
             source="maiko",
             type="conflict_duplicate",
             priority="normal",
