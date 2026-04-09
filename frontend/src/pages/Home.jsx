@@ -77,8 +77,8 @@ export default function Home() {
       setRecentPupdates(pupdates.slice(0, 5));
       setSchedule(sched);
 
-      // Calendar events from pupdates
-      setCalendarEvents(pupdates.filter((p) => p.source === "calendar").slice(0, 5));
+      // Calendar events from pupdates (show all of today's meetings)
+      setCalendarEvents(pupdates.filter((p) => p.source === "calendar"));
 
       // Load most recent morning brief — only if from today
       if (!morningBrief) {

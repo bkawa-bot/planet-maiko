@@ -34,8 +34,10 @@ class CalendarPoller(BasePoller):
             return {"events": []}
 
         all_events = []
-        now = datetime.now(timezone.utc)
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        # Use the user's local timezone for "today" so evening meetings
+        # don't get filtered out as "tomorrow UTC".
+        local_now = datetime.now().astimezone()
+        today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
         today_end = today_start + timedelta(days=1)
 
         for url in ical_urls:
@@ -53,11 +55,11 @@ class CalendarPoller(BasePoller):
                         continue
                     dt = dtstart.dt
 
-                    # Handle date vs datetime
+                    # Handle date vs datetime — use local TZ for naive values
                     if not isinstance(dt, datetime):
-                        dt = datetime.combine(dt, datetime.min.time(), tzinfo=timezone.utc)
+                        dt = datetime.combine(dt, datetime.min.time()).astimezone()
                     elif dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=timezone.utc)
+                        dt = dt.astimezone()
 
                     # Only include today's events
                     if not (today_start <= dt < today_end):
