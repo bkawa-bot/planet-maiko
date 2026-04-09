@@ -85,9 +85,25 @@ def get_skill_prompt(skill_name, context):
     if template is None:
         return None
 
+    # Inject user name from config so Maiko addresses the user correctly
+    try:
+        from planet_maiko.config import load_config
+        user_name = load_config().get("user", {}).get("name", "").strip()
+        if user_name:
+            context = {**context, "user_name": user_name}
+    except Exception:
+        pass
+
     result = template
     for key, value in context.items():
         result = result.replace("{" + key + "}", str(value))
+
+    # If the prompt doesn't reference {user_name} but we have one,
+    # prepend a directive so Claude uses the right name.
+    user_name = context.get("user_name", "").strip() if isinstance(context.get("user_name"), str) else ""
+    if user_name and "{user_name}" not in template and user_name not in result:
+        result = f"The user's name is {user_name}. Address them by name when appropriate.\n\n{result}"
+
     return result
 
 

@@ -6,6 +6,9 @@ from planet_maiko.paths import config_path as _config_path
 CONFIG_PATH = _config_path()
 
 DEFAULT_CONFIG = {
+    "user": {
+        "name": "",  # Your name (Maiko addresses you by this)
+    },
     "github": {
         "enabled": True,
         "username": "",
