@@ -157,7 +157,14 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
               </div>
             ))}
 
-            {activity.map((a, i) => (
+            {activity.map((a, i) => {
+              // Resolve display name: try prepared agents first, then profiles, then fallback
+              const prepared = agents.find((ag) => ag.task_id === a.task_id);
+              const profileId = prepared?.agent_id || a.task_id;
+              const profile = profiles.find((p) => p.id === profileId);
+              const displayName = profile?.display_name || a.task_id.replace(/^(task-|agent-report-|agent-)/, "");
+
+              return (
               <div key={i} className="agent-card card">
                 <div className={`speech-bubble status-${a.status}`}>
                   {a.last_message || "No recent messages"}
@@ -169,7 +176,7 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
                   <div className="agent-avatar-circle">🐕</div>
                   <div className="agent-info">
                     <div className="agent-name-row">
-                      <span className="agent-name">{a.task_id}</span>
+                      <span className="agent-name">{displayName}</span>
                       <span className={`badge ${a.status}`}>{a.status}</span>
                     </div>
                     <div className="agent-chips">
@@ -186,7 +193,8 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
                   <button className="btn btn-sm"><Moon size={12} /> Sleep</button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

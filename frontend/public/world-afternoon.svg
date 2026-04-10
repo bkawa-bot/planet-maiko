@@ -1,242 +1,124 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90" shape-rendering="crispEdges" preserveAspectRatio="xMidYMax slice">
   <defs>
     <linearGradient id="tt" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#F5DC88"/>
-      <stop offset="25%" stop-color="#F0C870"/>
-      <stop offset="45%" stop-color="#E8A858"/>
-      <stop offset="65%" stop-color="#D87858"/>
+      <stop offset="0%" stop-color="#F0D8B8"/>
+      <stop offset="25%" stop-color="#E8C8A0"/>
+      <stop offset="45%" stop-color="#E0A880"/>
+      <stop offset="65%" stop-color="#D08870"/>
       <stop offset="85%" stop-color="#9C5878"/>
       <stop offset="100%" stop-color="#5A3868"/>
     </linearGradient>
   </defs>
 
-  <!-- Sky -->
+  <!-- Sky — warm peach-to-purple golden hour -->
   <rect width="160" height="90" fill="url(#tt)"/>
 
-  <!-- Sun halo (soft glow) -->
-  <g fill="#FFE060" opacity="0.12">
+  <!-- Sun halo -->
+  <g fill="#F0C880" opacity="0.12">
     <rect x="98" y="22" width="34" height="18"/>
     <rect x="100" y="20" width="30" height="2"/>
     <rect x="100" y="40" width="30" height="2"/>
-    <rect x="96" y="24" width="2" height="14"/>
-    <rect x="132" y="24" width="2" height="14"/>
   </g>
 
-  <!-- Hazy sun (afternoon - higher than full sunset) -->
-  <g fill="#FFE060" opacity="0.55">
-    <rect x="108" y="25" width="14" height="1"/>
-    <rect x="106" y="26" width="18" height="1"/>
-    <rect x="105" y="27" width="20" height="1"/>
-    <rect x="104" y="28" width="22" height="2"/>
-    <rect x="104" y="30" width="22" height="2"/>
-    <rect x="105" y="32" width="20" height="1"/>
-    <rect x="106" y="33" width="18" height="1"/>
-    <rect x="108" y="34" width="14" height="1"/>
+  <!-- Sun (low, warm golden) -->
+  <g fill="#F0C880" opacity="0.55">
+    <rect x="108" y="28" width="14" height="1"/>
+    <rect x="106" y="29" width="18" height="1"/>
+    <rect x="105" y="30" width="20" height="1"/>
+    <rect x="104" y="31" width="22" height="2"/>
+    <rect x="104" y="33" width="22" height="2"/>
+    <rect x="105" y="35" width="20" height="1"/>
+    <rect x="106" y="36" width="18" height="1"/>
+    <rect x="108" y="37" width="14" height="1"/>
   </g>
-  <g fill="#FFF0A0" opacity="0.75">
-    <rect x="110" y="27" width="10" height="1"/>
-    <rect x="109" y="28" width="12" height="1"/>
-    <rect x="108" y="29" width="14" height="3"/>
-    <rect x="109" y="32" width="12" height="1"/>
-    <rect x="110" y="33" width="10" height="1"/>
+  <g fill="#FDE8C0" opacity="0.6">
+    <rect x="110" y="30" width="10" height="1"/>
+    <rect x="109" y="31" width="12" height="1"/>
+    <rect x="108" y="32" width="14" height="3"/>
+    <rect x="109" y="35" width="12" height="1"/>
+    <rect x="110" y="36" width="10" height="1"/>
   </g>
 
-  <!-- Wispy high clouds -->
-  <g fill="#FFE8B0" opacity="0.45">
-    <rect x="20" y="18" width="8" height="1"/>
-    <rect x="18" y="19" width="12" height="1"/>
-    <rect x="19" y="20" width="10" height="1"/>
-    <rect x="40" y="14" width="6" height="1"/>
-    <rect x="38" y="15" width="10" height="1"/>
-    <rect x="60" y="22" width="8" height="1"/>
-    <rect x="58" y="23" width="12" height="1"/>
-    <rect x="59" y="24" width="9" height="1"/>
-  </g>
-  <g fill="#FFD888" opacity="0.4">
-    <rect x="135" y="16" width="6" height="1"/>
-    <rect x="133" y="17" width="10" height="1"/>
-    <rect x="134" y="18" width="8" height="1"/>
-    <rect x="80" y="12" width="6" height="1"/>
-    <rect x="78" y="13" width="10" height="1"/>
+  <!-- Wispy clouds -->
+  <g fill="#F0D8C0" opacity="0.4">
+    <rect x="20" y="20" width="8" height="1"/>
+    <rect x="18" y="21" width="12" height="1"/>
+    <rect x="19" y="22" width="10" height="1"/>
+    <rect x="60" y="24" width="8" height="1"/>
+    <rect x="58" y="25" width="12" height="1"/>
+    <rect x="59" y="26" width="9" height="1"/>
+    <rect x="135" y="18" width="6" height="1"/>
+    <rect x="133" y="19" width="10" height="1"/>
+    <rect x="134" y="20" width="8" height="1"/>
+    <rect x="80" y="14" width="6" height="1"/>
+    <rect x="78" y="15" width="10" height="1"/>
   </g>
 
   <!-- Distant purple hills -->
   <polygon fill="#5A3068" opacity="0.65" points="0,55 8,55 8,53 18,53 18,51 28,51 28,49 40,49 40,47 52,47 52,49 64,49 64,51 76,51 76,49 88,49 88,47 100,47 100,49 112,49 112,51 124,51 124,53 138,53 138,55 150,55 150,57 160,57 160,90 0,90"/>
 
-  <!-- Mid hills (warmer rust) -->
-  <polygon fill="#7E3858" points="0,62 6,62 6,60 14,60 14,58 24,58 24,60 34,60 34,58 44,58 44,56 56,56 56,58 68,58 68,56 80,56 80,58 92,58 92,60 104,60 104,58 116,58 116,60 128,60 128,62 142,62 142,64 160,64 160,90 0,90"/>
+  <!-- Mid hills (warm rosy-brown) -->
+  <polygon fill="#7E4858" points="0,62 6,62 6,60 14,60 14,58 24,58 24,60 34,60 34,58 44,58 44,56 56,56 56,58 68,58 68,56 80,56 80,58 92,58 92,60 104,60 104,58 116,58 116,60 128,60 128,62 142,62 142,64 160,64 160,90 0,90"/>
 
-  <!-- Far left small buildings -->
-  <g fill="#3A2040">
-    <rect x="2" y="60" width="6" height="4"/>
-    <rect x="8" y="58" width="4" height="6"/>
-  </g>
-  <g fill="#A04030">
-    <rect x="8" y="57" width="4" height="1"/>
-    <rect x="9" y="56" width="2" height="1"/>
-  </g>
+  <!-- Tree silhouettes on mid hills -->
+  <g fill="#5A2848">
+    <rect x="25" y="55" width="1" height="1"/>
+    <rect x="24" y="56" width="3" height="1"/>
+    <rect x="24" y="57" width="3" height="1"/>
+    <rect x="25" y="58" width="1" height="1"/>
 
-  <!-- Left building cluster with brick rooftops -->
-  <g fill="#4A2848">
-    <rect x="14" y="58" width="6" height="6"/>
-    <rect x="20" y="55" width="8" height="9"/>
-    <rect x="28" y="60" width="5" height="4"/>
-  </g>
-  <!-- Triangle/sloped roofs -->
-  <g fill="#A04030">
-    <rect x="14" y="57" width="6" height="1"/>
-    <rect x="15" y="56" width="4" height="1"/>
-    <rect x="16" y="55" width="2" height="1"/>
-    <rect x="20" y="54" width="8" height="1"/>
-    <rect x="21" y="53" width="6" height="1"/>
-    <rect x="22" y="52" width="4" height="1"/>
-    <rect x="23" y="51" width="2" height="1"/>
-    <rect x="28" y="59" width="5" height="1"/>
-    <rect x="29" y="58" width="3" height="1"/>
-  </g>
-  <g fill="#C85040">
-    <rect x="15" y="57" width="4" height="1"/>
-    <rect x="16" y="56" width="2" height="1"/>
-    <rect x="21" y="54" width="6" height="1"/>
-    <rect x="22" y="53" width="4" height="1"/>
+    <rect x="51" y="53" width="1" height="1"/>
+    <rect x="50" y="54" width="3" height="1"/>
+    <rect x="50" y="55" width="3" height="1"/>
+    <rect x="51" y="56" width="1" height="1"/>
+
+    <rect x="75" y="53" width="1" height="1"/>
+    <rect x="74" y="54" width="3" height="1"/>
+    <rect x="73" y="55" width="5" height="1"/>
+    <rect x="74" y="56" width="3" height="1"/>
+    <rect x="75" y="57" width="1" height="1"/>
+
+    <rect x="110" y="55" width="1" height="1"/>
+    <rect x="109" y="56" width="3" height="1"/>
+    <rect x="108" y="57" width="5" height="1"/>
+    <rect x="109" y="58" width="3" height="1"/>
+
+    <rect x="140" y="59" width="1" height="1"/>
+    <rect x="139" y="60" width="3" height="1"/>
+    <rect x="139" y="61" width="3" height="1"/>
   </g>
 
-  <!-- Mid distance buildings (left of clock tower) -->
-  <g fill="#3A2040">
-    <rect x="38" y="58" width="6" height="6"/>
-    <rect x="44" y="60" width="5" height="4"/>
-    <rect x="50" y="56" width="7" height="8"/>
-    <rect x="58" y="59" width="6" height="5"/>
-  </g>
-  <g fill="#A04030">
-    <rect x="38" y="57" width="6" height="1"/>
-    <rect x="39" y="56" width="4" height="1"/>
-    <rect x="50" y="55" width="7" height="1"/>
-    <rect x="51" y="54" width="5" height="1"/>
-    <rect x="52" y="53" width="3" height="1"/>
+  <!-- Tiny house with warm window glow -->
+  <g>
+    <rect x="83" y="56" width="6" height="2" fill="#5A2848"/>
+    <rect x="82" y="58" width="8" height="3" fill="#4A2040"/>
+    <rect x="84" y="59" width="2" height="1" fill="#F0C880" opacity="0.7"/>
+    <rect x="88" y="59" width="1" height="1" fill="#F0C880" opacity="0.5"/>
   </g>
 
-  <!-- THE CLOCK TOWER (Twilight Town centerpiece) -->
-  <g fill="#3A2040">
-    <!-- Tower body -->
-    <rect x="70" y="38" width="10" height="22"/>
-    <!-- Wider base -->
-    <rect x="68" y="58" width="14" height="2"/>
-    <rect x="67" y="60" width="16" height="2"/>
-    <!-- Roof base -->
-    <rect x="69" y="36" width="12" height="2"/>
-    <!-- Spire stages tapering up -->
-    <rect x="71" y="34" width="8" height="2"/>
-    <rect x="72" y="32" width="6" height="2"/>
-    <rect x="73" y="30" width="4" height="2"/>
-    <rect x="74" y="27" width="2" height="3"/>
-    <rect x="74" y="25" width="2" height="1"/>
-  </g>
-  <!-- Clock face (cream with rim) -->
-  <rect x="72" y="42" width="6" height="6" fill="#F0D890"/>
-  <g fill="#3A2040">
-    <rect x="72" y="42" width="6" height="1"/>
-    <rect x="72" y="47" width="6" height="1"/>
-    <rect x="72" y="42" width="1" height="6"/>
-    <rect x="77" y="42" width="1" height="6"/>
-    <!-- Clock hands pointing to ~2 o'clock-ish (afternoon) -->
-    <rect x="74" y="44" width="2" height="1"/>
-    <rect x="75" y="44" width="1" height="2"/>
-  </g>
-  <!-- Hour mark dot at top of clock -->
-  <rect x="74" y="43" width="2" height="1" fill="#A04030"/>
-  <!-- Clock tower lit windows -->
-  <g fill="#FFD060" opacity="0.75">
-    <rect x="73" y="51" width="1" height="1"/>
-    <rect x="76" y="51" width="1" height="1"/>
-    <rect x="73" y="55" width="1" height="1"/>
-    <rect x="76" y="55" width="1" height="1"/>
-  </g>
-
-  <!-- Right building cluster with brick rooftops -->
-  <g fill="#4A2848">
-    <rect x="88" y="56" width="7" height="8"/>
-    <rect x="95" y="58" width="5" height="6"/>
-    <rect x="100" y="54" width="9" height="10"/>
-    <rect x="109" y="59" width="6" height="5"/>
-  </g>
-  <g fill="#A04030">
-    <rect x="88" y="55" width="7" height="1"/>
-    <rect x="89" y="54" width="5" height="1"/>
-    <rect x="90" y="53" width="3" height="1"/>
-    <rect x="100" y="53" width="9" height="1"/>
-    <rect x="101" y="52" width="7" height="1"/>
-    <rect x="102" y="51" width="5" height="1"/>
-    <rect x="103" y="50" width="3" height="1"/>
-    <rect x="109" y="58" width="6" height="1"/>
-    <rect x="110" y="57" width="4" height="1"/>
-  </g>
-  <g fill="#C85040">
-    <rect x="89" y="55" width="5" height="1"/>
-    <rect x="90" y="54" width="3" height="1"/>
-    <rect x="101" y="53" width="7" height="1"/>
-    <rect x="102" y="52" width="5" height="1"/>
-    <rect x="110" y="58" width="4" height="1"/>
-  </g>
-
-  <!-- Far right buildings -->
-  <g fill="#3A2040">
-    <rect x="120" y="60" width="5" height="4"/>
-    <rect x="125" y="58" width="4" height="6"/>
-    <rect x="129" y="61" width="6" height="3"/>
-    <rect x="138" y="59" width="5" height="5"/>
-  </g>
-  <g fill="#A04030">
-    <rect x="125" y="57" width="4" height="1"/>
-    <rect x="126" y="56" width="2" height="1"/>
-    <rect x="138" y="58" width="5" height="1"/>
-    <rect x="139" y="57" width="3" height="1"/>
-  </g>
-
-  <!-- Window lights scattered through buildings -->
-  <g fill="#FFCC60" opacity="0.75">
-    <rect x="4" y="61" width="1" height="1"/>
-    <rect x="9" y="60" width="1" height="1"/>
-    <rect x="16" y="60" width="1" height="1"/>
-    <rect x="22" y="58" width="1" height="1"/>
-    <rect x="25" y="60" width="1" height="1"/>
-    <rect x="40" y="60" width="1" height="1"/>
-    <rect x="52" y="58" width="1" height="1"/>
-    <rect x="55" y="60" width="1" height="1"/>
-    <rect x="60" y="61" width="1" height="1"/>
-    <rect x="90" y="58" width="1" height="1"/>
-    <rect x="92" y="60" width="1" height="1"/>
-    <rect x="96" y="60" width="1" height="1"/>
-    <rect x="102" y="56" width="1" height="1"/>
-    <rect x="105" y="58" width="1" height="1"/>
-    <rect x="107" y="60" width="1" height="1"/>
-    <rect x="111" y="61" width="1" height="1"/>
-    <rect x="122" y="61" width="1" height="1"/>
-    <rect x="126" y="60" width="1" height="1"/>
-    <rect x="140" y="61" width="1" height="1"/>
-  </g>
-
-  <!-- Front foreground hill (warm cobblestone tones) -->
+  <!-- Front foreground hill -->
   <polygon fill="#6A3858" points="0,72 8,72 8,70 18,70 18,68 30,68 30,66 44,66 44,68 58,68 58,66 72,66 72,68 86,68 86,66 100,66 100,68 114,68 114,66 128,66 128,68 142,68 142,70 152,70 152,72 160,72 160,90 0,90"/>
 
-  <!-- Tree silhouettes on front hill -->
+  <!-- Front hill trees -->
   <g fill="#4A2240">
     <rect x="25" y="63" width="1" height="1"/>
     <rect x="24" y="64" width="3" height="1"/>
     <rect x="24" y="65" width="3" height="1"/>
     <rect x="25" y="66" width="1" height="1"/>
-    <rect x="121" y="64" width="1" height="1"/>
-    <rect x="120" y="65" width="3" height="1"/>
-    <rect x="120" y="66" width="3" height="1"/>
-    <rect x="121" y="67" width="1" height="1"/>
+
+    <rect x="95" y="63" width="1" height="1"/>
+    <rect x="94" y="64" width="3" height="1"/>
+    <rect x="94" y="65" width="3" height="1"/>
+    <rect x="95" y="66" width="1" height="1"/>
+
     <rect x="147" y="65" width="1" height="1"/>
     <rect x="146" y="66" width="3" height="1"/>
     <rect x="146" y="67" width="3" height="1"/>
     <rect x="147" y="68" width="1" height="1"/>
   </g>
 
-  <!-- Winding cobblestone path up the front hill -->
-  <g fill="#8A4868" opacity="0.5">
+  <!-- Winding path on front hill -->
+  <g fill="#8A4868" opacity="0.4">
     <rect x="76" y="73" width="2" height="1"/>
     <rect x="78" y="75" width="2" height="1"/>
     <rect x="80" y="77" width="2" height="1"/>

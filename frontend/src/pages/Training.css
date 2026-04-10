@@ -170,7 +170,7 @@
   font-size: 12px; display: flex; align-items: center; gap: 4px;
 }
 .training-dataset-list {
-  margin-top: 12px; display: flex; flex-direction: column; gap: 4px;
+  margin-top: 6px; display: flex; flex-direction: column; gap: 4px;
 }
 .training-dataset-item {
   display: flex; align-items: center; gap: 12px;
@@ -180,3 +180,30 @@
 .training-dataset-name { font-family: var(--font-mono); color: var(--text-dim); flex: 1; }
 .training-dataset-count { color: var(--pink); font-weight: 600; }
 .training-dataset-size { color: var(--text-muted); }
+
+/* Collapsible datasets section */
+.training-datasets-collapse { margin-top: 16px; }
+.btn-collapse {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--text-muted); background: none;
+  border: none; cursor: pointer; padding: 4px 0; font-family: var(--font);
+}
+.btn-collapse:hover { color: var(--text-dim); }
+
+/* Training row — flex row for controls */
+.training-row {
+  display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;
+}
+.training-hint {
+  font-size: 11px; color: var(--text-muted);
+}
+
+/* Progress bars for long ops */
+.training-progress-bar {
+  display: flex; gap: 8px; align-items: center; font-size: 12px;
+  color: var(--text-dim); padding: 8px 0;
+}
+.training-live-progress { margin-bottom: 12px; }
+.training-progress-stats {
+  display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;
+}

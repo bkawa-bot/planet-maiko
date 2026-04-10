@@ -88,20 +88,20 @@
   --lavender-soft: rgba(149, 120, 194, 0.14); --lavender-faint: rgba(149, 120, 194, 0.07);
 }
 
-/* === Afternoon theme === Twilight Town vibes: hazy golden sunset, brick + cream, dusty purple shadows */
+/* === Afternoon theme === Golden hour: warm cream, peach sky, dusty purple shadows */
 [data-theme="afternoon"] {
-  --bg: #f0d4a0; --bg-card: #fae5b8; --bg-card-alt: #ecc888;
-  --bg-hover: #e8c878; --bg-selected: #dcb868;
+  --bg: #f0dcc0; --bg-card: #f8e8d0; --bg-card-alt: #edd8b8;
+  --bg-hover: #e8d0a8; --bg-selected: #dcc498;
   --text: #443f6e; --text-dim: #6a5a8a; --text-muted: #8c7ca8;
   --pink: #bf4e64; --pink-soft: rgba(191, 78, 100, 0.15); --pink-glow: rgba(191, 78, 100, 0.08);
   --blue: #4dc4d4; --blue-soft: rgba(77, 196, 212, 0.14);
-  --mint: #6abc88; --orange: #e06d56; --lavender: #8068a8;
-  --peach: #e8ab2c; --creamsicle: #f0c870; --lemon: #f0d769;
-  --urgent: #bf4e64; --high: #e06d56; --normal: #bf4e64; --low: #8c7ca8; --green: #6abc88;
-  --border: #d4b070; --border-subtle: #e0c088;
+  --mint: #6abc88; --orange: #d87048; --lavender: #8068a8;
+  --peach: #d8946a; --creamsicle: #e8b890; --lemon: #d8b868;
+  --urgent: #bf4e64; --high: #d87048; --normal: #bf4e64; --low: #8c7ca8; --green: #6abc88;
+  --border: #d0b888; --border-subtle: #dcc8a0;
   --urgent-soft: rgba(191, 78, 100, 0.16); --urgent-faint: rgba(191, 78, 100, 0.08);
-  --high-soft: rgba(224, 109, 86, 0.16); --high-faint: rgba(224, 109, 86, 0.08);
-  --lemon-soft: rgba(240, 215, 105, 0.20); --lemon-faint: rgba(240, 215, 105, 0.10);
+  --high-soft: rgba(216, 112, 72, 0.16); --high-faint: rgba(216, 112, 72, 0.08);
+  --lemon-soft: rgba(216, 184, 104, 0.20); --lemon-faint: rgba(216, 184, 104, 0.10);
   --green-soft: rgba(106, 188, 136, 0.18); --green-faint: rgba(106, 188, 136, 0.10);
   --lavender-soft: rgba(128, 104, 168, 0.14); --lavender-faint: rgba(128, 104, 168, 0.07);
 }
@@ -356,7 +356,7 @@ a:hover { text-decoration: underline; }
   background: rgba(255, 253, 248, 0.5);
 }
 [data-theme="afternoon"] .card-list-container {
-  background: rgba(250, 229, 184, 0.55);
+  background: rgba(248, 232, 208, 0.55);
 }
 [data-theme="sunset"] .card-list-container {
   background: rgba(58, 34, 72, 0.5);

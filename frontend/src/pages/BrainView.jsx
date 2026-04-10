@@ -18,7 +18,7 @@ const CATEGORY_ICONS = {
 export default function BrainView() {
   const [learnings, setLearnings] = useState([]);
   const [kLoading, setKLoading] = useState(true);
-  const [collapsed, setCollapsed] = useState({});
+  const [expandedCats, setExpandedCats] = useState({});
   const [addText, setAddText] = useState("");
   const [addCategory, setAddCategory] = useState("domain_knowledge");
   const [backfilling, setBackfilling] = useState(false);
@@ -49,7 +49,9 @@ export default function BrainView() {
 
   const visible = tab === "unsynthesized"
     ? unsynthesized
-    : learnings.filter((l) => l.status !== "dismissed" && l.category !== "pattern");
+    : tab === "pending"
+      ? pending
+      : learnings.filter((l) => l.status !== "dismissed" && l.category !== "pattern");
 
   const byCategory = {};
   for (const l of visible) {
@@ -87,7 +89,7 @@ export default function BrainView() {
     setSynthesizing(false);
   };
 
-  const toggleCategory = (cat) => setCollapsed((c) => ({ ...c, [cat]: !c[cat] }));
+  const toggleCategory = (cat) => setExpandedCats((e) => ({ ...e, [cat]: !e[cat] }));
 
   return (
     <div className="brain-view-page">
@@ -99,6 +101,12 @@ export default function BrainView() {
             onClick={() => setTab("pool")}
           >
             Knowledge Pool
+          </button>
+          <button
+            className={`inbox-tab ${tab === "pending" ? "active" : ""}`}
+            onClick={() => setTab("pending")}
+          >
+            Pending {pending.length > 0 && <span className="tab-badge">{pending.length}</span>}
           </button>
           <button
             className={`inbox-tab ${tab === "unsynthesized" ? "active" : ""}`}
@@ -181,20 +189,20 @@ export default function BrainView() {
           <div className="category-sections">
             {Object.entries(byCategory).sort().map(([category, catItems]) => {
               const Icon = CATEGORY_ICONS[category] || Brain;
-              const isCollapsed = collapsed[category];
+              const isExpanded = !!expandedCats[category];
               const pendingCount = catItems.filter((l) => l.status === "pending").length;
 
               return (
                 <div key={category} className="category-section">
                   <div className="category-header" onClick={() => toggleCategory(category)}>
-                    {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     <Icon size={14} />
                     <span className="category-name">{category.replace(/_/g, " ")}</span>
                     {pendingCount > 0 && <span className="tab-badge">{pendingCount} needs review</span>}
                     <span className="category-count">{catItems.length}</span>
                   </div>
 
-                  {!isCollapsed && (
+                  {isExpanded && (
                     <div className="category-items">
                       {catItems.map((l) => (
                         <div key={l.id} className={`learning-row status-${l.status}`}>
