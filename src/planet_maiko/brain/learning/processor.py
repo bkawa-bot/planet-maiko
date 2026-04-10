@@ -76,94 +76,112 @@ def _make_aggregation_key(signal):
     return ":".join(parts)
 
 
+def _apply_negative_signal(signal, learning, counts):
+    """LoRA hook said this rule is wrong — decrement confidence and
+    auto-dismiss if rejections dominate.
+    """
+    learning.confidence = max(0.0, learning.confidence - CONFIDENCE_PER_SIGNAL)
+    learning.last_signal_at = datetime.now(timezone.utc)
+    signal.learning_id = learning.id
+    counts["updated_learnings"] += 1
+
+    # Auto-dismiss if confidence cratered and rejections dominate
+    if learning.confidence < 0.1 and learning.status == "active":
+        reject_count = Signal.query.filter_by(
+            learning_id=learning.id, source_type="lora_hook", severity="rejected"
+        ).count()
+        accept_count = Signal.query.filter_by(
+            learning_id=learning.id, source_type="lora_hook", severity="suggestion"
+        ).count()
+        if reject_count > accept_count:
+            learning.status = "dismissed"
+            logger.info(f"[learning] Auto-dismissed (too many rejections): {learning.rule[:60]}")
+
+
+def _apply_positive_signal(signal, learning, counts):
+    """A confirming signal — bump signal count + confidence and check
+    whether it's time to graduate the learning from pending → active.
+    """
+    learning.signal_count += 1
+    learning.confidence = min(1.0, learning.confidence + CONFIDENCE_PER_SIGNAL)
+    learning.last_signal_at = datetime.now(timezone.utc)
+    signal.learning_id = learning.id
+    counts["updated_learnings"] += 1
+    _maybe_graduate(learning, counts)
+
+
+def _maybe_graduate(learning, counts):
+    """If the learning has crossed its category threshold, graduate it."""
+    threshold = GRADUATION_THRESHOLDS.get(learning.category, 3)
+    if learning.signal_count < threshold or learning.status != "pending":
+        return
+
+    # Don't graduate unclassified "pattern" signals — wait for LLM classification
+    if learning.category == "pattern" and learning.source == "auto":
+        return
+
+    if learning.category in NEEDS_APPROVAL:
+        # High-stakes categories stay pending; user approves manually
+        logger.info(f"[learning] Ready for approval: {learning.rule[:60]}")
+        return
+
+    learning.status = "active"
+    counts["graduated"] += 1
+    logger.info(f"[learning] Graduated: {learning.rule[:60]}")
+
+
+def _create_new_learning(signal, agg_key, counts):
+    """No existing learning matched this aggregation key — create one
+    in pending state and link the signal to it.
+    """
+    learning = Learning(
+        rule=signal.text,
+        category=signal.category,
+        scope_repo=signal.repo,
+        scope_language=signal.language,
+        confidence=CONFIDENCE_PER_SIGNAL,
+        signal_count=1,
+        source="auto",
+        status="pending",
+        aggregation_key=agg_key,
+        last_signal_at=datetime.now(timezone.utc),
+    )
+    db.session.add(learning)
+    db.session.flush()  # Get the autoincrement id
+    signal.learning_id = learning.id
+    counts["new_learnings"] += 1
+
+
 def process_signals():
     """Aggregate unaggregated signals into learnings.
 
     Returns:
-        dict with counts: {processed, new_learnings, updated_learnings, graduated}
+        dict with counts: {processed, new_learnings, updated_learnings,
+        graduated, skipped_junk}
     """
     unprocessed = Signal.query.filter_by(aggregated=False).all()
-
     if not unprocessed:
         return {"processed": 0, "new_learnings": 0, "updated_learnings": 0, "graduated": 0}
 
     logger.info(f"[learning] Processing {len(unprocessed)} signal(s)...")
-
-    counts = {"processed": 0, "new_learnings": 0, "updated_learnings": 0, "graduated": 0, "skipped_junk": 0}
+    counts = {"processed": 0, "new_learnings": 0, "updated_learnings": 0,
+              "graduated": 0, "skipped_junk": 0}
 
     for signal in unprocessed:
-        # Skip bot comments, boilerplate, and HTML fragments
         if _is_junk_signal(signal.text):
             signal.aggregated = True
             counts["skipped_junk"] += 1
             continue
 
         agg_key = _make_aggregation_key(signal)
-
-        # Find existing learning with this aggregation key
         learning = Learning.query.filter_by(aggregation_key=agg_key).first()
 
-        if learning:
-            # Handle negative signals from LoRA hook feedback
-            if signal.source_type == "lora_hook" and signal.severity == "rejected":
-                learning.confidence = max(0.0, learning.confidence - CONFIDENCE_PER_SIGNAL)
-                learning.last_signal_at = datetime.now(timezone.utc)
-                signal.learning_id = learning.id
-                counts["updated_learnings"] += 1
-
-                # Auto-dismiss if confidence is very low and rejections dominate
-                if learning.confidence < 0.1 and learning.status == "active":
-                    # Count accepted vs rejected signals for this learning
-                    reject_count = Signal.query.filter_by(
-                        learning_id=learning.id, source_type="lora_hook", severity="rejected"
-                    ).count()
-                    accept_count = Signal.query.filter_by(
-                        learning_id=learning.id, source_type="lora_hook", severity="suggestion"
-                    ).count()
-                    if reject_count > accept_count:
-                        learning.status = "dismissed"
-                        logger.info(f"[learning] Auto-dismissed (too many rejections): {learning.rule[:60]}")
-
-                signal.aggregated = True
-                counts["processed"] += 1
-                continue
-
-            # Update existing learning (positive signal)
-            learning.signal_count += 1
-            learning.confidence = min(1.0, learning.confidence + CONFIDENCE_PER_SIGNAL)
-            learning.last_signal_at = datetime.now(timezone.utc)
-            signal.learning_id = learning.id
-            counts["updated_learnings"] += 1
-
-            # Check graduation (don't graduate unclassified "pattern" signals)
-            threshold = GRADUATION_THRESHOLDS.get(learning.category, 3)
-            if learning.signal_count >= threshold and learning.status == "pending":
-                if learning.category == "pattern" and learning.source == "auto":
-                    pass  # Wait for LLM classification before graduating
-                elif learning.category in NEEDS_APPROVAL:
-                    logger.info(f"[learning] Ready for approval: {learning.rule[:60]}")
-                else:
-                    learning.status = "active"
-                    counts["graduated"] += 1
-                    logger.info(f"[learning] Graduated: {learning.rule[:60]}")
+        if learning is None:
+            _create_new_learning(signal, agg_key, counts)
+        elif signal.source_type == "lora_hook" and signal.severity == "rejected":
+            _apply_negative_signal(signal, learning, counts)
         else:
-            # Create new learning
-            learning = Learning(
-                rule=signal.text,
-                category=signal.category,
-                scope_repo=signal.repo,
-                scope_language=signal.language,
-                confidence=CONFIDENCE_PER_SIGNAL,
-                signal_count=1,
-                source="auto",
-                status="pending",
-                aggregation_key=agg_key,
-                last_signal_at=datetime.now(timezone.utc),
-            )
-            db.session.add(learning)
-            db.session.flush()  # Get the ID
-            signal.learning_id = learning.id
-            counts["new_learnings"] += 1
+            _apply_positive_signal(signal, learning, counts)
 
         signal.aggregated = True
         counts["processed"] += 1
