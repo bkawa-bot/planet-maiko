@@ -170,7 +170,7 @@ class TestFullAgentLifecycle:
         with open(claude_md, encoding="utf-8") as f:
             content = f.read()
         assert "maiko report" in content
-        assert "maiko inbox" in content
+        assert "maiko feedback" in content
         assert "task-e2e-1" in content
 
         # ---- 9. Simulate agent communication via inbox ----
@@ -1025,7 +1025,7 @@ class TestPrepareIntegration:
         assert result is not None
         assert result["status"] == "ready"
         assert result["mode"] == "branch"
-        assert "maiko-" in result["branch"]
+        assert result["branch"].startswith("maiko/")
 
         # Verify TASK.md exists
         task_md = os.path.join(result["working_path"], "TASK.md")
@@ -1048,69 +1048,7 @@ class TestPrepareIntegration:
 
 
 # ---------------------------------------------------------------------------
-# Test 13: Brief compilation with agent-aware scoring
-# ---------------------------------------------------------------------------
-
-
-class TestBriefCompilation:
-
-    def test_brief_excludes_overridden_learnings(self, app, db):
-        """Learnings in the agent's lens.overrides list are excluded."""
-        learning1 = Learning(
-            rule="Override me", category="testing",
-            status="active", confidence=0.8, signal_count=10,
-        )
-        learning2 = Learning(
-            rule="Keep me", category="style",
-            status="active", confidence=0.8, signal_count=10,
-        )
-        db.session.add_all([learning1, learning2])
-        db.session.flush()
-
-        profile = AgentProfile(
-            id="agent-override-1", display_name="Override Bot", avatar="shiba",
-            lens={"overrides": [learning1.id]},
-        )
-        db.session.add(profile)
-        db.session.commit()
-
-        from planet_maiko.brain.learning.processor import compile_brief
-        brief = compile_brief(agent_profile_id="agent-override-1")
-
-        assert "Override me" not in brief
-        assert "Keep me" in brief
-
-    def test_brief_boosts_gap_categories(self, app, db):
-        """Learnings in gap categories are boosted in priority."""
-        gap_learning = Learning(
-            rule="Gap category rule", category="performance",
-            status="active", confidence=0.3, signal_count=2,
-        )
-        normal_learning = Learning(
-            rule="Normal category rule", category="style",
-            status="active", confidence=0.3, signal_count=2,
-        )
-        db.session.add_all([gap_learning, normal_learning])
-        db.session.flush()
-
-        profile = AgentProfile(
-            id="agent-gap-boost", display_name="Gap Bot", avatar="corgi",
-            lens={"gaps": [{"category": "performance", "repo": "", "reason": "test"}]},
-        )
-        db.session.add(profile)
-        db.session.commit()
-
-        from planet_maiko.brain.learning.processor import compile_brief
-        brief = compile_brief(
-            agent_profile_id="agent-gap-boost",
-            max_learnings=1,
-        )
-        # With only 1 slot (plus exploration), the gap-boosted rule should win
-        assert "Gap category rule" in brief
-
-
-# ---------------------------------------------------------------------------
-# Test 14: Specialization scoring in recommendations
+# Test 13: Specialization scoring in recommendations
 # ---------------------------------------------------------------------------
 
 

@@ -218,7 +218,10 @@ def test_conflict_clustering_groups_agents_sharing_files(tmp_path, app, db):
     for wt in [wt_a, wt_b, wt_c]:
         wt.mkdir()
 
-    # A and B share file1, B and C share file2, so all three are in one cluster
+    # A and B share file1, B and C share file2.
+    # detect_conflicts reports per-file pairwise conflicts — NOT transitive
+    # clustering. So we should see two conflicts: one on file1 with [A, B],
+    # another on file2 with [B, C]. A and C are not directly in conflict.
     _init_git_worktree(wt_a, ["file1.py"])
     _init_git_worktree(wt_b, ["file1.py", "file2.py"])
     _init_git_worktree(wt_c, ["file2.py"])
@@ -229,10 +232,12 @@ def test_conflict_clustering_groups_agents_sharing_files(tmp_path, app, db):
         {"task_id": "t-c", "worktree_path": str(wt_c)},
     ])
 
-    # Should find conflicts; cluster_size should reflect the connected group
-    if conflicts:
-        cluster_sizes = {c["cluster_size"] for c in conflicts}
-        assert 3 in cluster_sizes
+    # Index conflicts by file so the assertion doesn't depend on order
+    by_file = {c["file"]: set(c["agents"]) for c in conflicts}
+    assert "file1.py" in by_file
+    assert "file2.py" in by_file
+    assert by_file["file1.py"] == {"t-a", "t-b"}
+    assert by_file["file2.py"] == {"t-b", "t-c"}
 
 
 # ---------------------------------------------------------------------------

@@ -220,63 +220,6 @@ def test_compile_brief_does_not_record_selection_without_task_id(app, db):
     assert count == 0
 
 
-def test_compile_brief_deprioritizes_mastered_categories_for_agent(app, db):
-    """When an agent has mastered a category (score > 0.9), those learnings are
-    deprioritized in ranking. With limited slots, the mastered rule should be
-    excluded in favor of rules the agent is weaker on.
-
-    The brief output groups rules by category alphabetically, so we test
-    selection rather than markdown position.
-    """
-    profile = AgentProfile(
-        id="agent-mastered",
-        display_name="Mastered Bot",
-        avatar="shiba",
-        specializations={"my-repo:null_safety": 0.95},
-    )
-    db.session.add(profile)
-
-    # Create many learnings so that max_learnings actually limits selection
-    mastered_learnings = []
-    for i in range(8):
-        l = Learning(
-            rule=f"Null safety rule {i}",
-            category="null_safety",
-            scope_repo="my-repo",
-            status="active",
-            confidence=0.8,
-            signal_count=10,
-        )
-        mastered_learnings.append(l)
-
-    weak_learnings = []
-    for i in range(8):
-        l = Learning(
-            rule=f"Testing rule {i}",
-            category="testing",
-            scope_repo="my-repo",
-            status="active",
-            confidence=0.8,
-            signal_count=10,
-        )
-        weak_learnings.append(l)
-
-    db.session.add_all(mastered_learnings + weak_learnings)
-    db.session.commit()
-
-    # With max_learnings=8, should prefer testing rules over null_safety
-    brief = compile_brief(
-        repo="my-repo",
-        agent_profile_id="agent-mastered",
-        max_learnings=8,
-    )
-    # Count how many of each category made it into the brief
-    testing_count = sum(1 for i in range(8) if f"Testing rule {i}" in brief)
-    null_count = sum(1 for i in range(8) if f"Null safety rule {i}" in brief)
-    # More testing rules should be selected than null_safety rules
-    assert testing_count > null_count
-
-
 def test_compile_brief_includes_exploration_slots(app, db):
     # Create enough learnings that exploration slots are meaningful
     for i in range(10):

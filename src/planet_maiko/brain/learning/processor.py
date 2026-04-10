@@ -233,7 +233,8 @@ def export_coding_guidelines(output_path=None):
     logger.info(f"[learning] Exported {len(learnings)} guidelines to {output_path}")
 
 
-def compile_brief(repo=None, language=None, max_learnings=15, **_kwargs):
+def compile_brief(repo=None, language=None, max_learnings=15, task_id=None,
+                  agent_profile_id=None, **_kwargs):
     """Compile active learnings into a markdown brief.
 
     Simple confidence-ranked selection scoped by repo/language.
@@ -244,6 +245,10 @@ def compile_brief(repo=None, language=None, max_learnings=15, **_kwargs):
         repo: scope to learnings for this repo (plus globals)
         language: scope to learnings for this language (plus globals)
         max_learnings: maximum learnings to include
+        task_id: if provided, record a ContextSelection linking the
+                 selected learnings to this task so record_task_outcome
+                 can later attribute success/failure to the chosen context
+        agent_profile_id: which agent this brief is for (for outcome stats)
 
     Returns:
         str: markdown brief
@@ -264,6 +269,21 @@ def compile_brief(repo=None, language=None, max_learnings=15, **_kwargs):
         return "No active learnings yet."
 
     selected = scoped[:max_learnings]
+
+    # Record the selection so the outcome (success/failure) can later
+    # be attributed back to this specific context. Skipped if task_id
+    # not provided (e.g. previewing the brief in the UI).
+    if task_id:
+        from planet_maiko.models.context_selection import ContextSelection
+        record = ContextSelection(
+            task_id=task_id,
+            agent_profile_id=agent_profile_id,
+            repo=repo,
+            learning_ids=[l.id for l in selected],
+            learning_count=len(selected),
+        )
+        db.session.add(record)
+        db.session.commit()
 
     by_category = {}
     for l in selected:

@@ -1,5 +1,6 @@
 """Project driver — auto-advances projects through phases."""
 
+import copy
 import logging
 import uuid
 from planet_maiko.database import db
@@ -21,7 +22,10 @@ def drive_projects():
     completed = 0
 
     for project in projects:
-        phases = project.phases or []
+        # Deep copy so in-place dict mutations are visible to SQLAlchemy
+        # when we reassign project.phases. JSON columns don't track
+        # nested mutations — you have to replace the whole value.
+        phases = copy.deepcopy(project.phases or [])
         if not phases:
             continue
 
@@ -42,7 +46,7 @@ def drive_projects():
             if next_idx < len(phases):
                 phases[next_idx]["status"] = "active"
                 project.current_phase = next_idx
-                project.phases = list(phases)  # copy for SQLAlchemy
+                project.phases = phases  # replace wholesale so SQLAlchemy sees the change
                 project.updated_at = datetime.now(timezone.utc)
                 advanced += 1
                 _notify_phase_advanced(project, phases[next_idx], next_idx)
@@ -64,7 +68,7 @@ def drive_projects():
 
             if phase_tasks and all(t.status in ("done", "cancelled") for t in phase_tasks):
                 phases[current]["status"] = "done"
-                project.phases = list(phases)
+                project.phases = phases  # replace wholesale
                 # Will advance on next cycle
 
     if advanced or completed:
