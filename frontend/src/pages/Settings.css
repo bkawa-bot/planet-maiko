@@ -162,3 +162,61 @@
 .knowledge-rule { flex: 1; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .knowledge-conf { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); min-width: 30px; text-align: right; }
 .knowledge-btns { display: flex; gap: 3px; flex-shrink: 0; }
+
+/* === Plugins === */
+.section-count {
+  font-size: 10px; color: var(--text-muted); margin-left: auto;
+}
+
+.plugins-list { display: flex; flex-direction: column; gap: 8px; }
+
+.plugin-card {
+  background: var(--bg); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs); padding: 10px 14px;
+}
+.plugin-card.disabled { opacity: 0.5; }
+
+.plugin-card-header {
+  display: flex; align-items: center; gap: 10px;
+}
+
+.plugin-icon { color: var(--text-muted); flex-shrink: 0; }
+.plugin-icon.status-loaded { color: var(--green); }
+.plugin-icon.status-error { color: var(--urgent); }
+.plugin-icon.status-disabled { color: var(--text-muted); }
+.plugin-icon.status-pending_restart { color: var(--lemon); }
+
+.plugin-info { flex: 1; min-width: 0; }
+.plugin-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.plugin-source {
+  display: block; font-size: 10px; color: var(--text-muted);
+  font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.plugin-status-area { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+.plugin-error {
+  margin-top: 6px; padding: 6px 8px; background: var(--urgent-faint);
+  border-radius: var(--radius-xs); font-size: 11px; color: var(--urgent);
+  font-family: var(--font-mono); display: flex; align-items: center; gap: 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Toggle switch */
+.plugin-toggle {
+  position: relative; display: inline-block; width: 32px; height: 18px;
+}
+.plugin-toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; inset: 0; cursor: pointer;
+  background: var(--border); border-radius: 9px;
+  transition: background 0.2s;
+}
+.toggle-slider::before {
+  content: ""; position: absolute;
+  height: 14px; width: 14px; left: 2px; bottom: 2px;
+  background: var(--text); border-radius: 50%;
+  transition: transform 0.2s;
+}
+.plugin-toggle input:checked + .toggle-slider { background: var(--green); }
+.plugin-toggle input:checked + .toggle-slider::before { transform: translateX(14px); }

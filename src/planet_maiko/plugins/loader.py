@@ -12,12 +12,15 @@ import importlib.util
 import logging
 import os
 import sys
+import traceback
 from importlib.metadata import entry_points
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 _plugins = None
+# All discovered plugins (including disabled/errored) for the /api/plugins endpoint
+_discovered = []
 
 
 def _local_plugins_dir():
@@ -25,38 +28,81 @@ def _local_plugins_dir():
     return Path.home() / ".maiko" / "plugins"
 
 
-def _discover_from_entry_points():
+def _get_disabled_list():
+    """Return the list of disabled plugin names from config."""
+    try:
+        from planet_maiko.config import load_config
+        return load_config().get("plugins", {}).get("disabled", [])
+    except Exception:
+        return []
+
+
+def _discover_from_entry_points(disabled):
     """Discover plugins registered via pip entry_points."""
     plugins = []
+    results = []
     eps = entry_points(group="planet_maiko.plugins")
     for ep in eps:
+        info = {
+            "name": ep.name,
+            "source": "entry_point",
+            "entry_point": ep.name,
+            "file": None,
+            "status": "loaded",
+            "error": None,
+        }
+        if ep.name in disabled:
+            info["status"] = "disabled"
+            results.append(info)
+            logger.info(f"[plugins] Skipping disabled plugin: {ep.name}")
+            continue
         try:
             plugin_cls = ep.load()
             plugin = plugin_cls()
             plugin._source = "entry_point"
             plugin._entry_point = ep.name
+            info["name"] = plugin.name or ep.name
             plugins.append(plugin)
             logger.info(f"[plugins] Loaded entry_point plugin: {ep.name} ({plugin.name})")
         except Exception as e:
+            info["status"] = "error"
+            info["error"] = traceback.format_exc()
             logger.warning(f"[plugins] Failed to load entry_point '{ep.name}': {e}")
-    return plugins
+        results.append(info)
+    return plugins, results
 
 
-def _discover_from_local_dir():
+def _discover_from_local_dir(disabled):
     """Discover plugins from ~/.maiko/plugins/*.py files."""
     from planet_maiko.plugins.base import MaikoPlugin
 
     plugins = []
+    results = []
     plugins_dir = _local_plugins_dir()
 
     if not plugins_dir.is_dir():
-        return plugins
+        return plugins, results
 
     for path in sorted(plugins_dir.glob("*.py")):
         if path.name.startswith("_"):
             continue
 
         module_name = f"maiko_local_plugin_{path.stem}"
+        info = {
+            "name": path.stem,
+            "source": "local",
+            "entry_point": None,
+            "file": str(path),
+            "status": "loaded",
+            "error": None,
+        }
+
+        if path.stem in disabled:
+            info["status"] = "disabled"
+            results.append(info)
+            logger.info(f"[plugins] Skipping disabled plugin: {path.stem}")
+            continue
+
         try:
             spec = importlib.util.spec_from_file_location(module_name, path)
             module = importlib.util.module_from_spec(spec)
@@ -74,20 +120,28 @@ def _discover_from_local_dir():
                     plugin = attr()
                     plugin._source = "local"
                     plugin._file = str(path)
+                    info["name"] = plugin.name or path.stem
                     plugins.append(plugin)
                     logger.info(f"[plugins] Loaded local plugin: {path.name} ({plugin.name})")
 
         except Exception as e:
+            info["status"] = "error"
+            info["error"] = traceback.format_exc()
             logger.warning(f"[plugins] Failed to load local plugin '{path.name}': {e}")
 
-    return plugins
+        results.append(info)
+
+    return plugins, results
 
 
 def discover_plugins():
     """Find all plugins from entry_points + local directory."""
-    plugins = []
-    plugins.extend(_discover_from_entry_points())
-    plugins.extend(_discover_from_local_dir())
+    disabled = _get_disabled_list()
+    ep_plugins, ep_results = _discover_from_entry_points(disabled)
+    local_plugins, local_results = _discover_from_local_dir(disabled)
+
+    plugins = ep_plugins + local_plugins
+    all_results = ep_results + local_results
 
     # Deduplicate by name (entry_point takes precedence over local)
     seen = {}
@@ -97,7 +151,7 @@ def discover_plugins():
             continue
         seen[p.name] = p
 
-    return list(seen.values())
+    return list(seen.values()), all_results
 
 
 def load_plugins(app):
@@ -105,14 +159,13 @@ def load_plugins(app):
 
     Called once during create_app(). Also merges plugin config defaults.
     """
-    global _plugins
-    _plugins = discover_plugins()
+    global _plugins, _discovered
+    _plugins, _discovered = discover_plugins()
 
     if not _plugins:
         logger.info("[plugins] No plugins found")
-        return
-
-    logger.info(f"[plugins] Loading {len(_plugins)} plugin(s): {[p.name for p in _plugins]}")
+    else:
+        logger.info(f"[plugins] Loading {len(_plugins)} plugin(s): {[p.name for p in _plugins]}")
 
     # Merge config defaults
     from planet_maiko.config import load_config, save_config
@@ -137,22 +190,44 @@ def load_plugins(app):
             plugin.on_startup(app)
         except Exception as e:
             logger.error(f"[plugins] on_startup failed for '{plugin.name}': {e}")
+            # Update discovered status to reflect startup failure
+            for d in _discovered:
+                if d["name"] == plugin.name:
+                    d["error"] = str(e)
 
-    # Register /api/plugins endpoint
-    from flask import jsonify
+    # Register plugin API endpoints
+    from flask import Blueprint, jsonify, request as flask_request
 
-    @app.route("/api/plugins", methods=["GET"])
-    def list_plugins():
-        return jsonify([
-            {
-                "name": p.name,
-                "source": getattr(p, "_source", "unknown"),
-                "file": getattr(p, "_file", None),
-                "entry_point": getattr(p, "_entry_point", None),
-                "status": "loaded",
-            }
-            for p in _plugins
-        ])
+    plugins_bp = Blueprint("plugins", __name__)
+
+    @plugins_bp.route("/plugins", methods=["GET"])
+    def list_all_plugins():
+        return jsonify(_discovered)
+
+    @plugins_bp.route("/plugins/<name>/toggle", methods=["POST"])
+    def toggle_plugin(name):
+        """Enable or disable a plugin. Requires server restart to take effect."""
+        config = load_config()
+        disabled = config.get("plugins", {}).get("disabled", [])
+
+        if name in disabled:
+            disabled.remove(name)
+            action = "enabled"
+        else:
+            disabled.append(name)
+            action = "disabled"
+
+        config.setdefault("plugins", {})["disabled"] = disabled
+        save_config(config)
+
+        # Update the in-memory discovered list so the UI reflects the change
+        for d in _discovered:
+            if d["name"] == name:
+                d["status"] = "disabled" if action == "disabled" else "pending_restart"
+
+        return jsonify({"status": action, "name": name, "restart_required": True})
+
+    app.register_blueprint(plugins_bp, url_prefix="/api")
 
 
 def get_plugins():

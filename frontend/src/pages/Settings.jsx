@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
-import { ChevronDown, ChevronRight, MapPin, Search, Loader, FolderGit2 } from "lucide-react";
+import { ChevronDown, ChevronRight, MapPin, Search, Loader, FolderGit2, Plug, AlertTriangle } from "lucide-react";
 import "./Settings.css";
 
 export default function Settings() {
@@ -10,21 +10,24 @@ export default function Settings() {
   const [pollerStatus, setPollerStatus] = useState({});
   const [message, setMessage] = useState("");
 
-  const [openSections, setOpenSections] = useState({ integrations: false, agents: false, routing: false, scene: true });
+  const [openSections, setOpenSections] = useState({ integrations: false, agents: false, routing: false, scene: true, plugins: false });
   const toggleSection = (key) => setOpenSections(s => ({ ...s, [key]: !s[key] }));
 
   const [locationQuery, setLocationQuery] = useState("");
   const [locationResolved, setLocationResolved] = useState("");
   const [lookingUp, setLookingUp] = useState(false);
   const [discovering, setDiscovering] = useState(false);
+  const [plugins, setPlugins] = useState([]);
 
   useEffect(() => {
     Promise.all([
       api.getConfig(),
       api.getPollerStatus(),
-    ]).then(([cfg, status]) => {
+      api.getPlugins().catch(() => []),
+    ]).then(([cfg, status, pluginList]) => {
       setConfig(cfg);
       setPollerStatus(status);
+      setPlugins(pluginList);
       // Restore resolved location display from config
       if (cfg?.scene?.location_name && cfg?.scene?.latitude && cfg?.scene?.longitude) {
         setLocationResolved(
@@ -516,6 +519,70 @@ export default function Settings() {
                 <div className="location-resolved">{locationResolved}</div>
               )}
             </div>
+          </div>
+        )}
+      </section>
+
+      {/* Plugins */}
+      <section className="settings-collapsible">
+        <div className="collapsible-header" onClick={() => toggleSection("plugins")}>
+          {openSections.plugins ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <span>Plugins</span>
+          {plugins.length > 0 && <span className="section-count">{plugins.length}</span>}
+        </div>
+        {openSections.plugins && (
+          <div className="collapsible-body">
+            {plugins.length === 0 ? (
+              <p className="integration-note">
+                No plugins detected. Drop <code>.py</code> files into <code>~/.maiko/plugins/</code> or install a pip package
+                with the <code>planet_maiko.plugins</code> entry point.
+              </p>
+            ) : (
+              <div className="plugins-list">
+                {plugins.map((p) => (
+                  <div key={p.name} className={`plugin-card ${p.status}`}>
+                    <div className="plugin-card-header">
+                      <Plug size={14} className={`plugin-icon status-${p.status}`} />
+                      <div className="plugin-info">
+                        <span className="plugin-name">{p.name}</span>
+                        <span className="plugin-source">
+                          {p.source === "local" ? p.file : `entry_point: ${p.entry_point}`}
+                        </span>
+                      </div>
+                      <div className="plugin-status-area">
+                        <span className={`badge ${p.status === "loaded" ? "active" : p.status === "disabled" ? "cancelled" : p.status === "pending_restart" ? "in_progress" : "urgent"}`}>
+                          {p.status === "pending_restart" ? "restart needed" : p.status}
+                        </span>
+                        <label className="plugin-toggle">
+                          <input
+                            type="checkbox"
+                            checked={p.status !== "disabled"}
+                            onChange={async () => {
+                              try {
+                                const result = await api.togglePlugin(p.name);
+                                setMessage(`Plugin "${p.name}" ${result.status}. Restart the server to apply.`);
+                                setTimeout(() => setMessage(""), 8000);
+                                // Refresh plugin list
+                                const updated = await api.getPlugins();
+                                setPlugins(updated);
+                              } catch (err) {
+                                setMessage("Failed to toggle plugin: " + err.message);
+                              }
+                            }}
+                          />
+                          <span className="toggle-slider" />
+                        </label>
+                      </div>
+                    </div>
+                    {p.status === "error" && p.error && (
+                      <div className="plugin-error">
+                        <AlertTriangle size={10} /> {p.error.split("\n").pop() || p.error}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </section>

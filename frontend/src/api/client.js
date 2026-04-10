@@ -172,6 +172,10 @@ export const api = {
   dismissLearning: (id) => request(`/learnings/${id}/dismiss`, { method: "POST" }),
   classifyLearnings: (batchSize = 50) => request("/learnings/classify", { method: "POST", body: JSON.stringify({ batch_size: batchSize }) }),
 
+  // Plugins
+  getPlugins: () => request("/plugins"),
+  togglePlugin: (name) => request(`/plugins/${name}/toggle`, { method: "POST" }),
+
   // System
   shutdown: () => request("/system/shutdown", { method: "POST" }),
 
