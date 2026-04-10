@@ -28,7 +28,7 @@ def seed_data(app):
     """Populate the DB with realistic test data. Idempotent."""
     with app.app_context():
         # Guard: skip if already seeded
-        if AgentProfile.query.get("agent-mochi"):
+        if db.session.get(AgentProfile, "agent-mochi"):
             logger.info("Seed data already present (agent-mochi exists). Skipping.")
             return
 

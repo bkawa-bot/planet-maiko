@@ -66,8 +66,9 @@ def get_skill_prompt(skill_name, context):
 
     # 1. Try database (only if user has edited it)
     try:
+        from planet_maiko.database import db
         from planet_maiko.models.custom_skill import CustomSkill
-        skill = CustomSkill.query.get(skill_name)
+        skill = db.session.get(CustomSkill, skill_name)
         if skill and skill.user_edited:
             template = skill.prompt
     except Exception as e:
