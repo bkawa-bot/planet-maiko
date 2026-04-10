@@ -217,7 +217,7 @@ def resume_session():
 
     data = request.get_json()
     task_id = data.get("task_id", "")
-    session_info = _agent_sessions.get(task_id)
+    session_info = _get_sessions().get(task_id)
 
     if not session_info:
         return jsonify({"error": "No session found. Launch the agent first."}), 404
@@ -331,7 +331,7 @@ def open_terminal():
         # Generate a session ID upfront so we can resume later
         session_id = str(uuid.uuid4())
         if task_id:
-            _agent_sessions[task_id] = {"session_id": session_id, "working_path": path}
+            _set_session(task_id, session_id, path)
 
         attach_cmd = f'{checkout}cd {path} && claude --session-id {session_id} {tools_flags} "{initial_prompt}"'
 
@@ -347,7 +347,7 @@ def open_terminal():
                     break
                 except FileNotFoundError:
                     continue
-        info = _agent_sessions.get(task_id, {})
+        info = _get_sessions().get(task_id, {})
         return jsonify({"status": "opened", "path": path, "tmux_attached": has_tmux_session, "session_id": info.get("session_id") if isinstance(info, dict) else info})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -575,8 +575,53 @@ def get_all_messages(task_id):
     return jsonify([m.to_dict() for m in messages])
 
 
-# In-memory session store (task_id -> {session_id, working_path})
-_agent_sessions = {}
+# ---------------------------------------------------------------------------
+# Persistent session store: task_id -> {session_id, working_path}
+#
+# Backed by a JSON file in the Maiko data dir so mappings survive server
+# restarts. Lazy-loaded on first read, flushed on every write.
+# ---------------------------------------------------------------------------
+
+_agent_sessions = None  # loaded lazily by _get_sessions()
+_SESSIONS_FILENAME = "agent-sessions.json"
+
+
+def _sessions_path():
+    from planet_maiko.paths import data_dir
+    return os.path.join(data_dir(), _SESSIONS_FILENAME)
+
+
+def _get_sessions():
+    """Return the sessions dict, loading from disk on first access."""
+    global _agent_sessions
+    if _agent_sessions is None:
+        path = _sessions_path()
+        if os.path.exists(path):
+            try:
+                import json as _json
+                with open(path, "r", encoding="utf-8") as f:
+                    _agent_sessions = _json.load(f)
+            except Exception:
+                _agent_sessions = {}
+        else:
+            _agent_sessions = {}
+    return _agent_sessions
+
+
+def _save_sessions():
+    """Flush the sessions dict to disk."""
+    import json as _json
+    path = _sessions_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        _json.dump(_agent_sessions, f, indent=2)
+
+
+def _set_session(task_id, session_id, working_path=""):
+    """Store a session mapping and persist to disk."""
+    sessions = _get_sessions()
+    sessions[task_id] = {"session_id": session_id, "working_path": working_path}
+    _save_sessions()
 
 
 @agents_bp.route("/agents/<task_id>/session", methods=["POST"])
@@ -585,17 +630,14 @@ def register_session(task_id):
     data = request.get_json()
     session_id = data.get("session_id")
     if session_id:
-        _agent_sessions[task_id] = {
-            "session_id": session_id,
-            "working_path": data.get("working_path", ""),
-        }
+        _set_session(task_id, session_id, data.get("working_path", ""))
     return jsonify({"status": "ok"})
 
 
 @agents_bp.route("/agents/<task_id>/session", methods=["GET"])
 def get_session(task_id):
     """Get the Claude Code session ID for an agent task."""
-    info = _agent_sessions.get(task_id, {})
+    info = _get_sessions().get(task_id, {})
     return jsonify({"session_id": info.get("session_id") if isinstance(info, dict) else info})
 
 
