@@ -1,0 +1,67 @@
+/**
+ * Date formatting helpers. Centralizes the inconsistent toLocale* calls
+ * scattered across pages so changing the format (or adding i18n later)
+ * happens in one spot.
+ *
+ * Each helper accepts an ISO string, Date, or null/undefined and returns
+ * an empty string for missing values rather than throwing.
+ */
+
+function _toDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  return new Date(value);
+}
+
+/**
+ * Time of day, no date. Used for "last seen at 14:23".
+ * Default rendering: 2:23 PM (locale-dependent).
+ */
+export function formatTime(value) {
+  const d = _toDate(value);
+  return d ? d.toLocaleTimeString() : "";
+}
+
+/**
+ * Short clock face: 14:23. Used for calendar event start times where
+ * we want the compact 24h-ish form.
+ */
+export function formatClock(value) {
+  const d = _toDate(value);
+  return d ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+}
+
+/**
+ * Date only: "4/9/2026". Used for "updated 5d ago" style chips and
+ * inbox/idea timestamps where the time-of-day is noise.
+ */
+export function formatDate(value) {
+  const d = _toDate(value);
+  return d ? d.toLocaleDateString() : "";
+}
+
+/**
+ * Full date + time: "4/9/2026, 2:23 PM". Used in pupdate card meta where
+ * both pieces matter.
+ */
+export function formatDateTime(value) {
+  const d = _toDate(value);
+  return d ? d.toLocaleString() : "";
+}
+
+/**
+ * Relative time: "just now", "5m ago", "3h ago", "2d ago".
+ * Past-only — doesn't render future times sensibly.
+ */
+export function relativeTime(value) {
+  const d = _toDate(value);
+  if (!d) return "";
+  const diff = Date.now() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}

@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import PupdateCard from "../components/PupdateCard";
 import { renderMarkdown } from "../utils/markdown";
+import { formatTime } from "../utils/dates";
 import { ExternalLink, X, Inbox as InboxIcon, ClipboardCheck, CheckSquare, MoreHorizontal, MessageCircle, Pencil, GitBranch, Calendar as CalendarIcon, Bot, Lightbulb, AlertTriangle, MessageSquare, Brain, Play, Loader, RefreshCw, FileText, Folder } from "lucide-react";
 import "./Inbox.css";
 import "./Brainstorm.css";
@@ -329,7 +330,7 @@ export default function Inbox() {
           <div className="widget-header"><span className="sidebar-brain-dot" /> Brain</div>
           <div className="widget-detail">
             <span>Cycles: {brainStatus?.cycle_count || 0}</span>
-            <span>Last: {brainStatus?.last_cycle ? new Date(brainStatus.last_cycle).toLocaleTimeString() : "Never"}</span>
+            <span>Last: {brainStatus?.last_cycle ? formatTime(brainStatus.last_cycle) : "Never"}</span>
           </div>
         </div>
       </div>

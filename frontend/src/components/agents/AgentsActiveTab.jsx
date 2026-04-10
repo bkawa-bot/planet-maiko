@@ -6,6 +6,7 @@ import {
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
 import LeaderboardWidget from "../LeaderboardWidget";
+import { formatTime } from "../../utils/dates";
 
 /**
  * Active tab — pack awareness, ready-to-launch agents, live activity, and
@@ -114,7 +115,7 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
                 <div className="speech-bubble">
                   Ready to launch
                   <div className="speech-time">
-                    {a.prepared_at ? new Date(a.prepared_at).toLocaleTimeString() : ""}
+                    {formatTime(a.prepared_at)}
                   </div>
                 </div>
                 <div className="agent-card-body">
@@ -161,7 +162,7 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
                 <div className={`speech-bubble status-${a.status}`}>
                   {a.last_message || "No recent messages"}
                   <div className="speech-time">
-                    {a.last_seen ? new Date(a.last_seen).toLocaleTimeString() : ""}
+                    {formatTime(a.last_seen)}
                   </div>
                 </div>
                 <div className="agent-card-body">
@@ -207,7 +208,7 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
                     <div className="thread-msg-header">
                       <span className="thread-msg-sender">{m.sender}</span>
                       <span className="badge">{m.message_type}</span>
-                      <span className="thread-msg-time">{new Date(m.created_at).toLocaleTimeString()}</span>
+                      <span className="thread-msg-time">{formatTime(m.created_at)}</span>
                     </div>
                     <div className="thread-msg-content">{m.content}</div>
                   </div>

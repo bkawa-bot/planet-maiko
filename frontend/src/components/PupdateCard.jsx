@@ -3,6 +3,7 @@ import {
 } from "lucide-react";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
+import { formatDateTime } from "../utils/dates";
 
 /**
  * A single pupdate card. Used by Inbox.jsx for both the "from_maiko" and
@@ -81,7 +82,7 @@ export default function PupdateCard({
         </div>
         <div className="card-meta">
           <span className="card-type">{p.type?.replace(/_/g, " ")}</span>
-          <span className="card-time">{new Date(p.timestamp).toLocaleString()}</span>
+          <span className="card-time">{formatDateTime(p.timestamp)}</span>
           {p.actionable && (
             <button
               className="card-action-hint"

@@ -5,6 +5,7 @@ import { showToast } from "../components/Toast";
 import SetupWizard from "../components/SetupWizard";
 import WeatherOverlay from "../components/WeatherOverlay";
 import { renderMarkdown } from "../utils/markdown";
+import { formatTime, formatClock, relativeTime } from "../utils/dates";
 import {
   CheckSquare, Inbox as InboxIcon, Brain, Calendar,
   AlertCircle, Palette, Video, Sunrise, Clock,
@@ -31,18 +32,6 @@ const MOON_EMOJI = {
   waxing_gibbous: "🌔", full: "🌕", waning_gibbous: "🌖",
   last_quarter: "🌗", waning_crescent: "🌘",
 };
-
-function relativeTime(timestamp) {
-  const now = Date.now();
-  const diff = now - new Date(timestamp).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
-}
 
 function weatherEmoji(w) {
   if (w === "clear") return "☀️";
@@ -285,7 +274,7 @@ export default function Home() {
                 {calendarEvents.map((e) => (
                   <div key={e.id} className="calendar-event">
                     <span className="calendar-time">
-                      {e.metadata?.start ? new Date(e.metadata.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
+                      {formatClock(e.metadata?.start)}
                     </span>
                     <span className="calendar-title">{e.title}</span>
                     {e.url && (
@@ -367,7 +356,7 @@ export default function Home() {
             <div className="widget-header"><Brain size={12} /> Brain</div>
             <div className="widget-detail">
               <span>Cycles: {brainStatus?.cycle_count || 0}</span>
-              <span>Last: {brainStatus?.last_cycle ? new Date(brainStatus.last_cycle).toLocaleTimeString() : "Never"}</span>
+              <span>Last: {brainStatus?.last_cycle ? formatTime(brainStatus.last_cycle) : "Never"}</span>
             </div>
           </div>
         </div>

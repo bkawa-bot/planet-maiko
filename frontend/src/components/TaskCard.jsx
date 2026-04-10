@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
+import { formatDate } from "../utils/dates";
 
 const STATUS_COLORS = {
   new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
@@ -122,7 +123,7 @@ export default function TaskCard({
           )}
           {t.due_date && <span className="card-time"><Clock size={9} /> {t.due_date}</span>}
           {!t.due_date && t.updated_at && (
-            <span className="card-time"><Clock size={9} /> {new Date(t.updated_at).toLocaleDateString()}</span>
+            <span className="card-time"><Clock size={9} /> {formatDate(t.updated_at)}</span>
           )}
           {t.assigned_agent_id && (
             <span className="tag agent-assigned-chip">
