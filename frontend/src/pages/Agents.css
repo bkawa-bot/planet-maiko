@@ -320,5 +320,19 @@
 .count-text { font-size: 11px; color: var(--text-muted); }
 
 .synthesis-report { margin-bottom: 8px; }
+.synthesis-report-pink { border-left: 3px solid var(--pink); }
 .synthesis-header { font-size: 13px; font-weight: 600; color: var(--pink); margin-bottom: 6px; }
 .synthesis-bullets { margin: 0; padding-left: 16px; font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+
+.proposed-rule-card { border-left: 3px solid var(--blue); margin-top: 8px; }
+.proposed-rule-text { margin-top: 4px; font-size: 12px; color: var(--text); }
+
+.panel-footer-spaced { margin-top: 12px; }
+.finalize-check-icon { color: var(--green); }
+
+/* Misc utility classes used by the agents tabs */
+.strategy-stat.clickable { cursor: pointer; color: var(--pink); }
+.modal-close-btn { border: none; padding: 4px; }
+.thread-empty { margin-top: 20px; }
+.new-agent-btn { margin-left: auto; }
+.context-set-rule { white-space: normal; }
