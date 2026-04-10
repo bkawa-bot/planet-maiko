@@ -25,10 +25,10 @@ _CACHE_TTL_SECONDS = 60 * 60  # 1 hour
 # WMO weather code -> our weather type
 # https://open-meteo.com/en/docs  (WMO Weather interpretation codes)
 _WMO_MAP = {
-    0: "clear",
-    1: "clear",
-    2: "cloudy",
-    3: "cloudy",
+    0: "clear",     # clear sky
+    1: "clear",     # mainly clear
+    2: "cloudy",    # partly cloudy
+    3: "cloudy",    # overcast
     45: "fog",
     48: "fog",
     51: "rain",
@@ -73,7 +73,7 @@ def _fetch_weather(lat, lon):
         url = (
             f"https://api.open-meteo.com/v1/forecast"
             f"?latitude={lat}&longitude={lon}"
-            f"&current=temperature_2m,weather_code"
+            f"&current=temperature_2m,weather_code,precipitation"
         )
         req = urllib.request.Request(url, headers={"User-Agent": "PlanetMaiko/2.0"})
         with urllib.request.urlopen(req, timeout=5) as resp:
@@ -82,13 +82,21 @@ def _fetch_weather(lat, lon):
         current = payload.get("current", {})
         weather_code = current.get("weather_code", 0)
         temp_c = current.get("temperature_2m", 21.1)  # default ~70F
+        precipitation_mm = current.get("precipitation", 0)
 
         weather_type = _WMO_MAP.get(weather_code, "clear")
+
+        # Open-Meteo sometimes returns overcast codes (1-3) during light
+        # rain/drizzle. If precipitation > 0 but the code only says
+        # cloudy, override to rain so the scene and overlays match reality.
+        if precipitation_mm and precipitation_mm > 0 and weather_type in ("clear", "cloudy"):
+            weather_type = "rain"
+
         temperature_f = round(temp_c * 9 / 5 + 32)
 
         data = {"weather": weather_type, "temperature_f": temperature_f}
         _weather_cache[cache_key] = {"data": data, "fetched_at": time.time()}
-        logger.info("Fetched weather from Open-Meteo: %s", data)
+        logger.info("Fetched weather from Open-Meteo: code=%s precip=%.1fmm -> %s", weather_code, precipitation_mm, weather_type)
         return data
 
     except Exception as e:
