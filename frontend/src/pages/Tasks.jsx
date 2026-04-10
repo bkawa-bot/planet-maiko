@@ -2,18 +2,14 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import AssignAgentModal from "../components/AssignAgentModal";
+import TaskCard from "../components/TaskCard";
 import {
-  CheckSquare, Square, Plus, FolderPlus, FolderOpen, Pin, PinOff, ExternalLink,
-  ChevronDown, ChevronRight, Folder, GitBranch, Clock, Bot, Eye,
-  Play, X, Download, Sparkles, Trash2, Pencil, Brain, Circle,
+  CheckSquare, Plus, FolderPlus, FolderOpen, ExternalLink,
+  ChevronDown, ChevronRight, Folder,
+  Play, X, Download, Sparkles, Trash2, Pencil, Brain,
 } from "lucide-react";
 import "./Tasks.css";
 import "./Inbox.css";
-
-const STATUS_COLORS = {
-  new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
-  review: "#a78bfa", done: "#4ade80", cancelled: "#6b7280",
-};
 
 export default function Tasks() {
   const [tasks, setTasks] = useState([]);
@@ -300,7 +296,22 @@ export default function Tasks() {
                   )}
                 </div>
                 {!collapsed && (pts.length > 0
-                  ? pts.map((t) => renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask, setEditingTask, setEditForm, setAskingMaiko, agentNames, setDetailTask))
+                  ? pts.map((t) => (
+                      <TaskCard
+                        key={t.id}
+                        task={t}
+                        isExpanded={expanded === t.id}
+                        onToggleExpand={() => setExpanded(expanded === t.id ? null : t.id)}
+                        onAction={handleAction}
+                        onAssignAgent={setAssigningTask}
+                        onEdit={(task, form) => { setEditForm(form); setEditingTask(task); }}
+                        onAskMaiko={setAskingMaiko}
+                        onShowDetail={setDetailTask}
+                        onRefresh={fetchData}
+                        projects={projects}
+                        agentNames={agentNames}
+                      />
+                    ))
                   : <div className="project-empty">No tasks yet. Create one and assign it to this project.</div>
                 )}
               </div>
@@ -308,9 +319,22 @@ export default function Tasks() {
           })}
 
           {/* Ungrouped tasks */}
-          {ungrouped.filter((t) => t.status !== "done" && t.status !== "cancelled").map((t) =>
-            renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask, setEditingTask, setEditForm, setAskingMaiko, agentNames, setDetailTask)
-          )}
+          {ungrouped.filter((t) => t.status !== "done" && t.status !== "cancelled").map((t) => (
+            <TaskCard
+              key={t.id}
+              task={t}
+              isExpanded={expanded === t.id}
+              onToggleExpand={() => setExpanded(expanded === t.id ? null : t.id)}
+              onAction={handleAction}
+              onAssignAgent={setAssigningTask}
+              onEdit={(task, form) => { setEditForm(form); setEditingTask(task); }}
+              onAskMaiko={setAskingMaiko}
+              onShowDetail={setDetailTask}
+              onRefresh={fetchData}
+              projects={projects}
+              agentNames={agentNames}
+            />
+          ))}
 
         </>
       )}
@@ -599,153 +623,6 @@ export default function Tasks() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function renderTaskCard(t, expanded, setExpanded, handleAction, projects, fetchData, setAssigningTask, setEditingTask, setEditForm, setAskingMaiko, agentNames, setDetailTask) {
-  const isExpanded = expanded === t.id;
-  const statusColor = {
-    new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
-    review: "#a78bfa", done: "#4ade80", cancelled: "#6b7280",
-  }[t.status] || "var(--text-muted)";
-
-  const statusIcon = {
-    new: Circle, in_progress: Square, waiting: Clock,
-    review: Eye, done: CheckSquare, cancelled: X,
-  }[t.status] || Circle;
-  const StatusIconComp = statusIcon;
-
-  const priorityClass = t.priority || "normal";
-
-  return (
-    <div
-      key={t.id}
-      className={`card pupdate-card ${priorityClass} ${t.status === "done" || t.status === "cancelled" ? "read" : ""} ${isExpanded ? "expanded" : ""}`}
-      onClick={() => setExpanded(isExpanded ? null : t.id)}
-    >
-      <div className="card-left-bar" style={{ background: statusColor }} />
-      <div className="card-source-icon" onClick={(e) => {
-        e.stopPropagation();
-        if (t.status === "new") handleAction(e, t.id, "start");
-        else if (t.status === "in_progress") handleAction(e, t.id, "done");
-      }} style={{ cursor: t.status === "new" || t.status === "in_progress" ? "pointer" : "default" }}
-        title={t.status === "new" ? "Click to start" : t.status === "in_progress" ? "Click to mark done" : t.status.replace("_", " ")}
-      >
-        <StatusIconComp size={14} />
-      </div>
-      <div className="card-content">
-        <div className="card-top">
-          <span className="card-source" style={{ color: statusColor }}>{t.status.replace("_", " ")}</span>
-          <span className="card-title">
-            {t.url ? <a href={t.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{t.title}</a> : t.title}
-          </span>
-        </div>
-        <div className="card-meta">
-          <span className="card-type">{t.type}</span>
-          {t.project_id && <span className="tag tag-project">{t.project_id}</span>}
-          {(t.metadata?.repo || t.extra?.repo) && <span className="tag"><GitBranch size={9} /> {t.metadata?.repo || t.extra?.repo}</span>}
-          {t.due_date && <span className="card-time"><Clock size={9} /> {t.due_date}</span>}
-          {!t.due_date && t.updated_at && <span className="card-time"><Clock size={9} /> {new Date(t.updated_at).toLocaleDateString()}</span>}
-          {t.assigned_agent_id && <span className="tag agent-assigned-chip"><Bot size={9} /> {agentNames[t.assigned_agent_id] || t.assigned_agent_id.replace("agent-", "")}</span>}
-        </div>
-
-        {isExpanded && (
-          <>
-            {t.tags?.length > 0 && (
-              <div className="task-detail">
-                {t.tags.map((tag) => <span key={tag} className="tag">{tag}</span>)}
-              </div>
-            )}
-            <div className="task-inline-actions" onClick={(e) => e.stopPropagation()}>
-              <input
-                type="date"
-                className="task-due-input"
-                value={t.due_date || ""}
-                onChange={async (e) => {
-                  await api.updateTask(t.id, { due_date: e.target.value || null });
-                  showToast(e.target.value ? `Due: ${e.target.value}` : "Due date cleared", "normal");
-                  fetchData();
-                }}
-                title="Set due date"
-              />
-              <select
-                className="task-project-select"
-                value={t.project_id || ""}
-                onChange={async (e) => {
-                  await api.updateTask(t.id, { project_id: e.target.value || null });
-                  showToast(e.target.value ? "Moved to project" : "Removed from project", "normal");
-                  fetchData();
-                }}
-              >
-                <option value="">No project</option>
-                {(projects || []).map((p) => (
-                  <option key={p.id} value={p.id}>{p.title}</option>
-                ))}
-              </select>
-              {t.url && (
-                <a href={t.url} target="_blank" rel="noreferrer" className="btn btn-sm" onClick={(e) => e.stopPropagation()}>
-                  <ExternalLink size={10} /> Open
-                </a>
-              )}
-              <button className="btn btn-sm btn-action" onClick={() => {
-                setEditForm({
-                  title: t.title || "",
-                  description: t.extra?.description || t.metadata?.description || "",
-                  type: t.type || "todo",
-                  priority: t.priority || "normal",
-                  status: t.status || "new",
-                  project_id: t.project_id || "",
-                  url: t.url || "",
-                  due_date: t.due_date || "",
-                });
-                setEditingTask(t);
-              }}>
-                <Pencil size={10} /> Edit
-              </button>
-              {(t.type === "review" || t.type === "pr_review") && t.url && (
-                <a href={t.url} target="_blank" rel="noreferrer" className="btn btn-sm btn-action" onClick={(e) => e.stopPropagation()}>
-                  <Eye size={10} /> Review PR
-                </a>
-              )}
-              {(t.extra?.description || t.metadata?.description || t.body) && (
-                <button className="btn btn-sm btn-action" onClick={() => setDetailTask(t)}>
-                  <FolderOpen size={10} /> Details
-                </button>
-              )}
-              <button className="btn btn-sm btn-action" onClick={() => setAskingMaiko(t)}>
-                <Brain size={10} /> Ask Maiko
-              </button>
-              {t.status !== "done" && t.status !== "cancelled" && !t.assigned_agent_id && (
-                <button className="btn btn-sm btn-action" onClick={() => setAssigningTask(t)}>
-                  <Bot size={10} /> Assign Agent
-                </button>
-              )}
-              {t.status !== "done" && t.status !== "cancelled" && (
-                <button className="btn btn-sm btn-danger" onClick={(e) => handleAction(e, t.id, "cancel")}>
-                  <X size={10} /> Cancel
-                </button>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-      <div className="card-right" onClick={(e) => e.stopPropagation()}>
-        <button
-          className={`btn-ghost btn-pin ${(t.extra?.pinned || t.metadata?.pinned) ? "pinned" : ""}`}
-          onClick={async () => {
-            const extra = { ...(t.extra || t.metadata || {}), pinned: !(t.extra?.pinned || t.metadata?.pinned) };
-            await api.updateTask(t.id, { extra });
-            showToast(extra.pinned ? "Pinned to focus" : "Unpinned", "normal");
-            fetchData();
-          }}
-          title={t.extra?.pinned || t.metadata?.pinned ? "Unpin from focus" : "Pin to focus"}
-        >
-          {(t.extra?.pinned || t.metadata?.pinned) ? <PinOff size={12} /> : <Pin size={12} />}
-        </button>
-        <span className={`card-priority badge ${priorityClass}`}>{t.priority}</span>
-        <ChevronRight size={14} className={`card-chevron ${isExpanded ? "open" : ""}`} />
-      </div>
     </div>
   );
 }

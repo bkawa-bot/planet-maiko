@@ -9,7 +9,6 @@ import {
 import LeaderboardWidget from "../components/LeaderboardWidget";
 import InfoButton from "../components/InfoButton";
 import "./Agents.css";
-import "./Gathering.css";
 
 
 const RANK_LABELS = { pup: "🌱 Pup", junior: "⭐ Junior", senior: "🌟 Senior", expert: "👑 Expert" };

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
-import { ExternalLink, X, Eye, Search, Inbox as InboxIcon, ClipboardCheck, FolderKanban, CheckSquare, MoreHorizontal, MessageCircle, Pencil, GitBranch, Calendar as CalendarIcon, Bot, Lightbulb, AlertTriangle, MessageSquare, ChevronRight, Brain, Play, Loader, RefreshCw, FileText, Folder } from "lucide-react";
+import PupdateCard from "../components/PupdateCard";
+import { ExternalLink, X, Inbox as InboxIcon, ClipboardCheck, CheckSquare, MoreHorizontal, MessageCircle, Pencil, GitBranch, Calendar as CalendarIcon, Bot, Lightbulb, AlertTriangle, MessageSquare, Brain, Play, Loader, RefreshCw, FileText, Folder } from "lucide-react";
 import "./Inbox.css";
 import "./Brainstorm.css";
 import "./Suggestions.css";
@@ -246,92 +247,18 @@ export default function Inbox() {
           ) : (
             <div className="card-list card-list-container">
               {filtered.map((p) => (
-                <div
+                <PupdateCard
                   key={p.id}
-                  className={`card pupdate-card ${p.priority} ${p.read ? "read" : ""} ${expanded === p.id ? "expanded" : ""}`}
-                  onClick={() => toggleExpand(p)}
-                >
-                  <div className="card-left-bar" />
-                  <div className="card-source-icon">
-                    {sourceIcon(p.source)}
-                  </div>
-                  <div className="card-content">
-                    <div className="card-top">
-                      <span className="card-source">{p.source}</span>
-                      <span className="card-title">
-                        {p.url ? <a href={p.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{p.title}</a> : p.title}
-                      </span>
-                    </div>
-                    <div className="card-meta">
-                      <span className="card-type">{p.type?.replace(/_/g, " ")}</span>
-                      <span className="card-time">{new Date(p.timestamp).toLocaleString()}</span>
-                      {p.actionable && <button className="card-action-hint" onClick={(e) => { e.stopPropagation(); toggleExpand(p); }}>{p.action_hint}</button>}
-                    </div>
-
-                    {expanded === p.id && p.body && (
-                      <div className="rich-body">{p.body}</div>
-                    )}
-
-                    {expanded === p.id && (
-                      <div className="card-inline-actions" onClick={(e) => e.stopPropagation()}>
-                        {p.type === "pr_review_requested" && (
-                          <button className="btn btn-sm btn-action" onClick={() => handleReviewPR(p)} disabled={reviewing === p.id}>
-                            <Eye size={10} /> {reviewing === p.id ? "Reviewing..." : "Review PR"}
-                          </button>
-                        )}
-                        {(p.type === "pr_ci_failed" || p.type === "incident") && (
-                          <button className="btn btn-sm btn-session"><Search size={10} /> Investigate</button>
-                        )}
-                        {p.type !== "suggestion" && (
-                          <button className="btn btn-sm btn-create" onClick={async () => {
-                            try {
-                              await api.createTask({
-                                id: `task-${p.id}`,
-                                title: p.title,
-                                type: "todo",
-                                priority: p.priority,
-                                source_pupdate_id: p.id,
-                                url: p.url || "",
-                                tags: p.tags || [],
-                              });
-                              showToast(`Task created: ${p.title.slice(0, 40)}...`, "normal");
-                              handleMarkRead(p.id);
-                            } catch (err) {
-                              showToast("Couldn't create task", "high");
-                            }
-                          }}><CheckSquare size={10} /> Create Task</button>
-                        )}
-                        <button className="btn btn-sm btn-approve" onClick={async () => {
-                          try {
-                            await api.createProject({
-                              id: `proj-${p.id}`,
-                              title: p.title,
-                              description: p.body || "",
-                              priority: p.priority || "normal",
-                            });
-                            showToast(`Project created: ${p.title.slice(0, 40)}...`, "normal");
-                            handleMarkRead(p.id);
-                          } catch (err) {
-                            showToast("Couldn't create project", "high");
-                          }
-                        }}><FolderKanban size={10} /> Create Project</button>
-                        <button className="btn btn-sm btn-danger" onClick={(e) => handleDismiss(e, p.id)}>
-                          <X size={10} /> Dismiss
-                        </button>
-                        {p.tags?.length > 0 && (
-                          <div className="card-tags-inline">
-                            {p.tags.map((t) => <span key={t} className="tag">{t}</span>)}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div className="card-right">
-                    <button className="btn-ghost btn-dismiss-quick" onClick={(e) => handleDismiss(e, p.id)} title="Dismiss"><X size={12} /></button>
-                    <span className={`card-priority badge ${p.priority}`}>{p.priority}</span>
-                    <ChevronRight size={14} className={`card-chevron ${expanded === p.id ? "open" : ""}`} />
-                  </div>
-                </div>
+                  pupdate={p}
+                  isExpanded={expanded === p.id}
+                  onToggleExpand={() => toggleExpand(p)}
+                  onMarkRead={handleMarkRead}
+                  onDismiss={handleDismiss}
+                  onReviewPR={handleReviewPR}
+                  reviewing={reviewing}
+                  sourceIcon={sourceIcon}
+                  showQuickDismiss={true}
+                />
               ))}
             </div>
           )}
@@ -347,94 +274,17 @@ export default function Inbox() {
       ) : (
         <div className="card-list card-list-container">
           {filtered.map((p) => (
-            <div
+            <PupdateCard
               key={p.id}
-              className={`card pupdate-card ${p.priority} ${p.read ? "read" : ""} ${expanded === p.id ? "expanded" : ""}`}
-              onClick={() => toggleExpand(p)}
-            >
-              <div className="card-left-bar" />
-              <div className="card-source-icon">
-                {sourceIcon(p.source)}
-              </div>
-              <div className="card-content">
-                <div className="card-top">
-                  <span className="card-source">{p.source}</span>
-                  <span className="card-title">
-                    {p.url ? <a href={p.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{p.title}</a> : p.title}
-                  </span>
-                </div>
-                <div className="card-meta">
-                  <span className="card-type">{p.type?.replace(/_/g, " ")}</span>
-                  <span className="card-time">{new Date(p.timestamp).toLocaleString()}</span>
-                  {p.actionable && <button className="card-action-hint" onClick={(e) => { e.stopPropagation(); toggleExpand(p); }}>{p.action_hint}</button>}
-                </div>
-
-                {expanded === p.id && p.body && (
-                  <div className="rich-body">{p.body}</div>
-                )}
-
-                {/* Inline actions — show when expanded */}
-                {expanded === p.id && (
-                  <div className="card-inline-actions" onClick={(e) => e.stopPropagation()}>
-                    {p.type === "pr_review_requested" && (
-                      <button className="btn btn-sm btn-action" onClick={async () => {
-                        handleReviewPR(p);
-                      }} disabled={reviewing === p.id}>
-                        <Eye size={10} /> {reviewing === p.id ? "Reviewing..." : "Review PR"}
-                      </button>
-                    )}
-                    {(p.type === "pr_ci_failed" || p.type === "incident") && (
-                      <button className="btn btn-sm btn-session"><Search size={10} /> Investigate</button>
-                    )}
-                    {p.type !== "suggestion" && (
-                      <button className="btn btn-sm btn-create" onClick={async () => {
-                        try {
-                          await api.createTask({
-                            id: `task-${p.id}`,
-                            title: p.title,
-                            type: "todo",
-                            priority: p.priority,
-                            source_pupdate_id: p.id,
-                            url: p.url || "",
-                            tags: p.tags || [],
-                          });
-                          showToast(`Task created: ${p.title.slice(0, 40)}...`, "normal");
-                          handleMarkRead(p.id);
-                        } catch (err) {
-                          showToast("Couldn't create task", "high");
-                        }
-                      }}><CheckSquare size={10} /> Create Task</button>
-                    )}
-                    <button className="btn btn-sm btn-approve" onClick={async () => {
-                      try {
-                        await api.createProject({
-                          id: `proj-${p.id}`,
-                          title: p.title,
-                          description: p.body || "",
-                          priority: p.priority || "normal",
-                        });
-                        showToast(`Project created: ${p.title.slice(0, 40)}...`, "normal");
-                        handleMarkRead(p.id);
-                      } catch (err) {
-                        showToast("Couldn't create project", "high");
-                      }
-                    }}><FolderKanban size={10} /> Create Project</button>
-                    <button className="btn btn-sm btn-danger" onClick={(e) => handleDismiss(e, p.id)}>
-                      <X size={10} /> Dismiss
-                    </button>
-                    {p.tags?.length > 0 && (
-                      <div className="card-tags-inline">
-                        {p.tags.map((t) => <span key={t} className="tag">{t}</span>)}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="card-right">
-                <span className={`card-priority badge ${p.priority}`}>{p.priority}</span>
-                <ChevronRight size={14} className={`card-chevron ${expanded === p.id ? "open" : ""}`} />
-              </div>
-            </div>
+              pupdate={p}
+              isExpanded={expanded === p.id}
+              onToggleExpand={() => toggleExpand(p)}
+              onMarkRead={handleMarkRead}
+              onDismiss={handleDismiss}
+              onReviewPR={handleReviewPR}
+              reviewing={reviewing}
+              sourceIcon={sourceIcon}
+            />
           ))}
         </div>
       )}
