@@ -471,6 +471,12 @@
 .setup-checklist li:last-child { border-bottom: none; }
 .setup-checklist strong { color: var(--text); }
 
+.setup-maiko-icon { width: 72px; border-radius: 16px; image-rendering: pixelated; }
+.setup-hint-good { font-size: 12px; color: var(--green); margin-top: 4px; }
+.setup-location-row { display: flex; gap: 8px; }
+.setup-location-row input { flex: 1; }
+.btn-discover { margin-bottom: 8px; }
+
 @media (max-width: 800px) {
   .home-grid { grid-template-columns: 1fr; }
 }

@@ -2,15 +2,35 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
+import SetupWizard from "../components/SetupWizard";
+import WeatherOverlay from "../components/WeatherOverlay";
+import { renderMarkdown } from "../utils/markdown";
 import {
-  Shield, CheckSquare, Inbox as InboxIcon, FolderOpen, Brain, Calendar,
-  AlertCircle, Palette, Video, Sunrise, GitBranch, Clock,
-  ExternalLink, ChevronRight, ChevronDown, Play, Pin, Bot,
-  Sparkles, GraduationCap, Wand2, Rocket,
+  CheckSquare, Inbox as InboxIcon, Brain, Calendar,
+  AlertCircle, Palette, Video, Sunrise, Clock,
+  ExternalLink, ChevronRight, ChevronDown, Play, Pin,
 } from "lucide-react";
 import "./Home.css";
 import "./Tasks.css";
 import "./Inbox.css";
+
+const HOME_POLL_INTERVAL_MS = 15000;
+
+const STATUS_COLORS = {
+  new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
+  review: "#a78bfa", done: "#4ade80", cancelled: "#6b7280",
+};
+
+const STATUS_ICONS = {
+  new: Play, in_progress: CheckSquare, waiting: Clock,
+  review: Calendar, done: CheckSquare, cancelled: InboxIcon,
+};
+
+const MOON_EMOJI = {
+  new: "🌑", waxing_crescent: "🌒", first_quarter: "🌓",
+  waxing_gibbous: "🌔", full: "🌕", waning_gibbous: "🌖",
+  last_quarter: "🌗", waning_crescent: "🌘",
+};
 
 function relativeTime(timestamp) {
   const now = Date.now();
@@ -22,6 +42,23 @@ function relativeTime(timestamp) {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   return `${days}d ago`;
+}
+
+function weatherEmoji(w) {
+  if (w === "clear") return "☀️";
+  if (w === "rain") return "🌧️";
+  if (w === "snow") return "🌨️";
+  if (w === "cloudy") return "☁️";
+  if (w === "fog") return "🌫️";
+  return "🌤️";
+}
+
+function seasonPoem(season) {
+  if (season === "spring") return "A peaceful spring day filled with vivid flowers on the field";
+  if (season === "summer") return "Warm sunlight blankets the hills as fireflies dance at dusk";
+  if (season === "autumn") return "Golden leaves drift quietly across the cooling hillside";
+  if (season === "winter") return "A crisp stillness hangs over the frost-kissed landscape";
+  return "The hills rest quietly under a gentle sky";
 }
 
 export default function Home() {
@@ -36,19 +73,8 @@ export default function Home() {
   const [morningBrief, setMorningBrief] = useState(null);
   const [briefLoading, setBriefLoading] = useState(false);
   const [showBrief, setShowBrief] = useState(false);
-  const [expandedFocus, setExpandedFocus] = useState(null);
-
   const [homeConfig, setHomeConfig] = useState(null);
   const [expandedFocusTask, setExpandedFocusTask] = useState(null);
-
-  // Setup wizard state
-  const [setupStep, setSetupStep] = useState(0);
-  const [setupUsername, setSetupUsername] = useState("");
-  const [setupRepos, setSetupRepos] = useState([]);
-  const [setupDiscovering, setSetupDiscovering] = useState(false);
-  const [setupLocation, setSetupLocation] = useState("");
-  const [setupLocationResolved, setSetupLocationResolved] = useState("");
-  const [setupLatLon, setSetupLatLon] = useState(null);
 
   const fetchAll = async () => {
     try {
@@ -76,8 +102,6 @@ export default function Home() {
       setBrainStatus(brain);
       setRecentPupdates(pupdates.slice(0, 5));
       setSchedule(sched);
-
-      // Calendar events from pupdates (show all of today's meetings)
       setCalendarEvents(pupdates.filter((p) => p.source === "calendar"));
 
       // Load most recent morning brief — only if from today
@@ -97,7 +121,7 @@ export default function Home() {
 
   useEffect(() => {
     fetchAll();
-    const interval = setInterval(fetchAll, 15000);
+    const interval = setInterval(fetchAll, HOME_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
 
@@ -113,294 +137,29 @@ export default function Home() {
           calendar: JSON.stringify(calendarEvents),
         },
       });
-      console.log("Morning brief result:", result);
       if (result.success) {
         setMorningBrief(result.output);
         setShowBrief(true);
         showToast("Your morning brief is ready! 🌅", "normal");
-        // Result is auto-saved to skill_results by the backend
       } else {
-        console.error("Brief failed:", result.error);
         showToast(result.error || "Couldn't fetch the brief right now", "high");
       }
     } catch (err) {
-      console.error("Brief exception:", err);
       showToast("Something went wrong: " + err.message, "high");
     }
     setBriefLoading(false);
   };
 
-  const focusState = focus?.current_state || "available";
-
-  const TOTAL_STEPS = 9;
   const isFirstRun = homeConfig && !homeConfig.setup_complete;
 
-  const finishSetup = async () => {
-    const config = {};
-    if (setupUsername) config.github = { username: setupUsername, enabled: true, repos: setupRepos };
-    if (setupLatLon) config.scene = { latitude: setupLatLon.lat, longitude: setupLatLon.lon, location_name: setupLocationResolved };
-    config.setup_complete = true;
-    await api.updateConfig(config);
-    window.location.reload();
-  };
-
   if (isFirstRun) {
-    return (
-      <div className="home">
-        <div className="setup-wizard">
-          {/* Progress dots */}
-          <div className="setup-progress">
-            {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-              <div key={i} className={`setup-dot ${i === setupStep ? "active" : ""} ${i < setupStep ? "done" : ""}`} />
-            ))}
-          </div>
-
-          {/* Step 0: Welcome */}
-          {setupStep === 0 && (
-            <div className="setup-step setup-step-centered">
-              <img src="/icon.png" alt="Maiko" style={{ width: 72, borderRadius: 16, imageRendering: "pixelated" }} />
-              <h1>Welcome to Planet Maiko</h1>
-              <p className="setup-sub">Your personal engineering companion. Maiko monitors your PRs, triages notifications, and orchestrates coding agents that learn from your team.</p>
-              <button className="btn btn-primary" onClick={() => setSetupStep(1)} style={{ marginTop: 16 }}>
-                <Rocket size={14} /> Get Started
-              </button>
-            </div>
-          )}
-
-          {/* Step 1: GitHub */}
-          {setupStep === 1 && (
-            <div className="setup-step">
-              <div className="setup-step-icon"><GitBranch size={28} /></div>
-              <h3>Connect GitHub</h3>
-              <p>Enter your GitHub username so Maiko can monitor your PRs and reviews. Requires <code>gh auth login</code> first.</p>
-              <input type="text" value={setupUsername} onChange={(e) => setSetupUsername(e.target.value)} placeholder="your-github-username" />
-              <div className="setup-actions">
-                <button className="setup-skip" onClick={() => setSetupStep(3)}>Skip</button>
-                <button className="btn btn-primary" onClick={() => setSetupStep(2)} disabled={!setupUsername}>Next</button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: Repos */}
-          {setupStep === 2 && (
-            <div className="setup-step">
-              <div className="setup-step-icon"><FolderOpen size={28} /></div>
-              <h3>Your Repos</h3>
-              <p>Which repos should Maiko watch? Auto-discover from your recent activity, or type them manually.</p>
-              <button className="btn" style={{ marginBottom: 8 }} onClick={async () => {
-                setSetupDiscovering(true);
-                try {
-                  await api.updateConfig({ github: { username: setupUsername, enabled: true } });
-                  const result = await api.discoverGithubRepos();
-                  if (result.repos?.length) {
-                    setSetupRepos(result.repos);
-                    setTimeout(() => setSetupStep(3), 800);
-                  }
-                } catch (e) {}
-                setSetupDiscovering(false);
-              }} disabled={setupDiscovering}>
-                {setupDiscovering ? "Discovering..." : "Auto-Discover Repos"}
-              </button>
-              <input type="text" value={setupRepos.join(", ")} onChange={(e) => setSetupRepos(e.target.value.split(",").map(s => s.trim()).filter(Boolean))} placeholder="org/repo1, org/repo2" />
-              {setupRepos.length > 0 && <div style={{ fontSize: 12, color: "var(--green)", marginTop: 4 }}>Found {setupRepos.length} repo(s)</div>}
-              <div className="setup-actions">
-                <button className="setup-skip" onClick={() => setSetupStep(1)}>Back</button>
-                <button className="btn btn-primary" onClick={() => setSetupStep(3)}>Next</button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Location */}
-          {setupStep === 3 && (
-            <div className="setup-step">
-              <div className="setup-step-icon"><Palette size={28} /></div>
-              <h3>Your Location</h3>
-              <p>For live weather on your dashboard. Clouds drift across the page when it's overcast, rain falls when it's stormy.</p>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input type="text" value={setupLocation} onChange={(e) => setSetupLocation(e.target.value)} placeholder="Boston" style={{ flex: 1 }} />
-                <button className="btn" onClick={async () => {
-                  try {
-                    const resp = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(setupLocation)}&count=1&language=en&format=json`);
-                    const data = await resp.json();
-                    if (data.results?.length) {
-                      const r = data.results[0];
-                      setSetupLocationResolved(`${r.name}, ${r.admin1 || ""}`);
-                      setSetupLatLon({ lat: r.latitude, lon: r.longitude });
-                    }
-                  } catch (e) {}
-                }}>Lookup</button>
-              </div>
-              {setupLocationResolved && <div style={{ fontSize: 12, color: "var(--green)", marginTop: 4 }}>{setupLocationResolved}</div>}
-              <div className="setup-actions">
-                <button className="setup-skip" onClick={() => setSetupStep(4)}>Skip</button>
-                <button className="btn btn-primary" onClick={() => setSetupStep(4)}>Next</button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 4: Tour — Inbox */}
-          {setupStep === 4 && (
-            <div className="setup-step setup-step-centered">
-              <div className="setup-step-icon tour-icon"><InboxIcon size={36} /></div>
-              <h3>Your Inbox</h3>
-              <p>All your notifications land here — PRs, calendar events, CI alerts, and whatever integrations you connect. Maiko triages them automatically.</p>
-              <p className="setup-detail">Tabs filter by type. You can dismiss, create tasks, or have Maiko investigate with one click.</p>
-              <div className="setup-actions">
-                <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
-                <button className="btn btn-primary" onClick={() => setSetupStep(5)}>Next</button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 5: Tour — Focus Mode */}
-          {setupStep === 5 && (
-            <div className="setup-step setup-step-centered">
-              <div className="setup-step-icon tour-icon"><Shield size={36} /></div>
-              <h3>Focus Mode</h3>
-              <p>Control which notifications reach you based on how deep in the zone you are. Find it in the top-right of the nav bar.</p>
-              <ul className="setup-checklist">
-                <li><strong>Available</strong> — everything comes through</li>
-                <li><strong>Soft focus</strong> — only high priority and above</li>
-                <li><strong>Deep focus</strong> — only critical and urgent</li>
-                <li><strong>Away</strong> — minimal interruptions</li>
-              </ul>
-              <p className="setup-detail">Held notifications are collected and released as a digest when you switch back.</p>
-              <div className="setup-actions">
-                <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
-                <button className="btn btn-primary" onClick={() => setSetupStep(6)}>Next</button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 6: Tour — Agents */}
-          {setupStep === 6 && (
-            <div className="setup-step setup-step-centered">
-              <div className="setup-step-icon tour-icon"><Bot size={36} /></div>
-              <h3>Meet Your Agents</h3>
-              <p>Agents are coding assistants that each carry a personalized set of learnings tuned for specific task types. They work in isolated git worktrees.</p>
-              <p className="setup-detail">New agents ("pups") explore with random learnings. Through training, they specialize and rank up.</p>
-              <div className="setup-actions">
-                <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
-                <button className="btn btn-primary" onClick={() => setSetupStep(7)}>Next</button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 7: Tour — Knowledge + Training */}
-          {setupStep === 7 && (
-            <div className="setup-step setup-step-centered">
-              <div className="setup-step-icon tour-icon"><Brain size={36} /></div>
-              <h3>Knowledge + Training</h3>
-              <p>Maiko learns coding patterns from your PR review comments. These get injected into agent briefs so they follow your team's conventions.</p>
-              <p className="setup-detail">Use <strong>Knowledge &gt; Backfill from PRs</strong> to scan your history. Then <strong>Training</strong> to teach agents on real merged PRs.</p>
-              <div className="setup-actions">
-                <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
-                <button className="btn btn-primary" onClick={() => setSetupStep(8)}>Next</button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 8: Tour — Done */}
-          {setupStep === 8 && (
-            <div className="setup-step setup-step-centered">
-              <div className="setup-step-icon tour-icon"><Sparkles size={36} /></div>
-              <h3>You're All Set!</h3>
-              <p>Here's what to do next:</p>
-              <ul className="setup-checklist">
-                <li><strong>Connect integrations</strong> — Go to Settings to add Linear, Calendar, or other services. Agent tools (Bash, Read, Edit, etc.) are pre-configured — customize in Settings &gt; Agent Preferences.</li>
-                <li><strong>Backfill knowledge</strong> — Go to Knowledge and click "Backfill from PRs"</li>
-                <li><strong>Create an agent</strong> — Visit Agents and click "New Agent"</li>
-                <li><strong>Train it</strong> — Go to Training, pick a merged PR, and run a session</li>
-              </ul>
-              <button className="btn btn-primary" onClick={finishSetup} style={{ marginTop: 16 }}>
-                <Rocket size={14} /> Go to Dashboard
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
+    return <SetupWizard onComplete={() => window.location.reload()} />;
   }
 
   return (
     <div className="home">
-      {/* Page-level weather overlay */}
-      {scene?.context?.weather && scene.context.weather !== "clear" && (
-        <div className="page-weather-overlay">
-          {(scene.context.weather === "cloudy" || scene.context.weather === "rain") && (
-            <>
-              <img src="/cloud1.svg" className="page-cloud page-cloud-1" alt="" />
-              <img src="/cloud2.svg" className="page-cloud page-cloud-2" alt="" />
-              <img src="/cloud3.svg" className="page-cloud page-cloud-3" alt="" />
-              <img src="/cloud1.svg" className="page-cloud page-cloud-4" alt="" />
-              <img src="/cloud2.svg" className="page-cloud page-cloud-5" alt="" />
-              <img src="/cloud3.svg" className="page-cloud page-cloud-6" alt="" />
-              <img src="/cloud1.svg" className="page-cloud page-cloud-7" alt="" />
-            </>
-          )}
-          {scene.context.weather === "rain" && (
-            <div className="page-rain">
-              {Array.from({ length: 60 }).map((_, i) => (
-                <div key={i} className="page-raindrop" style={{ left: `${(i * 1.7) + Math.random()}%`, animationDelay: `${Math.random() * 1.2}s`, animationDuration: `${0.6 + Math.random() * 0.4}s` }} />
-              ))}
-            </div>
-          )}
-          {scene.context.weather === "snow" && (
-            <div className="page-snow">
-              {Array.from({ length: 40 }).map((_, i) => (
-                <div key={i} className="page-snowflake" style={{ left: `${i * 2.5 + Math.random() * 1.5}%`, animationDelay: `${Math.random() * 5}s`, animationDuration: `${3 + Math.random() * 3}s` }} />
-              ))}
-            </div>
-          )}
-          {scene.context.weather === "fog" && (
-            <div className="page-fog" />
-          )}
-        </div>
-      )}
+      <WeatherOverlay scene={scene} />
 
-      {/* Seasonal overlays */}
-      {scene?.context?.season && (
-        <div className="page-weather-overlay">
-          {/* Spring: flowers */}
-          {scene.context.season === "spring" && (
-            <>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <img key={`fl-${i}`} src={i % 2 === 0 ? "/flower1.svg" : "/flower2.svg"} className="page-flower" style={{ left: `${10 + i * 18}%`, bottom: 32 }} alt="" />
-              ))}
-            </>
-          )}
-
-          {/* Summer: fireflies (evening/night only) */}
-          {scene.context.season === "summer" && scene.context.time_bucket !== "day" && (
-            <>
-              {Array.from({ length: 12 }).map((_, i) => (
-                <div key={`ff-${i}`} className="page-firefly" style={{ left: `${5 + Math.random() * 85}%`, top: `${10 + Math.random() * 60}%`, animationDelay: `${Math.random() * 4}s`, animationDuration: `${2 + Math.random() * 3}s` }} />
-              ))}
-            </>
-          )}
-
-          {/* Autumn: falling leaves */}
-          {scene.context.season === "autumn" && (
-            <>
-              {Array.from({ length: 8 }).map((_, i) => (
-                <img key={`lf-${i}`} src="/leaf.svg" className="page-leaf" style={{ left: `${i * 12 + Math.random() * 5}%`, animationDelay: `${Math.random() * 6}s`, animationDuration: `${4 + Math.random() * 4}s` }} alt="" />
-              ))}
-            </>
-          )}
-
-          {/* Night: planets + shooting stars */}
-          {scene.context.time_bucket === "night" && (
-            <>
-              <img src="/planet1.svg" className="page-planet page-planet-1" alt="" />
-              <img src="/planet2.svg" className="page-planet page-planet-2" alt="" />
-              {Array.from({ length: 15 }).map((_, i) => (
-                <div key={`st-${i}`} className="page-star" style={{ left: `${Math.random() * 95}%`, top: `${Math.random() * 40}%`, animationDelay: `${Math.random() * 5}s` }} />
-              ))}
-              <div className="page-shooting-star" />
-            </>
-          )}
-        </div>
-      )}
       <div className="home-grid">
         {/* Main content */}
         <div className="home-main">
@@ -421,30 +180,34 @@ export default function Home() {
             {schedule && schedule.blocks?.length > 0 ? (
               <div className="focus-tasks">
                 {schedule.blocks[0].tasks.slice(0, 3).map((t) => {
-                  const statusColor = {
-                    new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
-                    review: "#a78bfa", done: "#4ade80", cancelled: "#6b7280",
-                  }[t.status] || "var(--text-muted)";
-                  const FocusIcon = {
-                    new: Play, in_progress: CheckSquare, waiting: Clock,
-                    review: Calendar, done: CheckSquare, cancelled: Shield,
-                  }[t.status] || CheckSquare;
+                  const statusColor = STATUS_COLORS[t.status] || "var(--text-muted)";
+                  const FocusIcon = STATUS_ICONS[t.status] || CheckSquare;
                   const isExpanded = expandedFocusTask === t.id;
+                  const isPinned = t.extra?.pinned || t.metadata?.pinned;
                   return (
-                    <div key={t.id} className={`card pupdate-card ${t.priority || "normal"} ${isExpanded ? "expanded" : ""}`} onClick={() => setExpandedFocusTask(isExpanded ? null : t.id)} style={{ cursor: "pointer" }}>
+                    <div
+                      key={t.id}
+                      className={`card pupdate-card ${t.priority || "normal"} ${isExpanded ? "expanded" : ""}`}
+                      onClick={() => setExpandedFocusTask(isExpanded ? null : t.id)}
+                      style={{ cursor: "pointer" }}
+                    >
                       <div className="card-left-bar" style={{ background: statusColor }} />
-                      <div className="card-source-icon" onClick={(e) => {
-                        e.stopPropagation();
-                        if (t.status === "new") { api.startTask(t.id); showToast("Started", "normal"); }
-                        else if (t.status === "in_progress") { api.completeTask(t.id); showToast("Done!", "normal"); }
-                      }} style={{ cursor: t.status === "new" || t.status === "in_progress" ? "pointer" : "default" }}>
+                      <div
+                        className="card-source-icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (t.status === "new") { api.startTask(t.id); showToast("Started", "normal"); }
+                          else if (t.status === "in_progress") { api.completeTask(t.id); showToast("Done!", "normal"); }
+                        }}
+                        style={{ cursor: t.status === "new" || t.status === "in_progress" ? "pointer" : "default" }}
+                      >
                         <FocusIcon size={14} />
                       </div>
                       <div className="card-content">
                         <div className="card-top">
                           <span className="card-source" style={{ color: statusColor }}>{t.status.replace("_", " ")}</span>
                           <span className="card-title">{t.title}</span>
-                          {(t.extra?.pinned || t.metadata?.pinned) && <Pin size={10} style={{ color: "var(--pink)", flexShrink: 0 }} />}
+                          {isPinned && <Pin size={10} style={{ color: "var(--pink)", flexShrink: 0 }} />}
                         </div>
                         <div className="card-meta">
                           {t.type && <span className="card-type">{t.type}</span>}
@@ -465,7 +228,9 @@ export default function Home() {
                           </div>
                         )}
                       </div>
-                      {isExpanded ? <ChevronDown size={14} className="task-chevron open" /> : <ChevronRight size={14} className="task-chevron" />}
+                      {isExpanded
+                        ? <ChevronDown size={14} className="task-chevron open" />
+                        : <ChevronRight size={14} className="task-chevron" />}
                     </div>
                   );
                 })}
@@ -541,19 +306,12 @@ export default function Home() {
             <div className="widget-header"><Palette size={12} /> Scene</div>
             <div className="scene-info">
               {homeConfig?.scene?.latitude ? (
-                <>
-                  {scene?.context?.weather && (
-                    <div className="scene-weather">
-                      {scene.context.weather === "clear" ? "☀️" :
-                       scene.context.weather === "rain" ? "🌧️" :
-                       scene.context.weather === "snow" ? "🌨️" :
-                       scene.context.weather === "cloudy" ? "☁️" :
-                       scene.context.weather === "fog" ? "🌫️" : "🌤️"}
-                      {" "}{scene.context.weather}
-                      {scene.context.temperature_f && ` · ${scene.context.temperature_f}°F`}
-                    </div>
-                  )}
-                </>
+                scene?.context?.weather && (
+                  <div className="scene-weather">
+                    {weatherEmoji(scene.context.weather)} {scene.context.weather}
+                    {scene.context.temperature_f && ` · ${scene.context.temperature_f}°F`}
+                  </div>
+                )
               ) : (
                 <div className="scene-weather-fallback" onClick={() => navigate('/settings')} style={{ cursor: "pointer" }}>
                   <span className="weather-fallback-text">Set your location for live weather</span>
@@ -562,21 +320,15 @@ export default function Home() {
               {scene?.scene?.creative_note ? (
                 <div className="scene-creative-note">"{scene.scene.creative_note}"</div>
               ) : scene?.scene?.mood && (
-                <div className="scene-creative-note">
-                  {scene.context?.season === "spring" ? "A peaceful spring day filled with vivid flowers on the field" :
-                   scene.context?.season === "summer" ? "Warm sunlight blankets the hills as fireflies dance at dusk" :
-                   scene.context?.season === "autumn" ? "Golden leaves drift quietly across the cooling hillside" :
-                   scene.context?.season === "winter" ? "A crisp stillness hangs over the frost-kissed landscape" :
-                   "The hills rest quietly under a gentle sky"}
-                </div>
+                <div className="scene-creative-note">{seasonPoem(scene.context?.season)}</div>
               )}
               <div className="scene-tags">
                 {scene?.context?.season && <span className="scene-tag">{scene.context.season}</span>}
-                {scene?.context?.moon_phase && <span className="scene-tag">{{
-                  new: "🌑", waxing_crescent: "🌒", first_quarter: "🌓",
-                  waxing_gibbous: "🌔", full: "🌕", waning_gibbous: "🌖",
-                  last_quarter: "🌗", waning_crescent: "🌘",
-                }[scene.context.moon_phase] || "🌙"} {scene.context.moon_phase.replace("_", " ")}</span>}
+                {scene?.context?.moon_phase && (
+                  <span className="scene-tag">
+                    {MOON_EMOJI[scene.context.moon_phase] || "🌙"} {scene.context.moon_phase.replace("_", " ")}
+                  </span>
+                )}
                 {scene?.scene?.maiko_outfit && scene.scene.maiko_outfit !== "default" && (
                   <span className="scene-tag">maiko: {scene.scene.maiko_outfit}</span>
                 )}
@@ -592,19 +344,19 @@ export default function Home() {
             <div className="widget-header">Tasks</div>
             <div className="widget-stat-grid">
               <div className="widget-stat">
-                <div className="widget-stat-value" style={{color: "var(--blue)"}}>{stats.tasks_ip}</div>
+                <div className="widget-stat-value" style={{ color: "var(--blue)" }}>{stats.tasks_ip}</div>
                 <div className="widget-stat-label">In Progress</div>
               </div>
               <div className="widget-stat">
-                <div className="widget-stat-value" style={{color: "var(--pink)"}}>{stats.tasks_new}</div>
+                <div className="widget-stat-value" style={{ color: "var(--pink)" }}>{stats.tasks_new}</div>
                 <div className="widget-stat-label">New</div>
               </div>
               <div className="widget-stat">
-                <div className="widget-stat-value" style={{color: "var(--green)"}}>{stats.projects}</div>
+                <div className="widget-stat-value" style={{ color: "var(--green)" }}>{stats.projects}</div>
                 <div className="widget-stat-label">Projects</div>
               </div>
               <div className="widget-stat">
-                <div className="widget-stat-value" style={{color: "var(--lemon)"}}>{stats.pupdates}</div>
+                <div className="widget-stat-value" style={{ color: "var(--lemon)" }}>{stats.pupdates}</div>
                 <div className="widget-stat-label">Pupdates</div>
               </div>
             </div>
@@ -638,30 +390,4 @@ export default function Home() {
       )}
     </div>
   );
-}
-
-function renderMarkdown(text) {
-  return text
-    .replace(/\u00e2\u20ac\u201d/g, '\u2014')  // fix mojibake em dash
-    .replace(/\u00e2\u20ac\u201c/g, '\u2014')
-    .replace(/\u00e2\u20ac\u2122/g, '\u2019')  // fix mojibake apostrophe
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code>$1</code>')
-    .replace(/^\- (.+)$/gm, '<li>$1</li>')
-    .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
-    .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-    .replace(/\|(.+)\|/g, (match) => {
-      const cells = match.split('|').filter(c => c.trim());
-      if (cells.every(c => c.trim().match(/^[-:]+$/))) return '';
-      return '<tr>' + cells.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>';
-    })
-    .replace(/(<tr>.*<\/tr>\n?)+/g, '<table>$&</table>')
-    .replace(/^---$/gm, '<hr>')
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/^(?!<[hultop])(.+)$/gm, '<p>$1</p>')
-    .replace(/<p><\/p>/g, '');
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import PupdateCard from "../components/PupdateCard";
+import { renderMarkdown } from "../utils/markdown";
 import { ExternalLink, X, Inbox as InboxIcon, ClipboardCheck, CheckSquare, MoreHorizontal, MessageCircle, Pencil, GitBranch, Calendar as CalendarIcon, Bot, Lightbulb, AlertTriangle, MessageSquare, Brain, Play, Loader, RefreshCw, FileText, Folder } from "lucide-react";
 import "./Inbox.css";
 import "./Brainstorm.css";
@@ -357,7 +358,7 @@ export default function Inbox() {
           </div>
           <div className="modal-body">
             {reviewResult.success ? (
-              <div className="review-content" dangerouslySetInnerHTML={{ __html: renderReviewMarkdown(reviewResult.output) }} />
+              <div className="review-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(reviewResult.output) }} />
             ) : (
               <div style={{ color: "var(--urgent)", fontSize: 13 }}>
                 {reviewResult.error || "Review failed"}
@@ -369,20 +370,4 @@ export default function Inbox() {
     )}
     </div>
   );
-}
-
-function renderReviewMarkdown(text) {
-  if (!text) return "";
-  return text
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code>$1</code>')
-    .replace(/^\- (.+)$/gm, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/^(?!<[hulo])(.+)$/gm, '<p>$1</p>')
-    .replace(/<p><\/p>/g, '');
 }
