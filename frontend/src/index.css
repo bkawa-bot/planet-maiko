@@ -31,6 +31,20 @@
   --border: #435058;
   --border-subtle: #374148;
 
+  /* Themed tint backgrounds — use these instead of hardcoded rgba so
+     badges/tags/pills track the active theme. Pair with the matching
+     --xxx color for foreground text. */
+  --urgent-soft: rgba(255, 107, 127, 0.15);
+  --urgent-faint: rgba(255, 107, 127, 0.08);
+  --high-soft: rgba(255, 151, 91, 0.15);
+  --high-faint: rgba(255, 151, 91, 0.08);
+  --lemon-soft: rgba(249, 224, 127, 0.15);
+  --lemon-faint: rgba(249, 224, 127, 0.06);
+  --green-soft: rgba(125, 219, 163, 0.15);
+  --green-faint: rgba(125, 219, 163, 0.08);
+  --lavender-soft: rgba(195, 166, 232, 0.15);
+  --lavender-faint: rgba(195, 166, 232, 0.08);
+
   --font: 'Inter', -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
   --radius: 12px;
@@ -49,6 +63,11 @@
   --peach: #d48a6e; --creamsicle: #e8a878; --lemon: #c4a834;
   --urgent: #d44a5c; --high: #d47a3a; --normal: #E8A0B8; --low: #9A9080; --green: #8BC4A0;
   --border: #C8D8C8; --border-subtle: #D8E4D8;
+  --urgent-soft: rgba(212, 74, 92, 0.14); --urgent-faint: rgba(212, 74, 92, 0.07);
+  --high-soft: rgba(212, 122, 58, 0.14); --high-faint: rgba(212, 122, 58, 0.07);
+  --lemon-soft: rgba(196, 168, 52, 0.16); --lemon-faint: rgba(196, 168, 52, 0.08);
+  --green-soft: rgba(139, 196, 160, 0.18); --green-faint: rgba(139, 196, 160, 0.10);
+  --lavender-soft: rgba(138, 104, 184, 0.14); --lavender-faint: rgba(138, 104, 184, 0.07);
 }
 
 /* === Morning theme === */
@@ -62,6 +81,11 @@
   --peach: #e8a06a; --creamsicle: #f0b878; --lemon: #d4a838;
   --urgent: #d44a5c; --high: #e8944a; --normal: #B88CC8; --low: #a09080; --green: #5ab87d;
   --border: #e0d5c8; --border-subtle: #e8ddd0;
+  --urgent-soft: rgba(212, 74, 92, 0.14); --urgent-faint: rgba(212, 74, 92, 0.07);
+  --high-soft: rgba(232, 148, 74, 0.14); --high-faint: rgba(232, 148, 74, 0.07);
+  --lemon-soft: rgba(212, 168, 56, 0.16); --lemon-faint: rgba(212, 168, 56, 0.08);
+  --green-soft: rgba(90, 184, 125, 0.16); --green-faint: rgba(90, 184, 125, 0.08);
+  --lavender-soft: rgba(149, 120, 194, 0.14); --lavender-faint: rgba(149, 120, 194, 0.07);
 }
 
 /* === Afternoon theme === Twilight Town vibes: hazy golden sunset, brick + cream, dusty purple shadows */
@@ -75,6 +99,11 @@
   --peach: #e8ab2c; --creamsicle: #f0c870; --lemon: #f0d769;
   --urgent: #bf4e64; --high: #e06d56; --normal: #bf4e64; --low: #8c7ca8; --green: #6abc88;
   --border: #d4b070; --border-subtle: #e0c088;
+  --urgent-soft: rgba(191, 78, 100, 0.16); --urgent-faint: rgba(191, 78, 100, 0.08);
+  --high-soft: rgba(224, 109, 86, 0.16); --high-faint: rgba(224, 109, 86, 0.08);
+  --lemon-soft: rgba(240, 215, 105, 0.20); --lemon-faint: rgba(240, 215, 105, 0.10);
+  --green-soft: rgba(106, 188, 136, 0.18); --green-faint: rgba(106, 188, 136, 0.10);
+  --lavender-soft: rgba(128, 104, 168, 0.14); --lavender-faint: rgba(128, 104, 168, 0.07);
 }
 
 /* === Sunset theme === */
@@ -88,6 +117,11 @@
   --peach: #F0B090; --creamsicle: #FFD0A8; --lemon: #F0C850;
   --urgent: #FF6B7F; --high: #F0A060; --normal: #E8855A; --low: #8A6878; --green: #7dd4a0;
   --border: #483558; --border-subtle: #3E2D50;
+  --urgent-soft: rgba(255, 107, 127, 0.15); --urgent-faint: rgba(255, 107, 127, 0.08);
+  --high-soft: rgba(240, 160, 96, 0.15); --high-faint: rgba(240, 160, 96, 0.08);
+  --lemon-soft: rgba(240, 200, 80, 0.16); --lemon-faint: rgba(240, 200, 80, 0.08);
+  --green-soft: rgba(125, 212, 160, 0.16); --green-faint: rgba(125, 212, 160, 0.08);
+  --lavender-soft: rgba(160, 136, 208, 0.16); --lavender-faint: rgba(160, 136, 208, 0.08);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -161,18 +195,18 @@ a:hover { text-decoration: underline; }
   text-transform: uppercase; letter-spacing: 0.03em;
   line-height: 1.4;
 }
-.badge.urgent { background: rgba(255, 107, 127, 0.15); color: var(--urgent); }
-.badge.high { background: rgba(255, 151, 91, 0.15); color: var(--high); }
+.badge.urgent { background: var(--urgent-soft); color: var(--urgent); }
+.badge.high { background: var(--high-soft); color: var(--high); }
 .badge.normal { background: var(--pink-soft); color: var(--pink); }
 .badge.low { background: rgba(95, 114, 128, 0.15); color: var(--low); }
 .badge.new { background: var(--blue-soft); color: var(--blue); }
-.badge.in_progress { background: rgba(249, 224, 127, 0.15); color: var(--lemon); }
-.badge.done { background: rgba(125, 219, 163, 0.15); color: var(--green); }
+.badge.in_progress { background: var(--lemon-soft); color: var(--lemon); }
+.badge.done { background: var(--green-soft); color: var(--green); }
 .badge.cancelled { background: rgba(95, 114, 128, 0.15); color: var(--low); }
-.badge.planning { background: rgba(195, 166, 232, 0.15); color: var(--lavender); }
+.badge.planning { background: var(--lavender-soft); color: var(--lavender); }
 .badge.approved { background: var(--blue-soft); color: var(--blue); }
-.badge.active { background: rgba(125, 219, 163, 0.15); color: var(--green); }
-.badge.paused { background: rgba(249, 224, 127, 0.15); color: var(--lemon); }
+.badge.active { background: var(--green-soft); color: var(--green); }
+.badge.paused { background: var(--lemon-soft); color: var(--lemon); }
 
 /* === Buttons === */
 .btn {
@@ -186,9 +220,9 @@ a:hover { text-decoration: underline; }
 .btn-primary { background: var(--pink); color: #fff; border-color: var(--pink); font-weight: 600; }
 .btn-primary:hover { opacity: 0.9; background: var(--pink); border-color: var(--pink); }
 .btn-danger, .btn-dismiss { color: var(--urgent); border-color: currentColor; }
-.btn-danger:hover, .btn-dismiss:hover { background: rgba(255, 107, 127, 0.1); }
+.btn-danger:hover, .btn-dismiss:hover { background: var(--urgent-faint); }
 .btn-approve { border-color: var(--green); color: var(--green); }
-.btn-approve:hover { background: rgba(125, 219, 163, 0.1); }
+.btn-approve:hover { background: var(--green-faint); }
 .btn-action { border-color: var(--lavender); color: var(--lavender); }
 .btn-action:hover { background: rgba(167, 139, 250, 0.1); }
 .btn-session { border-color: var(--blue); color: var(--blue); }

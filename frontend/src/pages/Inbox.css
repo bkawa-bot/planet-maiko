@@ -98,8 +98,8 @@
   background: var(--bg-card-alt); border-radius: 8px;
   color: var(--text-muted); margin: 10px 0 10px 10px;
 }
-.pupdate-card.urgent .card-source-icon { color: var(--urgent); background: rgba(255, 107, 127, 0.1); }
-.pupdate-card.high .card-source-icon { color: var(--high); background: rgba(255, 151, 91, 0.1); }
+.pupdate-card.urgent .card-source-icon { color: var(--urgent); background: var(--urgent-faint); }
+.pupdate-card.high .card-source-icon { color: var(--high); background: var(--high-faint); }
 .pupdate-card.normal .card-source-icon { color: var(--pink); background: var(--pink-glow); }
 .pupdate-card.low .card-source-icon { color: var(--blue); background: var(--blue-soft); }
 
@@ -126,7 +126,7 @@
   opacity: 0; transition: all 0.15s;
 }
 .pupdate-card:hover .btn-dismiss-quick { opacity: 0.6; }
-.btn-dismiss-quick:hover { opacity: 1 !important; color: var(--urgent); background: rgba(255,107,127,0.1); }
+.btn-dismiss-quick:hover { opacity: 1 !important; color: var(--urgent); background: var(--urgent-faint); }
 
 .card-chevron {
   color: var(--text-muted); transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -178,7 +178,7 @@
 }
 .more-dropdown button:hover { background: var(--bg-hover); color: var(--text); }
 .more-dropdown .more-danger { color: var(--urgent); }
-.more-dropdown .more-danger:hover { background: rgba(255, 107, 127, 0.1); }
+.more-dropdown .more-danger:hover { background: var(--urgent-faint); }
 
 /* PR Review modal */
 .review-modal {

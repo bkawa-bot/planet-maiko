@@ -84,10 +84,10 @@
 .task-status-label { font-size: 10px; font-weight: 600; text-transform: capitalize; }
 .task-type-label { font-size: 10px; color: var(--text-muted); }
 .task-time { font-size: 10px; color: var(--text-muted); display: flex; align-items: center; gap: 2px; }
-.tag-project { background: rgba(195, 166, 232, 0.12); color: var(--lavender); font-weight: 600; text-transform: uppercase; }
+.tag-project { background: var(--lavender-soft); color: var(--lavender); font-weight: 600; text-transform: uppercase; }
 
-.tag-due { background: rgba(249, 224, 127, 0.15); color: var(--lemon); font-weight: 600; display: inline-flex; align-items: center; gap: 2px; }
-.tag-overdue { background: rgba(255, 107, 127, 0.15); color: var(--urgent); font-weight: 600; display: inline-flex; align-items: center; gap: 2px; }
+.tag-due { background: var(--lemon-soft); color: var(--lemon); font-weight: 600; display: inline-flex; align-items: center; gap: 2px; }
+.tag-overdue { background: var(--urgent-soft); color: var(--urgent); font-weight: 600; display: inline-flex; align-items: center; gap: 2px; }
 
 .task-due-input {
   padding: 3px 6px; border: 1px solid var(--border); border-radius: var(--radius-xs);

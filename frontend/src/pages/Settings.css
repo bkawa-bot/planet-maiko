@@ -28,7 +28,7 @@
 .settings-loading { color: var(--text-muted); text-align: center; margin-top: 60px; }
 
 .settings-message {
-  padding: 10px 16px; background: rgba(125, 219, 163, 0.15); color: var(--green);
+  padding: 10px 16px; background: var(--green-soft); color: var(--green);
   border-radius: var(--radius-xs); margin-bottom: 16px; font-size: 0.85rem;
 }
 

@@ -29,14 +29,14 @@
 .pack-awareness-list { display: flex; flex-direction: column; gap: 6px; }
 .conflict-item {
   display: flex; align-items: flex-start; gap: 8px;
-  padding: 8px 10px; background: rgba(255, 151, 91, 0.06);
+  padding: 8px 10px; background: var(--high-faint);
   border-radius: var(--radius-xs); font-size: 12px;
 }
 .conflict-icon { color: var(--high); flex-shrink: 0; margin-top: 1px; }
 .conflict-status-icon { flex-shrink: 0; font-size: 14px; }
 .conflict-task { font-weight: 600; color: var(--text); white-space: nowrap; min-width: 80px; }
 .conflict-content { color: var(--text-dim); line-height: 1.4; }
-.conflict-item.resolved { background: rgba(125, 219, 163, 0.06); border-left: 3px solid var(--green); }
+.conflict-item.resolved { background: var(--green-faint); border-left: 3px solid var(--green); }
 
 /* === Agent Grid === */
 .agent-card { padding: 0; overflow: hidden; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -172,7 +172,7 @@
 .strategy-meta { display: flex; gap: 6px; align-items: center; margin-top: 3px; }
 .strategy-rank { font-size: 10px; color: var(--pink); font-weight: 600; }
 .strategy-tag { font-size: 9px; padding: 1px 6px; border-radius: 8px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
-.strategy-tag.exploring { background: rgba(249, 224, 127, 0.15); color: var(--lemon); border: 1px solid rgba(249, 224, 127, 0.3); }
+.strategy-tag.exploring { background: var(--lemon-soft); color: var(--lemon); border: 1px solid var(--lemon-soft); }
 
 .strategy-score-ring {
   text-align: center; flex-shrink: 0;
@@ -204,8 +204,8 @@
   font-size: 10px; padding: 2px 8px; border-radius: 8px;
   display: inline-flex; align-items: center; gap: 4px;
 }
-.strategy-chip.strength { background: rgba(125, 219, 163, 0.12); color: var(--green); }
-.strategy-chip.gap { background: rgba(249, 224, 127, 0.12); color: var(--lemon); }
+.strategy-chip.strength { background: var(--green-soft); color: var(--green); }
+.strategy-chip.gap { background: var(--lemon-soft); color: var(--lemon); }
 .chip-score { font-family: var(--font-mono); font-weight: 700; font-size: 9px; }
 
 .strategy-repo-group { margin-bottom: 6px; }
@@ -292,7 +292,7 @@
   font-size: 9px; color: var(--text-muted); text-transform: capitalize;
 }
 .pipe-step.current { background: var(--pink-soft); color: var(--pink); border-color: var(--pink); font-weight: 600; }
-.pipe-step.done { background: rgba(125, 219, 163, 0.1); color: var(--green); border-color: var(--green); }
+.pipe-step.done { background: var(--green-faint); color: var(--green); border-color: var(--green); }
 
 .panel-center { text-align: center; padding: 24px 12px; }
 .panel-center p { color: var(--text-dim); font-size: 12px; margin-bottom: 12px; }

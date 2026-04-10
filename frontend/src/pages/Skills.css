@@ -17,7 +17,7 @@
 .skill-name { font-weight: 600; font-size: 14px; color: var(--text); text-transform: capitalize; margin-bottom: 4px; }
 .skill-desc { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
 .skill-mcps { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; min-height: 18px; }
-.schedule-tag { background: rgba(249, 224, 127, 0.15); color: var(--lemon); display: inline-flex; align-items: center; gap: 2px; }
+.schedule-tag { background: var(--lemon-soft); color: var(--lemon); display: inline-flex; align-items: center; gap: 2px; }
 .checkbox-label { flex-direction: row !important; align-items: center; gap: 6px !important; font-size: 11px; margin-top: auto; }
 
 /* Create form */

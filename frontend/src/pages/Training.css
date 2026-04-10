@@ -88,7 +88,7 @@
   background: var(--bg-card-alt); border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
 }
-.training-entry.is-winner { border-color: var(--lemon); background: rgba(249, 224, 127, 0.04); }
+.training-entry.is-winner { border-color: var(--lemon); background: var(--lemon-faint); }
 .training-entry.is-baseline { opacity: 0.6; border-style: dashed; }
 
 .training-entry-header {

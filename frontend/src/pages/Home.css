@@ -68,9 +68,9 @@
   padding: 2px 8px; border-radius: var(--radius-xs);
   font-size: 10px; font-weight: 600; text-transform: capitalize;
 }
-.focus-pill.available { background: rgba(125, 219, 163, 0.12); color: var(--green); }
-.focus-pill.soft_focus { background: rgba(249, 224, 127, 0.12); color: var(--lemon); }
-.focus-pill.deep_focus { background: rgba(255, 107, 127, 0.12); color: var(--urgent); }
+.focus-pill.available { background: var(--green-soft); color: var(--green); }
+.focus-pill.soft_focus { background: var(--lemon-soft); color: var(--lemon); }
+.focus-pill.deep_focus { background: var(--urgent-soft); color: var(--urgent); }
 .focus-pill.away { background: rgba(95, 114, 128, 0.15); color: var(--low); }
 
 /* === Grid layout === */
