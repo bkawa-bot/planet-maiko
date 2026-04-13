@@ -22,6 +22,7 @@ _SKILL_IDS = [
     "plan",
     "team",
     "verify",
+    "theme-designer",
 ]
 
 
