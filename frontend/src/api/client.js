@@ -187,6 +187,12 @@ export const api = {
   getPlugins: () => request("/plugins"),
   togglePlugin: (name) => request(`/plugins/${name}/toggle`, { method: "POST" }),
 
+  // Custom themes
+  getThemes: () => request("/themes"),
+  getTheme: (id) => request(`/themes/${id}`),
+  saveTheme: (data) => request("/themes", { method: "POST", body: JSON.stringify(data) }),
+  deleteTheme: (id) => request(`/themes/${id}`, { method: "DELETE" }),
+
   // System
   shutdown: () => request("/system/shutdown", { method: "POST" }),
 

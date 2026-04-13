@@ -10,6 +10,7 @@ import Agents from "./pages/Agents";
 import BrainView from "./pages/BrainView";
 import Skills from "./pages/Skills";
 import Training from "./pages/Training";
+import Themes from "./pages/Themes";
 import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
 
 function AppRoutes() {
@@ -25,6 +26,7 @@ function AppRoutes() {
         <Route path="/knowledge" element={<BrainView />} />
         <Route path="/skills" element={<Skills />} />
         <Route path="/training" element={<Training />} />
+        <Route path="/themes" element={<Themes />} />
         <Route path="/settings" element={<Settings />} />
         {/* Legacy routes */}
         <Route path="/brain" element={<Navigate to="/knowledge" replace />} />

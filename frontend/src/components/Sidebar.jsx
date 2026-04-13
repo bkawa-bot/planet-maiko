@@ -1,7 +1,8 @@
-import { NavLink } from "react-router-dom";
-import { Home, Inbox, CheckSquare, Bot, Brain, Wand2, GraduationCap, Settings, Bell, Shield, HelpCircle, X } from "lucide-react";
+import { NavLink, useNavigate } from "react-router-dom";
+import { Home, Inbox, CheckSquare, Bot, Brain, Wand2, GraduationCap, Settings, Bell, Shield, HelpCircle, X, Palette } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api/client";
+import { applyCustomTheme, clearCustomTheme, hydrateCachedCustomTheme } from "../utils/themes";
 import "./Sidebar.css";
 
 const NAV_ITEMS = [
@@ -32,9 +33,15 @@ function getAutoTheme() {
 }
 
 export default function Sidebar() {
-  const [theme, setTheme] = useState(
-    () => localStorage.getItem("maiko-theme") || "dark"
-  );
+  const navigate = useNavigate();
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem("maiko-theme") || "dark";
+    // Re-apply cached custom theme ASAP so the first paint uses the right
+    // colors instead of flashing the default dark theme.
+    hydrateCachedCustomTheme(saved);
+    return saved;
+  });
+  const [customThemes, setCustomThemes] = useState([]);
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const [badges, setBadges] = useState({});
   const [focusState, setFocusState] = useState("available");
@@ -44,6 +51,25 @@ export default function Sidebar() {
   const focusRef = useRef(null);
 
   useEffect(() => {
+    if (theme.startsWith("custom:")) {
+      const id = theme.slice("custom:".length);
+      const cached = customThemes.find((t) => t.id === id);
+      if (cached) {
+        applyCustomTheme(cached);
+      } else {
+        // Fetch if we don't have it yet (e.g. first load before the
+        // customThemes list arrives). hydrateCachedCustomTheme already
+        // handled the very-first render from localStorage.
+        api.getTheme(id).then(applyCustomTheme).catch(() => {
+          // Theme was deleted externally — fall back to dark.
+          setTheme("dark");
+        });
+      }
+      localStorage.setItem("maiko-theme", theme);
+      return undefined;
+    }
+
+    clearCustomTheme();
     const resolved = theme === "auto" ? getAutoTheme() : theme;
     document.documentElement.setAttribute("data-theme", resolved);
     localStorage.setItem("maiko-theme", theme);
@@ -53,7 +79,12 @@ export default function Sidebar() {
       }, 300000);
       return () => clearInterval(interval);
     }
-  }, [theme]);
+    return undefined;
+  }, [theme, customThemes]);
+
+  useEffect(() => {
+    api.getThemes().then(setCustomThemes).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const fetchBadges = async () => {
@@ -86,7 +117,12 @@ export default function Sidebar() {
     return () => document.removeEventListener("click", handleClick);
   }, []);
 
-  const themeEmoji = THEMES.find((t) => t.id === theme)?.emoji || "🌙";
+  const activeCustomTheme = theme.startsWith("custom:")
+    ? customThemes.find((t) => t.id === theme.slice("custom:".length))
+    : null;
+  const themeEmoji = activeCustomTheme?.emoji
+    || THEMES.find((t) => t.id === theme)?.emoji
+    || "🌙";
 
   return (
     <>
@@ -171,6 +207,26 @@ export default function Sidebar() {
                     <span>{t.emoji}</span> {t.label}
                   </button>
                 ))}
+                {customThemes.length > 0 && <div className="dropdown-divider" />}
+                {customThemes.map((t) => {
+                  const id = `custom:${t.id}`;
+                  return (
+                    <button
+                      key={id}
+                      className={`dropdown-item ${theme === id ? "active" : ""}`}
+                      onClick={() => { setTheme(id); setShowThemeMenu(false); }}
+                    >
+                      <span>{t.emoji || "🎨"}</span> {t.name}
+                    </button>
+                  );
+                })}
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-item dropdown-info"
+                  onClick={() => { navigate("/themes"); setShowThemeMenu(false); }}
+                >
+                  <Palette size={10} /> Customize themes...
+                </button>
               </div>
             )}
           </div>

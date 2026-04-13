@@ -76,6 +76,7 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.profiles_api import profiles_bp
     from planet_maiko.api.training_api import training_bp
     from planet_maiko.api.chat_api import chat_bp
+    from planet_maiko.api.themes_api import themes_bp
     app.register_blueprint(pupdates_bp, url_prefix="/api")
     app.register_blueprint(tasks_bp, url_prefix="/api")
     app.register_blueprint(projects_bp, url_prefix="/api")
@@ -91,6 +92,7 @@ def create_app(start_scheduler=False):
     app.register_blueprint(profiles_bp, url_prefix="/api")
     app.register_blueprint(training_bp, url_prefix="/api")
     app.register_blueprint(chat_bp, url_prefix="/api")
+    app.register_blueprint(themes_bp, url_prefix="/api")
 
     # Load plugins (entry_points + ~/.maiko/plugins/)
     from planet_maiko.plugins.loader import load_plugins
