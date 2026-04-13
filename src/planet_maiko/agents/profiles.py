@@ -50,8 +50,18 @@ FLAVOR_TEXTS = [
 ]
 
 
-def create_profile(agent_id, display_name=None, avatar=None):
-    """Create a new agent profile with a random name and avatar."""
+def create_profile(agent_id, display_name=None, avatar=None,
+                   role="coding", scope_repo=None, instructions=None):
+    """Create a new agent profile with a random name and avatar.
+
+    Args:
+        agent_id: primary key for the profile.
+        display_name: optional; if omitted, a random unused name is picked.
+        avatar: optional; random if omitted.
+        role: "coding" | "review" | "investigation" (default "coding").
+        scope_repo: optional single-repo scope. null = global.
+        instructions: optional markdown injected into every session.
+    """
     existing = db.session.get(AgentProfile, agent_id)
     if existing:
         return existing
@@ -68,11 +78,14 @@ def create_profile(agent_id, display_name=None, avatar=None):
         display_name=display_name,
         avatar=avatar or random.choice(AVATARS),
         flavor_text=random.choice(FLAVOR_TEXTS),
+        role=role,
+        scope_repo=scope_repo,
+        instructions=instructions,
     )
     db.session.add(profile)
     db.session.commit()
 
-    logger.info(f"[profiles] New agent arrived: {display_name} ({agent_id})")
+    logger.info(f"[profiles] New agent arrived: {display_name} ({agent_id}) role={role} scope={scope_repo}")
     return profile
 
 

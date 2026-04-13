@@ -7,8 +7,13 @@ class Task(db.Model):
 
     id = db.Column(db.String(128), primary_key=True)
     title = db.Column(db.String(512), nullable=False)
-    type = db.Column(db.String(50), default="todo")  # todo, bug, feature, review
-    status = db.Column(db.String(50), default="new", index=True)  # new, in_progress, done, cancelled
+    # type — coding: todo/bug/feature/review; orchestration roles:
+    # investigation, repo_analysis. Used by the router to pick an agent role.
+    type = db.Column(db.String(50), default="todo")
+    # Statuses: blocked (has unfinished deps) → new (ready to start) →
+    # in_progress → review/done/cancelled. "blocked" is new for the
+    # orchestration layer.
+    status = db.Column(db.String(50), default="new", index=True)
     priority = db.Column(db.String(20), default="normal", index=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
@@ -19,6 +24,9 @@ class Task(db.Model):
     extra = db.Column("metadata", db.JSON, default=dict)
     assigned_agent_id = db.Column(db.String(128), nullable=True)
     due_date = db.Column(db.String(20), nullable=True)  # ISO date string YYYY-MM-DD
+    # List of task IDs this task depends on. While any dep is not done, the
+    # task stays in "blocked" status. Stored as JSON for SQLite simplicity.
+    depends_on = db.Column(db.JSON, default=list)
 
     source_pupdate = db.relationship("Pupdate", backref="tasks")
     project = db.relationship("Project", backref="tasks")
@@ -39,4 +47,5 @@ class Task(db.Model):
             "url": self.url,
             "tags": self.tags,
             "metadata": self.extra,
+            "depends_on": self.depends_on or [],
         }

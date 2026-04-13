@@ -133,6 +133,56 @@
 }
 .strategies-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
 .strategy-card.archived { opacity: 0.5; }
+
+/* Role-grouped profiles view */
+.agents-role-section { margin-bottom: 20px; }
+.agents-role-header {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  margin-bottom: 8px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.agents-role-count {
+  font-size: 10px; color: var(--text-muted);
+  background: var(--bg-hover); padding: 1px 6px;
+  border-radius: 999px; margin-left: 4px;
+  text-transform: none; letter-spacing: 0;
+}
+.scope-tag { background: var(--blue-soft); color: var(--blue); font-size: 9px; padding: 1px 6px; border-radius: 8px; }
+.adapter-tag { background: var(--pink-soft); color: var(--pink); font-size: 9px; padding: 1px 6px; border-radius: 8px; }
+
+/* Agent edit modal */
+.agent-edit-modal {
+  background: var(--bg-card); border-radius: 16px;
+  max-width: 640px; width: calc(100% - 40px); max-height: 90vh;
+  display: flex; flex-direction: column;
+}
+.agent-edit-body { display: flex; flex-direction: column; gap: 12px; }
+.agent-edit-row { display: grid; grid-template-columns: 1fr 1.5fr; gap: 10px; }
+.agent-edit-row label, .agent-edit-full {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 11px; color: var(--text-dim); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.agent-edit-body input[type="text"], .agent-edit-body select, .agent-edit-body textarea {
+  padding: 7px 10px;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-xs);
+  font-size: 13px; font-family: inherit;
+  text-transform: none; letter-spacing: 0; font-weight: 400;
+}
+.agent-edit-body textarea {
+  font-family: var(--font-mono); font-size: 12px;
+  resize: vertical; line-height: 1.5;
+}
+.agent-edit-body input:focus, .agent-edit-body select:focus, .agent-edit-body textarea:focus {
+  border-color: var(--pink); outline: none;
+}
+.agent-edit-footer {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 12px 20px; border-top: 1px solid var(--border-subtle);
+}
 .archived-tag { background: var(--bg); color: var(--text-muted); font-size: 9px; padding: 1px 5px; border-radius: 4px; }
 .context-set-section { max-height: 120px; overflow-y: auto; }
 .context-set-list { display: flex; flex-direction: column; gap: 3px; }

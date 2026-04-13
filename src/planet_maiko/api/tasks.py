@@ -107,6 +107,52 @@ def cancel_task(task_id):
     return jsonify({"status": "deleted", "id": task_id})
 
 
+@tasks_bp.route("/tasks/<task_id>/reassign", methods=["POST"])
+def reassign_task(task_id):
+    """Reassign a task to a different agent.
+
+    Body: { agent_id?: str }. If agent_id is omitted, the router picks a
+    different agent of the same role for the task's scope, lazy-spawning
+    if needed. If the same agent would be picked again, returns 409.
+    """
+    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.orchestration import role_for_task, scope_for_task, find_profile, maybe_spawn
+
+    task = db.get_or_404(Task, task_id)
+    data = request.get_json(silent=True) or {}
+    current = task.assigned_agent_id
+    target_id = data.get("agent_id")
+
+    if target_id:
+        profile = db.session.get(AgentProfile, target_id)
+        if not profile:
+            return jsonify({"error": "agent not found"}), 404
+        task.assigned_agent_id = profile.id
+    else:
+        # Auto-pick: force a new agent of the same role. Archive the
+        # current so the router's simple find-match lookup skips it,
+        # spawn a replacement.
+        if current:
+            old = db.session.get(AgentProfile, current)
+            if old:
+                old.archived = True
+                old.archived_at = datetime.now(timezone.utc)
+        role = role_for_task(task)
+        scope = scope_for_task(task)
+        found = find_profile(role, scope)
+        new_profile = found or maybe_spawn(role, scope)
+        if new_profile.id == current:
+            return jsonify({"error": "no alternative agent available"}), 409
+        task.assigned_agent_id = new_profile.id
+
+    # Reset status so the new agent picks it up next cycle.
+    if task.status == "in_progress":
+        task.status = "new"
+    task.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify(task.to_dict())
+
+
 @tasks_bp.route("/tasks/<task_id>/linear", methods=["POST"])
 def send_task_to_linear(task_id):
     """Create a Linear issue from a Maiko task.

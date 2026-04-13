@@ -17,8 +17,10 @@ Pipeline (phases run in this order):
     5.  heartbeats           — nudge silent agents
     6.  projects             — auto-advance project phases
     7.  scheduled_skills     — run skills on their schedules
-    8a. auto_review_prs      — auto-run pr-review skill on review requests
-    8.  auto_investigate     — auto-run investigate skill on CI failures
+    8.  orchestrate          — materialize investigation tasks + route
+                               unassigned tasks to agent profiles
+    8b. unblock              — cascade depends_on completion
+    8c. execute_agent_tasks  — run review / investigation agents' tasks
 
 Note: morning brief is user-triggered from the Home page (not a cycle
 phase — nobody wants a "morning" brief running at 3am when the first
@@ -246,94 +248,296 @@ def _phase_scheduled_skills():
         return []
 
 
-def _phase_auto_review_prs():
-    """Phase 8a: Auto-run the pr-review skill on new review requests.
+_INVESTIGATION_TYPES = ("pr_ci_failed", "incident", "error_spike")
 
-    Limited to 2 per cycle to keep token spend predictable. Each completed
-    review is stored as a pupdate so the user can find it in the Inbox
-    "From Maiko" tab. The source pupdate gets an "auto_reviewed" tag so
-    it isn't reprocessed next cycle.
+
+def _phase_orchestrate():
+    """Phase 8: Route unassigned tasks to agents and create tasks for
+    investigable signals that haven't been materialized yet.
+
+    Does three things per cycle:
+
+    1. For each brain-processed investigable pupdate (CI failure, incident,
+       error spike) without a spawned investigation task, create one.
+    2. For every task with status in (new, blocked) and no
+       assigned_agent_id, call route(task) to assign.
+    3. Keep review tasks pointed at a review-role agent even if the
+       original task_from_review_request rule assigned them generically.
+
+    Idempotent — repeated runs are no-ops once everything is routed.
     """
+    from planet_maiko.models.pupdate import Pupdate
+    from planet_maiko.models.task import Task
+    from planet_maiko.database import db
+    from planet_maiko.orchestration import route
+
+    created = 0
+    routed = 0
+
     try:
-        from planet_maiko.models.pupdate import Pupdate
-        to_review = Pupdate.query.filter(
-            Pupdate.type == "pr_review_requested",
-            Pupdate.brain_processed == True,  # noqa: E712
-            Pupdate.dismissed == False,  # noqa: E712
-            ~Pupdate.tags.contains("auto_reviewed"),
-        ).limit(2).all()
-
-        reviewed = 0
-        if to_review:
-            import uuid
-            from planet_maiko.agents.brain_session import run_skill
-            from planet_maiko.database import db
-            for p in to_review:
-                try:
-                    meta = p.extra or {}
-                    repo = meta.get("repo", "")
-                    number = meta.get("number", "")
-                    result = run_skill("pr-review", context={
-                        "query": f"Review PR #{number} in {repo}: {p.title}",
-                        "context": f"URL: {p.url or ''}\n{p.body or ''}",
-                    })
-                    if result and result.get("success") and result.get("output"):
-                        review_pupdate = Pupdate(
-                            id=f"pr-review-{uuid.uuid4().hex[:8]}",
-                            source="maiko",
-                            type="pr_review_complete",
-                            priority="normal",
-                            title=f"Review ready: {p.title}",
-                            body=result["output"][:8000],
-                            url=p.url,
-                            actionable=True,
-                            action_hint="Open review",
-                            tags=["pr_review", "maiko"] + [t for t in (p.tags or []) if t],
-                        )
-                        db.session.add(review_pupdate)
-                    p.tags = list(p.tags or []) + ["auto_reviewed"]
-                    reviewed += 1
-                except Exception as e:
-                    logger.debug(f"[cycle] Auto-review of {p.id} failed: {e}")
-            db.session.commit()
-        return {"reviewed": reviewed}
-    except Exception as e:
-        logger.debug(f"[cycle] Auto-review skipped: {e}")
-        return {"reviewed": 0}
-
-
-def _phase_auto_investigate():
-    """Phase 8: Auto-investigate CI failures and incidents."""
-    try:
-        from planet_maiko.models.pupdate import Pupdate
-        investigate_types = ["pr_ci_failed", "incident", "error_spike"]
+        # 1. Materialize investigation tasks for unprocessed signals.
         to_investigate = Pupdate.query.filter(
-            Pupdate.type.in_(investigate_types),
+            Pupdate.type.in_(_INVESTIGATION_TYPES),
             Pupdate.brain_processed == True,  # noqa: E712
             Pupdate.dismissed == False,  # noqa: E712
-            ~Pupdate.tags.contains("auto_investigated"),
+            ~Pupdate.tags.contains("investigation_spawned"),
+        ).limit(4).all()
+
+        for p in to_investigate:
+            meta = p.extra or {}
+            repo = meta.get("repo") or meta.get("repository")
+            task_id = f"investigation-{p.id[:24]}"
+            if db.session.get(Task, task_id):
+                p.tags = list(p.tags or []) + ["investigation_spawned"]
+                continue
+            t = Task(
+                id=task_id,
+                title=f"Investigate: {p.title}",
+                type="investigation",
+                status="new",
+                priority=p.priority or "normal",
+                source_pupdate_id=p.id,
+                url=p.url,
+                extra={"repo": repo} if repo else {},
+                tags=["investigation"],
+            )
+            db.session.add(t)
+            p.tags = list(p.tags or []) + ["investigation_spawned"]
+            created += 1
+
+        # 2. Route any still-unrouted active tasks.
+        unrouted = Task.query.filter(
+            Task.status.in_(["new", "blocked"]),
+            Task.assigned_agent_id.is_(None),
+        ).limit(50).all()
+        for t in unrouted:
+            try:
+                route(t)
+                routed += 1
+            except Exception as e:
+                logger.debug(f"[cycle] route() failed for {t.id}: {e}")
+
+        if created or routed:
+            db.session.commit()
+        return {"investigation_tasks_created": created, "routed": routed}
+    except Exception as e:
+        logger.debug(f"[cycle] Orchestrate skipped: {e}")
+        return {"investigation_tasks_created": 0, "routed": 0, "error": str(e)}
+
+
+def _phase_unblock_tasks():
+    """Phase 8b: Cascade dep completion — any blocked task whose deps are
+    all done flips to "new" so its agent can pick it up."""
+    from planet_maiko.models.task import Task
+    from planet_maiko.database import db
+    from planet_maiko.orchestration import is_ready
+
+    try:
+        blocked = Task.query.filter(Task.status == "blocked").all()
+        unblocked = 0
+        for t in blocked:
+            if is_ready(t):
+                t.status = "new"
+                unblocked += 1
+        if unblocked:
+            db.session.commit()
+            logger.info(f"[cycle] Unblocked {unblocked} task(s)")
+        return {"unblocked": unblocked}
+    except Exception as e:
+        logger.debug(f"[cycle] Unblock phase skipped: {e}")
+        return {"unblocked": 0}
+
+
+def _phase_stuck_escalation():
+    """Phase 8d: Surface tasks stuck in_progress for too long as a
+    high-priority "needs rescue" pupdate.
+
+    A task in_progress whose updated_at is older than STUCK_DAYS gets a
+    single escalation pupdate (dedup by source_id). The user can open
+    the task and hit "Reassign" to route it to a different agent. When
+    the task is no longer stuck (moved to done/cancelled or updated),
+    the escalation pupdate is auto-dismissed.
+    """
+    from datetime import datetime, timezone, timedelta
+    from planet_maiko.models.task import Task
+    from planet_maiko.models.pupdate import Pupdate
+    from planet_maiko.database import db
+
+    STUCK_DAYS = 3
+    now = datetime.now(timezone.utc)
+    threshold = now - timedelta(days=STUCK_DAYS)
+
+    try:
+        in_progress = Task.query.filter(Task.status == "in_progress").all()
+        escalated = 0
+        for t in in_progress:
+            updated = t.updated_at
+            if updated is None:
+                continue
+            if updated.tzinfo is None:
+                updated = updated.replace(tzinfo=timezone.utc)
+            if updated >= threshold:
+                continue
+
+            source_id = f"stuck-task/{t.id}"
+            existing = Pupdate.query.filter_by(source_id=source_id).first()
+            if existing and not existing.dismissed:
+                continue  # already surfaced
+
+            days = (now - updated).days
+            agent_name = (t.assigned_agent_id or "unassigned")
+            p = Pupdate(
+                id=f"stuck-{t.id[:32]}",
+                source="maiko",
+                source_id=source_id,
+                type="stuck_task",
+                priority="high",
+                title=f"Stuck task: {t.title}",
+                body=f"Task has been in_progress for {days} days with no updates. Assigned to {agent_name}.",
+                actionable=True,
+                action_hint="Reassign or check in",
+                tags=["stuck", t.id, agent_name],
+                extra={"task_id": t.id, "days_stuck": days},
+            )
+            db.session.add(p)
+            escalated += 1
+
+        # Auto-dismiss escalations whose task is no longer stuck.
+        dismissed = 0
+        open_escalations = Pupdate.query.filter_by(type="stuck_task", dismissed=False).all()
+        for p in open_escalations:
+            task_id = (p.extra or {}).get("task_id")
+            if not task_id:
+                continue
+            task = db.session.get(Task, task_id)
+            if not task or task.status != "in_progress":
+                # Task completed / cancelled / gone — close the escalation.
+                p.dismissed = True
+                p.dismissed_at = now
+                dismissed += 1
+
+        if escalated or dismissed:
+            db.session.commit()
+        return {"escalated": escalated, "auto_dismissed": dismissed}
+    except Exception as e:
+        logger.debug(f"[cycle] Stuck escalation skipped: {e}")
+        return {"escalated": 0, "auto_dismissed": 0}
+
+
+def _phase_execute_agent_tasks():
+    """Phase 8c: Run one-shot skill-based agents (review / investigation)
+    on their assigned tasks.
+
+    Coding tasks are NOT handled here — those go through coding_agent's
+    worktree + session flow when the user (or an auto-start setting)
+    kicks them off. Only review-role and investigation-role agents whose
+    work is a single skill call get executed here.
+
+    Limited to 2 per cycle to bound token spend. When a task completes,
+    the artifact is stored on task.extra, a result pupdate is created
+    for visibility in From Maiko, and the task is marked done.
+    """
+    from planet_maiko.models.task import Task
+    from planet_maiko.models.pupdate import Pupdate
+    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.database import db
+    import uuid
+    from datetime import datetime, timezone
+
+    ROLE_FOR_TYPE = {
+        "investigation": ("investigation", "investigate"),
+        "repo_analysis": ("investigation", "repo-analysis"),
+        "review": ("review", "pr-review"),
+        "pr_review": ("review", "pr-review"),
+    }
+
+    try:
+        # Candidates: tasks in "new" status, assigned, with a type we
+        # can execute via a single skill call.
+        candidates = Task.query.filter(
+            Task.status == "new",
+            Task.assigned_agent_id.isnot(None),
+            Task.type.in_(list(ROLE_FOR_TYPE.keys())),
         ).limit(2).all()
 
-        investigated = 0
-        if to_investigate:
-            from planet_maiko.agents.brain_session import run_skill
-            from planet_maiko.database import db
-            for p in to_investigate:
-                try:
-                    run_skill("investigate", context={
-                        "query": f"Investigate: {p.title}",
-                        "context": f"Source: {p.source}\nURL: {p.url or ''}\n{p.body or ''}",
-                        "pupdates": "[]", "tasks": "[]", "calendar": "[]",
-                    })
-                    p.tags = list(p.tags or []) + ["auto_investigated"]
-                    investigated += 1
-                except Exception as e:
-                    logger.debug(f"[cycle] Auto-investigate of {p.id} failed: {e}")
+        if not candidates:
+            return {"executed": 0}
+
+        from planet_maiko.agents.brain_session import run_skill_as_agent
+
+        executed = 0
+        for task in candidates:
+            role, skill_name = ROLE_FOR_TYPE[task.type]
+            agent = db.session.get(AgentProfile, task.assigned_agent_id)
+            if not agent or agent.role != role:
+                # Router mis-assigned — skip, next cycle will re-route
+                continue
+
+            task.status = "in_progress"
             db.session.commit()
-        return {"investigated": investigated}
+
+            meta = task.extra or {}
+            context = {
+                "query": task.title,
+                "context": f"URL: {task.url or ''}\nRepo: {meta.get('repo', '')}",
+                "pupdates": "[]", "tasks": "[]", "calendar": "[]",
+            }
+
+            try:
+                result = run_skill_as_agent(
+                    agent.id, skill_name, context=context,
+                )
+            except Exception as e:
+                logger.warning(f"[cycle] Agent task {task.id} run failed: {e}")
+                task.status = "new"  # allow retry next cycle
+                task.extra = {**(task.extra or {}), "last_error": str(e)[:200]}
+                db.session.commit()
+                continue
+
+            if not result or not result.get("success") or not result.get("output"):
+                task.status = "new"
+                task.extra = {**(task.extra or {}), "last_error": (result or {}).get("error", "no output")[:200]}
+                db.session.commit()
+                continue
+
+            output = result["output"]
+            task.status = "done"
+            task.extra = {
+                **(task.extra or {}),
+                "artifact": output[:16000],
+                "completed_by": agent.id,
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            }
+
+            # Publish a pupdate so the artifact surfaces in "From Maiko"
+            result_type = "pr_review_complete" if role == "review" else "investigation_complete"
+            action_hint = "Open review" if role == "review" else "Open investigation"
+            title_prefix = "Review ready" if role == "review" else "Investigation ready"
+            result_pupdate = Pupdate(
+                id=f"{role}-result-{uuid.uuid4().hex[:8]}",
+                source="maiko",
+                type=result_type,
+                priority="normal",
+                title=f"{title_prefix}: {task.title}",
+                body=output[:8000],
+                url=task.url,
+                actionable=True,
+                action_hint=action_hint,
+                tags=[role, "maiko", agent.id],
+            )
+            db.session.add(result_pupdate)
+
+            # Attribution — increment the agent's completed count.
+            agent.tasks_completed = (agent.tasks_completed or 0) + 1
+            agent.last_active_at = datetime.now(timezone.utc)
+
+            executed += 1
+
+        db.session.commit()
+        return {"executed": executed}
     except Exception as e:
-        logger.debug(f"[cycle] Auto-investigate skipped: {e}")
-        return {"investigated": 0}
+        logger.debug(f"[cycle] Execute agent tasks skipped: {e}")
+        return {"executed": 0, "error": str(e)}
 
 
 # ---------------------------------------------------------------------------
@@ -356,8 +560,10 @@ _PHASES = [
     ("heartbeats", _phase_heartbeats),
     ("projects", _phase_projects),
     ("scheduled_skills", _phase_scheduled_skills),
-    ("auto_review_prs", _phase_auto_review_prs),
-    ("auto_investigate", _phase_auto_investigate),
+    ("orchestrate", _phase_orchestrate),
+    ("unblock", _phase_unblock_tasks),
+    ("execute_agent_tasks", _phase_execute_agent_tasks),
+    ("stuck_escalation", _phase_stuck_escalation),
 ]
 
 

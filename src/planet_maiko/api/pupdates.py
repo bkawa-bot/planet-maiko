@@ -89,3 +89,114 @@ def dismiss_pupdate(pupdate_id):
     pupdate.dismissed_at = datetime.now(timezone.utc)
     db.session.commit()
     return jsonify(pupdate.to_dict())
+
+
+@pupdates_bp.route("/proposals", methods=["POST"])
+def create_proposal():
+    """Create an agent_proposal pupdate — proposed follow-up work that lands
+    in From Maiko for user approval.
+
+    Body shape: {
+      id?, title, from_agent_id, reasoning,
+      draft: { title, type, priority, repo, category, description, depends_on? },
+      priority?
+    }
+    The draft is exactly the shape approve_proposal() will use to create a Task.
+    """
+    import uuid as _uuid
+    data = request.get_json(silent=True) or {}
+
+    if not data.get("title") or not data.get("draft"):
+        return jsonify({"error": "title and draft are required"}), 400
+
+    pupdate_id = data.get("id") or f"proposal-{_uuid.uuid4().hex[:10]}"
+    pupdate = Pupdate(
+        id=pupdate_id,
+        source="maiko",
+        type="agent_proposal",
+        priority=data.get("priority", "normal"),
+        title=data["title"],
+        body=data.get("reasoning") or "",
+        actionable=True,
+        action_hint="Approve / edit / dismiss",
+        tags=["proposal", "from_maiko"],
+        extra={
+            "from_agent_id": data.get("from_agent_id"),
+            "draft": data["draft"],
+        },
+    )
+    db.session.add(pupdate)
+    db.session.commit()
+    return jsonify(pupdate.to_dict()), 201
+
+
+@pupdates_bp.route("/proposals/<pupdate_id>/approve", methods=["POST"])
+def approve_proposal(pupdate_id):
+    """Turn an agent_proposal into a real routed task.
+
+    The body can include an edited draft; otherwise we use whatever's in
+    the pupdate's extra.draft. On success we mark the pupdate dismissed
+    so it leaves the From Maiko queue — the resulting task is the new
+    artifact to track.
+    """
+    from planet_maiko.models.task import Task
+    from planet_maiko.orchestration import route, is_ready
+    import uuid as _uuid
+
+    pupdate = db.get_or_404(Pupdate, pupdate_id)
+    if pupdate.type != "agent_proposal":
+        return jsonify({"error": "not a proposal"}), 400
+
+    body = request.get_json(silent=True) or {}
+    draft = body.get("draft") or (pupdate.extra or {}).get("draft") or {}
+    if not draft.get("title"):
+        return jsonify({"error": "draft.title is required"}), 400
+
+    task = Task(
+        id=f"task-{_uuid.uuid4().hex[:10]}",
+        title=draft["title"],
+        type=draft.get("type") or "todo",
+        priority=draft.get("priority") or pupdate.priority or "normal",
+        status="new",
+        source_pupdate_id=pupdate.id,
+        url=pupdate.url,
+        extra={
+            "description": draft.get("description") or pupdate.body or "",
+            "repo": draft.get("repo") or "",
+            "category": draft.get("category") or "",
+            "from_proposal": pupdate.id,
+        },
+        tags=["from_proposal"],
+        depends_on=draft.get("depends_on") or [],
+    )
+    db.session.add(task)
+    db.session.flush()
+
+    # Route (honoring any explicit override from the edited draft)
+    override = draft.get("assigned_agent_id")
+    if override:
+        task.assigned_agent_id = override
+    else:
+        route(task)
+    task.status = "blocked" if not is_ready(task) else "new"
+
+    # Dismiss the proposal — it's been actioned.
+    pupdate.dismissed = True
+    pupdate.dismissed_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    return jsonify({"task": task.to_dict(), "proposal_id": pupdate.id}), 201
+
+
+@pupdates_bp.route("/proposals/<pupdate_id>/dismiss", methods=["POST"])
+def dismiss_proposal(pupdate_id):
+    """Reject a proposal — dismisses the pupdate. Stored as feedback for
+    the proposing agent (decremented score, tag on the pupdate)."""
+    pupdate = db.get_or_404(Pupdate, pupdate_id)
+    if pupdate.type != "agent_proposal":
+        return jsonify({"error": "not a proposal"}), 400
+    pupdate.dismissed = True
+    pupdate.dismissed_at = datetime.now(timezone.utc)
+    pupdate.tags = list(pupdate.tags or []) + ["rejected"]
+    db.session.commit()
+    return jsonify(pupdate.to_dict())

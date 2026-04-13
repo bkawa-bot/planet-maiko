@@ -156,6 +156,64 @@ def run_skill(skill_name, context=None, working_dir=None):
     return result
 
 
+def run_skill_as_agent(agent_profile_id, skill_name, context=None, working_dir=None):
+    """Run a skill attributed to a specific agent profile.
+
+    Wraps run_skill and prepends the agent's markdown instructions to the
+    prompt so the model adopts the agent's persona / rules for this
+    session. If the profile has no instructions, this is equivalent to
+    calling run_skill directly.
+
+    The agent's LoRA adapter path (profile.extra.adapter_path) is noted
+    in the context for future inference-time wiring — today it's not
+    actually loaded for skill runs (that's only used by the pre-commit
+    hook). This preserves the hook semantics while letting us attribute
+    work to a profile.
+    """
+    from planet_maiko.models.agent_profile import AgentProfile
+    profile = db.session.get(AgentProfile, agent_profile_id) if agent_profile_id else None
+    if not profile:
+        return run_skill(skill_name, context, working_dir)
+
+    runtime = _get_runtime()
+    if not runtime.is_available():
+        return {"output": "", "success": False, "error": "Brain runtime not available"}
+
+    from planet_maiko.agents.skills import get_skill_prompt
+    prompt = get_skill_prompt(skill_name, context or {})
+    if prompt is None:
+        return {"output": "", "success": False, "error": f"Unknown skill: {skill_name}"}
+
+    # Prepend the agent's persona + instructions so their voice and rules
+    # shape every response. Generic defaults are used when fields are
+    # empty so the model always sees a consistent preamble.
+    preamble_lines = [
+        f"You are {profile.display_name or 'an agent'}, a Planet Maiko {profile.role} agent.",
+    ]
+    if profile.scope_repo:
+        preamble_lines.append(f"You specialize in the {profile.scope_repo} repository.")
+    if profile.flavor_text:
+        preamble_lines.append(profile.flavor_text)
+    if profile.instructions:
+        preamble_lines.append("\nYour instructions:")
+        preamble_lines.append(profile.instructions.strip())
+    preamble = "\n".join(preamble_lines) + "\n\n---\n\n"
+
+    full_prompt = preamble + prompt
+
+    timeout = 600 if skill_name in ("investigate", "brainstorm", "repo-analysis") else 120
+    from planet_maiko.agents.routing import resolve_model
+    db.session.close()
+    result = runtime.send(full_prompt, working_dir=working_dir, timeout=timeout,
+                          model=resolve_model(f"skill:{skill_name}"))
+    # Refresh the profile since session closed — update last_active_at.
+    profile = db.session.get(AgentProfile, agent_profile_id)
+    if profile:
+        profile.last_active_at = datetime.now(timezone.utc)
+        db.session.commit()
+    return result
+
+
 def reorder_tasks_with_hint(tasks, instructions):
     """Ask the brain to reorder tasks given a free-text user instruction.
 

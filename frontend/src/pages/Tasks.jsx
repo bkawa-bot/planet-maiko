@@ -347,33 +347,124 @@ export default function Tasks() {
         />
       )}
 
-      {/* Generated tasks review modal */}
+      {/* Plan editor — review + edit generated tasks before approval */}
       {generatedTasks && (
         <div className="modal-overlay" onClick={() => setGeneratedTasks(null)}>
-          <div className="generated-tasks-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="plan-editor" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <Sparkles size={14} />
-              <span>Review Generated Tasks</span>
+              <span>Review Plan</span>
               <button className="btn btn-sm" onClick={() => setGeneratedTasks(null)} style={{ marginLeft: "auto" }}><X size={10} /></button>
             </div>
             <div className="modal-body">
               <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>
-                Maiko suggested these tasks. Remove any you don't want, then approve.
+                Maiko drafted this plan. Tweak titles, deps, or agents before approving. On approve, tasks are created, routed, and ready ones go active.
               </p>
-              <div className="generated-task-list">
+              <div className="plan-task-list">
                 {generatedTasks.tasks.map((gt, i) => (
-                  <div key={i} className="generated-task-item card">
-                    <div className="generated-task-top">
-                      <span className={`badge ${gt.priority}`}>{gt.priority}</span>
-                      <span className="generated-task-title">{gt.title}</span>
-                      <button className="btn btn-sm btn-danger" onClick={() => {
-                        setGeneratedTasks((prev) => ({
-                          ...prev,
-                          tasks: prev.tasks.filter((_, j) => j !== i),
-                        }));
-                      }}><Trash2 size={9} /></button>
+                  <div key={i} className="plan-task card">
+                    <div className="plan-task-header">
+                      <span className="plan-task-idx">#{i + 1}</span>
+                      <input
+                        className="plan-task-title-input"
+                        value={gt.title || ""}
+                        onChange={(e) => setGeneratedTasks((p) => ({
+                          ...p, tasks: p.tasks.map((t, j) => j === i ? { ...t, title: e.target.value } : t),
+                        }))}
+                      />
+                      <button className="btn btn-sm btn-danger" title="Remove" onClick={() => setGeneratedTasks((p) => ({
+                        ...p,
+                        // Also drop this index from any task that depended on it, and shift indices > i down
+                        tasks: p.tasks
+                          .filter((_, j) => j !== i)
+                          .map((t) => ({
+                            ...t,
+                            depends_on: (t.depends_on || [])
+                              .filter((d) => d !== i)
+                              .map((d) => d > i ? d - 1 : d),
+                          })),
+                      }))}><Trash2 size={9} /></button>
                     </div>
-                    {gt.description && <div className="generated-task-desc">{gt.description}</div>}
+                    <div className="plan-task-row">
+                      <select
+                        className="plan-task-select"
+                        value={gt.priority || "normal"}
+                        onChange={(e) => setGeneratedTasks((p) => ({
+                          ...p, tasks: p.tasks.map((t, j) => j === i ? { ...t, priority: e.target.value } : t),
+                        }))}
+                      >
+                        {["urgent", "high", "normal", "low"].map((x) => <option key={x} value={x}>{x}</option>)}
+                      </select>
+                      <select
+                        className="plan-task-select"
+                        value={gt.type || "todo"}
+                        onChange={(e) => setGeneratedTasks((p) => ({
+                          ...p, tasks: p.tasks.map((t, j) => j === i ? { ...t, type: e.target.value } : t),
+                        }))}
+                      >
+                        {["todo", "bug", "feature", "review", "investigation", "repo_analysis"].map((x) => <option key={x} value={x}>{x}</option>)}
+                      </select>
+                      <input
+                        className="plan-task-input"
+                        placeholder="repo (org/name)"
+                        value={gt.repo || ""}
+                        onChange={(e) => setGeneratedTasks((p) => ({
+                          ...p, tasks: p.tasks.map((t, j) => j === i ? { ...t, repo: e.target.value } : t),
+                        }))}
+                      />
+                      <input
+                        className="plan-task-input"
+                        placeholder="category"
+                        value={gt.category || ""}
+                        onChange={(e) => setGeneratedTasks((p) => ({
+                          ...p, tasks: p.tasks.map((t, j) => j === i ? { ...t, category: e.target.value } : t),
+                        }))}
+                      />
+                    </div>
+                    {gt.description && (
+                      <div className="plan-task-desc">{gt.description}</div>
+                    )}
+                    <div className="plan-task-foot">
+                      <div className="plan-task-deps">
+                        <span className="plan-task-deps-label">Blocked by:</span>
+                        {(gt.depends_on || []).length === 0 && <span className="plan-task-deps-none">nothing</span>}
+                        {(gt.depends_on || []).map((d) => (
+                          <span key={d} className="plan-dep-chip">
+                            #{d + 1}
+                            <button className="btn-ghost" onClick={() => setGeneratedTasks((p) => ({
+                              ...p, tasks: p.tasks.map((t, j) => j === i ? { ...t, depends_on: (t.depends_on || []).filter((x) => x !== d) } : t),
+                            }))}><X size={9} /></button>
+                          </span>
+                        ))}
+                        <select
+                          className="plan-dep-add"
+                          value=""
+                          onChange={(e) => {
+                            const idx = parseInt(e.target.value, 10);
+                            if (Number.isNaN(idx)) return;
+                            setGeneratedTasks((p) => ({
+                              ...p,
+                              tasks: p.tasks.map((t, j) => j === i
+                                ? { ...t, depends_on: [...new Set([...(t.depends_on || []), idx])].sort((a, b) => a - b) }
+                                : t),
+                            }));
+                          }}
+                        >
+                          <option value="">+ add dep</option>
+                          {generatedTasks.tasks.map((other, j) => (
+                            j !== i && !(gt.depends_on || []).includes(j)
+                              ? <option key={j} value={j}>#{j + 1}: {other.title?.slice(0, 40) || "(untitled)"}</option>
+                              : null
+                          ))}
+                        </select>
+                      </div>
+                      <div className="plan-task-agent">
+                        <span className="plan-task-deps-label">Agent:</span>
+                        {gt.suggested_agent?.spawn_new
+                          ? <span className="plan-agent-chip new">{gt.suggested_agent.display_name}</span>
+                          : <span className="plan-agent-chip">{gt.suggested_agent?.display_name || "unrouted"}</span>}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -383,26 +474,17 @@ export default function Tasks() {
               <div style={{ display: "flex", gap: 6 }}>
                 <button className="btn" onClick={() => setGeneratedTasks(null)}>Cancel</button>
                 <button className="btn btn-primary" onClick={async () => {
-                  for (let idx = 0; idx < generatedTasks.tasks.length; idx++) {
-                    const gt = generatedTasks.tasks[idx];
-                    await api.createTask({
-                      id: `task-${Date.now()}-${String(idx).padStart(3, "0")}`,
-                      title: gt.title,
-                      type: gt.type || "todo",
-                      priority: gt.priority || "normal",
-                      project_id: generatedTasks.project_id,
-                      metadata: gt.description ? { description: gt.description } : undefined,
-                    });
-                  }
-                  // Clear generated tasks from project metadata
                   try {
-                    await api.updateProject(generatedTasks.project_id, { metadata: { generated_tasks: null } });
-                  } catch (e) {}
-                  showToast(`Created ${generatedTasks.tasks.length} task(s)!`, "normal");
-                  setGeneratedTasks(null);
-                  fetchData();
+                    const res = await api.approvePlan(generatedTasks.project_id, generatedTasks.tasks);
+                    const n = res.tasks_created?.length || 0;
+                    showToast(`Approved plan — ${n} task(s) created and routed`, "normal");
+                    setGeneratedTasks(null);
+                    fetchData();
+                  } catch (err) {
+                    showToast("Approve failed: " + err.message, "high");
+                  }
                 }}>
-                  <CheckSquare size={12} /> Approve & Create All
+                  <CheckSquare size={12} /> Approve Plan
                 </button>
               </div>
             </div>

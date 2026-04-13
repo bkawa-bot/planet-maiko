@@ -17,6 +17,16 @@ class AgentProfile(db.Model):
     breed = db.Column(db.String(50), default="pup")  # pup, junior, senior, expert
     flavor_text = db.Column(db.String(256), nullable=True)  # "Loves debugging. Afraid of CSS."
 
+    # Orchestration identity. Role picks what kind of work this agent takes
+    # ("coding" default for backward compat; "review" / "investigation" for
+    # the new roles). scope_repo narrows it to a single repo — null means
+    # "global" (e.g. the Detective for cross-repo incidents).
+    role = db.Column(db.String(32), default="coding", index=True)
+    scope_repo = db.Column(db.String(256), nullable=True, index=True)
+    # Markdown injected into every session this agent runs — the "soul" of
+    # the agent. Analogous to AGENTS.md / CLAUDE.md but per-profile.
+    instructions = db.Column(db.Text, nullable=True)
+
     # Stats
     tasks_completed = db.Column(db.Integer, default=0)
     tasks_failed = db.Column(db.Integer, default=0)
@@ -67,6 +77,9 @@ class AgentProfile(db.Model):
             "breed": self.breed,
             "rank": self.rank(),
             "flavor_text": self.flavor_text,
+            "role": self.role or "coding",
+            "scope_repo": self.scope_repo,
+            "instructions": self.instructions or "",
             "tasks_completed": self.tasks_completed,
             "tasks_failed": self.tasks_failed,
             "prs_merged": self.prs_merged,

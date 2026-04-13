@@ -11,11 +11,13 @@ import { formatDate } from "../utils/dates";
 const STATUS_COLORS = {
   new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
   review: "#a78bfa", done: "#4ade80", cancelled: "#6b7280",
+  blocked: "#d1a050",
 };
 
 const STATUS_ICONS = {
   new: Circle, in_progress: Square, waiting: Clock,
   review: Eye, done: CheckSquare, cancelled: X,
+  blocked: Clock,
 };
 
 /**
@@ -143,6 +145,11 @@ export default function TaskCard({
           {t.project_id && <span className="tag tag-project">{t.project_id}</span>}
           {(t.metadata?.repo || t.extra?.repo) && (
             <span className="tag"><GitBranch size={9} /> {t.metadata?.repo || t.extra?.repo}</span>
+          )}
+          {t.status === "blocked" && (t.depends_on || []).length > 0 && (
+            <span className="tag" style={{ color: "var(--orange)", background: "var(--high-soft)" }}>
+              <Clock size={9} /> blocked by {t.depends_on.length}
+            </span>
           )}
           {t.due_date && <span className="card-time"><Clock size={9} /> {t.due_date}</span>}
           {!t.due_date && t.updated_at && (

@@ -17,6 +17,7 @@ def _ensure_columns():
     migrations = [
         "ALTER TABLE tasks ADD COLUMN assigned_agent_id VARCHAR(128)",
         "ALTER TABLE tasks ADD COLUMN due_date VARCHAR(20)",
+        "ALTER TABLE tasks ADD COLUMN depends_on JSON DEFAULT '[]'",
         "ALTER TABLE custom_skills ADD COLUMN schedule_interval_minutes INTEGER",
         "ALTER TABLE custom_skills ADD COLUMN creates_pupdates BOOLEAN DEFAULT 0",
         "ALTER TABLE custom_skills ADD COLUMN last_run_at DATETIME",
@@ -24,6 +25,9 @@ def _ensure_columns():
         "ALTER TABLE signals ADD COLUMN incorporated_at DATETIME",
         "ALTER TABLE custom_skills ADD COLUMN user_edited BOOLEAN DEFAULT 0",
         "ALTER TABLE agent_profiles ADD COLUMN extra JSON DEFAULT '{}'",
+        "ALTER TABLE agent_profiles ADD COLUMN role VARCHAR(32) DEFAULT 'coding'",
+        "ALTER TABLE agent_profiles ADD COLUMN scope_repo VARCHAR(256)",
+        "ALTER TABLE agent_profiles ADD COLUMN instructions TEXT",
         # Tournament system removed — drop legacy tables if present
         "DROP TABLE IF EXISTS tournament_entries",
         "DROP TABLE IF EXISTS tournaments",

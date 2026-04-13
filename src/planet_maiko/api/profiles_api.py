@@ -41,7 +41,7 @@ def create_agent_profile():
 
 @profiles_bp.route("/profiles/<profile_id>", methods=["PATCH"])
 def update_profile(profile_id):
-    """Update agent profile (rename, change avatar, etc.)."""
+    """Update agent profile (rename, change avatar, role, scope, instructions)."""
     profile = db.get_or_404(AgentProfile, profile_id)
     data = request.get_json()
     if "display_name" in data:
@@ -50,6 +50,13 @@ def update_profile(profile_id):
         profile.avatar = data["avatar"]
     if "flavor_text" in data:
         profile.flavor_text = data["flavor_text"]
+    if "role" in data and data["role"] in ("coding", "review", "investigation"):
+        profile.role = data["role"]
+    if "scope_repo" in data:
+        # Empty string → null (global scope).
+        profile.scope_repo = data["scope_repo"] or None
+    if "instructions" in data:
+        profile.instructions = data["instructions"] or None
     db.session.commit()
     return jsonify(profile.to_dict())
 

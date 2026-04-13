@@ -1,11 +1,20 @@
 import { useState } from "react";
 import {
-  Bot, Brain, CheckSquare, Plus, Target, TrendingUp, X, Zap,
+  Bot, Brain, CheckSquare, Plus, Target, TrendingUp, X, Zap, Pencil, Save, Code2, Eye, Search,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
 
 const RANK_LABELS = { pup: "🌱 Pup", junior: "⭐ Junior", senior: "🌟 Senior", expert: "👑 Expert" };
+
+const ROLE_META = {
+  coding: { icon: Code2, label: "Coder", color: "var(--pink)" },
+  review: { icon: Eye, label: "Reviewer", color: "var(--blue)" },
+  investigation: { icon: Search, label: "Investigator", color: "var(--lavender)" },
+};
+
+// Section order for the role-grouped view.
+const ROLE_ORDER = ["coding", "review", "investigation"];
 
 /**
  * Profiles tab — agent context-set strategy view.
@@ -28,6 +37,33 @@ export default function AgentsProfilesTab({
 }) {
   const [showArchived, setShowArchived] = useState(false);
   const [contextSetModal, setContextSetModal] = useState(null);
+  const [editing, setEditing] = useState(null);     // profile being edited
+  const [editForm, setEditForm] = useState({ role: "coding", scope_repo: "", instructions: "", flavor_text: "" });
+  const [editSaving, setEditSaving] = useState(false);
+
+  const openEdit = (p) => {
+    setEditing(p);
+    setEditForm({
+      role: p.role || "coding",
+      scope_repo: p.scope_repo || "",
+      instructions: p.instructions || "",
+      flavor_text: p.flavor_text || "",
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    setEditSaving(true);
+    try {
+      await api.updateProfile(editing.id, editForm);
+      showToast(`Saved ${editing.display_name}`, "normal");
+      setEditing(null);
+      onProfilesChanged();
+    } catch (err) {
+      showToast(err.message || "Save failed", "high");
+    }
+    setEditSaving(false);
+  };
 
   const handleToggleArchived = async (e) => {
     setShowArchived(e.target.checked);
@@ -47,6 +83,14 @@ export default function AgentsProfilesTab({
   };
 
   const visibleProfiles = showArchived ? profiles : profiles.filter((p) => !p.archived);
+
+  // Group by role for the section view. Profiles without a known role
+  // fall into coding (historical default).
+  const byRole = {};
+  for (const p of visibleProfiles) {
+    const r = ROLE_META[p.role] ? p.role : "coding";
+    (byRole[r] = byRole[r] || []).push(p);
+  }
 
   if (visibleProfiles.length === 0) {
     return (
@@ -78,77 +122,165 @@ export default function AgentsProfilesTab({
         </label>
       </div>
 
-      <div className="strategies-grid">
-        {visibleProfiles.map((p) => {
-          const specEntries = Object.entries(p.specializations || {}).sort((a, b) => b[1] - a[1]);
-          const totalTasks = p.tasks_completed + p.tasks_failed;
-          const isPup = totalTasks < 3;
-          const strengths = specEntries.filter(([, s]) => s >= 0.7);
-          const hasContextSet = p.context_set?.length > 0;
-
-          return (
-            <div key={p.id} className={`strategy-card card ${p.archived ? "archived" : ""}`}>
-              <div className="strategy-header">
-                <div className="strategy-avatar"><Bot size={20} /></div>
-                <div className="strategy-identity">
-                  <div className="strategy-name">{p.display_name}</div>
-                  <div className="strategy-meta">
-                    <span className={`strategy-rank rank-${p.rank || "pup"}`}>{RANK_LABELS[p.rank] || "🌱 Pup"}</span>
-                    {isPup && <span className="strategy-tag exploring"><Zap size={9} /> exploring</span>}
-                    {p.archived && <span className="strategy-tag archived-tag">archived</span>}
-                  </div>
-                </div>
-                <div className="strategy-score-ring">
-                  <span className="strategy-score-val">{(p.success_rate * 100).toFixed(0)}%</span>
-                  <span className="strategy-score-label">success</span>
-                </div>
-              </div>
-
-              {p.flavor_text && <div className="strategy-flavor">"{p.flavor_text}"</div>}
-
-              {strengths.length > 0 && (
-                <div className="strategy-section">
-                  <div className="strategy-section-label"><TrendingUp size={10} /> Strengths</div>
-                  <div className="strategy-chips">
-                    {strengths.slice(0, 4).map(([key, score]) => (
-                      <span key={key} className="strategy-chip strength">
-                        {key.split(":").pop()?.replace(/_/g, " ")}{" "}
-                        <span className="chip-score">{(score * 100).toFixed(0)}%</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="strategy-stats-row">
-                <span className="strategy-stat"><CheckSquare size={10} /> {p.tasks_completed} done</span>
-                <span className="strategy-stat"><X size={10} /> {p.tasks_failed} failed</span>
-                <span
-                  className={`strategy-stat ${hasContextSet ? "clickable" : ""}`}
-                  onClick={(e) => {
-                    if (hasContextSet) {
-                      e.stopPropagation();
-                      setContextSetModal(p);
-                    }
-                  }}
-                >
-                  <Brain size={10} /> {p.context_set?.length || 0} learnings
-                </span>
-              </div>
-
-              <div className="strategy-card-actions">
-                {p.archived ? (
-                  <button className="btn btn-sm" onClick={() => handleUnarchive(p)}>Unarchive</button>
-                ) : (
-                  <button className="btn btn-sm btn-danger" onClick={() => handleArchive(p)}>
-                    <X size={10} /> Archive
-                  </button>
-                )}
-              </div>
+      {ROLE_ORDER.filter((r) => (byRole[r] || []).length > 0).map((role) => {
+        const meta = ROLE_META[role];
+        const RoleIcon = meta.icon;
+        return (
+          <div key={role} className="agents-role-section">
+            <div className="agents-role-header" style={{ color: meta.color }}>
+              <RoleIcon size={14} /> {meta.label}s
+              <span className="agents-role-count">{byRole[role].length}</span>
             </div>
-          );
-        })}
-      </div>
+            <div className="strategies-grid">
+              {byRole[role].map((p) => {
+                const specEntries = Object.entries(p.specializations || {}).sort((a, b) => b[1] - a[1]);
+                const totalTasks = p.tasks_completed + p.tasks_failed;
+                const isPup = totalTasks < 3;
+                const strengths = specEntries.filter(([, s]) => s >= 0.7);
+                const hasContextSet = p.context_set?.length > 0;
+                const hasAdapter = !!p.extra?.adapter_path;
+
+                return (
+                  <div key={p.id} className={`strategy-card card ${p.archived ? "archived" : ""}`}>
+                    <div className="strategy-header">
+                      <div className="strategy-avatar"><Bot size={20} /></div>
+                      <div className="strategy-identity">
+                        <div className="strategy-name">{p.display_name}</div>
+                        <div className="strategy-meta">
+                          <span className={`strategy-rank rank-${p.rank || "pup"}`}>{RANK_LABELS[p.rank] || "🌱 Pup"}</span>
+                          {p.scope_repo && <span className="strategy-tag scope-tag">{p.scope_repo}</span>}
+                          {!p.scope_repo && p.role === "investigation" && <span className="strategy-tag scope-tag">global</span>}
+                          {hasAdapter && <span className="strategy-tag adapter-tag" title="has LoRA adapter">LoRA</span>}
+                          {isPup && <span className="strategy-tag exploring"><Zap size={9} /> exploring</span>}
+                          {p.archived && <span className="strategy-tag archived-tag">archived</span>}
+                        </div>
+                      </div>
+                      <div className="strategy-score-ring">
+                        <span className="strategy-score-val">{(p.success_rate * 100).toFixed(0)}%</span>
+                        <span className="strategy-score-label">success</span>
+                      </div>
+                    </div>
+
+                    {p.flavor_text && <div className="strategy-flavor">"{p.flavor_text}"</div>}
+
+                    {strengths.length > 0 && (
+                      <div className="strategy-section">
+                        <div className="strategy-section-label"><TrendingUp size={10} /> Strengths</div>
+                        <div className="strategy-chips">
+                          {strengths.slice(0, 4).map(([key, score]) => (
+                            <span key={key} className="strategy-chip strength">
+                              {key.split(":").pop()?.replace(/_/g, " ")}{" "}
+                              <span className="chip-score">{(score * 100).toFixed(0)}%</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="strategy-stats-row">
+                      <span className="strategy-stat"><CheckSquare size={10} /> {p.tasks_completed} done</span>
+                      <span className="strategy-stat"><X size={10} /> {p.tasks_failed} failed</span>
+                      <span
+                        className={`strategy-stat ${hasContextSet ? "clickable" : ""}`}
+                        onClick={(e) => {
+                          if (hasContextSet) {
+                            e.stopPropagation();
+                            setContextSetModal(p);
+                          }
+                        }}
+                      >
+                        <Brain size={10} /> {p.context_set?.length || 0} learnings
+                      </span>
+                    </div>
+
+                    <div className="strategy-card-actions">
+                      <button className="btn btn-sm" onClick={() => openEdit(p)}>
+                        <Pencil size={10} /> Edit
+                      </button>
+                      {p.archived ? (
+                        <button className="btn btn-sm" onClick={() => handleUnarchive(p)}>Unarchive</button>
+                      ) : (
+                        <button className="btn btn-sm btn-danger" onClick={() => handleArchive(p)}>
+                          <X size={10} /> Archive
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+
+      {editing && (
+        <div className="modal-overlay" onClick={() => !editSaving && setEditing(null)}>
+          <div className="agent-edit-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <Pencil size={14} /> Edit {editing.display_name}
+              <span style={{ flex: 1 }} />
+              <button className="btn btn-sm" onClick={() => setEditing(null)} disabled={editSaving}>
+                <X size={12} />
+              </button>
+            </div>
+            <div className="modal-body agent-edit-body">
+              <div className="agent-edit-row">
+                <label>
+                  Role
+                  <select
+                    value={editForm.role}
+                    onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                  >
+                    <option value="coding">Coder</option>
+                    <option value="review">Reviewer</option>
+                    <option value="investigation">Investigator</option>
+                  </select>
+                </label>
+                <label>
+                  Scope (repo)
+                  <input
+                    type="text"
+                    value={editForm.scope_repo}
+                    onChange={(e) => setEditForm({ ...editForm, scope_repo: e.target.value })}
+                    placeholder="org/repo  (leave blank for global)"
+                  />
+                </label>
+              </div>
+              <label className="agent-edit-full">
+                Flavor text
+                <input
+                  type="text"
+                  value={editForm.flavor_text}
+                  onChange={(e) => setEditForm({ ...editForm, flavor_text: e.target.value })}
+                  placeholder="e.g. Loves debugging. Afraid of CSS."
+                />
+              </label>
+              <label className="agent-edit-full">
+                Instructions (markdown, injected into every session)
+                <textarea
+                  rows={10}
+                  value={editForm.instructions}
+                  onChange={(e) => setEditForm({ ...editForm, instructions: e.target.value })}
+                  placeholder={`## Your style
+- Write tests first
+- Prefer standard library over dependencies
+- Keep functions under 50 lines
+
+## Patterns to watch for in this repo
+- Always use the existing logger, not print()
+- ...`}
+                />
+              </label>
+            </div>
+            <div className="agent-edit-footer">
+              <button className="btn" onClick={() => setEditing(null)} disabled={editSaving}>Cancel</button>
+              <button className="btn btn-primary" onClick={saveEdit} disabled={editSaving}>
+                <Save size={12} /> {editSaving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {contextSetModal && (
         <div className="modal-overlay" onClick={() => setContextSetModal(null)}>

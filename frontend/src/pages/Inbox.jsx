@@ -5,6 +5,7 @@ import PupdateCard from "../components/PupdateCard";
 import { renderMarkdown } from "../utils/markdown";
 import { formatTime } from "../utils/dates";
 import { ExternalLink, X, Inbox as InboxIcon, ClipboardCheck, CheckSquare, MoreHorizontal, MessageCircle, Pencil, GitBranch, Calendar as CalendarIcon, Bot, Lightbulb, AlertTriangle, MessageSquare, Play, Loader, FileText, Folder } from "lucide-react";
+import ProposalCard from "../components/ProposalCard";
 import "./Inbox.css";
 import "./Brainstorm.css";
 import "./Suggestions.css";
@@ -173,18 +174,22 @@ export default function Inbox() {
           ) : (
             <div className="card-list card-list-container">
               {filtered.map((p) => (
-                <PupdateCard
-                  key={p.id}
-                  pupdate={p}
-                  isExpanded={expanded === p.id}
-                  onToggleExpand={() => toggleExpand(p)}
-                  onMarkRead={handleMarkRead}
-                  onDismiss={handleDismiss}
-                  onReviewPR={handleReviewPR}
-                  reviewing={reviewing}
-                  sourceIcon={sourceIcon}
-                  showQuickDismiss={true}
-                />
+                p.type === "agent_proposal" ? (
+                  <ProposalCard key={p.id} proposal={p} onAction={fetchPupdates} />
+                ) : (
+                  <PupdateCard
+                    key={p.id}
+                    pupdate={p}
+                    isExpanded={expanded === p.id}
+                    onToggleExpand={() => toggleExpand(p)}
+                    onMarkRead={handleMarkRead}
+                    onDismiss={handleDismiss}
+                    onReviewPR={handleReviewPR}
+                    reviewing={reviewing}
+                    sourceIcon={sourceIcon}
+                    showQuickDismiss={true}
+                  />
+                )
               ))}
             </div>
           )}

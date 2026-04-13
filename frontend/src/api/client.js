@@ -61,6 +61,8 @@ export const api = {
   startTask: (id) => request(`/tasks/${id}/start`, { method: "POST" }),
   completeTask: (id) => request(`/tasks/${id}/done`, { method: "POST" }),
   cancelTask: (id) => request(`/tasks/${id}/cancel`, { method: "POST" }),
+  reassignTask: (id, agent_id) =>
+    request(`/tasks/${id}/reassign`, { method: "POST", body: JSON.stringify(agent_id ? { agent_id } : {}) }),
   sendTaskToLinear: (id, overrides = {}) =>
     request(`/tasks/${id}/linear`, { method: "POST", body: JSON.stringify(overrides) }),
   importLinear: () => request("/tasks/import-linear", { method: "POST" }),
@@ -186,6 +188,15 @@ export const api = {
   // Plugins
   getPlugins: () => request("/plugins"),
   togglePlugin: (name) => request(`/plugins/${name}/toggle`, { method: "POST" }),
+
+  // Project plan orchestration
+  approvePlan: (projectId, tasks) =>
+    request(`/projects/${projectId}/approve-plan`, { method: "POST", body: JSON.stringify({ tasks }) }),
+
+  // Agent proposals (From Maiko approval queue)
+  createProposal: (data) => request("/proposals", { method: "POST", body: JSON.stringify(data) }),
+  approveProposal: (id, draft) => request(`/proposals/${id}/approve`, { method: "POST", body: JSON.stringify(draft ? { draft } : {}) }),
+  dismissProposal: (id) => request(`/proposals/${id}/dismiss`, { method: "POST" }),
 
   // Custom themes
   getThemes: () => request("/themes"),

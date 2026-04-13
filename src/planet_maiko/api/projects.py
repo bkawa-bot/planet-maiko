@@ -125,40 +125,72 @@ Keep it concise and actionable. Use markdown formatting."""
     return jsonify({"plan": plan, "project_id": project_id})
 
 
+def _preview_agent(role, scope_repo):
+    """Return {id, display_name, spawn_new} for what route() would pick.
+    Doesn't actually create anything — preview only."""
+    from planet_maiko.orchestration import find_profile
+    existing = find_profile(role, scope_repo)
+    if existing:
+        return {"id": existing.id, "display_name": existing.display_name, "spawn_new": False}
+    return {"id": None, "display_name": f"(new {role} agent for {scope_repo or 'global'})", "spawn_new": True}
+
+
 @projects_bp.route("/projects/<project_id>/generate-tasks", methods=["POST"])
 def generate_tasks(project_id):
-    """Use LLM to generate task breakdown from project description."""
+    """Generate a draft task plan with dependencies and proposed assignments.
+
+    Returns an array of draft tasks. Each draft has temp_index (its position
+    in the array), title, type, priority, description, repo, category, and
+    depends_on (list of indices in the same array). We also pre-compute
+    which agent would handle each task via the router so the plan-editor
+    UI can surface assignments for review — nothing is persisted as a Task
+    yet, nothing is routed. The draft sits in project.extra.generated_tasks
+    until the user calls /approve-plan.
+    """
+    from planet_maiko.orchestration import TYPE_TO_ROLE
+
     project = db.get_or_404(Project, project_id)
 
-    from planet_maiko.agents.brain_session import run_skill
-    from planet_maiko.agents.skills import get_skill_prompt
-
-    prompt = f"""Break down this project into concrete tasks. Return ONLY valid JSON — an array of task objects.
+    prompt = f"""Break down this project into concrete tasks with dependencies. Return ONLY valid JSON — an array of task objects.
 
 Project: {project.title}
 Plan/Description:
 {project.description or "No description provided."}
 
-Return JSON array like:
+Return JSON array where each task has:
+- title: concise (≤80 chars)
+- type: todo | bug | feature | review | investigation | repo_analysis
+- priority: urgent | high | normal | low
+- description: 1-2 sentences of what to do
+- repo: the repo this task belongs to (e.g. "org/auth-service"), or "" if cross-cutting
+- category: short tag ("schema", "api", "ui", "test", "docs", "infra", ...)
+- depends_on: array of 0-based INDICES of earlier tasks in THIS array that must complete first
+
+Example:
 [
-  {{"title": "Task title", "type": "todo", "priority": "normal", "description": "What to do"}},
-  ...
+  {{"title": "Add sessions table migration", "type": "feature", "priority": "high",
+    "description": "SQL migration with index on user_id", "repo": "org/auth-service",
+    "category": "schema", "depends_on": []}},
+  {{"title": "Wire /sessions endpoint", "type": "feature", "priority": "normal",
+    "description": "Handler + validation + tests", "repo": "org/auth-service",
+    "category": "api", "depends_on": [0]}},
+  {{"title": "Update web client", "type": "feature", "priority": "normal",
+    "description": "Call new endpoint from login flow", "repo": "org/web-app",
+    "category": "client", "depends_on": [1]}}
 ]
 
 Rules:
-- 3-8 tasks maximum
-- Each task should be a single clear action
-- Set priority: urgent, high, normal, or low
-- Set type: todo, bug, feature, or review
-- Keep titles concise (under 80 chars)
-- Order by suggested execution sequence"""
+- 3-10 tasks total
+- depends_on uses indices in THIS array; no cycles; no self-references
+- Tasks in different repos with no real dep should NOT be artificially linked
+- If a task is purely investigation / analysis, use type "investigation"
+"""
 
     # Release DB before long LLM call to avoid SQLite locks
     db.session.close()
-
     from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
     runtime = ClaudeCodeRuntime()
-    result = runtime.send_json(prompt, timeout=60)
+    result = runtime.send_json(prompt, timeout=90)
 
     if not result.get("success") or not result.get("parsed"):
         return jsonify({"error": result.get("error", "Failed to generate tasks")}), 500
@@ -167,10 +199,114 @@ Rules:
     if not isinstance(tasks, list):
         tasks = [tasks]
 
-    # Save to project metadata so they survive page navigation
+    # Enrich: pre-compute suggested agent for each draft task.
+    project = db.get_or_404(Project, project_id)
+    for idx, draft in enumerate(tasks):
+        draft["temp_index"] = idx
+        draft.setdefault("depends_on", [])
+        # Sanitize depends_on — drop self-refs and out-of-range indices
+        draft["depends_on"] = [
+            d for d in draft["depends_on"]
+            if isinstance(d, int) and 0 <= d < len(tasks) and d != idx
+        ]
+        role = TYPE_TO_ROLE.get(draft.get("type") or "", "coding")
+        scope = draft.get("repo") or None
+        draft["suggested_role"] = role
+        draft["suggested_scope_repo"] = scope
+        draft["suggested_agent"] = _preview_agent(role, scope)
+
+    # Persist the draft on the project so it survives reload.
     meta = dict(project.extra or {}) if project.extra else {}
     meta["generated_tasks"] = tasks
     project.extra = meta
     db.session.commit()
 
     return jsonify({"tasks": tasks, "project_id": project_id})
+
+
+@projects_bp.route("/projects/<project_id>/approve-plan", methods=["POST"])
+def approve_plan(project_id):
+    """Commit the (possibly user-edited) draft plan as real tasks.
+
+    Body shape: { tasks: [...] } — same schema generate-tasks returned,
+    optionally edited. If omitted, we commit whatever's in
+    project.extra.generated_tasks.
+
+    For each draft:
+      - Create a Task row with a stable id (project-scoped + index).
+      - Resolve depends_on indices to real task IDs.
+      - Call route(task) to assign an agent (lazy-spawning if needed).
+      - Set initial status: "blocked" if it has unfinished deps,
+        otherwise "new".
+
+    Project status flips to "active" on successful approval.
+    """
+    from planet_maiko.models.task import Task
+    from planet_maiko.orchestration import route, is_ready
+
+    project = db.get_or_404(Project, project_id)
+
+    data = request.get_json(silent=True) or {}
+    drafts = data.get("tasks")
+    if drafts is None:
+        drafts = (project.extra or {}).get("generated_tasks") or []
+    if not isinstance(drafts, list) or not drafts:
+        return jsonify({"error": "no tasks to approve"}), 400
+
+    # Resolve task IDs up-front so depends_on can reference them before
+    # we've inserted the later ones.
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    ids = [f"task-{project.id}-{now_ms}-{i:03d}" for i in range(len(drafts))]
+
+    created = []
+    for i, draft in enumerate(drafts):
+        deps_idx = draft.get("depends_on") or []
+        dep_ids = [ids[d] for d in deps_idx if isinstance(d, int) and 0 <= d < len(ids)]
+
+        task = Task(
+            id=ids[i],
+            title=draft.get("title") or "(untitled)",
+            type=draft.get("type") or "todo",
+            priority=draft.get("priority") or "normal",
+            project_id=project.id,
+            status="new",  # fixed up below based on deps
+            extra={
+                "description": draft.get("description") or "",
+                "repo": draft.get("repo") or "",
+                "category": draft.get("category") or "",
+            },
+            tags=[],
+            depends_on=dep_ids,
+        )
+        db.session.add(task)
+        created.append(task)
+
+    # Flush so route() can find them if it needs to (it doesn't, but
+    # keeps the session consistent before routing).
+    db.session.flush()
+
+    # Route every task and set initial status based on dep readiness.
+    for task in created:
+        # Honor explicit assigned_agent_id override from the UI if present.
+        draft = next((d for d in drafts if f"task-{project.id}-{now_ms}-{drafts.index(d):03d}" == task.id), None)
+        override = (draft or {}).get("assigned_agent_id")
+        if override:
+            task.assigned_agent_id = override
+        else:
+            route(task)
+        task.status = "blocked" if not is_ready(task) else "new"
+
+    # Clear the draft now that it's committed.
+    meta = dict(project.extra or {})
+    meta["generated_tasks"] = None
+    project.extra = meta
+    # Kick the project into the active lifecycle.
+    if project.status in ("planning", "approved"):
+        project.status = "active"
+    project.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    return jsonify({
+        "project_id": project.id,
+        "tasks_created": [t.to_dict() for t in created],
+    }), 201

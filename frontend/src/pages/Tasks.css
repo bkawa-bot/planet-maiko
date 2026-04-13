@@ -147,7 +147,61 @@
 .empty-sub { font-size: 12px; color: var(--text-muted); max-width: 300px; margin: 0 auto; line-height: 1.5; }
 .page-empty { color: var(--text-muted); text-align: center; margin-top: 60px; font-size: 13px; }
 
-/* Generated tasks modal */
+/* Plan editor (draft DAG review before approval) */
+.plan-editor {
+  background: var(--bg-card); border-radius: 16px;
+  max-width: 820px; width: calc(100% - 40px);
+  max-height: 90vh; display: flex; flex-direction: column;
+}
+.plan-task-list { display: flex; flex-direction: column; gap: 8px; max-height: 560px; overflow-y: auto; padding-right: 4px; }
+.plan-task { padding: 10px 14px; }
+.plan-task-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.plan-task-idx {
+  background: var(--bg-hover); color: var(--text-muted);
+  padding: 2px 6px; border-radius: var(--radius-xs);
+  font-size: 11px; font-family: var(--font-mono); flex-shrink: 0;
+}
+.plan-task-title-input {
+  flex: 1; padding: 4px 8px; font-size: 13px; font-weight: 500;
+  color: var(--text); background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-xs); font-family: inherit;
+}
+.plan-task-title-input:focus { border-color: var(--pink); outline: none; }
+.plan-task-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+.plan-task-select, .plan-task-input {
+  padding: 4px 8px; font-size: 11px;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-xs);
+  font-family: inherit;
+}
+.plan-task-input { min-width: 120px; flex: 1; }
+.plan-task-select { min-width: 70px; }
+.plan-task-desc { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; line-height: 1.4; }
+.plan-task-foot { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; font-size: 11px; color: var(--text-dim); }
+.plan-task-deps { display: flex; align-items: center; gap: 4px; flex: 1; flex-wrap: wrap; }
+.plan-task-agent { display: flex; align-items: center; gap: 4px; }
+.plan-task-deps-label { color: var(--text-muted); font-weight: 500; }
+.plan-task-deps-none { color: var(--text-muted); font-style: italic; }
+.plan-dep-chip {
+  display: inline-flex; align-items: center; gap: 2px;
+  background: var(--blue-soft); color: var(--blue);
+  padding: 2px 6px; border-radius: var(--radius-xs);
+  font-family: var(--font-mono); font-size: 10px;
+}
+.plan-dep-chip .btn-ghost { padding: 0; color: inherit; background: none; border: none; cursor: pointer; }
+.plan-dep-add {
+  background: transparent; border: 1px dashed var(--border);
+  color: var(--text-muted); padding: 2px 4px;
+  border-radius: var(--radius-xs); font-size: 10px;
+  cursor: pointer; font-family: inherit;
+}
+.plan-agent-chip {
+  background: var(--pink-soft); color: var(--pink);
+  padding: 2px 8px; border-radius: var(--radius-xs); font-size: 10px;
+}
+.plan-agent-chip.new { background: var(--lavender-soft); color: var(--lavender); font-style: italic; }
+
+/* Generated tasks modal (legacy / simple generation UI) */
 .generated-tasks-modal {
   background: var(--bg-card); border-radius: 16px;
   max-width: 560px; width: 100%;
