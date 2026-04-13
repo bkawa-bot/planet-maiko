@@ -1,0 +1,62 @@
+.backfill-progress {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--pink);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.backfill-progress.synthesizing { border-left-color: var(--lemon); }
+.backfill-progress.aggregating  { border-left-color: var(--blue); }
+.backfill-progress.done { border-left-color: var(--green); }
+.backfill-progress.error { border-left-color: var(--urgent); }
+
+.backfill-progress-head {
+  display: flex; align-items: center; gap: 8px;
+}
+.backfill-progress-title {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  flex: 1;
+}
+.backfill-progress-repos {
+  font-size: 10px; color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.backfill-progress-detail {
+  font-size: 11px; color: var(--text-dim); line-height: 1.5;
+}
+.backfill-progress-detail code {
+  font-family: var(--font-mono); font-size: 10px;
+  background: var(--bg); padding: 1px 5px; border-radius: 3px;
+}
+.backfill-progress-detail.success { color: var(--green); }
+.backfill-progress-detail.danger  { color: var(--urgent); }
+
+.backfill-progress-bar {
+  height: 4px;
+  background: var(--bg); border-radius: 2px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+.backfill-progress-bar-fill {
+  height: 100%;
+  background: var(--pink);
+  transition: width 0.4s ease;
+}
+.backfill-progress-bar-fill.indeterminate {
+  width: 40%;
+  animation: backfill-indeterminate 1.6s infinite ease-in-out;
+  background: linear-gradient(90deg, transparent, var(--pink), transparent);
+}
+@keyframes backfill-indeterminate {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
+.backfill-progress-stats {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  font-size: 11px; color: var(--text-muted);
+}
+.backfill-progress-stats strong { color: var(--text); font-weight: 600; }

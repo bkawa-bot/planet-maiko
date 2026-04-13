@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import InfoButton from "../components/InfoButton";
 import ConfirmModal from "../components/ConfirmModal";
+import BackfillProgress from "../components/BackfillProgress";
 import "./Knowledge.css";
 
 const CATEGORY_ICONS = {
@@ -86,6 +87,9 @@ export default function BrainView() {
             }
           }
           fetchLearnings();
+          // Let the final panel linger briefly so the user sees the
+          // done/error state, then clear it.
+          setTimeout(() => setBackfillProgress(null), 6000);
         }
       } catch {
         // transient network errors — keep polling
@@ -147,6 +151,10 @@ export default function BrainView() {
   return (
     <div className="brain-view-page">
       <div className="knowledge-page">
+        {/* Live progress while backfill is running */}
+        {(backfilling || backfillProgress?.phase === "done" || backfillProgress?.phase === "error") && (
+          <BackfillProgress progress={backfillProgress} />
+        )}
         {/* Tabs */}
         <div className="knowledge-tabs">
           <button

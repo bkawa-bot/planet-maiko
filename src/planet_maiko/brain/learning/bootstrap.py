@@ -26,8 +26,9 @@ _progress = {
     "repos_total": 0,
     "repos_done": 0,
     "current_repo": None,
-    "prs_in_repo": 0,
-    "signals_created": 0,
+    "prs_in_repo": 0,         # total PRs fetched for the current repo
+    "prs_done": 0,            # how many of those we've processed so far
+    "signals_created": 0,     # running count across all repos (updated per-PR)
     "synthesized": 0,
     "new_learnings": 0,
     "graduated": 0,
@@ -52,8 +53,9 @@ def reset_backfill_progress():
     with _progress_lock:
         _progress.update({
             "running": False, "phase": "idle", "repos_total": 0, "repos_done": 0,
-            "current_repo": None, "prs_in_repo": 0, "signals_created": 0,
-            "synthesized": 0, "new_learnings": 0, "graduated": 0, "error": None,
+            "current_repo": None, "prs_in_repo": 0, "prs_done": 0,
+            "signals_created": 0, "synthesized": 0, "new_learnings": 0,
+            "graduated": 0, "error": None,
             "started_at": None, "finished_at": None, "result": None,
         })
 
@@ -85,14 +87,21 @@ def bootstrap_from_prs(limit=20, repos=None):
     update_backfill_progress(repos_total=len(repos), repos_done=0)
 
     for repo in repos:
-        update_backfill_progress(current_repo=repo, prs_in_repo=0)
+        update_backfill_progress(current_repo=repo, prs_in_repo=0, prs_done=0)
         repo_stats = {"repo": repo, "prs_scanned": 0, "signals_created": 0, "error": None}
 
         try:
+            # We fetch both `reviews` (top-level review summary bodies) and
+            # `comments` (PR conversation comments) because most real
+            # feedback lives in the conversation, not the review summary —
+            # bare approvals + inline comments are common patterns and
+            # `reviews` alone captures almost none of that.
+            # (Inline per-file review comments require a separate per-PR
+            # API call and aren't pulled here yet — follow-up.)
             result = subprocess.run(
                 ["gh", "pr", "list", "--repo", repo, "--state", "merged",
-                 "--limit", str(limit), "--json", "number,title,reviews"],
-                capture_output=True, text=True, timeout=30,
+                 "--limit", str(limit), "--json", "number,title,reviews,comments"],
+                capture_output=True, text=True, timeout=60,
             )
             if result.returncode != 0:
                 err = result.stderr.strip()[:200]
@@ -106,9 +115,18 @@ def bootstrap_from_prs(limit=20, repos=None):
             update_backfill_progress(prs_in_repo=len(prs))
             created_for_repo = 0
 
-            for pr in prs:
+            for pr_index, pr in enumerate(prs, start=1):
+                # Combine review bodies and conversation comments into a
+                # single stream — they're both "someone wrote feedback on
+                # this PR". Duplicates are filtered below by text+repo.
+                entries = []
                 for review in (pr.get("reviews") or []):
-                    body = review.get("body", "").strip()
+                    entries.append(review)
+                for comment in (pr.get("comments") or []):
+                    entries.append(comment)
+
+                for entry in entries:
+                    body = (entry.get("body") or "").strip()
                     if not body:
                         continue
 
@@ -122,12 +140,19 @@ def bootstrap_from_prs(limit=20, repos=None):
                         category="pattern",
                         text=body[:500],
                         source_type="pr_comment",
-                        reviewer=review.get("author", {}).get("login", ""),
+                        reviewer=(entry.get("author") or {}).get("login", ""),
                         severity="suggestion",
                         repo=repo,
                     )
                     db.session.add(signal)
                     created_for_repo += 1
+
+                # Emit live progress every PR so the UI actually moves.
+                # total_created + created_for_repo = cumulative across this run.
+                update_backfill_progress(
+                    prs_done=pr_index,
+                    signals_created=total_created + created_for_repo,
+                )
 
             repo_stats["signals_created"] = created_for_repo
             total_created += created_for_repo
