@@ -11,15 +11,9 @@ from planet_maiko.config import load_config
 
 logger = logging.getLogger(__name__)
 
-# Comment-length filters: a real review comment that's worth turning into a
-# learning is at least MIN_COMMENT_LEN chars. Below SHORT_COMMENT_LEN we
-# also reject pure-praise phrases like "lgtm" — those don't carry signal
-# unless wrapped in a longer explanation. Question-only comments under
-# QUESTION_COMMENT_LEN are skipped because they're usually clarifying
-# questions, not actionable rules.
-MIN_COMMENT_LEN = 30
-SHORT_COMMENT_LEN = 60
-QUESTION_COMMENT_LEN = 80
+# Pre-LLM filters have been removed — the synthesis step is better at
+# separating signal from noise than brittle length / phrase heuristics
+# were. Only empty bodies are skipped here.
 
 
 # Progress state for the async backfill job. Accessed through the helpers
@@ -115,18 +109,7 @@ def bootstrap_from_prs(limit=20, repos=None):
             for pr in prs:
                 for review in (pr.get("reviews") or []):
                     body = review.get("body", "").strip()
-                    if not body or len(body) < MIN_COMMENT_LEN:
-                        continue
-
-                    lower = body.lower()
-                    skip_phrases = [
-                        "lgtm", "looks good", "ship it", "approved", "nice work",
-                        "thanks", "thank you", "+1", "nit:", "nit", "merge",
-                    ]
-                    if any(lower.strip().startswith(p) for p in skip_phrases) and len(body) < SHORT_COMMENT_LEN:
-                        continue
-
-                    if body.strip().endswith("?") and len(body) < QUESTION_COMMENT_LEN:
+                    if not body:
                         continue
 
                     existing = Signal.query.filter_by(
