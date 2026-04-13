@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import InfoButton from "../components/InfoButton";
+import ConfirmModal from "../components/ConfirmModal";
 import {
   GraduationCap, Loader, Sparkles, Link2, ChevronDown, ChevronRight,
 } from "lucide-react";
@@ -22,6 +23,8 @@ export default function Training() {
   const [assignAdapter, setAssignAdapter] = useState("");
   const [coverage, setCoverage] = useState(null);
   const [filterRepo, setFilterRepo] = useState("");
+  const [confirmTraining, setConfirmTraining] = useState(false);
+  const [confirmRegenAll, setConfirmRegenAll] = useState(false);
 
   const fetchDatasets = () => {
     api.getTrainingDatasets().then(setDatasets).catch(() => {});
@@ -52,6 +55,46 @@ export default function Training() {
   }, [running]);
 
   const totalDatasetExamples = datasets.reduce((sum, d) => sum + d.examples, 0);
+
+  const startTraining = async () => {
+    setRunning(true);
+    setConfirmTraining(false);
+    showToast("Training LoRA adapter... this may take 20-30 minutes", "normal");
+    try {
+      const result = await api.trainAgent({});
+      if (result.success) {
+        showToast(`Training complete! Adapter saved (${result.examples} examples, ${result.duration_seconds}s)`, "normal");
+        api.getAdapters().then(setAdapters).catch(() => {});
+        api.getProfiles().then(setProfiles).catch(() => {});
+      } else {
+        showToast(result.error || "Training failed", "high");
+        if (result.install_hint) showToast(`Install: ${result.install_hint}`, "normal");
+      }
+    } catch (err) {
+      showToast("Training failed: " + err.message, "high");
+    }
+    setRunning(false);
+  };
+
+  const startRegenerateAll = async () => {
+    setConfirmRegenAll(false);
+    setGenerating(true);
+    setGeneratingProgress(`Regenerating all ${coverage?.active_count} rules...`);
+    try {
+      const result = await api.generateFromRules({ force: true, repo: filterRepo || undefined });
+      if (result.success) {
+        showToast(`Generated ${result.pairs} pairs from ${result.rules_processed} rules`, "normal");
+        fetchDatasets();
+        fetchCoverage(filterRepo);
+      } else {
+        showToast(result.error || "Generation failed", "high");
+      }
+    } catch (err) {
+      showToast("Generation failed: " + err.message, "high");
+    }
+    setGenerating(false);
+    setGeneratingProgress("");
+  };
 
   return (
     <div className="training-page">
@@ -150,25 +193,7 @@ export default function Training() {
           <button
             className="btn btn-sm"
             disabled={generating || !coverage || coverage.active_count === 0}
-            onClick={async () => {
-              if (!confirm(`Regenerate ALL ${coverage?.active_count || 0} rules from scratch? This will make new Opus calls for every rule.`)) return;
-              setGenerating(true);
-              setGeneratingProgress(`Regenerating all ${coverage?.active_count} rules...`);
-              try {
-                const result = await api.generateFromRules({ force: true, repo: filterRepo || undefined });
-                if (result.success) {
-                  showToast(`Generated ${result.pairs} pairs from ${result.rules_processed} rules`, "normal");
-                  fetchDatasets();
-                  fetchCoverage(filterRepo);
-                } else {
-                  showToast(result.error || "Generation failed", "high");
-                }
-              } catch (err) {
-                showToast("Generation failed: " + err.message, "high");
-              }
-              setGenerating(false);
-              setGeneratingProgress("");
-            }}
+            onClick={() => setConfirmRegenAll(true)}
           >
             Regenerate All
           </button>
@@ -221,24 +246,7 @@ export default function Training() {
           <button
             className="btn btn-primary"
             disabled={!datasets.length || running}
-            onClick={async () => {
-              setRunning(true);
-              showToast("Training LoRA adapter... this may take 20-30 minutes", "normal");
-              try {
-                const result = await api.trainAgent({});
-                if (result.success) {
-                  showToast(`Training complete! Adapter saved (${result.examples} examples, ${result.duration_seconds}s)`, "normal");
-                  api.getAdapters().then(setAdapters).catch(() => {});
-                  api.getProfiles().then(setProfiles).catch(() => {});
-                } else {
-                  showToast(result.error || "Training failed", "high");
-                  if (result.install_hint) showToast(`Install: ${result.install_hint}`, "normal");
-                }
-              } catch (err) {
-                showToast("Training failed: " + err.message, "high");
-              }
-              setRunning(false);
-            }}
+            onClick={() => setConfirmTraining(true)}
           >
             {running ? <><Loader size={12} className="spin" /> Training...</> : <><GraduationCap size={12} /> Train Model</>}
           </button>
@@ -326,6 +334,40 @@ export default function Training() {
           </p>
         </div>
       )}
+
+      <ConfirmModal
+        open={confirmTraining}
+        title="Training is resource-intensive"
+        body={<>
+          <p>
+            This fine-tunes a LoRA adapter on the combined dataset
+            ({totalDatasetExamples.toLocaleString()} examples). Runs locally — expect heavy GPU/CPU use for <strong>20-30 minutes</strong> and no interruption.
+          </p>
+          <p>The server stays responsive, but your machine will get warm.</p>
+          <span className="confirm-estimate">~20-30 min · local GPU/CPU · no API cost</span>
+        </>}
+        confirmText="Train model"
+        onCancel={() => setConfirmTraining(false)}
+        onConfirm={startTraining}
+      />
+
+      <ConfirmModal
+        open={confirmRegenAll}
+        severity="danger"
+        title={`Regenerate ALL ${coverage?.active_count || 0} rules?`}
+        body={<>
+          <p>
+            This will make a <strong>new Opus call per rule</strong> — overwriting the existing training pairs. Expensive and slow.
+          </p>
+          <p>Only do this if rules have changed materially or the existing dataset feels stale.</p>
+          <span className="confirm-estimate">
+            ~{coverage?.active_count || 0} Opus calls · ≈ $0.25–$0.50 per rule
+          </span>
+        </>}
+        confirmText="Regenerate all"
+        onCancel={() => setConfirmRegenAll(false)}
+        onConfirm={startRegenerateAll}
+      />
     </div>
   );
 }

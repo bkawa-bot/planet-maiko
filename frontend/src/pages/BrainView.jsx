@@ -6,6 +6,7 @@ import {
   ChevronDown, ChevronRight, Plus, Shield, Download, Loader, Sparkles,
 } from "lucide-react";
 import InfoButton from "../components/InfoButton";
+import ConfirmModal from "../components/ConfirmModal";
 import "./Knowledge.css";
 
 const CATEGORY_ICONS = {
@@ -27,6 +28,8 @@ export default function BrainView() {
   const [showBackfillModal, setShowBackfillModal] = useState(false);
   const [backfillLimit, setBackfillLimit] = useState("20");
   const [backfillRepo, setBackfillRepo] = useState("");
+  const [confirmingBackfill, setConfirmingBackfill] = useState(false);
+  const [startingBackfill, setStartingBackfill] = useState(false);
   const [configuredRepos, setConfiguredRepos] = useState([]);
   const [tab, setTab] = useState("pool");
   const [synthesizing, setSynthesizing] = useState(false);
@@ -367,17 +370,7 @@ export default function BrainView() {
                   type="button"
                   className="btn btn-primary"
                   disabled={backfilling}
-                  onClick={async () => {
-                    const limit = Math.min(500, Math.max(1, parseInt(backfillLimit, 10) || 20));
-                    try {
-                      await api.backfillKnowledge(limit, backfillRepo || null);
-                      setShowBackfillModal(false);
-                      setBackfilling(true); // kicks off the polling effect
-                      showToast("Backfill started 🐾", "normal");
-                    } catch (err) {
-                      showToast("Backfill failed to start: " + err.message, "high");
-                    }
-                  }}
+                  onClick={() => setConfirmingBackfill(true)}
                 >
                   {backfilling ? <><Loader size={12} className="spin" /> Scanning...</> : <><Download size={12} /> Scan {backfillLimit || 20} PRs{backfillRepo ? ` in ${backfillRepo.split("/").pop()}` : ""}</>}
                 </button>
@@ -386,6 +379,38 @@ export default function BrainView() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={confirmingBackfill}
+        title="Backfill is resource-intensive"
+        body={<>
+          <p>
+            This scans merged PRs in {backfillRepo ? <code>{backfillRepo}</code> : "every configured repo"} via the <code>gh</code> CLI,
+            then runs an LLM synthesis pass to turn review comments into clean rules.
+          </p>
+          <p>Typically a few minutes of wall time and a handful of LLM calls. You can keep working — it runs in the background.</p>
+          <span className="confirm-estimate">
+            ~{backfillLimit || 20} PRs{backfillRepo ? "" : " × each configured repo"} · ≤20 LLM calls for synthesis
+          </span>
+        </>}
+        confirmText="Start backfill"
+        busy={startingBackfill}
+        onCancel={() => setConfirmingBackfill(false)}
+        onConfirm={async () => {
+          setStartingBackfill(true);
+          const limit = Math.min(500, Math.max(1, parseInt(backfillLimit, 10) || 20));
+          try {
+            await api.backfillKnowledge(limit, backfillRepo || null);
+            setConfirmingBackfill(false);
+            setShowBackfillModal(false);
+            setBackfilling(true);
+            showToast("Backfill started 🐾", "normal");
+          } catch (err) {
+            showToast("Backfill failed to start: " + err.message, "high");
+          }
+          setStartingBackfill(false);
+        }}
+      />
     </div>
   );
 }
