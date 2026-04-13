@@ -148,6 +148,9 @@ body {
 [data-theme="afternoon"] body { background-image: url('/world-afternoon.svg'); }
 [data-theme="sunset"] body { background-image: url('/world-sunset.svg'); }
 
+/* Toggle: let users fall back to a plain backdrop via Settings. */
+html[data-hills="off"] body { background-image: none; }
+
 a { color: var(--pink); text-decoration: none; }
 a:hover { text-decoration: underline; }
 

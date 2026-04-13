@@ -9,10 +9,13 @@
  * steals clicks.
  *
  * Props:
- *   scene — scene object from /api/scene, shape: { context: { weather,
- *           season, time_bucket }, ... }. Can be null/undefined.
+ *   scene   — scene object from /api/scene, shape: { context: { weather,
+ *             season, time_bucket }, ... }. Can be null/undefined.
+ *   enabled — bool, defaults to true. When false returns null — the
+ *             Settings toggle for "show weather overlay" pipes in here.
  */
-export default function WeatherOverlay({ scene }) {
+export default function WeatherOverlay({ scene, enabled = true }) {
+  if (!enabled) return null;
   if (!scene?.context) return null;
   const { weather, season, time_bucket: timeBucket } = scene.context;
   const hasWeather = weather && weather !== "clear";

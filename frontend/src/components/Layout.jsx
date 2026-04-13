@@ -6,6 +6,25 @@ import { showToast } from "./Toast";
 import { api } from "../api/client";
 import "./Layout.css";
 
+// Mirror a few scene-visibility config flags onto html attributes so CSS
+// can opt out of the hill background (and future heavy visuals). Polls at
+// the same cadence as the pupdate watcher so Settings changes take effect
+// without a manual refresh.
+function useSceneVisibility() {
+  useEffect(() => {
+    const apply = async () => {
+      try {
+        const cfg = await api.getConfig();
+        const hillsOn = cfg?.scene?.show_hill_background !== false;
+        document.documentElement.setAttribute("data-hills", hillsOn ? "on" : "off");
+      } catch { /* ignore */ }
+    };
+    apply();
+    const interval = setInterval(apply, 15000);
+    return () => clearInterval(interval);
+  }, []);
+}
+
 function usePupdateWatcher() {
   const knownIds = useRef(new Set());
   const initialized = useRef(false);
@@ -73,6 +92,7 @@ function useIdleDetection() {
 }
 
 export default function Layout() {
+  useSceneVisibility();
   usePupdateWatcher();
   const { showIdlePrompt, setShowIdlePrompt, resetActivity } = useIdleDetection();
 

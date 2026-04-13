@@ -188,7 +188,7 @@ export default function Home() {
 
   return (
     <div className="home">
-      <WeatherOverlay scene={scene} />
+      <WeatherOverlay scene={scene} enabled={homeConfig?.scene?.show_weather_overlay !== false} />
 
       <div className="home-grid">
         {/* Main content */}

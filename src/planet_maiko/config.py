@@ -68,6 +68,11 @@ DEFAULT_CONFIG = {
     "scene": {
         "latitude": None,   # e.g. 37.77 for San Francisco
         "longitude": None,  # e.g. -122.42 for San Francisco
+        # Visual ambient effects. Some folks find the drifting clouds /
+        # rain and the hill backdrop too busy — these let them turn it
+        # off for a plain background without losing the rest of the UI.
+        "show_weather_overlay": True,
+        "show_hill_background": True,
     },
     "routing": {
         "enabled": True,

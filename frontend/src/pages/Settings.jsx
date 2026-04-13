@@ -542,6 +542,29 @@ export default function Settings() {
                 <div className="location-resolved">{locationResolved}</div>
               )}
             </div>
+
+            <div className="integration-fields" style={{ marginTop: 16 }}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={config.scene?.show_weather_overlay !== false}
+                  onChange={(e) =>
+                    setConfig((c) => ({ ...c, scene: { ...(c.scene || {}), show_weather_overlay: e.target.checked } }))
+                  }
+                />
+                Show weather overlay (clouds, rain, snow, stars)
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={config.scene?.show_hill_background !== false}
+                  onChange={(e) =>
+                    setConfig((c) => ({ ...c, scene: { ...(c.scene || {}), show_hill_background: e.target.checked } }))
+                  }
+                />
+                Show hill background
+              </label>
+            </div>
           </div>
         )}
       </section>
