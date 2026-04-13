@@ -158,48 +158,48 @@ def classify_pending():
     })
 
 
-@learning_bp.route("/learnings/backfill", methods=["POST"])
-def backfill_learnings():
-    """Scan past PRs, synthesize comments into clean learnings via LLM."""
-    from planet_maiko.brain.learning.bootstrap import bootstrap_from_prs
+def _run_backfill_job(app, limit, repo):
+    """The actual backfill work — runs in a background thread.
+
+    Updates the shared progress dict as it moves through fetch → synthesize
+    → aggregate phases, so the UI can poll /learnings/backfill/status.
+    """
+    from planet_maiko.brain.learning.bootstrap import (
+        bootstrap_from_prs, update_backfill_progress,
+    )
     from planet_maiko.brain.learning.processor import process_signals
+    from datetime import datetime, timezone
 
-    data = request.get_json(silent=True) or {}
-    limit = data.get("limit", 20)
-    repo = data.get("repo")  # optional: scan only this one repo
+    with app.app_context():
+        try:
+            # Phase 1: fetch PR comments
+            update_backfill_progress(phase="fetching")
+            repos = [repo] if repo else None
+            bootstrap_result = bootstrap_from_prs(limit=limit, repos=repos)
+            signals_created = bootstrap_result["total_created"]
+            per_repo = bootstrap_result["per_repo"]
 
-    # Step 1: Pull raw PR comments as signals
-    repos = [repo] if repo else None
-    bootstrap_result = bootstrap_from_prs(limit=limit, repos=repos)
-    signals_created = bootstrap_result["total_created"]
-    per_repo = bootstrap_result["per_repo"]
+            synthesized = 0
+            synth_error = None
 
-    if signals_created == 0:
-        return jsonify({
-            "signals_created": 0, "synthesized": 0,
-            "new_learnings": 0, "graduated": 0,
-            "per_repo": per_repo,
-        })
+            if signals_created > 0:
+                # Phase 2: LLM synthesis
+                update_backfill_progress(phase="synthesizing")
+                try:
+                    from planet_maiko.models.signal import Signal as BackfillSignal
+                    from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
+                    from planet_maiko.agents.routing import resolve_model
 
-    # Step 2: LLM synthesis — transform raw comments into clean learnings
-    synthesized = 0
-    synth_error = None
-    try:
-        from planet_maiko.models.signal import Signal as BackfillSignal
-        from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
-        from planet_maiko.agents.routing import resolve_model
+                    raw = BackfillSignal.query.filter_by(
+                        source_type="pr_comment", aggregated=False
+                    ).all()
 
-        raw = BackfillSignal.query.filter_by(
-            source_type="pr_comment", aggregated=False
-        ).all()
+                    if raw:
+                        comments = []
+                        for i, s in enumerate(raw[:20]):
+                            comments.append(f"{i+1}. [{s.repo or 'unknown'}] {s.text[:300]}")
 
-        if raw:
-            # Build batch prompt
-            comments = []
-            for i, s in enumerate(raw[:20]):
-                comments.append(f"{i+1}. [{s.repo or 'unknown'}] {s.text[:300]}")
-
-            prompt = f"""Synthesize these PR review comments into clean, actionable coding rules.
+                        prompt = f"""Synthesize these PR review comments into clean, actionable coding rules.
 
 For each comment, extract the core lesson as a short rule (one sentence).
 Also classify each into a category.
@@ -212,40 +212,99 @@ architecture, null_safety, style, naming, docs, pattern, domain_knowledge
 
 Respond as JSON: {{"rules": [{{"index": 1, "rule": "Always validate input lengths at API boundaries", "category": "security"}}, ...]}}"""
 
-            # Release DB before long LLM call to avoid SQLite locks
-            signal_ids = [s.id for s in raw]
-            db.session.close()
+                        signal_ids = [s.id for s in raw]
+                        db.session.close()
 
-            runtime = ClaudeCodeRuntime()
-            result = runtime.send_json(prompt, timeout=90, model=resolve_model("classify"))
+                        runtime = ClaudeCodeRuntime()
+                        result = runtime.send_json(prompt, timeout=90, model=resolve_model("classify"))
 
-            if result.get("parsed") and "rules" in result["parsed"]:
-                from planet_maiko.models.signal import Signal as RefetchSignal
-                refetched = RefetchSignal.query.filter(RefetchSignal.id.in_(signal_ids)).all()
-                for rule_data in result["parsed"]["rules"]:
-                    idx = rule_data.get("index", 0) - 1
-                    if 0 <= idx < len(refetched):
-                        refetched[idx].text = rule_data.get("rule", refetched[idx].text)
-                        refetched[idx].category = rule_data.get("category", "pattern")
-                        synthesized += 1
+                        if result.get("parsed") and "rules" in result["parsed"]:
+                            from planet_maiko.models.signal import Signal as RefetchSignal
+                            refetched = RefetchSignal.query.filter(RefetchSignal.id.in_(signal_ids)).all()
+                            for rule_data in result["parsed"]["rules"]:
+                                idx = rule_data.get("index", 0) - 1
+                                if 0 <= idx < len(refetched):
+                                    refetched[idx].text = rule_data.get("rule", refetched[idx].text)
+                                    refetched[idx].category = rule_data.get("category", "pattern")
+                                    synthesized += 1
+                            db.session.commit()
+                        update_backfill_progress(synthesized=synthesized)
+                except Exception as e:
+                    synth_error = str(e)
 
-                db.session.commit()
-    except Exception as e:
-        synth_error = str(e)
+                # Phase 3: aggregate into learnings
+                update_backfill_progress(phase="aggregating")
+                learning_results = process_signals()
+                update_backfill_progress(
+                    new_learnings=learning_results.get("new_learnings", 0),
+                    graduated=learning_results.get("graduated", 0),
+                )
+            else:
+                learning_results = {"new_learnings": 0, "graduated": 0}
 
-    # Step 3: Aggregate into learnings
-    learning_results = process_signals()
+            summary = {
+                "signals_created": signals_created,
+                "synthesized": synthesized,
+                "new_learnings": learning_results.get("new_learnings", 0),
+                "graduated": learning_results.get("graduated", 0),
+                "per_repo": per_repo,
+            }
+            if synth_error:
+                summary["synth_note"] = f"LLM synthesis issue: {synth_error}"
 
-    result = {
-        "signals_created": signals_created,
-        "synthesized": synthesized,
-        "new_learnings": learning_results.get("new_learnings", 0),
-        "graduated": learning_results.get("graduated", 0),
-        "per_repo": per_repo,
-    }
-    if synth_error:
-        result["synth_note"] = f"LLM synthesis issue: {synth_error}"
-    return jsonify(result)
+            update_backfill_progress(
+                phase="done",
+                running=False,
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                result=summary,
+            )
+        except Exception as e:
+            update_backfill_progress(
+                phase="error",
+                running=False,
+                error=str(e)[:300],
+                finished_at=datetime.now(timezone.utc).isoformat(),
+            )
+
+
+@learning_bp.route("/learnings/backfill", methods=["POST"])
+def backfill_learnings():
+    """Kick off a PR backfill asynchronously. Poll /learnings/backfill/status."""
+    import threading
+    from datetime import datetime, timezone
+    from flask import current_app
+    from planet_maiko.brain.learning.bootstrap import (
+        get_backfill_progress, reset_backfill_progress, update_backfill_progress,
+    )
+
+    progress = get_backfill_progress()
+    if progress["running"]:
+        return jsonify({"error": "A backfill is already running", "progress": progress}), 409
+
+    data = request.get_json(silent=True) or {}
+    limit = data.get("limit", 20)
+    repo = data.get("repo")
+
+    reset_backfill_progress()
+    update_backfill_progress(
+        running=True,
+        phase="fetching",
+        started_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+    app = current_app._get_current_object()
+    thread = threading.Thread(
+        target=_run_backfill_job, args=(app, limit, repo), daemon=True,
+    )
+    thread.start()
+    return jsonify({"started": True})
+
+
+@learning_bp.route("/learnings/backfill/status", methods=["GET"])
+def backfill_status():
+    """Poll the active backfill job's progress."""
+    from planet_maiko.brain.learning.bootstrap import get_backfill_progress
+    return jsonify(get_backfill_progress())
 
 
 @learning_bp.route("/learnings/brief", methods=["GET"])

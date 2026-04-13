@@ -17,6 +17,7 @@ Pipeline (phases run in this order):
     5.  heartbeats           — nudge silent agents
     6.  projects             — auto-advance project phases
     7.  scheduled_skills     — run skills on their schedules
+    8a. auto_review_prs      — auto-run pr-review skill on review requests
     8.  auto_investigate     — auto-run investigate skill on CI failures
     9.  morning_brief        — generate the daily morning brief
     10. brainstorm           — auto-brainstorm on Tue/Thu
@@ -242,6 +243,62 @@ def _phase_scheduled_skills():
         return []
 
 
+def _phase_auto_review_prs():
+    """Phase 8a: Auto-run the pr-review skill on new review requests.
+
+    Limited to 2 per cycle to keep token spend predictable. Each completed
+    review is stored as a pupdate so the user can find it in the Inbox
+    "From Maiko" tab. The source pupdate gets an "auto_reviewed" tag so
+    it isn't reprocessed next cycle.
+    """
+    try:
+        from planet_maiko.models.pupdate import Pupdate
+        to_review = Pupdate.query.filter(
+            Pupdate.type == "pr_review_requested",
+            Pupdate.brain_processed == True,  # noqa: E712
+            Pupdate.dismissed == False,  # noqa: E712
+            ~Pupdate.tags.contains("auto_reviewed"),
+        ).limit(2).all()
+
+        reviewed = 0
+        if to_review:
+            import uuid
+            from planet_maiko.agents.brain_session import run_skill
+            from planet_maiko.database import db
+            for p in to_review:
+                try:
+                    meta = p.extra or {}
+                    repo = meta.get("repo", "")
+                    number = meta.get("number", "")
+                    result = run_skill("pr-review", context={
+                        "query": f"Review PR #{number} in {repo}: {p.title}",
+                        "context": f"URL: {p.url or ''}\n{p.body or ''}",
+                    })
+                    if result and result.get("success") and result.get("output"):
+                        review_pupdate = Pupdate(
+                            id=f"pr-review-{uuid.uuid4().hex[:8]}",
+                            source="maiko",
+                            type="pr_review_complete",
+                            priority="normal",
+                            title=f"Review ready: {p.title}",
+                            body=result["output"][:8000],
+                            url=p.url,
+                            actionable=True,
+                            action_hint="Open review",
+                            tags=["pr_review", "maiko"] + [t for t in (p.tags or []) if t],
+                        )
+                        db.session.add(review_pupdate)
+                    p.tags = list(p.tags or []) + ["auto_reviewed"]
+                    reviewed += 1
+                except Exception as e:
+                    logger.debug(f"[cycle] Auto-review of {p.id} failed: {e}")
+            db.session.commit()
+        return {"reviewed": reviewed}
+    except Exception as e:
+        logger.debug(f"[cycle] Auto-review skipped: {e}")
+        return {"reviewed": 0}
+
+
 def _phase_auto_investigate():
     """Phase 8: Auto-investigate CI failures and incidents."""
     try:
@@ -363,6 +420,7 @@ _PHASES = [
     ("heartbeats", _phase_heartbeats),
     ("projects", _phase_projects),
     ("scheduled_skills", _phase_scheduled_skills),
+    ("auto_review_prs", _phase_auto_review_prs),
     ("auto_investigate", _phase_auto_investigate),
     ("morning_brief", _phase_morning_brief),
     ("brainstorm", _phase_brainstorm),

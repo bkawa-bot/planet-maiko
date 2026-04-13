@@ -10,6 +10,7 @@ import {
   CheckSquare, Inbox as InboxIcon, Brain, Calendar,
   AlertCircle, Palette, Video, Sunrise, Clock,
   ExternalLink, ChevronRight, ChevronDown, Play, Pin,
+  Sparkles, X,
 } from "lucide-react";
 import "./Home.css";
 import "./Tasks.css";
@@ -64,6 +65,9 @@ export default function Home() {
   const [showBrief, setShowBrief] = useState(false);
   const [homeConfig, setHomeConfig] = useState(null);
   const [expandedFocusTask, setExpandedFocusTask] = useState(null);
+  const [regenOpen, setRegenOpen] = useState(false);
+  const [regenInput, setRegenInput] = useState("");
+  const [regenLoading, setRegenLoading] = useState(false);
 
   const fetchAll = async () => {
     try {
@@ -91,7 +95,11 @@ export default function Home() {
       setBrainStatus(brain);
       setRecentPupdates(pupdates.slice(0, 5));
       setSchedule(sched);
-      setCalendarEvents(pupdates.filter((p) => p.source === "calendar"));
+      setCalendarEvents(
+        pupdates
+          .filter((p) => p.source === "calendar")
+          .sort((a, b) => (a.metadata?.start || "").localeCompare(b.metadata?.start || ""))
+      );
 
       // Load most recent morning brief — only if from today
       if (!morningBrief) {
@@ -113,6 +121,36 @@ export default function Home() {
     const interval = setInterval(fetchAll, HOME_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
+
+  const regenerateFocus = async () => {
+    const hint = regenInput.trim();
+    if (!hint) return;
+    setRegenLoading(true);
+    showToast("Reordering your focus... 🐾", "normal");
+    try {
+      const result = await api.regenerateSchedule(hint);
+      if (result?.blocks) {
+        setSchedule(result);
+        setRegenOpen(false);
+        setRegenInput("");
+        showToast("Focus reordered!", "normal");
+      } else {
+        showToast(result?.error || "Couldn't reorder", "high");
+      }
+    } catch (err) {
+      showToast("Something went wrong: " + err.message, "high");
+    }
+    setRegenLoading(false);
+  };
+
+  const clearFocusOverride = async () => {
+    try {
+      const result = await api.clearScheduleOverride();
+      if (result?.blocks !== undefined) setSchedule(result);
+    } catch (err) {
+      showToast("Couldn't clear hint: " + err.message, "high");
+    }
+  };
 
   const runMorningBrief = async () => {
     setBriefLoading(true);
@@ -165,7 +203,44 @@ export default function Home() {
           <div className="home-card home-focus-card">
             <div className="home-card-header">
               <CheckSquare size={14} /> Focus
+              <button
+                className="btn btn-sm focus-regen-toggle"
+                style={{ marginLeft: "auto" }}
+                onClick={() => setRegenOpen((v) => !v)}
+                title="Regenerate with a hint"
+              >
+                <Sparkles size={11} /> Regenerate
+              </button>
             </div>
+            {schedule?.override?.instructions && (
+              <div className="focus-override-chip">
+                <Sparkles size={10} />
+                <span className="focus-override-text">Hint: {schedule.override.instructions}</span>
+                <button className="btn-ghost" onClick={clearFocusOverride} title="Clear hint">
+                  <X size={12} />
+                </button>
+              </div>
+            )}
+            {regenOpen && (
+              <div className="focus-regen-row">
+                <input
+                  type="text"
+                  value={regenInput}
+                  onChange={(e) => setRegenInput(e.target.value)}
+                  placeholder='e.g. "prioritize reliability work"'
+                  autoFocus
+                  disabled={regenLoading}
+                  onKeyDown={(e) => { if (e.key === "Enter") regenerateFocus(); }}
+                />
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={regenerateFocus}
+                  disabled={regenLoading || !regenInput.trim()}
+                >
+                  {regenLoading ? "Thinking..." : "Apply"}
+                </button>
+              </div>
+            )}
             {schedule && schedule.blocks?.length > 0 ? (
               <div className="focus-tasks">
                 {schedule.blocks[0].tasks.slice(0, 3).map((t) => {

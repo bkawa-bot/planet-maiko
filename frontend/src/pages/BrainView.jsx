@@ -22,9 +22,10 @@ export default function BrainView() {
   const [addText, setAddText] = useState("");
   const [addCategory, setAddCategory] = useState("domain_knowledge");
   const [backfilling, setBackfilling] = useState(false);
+  const [backfillProgress, setBackfillProgress] = useState(null);
   const [expandedLearning, setExpandedLearning] = useState(null);
   const [showBackfillModal, setShowBackfillModal] = useState(false);
-  const [backfillLimit, setBackfillLimit] = useState(20);
+  const [backfillLimit, setBackfillLimit] = useState("20");
   const [backfillRepo, setBackfillRepo] = useState("");
   const [configuredRepos, setConfiguredRepos] = useState([]);
   const [tab, setTab] = useState("pool");
@@ -41,7 +42,56 @@ export default function BrainView() {
     api.getConfig().then((c) => {
       setConfiguredRepos(c?.github?.repos || []);
     }).catch(() => {});
+    // Resume showing progress if a backfill is already running (page reload)
+    api.getBackfillStatus().then((s) => {
+      if (s?.running) {
+        setBackfilling(true);
+        setBackfillProgress(s);
+      }
+    }).catch(() => {});
   }, []);
+
+  // Poll backfill status while a job is running; surface final summary toast.
+  useEffect(() => {
+    if (!backfilling) return undefined;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const s = await api.getBackfillStatus();
+        if (cancelled) return;
+        setBackfillProgress(s);
+        if (s?.phase === "done" || s?.phase === "error") {
+          setBackfilling(false);
+          if (s.phase === "error") {
+            showToast(`Backfill failed: ${s.error || "unknown"}`, "high");
+          } else {
+            const r = s.result || {};
+            const perRepo = r.per_repo || [];
+            const errored = perRepo.filter((x) => x.error);
+            const summary = perRepo
+              .map((x) => x.error
+                ? `${x.repo}: error (${x.error.slice(0, 40)})`
+                : `${x.repo}: ${x.signals_created}/${x.prs_scanned} PRs`)
+              .join("\n");
+            if (r.signals_created === 0 && errored.length === 0) {
+              showToast("No new PR comments found.\n" + summary, "normal");
+            } else if (r.signals_created === 0) {
+              showToast("Backfill errors:\n" + summary, "high");
+            } else {
+              const note = errored.length ? ` (${errored.length} repo errors)` : "";
+              showToast(`Synthesized ${r.synthesized} into ${r.new_learnings} learnings${note}\n${summary}`, errored.length ? "high" : "normal");
+            }
+          }
+          fetchLearnings();
+        }
+      } catch {
+        // transient network errors — keep polling
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 1500);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [backfilling]);
 
   const active = learnings.filter((l) => l.status === "active" && l.category !== "pattern");
   const pending = learnings.filter((l) => l.status === "pending" && l.category !== "pattern");
@@ -157,8 +207,21 @@ export default function BrainView() {
             style={pending.length === 0 ? { marginLeft: "auto" } : {}}
             disabled={backfilling}
             onClick={() => setShowBackfillModal(true)}
+            title={backfilling && backfillProgress ? `Phase: ${backfillProgress.phase}` : ""}
           >
-            {backfilling ? <><Loader size={10} className="spin" /> Scanning...</> : <><Download size={10} /> Backfill from PRs</>}
+            {backfilling ? (
+              <>
+                <Loader size={10} className="spin" />
+                {" "}
+                {backfillProgress?.phase === "synthesizing" ? "Synthesizing..."
+                  : backfillProgress?.phase === "aggregating" ? "Aggregating..."
+                  : backfillProgress?.repos_total
+                    ? `Scanning ${backfillProgress.current_repo || ""} (${backfillProgress.repos_done}/${backfillProgress.repos_total})`
+                    : "Starting..."}
+              </>
+            ) : (
+              <><Download size={10} /> Backfill from PRs</>
+            )}
           </button>
           <InfoButton title={<><Brain size={16} /> Knowledge Pool</>}>
             <p>The Knowledge Pool is Planet Maiko's collective memory — coding patterns and rules learned from your team's PR reviews, agent feedback, and manual input.</p>
@@ -288,11 +351,12 @@ export default function BrainView() {
                 <label>
                   PRs to scan {backfillRepo ? "" : "per repo"}
                   <input
-                    type="number"
-                    min="1"
-                    max="500"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={backfillLimit}
-                    onChange={(e) => setBackfillLimit(parseInt(e.target.value) || 20)}
+                    onChange={(e) => setBackfillLimit(e.target.value.replace(/[^0-9]/g, ""))}
+                    placeholder="20"
                     autoFocus
                   />
                 </label>
@@ -304,34 +368,18 @@ export default function BrainView() {
                   className="btn btn-primary"
                   disabled={backfilling}
                   onClick={async () => {
-                    setShowBackfillModal(false);
-                    setBackfilling(true);
+                    const limit = Math.min(500, Math.max(1, parseInt(backfillLimit, 10) || 20));
                     try {
-                      const result = await api.backfillKnowledge(backfillLimit, backfillRepo || null);
-                      const perRepo = result.per_repo || [];
-                      const errored = perRepo.filter((r) => r.error);
-                      const summary = perRepo
-                        .map((r) => r.error
-                          ? `${r.repo}: error (${r.error.slice(0, 40)})`
-                          : `${r.repo}: ${r.signals_created}/${r.prs_scanned} PRs`)
-                        .join("\n");
-
-                      if (result.signals_created === 0 && errored.length === 0) {
-                        showToast("No new PR comments found.\n" + summary, "normal");
-                      } else if (result.signals_created === 0) {
-                        showToast("Backfill errors:\n" + summary, "high");
-                      } else {
-                        const note = errored.length ? ` (${errored.length} repo errors)` : "";
-                        showToast(`Synthesized ${result.synthesized} into ${result.new_learnings} learnings${note}\n${summary}`, errored.length ? "high" : "normal");
-                      }
-                      fetchLearnings();
+                      await api.backfillKnowledge(limit, backfillRepo || null);
+                      setShowBackfillModal(false);
+                      setBackfilling(true); // kicks off the polling effect
+                      showToast("Backfill started 🐾", "normal");
                     } catch (err) {
-                      showToast("Backfill failed: " + err.message, "high");
+                      showToast("Backfill failed to start: " + err.message, "high");
                     }
-                    setBackfilling(false);
                   }}
                 >
-                  {backfilling ? <><Loader size={12} className="spin" /> Scanning...</> : <><Download size={12} /> Scan {backfillLimit} PRs{backfillRepo ? ` in ${backfillRepo.split("/").pop()}` : ""}</>}
+                  {backfilling ? <><Loader size={12} className="spin" /> Scanning...</> : <><Download size={12} /> Scan {backfillLimit || 20} PRs{backfillRepo ? ` in ${backfillRepo.split("/").pop()}` : ""}</>}
                 </button>
               </div>
             </div>

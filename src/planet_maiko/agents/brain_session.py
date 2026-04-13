@@ -156,6 +156,51 @@ def run_skill(skill_name, context=None, working_dir=None):
     return result
 
 
+def reorder_tasks_with_hint(tasks, instructions):
+    """Ask the brain to reorder tasks given a free-text user instruction.
+
+    Args:
+        tasks: list of dicts with keys id, title, priority, status, type
+        instructions: free-text hint from the user (e.g. "prioritize reliability work")
+
+    Returns:
+        dict with keys:
+            success: bool
+            ordered_ids: list[str] in the LLM's chosen order (or [] on failure)
+            error: str or None
+    """
+    runtime = _get_runtime()
+    if not runtime.is_available():
+        return {"success": False, "ordered_ids": [], "error": "Brain runtime not available"}
+
+    prompt = (
+        "You are reordering a personal task list based on a user's directive.\n\n"
+        f"User directive: {instructions}\n\n"
+        "Tasks:\n"
+        f"{json.dumps(tasks, indent=2)}\n\n"
+        "Return a JSON array of task IDs in the new priority order (most important first). "
+        "Include every task ID exactly once. No other keys, no commentary."
+    )
+
+    from planet_maiko.agents.routing import resolve_model
+    db.session.close()
+    result = runtime.send_json(prompt, timeout=90, model=resolve_model("skill"))
+
+    if not result.get("success"):
+        return {"success": False, "ordered_ids": [], "error": result.get("error")}
+
+    parsed = result.get("parsed")
+    if not isinstance(parsed, list):
+        return {"success": False, "ordered_ids": [], "error": "LLM did not return a list"}
+
+    valid_ids = {t["id"] for t in tasks}
+    ordered = [x for x in parsed if isinstance(x, str) and x in valid_ids]
+    for t in tasks:
+        if t["id"] not in ordered:
+            ordered.append(t["id"])
+    return {"success": True, "ordered_ids": ordered, "error": None}
+
+
 def get_status():
     """Get brain session status."""
     runtime = _get_runtime()

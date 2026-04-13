@@ -22,9 +22,14 @@ async function request(path, options = {}) {
   }
   const data = await res.json();
 
-  // Cache GET responses
   if (isGet) {
     _cache[path] = { data, at: Date.now() };
+  } else {
+    // Any mutation invalidates GET cache so the next read sees fresh state.
+    // This was a real bug: Dismiss All posted to N /learnings/*/dismiss
+    // endpoints and then fetchLearnings was served from the stale cache,
+    // making the UI look as if nothing changed.
+    for (const key in _cache) delete _cache[key];
   }
 
   return data;
@@ -56,6 +61,8 @@ export const api = {
   startTask: (id) => request(`/tasks/${id}/start`, { method: "POST" }),
   completeTask: (id) => request(`/tasks/${id}/done`, { method: "POST" }),
   cancelTask: (id) => request(`/tasks/${id}/cancel`, { method: "POST" }),
+  sendTaskToLinear: (id, overrides = {}) =>
+    request(`/tasks/${id}/linear`, { method: "POST", body: JSON.stringify(overrides) }),
   importLinear: () => request("/tasks/import-linear", { method: "POST" }),
 
   // Projects
@@ -98,6 +105,9 @@ export const api = {
   getBrainRules: () => request("/brain/rules"),
   runBrainCycle: () => request("/brain/cycle", { method: "POST" }),
   getSchedule: () => request("/brain/schedule"),
+  regenerateSchedule: (instructions) =>
+    request("/brain/schedule/regenerate", { method: "POST", body: JSON.stringify({ instructions }) }),
+  clearScheduleOverride: () => request("/brain/schedule/override", { method: "DELETE" }),
 
   // Scene
   getScene: (params = {}) => {
@@ -168,6 +178,7 @@ export const api = {
   // Learnings management
   createLearning: (data) => request("/learnings", { method: "POST", body: JSON.stringify(data) }),
   backfillKnowledge: (limit = 20, repo = null) => request("/learnings/backfill", { method: "POST", body: JSON.stringify(repo ? { limit, repo } : { limit }) }),
+  getBackfillStatus: () => request("/learnings/backfill/status"),
   approveLearning: (id) => request(`/learnings/${id}/approve`, { method: "POST" }),
   dismissLearning: (id) => request(`/learnings/${id}/dismiss`, { method: "POST" }),
   classifyLearnings: (batchSize = 50) => request("/learnings/classify", { method: "POST", body: JSON.stringify({ batch_size: batchSize }) }),

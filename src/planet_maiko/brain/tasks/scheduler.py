@@ -14,6 +14,38 @@ logger = logging.getLogger(__name__)
 
 PRIORITY_SCORES = {"urgent": 40, "high": 30, "normal": 20, "low": 10}
 
+# In-memory override set by the user via the Focus "regenerate with hint"
+# flow. Cleared on server restart — that's intentional (see issue tracker).
+_OVERRIDE_TTL_HOURS = 4
+_override = None  # {"instructions": str, "ordered_task_ids": [str], "timestamp": datetime}
+
+
+def set_override(instructions, ordered_task_ids):
+    """Store a user-directed task ordering so compute_schedule applies it."""
+    global _override
+    _override = {
+        "instructions": instructions,
+        "ordered_task_ids": list(ordered_task_ids),
+        "timestamp": datetime.now(timezone.utc),
+    }
+
+
+def clear_override():
+    global _override
+    _override = None
+
+
+def get_override():
+    """Return the active override, or None if missing / expired."""
+    global _override
+    if _override is None:
+        return None
+    age = datetime.now(timezone.utc) - _override["timestamp"]
+    if age.total_seconds() > _OVERRIDE_TTL_HOURS * 3600:
+        _override = None
+        return None
+    return _override
+
 
 def _score_task(task):
     """Score a task for scheduling."""
@@ -48,6 +80,20 @@ def _score_task(task):
     return score
 
 
+def _task_to_dict(t, score=0):
+    return {
+        "id": t.id,
+        "title": t.title,
+        "priority": t.priority,
+        "status": t.status,
+        "score": score,
+        "type": t.type,
+        "url": t.url,
+        "due_date": t.due_date,
+        "extra": t.extra or {},
+    }
+
+
 def compute_schedule():
     """Compute an optimal task schedule.
 
@@ -58,6 +104,34 @@ def compute_schedule():
 
     if not active_tasks:
         return {"blocks": [], "total_hours": 0, "task_count": 0}
+
+    # If the user has asked for a custom focus ordering, apply it instead
+    # of the deterministic scoring. Tasks not in the override (newly created
+    # since it was set) are appended at the end so they don't disappear.
+    override = get_override()
+    if override:
+        by_id = {t.id: t for t in active_tasks}
+        ordered = [by_id[tid] for tid in override["ordered_task_ids"] if tid in by_id]
+        for t in active_tasks:
+            if t.id not in override["ordered_task_ids"]:
+                ordered.append(t)
+        block = {
+            "repo": "(custom focus)",
+            "max_score": 999,
+            "total_score": 999,
+            "estimated_hours": len(ordered) * 0.5,
+            "tasks": [_task_to_dict(t) for t in ordered],
+        }
+        return {
+            "blocks": [block],
+            "total_hours": block["estimated_hours"],
+            "task_count": len(active_tasks),
+            "computed_at": datetime.now(timezone.utc).isoformat(),
+            "override": {
+                "instructions": override["instructions"],
+                "applied_at": override["timestamp"].isoformat(),
+            },
+        }
 
     # Group by repo
     by_repo = defaultdict(list)

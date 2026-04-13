@@ -107,6 +107,62 @@ def cancel_task(task_id):
     return jsonify({"status": "deleted", "id": task_id})
 
 
+@tasks_bp.route("/tasks/<task_id>/linear", methods=["POST"])
+def send_task_to_linear(task_id):
+    """Create a Linear issue from a Maiko task.
+
+    Stores the new Linear id/identifier/url on task.extra so the UI can
+    deep-link and avoid creating duplicates.
+    """
+    from planet_maiko.pollers.linear_poller import LinearPoller
+
+    task = db.get_or_404(Task, task_id)
+    extra = dict(task.extra or {})
+
+    # If this task is already linked to a Linear issue (either sent before
+    # or imported from Linear originally), hand back what we have.
+    if extra.get("linear_identifier") or extra.get("identifier"):
+        return jsonify({
+            "already_synced": True,
+            "linear_id": extra.get("linear_id"),
+            "linear_identifier": extra.get("linear_identifier") or extra.get("identifier"),
+            "linear_url": extra.get("linear_url") or task.url,
+        })
+
+    data = request.get_json(silent=True) or {}
+
+    # Description falls back to the originating pupdate's body.
+    description = data.get("description")
+    if description is None:
+        description = extra.get("description") or ""
+        if not description and task.source_pupdate is not None:
+            description = task.source_pupdate.body or ""
+
+    try:
+        issue = LinearPoller.create_issue(
+            task,
+            description=description,
+            team_id=data.get("team_id") or None,
+            project_id=data.get("project_id") or None,
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Linear create failed: {e}"}), 502
+
+    extra["linear_id"] = issue["id"]
+    extra["linear_identifier"] = issue["identifier"]
+    extra["linear_url"] = issue["url"]
+    task.extra = extra
+    db.session.commit()
+    return jsonify({
+        "success": True,
+        "linear_id": issue["id"],
+        "linear_identifier": issue["identifier"],
+        "linear_url": issue["url"],
+    }), 201
+
+
 @tasks_bp.route("/tasks/import-linear", methods=["POST"])
 def import_from_linear():
     """Import assigned issues from Linear as tasks with project associations."""

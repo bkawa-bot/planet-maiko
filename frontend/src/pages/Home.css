@@ -110,6 +110,40 @@
 
 .home-focus-card { border-color: var(--pink-soft); }
 
+.focus-regen-toggle {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; padding: 3px 8px; line-height: 1;
+}
+
+.focus-regen-row {
+  display: flex; gap: 6px; align-items: center;
+  margin-bottom: 10px;
+}
+.focus-regen-row input {
+  flex: 1; padding: 6px 10px;
+  border: 1px solid var(--border); border-radius: var(--radius-xs);
+  background: var(--bg); color: var(--text); font-size: 12px; font-family: inherit;
+}
+.focus-regen-row input:focus { border-color: var(--pink); outline: none; }
+
+.focus-override-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 8px 4px 10px; margin-bottom: 8px;
+  background: var(--pink-soft); border-radius: 999px;
+  font-size: 11px; color: var(--pink);
+  max-width: 100%;
+}
+.focus-override-text {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 260px;
+}
+.focus-override-chip .btn-ghost {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: none; padding: 2px; cursor: pointer;
+  color: var(--pink); opacity: 0.7;
+}
+.focus-override-chip .btn-ghost:hover { opacity: 1; }
+
 /* === Focus tasks === */
 .focus-tasks { display: flex; flex-direction: column; gap: 6px; }
 

@@ -1,7 +1,8 @@
+import { useState } from "react";
 import {
   CheckSquare, Square, FolderOpen, Pin, PinOff, ExternalLink,
   ChevronRight, GitBranch, Clock, Bot, Eye,
-  X, Pencil, Brain, Circle,
+  X, Pencil, Brain, Circle, Send,
 } from "lucide-react";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
@@ -77,6 +78,28 @@ export default function TaskCard({
     await api.updateTask(t.id, { project_id: e.target.value || null });
     showToast(e.target.value ? "Moved to project" : "Removed from project", "normal");
     onRefresh();
+  };
+
+  const linearIdentifier = t.extra?.linear_identifier || t.extra?.identifier || t.metadata?.linear_identifier || t.metadata?.identifier;
+  const linearUrl = t.extra?.linear_url || t.metadata?.linear_url || (t.url?.includes("linear.app") ? t.url : null);
+  const [sendingToLinear, setSendingToLinear] = useState(false);
+
+  const handleSendToLinear = async () => {
+    if (sendingToLinear) return;
+    setSendingToLinear(true);
+    try {
+      const result = await api.sendTaskToLinear(t.id);
+      if (result?.linear_identifier) {
+        showToast(`Sent to Linear as ${result.linear_identifier}`, "normal");
+        onRefresh();
+      } else if (result?.error) {
+        showToast(result.error, "high");
+      }
+    } catch (err) {
+      const msg = err?.message || "Failed to send to Linear";
+      showToast(msg.includes("team_id") ? "Set your Linear team_id in Settings first" : msg, "high");
+    }
+    setSendingToLinear(false);
   };
 
   const handleEditClick = () => {
@@ -178,6 +201,31 @@ export default function TaskCard({
               <button className="btn btn-sm btn-action" onClick={() => onAskMaiko(t)}>
                 <Brain size={10} /> Ask Maiko
               </button>
+              {linearIdentifier ? (
+                linearUrl ? (
+                  <a
+                    href={linearUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-sm btn-action"
+                    onClick={(e) => e.stopPropagation()}
+                    title="Open in Linear"
+                  >
+                    <ExternalLink size={10} /> {linearIdentifier}
+                  </a>
+                ) : (
+                  <span className="tag">{linearIdentifier}</span>
+                )
+              ) : (
+                <button
+                  className="btn btn-sm btn-action"
+                  onClick={handleSendToLinear}
+                  disabled={sendingToLinear}
+                  title="Create a Linear issue from this task"
+                >
+                  <Send size={10} /> {sendingToLinear ? "Sending..." : "Send to Linear"}
+                </button>
+              )}
               {!isDone && !t.assigned_agent_id && (
                 <button className="btn btn-sm btn-action" onClick={() => onAssignAgent(t)}>
                   <Bot size={10} /> Assign Agent

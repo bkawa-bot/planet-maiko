@@ -4,7 +4,7 @@ import { showToast } from "../components/Toast";
 import PupdateCard from "../components/PupdateCard";
 import { renderMarkdown } from "../utils/markdown";
 import { formatTime } from "../utils/dates";
-import { ExternalLink, X, Inbox as InboxIcon, ClipboardCheck, CheckSquare, MoreHorizontal, MessageCircle, Pencil, GitBranch, Calendar as CalendarIcon, Bot, Lightbulb, AlertTriangle, MessageSquare, Brain, Play, Loader, RefreshCw, FileText, Folder } from "lucide-react";
+import { ExternalLink, X, Inbox as InboxIcon, ClipboardCheck, CheckSquare, MoreHorizontal, MessageCircle, Pencil, GitBranch, Calendar as CalendarIcon, Bot, Lightbulb, AlertTriangle, MessageSquare, Play, Loader, FileText, Folder } from "lucide-react";
 import "./Inbox.css";
 import "./Brainstorm.css";
 import "./Suggestions.css";
@@ -44,42 +44,6 @@ export default function Inbox() {
   const [reviewing, setReviewing] = useState(null);
   const [brainStatus, setBrainStatus] = useState(null);
   const [tasks, setTasks] = useState([]);
-
-  // Brainstorm state
-  const [bsResult, setBsResult] = useState(null);
-  const [bsRunning, setBsRunning] = useState(false);
-  const [bsLastRun, setBsLastRun] = useState(null);
-  const [scanning, setScanning] = useState(false);
-
-  const runBrainstorm = async () => {
-    setBsRunning(true);
-    setBsResult(null);
-    showToast("Maiko is thinking...", "normal");
-    try {
-      const res = await api.runSkill("brainstorm", {
-        context: {
-          pupdates: JSON.stringify(pupdates.slice(0, 20), null, 2),
-          tasks: JSON.stringify(tasks.slice(0, 20), null, 2),
-        },
-      });
-      setBsResult(res);
-      setBsLastRun(new Date());
-      showToast(res.success ? "Brainstorm complete!" : "Brainstorm had trouble", res.success ? "normal" : "high");
-    } catch (err) {
-      setBsResult({ success: false, error: err.message, output: "" });
-      showToast("Something went wrong", "high");
-    }
-    setBsRunning(false);
-  };
-
-  const handleScan = async () => {
-    setScanning(true);
-    try {
-      await api.runScan();
-      await fetchPupdates();
-    } catch (err) { console.error(err); }
-    setScanning(false);
-  };
 
   const fetchPupdates = async () => {
     setLoading(true);
@@ -200,51 +164,11 @@ export default function Inbox() {
 
       {tab === "from_maiko" ? (
         <div style={{ padding: "8px 0" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <button className="btn btn-sm" onClick={handleScan} disabled={scanning}>
-              <RefreshCw size={10} className={scanning ? "spin" : ""} /> {scanning ? "Scanning..." : "Run Scan"}
-            </button>
-            <button className="btn btn-sm" onClick={async () => {
-              setBsRunning(true);
-              setBsResult(null);
-              showToast("Maiko is thinking...", "normal");
-              try {
-                const res = await api.runSkill("brainstorm", {
-                  context: {
-                    pupdates: JSON.stringify(pupdates.slice(0, 20), null, 2),
-                    tasks: JSON.stringify(tasks.slice(0, 20), null, 2),
-                  },
-                });
-                setBsResult(res);
-                setBsLastRun(new Date());
-                if (res.success) {
-                  await api.createPupdate({
-                    id: "bs-" + Date.now(),
-                    source: "maiko",
-                    type: "brainstorm_result",
-                    title: "Brainstorm Results",
-                    body: res.output,
-                    priority: "normal",
-                  });
-                  await fetchPupdates();
-                  showToast("Brainstorm complete!", "normal");
-                } else {
-                  showToast("Brainstorm had trouble", "high");
-                }
-              } catch (err) {
-                setBsResult({ success: false, error: err.message, output: "" });
-                showToast("Something went wrong", "high");
-              }
-              setBsRunning(false);
-            }} disabled={bsRunning}>
-              <Brain size={10} /> {bsRunning ? "Running..." : "Run Brainstorm"}
-            </button>
-          </div>
           {filtered.length === 0 ? (
             <div className="empty-state">
               <InboxIcon size={36} className="empty-icon" />
               <div className="empty-title">Nothing from Maiko yet</div>
-              <div className="empty-sub">Run a scan or brainstorm to get suggestions, approvals, and ideas</div>
+              <div className="empty-sub">Maiko posts brainstorms, approvals, and investigations here as they come up.</div>
             </div>
           ) : (
             <div className="card-list card-list-container">

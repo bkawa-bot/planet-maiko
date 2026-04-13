@@ -86,14 +86,28 @@ def get_skill_prompt(skill_name, context):
     if template is None:
         return None
 
-    # Inject user name from config so Maiko addresses the user correctly
+    # Auto-inject the current local date/day so skills always know "when"
+    # without relying on the model's guess. Callers can override by passing
+    # these keys explicitly in context.
+    from datetime import datetime
+    now = datetime.now()
+    base_context = {
+        "current_date": now.strftime("%Y-%m-%d"),
+        "day_of_week": now.strftime("%A"),
+        "current_time": now.strftime("%I:%M %p"),
+    }
+    context = {**base_context, **(context or {})}
+
+    # Inject user name from config so Maiko addresses the user correctly.
+    # If no name is configured, fall back to "your human" so the LLM never
+    # sees a literal {user_name} placeholder and hallucinates a name.
+    user_name = ""
     try:
         from planet_maiko.config import load_config
         user_name = load_config().get("user", {}).get("name", "").strip()
-        if user_name:
-            context = {**context, "user_name": user_name}
     except Exception:
         pass
+    context = {**context, "user_name": user_name or "your human"}
 
     result = template
     for key, value in context.items():
@@ -101,9 +115,13 @@ def get_skill_prompt(skill_name, context):
 
     # If the prompt doesn't reference {user_name} but we have one,
     # prepend a directive so Claude uses the right name.
-    user_name = context.get("user_name", "").strip() if isinstance(context.get("user_name"), str) else ""
     if user_name and "{user_name}" not in template and user_name not in result:
         result = f"The user's name is {user_name}. Address them by name when appropriate.\n\n{result}"
+
+    # Safety net: if the template doesn't reference the date anywhere,
+    # prepend it so the model never has to guess the current day.
+    if "{current_date}" not in template and "{day_of_week}" not in template:
+        result = f"Today is {base_context['day_of_week']}, {base_context['current_date']}.\n\n{result}"
 
     return result
 

@@ -112,6 +112,29 @@ export default function Settings() {
       <h2>Settings</h2>
       {message && <div className="settings-message">{message}</div>}
 
+      {/* Your Name */}
+      <section className="settings-collapsible">
+        <div className="collapsible-header" style={{ cursor: "default" }}>
+          <span>Your Name</span>
+        </div>
+        <div className="collapsible-body">
+          <div className="integration-section">
+            <div className="setup-hint">How Maiko addresses you in briefs and greetings.</div>
+            <div className="integration-fields">
+              <label>
+                Name
+                <input
+                  type="text"
+                  value={config.user?.name || ""}
+                  onChange={(e) => setConfig((c) => ({ ...c, user: { ...(c.user || {}), name: e.target.value } }))}
+                  placeholder="e.g. Brigitte"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Integrations (collapsed by default) */}
       <section className="settings-collapsible">
         <div className="collapsible-header" onClick={() => toggleSection("integrations")}>

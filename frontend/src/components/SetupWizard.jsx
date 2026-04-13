@@ -1,22 +1,23 @@
 import { useState } from "react";
 import {
   Shield, Inbox as InboxIcon, FolderOpen, Brain, Palette,
-  GitBranch, Bot, Sparkles, Rocket,
+  GitBranch, Bot, Sparkles, Rocket, PawPrint,
 } from "lucide-react";
 import { api } from "../api/client";
 
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 10;
 
 /**
  * First-run setup wizard. Shown on Home when config.setup_complete is
- * false. Collects GitHub + repos + location, then walks through a short
- * tour of Inbox / Focus / Agents / Knowledge before marking setup done.
+ * false. Collects name + GitHub + repos + location, then walks through a
+ * short tour of Inbox / Focus / Agents / Knowledge before marking setup done.
  *
  * Props:
  *   onComplete — () => void, called after config is saved. Home reloads.
  */
 export default function SetupWizard({ onComplete }) {
   const [step, setStep] = useState(0);
+  const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [repos, setRepos] = useState([]);
   const [discovering, setDiscovering] = useState(false);
@@ -26,6 +27,7 @@ export default function SetupWizard({ onComplete }) {
 
   const finishSetup = async () => {
     const config = {};
+    if (name.trim()) config.user = { name: name.trim() };
     if (username) config.github = { username, enabled: true, repos };
     if (latLon) config.scene = { latitude: latLon.lat, longitude: latLon.lon, location_name: locationResolved };
     config.setup_complete = true;
@@ -40,7 +42,7 @@ export default function SetupWizard({ onComplete }) {
       const result = await api.discoverGithubRepos();
       if (result.repos?.length) {
         setRepos(result.repos);
-        setTimeout(() => setStep(3), 800);
+        setTimeout(() => setStep(4), 800);
       }
     } catch (e) {
       // Best effort — the user can type repos manually below
@@ -84,22 +86,43 @@ export default function SetupWizard({ onComplete }) {
           </div>
         )}
 
-        {/* Step 1: GitHub */}
+        {/* Step 1: Your Name */}
         {step === 1 && (
+          <div className="setup-step">
+            <div className="setup-step-icon"><PawPrint size={28} /></div>
+            <h3>What should I call you?</h3>
+            <p>Maiko uses this name to greet you and reference you in briefs. First name or nickname is fine.</p>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Brigitte"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) setStep(2); }}
+            />
+            <div className="setup-actions">
+              <button className="setup-skip" onClick={() => setStep(2)}>Skip</button>
+              <button className="btn btn-primary" onClick={() => setStep(2)} disabled={!name.trim()}>Next</button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: GitHub */}
+        {step === 2 && (
           <div className="setup-step">
             <div className="setup-step-icon"><GitBranch size={28} /></div>
             <h3>Connect GitHub</h3>
             <p>Enter your GitHub username so Maiko can monitor your PRs and reviews. Requires <code>gh auth login</code> first.</p>
             <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="your-github-username" />
             <div className="setup-actions">
-              <button className="setup-skip" onClick={() => setStep(3)}>Skip</button>
-              <button className="btn btn-primary" onClick={() => setStep(2)} disabled={!username}>Next</button>
+              <button className="setup-skip" onClick={() => setStep(4)}>Skip</button>
+              <button className="btn btn-primary" onClick={() => setStep(3)} disabled={!username}>Next</button>
             </div>
           </div>
         )}
 
-        {/* Step 2: Repos */}
-        {step === 2 && (
+        {/* Step 3: Repos */}
+        {step === 3 && (
           <div className="setup-step">
             <div className="setup-step-icon"><FolderOpen size={28} /></div>
             <h3>Your Repos</h3>
@@ -117,14 +140,14 @@ export default function SetupWizard({ onComplete }) {
               <div className="setup-hint-good">Found {repos.length} repo(s)</div>
             )}
             <div className="setup-actions">
-              <button className="setup-skip" onClick={() => setStep(1)}>Back</button>
-              <button className="btn btn-primary" onClick={() => setStep(3)}>Next</button>
+              <button className="setup-skip" onClick={() => setStep(2)}>Back</button>
+              <button className="btn btn-primary" onClick={() => setStep(4)}>Next</button>
             </div>
           </div>
         )}
 
-        {/* Step 3: Location */}
-        {step === 3 && (
+        {/* Step 4: Location */}
+        {step === 4 && (
           <div className="setup-step">
             <div className="setup-step-icon"><Palette size={28} /></div>
             <h3>Your Location</h3>
@@ -140,14 +163,14 @@ export default function SetupWizard({ onComplete }) {
             </div>
             {locationResolved && <div className="setup-hint-good">{locationResolved}</div>}
             <div className="setup-actions">
-              <button className="setup-skip" onClick={() => setStep(4)}>Skip</button>
-              <button className="btn btn-primary" onClick={() => setStep(4)}>Next</button>
+              <button className="setup-skip" onClick={() => setStep(5)}>Skip</button>
+              <button className="btn btn-primary" onClick={() => setStep(5)}>Next</button>
             </div>
           </div>
         )}
 
-        {/* Step 4: Tour — Inbox */}
-        {step === 4 && (
+        {/* Step 5: Tour — Inbox */}
+        {step === 5 && (
           <div className="setup-step setup-step-centered">
             <div className="setup-step-icon tour-icon"><InboxIcon size={36} /></div>
             <h3>Your Inbox</h3>
@@ -155,13 +178,13 @@ export default function SetupWizard({ onComplete }) {
             <p className="setup-detail">Tabs filter by type. You can dismiss, create tasks, or have Maiko investigate with one click.</p>
             <div className="setup-actions">
               <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
-              <button className="btn btn-primary" onClick={() => setStep(5)}>Next</button>
+              <button className="btn btn-primary" onClick={() => setStep(6)}>Next</button>
             </div>
           </div>
         )}
 
-        {/* Step 5: Tour — Focus Mode */}
-        {step === 5 && (
+        {/* Step 6: Tour — Focus Mode */}
+        {step === 6 && (
           <div className="setup-step setup-step-centered">
             <div className="setup-step-icon tour-icon"><Shield size={36} /></div>
             <h3>Focus Mode</h3>
@@ -175,13 +198,13 @@ export default function SetupWizard({ onComplete }) {
             <p className="setup-detail">Held notifications are collected and released as a digest when you switch back.</p>
             <div className="setup-actions">
               <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
-              <button className="btn btn-primary" onClick={() => setStep(6)}>Next</button>
+              <button className="btn btn-primary" onClick={() => setStep(7)}>Next</button>
             </div>
           </div>
         )}
 
-        {/* Step 6: Tour — Agents */}
-        {step === 6 && (
+        {/* Step 7: Tour — Agents */}
+        {step === 7 && (
           <div className="setup-step setup-step-centered">
             <div className="setup-step-icon tour-icon"><Bot size={36} /></div>
             <h3>Meet Your Agents</h3>
@@ -189,13 +212,13 @@ export default function SetupWizard({ onComplete }) {
             <p className="setup-detail">New agents ("pups") explore with random learnings. Through training, they specialize and rank up.</p>
             <div className="setup-actions">
               <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
-              <button className="btn btn-primary" onClick={() => setStep(7)}>Next</button>
+              <button className="btn btn-primary" onClick={() => setStep(8)}>Next</button>
             </div>
           </div>
         )}
 
-        {/* Step 7: Tour — Knowledge + Training */}
-        {step === 7 && (
+        {/* Step 8: Tour — Knowledge + Training */}
+        {step === 8 && (
           <div className="setup-step setup-step-centered">
             <div className="setup-step-icon tour-icon"><Brain size={36} /></div>
             <h3>Knowledge + Training</h3>
@@ -203,13 +226,13 @@ export default function SetupWizard({ onComplete }) {
             <p className="setup-detail">Use <strong>Knowledge &gt; Backfill from PRs</strong> to scan your history. Then <strong>Training</strong> to teach agents on real merged PRs.</p>
             <div className="setup-actions">
               <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
-              <button className="btn btn-primary" onClick={() => setStep(8)}>Next</button>
+              <button className="btn btn-primary" onClick={() => setStep(9)}>Next</button>
             </div>
           </div>
         )}
 
-        {/* Step 8: Tour — Done */}
-        {step === 8 && (
+        {/* Step 9: Tour — Done */}
+        {step === 9 && (
           <div className="setup-step setup-step-centered">
             <div className="setup-step-icon tour-icon"><Sparkles size={36} /></div>
             <h3>You're All Set!</h3>

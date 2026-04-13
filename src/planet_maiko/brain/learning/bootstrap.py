@@ -3,6 +3,7 @@
 import logging
 import subprocess
 import json
+import threading
 from datetime import datetime, timezone
 from planet_maiko.database import db
 from planet_maiko.models.signal import Signal
@@ -19,6 +20,48 @@ logger = logging.getLogger(__name__)
 MIN_COMMENT_LEN = 30
 SHORT_COMMENT_LEN = 60
 QUESTION_COMMENT_LEN = 80
+
+
+# Progress state for the async backfill job. Accessed through the helpers
+# below so we have a single place to update it and a single lock guarding
+# the dict. The UI polls get_backfill_progress() to render a progress bar.
+_progress_lock = threading.Lock()
+_progress = {
+    "running": False,
+    "phase": "idle",          # idle | fetching | synthesizing | aggregating | done | error
+    "repos_total": 0,
+    "repos_done": 0,
+    "current_repo": None,
+    "prs_in_repo": 0,
+    "signals_created": 0,
+    "synthesized": 0,
+    "new_learnings": 0,
+    "graduated": 0,
+    "error": None,
+    "started_at": None,
+    "finished_at": None,
+    "result": None,           # full result dict once phase == done
+}
+
+
+def get_backfill_progress():
+    with _progress_lock:
+        return dict(_progress)
+
+
+def update_backfill_progress(**kwargs):
+    with _progress_lock:
+        _progress.update(kwargs)
+
+
+def reset_backfill_progress():
+    with _progress_lock:
+        _progress.update({
+            "running": False, "phase": "idle", "repos_total": 0, "repos_done": 0,
+            "current_repo": None, "prs_in_repo": 0, "signals_created": 0,
+            "synthesized": 0, "new_learnings": 0, "graduated": 0, "error": None,
+            "started_at": None, "finished_at": None, "result": None,
+        })
 
 
 def bootstrap_from_prs(limit=20, repos=None):
@@ -45,8 +88,10 @@ def bootstrap_from_prs(limit=20, repos=None):
 
     total_created = 0
     per_repo = []
+    update_backfill_progress(repos_total=len(repos), repos_done=0)
 
     for repo in repos:
+        update_backfill_progress(current_repo=repo, prs_in_repo=0)
         repo_stats = {"repo": repo, "prs_scanned": 0, "signals_created": 0, "error": None}
 
         try:
@@ -64,6 +109,7 @@ def bootstrap_from_prs(limit=20, repos=None):
 
             prs = json.loads(result.stdout)
             repo_stats["prs_scanned"] = len(prs)
+            update_backfill_progress(prs_in_repo=len(prs))
             created_for_repo = 0
 
             for pr in prs:
@@ -111,6 +157,10 @@ def bootstrap_from_prs(limit=20, repos=None):
             logger.warning(f"[bootstrap] Error scanning {repo}: {e}")
 
         per_repo.append(repo_stats)
+        update_backfill_progress(
+            repos_done=len(per_repo),
+            signals_created=total_created,
+        )
 
     if total_created:
         db.session.commit()

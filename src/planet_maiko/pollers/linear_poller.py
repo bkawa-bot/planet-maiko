@@ -15,6 +15,20 @@ logger = logging.getLogger(__name__)
 
 LINEAR_API = "https://api.linear.app/graphql"
 
+# Maiko priority → Linear priority. Linear uses 0=No priority, 1=Urgent,
+# 2=High, 3=Normal/Medium, 4=Low. We pick 3 for "normal" so new issues land
+# in the middle of the queue rather than on top.
+MAIKO_TO_LINEAR_PRIORITY = {"urgent": 1, "high": 2, "normal": 3, "low": 4}
+
+ISSUE_CREATE_MUTATION = """
+mutation IssueCreate($input: IssueCreateInput!) {
+  issueCreate(input: $input) {
+    success
+    issue { id identifier url title }
+  }
+}
+"""
+
 ASSIGNED_ISSUES_QUERY = """
 query {
   viewer {
@@ -90,7 +104,64 @@ class LinearPoller(BasePoller):
 
         data = self._query(api_key, ASSIGNED_ISSUES_QUERY)
         issues = data.get("viewer", {}).get("assignedIssues", {}).get("nodes", [])
+
+        # Push Linear state changes back onto any linked Maiko tasks.
+        # Runs best-effort so a sync hiccup doesn't break the whole poll.
+        try:
+            self.sync_statuses(issues)
+        except Exception as e:
+            logger.warning(f"[linear] Status sync failed: {e}")
+
         return {"issues": issues}
+
+    @staticmethod
+    def sync_statuses(issues):
+        """Mirror Linear issue state onto Maiko tasks linked by extra.linear_id.
+
+        Only touches tasks currently in new/in_progress; done/cancelled tasks
+        are left alone on the assumption the user has moved on. Returns a
+        dict with the number of tasks updated.
+        """
+        from planet_maiko.database import db
+        from planet_maiko.models.task import Task
+
+        if not issues:
+            return {"updated": 0}
+
+        state_type_to_status = {
+            "backlog": "new", "unstarted": "new",
+            "started": "in_progress",
+            "completed": "done", "canceled": "cancelled",
+        }
+
+        issue_by_id = {i.get("id"): i for i in issues if i.get("id")}
+        if not issue_by_id:
+            return {"updated": 0}
+
+        active = Task.query.filter(Task.status.in_(["new", "in_progress"])).all()
+        updated = 0
+        for t in active:
+            extra = t.extra or {}
+            lid = extra.get("linear_id")
+            if not lid or lid not in issue_by_id:
+                continue
+            issue = issue_by_id[lid]
+            state = issue.get("state") or {}
+            new_status = state_type_to_status.get(state.get("type", ""))
+            if not new_status or new_status == t.status:
+                continue
+            logger.info(f"[linear] Task {t.id} status {t.status} → {new_status}")
+            t.status = new_status
+            # Keep stored state name fresh for downstream display.
+            new_extra = dict(extra)
+            if state.get("name"):
+                new_extra["state"] = state["name"]
+            t.extra = new_extra
+            updated += 1
+
+        if updated:
+            db.session.commit()
+        return {"updated": updated}
 
     def to_pupdates(self, raw_data):
         pupdates = []
@@ -151,6 +222,73 @@ class LinearPoller(BasePoller):
                     pass
 
         return pupdates
+
+    @staticmethod
+    def create_issue(task, description="", team_id=None, project_id=None, api_key=None):
+        """Create a Linear issue from a Maiko task.
+
+        Args:
+            task: a Task ORM instance (has title, priority, due_date).
+            description: markdown body for the Linear issue. Typically
+                sourced from the task's originating pupdate.
+            team_id: Linear team ID override. Falls back to
+                config.linear.team_id.
+            project_id: optional Linear project ID to assign the issue to.
+            api_key: optional API key override. Falls back to
+                config.linear.api_key.
+
+        Returns:
+            dict with {id, identifier, url, title}.
+
+        Raises:
+            ValueError: if API key or team_id is missing.
+            RuntimeError: if the Linear API returns errors.
+        """
+        import certifi
+
+        config = load_config()
+        linear_cfg = config.get("linear", {})
+        api_key = api_key or linear_cfg.get("api_key", "")
+        if not api_key:
+            raise ValueError("Linear API key not configured")
+        team_id = team_id or linear_cfg.get("team_id", "")
+        if not team_id:
+            raise ValueError("Linear team_id not configured")
+
+        input_data = {
+            "teamId": team_id,
+            "title": task.title or "(Untitled)",
+            "priority": MAIKO_TO_LINEAR_PRIORITY.get(task.priority, 3),
+        }
+        if description:
+            input_data["description"] = description[:8000]
+        if task.due_date:
+            input_data["dueDate"] = task.due_date
+        if project_id:
+            input_data["projectId"] = project_id
+
+        resp = requests.post(
+            LINEAR_API,
+            json={"query": ISSUE_CREATE_MUTATION, "variables": {"input": input_data}},
+            headers={"Authorization": api_key, "Content-Type": "application/json"},
+            timeout=30,
+            verify=certifi.where(),
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if "errors" in data:
+            raise RuntimeError(f"Linear API errors: {data['errors']}")
+
+        create_result = (data.get("data") or {}).get("issueCreate") or {}
+        if not create_result.get("success"):
+            raise RuntimeError("Linear issueCreate returned success=false")
+        issue = create_result.get("issue") or {}
+        return {
+            "id": issue.get("id"),
+            "identifier": issue.get("identifier"),
+            "url": issue.get("url"),
+            "title": issue.get("title"),
+        }
 
     @staticmethod
     def import_issues(api_key):
