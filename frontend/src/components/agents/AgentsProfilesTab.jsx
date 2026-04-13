@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Bot, Brain, CheckSquare, Plus, Target, TrendingUp, X, Zap, Pencil, Save, Code2, Eye, Search,
+  Bot, Brain, CheckSquare, Plus, Target, TrendingUp, X, Pencil, Save, Code2, Eye, Search,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
@@ -134,8 +134,6 @@ export default function AgentsProfilesTab({
             <div className="strategies-grid">
               {byRole[role].map((p) => {
                 const specEntries = Object.entries(p.specializations || {}).sort((a, b) => b[1] - a[1]);
-                const totalTasks = p.tasks_completed + p.tasks_failed;
-                const isPup = totalTasks < 3;
                 const strengths = specEntries.filter(([, s]) => s >= 0.7);
                 const hasContextSet = p.context_set?.length > 0;
                 const hasAdapter = !!p.extra?.adapter_path;
@@ -151,7 +149,6 @@ export default function AgentsProfilesTab({
                           {p.scope_repo && <span className="strategy-tag scope-tag">{p.scope_repo}</span>}
                           {!p.scope_repo && p.role === "investigation" && <span className="strategy-tag scope-tag">global</span>}
                           {hasAdapter && <span className="strategy-tag adapter-tag" title="has LoRA adapter">LoRA</span>}
-                          {isPup && <span className="strategy-tag exploring"><Zap size={9} /> exploring</span>}
                           {p.archived && <span className="strategy-tag archived-tag">archived</span>}
                         </div>
                       </div>

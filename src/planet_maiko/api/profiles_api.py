@@ -29,12 +29,27 @@ def get_profile(profile_id):
 
 @profiles_bp.route("/profiles", methods=["POST"])
 def create_agent_profile():
-    """Create a new agent profile (the arrival experience)."""
+    """Create a new agent profile (the arrival experience).
+
+    Body fields (all optional):
+      agent_id, display_name, avatar — cosmetic identity
+      role          — "coding" (default) | "review" | "investigation"
+      scope_repo    — single-repo scope, e.g. "org/auth-service". Null
+                      = global (e.g. a Detective for cross-repo work).
+      instructions  — markdown, injected into every session this agent
+                      runs. Equivalent to a per-agent AGENTS.md fragment.
+    """
     data = request.get_json(silent=True) or {}
+    role = data.get("role") or "coding"
+    if role not in ("coding", "review", "investigation"):
+        return jsonify({"error": f"invalid role: {role}"}), 400
     profile = create_profile(
         agent_id=data.get("agent_id", f"agent-{__import__('time').time_ns()}"),
         display_name=data.get("display_name"),
         avatar=data.get("avatar"),
+        role=role,
+        scope_repo=(data.get("scope_repo") or None),
+        instructions=(data.get("instructions") or None),
     )
     return jsonify(profile.to_dict()), 201
 

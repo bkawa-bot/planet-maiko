@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import {
-  Bot, Plus, Flame, Target, AlertTriangle,
+  Bot, Plus, Flame, Target, AlertTriangle, Code2, Eye, Search, X,
 } from "lucide-react";
 import InfoButton from "../components/InfoButton";
 import AgentsActiveTab from "../components/agents/AgentsActiveTab";
@@ -21,6 +21,9 @@ export default function Agents() {
   const [allLearnings, setAllLearnings] = useState({});
   const [loading, setLoading] = useState(true);
   const [showArrival, setShowArrival] = useState(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createForm, setCreateForm] = useState({ role: "coding", scope_repo: "", instructions: "" });
+  const [creating, setCreating] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -44,15 +47,29 @@ export default function Agents() {
 
   useEffect(() => { fetchData(); }, []);
 
-  const handleCreateAgent = async () => {
+  const handleCreateAgent = () => {
+    // Open the pre-creation form so the user can pick role/scope first.
+    // The arrival greeting follows once the profile is persisted.
+    setCreateForm({ role: "coding", scope_repo: "", instructions: "" });
+    setShowCreateForm(true);
+  };
+
+  const submitCreateAgent = async () => {
+    setCreating(true);
     try {
-      const profile = await api.createProfile({});
+      const profile = await api.createProfile({
+        role: createForm.role,
+        scope_repo: createForm.scope_repo.trim() || undefined,
+        instructions: createForm.instructions.trim() || undefined,
+      });
+      setShowCreateForm(false);
       setShowArrival(profile);
       showToast(`${profile.display_name} just arrived in town! 🐾`, "normal");
       fetchData();
     } catch (err) {
-      console.error(err);
+      showToast(err.message || "Create failed", "high");
     }
+    setCreating(false);
   };
 
   const handleShowArchived = async (showArchived) => {
@@ -64,6 +81,62 @@ export default function Agents() {
 
   return (
     <div className="agents-page">
+      {/* New Agent create form */}
+      {showCreateForm && (
+        <div className="modal-overlay" onClick={() => !creating && setShowCreateForm(false)}>
+          <div className="agent-edit-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <Plus size={14} /> New Agent
+              <span style={{ flex: 1 }} />
+              <button className="btn btn-sm" onClick={() => setShowCreateForm(false)} disabled={creating}>
+                <X size={12} />
+              </button>
+            </div>
+            <div className="modal-body agent-edit-body">
+              <div className="agent-edit-row">
+                <label>
+                  Role
+                  <select
+                    value={createForm.role}
+                    onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
+                  >
+                    <option value="coding">Coder — writes code, opens PRs</option>
+                    <option value="review">Reviewer — reviews PRs</option>
+                    <option value="investigation">Investigator — digs into incidents & CI</option>
+                  </select>
+                </label>
+                <label>
+                  Scope (repo)
+                  <input
+                    type="text"
+                    value={createForm.scope_repo}
+                    onChange={(e) => setCreateForm({ ...createForm, scope_repo: e.target.value })}
+                    placeholder="org/repo-name  (leave blank for global)"
+                  />
+                </label>
+              </div>
+              <label className="agent-edit-full">
+                Starter instructions (optional, markdown)
+                <textarea
+                  rows={8}
+                  value={createForm.instructions}
+                  onChange={(e) => setCreateForm({ ...createForm, instructions: e.target.value })}
+                  placeholder={"How should this agent work? You can also add this later via Edit.\n\nExample:\n## Your focus\n- Only touch files under src/auth/\n- Prefer tests before implementation\n- Ask before adding new dependencies"}
+                />
+              </label>
+            </div>
+            <div className="agent-edit-footer">
+              <button className="btn" onClick={() => setShowCreateForm(false)} disabled={creating}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" onClick={submitCreateAgent} disabled={creating}>
+                {creating ? "Spawning..." : <><Plus size={12} /> Create</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Arrival Modal */}
       {showArrival && (
         <div className="modal-overlay" onClick={() => setShowArrival(null)}>
@@ -73,6 +146,13 @@ export default function Agents() {
               <h2 className="arrival-greeting">{showArrival.display_name}</h2>
               <p className="arrival-flavor">{showArrival.flavor_text}</p>
               <div className="arrival-rank">{RANK_LABELS[showArrival.rank] || "🌱 Pup"}</div>
+              <div className="arrival-role">
+                {(showArrival.role || "coding") === "coding" && <><Code2 size={10} /> Coder</>}
+                {showArrival.role === "review" && <><Eye size={10} /> Reviewer</>}
+                {showArrival.role === "investigation" && <><Search size={10} /> Investigator</>}
+                {showArrival.scope_repo && <span className="arrival-scope"> · {showArrival.scope_repo}</span>}
+                {!showArrival.scope_repo && <span className="arrival-scope"> · global</span>}
+              </div>
               <button className="btn btn-primary" onClick={() => setShowArrival(null)}>
                 Let's go!
               </button>
