@@ -64,15 +64,19 @@ def get_skill_prompt(skill_name, context):
     """
     template = None
 
-    # 1. Try database (only if user has edited it)
+    # 1. Try database. Two cases:
+    #    - User-created skill (is_default=False): always use the DB prompt,
+    #      since there's no file or hardcoded fallback for it.
+    #    - User-edited default skill (user_edited=True): prefer their edits
+    #      over the bundled file/hardcoded prompt.
     try:
         from planet_maiko.database import db
         from planet_maiko.models.custom_skill import CustomSkill
         skill = db.session.get(CustomSkill, skill_name)
-        if skill and skill.user_edited:
+        if skill and (not skill.is_default or skill.user_edited):
             template = skill.prompt
     except Exception as e:
-        logger.debug(f"[skills] Could not check DB for user-edited prompt of {skill_name}: {e}")
+        logger.debug(f"[skills] Could not check DB for prompt of {skill_name}: {e}")
 
     # 2. Try prompt file (authoritative for default skills unless user-edited)
     if template is None:
