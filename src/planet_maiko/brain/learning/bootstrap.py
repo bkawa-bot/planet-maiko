@@ -84,6 +84,10 @@ def _fetch_inline_review_comments(repo, timeout=120):
             "author": {"login": (c.get("user") or {}).get("login", "")},
             "path": c.get("path"),
             "line": c.get("line"),
+            # diff_hunk is the code context — a few lines of diff around
+            # where the reviewer left the comment. Gold for LoRA training:
+            # the model sees both the code and the human's reaction to it.
+            "diff_hunk": c.get("diff_hunk"),
         })
     return by_pr
 
@@ -218,10 +222,25 @@ def bootstrap_from_prs(limit=20, repos=None):
                     if not body:
                         continue
 
+                    # Inline comments carry the diff hunk + file path;
+                    # review bodies and conversation comments don't.
+                    # When present, these fields turn the signal into
+                    # gold LoRA training data (code + human reaction).
+                    diff_hunk = entry.get("diff_hunk") or None
+                    file_path = entry.get("path") or None
+
                     existing = Signal.query.filter_by(
                         text=body[:500], repo=repo, source_type="pr_comment"
                     ).first()
                     if existing:
+                        # Upgrade older signals in place: if we have a
+                        # diff hunk this time and the existing row has
+                        # none, backfill it so training can pick it up.
+                        # Otherwise skip as before.
+                        if diff_hunk and not existing.code_context:
+                            existing.code_context = diff_hunk
+                            if file_path and not existing.file_path:
+                                existing.file_path = file_path
                         continue
 
                     signal = Signal(
@@ -231,6 +250,8 @@ def bootstrap_from_prs(limit=20, repos=None):
                         reviewer=(entry.get("author") or {}).get("login", ""),
                         severity="suggestion",
                         repo=repo,
+                        file_path=file_path,
+                        code_context=diff_hunk,
                     )
                     db.session.add(signal)
                     created_for_repo += 1
