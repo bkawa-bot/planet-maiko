@@ -29,6 +29,23 @@ mutation IssueCreate($input: IssueCreateInput!) {
 }
 """
 
+LED_PROJECTS_QUERY = """
+query {
+  projects(filter: { lead: { isMe: { eq: true } } }, first: 50) {
+    nodes {
+      id
+      name
+      description
+      url
+      state
+      targetDate
+      startDate
+      updatedAt
+    }
+  }
+}
+"""
+
 ASSIGNED_ISSUES_QUERY = """
 query {
   viewer {
@@ -112,6 +129,13 @@ class LinearPoller(BasePoller):
         except Exception as e:
             logger.warning(f"[linear] Status sync failed: {e}")
 
+        # Pull projects the viewer leads (they won't necessarily show up
+        # through assigned issues). Best-effort.
+        try:
+            self.import_led_projects(api_key)
+        except Exception as e:
+            logger.warning(f"[linear] Led-project sync failed: {e}")
+
         return {"issues": issues}
 
     @staticmethod
@@ -162,6 +186,79 @@ class LinearPoller(BasePoller):
         if updated:
             db.session.commit()
         return {"updated": updated}
+
+    def import_led_projects(self, api_key):
+        """Create / update Maiko projects for Linear projects the user leads.
+
+        Called on every Linear poll so new lead assignments show up without
+        a manual import. Idempotent — existing projects are updated in place
+        (title / status / targetDate can change), not duplicated.
+
+        Linear state → Maiko status: started → active, completed → done,
+        canceled → cancelled, anything else (planned/backlog/paused) → planning.
+        """
+        from planet_maiko.database import db
+        from planet_maiko.models.project import Project
+
+        data = self._query(api_key, LED_PROJECTS_QUERY)
+        projects = (data.get("projects") or {}).get("nodes") or []
+
+        state_to_status = {
+            "started": "active",
+            "completed": "done",
+            "canceled": "cancelled",
+            "paused": "paused",
+        }
+
+        created, updated = 0, 0
+        for lp in projects:
+            linear_id = lp.get("id")
+            if not linear_id:
+                continue
+            project_id = f"proj-linear-{linear_id[:8]}"
+            name = lp.get("name") or "Untitled Project"
+            linear_state = lp.get("state", "")
+            new_status = state_to_status.get(linear_state, "planning")
+
+            existing = db.session.get(Project, project_id)
+            if existing:
+                # Refresh surface fields; keep any Maiko-local edits to
+                # description / phases / priority alone.
+                existing.title = name
+                existing.status = new_status
+                existing.source_url = lp.get("url") or existing.source_url
+                ex_extra = dict(existing.extra or {})
+                ex_extra["role"] = "lead"
+                ex_extra["linear_state"] = linear_state
+                if lp.get("targetDate"):
+                    ex_extra["target_date"] = lp["targetDate"]
+                if lp.get("startDate"):
+                    ex_extra["start_date"] = lp["startDate"]
+                existing.extra = ex_extra
+                updated += 1
+            else:
+                proj = Project(
+                    id=project_id,
+                    title=name,
+                    description=lp.get("description") or None,
+                    status=new_status,
+                    source_type="linear",
+                    source_id=linear_id,
+                    source_url=lp.get("url"),
+                    extra={
+                        "role": "lead",
+                        "linear_state": linear_state,
+                        "target_date": lp.get("targetDate"),
+                        "start_date": lp.get("startDate"),
+                    },
+                )
+                db.session.add(proj)
+                created += 1
+
+        if created or updated:
+            db.session.commit()
+            logger.info(f"[linear] Led projects: {created} created, {updated} updated")
+        return {"created": created, "updated": updated}
 
     def to_pupdates(self, raw_data):
         pupdates = []
