@@ -31,6 +31,7 @@ export default function BackfillProgress({ progress }) {
   if (!progress) return null;
   const {
     phase = "idle",
+    stage,
     current_repo,
     prs_done = 0,
     prs_in_repo = 0,
@@ -68,8 +69,11 @@ export default function BackfillProgress({ progress }) {
 
       {phase === "fetching" && current_repo && (
         <div className="backfill-progress-detail">
-          Scanning <code>{current_repo}</code>
-          {prs_in_repo > 0 && <> — {prs_done}/{prs_in_repo} PRs</>}
+          {stage === "listing" && <>Listing merged PRs in <code>{current_repo}</code>...</>}
+          {stage === "inline" && <>Fetching inline review comments for <code>{current_repo}</code>...</>}
+          {(stage === "processing" || !stage) && (
+            <>Scanning <code>{current_repo}</code>{prs_in_repo > 0 && <> — {prs_done}/{prs_in_repo} PRs</>}</>
+          )}
         </div>
       )}
       {phase === "synthesizing" && (

@@ -16,6 +16,78 @@ logger = logging.getLogger(__name__)
 # were. Only empty bodies are skipped here.
 
 
+def _fetch_inline_review_comments(repo, timeout=120):
+    """Fetch every inline (per-file, per-line) PR review comment in a repo.
+
+    Uses the repo-level REST endpoint (/repos/{owner}/{repo}/pulls/comments)
+    which returns all inline review comments across all PRs, paginated.
+    That's one gh api call per repo regardless of PR count — the per-PR
+    alternative would take ~309 calls for a busy repo.
+
+    Returns a dict mapping PR number → list of comment-like dicts with
+    body, author, path, line. Best-effort: on failure returns {}.
+    """
+    try:
+        result = subprocess.run(
+            ["gh", "api", "--paginate",
+             f"repos/{repo}/pulls/comments?per_page=100"],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        if result.returncode != 0:
+            logger.warning(f"[bootstrap] Inline comments fetch failed for {repo}: {result.stderr.strip()[:160]}")
+            return {}
+        raw = result.stdout.strip()
+        if not raw:
+            return {}
+        # gh api --paginate on array endpoints returns a single merged
+        # JSON array. For safety fall back to line-by-line parsing if
+        # that assumption changes upstream.
+        try:
+            comments = json.loads(raw)
+        except json.JSONDecodeError:
+            comments = []
+            for line in raw.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    chunk = json.loads(line)
+                    if isinstance(chunk, list):
+                        comments.extend(chunk)
+                    elif isinstance(chunk, dict):
+                        comments.append(chunk)
+                except json.JSONDecodeError:
+                    continue
+    except subprocess.TimeoutExpired:
+        logger.warning(f"[bootstrap] Inline comments timeout for {repo}")
+        return {}
+    except Exception as e:
+        logger.warning(f"[bootstrap] Inline comments error for {repo}: {e}")
+        return {}
+
+    by_pr = {}
+    for c in comments:
+        if not isinstance(c, dict):
+            continue
+        pr_url = c.get("pull_request_url") or ""
+        if not pr_url:
+            continue
+        try:
+            pr_number = int(pr_url.rsplit("/", 1)[-1])
+        except (ValueError, AttributeError):
+            continue
+        body = (c.get("body") or "").strip()
+        if not body:
+            continue
+        by_pr.setdefault(pr_number, []).append({
+            "body": body,
+            "author": {"login": (c.get("user") or {}).get("login", "")},
+            "path": c.get("path"),
+            "line": c.get("line"),
+        })
+    return by_pr
+
+
 # Progress state for the async backfill job. Accessed through the helpers
 # below so we have a single place to update it and a single lock guarding
 # the dict. The UI polls get_backfill_progress() to render a progress bar.
@@ -23,6 +95,7 @@ _progress_lock = threading.Lock()
 _progress = {
     "running": False,
     "phase": "idle",          # idle | fetching | synthesizing | aggregating | done | error
+    "stage": None,            # within "fetching": listing | inline | processing
     "repos_total": 0,
     "repos_done": 0,
     "current_repo": None,
@@ -52,7 +125,8 @@ def update_backfill_progress(**kwargs):
 def reset_backfill_progress():
     with _progress_lock:
         _progress.update({
-            "running": False, "phase": "idle", "repos_total": 0, "repos_done": 0,
+            "running": False, "phase": "idle", "stage": None,
+            "repos_total": 0, "repos_done": 0,
             "current_repo": None, "prs_in_repo": 0, "prs_done": 0,
             "signals_created": 0, "synthesized": 0, "new_learnings": 0,
             "graduated": 0, "error": None,
@@ -87,7 +161,7 @@ def bootstrap_from_prs(limit=20, repos=None):
     update_backfill_progress(repos_total=len(repos), repos_done=0)
 
     for repo in repos:
-        update_backfill_progress(current_repo=repo, prs_in_repo=0, prs_done=0)
+        update_backfill_progress(current_repo=repo, prs_in_repo=0, prs_done=0, stage="listing")
         repo_stats = {"repo": repo, "prs_scanned": 0, "signals_created": 0, "error": None}
 
         try:
@@ -112,18 +186,32 @@ def bootstrap_from_prs(limit=20, repos=None):
 
             prs = json.loads(result.stdout)
             repo_stats["prs_scanned"] = len(prs)
-            update_backfill_progress(prs_in_repo=len(prs))
+            update_backfill_progress(prs_in_repo=len(prs), stage="inline")
+
+            # Batch-fetch every inline review comment in the repo (single
+            # API call, regardless of PR count). Indexed by PR number so
+            # we can merge them into each PR's entry stream below.
+            inline_by_pr = _fetch_inline_review_comments(repo)
+
+            update_backfill_progress(stage="processing")
             created_for_repo = 0
 
             for pr_index, pr in enumerate(prs, start=1):
-                # Combine review bodies and conversation comments into a
-                # single stream — they're both "someone wrote feedback on
-                # this PR". Duplicates are filtered below by text+repo.
+                # Three kinds of feedback on a PR, all just "someone
+                # wrote something" to the backfill:
+                #   1. review summary bodies (the "Files changed" Review box)
+                #   2. conversation comments (the PR discussion tab)
+                #   3. inline code review comments (per-file, per-line)
+                # Duplicates get filtered below by text+repo.
                 entries = []
                 for review in (pr.get("reviews") or []):
                     entries.append(review)
                 for comment in (pr.get("comments") or []):
                     entries.append(comment)
+                pr_number = pr.get("number")
+                if pr_number is not None:
+                    for inline in inline_by_pr.get(pr_number, []):
+                        entries.append(inline)
 
                 for entry in entries:
                     body = (entry.get("body") or "").strip()
