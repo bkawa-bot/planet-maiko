@@ -19,8 +19,11 @@ Pipeline (phases run in this order):
     7.  scheduled_skills     — run skills on their schedules
     8a. auto_review_prs      — auto-run pr-review skill on review requests
     8.  auto_investigate     — auto-run investigate skill on CI failures
-    9.  morning_brief        — generate the daily morning brief
-    10. brainstorm           — auto-brainstorm on Tue/Thu
+
+Note: morning brief is user-triggered from the Home page (not a cycle
+phase — nobody wants a "morning" brief running at 3am when the first
+cycle happens to tick). Brainstorm can be set up as a scheduled skill
+via the Skills page if the user wants it recurring.
 """
 
 import logging
@@ -333,73 +336,6 @@ def _phase_auto_investigate():
         return {"investigated": 0}
 
 
-def _phase_morning_brief():
-    """Phase 9: Generate the daily morning brief (first cycle of the day)."""
-    try:
-        from planet_maiko.models.skill_result import SkillResult
-        today = datetime.now(timezone.utc).date()
-        existing = SkillResult.query.filter(
-            SkillResult.skill_name == "morning-brief",
-            SkillResult.created_at >= datetime(today.year, today.month, today.day, tzinfo=timezone.utc),
-        ).first()
-        if existing:
-            return {"already_exists": True}
-
-        from planet_maiko.agents.brain_session import run_skill
-        result = run_skill("morning-brief", context={
-            "pupdates": "[]", "tasks": "[]", "calendar": "[]",
-        })
-        if result and result.get("success"):
-            from planet_maiko.database import db
-            sr = SkillResult(
-                skill_name="morning-brief",
-                title=f"Morning Brief — {today.strftime('%B %d')}",
-                content=result["output"],
-            )
-            db.session.add(sr)
-            db.session.commit()
-            return {"generated": True}
-        return {"generated": False}
-    except Exception as e:
-        logger.debug(f"[cycle] Auto morning brief skipped: {e}")
-        return {"generated": False, "error": str(e)}
-
-
-def _phase_brainstorm():
-    """Phase 10: Auto-brainstorm (Tuesdays and Thursdays)."""
-    try:
-        if datetime.now(timezone.utc).weekday() not in (1, 3):  # Tue, Thu
-            return {"generated": False, "skipped": "wrong_day"}
-
-        from planet_maiko.models.skill_result import SkillResult
-        today = datetime.now(timezone.utc).date()
-        existing = SkillResult.query.filter(
-            SkillResult.skill_name == "brainstorm",
-            SkillResult.created_at >= datetime(today.year, today.month, today.day, tzinfo=timezone.utc),
-        ).first()
-        if existing:
-            return {"already_exists": True}
-
-        from planet_maiko.agents.brain_session import run_skill
-        result = run_skill("brainstorm", context={
-            "pupdates": "[]", "tasks": "[]", "calendar": "[]",
-        })
-        if result and result.get("success"):
-            from planet_maiko.database import db
-            sr = SkillResult(
-                skill_name="brainstorm",
-                title=f"Brainstorm — {today.strftime('%B %d')}",
-                content=result["output"],
-            )
-            db.session.add(sr)
-            db.session.commit()
-            return {"generated": True}
-        return {"generated": False}
-    except Exception as e:
-        logger.debug(f"[cycle] Auto brainstorm skipped: {e}")
-        return {"generated": False, "error": str(e)}
-
-
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
@@ -422,8 +358,6 @@ _PHASES = [
     ("scheduled_skills", _phase_scheduled_skills),
     ("auto_review_prs", _phase_auto_review_prs),
     ("auto_investigate", _phase_auto_investigate),
-    ("morning_brief", _phase_morning_brief),
-    ("brainstorm", _phase_brainstorm),
 ]
 
 

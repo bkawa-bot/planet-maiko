@@ -156,6 +156,9 @@ export default function Home() {
     setBriefLoading(true);
     showToast("Morning brief is brewing... ☕", "normal");
     try {
+      // Run the quick scanner first so stuck-PR / stale-task suggestions
+      // show up in the brief context. Best-effort — never block on it.
+      await api.runScan().catch(() => {});
       const [p, t] = await Promise.all([api.getPupdates(), api.getTasks()]);
       const result = await api.runSkill("morning-brief", {
         context: {
