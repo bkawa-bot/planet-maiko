@@ -233,14 +233,6 @@ def bootstrap_from_prs(limit=20, repos=None):
                         text=body[:500], repo=repo, source_type="pr_comment"
                     ).first()
                     if existing:
-                        # Upgrade older signals in place: if we have a
-                        # diff hunk this time and the existing row has
-                        # none, backfill it so training can pick it up.
-                        # Otherwise skip as before.
-                        if diff_hunk and not existing.code_context:
-                            existing.code_context = diff_hunk
-                            if file_path and not existing.file_path:
-                                existing.file_path = file_path
                         continue
 
                     signal = Signal(
