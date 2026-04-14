@@ -19,6 +19,14 @@ import { formatTime } from "../../utils/dates";
  *   profiles   — for resolving display names
  */
 export default function AgentsActiveTab({ agents, activity, conflicts, profiles }) {
+  // With autonomous agents, every prepared agent also has an active
+  // session and an entry in `activity` as soon as it sends its first
+  // pupdate. Rendering both `agents` and `activity` would show two
+  // cards for the same task — the "Ready to launch" one (stale) and
+  // the live one. Dedupe: if a task_id has any activity, skip its
+  // prepared-agent card and let the activity entry represent it.
+  const activeTaskIds = new Set(activity.map((a) => a.task_id).filter(Boolean));
+  const dormantAgents = agents.filter((a) => !a.task_id || !activeTaskIds.has(a.task_id));
   const [selectedThread, setSelectedThread] = useState(null);
   const [messages, setMessages] = useState([]);
   const [msgInput, setMsgInput] = useState("");
@@ -102,7 +110,7 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
           </div>
         )}
 
-        {agents.length === 0 && activity.length === 0 ? (
+        {dormantAgents.length === 0 && activity.length === 0 ? (
           <div className="empty-state">
             <span style={{ fontSize: 48 }}>🐾</span>
             <div className="empty-title">No active agents</div>
@@ -110,7 +118,7 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
           </div>
         ) : (
           <div className="agent-grid">
-            {agents.map((a) => (
+            {dormantAgents.map((a) => (
               <div key={a.agent_id} className="agent-card card">
                 <div className="speech-bubble">
                   Ready to launch
@@ -186,11 +194,17 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
                   </div>
                 </div>
                 <div className="agent-actions">
-                  <button className="btn btn-sm btn-comms"><Bone size={12} /> Nudge</button>
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => handleResume({ task_id: a.task_id, working_path: prepared?.working_path, branch: prepared?.branch })}
+                    title="Resume the agent's Claude Code session in a terminal"
+                  >
+                    <ExternalLink size={12} /> View Session
+                  </button>
                   <button className="btn btn-sm" onClick={() => loadThread(a.task_id)}>
                     <MessageCircle size={12} /> Channel Log
                   </button>
-                  <button className="btn btn-sm"><Moon size={12} /> Sleep</button>
+                  <button className="btn btn-sm btn-comms"><Bone size={12} /> Nudge</button>
                 </div>
               </div>
               );
