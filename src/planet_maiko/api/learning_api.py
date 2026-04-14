@@ -45,6 +45,9 @@ def create_signal():
         language=data.get("language"),
         file_path=data.get("file_path"),
         code_context=data.get("code_context"),
+        # Manual / API-created signals carry an explicit category —
+        # no LLM synthesis needed.
+        synthesized=True,
     )
     db.session.add(signal)
     db.session.commit()
@@ -266,6 +269,7 @@ Respond as JSON:
                                     continue
                                 target.text = rule_data.get("rule", target.text)
                                 target.category = rule_data.get("category", "pattern")
+                                target.synthesized = True
                                 synthesized += 1
                             db.session.commit()
 

@@ -43,6 +43,11 @@ class Signal(db.Model):
     learning_id = db.Column(db.Integer, db.ForeignKey("learnings.id"), nullable=True)
     aggregated = db.Column(db.Boolean, default=False)  # Has this been processed?
     incorporated_at = db.Column(db.DateTime, nullable=True)  # When included in a training dataset
+    # True once the signal has been through LLM synthesis (or was
+    # emitted by a source that sets a real category directly, like
+    # CLI feedback). False means "category is the bootstrap default
+    # and may be wrong" — cluster should wait for synthesis first.
+    synthesized = db.Column(db.Boolean, default=False, index=True)
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
@@ -63,6 +68,7 @@ class Signal(db.Model):
             "examples": self.examples or [],
             "learning_id": self.learning_id,
             "aggregated": self.aggregated,
+            "synthesized": bool(self.synthesized),
             "incorporated_at": self.incorporated_at.isoformat() if self.incorporated_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

@@ -231,6 +231,8 @@ def finalize(decisions=None):
             text=item["text"],
             source_type=item.get("source_type", "agent_discovery"),
             repo=item.get("repo"),
+            # Pack insights synthesis already picked the category.
+            synthesized=True,
         )
         db.session.add(signal)
 

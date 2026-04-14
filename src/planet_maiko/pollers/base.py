@@ -182,6 +182,9 @@ class BasePoller(ABC):
                         repo=s.get("repo"),
                         language=s.get("language"),
                         file_path=s.get("file_path"),
+                        # Pollers set real categories directly, no LLM
+                        # synthesis needed.
+                        synthesized=True,
                     )
                     db_session.add(signal)
                     new_signals += 1

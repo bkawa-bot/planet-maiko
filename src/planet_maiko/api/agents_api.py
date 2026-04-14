@@ -575,6 +575,9 @@ def agent_sends_message(task_id):
             repo=_get_repo_for_task(task_id),
             file_path=metadata.get("file_path"),
             code_context=code_context,
+            # Session feedback carries an explicit category from the
+            # agent — skip re-synthesis.
+            synthesized=True,
         )
         db.session.add(signal)
 

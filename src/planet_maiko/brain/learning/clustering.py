@@ -364,8 +364,21 @@ def cluster_signals_into_learnings():
     """
     from planet_maiko.brain.learning.processor import _apply_positive_signal
 
-    unprocessed = Signal.query.filter_by(aggregated=False).all()
+    # Only cluster signals that have been synthesized (or came from a
+    # source that set a real category directly, like CLI feedback).
+    # Non-synthesized signals still carry the bootstrap default
+    # category, which may be "pattern" but could also just be stale;
+    # we wait for synthesis to settle them before aggregation.
+    unprocessed = Signal.query.filter_by(aggregated=False, synthesized=True).all()
+    waiting_unsynthesized = Signal.query.filter_by(
+        aggregated=False, synthesized=False,
+    ).count()
     if not unprocessed:
+        if waiting_unsynthesized:
+            logger.info(
+                f"[clustering] {waiting_unsynthesized} signal(s) still waiting for "
+                "synthesis — next backfill cycle will pick them up"
+            )
         return {"processed": 0, "new_learnings": 0, "updated_learnings": 0, "graduated": 0}
 
     counts = {
@@ -375,21 +388,17 @@ def cluster_signals_into_learnings():
         "graduated": 0,
         "deferred": 0,
     }
+    if waiting_unsynthesized:
+        counts["awaiting_synthesis"] = waiting_unsynthesized
 
-    # Group by category. Junk is filtered upstream — synthesis marks
-    # non-actionable signals and deletes them, so by the time we get
-    # here everything is rule-shaped.
+    # Group by category. Junk filtering happens upstream (synthesis
+    # marks non-actionable signals and deletes them), so by the time
+    # we get here everything is rule-shaped and category is real —
+    # "pattern" here is a legitimate LLM-chosen bucket, not the
+    # bootstrap placeholder.
     by_category = {}
     for s in unprocessed:
         by_category.setdefault(s.category or "pattern", []).append(s)
-
-    # Unclassified "pattern" signals stay in the queue — wait for the
-    # synthesize / classify step to tag them properly before we try to
-    # place them into category-specific Learnings.
-    pattern_batch = by_category.pop("pattern", [])
-    for s in pattern_batch:
-        # leave aggregated=False so they're picked up on the next pass
-        pass
 
     for category, signals in by_category.items():
         existing = Learning.query.filter(

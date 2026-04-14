@@ -280,9 +280,13 @@ class TestBrainCycle:
             ], True
         monkeypatch.setattr(_clustering, "_call_attach_llm", fake_attach)
 
+        # Manual signals carry a real category, mirror that here so
+        # clustering picks them up (the cluster path skips any signal
+        # with synthesized=False, waiting for LLM synthesis to settle
+        # the category first).
         sig = Signal(
             category="style", text="Keep functions under 30 lines",
-            source_type="manual",
+            source_type="manual", synthesized=True,
         )
         db.session.add(sig)
         db.session.commit()

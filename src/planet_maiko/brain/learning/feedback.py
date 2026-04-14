@@ -175,6 +175,8 @@ def sync_feedback_to_server():
             "repo": entry.get("repo"),
             "file_path": entry.get("file_path"),
             "code_context": entry.get("diff", "")[:2000],
+            # Category came from the LoRA hook output directly.
+            "synthesized": True,
         }
 
         try:
@@ -334,6 +336,8 @@ def _emit_signal(category, text, source_type, severity, repo=None, file_path=Non
             repo=repo,
             file_path=file_path,
             code_context=code_context,
+            # CLI/hook callers supply a real category; no synthesis needed.
+            synthesized=True,
         )
         db.session.add(signal)
         db.session.commit()
@@ -401,6 +405,8 @@ def drain_signal_queue():
                 repo=entry.get("repo"),
                 file_path=entry.get("file_path"),
                 code_context=entry.get("code_context"),
+                # Queue entries carry a real category from the CLI.
+                synthesized=True,
             )
             db.session.add(signal)
             imported += 1

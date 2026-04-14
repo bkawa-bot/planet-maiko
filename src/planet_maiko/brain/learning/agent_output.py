@@ -156,6 +156,9 @@ def parse_and_apply_blocks(output, *, agent, task, repo=None):
                     "author": agent.display_name,
                     "line": None,
                 }] if code else [],
+                # Review / investigation agents already wrote the rule
+                # text themselves; no re-synthesis needed.
+                synthesized=True,
             )
             db.session.add(sig)
             patterns_emitted += 1
