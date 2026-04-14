@@ -83,7 +83,8 @@ export default function BrainView() {
               showToast("Backfill errors:\n" + summary, "high");
             } else {
               const note = errored.length ? ` (${errored.length} repo errors)` : "";
-              showToast(`Synthesized ${r.synthesized} into ${r.new_learnings} learnings${note}\n${summary}`, errored.length ? "high" : "normal");
+              const mergedNote = r.learnings_merged ? `, merged ${r.learnings_merged} duplicates` : "";
+              showToast(`Synthesized ${r.synthesized} into ${r.new_learnings} learnings${mergedNote}${note}\n${summary}`, errored.length ? "high" : "normal");
             }
           }
           fetchLearnings();

@@ -14,6 +14,7 @@ const PHASE_LABEL = {
   fetching: "Fetching PR reviews",
   synthesizing: "Synthesizing comments into rules",
   aggregating: "Aggregating into learnings",
+  clustering: "Merging duplicate rules",
   done: "Done",
   error: "Error",
   idle: "Starting...",
@@ -23,6 +24,7 @@ const PHASE_ICON = {
   fetching: Download,
   synthesizing: Sparkles,
   aggregating: Layers,
+  clustering: Layers,
   done: CheckCircle2,
   error: AlertCircle,
 };
@@ -82,6 +84,11 @@ export default function BackfillProgress({ progress }) {
       {phase === "aggregating" && (
         <div className="backfill-progress-detail">
           Grouping similar signals into learnings
+        </div>
+      )}
+      {phase === "clustering" && (
+        <div className="backfill-progress-detail">
+          Asking Claude to merge rules that say the same thing
         </div>
       )}
       {phase === "done" && (

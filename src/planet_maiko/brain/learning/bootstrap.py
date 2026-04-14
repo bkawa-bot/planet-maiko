@@ -111,6 +111,7 @@ _progress = {
     "synthesized": 0,
     "new_learnings": 0,
     "graduated": 0,
+    "learnings_merged": 0,    # how many duplicate learnings the clustering pass merged
     "error": None,
     "started_at": None,
     "finished_at": None,
@@ -135,7 +136,7 @@ def reset_backfill_progress():
             "repos_total": 0, "repos_done": 0,
             "current_repo": None, "comments_total": 0, "comments_done": 0,
             "signals_created": 0, "synthesized": 0, "new_learnings": 0,
-            "graduated": 0, "error": None,
+            "graduated": 0, "learnings_merged": 0, "error": None,
             "started_at": None, "finished_at": None, "result": None,
         })
 

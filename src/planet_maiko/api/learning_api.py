@@ -1,7 +1,11 @@
+import logging
+
 from flask import Blueprint, jsonify, request
 from planet_maiko.database import db
 from planet_maiko.models.signal import Signal
 from planet_maiko.models.learning import Learning
+
+logger = logging.getLogger(__name__)
 
 learning_bp = Blueprint("learning", __name__)
 
@@ -183,7 +187,10 @@ def _run_backfill_job(app, limit, repo):
             synth_error = None
 
             if signals_created > 0:
-                # Phase 2: LLM synthesis
+                # Phase 2: LLM synthesis — batch through EVERY unsynthesized
+                # pr_comment signal (not just the first 20). Keeping the
+                # batch size modest so the model stays precise on each.
+                SYNTH_BATCH = 40
                 update_backfill_progress(phase="synthesizing")
                 try:
                     from planet_maiko.models.signal import Signal as BackfillSignal
@@ -194,11 +201,15 @@ def _run_backfill_job(app, limit, repo):
                         source_type="pr_comment", aggregated=False
                     ).all()
 
-                    if raw:
-                        comments = []
-                        for i, s in enumerate(raw[:20]):
-                            comments.append(f"{i+1}. [{s.repo or 'unknown'}] {s.text[:300]}")
+                    runtime = ClaudeCodeRuntime()
+                    model = resolve_model("classify")
 
+                    for start in range(0, len(raw), SYNTH_BATCH):
+                        batch = raw[start:start + SYNTH_BATCH]
+                        comments = [
+                            f"{i+1}. [{s.repo or 'unknown'}] {s.text[:300]}"
+                            for i, s in enumerate(batch)
+                        ]
                         prompt = f"""Synthesize these PR review comments into clean, actionable coding rules.
 
 For each comment, extract the core lesson as a short rule (one sentence).
@@ -212,22 +223,28 @@ architecture, null_safety, style, naming, docs, pattern, domain_knowledge
 
 Respond as JSON: {{"rules": [{{"index": 1, "rule": "Always validate input lengths at API boundaries", "category": "security"}}, ...]}}"""
 
-                        signal_ids = [s.id for s in raw]
+                        signal_ids = [s.id for s in batch]
                         db.session.close()
-
-                        runtime = ClaudeCodeRuntime()
-                        result = runtime.send_json(prompt, timeout=90, model=resolve_model("classify"))
+                        result = runtime.send_json(prompt, timeout=120, model=model)
 
                         if result.get("parsed") and "rules" in result["parsed"]:
                             from planet_maiko.models.signal import Signal as RefetchSignal
                             refetched = RefetchSignal.query.filter(RefetchSignal.id.in_(signal_ids)).all()
+                            # Re-map by id since SQLAlchemy doesn't preserve order.
+                            by_id = {s.id: s for s in refetched}
+                            id_order = signal_ids
                             for rule_data in result["parsed"]["rules"]:
                                 idx = rule_data.get("index", 0) - 1
-                                if 0 <= idx < len(refetched):
-                                    refetched[idx].text = rule_data.get("rule", refetched[idx].text)
-                                    refetched[idx].category = rule_data.get("category", "pattern")
-                                    synthesized += 1
+                                if not (0 <= idx < len(id_order)):
+                                    continue
+                                target = by_id.get(id_order[idx])
+                                if target is None:
+                                    continue
+                                target.text = rule_data.get("rule", target.text)
+                                target.category = rule_data.get("category", "pattern")
+                                synthesized += 1
                             db.session.commit()
+
                         update_backfill_progress(synthesized=synthesized)
                 except Exception as e:
                     synth_error = str(e)
@@ -239,14 +256,30 @@ Respond as JSON: {{"rules": [{{"index": 1, "rule": "Always validate input length
                     new_learnings=learning_results.get("new_learnings", 0),
                     graduated=learning_results.get("graduated", 0),
                 )
+
+                # Phase 4: semantic clustering — merge Learnings that
+                # differ only in wording. Without this, the prefix-based
+                # aggregation leaves duplicate rules in the pool.
+                update_backfill_progress(phase="clustering")
+                try:
+                    from planet_maiko.brain.learning.clustering import cluster_learnings
+                    cluster_results = cluster_learnings()
+                    update_backfill_progress(
+                        learnings_merged=cluster_results.get("learnings_merged", 0),
+                    )
+                except Exception as e:
+                    logger.warning(f"[backfill] Clustering skipped: {e}")
+                    cluster_results = {"learnings_merged": 0}
             else:
                 learning_results = {"new_learnings": 0, "graduated": 0}
+                cluster_results = {"learnings_merged": 0}
 
             summary = {
                 "signals_created": signals_created,
                 "synthesized": synthesized,
                 "new_learnings": learning_results.get("new_learnings", 0),
                 "graduated": learning_results.get("graduated", 0),
+                "learnings_merged": cluster_results.get("learnings_merged", 0),
                 "per_repo": per_repo,
             }
             if synth_error:
@@ -308,6 +341,24 @@ def backfill_status():
     """Poll the active backfill job's progress."""
     from planet_maiko.brain.learning.bootstrap import get_backfill_progress
     return jsonify(get_backfill_progress())
+
+
+@learning_bp.route("/learnings/cluster", methods=["POST"])
+def cluster_learnings_endpoint():
+    """Run semantic clustering over the active learning pool.
+
+    Useful to merge duplicates that slipped through the prefix-based
+    aggregator (e.g. "handle null with Optional" and "null check missing"
+    that ended up as separate Learnings). Synchronous — one LLM call per
+    batch of ~40 learnings per category.
+    """
+    from planet_maiko.brain.learning.clustering import cluster_learnings
+    try:
+        results = cluster_learnings()
+        return jsonify(results)
+    except Exception as e:
+        logger.exception("[cluster] failed")
+        return jsonify({"error": str(e)}), 500
 
 
 @learning_bp.route("/learnings/brief", methods=["GET"])

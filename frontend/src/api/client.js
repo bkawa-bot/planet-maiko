@@ -188,6 +188,7 @@ export const api = {
     return request("/learnings/backfill", { method: "POST", body: JSON.stringify(body) });
   },
   getBackfillStatus: () => request("/learnings/backfill/status"),
+  clusterLearnings: () => request("/learnings/cluster", { method: "POST" }),
   approveLearning: (id) => request(`/learnings/${id}/approve`, { method: "POST" }),
   dismissLearning: (id) => request(`/learnings/${id}/dismiss`, { method: "POST" }),
   classifyLearnings: (batchSize = 50) => request("/learnings/classify", { method: "POST", body: JSON.stringify({ batch_size: batchSize }) }),
