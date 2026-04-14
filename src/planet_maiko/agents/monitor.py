@@ -23,12 +23,23 @@ IDLE_THRESHOLD_MINUTES = 30
 
 
 def get_agent_activity():
-    """Get the latest activity for each agent.
+    """Get the latest activity for each agent whose task is still open.
+
+    Filters out:
+      - Tasks the agent finished (done / cancelled)
+      - Tasks that no longer exist (deleted out from under the agent)
+      - Tasks whose most recent agent pupdate is older than
+        STALE_AGENT_DAYS — the agent's clearly abandoned this one,
+        nothing productive happens from surfacing it in "Active"
 
     Returns:
         list of dicts with agent_id, last_message, last_seen, status
     """
-    # Find all agent pupdates
+    from planet_maiko.models.task import Task
+    from planet_maiko.models.agent_profile import AgentProfile
+
+    STALE_AGENT_DAYS = 7
+
     agent_pupdates = (
         Pupdate.query
         .filter_by(source="agent")
@@ -36,18 +47,19 @@ def get_agent_activity():
         .all()
     )
 
-    # Group by task_id tag to find per-agent activity
     agents = {}
     now = datetime.now(timezone.utc)
+    stale_cutoff = now - timedelta(days=STALE_AGENT_DAYS)
 
     for p in agent_pupdates:
-        # The first tag is the task_id (set by agent CLI and hooks)
         agent_key = (p.tags or [None])[0] or p.id
 
         if agent_key not in agents:
             last_seen = p.timestamp
             if last_seen.tzinfo is None:
                 last_seen = last_seen.replace(tzinfo=timezone.utc)
+            if last_seen < stale_cutoff:
+                continue  # Abandoned task, skip entirely
             idle_minutes = (now - last_seen).total_seconds() / 60
 
             agents[agent_key] = {
@@ -61,23 +73,26 @@ def get_agent_activity():
                 "idle_minutes": round(idle_minutes),
             }
 
-        agents[agent_key]["pupdate_count"] += 1
+        if agent_key in agents:
+            agents[agent_key]["pupdate_count"] += 1
 
-    # Enrich with agent profile names where available
-    try:
-        from planet_maiko.models.task import Task
-        from planet_maiko.models.agent_profile import AgentProfile
-        for a in agents.values():
-            task = db.session.get(Task, a["task_id"])
-            if task and task.assigned_agent_id:
-                profile = db.session.get(AgentProfile, task.assigned_agent_id)
-                if profile:
-                    a["agent_name"] = profile.display_name
-                    a["agent_id"] = profile.id
-    except Exception:
-        pass
+    # Drop tasks that are finished or no longer exist, and enrich
+    # the rest with agent profile info.
+    keep = {}
+    for key, a in agents.items():
+        task = db.session.get(Task, a["task_id"])
+        if not task:
+            continue  # task was deleted out from under the agent
+        if task.status in ("done", "cancelled"):
+            continue  # agent's work on this one is over
+        if task.assigned_agent_id:
+            profile = db.session.get(AgentProfile, task.assigned_agent_id)
+            if profile:
+                a["agent_name"] = profile.display_name
+                a["agent_id"] = profile.id
+        keep[key] = a
 
-    return list(agents.values())
+    return list(keep.values())
 
 
 def process_agent_pupdates():

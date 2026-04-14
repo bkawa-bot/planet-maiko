@@ -682,12 +682,12 @@ def cleanup(repo_path, branch_name):
 
 
 def list_prepared():
-    """List all prepared agent worktrees by checking for agent_ready pupdates.
+    """List prepared agent worktrees whose task is still open.
 
-    Includes coding agents (still ready to launch), review/investigation
-    agents (running autonomously), and their task status if we can find
-    it — the UI uses task.status to show "running" vs "done" and to
-    surface a "dig deeper" button once one-shot agents complete.
+    Filters out agent_ready pupdates that are dismissed, that
+    reference a task in done/cancelled state, or that reference a
+    task that no longer exists. Those are finished work, not active
+    work — leaving them on the Active tab buries the real signal.
     """
     from planet_maiko.models.task import Task
     agents = Pupdate.query.filter_by(type="agent_ready", dismissed=False).all()
@@ -699,6 +699,10 @@ def list_prepared():
     for p in agents:
         tid = p.extra.get("task_id")
         task = tasks_by_id.get(tid)
+        if tid and not task:
+            continue  # task deleted
+        if task and task.status in ("done", "cancelled"):
+            continue  # finished
         out.append({
             "agent_id": p.extra.get("agent_id"),
             "task_id": tid,
