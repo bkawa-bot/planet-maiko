@@ -980,6 +980,10 @@ class TestAgentMonitor:
         assert refreshed.status == "done"
 
     def test_agent_activity_tracks_recent(self, app, db):
+        # get_agent_activity filters out pupdates whose task is
+        # closed or missing, so the test needs a real open task.
+        task = Task(id="task-act-1", title="Monitor test", status="in_progress")
+        db.session.add(task)
         pup = Pupdate(
             id="pup-activity-1", source="agent", type="agent_update",
             title="Working on tests", tags=["task-act-1"],
@@ -991,6 +995,19 @@ class TestAgentMonitor:
         activity = get_agent_activity()
         assert len(activity) >= 1
         assert activity[0]["task_id"] == "task-act-1"
+
+    def test_agent_activity_skips_closed_tasks(self, app, db):
+        closed = Task(id="task-act-closed", title="Already done", status="done")
+        db.session.add(closed)
+        db.session.add(Pupdate(
+            id="pup-activity-closed", source="agent", type="agent_update",
+            title="Old message", tags=["task-act-closed"],
+        ))
+        db.session.commit()
+
+        from planet_maiko.agents.monitor import get_agent_activity
+        activity = get_agent_activity()
+        assert not any(a["task_id"] == "task-act-closed" for a in activity)
 
 
 # ---------------------------------------------------------------------------
