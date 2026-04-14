@@ -1,6 +1,7 @@
 import {
-  CheckSquare, FolderKanban, ChevronRight, Eye, Search, X,
+  CheckSquare, FolderKanban, ChevronRight, Eye, Search, X, GitPullRequest,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { formatDateTime } from "../utils/dates";
@@ -105,6 +106,15 @@ export default function PupdateCard({
               >
                 <Eye size={10} /> {reviewing === p.id ? "Reviewing..." : "Review PR"}
               </button>
+            )}
+            {p.type === "agent_ready_for_review" && p.extra?.task_id && (
+              <Link
+                to={`/tasks/${p.extra.task_id}/review`}
+                className="btn btn-sm btn-primary"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <GitPullRequest size={10} /> Review diff
+              </Link>
             )}
             {(p.type === "pr_ci_failed" || p.type === "incident") && (
               <button className="btn btn-sm btn-session"><Search size={10} /> Investigate</button>

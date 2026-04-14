@@ -143,6 +143,20 @@ export const api = {
     return request(`/signals/count${query ? `?${query}` : ""}`);
   },
 
+  // Diff review — feeds the ReviewDiff page
+  getTaskDiff: (taskId) => request(`/tasks/${taskId}/diff`),
+  listDiffComments: (taskId) => request(`/tasks/${taskId}/comments`),
+  createDiffComment: (taskId, data) =>
+    request(`/tasks/${taskId}/comments`, { method: "POST", body: JSON.stringify(data) }),
+  updateDiffComment: (commentId, data) =>
+    request(`/comments/${commentId}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteDiffComment: (commentId) =>
+    request(`/comments/${commentId}`, { method: "DELETE" }),
+  requestDiffChanges: (taskId) =>
+    request(`/tasks/${taskId}/review/request-changes`, { method: "POST" }),
+  approveDiffReview: (taskId) =>
+    request(`/tasks/${taskId}/review/approve`, { method: "POST" }),
+
   // Pack Insights
   getPackInsightsState: () => request("/pack-insights"),
   startPackInsights: () => request("/pack-insights/start", { method: "POST" }),

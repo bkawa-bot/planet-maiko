@@ -1,0 +1,390 @@
+/* Diff review page — two-column layout with the diff on the left and
+   a sticky comment sidebar on the right. Styling leans on the shared
+   card / button tokens from index.css so it tracks the active theme. */
+
+.review-diff-page {
+  padding: 16px 20px 40px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.review-diff-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  position: sticky;
+  top: 58px;
+  z-index: 5;
+  backdrop-filter: blur(6px);
+}
+
+.review-diff-title {
+  flex: 1;
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.review-diff-branch {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.review-diff-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.review-diff-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 2px 8px;
+  background: var(--bg-hover);
+  border-radius: var(--radius-xs);
+}
+
+.review-diff-layout {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+@media (max-width: 1100px) {
+  .review-diff-layout { grid-template-columns: 1fr; }
+}
+
+.review-diff-main {
+  min-width: 0;
+}
+
+.diff-view-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+.diff-file-block {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.diff-file-header {
+  padding: 8px 12px;
+  background: var(--bg-card-alt);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.diff-file-path {
+  flex: 1;
+  color: var(--text);
+}
+
+.diff-file-type {
+  font-size: 9px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--bg-hover);
+}
+
+/* react-diff-view overrides to fit our theme */
+.diff-view .diff {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  background: transparent;
+  color: var(--text);
+}
+.diff-view .diff-gutter {
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+.diff-view .diff-gutter:hover {
+  background: var(--pink-soft);
+}
+.diff-view .diff-gutter-insert { color: var(--green); background: var(--green-faint); }
+.diff-view .diff-gutter-delete { color: var(--urgent); background: var(--urgent-faint); }
+.diff-view .diff-code-insert   { background: var(--green-faint); }
+.diff-view .diff-code-delete   { background: var(--urgent-faint); }
+.diff-view .diff-hunk-header {
+  background: var(--bg-card-alt);
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+/* --- Sidebar --- */
+
+.review-diff-sidebar {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  position: sticky;
+  top: 120px;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+}
+
+.review-diff-sidebar-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.review-diff-sidebar-count {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.review-diff-sidebar-empty {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 8px 2px;
+}
+
+.review-diff-sidebar-thread {
+  padding: 8px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+.review-diff-sidebar-thread:first-of-type { border-top: 0; padding-top: 0; }
+
+.review-diff-sidebar-anchor {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 10px;
+}
+.review-diff-sidebar-anchor code {
+  font-size: 10px;
+  color: var(--pink);
+  background: var(--pink-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.side-badge {
+  font-size: 9px;
+  color: var(--text-muted);
+  padding: 0 4px;
+  border-radius: 2px;
+  background: var(--bg-hover);
+}
+
+/* --- Comment thread --- */
+
+.diff-comment-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.diff-comment-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.diff-comment {
+  padding: 6px 8px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-hover);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.diff-comment.author-user   { border-left: 3px solid var(--pink); }
+.diff-comment.author-agent  { border-left: 3px solid var(--lavender); background: var(--lavender-soft); }
+.diff-comment.is-draft      { border-style: dashed; opacity: 0.92; }
+.diff-comment.is-resolved   { opacity: 0.55; }
+
+.diff-comment.nested { margin-left: 12px; }
+
+.diff-comment-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.diff-comment-author { font-weight: 600; text-transform: capitalize; }
+
+.diff-comment-badge {
+  font-size: 9px;
+  padding: 0 4px;
+  border-radius: 2px;
+  font-weight: 500;
+}
+.diff-comment-badge.draft     { background: var(--lemon-soft);  color: var(--lemon); }
+.diff-comment-badge.submitted { background: var(--pink-soft);   color: var(--pink); }
+.diff-comment-badge.resolved  { background: var(--green-soft);  color: var(--green); }
+
+.diff-comment-body {
+  color: var(--text);
+  word-break: break-word;
+}
+.diff-comment-body p:first-child { margin-top: 0; }
+.diff-comment-body p:last-child  { margin-bottom: 0; }
+.diff-comment-body code {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 1px 4px;
+  background: var(--bg);
+  border-radius: 2px;
+}
+
+.diff-comment-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 10px;
+}
+
+.diff-comment-action {
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.diff-comment-action:hover { color: var(--text); }
+.diff-comment-action.danger:hover { color: var(--urgent); }
+
+.diff-comment-reply-btn {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-dim);
+  padding: 4px 8px;
+  border-radius: var(--radius-xs);
+  font-size: 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.diff-comment-reply-btn:hover { border-color: var(--pink); color: var(--pink); }
+
+.diff-comment-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+.diff-comment-editor textarea {
+  width: 100%;
+  min-height: 56px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  font-family: var(--font);
+  font-size: 11.5px;
+  background: var(--bg);
+  color: var(--text);
+  resize: vertical;
+}
+.diff-comment-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* --- New comment overlay --- */
+
+.review-diff-new-comment-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.review-diff-new-comment {
+  background: var(--bg-card);
+  border: 1px solid var(--pink);
+  border-radius: var(--radius);
+  padding: 14px;
+  width: 460px;
+  max-width: 90vw;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.review-diff-new-comment-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.review-diff-new-comment-header code {
+  font-size: 10.5px;
+  color: var(--pink);
+  background: var(--pink-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.review-diff-new-comment textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  resize: vertical;
+}
+
+.review-diff-new-comment-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.spin { animation: maikoSpin 1s linear infinite; }
+@keyframes maikoSpin { to { transform: rotate(360deg); } }
