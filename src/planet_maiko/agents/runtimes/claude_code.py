@@ -114,8 +114,20 @@ class ClaudeCodeRuntime(AgentRuntime):
         """Send a prompt to claude CLI in print mode.
 
         Uses --print for single prompt/response (no interactive session).
-        This is used for brain triage and skill execution.
+        The prompt is piped via stdin rather than passed as a command-
+        line argument — our prompts (agent preamble + role protocol +
+        skill content + task context) can exceed Windows' ~32K argv
+        limit and get silently truncated, producing the "input must
+        be provided either through stdin or as a prompt argument"
+        error from claude. stdin has no such limit.
         """
+        if not prompt or not prompt.strip():
+            return {
+                "output": "",
+                "success": False,
+                "error": "Empty prompt — nothing to send",
+            }
+
         claude_path = self._find_claude() or "claude"
         cmd = [claude_path, "--print", "--output-format", "text"]
 
@@ -136,13 +148,14 @@ class ClaudeCodeRuntime(AgentRuntime):
         for tool in allowed_tools:
             cmd.extend(["--allowedTools", tool])
 
-        cmd.append(prompt)
-
         try:
             result = subprocess.run(
                 cmd,
+                input=prompt,  # pipe via stdin, not argv — avoids length caps
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=timeout,
                 cwd=working_dir,
             )
