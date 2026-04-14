@@ -165,13 +165,14 @@ export default function BrainView() {
 
   const handleSynthesize = async () => {
     setSynthesizing(true);
-    showToast(`Synthesizing ${unsynthesized.length} signals...`, "normal");
+    showToast(`Synthesizing up to 50 signals...`, "normal");
     try {
       const result = await api.classifyLearnings(50);
       const parts = [];
       if (result.synthesized) parts.push(`${result.synthesized} synthesized`);
       if (result.new_learnings) parts.push(`${result.new_learnings} new learnings`);
       if (result.dropped_junk) parts.push(`${result.dropped_junk} dropped as junk`);
+      if (result.remaining) parts.push(`${result.remaining} still queued`);
       showToast(parts.length ? parts.join(", ") : "Nothing to synthesize", "normal");
       fetchLearnings();
     } catch (err) {

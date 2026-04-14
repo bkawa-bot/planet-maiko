@@ -155,14 +155,29 @@ def classify_pending():
     Used by the "Synthesize Now" button on the Unsynthesized tab — same
     work the cycle's synthesis + learning phases do, but kicked off
     immediately so the user doesn't wait for the next tick.
+
+    Caps at `batch_size` (default 50) signals per call so one click
+    doesn't hang the browser for minutes on a big backlog. Click
+    again to drain more, or let the cycle phase catch up in the
+    background.
     """
     from planet_maiko.brain.learning.synthesizer import synthesize_unsynthesized_signals
     from planet_maiko.brain.learning.clustering import cluster_signals_into_learnings
 
+    data = request.get_json(silent=True) or {}
+    batch_size = int(data.get("batch_size", 50))
+
     db.session.close()
 
-    synth = synthesize_unsynthesized_signals()
+    synth = synthesize_unsynthesized_signals(max_signals=batch_size)
     cluster = cluster_signals_into_learnings()
+
+    # Count what's still waiting so the UI can tell the user whether
+    # another click (or just patience with the cycle) is needed.
+    from planet_maiko.models.signal import Signal
+    remaining = Signal.query.filter_by(
+        source_type="pr_comment", synthesized=False,
+    ).count()
 
     return jsonify({
         "synthesized": synth.get("synthesized", 0),
@@ -170,6 +185,7 @@ def classify_pending():
         "processed": synth.get("processed", 0),
         "new_learnings": cluster.get("new_learnings", 0),
         "graduated": cluster.get("graduated", 0),
+        "remaining": remaining,
     })
 
 
