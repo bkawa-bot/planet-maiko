@@ -32,9 +32,11 @@ def _fetch_inline_review_comments(repo, timeout=120):
     line, diff_hunk, pr_number. Best-effort: on failure returns [].
     """
     try:
+        # Newest comments first — when the user caps `limit` we want
+        # the most recent N, not the oldest N from ancient history.
         result = subprocess.run(
             ["gh", "api", "--paginate",
-             f"repos/{repo}/pulls/comments?per_page=100"],
+             f"repos/{repo}/pulls/comments?per_page=100&sort=created&direction=desc"],
             capture_output=True, text=True, timeout=timeout,
         )
         if result.returncode != 0:
