@@ -619,6 +619,56 @@ def agent_sends_message(task_id):
     )
     db.session.add(msg)
 
+    # Emit a pupdate so the user actually sees the message in their
+    # inbox — otherwise it just sits in the Channel Log nobody checks.
+    # Full content goes in the body; title gets a one-line preview.
+    # Skip "status" messages (those are chatter), skip "feedback"
+    # (the Signal creation below already surfaces it).
+    message_type = data.get("message_type", "message")
+    if message_type not in ("status", "feedback"):
+        from planet_maiko.models.task import Task
+        from planet_maiko.models.agent_profile import AgentProfile
+        task = db.session.get(Task, task_id)
+        agent_name = None
+        if task and task.assigned_agent_id:
+            agent = db.session.get(AgentProfile, task.assigned_agent_id)
+            if agent:
+                agent_name = agent.display_name
+        agent_name = agent_name or "Agent"
+
+        content = data["content"]
+        preview = content.replace("\n", " ").strip()
+        if len(preview) > 80:
+            preview = preview[:77] + "…"
+
+        # Priority: done/stuck are important; plain messages are normal.
+        priority = "high" if message_type == "stuck" else "normal"
+        type_label = {
+            "done": "completed",
+            "stuck": "is stuck",
+            "message": "replied",
+        }.get(message_type, "replied")
+
+        from planet_maiko.models.pupdate import Pupdate
+        pupdate = Pupdate(
+            id=f"agent-msg-{task_id}-{uuid.uuid4().hex[:8]}",
+            source="maiko",
+            source_id=f"agent-msg/{task_id}/{msg.id or uuid.uuid4().hex[:8]}",
+            type=f"agent_{message_type}" if message_type in ("done", "stuck") else "agent_message",
+            priority=priority,
+            title=f"{agent_name} {type_label}: {preview}",
+            body=content,
+            actionable=True,
+            action_hint="Open task",
+            tags=[task_id, "agent-message"],
+            extra={
+                "task_id": task_id,
+                "agent_id": task.assigned_agent_id if task else None,
+                "message_type": message_type,
+            },
+        )
+        db.session.add(pupdate)
+
     # If feedback message, create a training signal with code context
     if data.get("message_type") == "feedback":
         metadata = data.get("metadata", {})
