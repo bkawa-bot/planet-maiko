@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import SetupWizard from "../components/SetupWizard";
-import WeatherOverlay from "../components/WeatherOverlay";
 import { renderMarkdown } from "../utils/markdown";
 import { formatTime, formatClock, relativeTime } from "../utils/dates";
 import {
@@ -188,8 +187,6 @@ export default function Home() {
 
   return (
     <div className="home">
-      <WeatherOverlay scene={scene} enabled={homeConfig?.scene?.show_weather_overlay !== false} />
-
       <div className="home-grid">
         {/* Main content */}
         <div className="home-main">

@@ -3,10 +3,11 @@
 :root {
   /* Summer sherbet dark palette (default / night) */
   --bg: #1e2529;
-  /* --bg-plain: the flat backdrop when the hill SVG is hidden. A hair
-     darker and less saturated than --bg so it reads as a proper matte
-     surface rather than a faded sky. */
-  --bg-plain: #13171a;
+  /* --bg-plain: the flat backdrop when the hill SVG is hidden. Matches
+     the top-of-gradient stop in the matching world-*.svg so turning
+     hills off still reads as the same sky palette — just without the
+     hill silhouette. */
+  --bg-plain: #040410;  /* top of world-night.svg */
   --bg-card: #2d363c;
   --bg-card-alt: #333d44;
   --bg-hover: #3a454d;
@@ -58,7 +59,7 @@
 
 /* === Light theme === */
 [data-theme="light"] {
-  --bg: #EAF0EA; --bg-plain: #DCD9D2; --bg-card: #FAFCFA; --bg-card-alt: #F0F6F0;
+  --bg: #EAF0EA; --bg-plain: #6AAED0; --bg-card: #FAFCFA; --bg-card-alt: #F0F6F0;
   --bg-hover: #DCE8DC; --bg-selected: #D2E0D2;
   --text: #2c2420; --text-dim: #5C5448; --text-muted: #9A9080;
   --pink: #E8A0B8; --pink-soft: rgba(232, 160, 184, 0.15); --pink-glow: rgba(232, 160, 184, 0.08);
@@ -76,7 +77,7 @@
 
 /* === Morning theme === */
 [data-theme="morning"] {
-  --bg: #f5efe4; --bg-plain: #e4d9c3; --bg-card: #faf6ee; --bg-card-alt: #f2ece0;
+  --bg: #f5efe4; --bg-plain: #e8d8f0; --bg-card: #faf6ee; --bg-card-alt: #f2ece0;
   --bg-hover: #f5ede0; --bg-selected: #ece4d5;
   --text: #3a3028; --text-dim: #7a6a58; --text-muted: #a09080;
   --pink: #B88CC8; --pink-soft: rgba(184, 140, 200, 0.12); --pink-glow: rgba(184, 140, 200, 0.06);
@@ -94,7 +95,7 @@
 
 /* === Afternoon theme === Golden hour: warm cream, peach sky, dusty purple shadows */
 [data-theme="afternoon"] {
-  --bg: #f0dcc0; --bg-plain: #d8c098; --bg-card: #f8e8d0; --bg-card-alt: #edd8b8;
+  --bg: #f0dcc0; --bg-plain: #F0D8B8; --bg-card: #f8e8d0; --bg-card-alt: #edd8b8;
   --bg-hover: #e8d0a8; --bg-selected: #dcc498;
   --text: #443f6e; --text-dim: #6a5a8a; --text-muted: #8c7ca8;
   --pink: #bf4e64; --pink-soft: rgba(191, 78, 100, 0.15); --pink-glow: rgba(191, 78, 100, 0.08);
@@ -112,7 +113,7 @@
 
 /* === Sunset theme === */
 [data-theme="sunset"] {
-  --bg: #1A1A2E; --bg-plain: #0F0F1F; --bg-card: #302248; --bg-card-alt: #382850;
+  --bg: #1A1A2E; --bg-plain: #0C0E2A; --bg-card: #302248; --bg-card-alt: #382850;
   --bg-hover: #3E2D50; --bg-selected: #483558;
   --text: #F0E6E8; --text-dim: #C4A0AA; --text-muted: #8A6878;
   --pink: #E8855A; --pink-soft: rgba(232, 133, 90, 0.15); --pink-glow: rgba(232, 133, 90, 0.08);

@@ -2,27 +2,38 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Footer from "./Footer";
+import WeatherOverlay from "./WeatherOverlay";
 import { showToast } from "./Toast";
 import { api } from "../api/client";
 import "./Layout.css";
 
 // Mirror a few scene-visibility config flags onto html attributes so CSS
-// can opt out of the hill background (and future heavy visuals). Polls at
-// the same cadence as the pupdate watcher so Settings changes take effect
+// can opt out of the hill background (and future heavy visuals). Also
+// fetches the scene context so the global WeatherOverlay can render
+// weather + season across every page, not just Home. Polls at the same
+// cadence as the pupdate watcher so Settings changes take effect
 // without a manual refresh.
 function useSceneVisibility() {
+  const [scene, setScene] = useState(null);
+  const [weatherEnabled, setWeatherEnabled] = useState(true);
   useEffect(() => {
     const apply = async () => {
       try {
-        const cfg = await api.getConfig();
+        const [cfg, sc] = await Promise.all([
+          api.getConfig(),
+          api.getScene().catch(() => null),
+        ]);
         const hillsOn = cfg?.scene?.show_hill_background !== false;
         document.documentElement.setAttribute("data-hills", hillsOn ? "on" : "off");
+        setWeatherEnabled(cfg?.scene?.show_weather_overlay !== false);
+        setScene(sc);
       } catch { /* ignore */ }
     };
     apply();
     const interval = setInterval(apply, 15000);
     return () => clearInterval(interval);
   }, []);
+  return { scene, weatherEnabled };
 }
 
 function usePupdateWatcher() {
@@ -92,7 +103,7 @@ function useIdleDetection() {
 }
 
 export default function Layout() {
-  useSceneVisibility();
+  const { scene, weatherEnabled } = useSceneVisibility();
   usePupdateWatcher();
   const { showIdlePrompt, setShowIdlePrompt, resetActivity } = useIdleDetection();
 
@@ -112,6 +123,7 @@ export default function Layout() {
 
   return (
     <div className="layout">
+      <WeatherOverlay scene={scene} enabled={weatherEnabled} />
       <Sidebar />
       <main className="main-content">
         <Outlet />

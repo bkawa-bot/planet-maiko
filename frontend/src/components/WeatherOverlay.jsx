@@ -34,6 +34,13 @@ export default function WeatherOverlay({ scene, enabled = true }) {
               <img src="/cloud2.svg" className="page-cloud page-cloud-5" alt="" />
               <img src="/cloud3.svg" className="page-cloud page-cloud-6" alt="" />
               <img src="/cloud1.svg" className="page-cloud page-cloud-7" alt="" />
+              <img src="/cloud2.svg" className="page-cloud page-cloud-8" alt="" />
+              <img src="/cloud3.svg" className="page-cloud page-cloud-9" alt="" />
+              <img src="/cloud1.svg" className="page-cloud page-cloud-10" alt="" />
+              <img src="/cloud2.svg" className="page-cloud page-cloud-11" alt="" />
+              <img src="/cloud3.svg" className="page-cloud page-cloud-12" alt="" />
+              <img src="/cloud1.svg" className="page-cloud page-cloud-13" alt="" />
+              <img src="/cloud2.svg" className="page-cloud page-cloud-14" alt="" />
             </>
           )}
           {weather === "rain" && (

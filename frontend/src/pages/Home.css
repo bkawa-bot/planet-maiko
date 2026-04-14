@@ -264,13 +264,23 @@
   image-rendering: pixelated;
   animation: pageCloudDrift linear infinite;
 }
-.page-cloud-1 { width: 200px; top: 3%; left: -200px; animation-duration: 180s; }
-.page-cloud-2 { width: 150px; top: 15%; left: -150px; animation-duration: 220s; animation-delay: 30s; opacity: 0.3; }
-.page-cloud-3 { width: 240px; top: 6%; left: -240px; animation-duration: 200s; animation-delay: 60s; opacity: 0.25; }
-.page-cloud-4 { width: 130px; top: 22%; left: -130px; animation-duration: 250s; animation-delay: 90s; opacity: 0.28; }
-.page-cloud-5 { width: 180px; top: 10%; left: -180px; animation-duration: 190s; animation-delay: 120s; opacity: 0.32; }
-.page-cloud-6 { width: 160px; top: 28%; left: -160px; animation-duration: 240s; animation-delay: 150s; opacity: 0.2; }
-.page-cloud-7 { width: 210px; top: 1%; left: -210px; animation-duration: 210s; animation-delay: 45s; opacity: 0.3; }
+.page-cloud-1  { width: 200px; top:  3%; left: -200px; animation-duration: 180s; }
+.page-cloud-2  { width: 150px; top: 15%; left: -150px; animation-duration: 220s; animation-delay:  30s; opacity: 0.3; }
+.page-cloud-3  { width: 240px; top:  6%; left: -240px; animation-duration: 200s; animation-delay:  60s; opacity: 0.25; }
+.page-cloud-4  { width: 130px; top: 22%; left: -130px; animation-duration: 250s; animation-delay:  90s; opacity: 0.28; }
+.page-cloud-5  { width: 180px; top: 10%; left: -180px; animation-duration: 190s; animation-delay: 120s; opacity: 0.32; }
+.page-cloud-6  { width: 160px; top: 28%; left: -160px; animation-duration: 240s; animation-delay: 150s; opacity: 0.22; }
+.page-cloud-7  { width: 210px; top:  1%; left: -210px; animation-duration: 210s; animation-delay:  45s; opacity: 0.3; }
+/* extra clouds for cloudy — make the sky actually feel overcast. Stagger
+   starts across the full animation window so at any given moment there
+   are ~6-8 visible, not just the original 3-4. */
+.page-cloud-8  { width: 190px; top: 18%; left: -190px; animation-duration: 230s; animation-delay:  15s; opacity: 0.3; }
+.page-cloud-9  { width: 220px; top: 32%; left: -220px; animation-duration: 260s; animation-delay:  75s; opacity: 0.28; }
+.page-cloud-10 { width: 170px; top:  8%; left: -170px; animation-duration: 205s; animation-delay: 135s; opacity: 0.32; }
+.page-cloud-11 { width: 150px; top: 26%; left: -150px; animation-duration: 195s; animation-delay: 180s; opacity: 0.3; }
+.page-cloud-12 { width: 230px; top: 13%; left: -230px; animation-duration: 235s; animation-delay: 105s; opacity: 0.25; }
+.page-cloud-13 { width: 180px; top: 20%; left: -180px; animation-duration: 215s; animation-delay: 165s; opacity: 0.28; }
+.page-cloud-14 { width: 160px; top:  4%; left: -160px; animation-duration: 245s; animation-delay: 200s; opacity: 0.3; }
 
 @keyframes pageCloudDrift {
   from { transform: translateX(0); }
