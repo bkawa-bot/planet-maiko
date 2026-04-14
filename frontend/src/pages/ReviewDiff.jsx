@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Check, GitPullRequest, Loader, MessageSquare } from "lucide-react";
 import { api } from "../api/client";
@@ -6,6 +6,25 @@ import { showToast } from "../components/Toast";
 import DiffView from "../components/diff/DiffView";
 import CommentThread from "../components/diff/CommentThread";
 import "./ReviewDiff.css";
+
+/** Inline chip rendered on a diff line that has comments. Shows the
+ *  count + a color reflecting who authored them. Clicking scrolls
+ *  the sidebar thread into view and focus-rings it briefly. */
+function InlineCommentMarker({ threadComments, onClick }) {
+  const hasUser = threadComments.some((c) => c.author === "user");
+  const hasAgent = threadComments.some((c) => c.author === "agent");
+  const cls = hasUser && hasAgent ? "mixed" : hasAgent ? "has-agent" : "";
+  return (
+    <button
+      className={`diff-inline-marker ${cls}`}
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      title={`${threadComments.length} comment${threadComments.length === 1 ? "" : "s"} — click to view`}
+    >
+      <MessageSquare size={9} />
+      <span className="diff-inline-marker-count">{threadComments.length}</span>
+    </button>
+  );
+}
 
 /**
  * Full-page diff reviewer. Flow:
@@ -28,6 +47,8 @@ export default function ReviewDiff() {
   const [newCommentAnchor, setNewCommentAnchor] = useState(null);  // { filePath, line, side, changeKey }
   const [newCommentBody, setNewCommentBody] = useState("");
   const [task, setTask] = useState(null);
+  const [focusedKey, setFocusedKey] = useState(null);
+  const threadRefs = useRef({});
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -64,16 +85,30 @@ export default function ReviewDiff() {
     return map;
   }, [comments]);
 
-  // Build the widgets map DiffView expects. We can't compute changeKey
-  // from (file, line, side) alone — the library's getChangeKey uses
-  // internal hunk indices. So DiffView handles matching via its
-  // gutter handler, but for threads we parse the diff once to build
-  // a (file, line, side) → changeKey index and reuse it here.
-  // For MVP we take the simpler path: render threads as an "overview"
-  // panel alongside the diff (not as inline widgets), so the user can
-  // always see all comments even when we haven't wired widget anchors.
-  // Inline widgets via the widgets prop come in a polish pass.
-  const widgetsByKey = useMemo(() => ({}), []);
+  const scrollToThread = useCallback((key) => {
+    const node = threadRefs.current[key];
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    setFocusedKey(key);
+    // Let the focus ring fade after a beat so repeat clicks retrigger.
+    setTimeout(() => setFocusedKey((prev) => (prev === key ? null : prev)), 1600);
+  }, []);
+
+  // Build the inline-marker map DiffView expects. Each anchor key
+  // matches file_path::line::side (same shape DiffView uses internally)
+  // and the value is a React node rendered on the matching diff line.
+  const anchors = useMemo(() => {
+    const map = {};
+    for (const [key, threadComments] of Object.entries(threadsByAnchor)) {
+      map[key] = (
+        <InlineCommentMarker
+          threadComments={threadComments}
+          onClick={() => scrollToThread(key)}
+        />
+      );
+    }
+    return map;
+  }, [threadsByAnchor, scrollToThread]);
 
   const handleLineClick = (filePath, line, side) => {
     setNewCommentAnchor({ filePath, line, side });
@@ -216,7 +251,7 @@ export default function ReviewDiff() {
         <div className="review-diff-main">
           <DiffView
             rawDiff={diff?.raw_diff}
-            widgetsByKey={widgetsByKey}
+            anchors={anchors}
             onLineClick={handleLineClick}
             viewType="unified"
           />
@@ -236,8 +271,13 @@ export default function ReviewDiff() {
             const threadComments = threadsByAnchor[key];
             const first = threadComments[0];
             const anchor = { filePath: first.file_path, line: first.line_number, side: first.side };
+            const isFocused = focusedKey === key;
             return (
-              <div key={key} className="review-diff-sidebar-thread">
+              <div
+                key={key}
+                ref={(el) => { threadRefs.current[key] = el; }}
+                className={`review-diff-sidebar-thread ${isFocused ? "is-focused" : ""}`}
+              >
                 <div className="review-diff-sidebar-anchor">
                   <code>{first.file_path}:{first.line_number}</code>
                   {first.side === "old" && <span className="side-badge">old</span>}

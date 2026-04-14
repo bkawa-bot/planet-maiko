@@ -128,14 +128,49 @@
 .diff-view .diff-gutter:hover {
   background: var(--pink-soft);
 }
-.diff-view .diff-gutter-insert { color: var(--green); background: var(--green-faint); }
-.diff-view .diff-gutter-delete { color: var(--urgent); background: var(--urgent-faint); }
-.diff-view .diff-code-insert   { background: var(--green-faint); }
-.diff-view .diff-code-delete   { background: var(--urgent-faint); }
+/* Stronger insert/delete tints. The original *-faint tokens (8% alpha)
+   were too washed out on a busy diff; bumping to ~22% gives a clear
+   read at a glance without drowning the code text. Gutters get a
+   slightly stronger value so the column still feels anchored. */
+.diff-view .diff-gutter-insert { color: var(--green);  background: rgba(125, 219, 163, 0.28); }
+.diff-view .diff-gutter-delete { color: var(--urgent); background: rgba(255, 107, 127, 0.26); }
+.diff-view .diff-code-insert   { background: rgba(125, 219, 163, 0.20); }
+.diff-view .diff-code-delete   { background: rgba(255, 107, 127, 0.18); }
 .diff-view .diff-hunk-header {
   background: var(--bg-card-alt);
   color: var(--text-muted);
   font-size: 10px;
+}
+
+/* Inline comment marker — small chip that sits directly on a commented
+   line. Shows the count + author mix, pulses gently so it's the first
+   thing the eye catches on a diff full of changes. Clicking scrolls
+   the sidebar thread into view. */
+.diff-inline-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px 1px 5px;
+  margin: 2px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  border: 0;
+  background: var(--pink);
+  color: var(--bg);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  transition: transform 120ms ease;
+}
+.diff-inline-marker:hover { transform: scale(1.08); }
+.diff-inline-marker.has-agent { background: var(--lavender); }
+.diff-inline-marker.mixed    { background: linear-gradient(90deg, var(--pink) 0%, var(--lavender) 100%); }
+.diff-inline-marker-count { font-variant-numeric: tabular-nums; }
+
+.review-diff-sidebar-thread.is-focused {
+  box-shadow: 0 0 0 2px var(--pink) inset;
+  border-radius: var(--radius-xs);
 }
 
 /* --- Sidebar --- */

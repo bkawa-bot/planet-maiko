@@ -5,19 +5,23 @@ import "react-diff-view/style/index.css";
 /**
  * Thin wrapper over react-diff-view. Parses a raw unified diff, renders
  * each file as a collapsible section, and threads per-line widgets
- * (comment pins, draft forms, comment threads) into the gutter via
- * the library's `widgets` prop.
+ * (comment markers, draft forms) into the gutter via the library's
+ * `widgets` prop.
  *
  * Props:
  *   rawDiff       — string, unified diff output from `git diff`
- *   widgetsByKey  — { [changeKey]: ReactNode } rendered after that line
+ *   anchors       — { [fileKey]: ReactNode } where fileKey is
+ *                   `${file_path}::${line_number}::${side}`. Each node
+ *                   renders on the matching diff line. DiffView
+ *                   translates to the library's internal changeKey
+ *                   by walking every change in every hunk.
  *   onLineClick   — (file_path, line_number, side, changeKey) => void,
  *                   fired when the user clicks a diff row to leave a
  *                   new comment
  *   viewType      — "split" | "unified" (default "unified" — nicer for
  *                   inline comments)
  */
-export default function DiffView({ rawDiff, widgetsByKey = {}, onLineClick, viewType = "unified" }) {
+export default function DiffView({ rawDiff, anchors = {}, onLineClick, viewType = "unified" }) {
   const files = useMemo(() => {
     if (!rawDiff) return [];
     try {
@@ -38,7 +42,7 @@ export default function DiffView({ rawDiff, widgetsByKey = {}, onLineClick, view
           key={`${file.oldPath}-${file.newPath}-${i}`}
           file={file}
           viewType={viewType}
-          widgetsByKey={widgetsByKey}
+          anchors={anchors}
           onLineClick={onLineClick}
         />
       ))}
@@ -46,24 +50,36 @@ export default function DiffView({ rawDiff, widgetsByKey = {}, onLineClick, view
   );
 }
 
-function FileBlock({ file, viewType, widgetsByKey, onLineClick }) {
+function FileBlock({ file, viewType, anchors, onLineClick }) {
   const displayPath = file.newPath !== "/dev/null" ? file.newPath : file.oldPath;
 
   const widgets = useMemo(() => {
-    // Filter widgets to just the changes in this file's hunks so
-    // react-diff-view doesn't warn about orphans.
-    const changeKeys = new Set();
+    // Walk every change in the file and map (file_path, line, side)
+    // back to the library's changeKey. Normal (unchanged) lines are
+    // visible on both sides in split view and once in unified; we
+    // register both side variants so a comment pinned to either side
+    // finds its home.
+    const byAnchor = {};
     for (const hunk of file.hunks || []) {
       for (const change of hunk.changes || []) {
-        changeKeys.add(getChangeKey(change));
+        const key = getChangeKey(change);
+        if (change.isInsert) {
+          byAnchor[`${file.newPath}::${change.lineNumber}::new`] = key;
+        } else if (change.isDelete) {
+          byAnchor[`${file.oldPath}::${change.lineNumber}::old`] = key;
+        } else if (change.isNormal) {
+          byAnchor[`${file.newPath}::${change.newLineNumber}::new`] = key;
+          byAnchor[`${file.oldPath}::${change.oldLineNumber}::old`] = key;
+        }
       }
     }
-    const filtered = {};
-    for (const [key, node] of Object.entries(widgetsByKey || {})) {
-      if (changeKeys.has(key)) filtered[key] = node;
+    const result = {};
+    for (const [anchor, node] of Object.entries(anchors || {})) {
+      const key = byAnchor[anchor];
+      if (key) result[key] = node;
     }
-    return filtered;
-  }, [file, widgetsByKey]);
+    return result;
+  }, [file, anchors]);
 
   const handleGutterClick = (change) => {
     if (!onLineClick) return;
