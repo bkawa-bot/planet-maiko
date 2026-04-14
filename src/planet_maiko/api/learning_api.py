@@ -207,13 +207,13 @@ def _run_backfill_job(app, limit, repo):
                     for start in range(0, len(raw), SYNTH_BATCH):
                         batch = raw[start:start + SYNTH_BATCH]
                         comments = [
-                            f"{i+1}. [{s.repo or 'unknown'}] {s.text[:300]}"
-                            for i, s in enumerate(batch)
+                            f"id={s.id} [{s.repo or 'unknown'}] {s.text[:300]}"
+                            for s in batch
                         ]
                         prompt = f"""Synthesize these PR review comments into clean, actionable coding rules.
 
 For each comment, extract the core lesson as a short rule (one sentence).
-Also classify each into a category.
+Also classify each into a category. Echo back the id exactly as given.
 
 Comments:
 {chr(10).join(comments)}
@@ -221,23 +221,32 @@ Comments:
 Categories: security, error_handling, testing, performance, api_design,
 architecture, null_safety, style, naming, docs, pattern, domain_knowledge
 
-Respond as JSON: {{"rules": [{{"index": 1, "rule": "Always validate input lengths at API boundaries", "category": "security"}}, ...]}}"""
+Respond as JSON:
+{{"rules": [
+  {{"id": 1234, "rule": "Always validate input lengths at API boundaries", "category": "security"}},
+  ...
+]}}"""
 
-                        signal_ids = [s.id for s in batch]
                         db.session.close()
                         result = runtime.send_json(prompt, timeout=120, model=model)
 
-                        if result.get("parsed") and "rules" in result["parsed"]:
+                        parsed_rules = (result.get("parsed") or {}).get("rules") if result else None
+                        if parsed_rules:
+                            # Look up only the signals the LLM actually
+                            # returned — refetch is still needed because
+                            # db.session.close() invalidated the batch objects
+                            # during the long LLM call.
                             from planet_maiko.models.signal import Signal as RefetchSignal
-                            refetched = RefetchSignal.query.filter(RefetchSignal.id.in_(signal_ids)).all()
-                            # Re-map by id since SQLAlchemy doesn't preserve order.
+                            returned_ids = [
+                                r["id"] for r in parsed_rules
+                                if isinstance(r, dict) and isinstance(r.get("id"), int)
+                            ]
+                            refetched = RefetchSignal.query.filter(
+                                RefetchSignal.id.in_(returned_ids)
+                            ).all() if returned_ids else []
                             by_id = {s.id: s for s in refetched}
-                            id_order = signal_ids
-                            for rule_data in result["parsed"]["rules"]:
-                                idx = rule_data.get("index", 0) - 1
-                                if not (0 <= idx < len(id_order)):
-                                    continue
-                                target = by_id.get(id_order[idx])
+                            for rule_data in parsed_rules:
+                                target = by_id.get(rule_data.get("id"))
                                 if target is None:
                                     continue
                                 target.text = rule_data.get("rule", target.text)
