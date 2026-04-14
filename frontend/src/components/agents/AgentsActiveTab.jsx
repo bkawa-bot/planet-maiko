@@ -204,7 +204,14 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
                   </div>
                 </div>
                 <div className="agent-actions">
-                  {prepared?.role === "coding" && (
+                  {/* Review diff is available on any active task —
+                      gating on prepared?.role was wrong, since
+                      list_prepared filters out tasks that are already
+                      done and the prepared entry can just be missing
+                      (e.g. user dismissed the agent_ready pupdate).
+                      The review page itself shows an empty-diff
+                      state gracefully if there's no worktree yet. */}
+                  {a.task_id && (
                     <Link
                       to={`/tasks/${a.task_id}/review`}
                       className="btn btn-sm btn-primary"
