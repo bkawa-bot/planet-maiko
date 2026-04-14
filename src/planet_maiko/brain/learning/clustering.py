@@ -1,19 +1,17 @@
-"""Semantic clustering of Learnings.
+"""Semantic clustering of signals → learnings.
 
-The prefix-based aggregation in processor._make_aggregation_key only
-catches rules that share their first 80 characters. "Always handle null
-with Optional.orElseThrow" and "Null check missing — wrap in Optional"
-end up as separate Learnings even though they're the same rule.
+The single semantic pass that turns cleaned signals into Learning rows.
+Subsumes what the old processor.py prefix-based aggregation did: for
+each batch of unaggregated signals, Claude decides whether each signal
+belongs to an existing Learning in the same category or starts a new
+cluster. Prefix matching is only a fallback for when the LLM runtime
+is unavailable.
 
-This module fixes that by asking Claude to group semantically-equivalent
-Learnings and picking a canonical rule per cluster. Duplicates are
-merged in the DB: the highest-confidence row wins, every duplicate
-Learning's signals get re-pointed to the winner (so code examples
-follow), and the losing rows get dismissed.
-
-One call per category (we never try to merge a null_safety rule with
-a testing rule — that'd be noise). Batches of ~40 per call, with a
-soft limit so extremely busy categories don't blow out the context.
+Two public entry points:
+  * cluster_signals_into_learnings() — the pipeline step called from
+    backfill + the brain cycle. Processes unaggregated signals.
+  * cluster_learnings() — a cleanup-only pass over already-created
+    Learnings (drift collector), kept for manual re-merging.
 """
 
 import json
@@ -250,3 +248,222 @@ def cluster_learnings(statuses=DEFAULT_STATUSES, batch_size=BATCH_SIZE, on_progr
         f"across {results['clusters_processed']} cluster(s)."
     )
     return results
+
+
+# ---------------------------------------------------------------------------
+# Signals → Learnings (the main aggregation path)
+# ---------------------------------------------------------------------------
+
+SIGNAL_BATCH = 30  # new signals per LLM call
+
+ATTACH_PROMPT = """You are the rule-indexer for a coding guidelines system.
+
+For each NEW_SIGNAL below, decide:
+  - Does it match an EXISTING_RULE (same idea, even if worded differently)?
+  - If yes, attach it to that rule.
+  - If no, propose a new rule: a short, actionable one-sentence version.
+
+Never merge signals across different ideas. Every NEW_SIGNAL id must
+appear in exactly one cluster. Clusters of size 1 are allowed and common.
+
+Category for all items: {category}
+
+EXISTING_RULES (attach to these when possible):
+{existing_json}
+
+NEW_SIGNALS (place each into a cluster):
+{signals_json}
+
+Return ONLY valid JSON matching this schema. No markdown, no commentary.
+{{
+  "clusters": [
+    {{"existing_id": 42,   "canonical": null, "member_ids": [1, 5]}},
+    {{"existing_id": null, "canonical": "Short new rule",
+      "member_ids": [3]}}
+  ]
+}}
+"""
+
+
+def _call_attach_llm(category, existing, signals):
+    """Send a batch to Claude and parse clusters.
+
+    Returns (clusters: list[dict], ok: bool). ok=False means caller
+    should fall back to prefix-based aggregation for this batch.
+    """
+    from planet_maiko.agents.brain_session import _get_runtime
+    from planet_maiko.agents.routing import resolve_model
+
+    runtime = _get_runtime()
+    if not runtime.is_available():
+        return [], False
+
+    existing_payload = [{"id": l.id, "rule": (l.rule or "").strip()} for l in existing]
+    signal_payload = [{"id": s.id, "text": (s.text or "").strip()[:300]} for s in signals]
+
+    prompt = ATTACH_PROMPT.format(
+        category=category,
+        existing_json=json.dumps(existing_payload, indent=2),
+        signals_json=json.dumps(signal_payload, indent=2),
+    )
+
+    db.session.close()
+    result = runtime.send_json(prompt, timeout=120, model=resolve_model("classify"))
+    parsed = result.get("parsed") if isinstance(result, dict) else None
+    if not isinstance(parsed, dict):
+        return [], False
+    clusters = parsed.get("clusters")
+    if not isinstance(clusters, list):
+        return [], False
+    return clusters, True
+
+
+def cluster_signals_into_learnings():
+    """Turn unaggregated signals into Learnings via a single semantic pass.
+
+    For each category, Claude sees both the existing Learnings and the
+    new signals that need a home. Signals that match an existing Learning
+    attach to it; signals that introduce a genuinely new idea become a
+    brand-new Learning.
+
+    Falls back to prefix-based aggregation (the old processor.process_signals
+    logic) when the LLM runtime is unavailable so offline / early-boot
+    environments still make forward progress.
+
+    Returns a dict with counts (matches the shape process_signals used
+    to return so callers don't need to change).
+    """
+    from planet_maiko.brain.learning.processor import (
+        _is_junk_signal, _apply_positive_signal, _maybe_graduate,
+        CONFIDENCE_PER_SIGNAL, process_signals,
+    )
+
+    unprocessed = Signal.query.filter_by(aggregated=False).all()
+    if not unprocessed:
+        return {"processed": 0, "new_learnings": 0, "updated_learnings": 0, "graduated": 0}
+
+    counts = {
+        "processed": 0,
+        "new_learnings": 0,
+        "updated_learnings": 0,
+        "graduated": 0,
+        "skipped_junk": 0,
+        "fallback_prefix": 0,
+    }
+
+    # Junk filter + group by category
+    by_category = {}
+    for s in unprocessed:
+        if _is_junk_signal(s.text):
+            s.aggregated = True
+            counts["skipped_junk"] += 1
+            continue
+        by_category.setdefault(s.category or "pattern", []).append(s)
+
+    # Unclassified "pattern" signals stay in the queue — wait for the
+    # synthesize / classify step to tag them properly before we try to
+    # place them into category-specific Learnings.
+    pattern_batch = by_category.pop("pattern", [])
+    for s in pattern_batch:
+        # leave aggregated=False so they're picked up on the next pass
+        pass
+
+    for category, signals in by_category.items():
+        existing = Learning.query.filter(
+            Learning.category == category,
+            Learning.status != "dismissed",
+        ).all()
+        existing_by_id = {l.id: l for l in existing}
+
+        for start in range(0, len(signals), SIGNAL_BATCH):
+            batch = signals[start:start + SIGNAL_BATCH]
+            clusters, ok = _call_attach_llm(category, existing, batch)
+
+            if not ok:
+                # Degrade to prefix-matching for this batch — old logic.
+                counts["fallback_prefix"] += len(batch)
+                fallback = process_signals()
+                # process_signals hit all unaggregated signals, not just
+                # this batch — reconcile the counts.
+                counts["new_learnings"] += fallback.get("new_learnings", 0)
+                counts["updated_learnings"] += fallback.get("updated_learnings", 0)
+                counts["graduated"] += fallback.get("graduated", 0)
+                counts["processed"] += fallback.get("processed", 0)
+                return counts
+
+            batch_by_id = {s.id: s for s in batch}
+            placed = set()
+
+            for cluster in clusters:
+                member_ids = [
+                    mid for mid in (cluster.get("member_ids") or [])
+                    if isinstance(mid, int) and mid in batch_by_id
+                ]
+                if not member_ids:
+                    continue
+
+                existing_id = cluster.get("existing_id")
+                learning = existing_by_id.get(existing_id) if isinstance(existing_id, int) else None
+
+                if learning is None:
+                    # New Learning for this cluster. signal_count / confidence
+                    # start at 0 and get bumped once per member below, so
+                    # the math matches _apply_positive_signal's post-creation
+                    # contract (a 3-signal cluster ends at signal_count=3,
+                    # confidence=0.3 just like the old prefix path).
+                    canonical = (cluster.get("canonical") or "").strip()
+                    if not canonical:
+                        canonical = batch_by_id[member_ids[0]].text[:300]
+                    sample = batch_by_id[member_ids[0]]
+                    learning = Learning(
+                        rule=canonical,
+                        category=category,
+                        scope_repo=sample.repo,
+                        scope_language=sample.language,
+                        confidence=0.0,
+                        signal_count=0,
+                        source="auto",
+                        status="pending",
+                        aggregation_key=f"cluster:{category}:{canonical[:60].lower()}",
+                        last_signal_at=datetime.now(timezone.utc),
+                    )
+                    db.session.add(learning)
+                    db.session.flush()
+                    existing_by_id[learning.id] = learning
+                    counts["new_learnings"] += 1
+
+                for sid in member_ids:
+                    sig = batch_by_id[sid]
+                    _apply_positive_signal(sig, learning, counts)
+                    sig.aggregated = True
+                    placed.add(sid)
+                    counts["processed"] += 1
+
+            # Any signal the LLM dropped on the floor — park it as its
+            # own new Learning using its own text. Safer than losing it.
+            for sid, sig in batch_by_id.items():
+                if sid in placed:
+                    continue
+                learning = Learning(
+                    rule=sig.text[:300],
+                    category=category,
+                    scope_repo=sig.repo,
+                    scope_language=sig.language,
+                    confidence=0.0,
+                    signal_count=0,
+                    source="auto",
+                    status="pending",
+                    aggregation_key=f"cluster:{category}:{sig.text[:60].lower()}",
+                    last_signal_at=datetime.now(timezone.utc),
+                )
+                db.session.add(learning)
+                db.session.flush()
+                existing_by_id[learning.id] = learning
+                counts["new_learnings"] += 1
+                _apply_positive_signal(sig, learning, counts)
+                sig.aggregated = True
+                counts["processed"] += 1
+
+            db.session.commit()
+
+    return counts

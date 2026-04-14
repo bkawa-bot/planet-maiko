@@ -139,7 +139,7 @@ def classify_pending():
     from planet_maiko.brain.learning.classifier import (
         classify_unclassified_signals, classify_pattern_learnings
     )
-    from planet_maiko.brain.learning.processor import process_signals
+    from planet_maiko.brain.learning.clustering import cluster_signals_into_learnings
 
     data = request.get_json(silent=True) or {}
     batch_size = data.get("batch_size", 50)
@@ -149,7 +149,7 @@ def classify_pending():
 
     # First: classify any unaggregated signals
     classified_signals = classify_unclassified_signals(batch_size=batch_size)
-    learning_results = process_signals()
+    learning_results = cluster_signals_into_learnings()
 
     # Then: reclassify any existing pattern-category learnings
     classified_learnings = classify_pattern_learnings(batch_size=batch_size)
@@ -249,27 +249,19 @@ Respond as JSON: {{"rules": [{{"index": 1, "rule": "Always validate input length
                 except Exception as e:
                     synth_error = str(e)
 
-                # Phase 3: aggregate into learnings
-                update_backfill_progress(phase="aggregating")
-                learning_results = process_signals()
+                # Phase 3: cluster signals directly into Learnings.
+                # This replaces the old prefix-based aggregation +
+                # separate dedup pass — one semantic call that matches
+                # each new signal against existing rules or starts a
+                # new cluster.
+                update_backfill_progress(phase="clustering")
+                from planet_maiko.brain.learning.clustering import cluster_signals_into_learnings
+                learning_results = cluster_signals_into_learnings()
                 update_backfill_progress(
                     new_learnings=learning_results.get("new_learnings", 0),
                     graduated=learning_results.get("graduated", 0),
                 )
-
-                # Phase 4: semantic clustering — merge Learnings that
-                # differ only in wording. Without this, the prefix-based
-                # aggregation leaves duplicate rules in the pool.
-                update_backfill_progress(phase="clustering")
-                try:
-                    from planet_maiko.brain.learning.clustering import cluster_learnings
-                    cluster_results = cluster_learnings()
-                    update_backfill_progress(
-                        learnings_merged=cluster_results.get("learnings_merged", 0),
-                    )
-                except Exception as e:
-                    logger.warning(f"[backfill] Clustering skipped: {e}")
-                    cluster_results = {"learnings_merged": 0}
+                cluster_results = {"learnings_merged": 0}
             else:
                 learning_results = {"new_learnings": 0, "graduated": 0}
                 cluster_results = {"learnings_merged": 0}

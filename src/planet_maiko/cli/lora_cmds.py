@@ -141,7 +141,7 @@ def cmd_retrain(args):
         # Step 1: Resolve & sync feedback
         if not args.skip_feedback:
             from planet_maiko.brain.learning.feedback import resolve_pending_feedback, sync_feedback_to_server, drain_signal_queue
-            from planet_maiko.brain.learning.processor import process_signals
+            from planet_maiko.brain.learning.clustering import cluster_signals_into_learnings
 
             print("Step 1/3: Resolving feedback...")
             repo_path = args.repo_path
@@ -155,7 +155,7 @@ def cmd_retrain(args):
             if drained["imported"]:
                 print(f"  Imported {drained['imported']} queued signals from CLI corrections")
 
-            result = process_signals()
+            result = cluster_signals_into_learnings()
             if result["graduated"]:
                 print(f"  {result['graduated']} learnings graduated")
             if result["new_learnings"]:

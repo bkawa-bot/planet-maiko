@@ -197,8 +197,8 @@ def _phase_llm_triage():
 
 def _phase_learning():
     """Phase 4: Aggregate feedback signals into learnings."""
-    from planet_maiko.brain.learning.processor import process_signals
-    return process_signals()
+    from planet_maiko.brain.learning.clustering import cluster_signals_into_learnings
+    return cluster_signals_into_learnings()
 
 
 def _phase_classification():
