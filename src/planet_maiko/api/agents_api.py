@@ -1,6 +1,8 @@
+import logging
 import os
+import threading
 import uuid
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from planet_maiko.database import db
 from planet_maiko.models.agent_message import AgentMessage
 from planet_maiko.agents.brain_session import run_skill, get_status as brain_status
@@ -8,7 +10,37 @@ from planet_maiko.agents.coding_agent import prepare, list_prepared, cleanup
 from planet_maiko.agents.monitor import get_agent_activity, process_agent_pupdates, get_stuck_agents
 from planet_maiko.agents.skills import list_skills
 
+logger = logging.getLogger(__name__)
+
 agents_bp = Blueprint("agents", __name__)
+
+
+def _spawn_one_shot_thread(task_id, working_path):
+    """Fire a daemon thread that runs execute_one_shot_task for a
+    freshly-assigned review/investigation task.
+
+    Runs in its own app context so the thread has DB access. Any
+    failure is logged but doesn't reach the caller — the cycle's
+    execute-one-shot phase picks up stragglers on its next tick.
+    """
+    app = current_app._get_current_object()
+
+    def _run():
+        with app.app_context():
+            try:
+                from planet_maiko.models.task import Task
+                from planet_maiko.agents.brain_session import execute_one_shot_task
+                task = db.session.get(Task, task_id)
+                if not task:
+                    logger.warning(f"[assign-thread] Task {task_id} vanished before run")
+                    return
+                if task.status not in ("new", "blocked"):
+                    return  # Already running or done — let the cycle handle it
+                execute_one_shot_task(task, working_dir=working_path)
+            except Exception as e:
+                logger.exception(f"[assign-thread] execute_one_shot_task failed for {task_id}: {e}")
+
+    threading.Thread(target=_run, daemon=True, name=f"one-shot-{task_id}").start()
 
 
 @agents_bp.route("/brain/session", methods=["GET"])
@@ -96,9 +128,12 @@ def assign_agent():
     Coding agents: prepares a worktree + CLAUDE.md as before. Requires
     repo_path.
 
-    Review / investigation agents: just links the task to the profile
-    and coerces the task type so the one-shot execution path picks
-    it up. No worktree, no prepare(), no repo_path needed.
+    Review / investigation agents: also prepares a worktree (so the
+    user can "dig deeper" later by attaching to it), then fires a
+    background thread that runs the one-shot skill immediately. No
+    repo_path needed — resolved from config.github.repo_roots using
+    the task's repo. Returns 201 right away; the thread writes the
+    result pupdate when it completes.
     """
     from planet_maiko.models.task import Task
     from planet_maiko.models.agent_profile import AgentProfile
@@ -119,26 +154,70 @@ def assign_agent():
     task = db.get_or_404(Task, task_id)
     profile = db.get_or_404(AgentProfile, profile_id)
 
-    # One-shot roles (review, investigation) take a different path:
-    # no worktree, just link + coerce type so the cycle / launch
-    # endpoint knows how to run them.
+    # Review / investigation: prepare a worktree (for later "dig
+    # deeper"), fire a daemon thread that runs the skill, return
+    # immediately. The thread writes the result pupdate.
     if profile.role in ("review", "investigation"):
+        from planet_maiko.orchestration import resolve_repo_path
+        repo = (task.extra or {}).get("repo") or (task.extra or {}).get("repository")
+        local_path = resolve_repo_path(repo)
+        if not local_path:
+            return jsonify({
+                "error": (
+                    f"No local clone found for {repo}. "
+                    "Set config.github.repo_roots to the directories "
+                    "where your repos live."
+                ),
+            }), 400
+
         task.assigned_agent_id = profile.id
         if task.type not in ONE_SHOT_ROLE_FOR_TYPE:
-            coerced = {"review": "review", "investigation": "investigation"}[profile.role]
-            task.type = coerced
-        if task.status == "blocked":
-            # Don't change; blocked tasks unblock later via the cascade
-            pass
-        elif task.status == "done":
-            pass
-        else:
-            task.status = "new"  # ready for launch / auto-run
+            task.type = {"review": "review", "investigation": "investigation"}[profile.role]
+        if task.status not in ("blocked", "done"):
+            task.status = "new"
+
+        prompt_parts = [task.title]
+        if task.source_pupdate_id:
+            from planet_maiko.models.pupdate import Pupdate
+            source = db.session.get(Pupdate, task.source_pupdate_id)
+            if source and source.body:
+                prompt_parts.append(f"\n## Source Context\n\n{source.body}")
+            if source and source.url:
+                prompt_parts.append(f"\nSource URL: {source.url}")
+        if task.url:
+            prompt_parts.append(f"\nTask URL: {task.url}")
+        full_prompt = "\n".join(prompt_parts)
+
+        try:
+            prep_result = prepare(
+                task_id=task.id,
+                task_title=task.title,
+                prompt=full_prompt,
+                repo_path=local_path,
+                branch_prefix=branch_name or "maiko",
+                auto_kickoff=False,
+                use_worktree=True,
+                agent_profile_id=profile.id,
+                role=profile.role,
+            )
+        except Exception as e:
+            return jsonify({"error": f"Prepare failed: {e}"}), 500
+        if not prep_result:
+            return jsonify({"error": "Prepare failed"}), 500
+
+        extra = dict(task.extra or {})
+        extra["working_path"] = prep_result["working_path"]
+        extra["branch"] = prep_result["branch"]
+        task.extra = extra
         db.session.commit()
+
+        _spawn_one_shot_thread(task.id, prep_result["working_path"])
+
         return jsonify({
             "task": task.to_dict(),
             "agent": profile.to_dict(),
             "mode": profile.role,
+            "worktree": prep_result,
         }), 201
 
     # Coding path below — unchanged.

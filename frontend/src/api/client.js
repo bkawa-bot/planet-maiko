@@ -64,11 +64,6 @@ export const api = {
   reassignTask: (id, agent_id) =>
     request(`/tasks/${id}/reassign`, { method: "POST", body: JSON.stringify(agent_id ? { agent_id } : {}) }),
   launchTask: (id) => request(`/tasks/${id}/launch`, { method: "POST" }),
-  toggleTaskAutoLaunch: (id, enabled) =>
-    request(`/tasks/${id}/auto-launch`, {
-      method: "POST",
-      body: JSON.stringify(enabled == null ? {} : { enabled }),
-    }),
   sendTaskToLinear: (id, overrides = {}) =>
     request(`/tasks/${id}/linear`, { method: "POST", body: JSON.stringify(overrides) }),
   importLinear: () => request("/tasks/import-linear", { method: "POST" }),

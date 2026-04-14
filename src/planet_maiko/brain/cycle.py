@@ -425,61 +425,75 @@ def _phase_stuck_escalation():
 
 
 def _phase_execute_agent_tasks():
-    """Phase 8c: Auto-run one-shot review/investigation tasks whose
-    auto_launch flag is true.
+    """Phase 8c: Auto-run one-shot review/investigation tasks that
+    have been assigned but haven't started yet.
 
-    Each task's actual execution lives in
-    agents.brain_session.execute_one_shot_task so the Launch endpoint
-    can reuse it. This phase only decides which tasks to execute and
-    in what order.
+    Review/investigation agents are always autonomous — the cycle picks
+    up any task with status="new" + assigned_agent_id set + a one-shot
+    type, prepares a worktree for it (so the user can attach later to
+    dig deeper), and runs the skill. Same helper that /agents/assign
+    uses inline for immediate start; the cycle is the safety net for
+    tasks routed by _phase_orchestrate or whose inline thread died.
 
     Coding tasks are NOT handled here — those go through coding_agent's
-    worktree + session flow.
+    worktree + session flow with a human-driven launch.
 
-    Candidates must have:
-      - status == "new"
-      - assigned_agent_id set
-      - type in ONE_SHOT_ROLE_FOR_TYPE
-      - auto_launch resolved to True (either task.extra.auto_launch or
-        the global config.agents.auto_launch_one_shot default)
-
-    Limited to 2 per cycle to bound token spend.
+    Capped at 2 per cycle to bound token spend.
     """
     from planet_maiko.models.task import Task
     from planet_maiko.database import db
     from planet_maiko.agents.brain_session import (
         ONE_SHOT_ROLE_FOR_TYPE, execute_one_shot_task,
     )
-    from planet_maiko.config import load_config
+    from planet_maiko.agents.coding_agent import prepare
+    from planet_maiko.orchestration import resolve_repo_path
 
     try:
-        default_auto = bool(
-            (load_config().get("agents", {}) or {}).get("auto_launch_one_shot", False)
-        )
-
         candidates = Task.query.filter(
             Task.status == "new",
             Task.assigned_agent_id.isnot(None),
             Task.type.in_(list(ONE_SHOT_ROLE_FOR_TYPE.keys())),
-        ).all()
+        ).limit(2).all()
 
-        # Filter by auto_launch — honor per-task override, fall back to
-        # the global default. Cap at 2 per cycle.
-        runnable = []
-        for t in candidates:
-            flag = (t.extra or {}).get("auto_launch")
-            auto = flag if isinstance(flag, bool) else default_auto
-            if auto:
-                runnable.append(t)
-            if len(runnable) >= 2:
-                break
-
-        if not runnable:
+        if not candidates:
             return {"executed": 0}
 
         executed = 0
-        for task in runnable:
-            result = execute_one_shot_task(task)
+        for task in candidates:
+            meta = task.extra or {}
+            working_dir = meta.get("working_path")
+
+            # First time through for this task — set up the worktree so
+            # the user can later attach to it from the result pupdate.
+            if not working_dir:
+                repo = meta.get("repo") or meta.get("repository")
+                local_path = resolve_repo_path(repo)
+                if not local_path:
+                    logger.info(f"[cycle] task {task.id}: no local clone for {repo}, skipping")
+                    continue
+                try:
+                    prep = prepare(
+                        task_id=task.id,
+                        task_title=task.title,
+                        prompt=task.title + (f"\n\nURL: {task.url}" if task.url else ""),
+                        repo_path=local_path,
+                        auto_kickoff=False,
+                        use_worktree=True,
+                        agent_profile_id=task.assigned_agent_id,
+                        role={"review": "review", "pr_review": "review",
+                              "investigation": "investigation",
+                              "repo_analysis": "investigation"}.get(task.type, "investigation"),
+                    )
+                except Exception as e:
+                    logger.warning(f"[cycle] prepare failed for {task.id}: {e}")
+                    continue
+                if not prep:
+                    continue
+                working_dir = prep["working_path"]
+                task.extra = {**meta, "working_path": working_dir, "branch": prep["branch"]}
+                db.session.commit()
+
+            result = execute_one_shot_task(task, working_dir=working_dir)
             if result.get("success"):
                 executed += 1
             else:

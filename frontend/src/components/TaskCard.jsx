@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   CheckSquare, Square, FolderOpen, Pin, PinOff, ExternalLink,
   ChevronRight, GitBranch, Clock, Bot, Eye,
-  X, Pencil, Brain, Circle, Send, Play, Zap, ZapOff, Loader, FileText,
+  X, Pencil, Brain, Circle, Send, Loader, FileText,
 } from "lucide-react";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
@@ -87,57 +87,14 @@ export default function TaskCard({
   const linearUrl = t.extra?.linear_url || t.metadata?.linear_url || (t.url?.includes("linear.app") ? t.url : null);
   const [sendingToLinear, setSendingToLinear] = useState(false);
 
-  // One-shot agent work (review / investigation) has its own UX
-  // because it doesn't open a terminal. We render a Launch button, a
-  // "thinking" badge while the skill runs, and an expandable artifact
-  // view once it's done.
+  // One-shot agent work (review / investigation) runs autonomously
+  // after assignment — no manual launch needed. Shows a "working"
+  // badge while in_progress, and the artifact once it's done.
   const ONE_SHOT_TYPES = new Set(["review", "pr_review", "investigation", "repo_analysis"]);
   const isOneShotTask = ONE_SHOT_TYPES.has(t.type);
   const hasArtifact = !!(t.extra?.artifact);
   const agentName = agentNames?.[t.assigned_agent_id] || t.assigned_agent_id?.replace(/^agent-/, "");
-  const autoLaunchOn = !!(t.extra?.auto_launch);
-  const [launching, setLaunching] = useState(false);
   const [showArtifact, setShowArtifact] = useState(false);
-  const [togglingAutoLaunch, setTogglingAutoLaunch] = useState(false);
-
-  const handleLaunch = async (e) => {
-    e.stopPropagation();
-    if (launching) return;
-    setLaunching(true);
-    showToast(`${agentName || "Agent"} is working...`, "normal");
-    try {
-      const result = await api.launchTask(t.id);
-      if (result?.success !== false) {
-        const patterns = result?.patterns_emitted;
-        const proposals = result?.proposals_emitted;
-        const parts = [];
-        if (patterns) parts.push(`${patterns} pattern${patterns === 1 ? "" : "s"}`);
-        if (proposals) parts.push(`${proposals} proposal${proposals === 1 ? "" : "s"}`);
-        const extra = parts.length ? ` (${parts.join(", ")})` : "";
-        showToast(`${agentName || "Agent"} finished${extra}`, "normal");
-        onRefresh();
-      } else {
-        showToast(result?.error || "Launch failed", "high");
-      }
-    } catch (err) {
-      showToast(err.message || "Launch failed", "high");
-    }
-    setLaunching(false);
-  };
-
-  const handleToggleAutoLaunch = async (e) => {
-    e.stopPropagation();
-    if (togglingAutoLaunch) return;
-    setTogglingAutoLaunch(true);
-    try {
-      const result = await api.toggleTaskAutoLaunch(t.id);
-      showToast(result.auto_launch ? "Auto-launch on" : "Auto-launch off", "normal");
-      onRefresh();
-    } catch (err) {
-      showToast(err.message || "Toggle failed", "high");
-    }
-    setTogglingAutoLaunch(false);
-  };
 
   const handleSendToLinear = async () => {
     if (sendingToLinear) return;
@@ -323,32 +280,13 @@ export default function TaskCard({
                   <Bot size={10} /> Assign Agent
                 </button>
               )}
-              {/* Launch + auto-launch controls for one-shot tasks that
-                  already have an assigned agent. Launch triggers the
-                  skill call inline; auto-launch toggle lets the brain
-                  cycle pick it up on its own next tick. */}
-              {isOneShotTask && t.assigned_agent_id && !isDone && (
-                <>
-                  <button
-                    className="btn btn-sm btn-primary"
-                    onClick={handleLaunch}
-                    disabled={launching || t.status === "in_progress"}
-                    title="Run this agent's skill now"
-                  >
-                    {launching || t.status === "in_progress"
-                      ? <><Loader size={10} className="spin" /> Working…</>
-                      : <><Play size={10} /> Launch</>}
-                  </button>
-                  <button
-                    className="btn btn-sm btn-action"
-                    onClick={handleToggleAutoLaunch}
-                    disabled={togglingAutoLaunch}
-                    title={autoLaunchOn ? "Auto-launch is ON (brain cycle will run this). Click to turn off." : "Auto-launch is OFF. Click to let the brain cycle run this automatically."}
-                  >
-                    {autoLaunchOn ? <Zap size={10} /> : <ZapOff size={10} />}
-                    {autoLaunchOn ? " Auto: on" : " Auto: off"}
-                  </button>
-                </>
+              {/* One-shot agents run autonomously. While in_progress,
+                  show a "working" badge so the user can see Maiko is
+                  actually doing the thing. */}
+              {isOneShotTask && t.assigned_agent_id && t.status === "in_progress" && (
+                <span className="badge" title="Agent is running">
+                  <Loader size={10} className="spin" /> {agentName || "Agent"} working…
+                </span>
               )}
               {!isDone && (
                 <button className="btn btn-sm btn-danger" onClick={(e) => onAction(e, t.id, "cancel")}>

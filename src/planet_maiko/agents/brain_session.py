@@ -262,11 +262,18 @@ ONE_SHOT_ROLE_FOR_TYPE = {
 }
 
 
-def execute_one_shot_task(task):
+def execute_one_shot_task(task, working_dir=None):
     """Run a single review/investigation/repo_analysis task as its
     assigned agent, parse output blocks, publish a result pupdate, and
-    mark the task done. Shared by the cycle's auto-execution path and
-    the manual Launch endpoint.
+    mark the task done.
+
+    Args:
+        task: the Task to run.
+        working_dir: optional path to run the skill in — typically a
+            worktree prepared by coding_agent.prepare() so the agent has
+            repo access and the user can attach later to "dig deeper".
+            If None, falls back to task.extra.working_path, otherwise
+            no working_dir (skill runs in the default cwd).
 
     Returns dict with:
         success: bool
@@ -306,8 +313,11 @@ def execute_one_shot_task(task):
         "pupdates": "[]", "tasks": "[]", "calendar": "[]",
     }
 
+    resolved_working_dir = working_dir or meta.get("working_path")
+
     try:
-        result = run_skill_as_agent(agent.id, skill_name, context=context)
+        result = run_skill_as_agent(agent.id, skill_name, context=context,
+                                    working_dir=resolved_working_dir)
     except Exception as e:
         logger.warning(f"[execute] Task {task.id} run failed: {e}")
         task.status = "new"

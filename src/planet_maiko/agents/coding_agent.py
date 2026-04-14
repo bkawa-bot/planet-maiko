@@ -109,31 +109,39 @@ def _write_task_file(working_path, task_id, task_title, prompt):
         f.write(content)
 
 
-def _write_claude_md(working_path, task_id, task_title, maiko_port=None):
+def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_port=None):
     """Write CLAUDE.md with full agent protocol.
 
-    Loads the protocol template from the agent-protocol skill prompt file,
-    which can be customized from the Skills page.
+    Loads the protocol template for the given role. "coding" uses the
+    full agent-protocol (MCP channel, task-state reporting, etc.);
+    review/investigation use their own protocol prompts which describe
+    the structured-block output contract their initial one-shot run
+    follows.
     """
     if maiko_port is None:
         from planet_maiko.config import MAIKO_PORT
         maiko_port = MAIKO_PORT
 
     custom_instructions = ""
-    role_instructions_coding = ""
+    role_instructions_for_role = ""
     try:
         from planet_maiko.config import load_config
         agents_cfg = load_config().get("agents", {}) or {}
         custom_instructions = agents_cfg.get("custom_instructions", "") or ""
-        role_instructions_coding = (agents_cfg.get("role_instructions") or {}).get("coding", "") or ""
+        role_instructions_for_role = (agents_cfg.get("role_instructions") or {}).get(role, "") or ""
     except Exception:
         pass
+
+    protocol_skill = {
+        "review": "review-agent-protocol",
+        "investigation": "investigation-agent-protocol",
+    }.get(role, "agent-protocol")
 
     # Load protocol from skill prompt (editable via Skills page)
     content = None
     try:
         from planet_maiko.agents.skills import get_skill_prompt
-        content = get_skill_prompt("agent-protocol", {
+        content = get_skill_prompt(protocol_skill, {
             "task_title": task_title,
             "task_id": task_id,
             "maiko_port": str(maiko_port),
@@ -145,7 +153,7 @@ def _write_claude_md(working_path, task_id, task_title, maiko_port=None):
     if not content:
         prompt_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "prompts", "agent-protocol.md"
+            "prompts", f"{protocol_skill}.md"
         )
         try:
             with open(prompt_path, "r") as f:
@@ -154,15 +162,11 @@ def _write_claude_md(working_path, task_id, task_title, maiko_port=None):
             content = content.replace("{task_id}", task_id)
             content = content.replace("{maiko_port}", str(maiko_port))
         except Exception:
-            content = f"# Agent Protocol\n\nTask: {task_title}\nTask ID: {task_id}\n\nRead TASK.md for instructions."
+            content = f"# Agent Protocol\n\nTask: {task_title}\nTask ID: {task_id}\nRole: {role}\n\nRead TASK.md for instructions."
 
-    # Team-wide coding instructions from Settings > Agents. Separate
-    # from the legacy custom_instructions field (which we still honor
-    # for back-compat) so users who adopted role_instructions don't
-    # need to migrate anything.
-    if role_instructions_coding:
-        content += f"\n\n## Team instructions for coding agents\n\n{role_instructions_coding.strip()}\n"
-    if custom_instructions:
+    if role_instructions_for_role:
+        content += f"\n\n## Team instructions for {role} agents\n\n{role_instructions_for_role.strip()}\n"
+    if custom_instructions and role == "coding":
         content += f"\n\n## Owner's Workflow Preferences\n\n{custom_instructions}\n"
 
     claude_dir = os.path.join(working_path, ".claude")
@@ -430,7 +434,8 @@ def _finalize_branch(repo_path):
 
 
 def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
-            auto_kickoff=False, use_worktree=True, agent_profile_id=None):
+            auto_kickoff=False, use_worktree=True, agent_profile_id=None,
+            role="coding"):
     """Prepare for an agent to work on a task.
 
     Two modes:
@@ -450,6 +455,8 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
         branch_prefix: prefix for the branch name
         auto_kickoff: if True, immediately start the agent via the runtime
         use_worktree: if True, create a git worktree; if False, just create a branch
+        role: "coding" | "review" | "investigation" — picks the CLAUDE.md
+            protocol template and role-scoped team instructions.
 
     Returns:
         dict with agent info and launch instructions, or None on failure
@@ -487,7 +494,7 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
 
     # Write task files
     _write_task_file(working_path, task_id, task_title, prompt)
-    _write_claude_md(working_path, task_id, task_title)
+    _write_claude_md(working_path, task_id, task_title, role=role)
     _write_mcp_json(working_path, task_id)
 
     # Use existing profile if provided, otherwise generate an ID
@@ -526,23 +533,34 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
         _finalize_branch(working_path)
 
     mode = "worktree" if use_worktree else "branch"
+    # Review/investigation agents run autonomously after prepare, so the
+    # "ready to launch" framing doesn't fit — their action is "dig deeper"
+    # once the result pupdate arrives. Coding agents still need a manual
+    # terminal launch.
+    if role == "coding":
+        ready_title = f"Agent ready: {task_title}"
+        ready_hint = "Launch agent"
+    else:
+        ready_title = f"{role.capitalize()} agent working: {task_title}"
+        ready_hint = "Dig deeper"
     notify = Pupdate(
         id=f"agent-ready-{task_id}-{uuid.uuid4().hex[:8]}",
         source="maiko",
         source_id=f"agent/{agent_id}",
         type="agent_ready",
         priority="normal",
-        title=f"Agent ready: {task_title}",
-        body=f"Prepared on branch `{branch_name}` ({mode}).\n\n{'Launch in: ' + working_path if use_worktree else 'Checkout: git checkout ' + branch_name}",
+        title=ready_title,
+        body=f"Prepared on branch `{branch_name}` ({mode}).\n\n{'Working in: ' + working_path if use_worktree else 'Checkout: git checkout ' + branch_name}",
         actionable=True,
-        action_hint="Launch agent",
-        tags=[task_id, "agent"],
+        action_hint=ready_hint,
+        tags=[task_id, "agent", role],
         extra={
             "agent_id": agent_id,
             "branch": branch_name,
             "working_path": working_path,
             "mode": mode,
             "task_id": task_id,
+            "role": role,
         },
     )
     db.session.add(notify)
@@ -586,15 +604,31 @@ def cleanup(repo_path, branch_name):
 
 
 def list_prepared():
-    """List all prepared agent worktrees by checking for agent_ready pupdates."""
+    """List all prepared agent worktrees by checking for agent_ready pupdates.
+
+    Includes coding agents (still ready to launch), review/investigation
+    agents (running autonomously), and their task status if we can find
+    it — the UI uses task.status to show "running" vs "done" and to
+    surface a "dig deeper" button once one-shot agents complete.
+    """
+    from planet_maiko.models.task import Task
     agents = Pupdate.query.filter_by(type="agent_ready", dismissed=False).all()
-    return [
-        {
+    task_ids = [p.extra.get("task_id") for p in agents if p.extra.get("task_id")]
+    tasks_by_id = {}
+    if task_ids:
+        tasks_by_id = {t.id: t for t in Task.query.filter(Task.id.in_(task_ids)).all()}
+    out = []
+    for p in agents:
+        tid = p.extra.get("task_id")
+        task = tasks_by_id.get(tid)
+        out.append({
             "agent_id": p.extra.get("agent_id"),
-            "task_id": p.extra.get("task_id"),
+            "task_id": tid,
+            "task_title": task.title if task else None,
+            "task_status": task.status if task else None,
+            "role": p.extra.get("role", "coding"),
             "branch": p.extra.get("branch"),
             "working_path": p.extra.get("working_path"),
             "prepared_at": p.timestamp.isoformat() if p.timestamp else None,
-        }
-        for p in agents
-    ]
+        })
+    return out

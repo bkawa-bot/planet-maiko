@@ -41,6 +41,36 @@ def scope_for_task(task: Task) -> Optional[str]:
     return extra.get("repo") or extra.get("repository") or None
 
 
+def resolve_repo_path(repo: Optional[str]) -> Optional[str]:
+    """Resolve a GitHub-style "org/repo" to a local filesystem path.
+
+    Walks config.github.repo_roots looking for a directory that is a
+    git repo and whose name matches the last segment of `repo`. Also
+    tries the full "org/repo" subpath in case the user clones under
+    nested dirs. Returns the first match or None.
+
+    Used by the one-shot assign path to find a local clone to create
+    a worktree in — no UI prompt needed since the user's already
+    told us where repos live.
+    """
+    if not repo:
+        return None
+    import os
+    from planet_maiko.config import load_config
+    roots = (load_config().get("github", {}) or {}).get("repo_roots") or []
+    if not roots:
+        return None
+    name = repo.rsplit("/", 1)[-1]
+    for root in roots:
+        root = os.path.expanduser(root)
+        if not os.path.isdir(root):
+            continue
+        for candidate in (os.path.join(root, name), os.path.join(root, repo)):
+            if os.path.isdir(os.path.join(candidate, ".git")):
+                return candidate
+    return None
+
+
 def find_profile(role: str, scope_repo: Optional[str]) -> Optional[AgentProfile]:
     """Exact (role, scope_repo) match. None if no profile fits."""
     q = AgentProfile.query.filter(
