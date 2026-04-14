@@ -110,7 +110,7 @@ class ClaudeCodeRuntime(AgentRuntime):
         except Exception:
             return "medium"
 
-    def send(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None):
+    def send(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None, session_id=None):
         """Send a prompt to claude CLI in print mode.
 
         Uses --print for single prompt/response (no interactive session).
@@ -120,6 +120,10 @@ class ClaudeCodeRuntime(AgentRuntime):
         limit and get silently truncated, producing the "input must
         be provided either through stdin or as a prompt argument"
         error from claude. stdin has no such limit.
+
+        If session_id is provided, the run is saved under that id so
+        later "View Session" / resume lookups can find the transcript
+        at ~/.claude/projects/<escaped-path>/<session_id>.jsonl.
         """
         if not prompt or not prompt.strip():
             return {
@@ -130,6 +134,9 @@ class ClaudeCodeRuntime(AgentRuntime):
 
         claude_path = self._find_claude() or "claude"
         cmd = [claude_path, "--print", "--output-format", "text"]
+
+        if session_id:
+            cmd.extend(["--session-id", session_id])
 
         # Model override for cost-aware routing
         if model:

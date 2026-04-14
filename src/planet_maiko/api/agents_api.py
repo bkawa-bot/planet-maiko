@@ -345,26 +345,21 @@ def resume_session():
     if has_tmux:
         cmd = f"tmux attach -t {session_name}"
         mode = "tmux"
+    elif working_path and shutil.which("claude"):
+        # For autonomous review/investigation agents (and any coding
+        # agent launched without tmux), `claude --resume <id>` opens
+        # an interactive session restored to the point the background
+        # run reached. Works both mid-run and after completion, and
+        # lets the user continue the conversation to dig deeper.
+        cmd = f"cd {working_path} && claude --resume {session_id}"
+        mode = "resume"
     else:
-        # 2. Tail the Claude session JSONL file
         session_file = _find_claude_session_file(working_path, session_id)
-        if session_file and shutil.which("jq"):
-            # Pretty-print user/assistant messages and tool uses as they stream
-            cmd = (
-                f"echo 'Live tailing agent session: {session_id}' && "
-                f"echo '(Press Ctrl+C to stop)' && echo '' && "
-                f"tail -f {session_file} | jq -r 'select(.type==\"user\" or .type==\"assistant\") | "
-                f"\"[\" + .type + \"] \" + (if .message.content then "
-                f"(.message.content | if type==\"array\" then map(if .type==\"text\" then .text "
-                f"elif .type==\"tool_use\" then \"<\" + .name + \">\" else \"\" end) | join(\"\\n\") else . end) "
-                f"else \"\" end)'"
-            )
-            mode = "tail"
-        elif session_file:
-            cmd = f"echo 'Live tailing agent session ({session_id})' && echo '' && tail -f {session_file}"
+        if session_file:
+            cmd = f"echo 'Tailing agent session ({session_id})' && echo '' && tail -f {session_file}"
             mode = "tail-raw"
         elif working_path and os.path.isdir(working_path):
-            cmd = f"cd {working_path} && echo 'No live session file found. Worktree:' && pwd && exec $SHELL"
+            cmd = f"cd {working_path} && echo 'No session file yet. Worktree:' && pwd && exec $SHELL"
             mode = "worktree"
         else:
             return jsonify({"error": "No session file or worktree found."}), 404

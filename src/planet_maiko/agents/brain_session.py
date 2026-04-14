@@ -156,7 +156,7 @@ def run_skill(skill_name, context=None, working_dir=None):
     return result
 
 
-def run_skill_as_agent(agent_profile_id, skill_name, context=None, working_dir=None):
+def run_skill_as_agent(agent_profile_id, skill_name, context=None, working_dir=None, session_id=None):
     """Run a skill attributed to a specific agent profile.
 
     Wraps run_skill and prepends the agent's markdown instructions to the
@@ -243,7 +243,8 @@ def run_skill_as_agent(agent_profile_id, skill_name, context=None, working_dir=N
     from planet_maiko.agents.routing import resolve_model
     db.session.close()
     result = runtime.send(full_prompt, working_dir=working_dir, timeout=timeout,
-                          model=resolve_model(f"skill:{skill_name}"))
+                          model=resolve_model(f"skill:{skill_name}"),
+                          session_id=session_id)
     # Refresh the profile since session closed — update last_active_at.
     profile = db.session.get(AgentProfile, agent_profile_id)
     if profile:
@@ -315,9 +316,24 @@ def execute_one_shot_task(task, working_dir=None):
 
     resolved_working_dir = working_dir or meta.get("working_path")
 
+    # Generate + register a session id so the background `claude --print`
+    # run saves its transcript under a predictable path, and "View Session"
+    # / `claude --resume <id>` can find it both live and after completion.
+    session_id = meta.get("session_id") or str(_uuid.uuid4())
+    if not meta.get("session_id"):
+        task.extra = {**meta, "session_id": session_id}
+        db.session.commit()
+    if resolved_working_dir:
+        try:
+            from planet_maiko.api.agents_api import _set_session
+            _set_session(task.id, session_id, resolved_working_dir)
+        except Exception:
+            pass
+
     try:
         result = run_skill_as_agent(agent.id, skill_name, context=context,
-                                    working_dir=resolved_working_dir)
+                                    working_dir=resolved_working_dir,
+                                    session_id=session_id)
     except Exception as e:
         logger.warning(f"[execute] Task {task.id} run failed: {e}")
         task.status = "new"
