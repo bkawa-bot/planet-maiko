@@ -70,9 +70,9 @@ def resolve_repo_path(repo: Optional[str]) -> Optional[str]:
 
     Walks config.github.repo_roots (set under Settings) looking for a
     directory that is a git repo and whose name matches the last
-    segment of `repo`. Also tries the full "org/repo" subpath in case
-    the user clones under nested dirs. Returns None when nothing
-    matches.
+    segment of `repo` — i.e. the repo name without the org prefix.
+    Most devs clone flat (~/src/planet-maiko, not
+    ~/src/bkawa-bot/planet-maiko), so we only check <root>/<name>.
     """
     if not repo:
         return None
@@ -82,11 +82,9 @@ def resolve_repo_path(repo: Optional[str]) -> Optional[str]:
     name = repo.rsplit("/", 1)[-1]
     for root in roots:
         root = os.path.expanduser(root)
-        if not os.path.isdir(root):
-            continue
-        for candidate in (os.path.join(root, name), os.path.join(root, repo)):
-            if os.path.isdir(os.path.join(candidate, ".git")):
-                return candidate
+        candidate = os.path.join(root, name)
+        if os.path.isdir(os.path.join(candidate, ".git")):
+            return candidate
     return None
 
 
