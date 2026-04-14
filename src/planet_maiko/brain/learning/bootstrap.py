@@ -16,6 +16,70 @@ logger = logging.getLogger(__name__)
 # were. Only empty bodies are skipped here.
 
 
+def fetch_comments_for_pr(repo, pr_number, timeout=60):
+    """Fetch every inline review comment on a single PR.
+
+    Used by the "scrape on PR merge" flow: we don't need the full
+    repo-wide batch, just the comments on the one PR that just merged.
+    Same shape as _fetch_inline_review_comments — a flat list of dicts
+    with body, author, path, line, diff_hunk.
+    """
+    try:
+        result = subprocess.run(
+            ["gh", "api", "--paginate",
+             f"repos/{repo}/pulls/{pr_number}/comments?per_page=100"],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        if result.returncode != 0:
+            logger.warning(
+                f"[bootstrap] Per-PR comment fetch failed for {repo}#{pr_number}: "
+                f"{result.stderr.strip()[:160]}"
+            )
+            return []
+        raw = result.stdout.strip()
+        if not raw:
+            return []
+        try:
+            comments = json.loads(raw)
+        except json.JSONDecodeError:
+            comments = []
+            for line in raw.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    chunk = json.loads(line)
+                    if isinstance(chunk, list):
+                        comments.extend(chunk)
+                    elif isinstance(chunk, dict):
+                        comments.append(chunk)
+                except json.JSONDecodeError:
+                    continue
+    except subprocess.TimeoutExpired:
+        logger.warning(f"[bootstrap] Timeout on {repo}#{pr_number}")
+        return []
+    except Exception as e:
+        logger.warning(f"[bootstrap] Per-PR comment error {repo}#{pr_number}: {e}")
+        return []
+
+    out = []
+    for c in comments:
+        if not isinstance(c, dict):
+            continue
+        body = (c.get("body") or "").strip()
+        if not body:
+            continue
+        out.append({
+            "body": body,
+            "author": (c.get("user") or {}).get("login", ""),
+            "path": c.get("path"),
+            "line": c.get("line"),
+            "diff_hunk": c.get("diff_hunk"),
+            "pr_number": pr_number,
+        })
+    return out
+
+
 def _fetch_inline_review_comments(repo, timeout=120):
     """Fetch every inline (per-file, per-line) PR review comment in a repo.
 

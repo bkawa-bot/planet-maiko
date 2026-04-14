@@ -348,6 +348,97 @@ def _phase_unblock_tasks():
         return {"unblocked": 0}
 
 
+def _phase_scrape_merged_prs():
+    """When a pr_merged pupdate appears, scrape the PR's inline review
+    comments into unsynthesized Signal rows. Next cycle picks them up,
+    synthesis categorizes them, clustering places them into Learnings.
+
+    This is how new team activity flows into the learning pipeline
+    without the user having to manually click Backfill every time.
+
+    Caps at 5 PRs per cycle to bound gh CLI calls. Marks each pupdate
+    with a `signals_scraped` tag so we don't re-process.
+    """
+    from planet_maiko.models.pupdate import Pupdate
+    from planet_maiko.models.signal import Signal
+    from planet_maiko.database import db
+    from planet_maiko.brain.learning.bootstrap import fetch_comments_for_pr
+
+    try:
+        candidates = Pupdate.query.filter(
+            Pupdate.type == "pr_merged",
+            Pupdate.dismissed == False,  # noqa: E712
+            ~Pupdate.tags.contains("signals_scraped"),
+        ).limit(5).all()
+
+        if not candidates:
+            return {"scraped_prs": 0, "signals_created": 0}
+
+        total_signals = 0
+        scraped = 0
+        for p in candidates:
+            meta = p.extra or {}
+            repo = meta.get("repo")
+            number = meta.get("number")
+            if not (repo and number):
+                p.tags = list(p.tags or []) + ["signals_scraped"]
+                continue
+
+            comments = fetch_comments_for_pr(repo, number)
+
+            # Preload existing signals for this repo so the same comment
+            # that showed up in a prior backfill doesn't double-insert.
+            existing_keys = {
+                (s.text, s.file_path or "", s.code_context or "")
+                for s in Signal.query.filter_by(
+                    repo=repo, source_type="pr_comment"
+                ).all()
+            }
+
+            for entry in comments:
+                body = entry["body"][:500]
+                file_path = entry.get("path") or None
+                diff_hunk = entry.get("diff_hunk") or None
+                key = (body, file_path or "", diff_hunk or "")
+                if key in existing_keys:
+                    continue
+
+                sig = Signal(
+                    category="pattern",  # placeholder — synthesis sets real category
+                    text=body,
+                    source_type="pr_comment",
+                    reviewer=entry.get("author", "") or "",
+                    severity="suggestion",
+                    repo=repo,
+                    file_path=file_path,
+                    code_context=diff_hunk,
+                    examples=[{
+                        "path": file_path,
+                        "diff_hunk": diff_hunk,
+                        "author": entry.get("author", "") or "",
+                        "line": entry.get("line"),
+                    }] if diff_hunk else [],
+                    synthesized=False,  # goes through synthesis pipeline
+                )
+                db.session.add(sig)
+                existing_keys.add(key)
+                total_signals += 1
+
+            p.tags = list(p.tags or []) + ["signals_scraped"]
+            scraped += 1
+
+        if total_signals or scraped:
+            db.session.commit()
+            if total_signals:
+                logger.info(
+                    f"[cycle] Scraped {total_signals} signal(s) from {scraped} merged PR(s)"
+                )
+        return {"scraped_prs": scraped, "signals_created": total_signals}
+    except Exception as e:
+        logger.debug(f"[cycle] Scrape merged PRs skipped: {e}")
+        return {"scraped_prs": 0, "signals_created": 0}
+
+
 def _phase_stuck_escalation():
     """Phase 8d: Surface tasks stuck in_progress for too long as a
     high-priority "needs rescue" pupdate.
@@ -515,6 +606,7 @@ _PHASES = [
     ("unblock", _phase_unblock_tasks),
     ("execute_agent_tasks", _phase_execute_agent_tasks),
     ("stuck_escalation", _phase_stuck_escalation),
+    ("scrape_merged_prs", _phase_scrape_merged_prs),
 ]
 
 
