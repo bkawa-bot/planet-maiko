@@ -158,10 +158,19 @@ class ClaudeCodeRuntime(AgentRuntime):
         # Pre-approve tools to avoid permission prompts. Per-call
         # allowed_tools overrides the config default; this is how
         # per-skill MCP wiring grants specific MCPs for a given run.
-        if allowed_tools is None:
-            allowed_tools = self._get_allowed_tools()
-        for tool in allowed_tools:
-            cmd.extend(["--allowedTools", tool])
+        #
+        # When skip_permissions is on, --allowedTools actively hurts:
+        # the skip flag is a blanket "don't prompt for anything", but
+        # --allowedTools is treated as a restrictive scope filter.
+        # Writing to "REVIEW.md" without a matching Write(**) glob, or
+        # calling mcp__maiko-channel__reply without naming the
+        # specific sub-tool, would still stall. The skip flag alone
+        # is the right behavior for headless / autonomous runs.
+        if not skip_permissions:
+            if allowed_tools is None:
+                allowed_tools = self._get_allowed_tools()
+            for tool in allowed_tools:
+                cmd.extend(["--allowedTools", tool])
 
         try:
             result = subprocess.run(

@@ -331,17 +331,6 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None):
     from planet_maiko.api.agents_api import _set_session
     _set_session(task_id, session_id, worktree_path)
 
-    # Pre-approve the MCP channel + user's configured tools. Redundant
-    # with --dangerously-skip-permissions, but harmless and keeps the
-    # tool list visible when resuming the session later.
-    allowed_tools = ["mcp__maiko-channel"]
-    try:
-        from planet_maiko.config import load_config
-        user_tools = load_config().get("brain", {}).get("allowed_tools", [])
-        allowed_tools.extend(user_tools)
-    except Exception:
-        pass
-
     initial_prompt = (
         "Read TASK.md and CLAUDE.md in this directory. Begin working on the "
         "task following the protocol. After your first meaningful commit, "
@@ -351,13 +340,16 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None):
         "once the human approves."
     )
 
+    # No --allowedTools alongside --dangerously-skip-permissions — the
+    # skip flag is the blanket bypass, and passing allowlists on top
+    # gets treated as restrictive scope filter that stalls on writes
+    # to unlisted paths and MCP subtools. Worktree isolation makes the
+    # nuclear option safe here.
     cmd = [
         claude_path, "--print", "--output-format", "text",
         "--session-id", session_id,
         "--dangerously-skip-permissions",
     ]
-    for tool in allowed_tools:
-        cmd.extend(["--allowedTools", tool])
 
     log_path = os.path.join(worktree_path, "agent.log")
 
