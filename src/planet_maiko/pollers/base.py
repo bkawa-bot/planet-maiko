@@ -193,9 +193,25 @@ class BasePoller(ABC):
         except Exception as e:
             logger.debug(f"[{self.name}] Signal extraction skipped: {e}")
 
+        # Subclass hook: per-poller custom processing that needs access
+        # to the raw_data AND the live db session. Used by github_poller
+        # to scrape inline review comments from newly merged PRs into
+        # unsynthesized Signals without duplicating poll scaffolding.
+        try:
+            self._after_sync(raw_data, db_session)
+        except Exception as e:
+            logger.warning(f"[{self.name}] _after_sync hook failed: {e}")
+
         if created or signal_dicts:
             db_session.commit()
             if created:
                 logger.info(f"[{self.name}] Created {created} new pupdate(s)")
 
         return created
+
+    def _after_sync(self, raw_data, db_session):
+        """Hook called after pupdates + signals have been staged but
+        before commit. Default no-op; subclasses override for custom
+        post-poll work (e.g. per-PR API calls).
+        """
+        pass

@@ -362,3 +362,72 @@ class GitHubPoller(BasePoller):
                 "language": _detect_language(item.get("file_path", "")),
             })
         return signals
+
+    def _after_sync(self, raw_data, db_session):
+        """For each merged PR in this poll, fetch inline review comments
+        and create unsynthesized Signal rows with code_context. Dedupes
+        per-repo against existing signals by (text, file_path, diff_hunk)
+        so overlapping polls don't duplicate.
+
+        Signals land as synthesized=False — they flow through the normal
+        synthesis → clustering pipeline on the next brain cycle tick.
+        """
+        merged = raw_data.get("merged_prs") or []
+        if not merged:
+            return
+
+        from planet_maiko.models.signal import Signal
+        from planet_maiko.brain.learning.bootstrap import fetch_comments_for_pr
+
+        # Group merged PRs by repo so we can preload once per repo.
+        by_repo = {}
+        for pr in merged:
+            repo = pr.get("_repo", "")
+            if not repo:
+                continue
+            by_repo.setdefault(repo, []).append(pr)
+
+        created = 0
+        for repo, prs in by_repo.items():
+            existing_keys = {
+                (s.text, s.file_path or "", s.code_context or "")
+                for s in Signal.query.filter_by(
+                    repo=repo, source_type="pr_comment"
+                ).all()
+            }
+
+            for pr in prs:
+                number = pr.get("number")
+                if not number:
+                    continue
+                comments = fetch_comments_for_pr(repo, number)
+                for entry in comments:
+                    body = entry["body"][:500]
+                    file_path = entry.get("path") or None
+                    diff_hunk = entry.get("diff_hunk") or None
+                    key = (body, file_path or "", diff_hunk or "")
+                    if key in existing_keys:
+                        continue
+                    sig = Signal(
+                        category="pattern",  # placeholder — synthesis sets the real one
+                        text=body,
+                        source_type="pr_comment",
+                        reviewer=entry.get("author", "") or "",
+                        severity="suggestion",
+                        repo=repo,
+                        file_path=file_path,
+                        code_context=diff_hunk,
+                        examples=[{
+                            "path": file_path,
+                            "diff_hunk": diff_hunk,
+                            "author": entry.get("author", "") or "",
+                            "line": entry.get("line"),
+                        }] if diff_hunk else [],
+                        synthesized=False,  # will be synthesized next cycle
+                    )
+                    db_session.add(sig)
+                    existing_keys.add(key)
+                    created += 1
+
+        if created:
+            logger.info(f"[{self.name}] Scraped {created} inline comment signal(s) from merged PRs")
