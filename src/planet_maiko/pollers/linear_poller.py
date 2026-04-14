@@ -76,6 +76,7 @@ query {
         project {
           id
           name
+          description
           url
           state
         }
@@ -288,6 +289,12 @@ class LinearPoller(BasePoller):
                     "identifier": identifier,
                     "state": state_name,
                     "due_date": due_date,
+                    # Carry the description through so when the pupdate
+                    # is converted to a Task the body survives —
+                    # TaskCard reads t.extra.description for the
+                    # expanded view, otherwise tasks end up titled
+                    # but blank.
+                    "description": issue.get("description") or "",
                 },
             })
 
@@ -426,6 +433,7 @@ class LinearPoller(BasePoller):
                     proj = Project(
                         id=project_id,
                         title=linear_project.get("name", "Untitled Project"),
+                        description=linear_project.get("description") or None,
                         status="active" if linear_project.get("state") == "started" else "planning",
                         source_type="linear",
                         source_id=linear_project.get("id"),
@@ -460,6 +468,7 @@ class LinearPoller(BasePoller):
                     "identifier": identifier,
                     "due_date": issue.get("dueDate"),
                     "state": issue.get("state", {}).get("name"),
+                    "description": issue.get("description") or "",
                 },
             )
             db.session.add(task)
