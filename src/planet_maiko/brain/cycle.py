@@ -489,7 +489,8 @@ def _phase_execute_agent_tasks():
             # First time through for this task — set up the worktree so
             # the user can later attach to it from the result pupdate.
             if not working_dir:
-                repo = meta.get("repo") or meta.get("repository")
+                from planet_maiko.orchestration import scope_for_task
+                repo = scope_for_task(task)
                 local_path = resolve_repo_path(repo)
                 if not local_path:
                     logger.info(f"[cycle] task {task.id}: no local clone for {repo}, skipping")

@@ -36,9 +36,33 @@ def role_for_task(task: Task) -> str:
 
 
 def scope_for_task(task: Task) -> Optional[str]:
-    """The repo this task belongs to, if any. None = global/no-scope."""
+    """The repo this task belongs to, if any. None = global/no-scope.
+
+    Falls back to parsing task.url when task.extra doesn't carry a
+    repo key — catches tasks created by older pollers or by hand
+    whose URL still points at a github.com PR / issue.
+    """
     extra = task.extra or {}
-    return extra.get("repo") or extra.get("repository") or None
+    scope = extra.get("repo") or extra.get("repository")
+    if scope:
+        return scope
+    return _repo_from_github_url(task.url)
+
+
+def _repo_from_github_url(url: Optional[str]) -> Optional[str]:
+    """Extract "org/repo" from a github.com URL. Returns None if the
+    URL isn't a recognizable github link.
+    """
+    if not url or "github.com/" not in url:
+        return None
+    try:
+        tail = url.split("github.com/", 1)[1]
+        parts = tail.split("/")
+        if len(parts) >= 2 and parts[0] and parts[1]:
+            return f"{parts[0]}/{parts[1]}"
+    except Exception:
+        pass
+    return None
 
 
 def resolve_repo_path(repo: Optional[str]) -> Optional[str]:

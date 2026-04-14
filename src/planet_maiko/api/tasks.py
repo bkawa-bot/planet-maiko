@@ -137,9 +137,8 @@ def launch_task(task_id):
     from planet_maiko.config import load_config
     from planet_maiko.orchestration import resolve_repo_path
     branch_prefix = (load_config().get("agents", {}) or {}).get("branch_prefix", "maiko")
-    repo_path = (task.extra or {}).get("repo_path") or resolve_repo_path(
-        (task.extra or {}).get("repo")
-    )
+    from planet_maiko.orchestration import scope_for_task
+    repo_path = (task.extra or {}).get("repo_path") or resolve_repo_path(scope_for_task(task))
     if not repo_path:
         return jsonify({"error": "No local clone found"}), 400
     result = prepare(
