@@ -1,8 +1,9 @@
 import { useState } from "react";
 import {
   AlertTriangle, Bot, Bone, CheckSquare, ExternalLink, GitBranch,
-  HeartPulse, MessageCircle, Moon, Play, X,
+  GitPullRequest, HeartPulse, MessageCircle, Moon, Play, X,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
 import LeaderboardWidget from "../LeaderboardWidget";
@@ -194,6 +195,15 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
                   </div>
                 </div>
                 <div className="agent-actions">
+                  {prepared?.role === "coding" && (
+                    <Link
+                      to={`/tasks/${a.task_id}/review`}
+                      className="btn btn-sm btn-primary"
+                      title="Review the agent's changes"
+                    >
+                      <GitPullRequest size={12} /> Review diff
+                    </Link>
+                  )}
                   <button
                     className="btn btn-sm"
                     onClick={() => handleResume({ task_id: a.task_id, working_path: prepared?.working_path, branch: prepared?.branch })}

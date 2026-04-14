@@ -86,7 +86,7 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "reply",
       description:
-        "Send a message back to Planet Maiko (status update, question, or task completion)",
+        "Send a message back to Planet Maiko (status update, review request, task completion, or help request)",
       inputSchema: {
         type: "object",
         properties: {
@@ -96,9 +96,15 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           message_type: {
             type: "string",
-            enum: ["message", "status", "feedback", "done", "stuck"],
+            enum: ["message", "status", "feedback", "done", "stuck", "ready_for_review"],
             description:
-              "Type of message: 'status' for updates, 'done' for task completion, 'stuck' for help requests",
+              "Type of message: " +
+              "'message' for general replies to the user, " +
+              "'status' for live progress updates (chatter, no pupdate), " +
+              "'feedback' to record a learning / training signal, " +
+              "'ready_for_review' when you've committed work and the user should review the diff, " +
+              "'done' for task completion, " +
+              "'stuck' when you're blocked and need the user's help.",
           },
         },
         required: ["content"],

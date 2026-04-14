@@ -2,8 +2,9 @@ import { useState } from "react";
 import {
   CheckSquare, Square, FolderOpen, Pin, PinOff, ExternalLink,
   ChevronRight, GitBranch, Clock, Bot, Eye,
-  X, Pencil, Brain, Circle, Send, Loader, FileText,
+  X, Pencil, Brain, Circle, Send, Loader, FileText, GitPullRequest,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { formatDate } from "../utils/dates";
@@ -279,6 +280,21 @@ export default function TaskCard({
                 <button className="btn btn-sm btn-action" onClick={() => onAssignAgent(t)}>
                   <Bot size={10} /> Assign Agent
                 </button>
+              )}
+              {/* Any task whose assigned agent has a worktree (coding
+                  agents that have auto-kicked off, review/investigation
+                  mid-run) gets a direct "Review diff" link — even if
+                  the agent never explicitly sent ready_for_review, the
+                  user can always find the diff. */}
+              {!isDone && t.assigned_agent_id && t.extra?.working_path && (
+                <Link
+                  to={`/tasks/${t.id}/review`}
+                  className="btn btn-sm btn-primary"
+                  onClick={(e) => e.stopPropagation()}
+                  title="Review the agent's changes"
+                >
+                  <GitPullRequest size={10} /> Review diff
+                </Link>
               )}
               {/* One-shot agents run autonomously. While in_progress,
                   show a "working" badge so the user can see Maiko is

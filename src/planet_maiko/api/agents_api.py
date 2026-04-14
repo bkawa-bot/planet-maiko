@@ -297,6 +297,16 @@ def assign_agent():
     task.assigned_agent_id = profile_id
     if task.status == "new":
         task.status = "in_progress"
+    # Persist the worktree info on the task itself so the frontend can
+    # always surface a "Review diff" link — even if the agent never
+    # sends ready_for_review, the task carries enough state to find
+    # the worktree and render its diff.
+    extra = dict(task.extra or {})
+    if working_path:
+        extra["working_path"] = working_path
+    if branch:
+        extra["branch"] = branch
+    task.extra = extra
     db.session.commit()
 
     return jsonify({
