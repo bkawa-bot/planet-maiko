@@ -156,7 +156,7 @@ def run_skill(skill_name, context=None, working_dir=None):
     return result
 
 
-def run_skill_as_agent(agent_profile_id, skill_name, context=None, working_dir=None, session_id=None):
+def run_skill_as_agent(agent_profile_id, skill_name, context=None, working_dir=None, session_id=None, skip_permissions=False):
     """Run a skill attributed to a specific agent profile.
 
     Wraps run_skill and prepends the agent's markdown instructions to the
@@ -244,7 +244,8 @@ def run_skill_as_agent(agent_profile_id, skill_name, context=None, working_dir=N
     db.session.close()
     result = runtime.send(full_prompt, working_dir=working_dir, timeout=timeout,
                           model=resolve_model(f"skill:{skill_name}"),
-                          session_id=session_id)
+                          session_id=session_id,
+                          skip_permissions=skip_permissions)
     # Refresh the profile since session closed — update last_active_at.
     profile = db.session.get(AgentProfile, agent_profile_id)
     if profile:
@@ -331,9 +332,13 @@ def execute_one_shot_task(task, working_dir=None):
             pass
 
     try:
+        # Autonomous runs have no human to approve tool use. The
+        # worktree is isolated (throwaway checkout we created just
+        # for this task), so skipping permission prompts is safe.
         result = run_skill_as_agent(agent.id, skill_name, context=context,
                                     working_dir=resolved_working_dir,
-                                    session_id=session_id)
+                                    session_id=session_id,
+                                    skip_permissions=True)
     except Exception as e:
         logger.warning(f"[execute] Task {task.id} run failed: {e}")
         task.status = "new"

@@ -110,7 +110,7 @@ class ClaudeCodeRuntime(AgentRuntime):
         except Exception:
             return "medium"
 
-    def send(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None, session_id=None):
+    def send(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None, session_id=None, skip_permissions=False):
         """Send a prompt to claude CLI in print mode.
 
         Uses --print for single prompt/response (no interactive session).
@@ -124,6 +124,11 @@ class ClaudeCodeRuntime(AgentRuntime):
         If session_id is provided, the run is saved under that id so
         later "View Session" / resume lookups can find the transcript
         at ~/.claude/projects/<escaped-path>/<session_id>.jsonl.
+
+        skip_permissions=True adds --dangerously-skip-permissions for
+        autonomous runs where there's no human to answer tool-approval
+        prompts. Only safe inside isolated worktrees we own — the
+        caller is responsible for the sandbox.
         """
         if not prompt or not prompt.strip():
             return {
@@ -137,6 +142,9 @@ class ClaudeCodeRuntime(AgentRuntime):
 
         if session_id:
             cmd.extend(["--session-id", session_id])
+
+        if skip_permissions:
+            cmd.append("--dangerously-skip-permissions")
 
         # Model override for cost-aware routing
         if model:
