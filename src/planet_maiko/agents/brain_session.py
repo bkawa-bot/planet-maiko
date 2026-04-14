@@ -223,7 +223,21 @@ def run_skill_as_agent(agent_profile_id, skill_name, context=None, working_dir=N
             # the structured blocks the server would have parsed.
             logger.debug(f"[brain] Could not load {protocol_filename}")
 
-    full_prompt = preamble + protocol + prompt
+    # Team-wide role instructions from Settings > Agents. Sit between
+    # the machine-contract protocol and the individual agent's
+    # personality so "every reviewer cares about X" applies across
+    # every review agent without editing each one.
+    team_role = ""
+    try:
+        from planet_maiko.config import load_config
+        cfg = load_config().get("agents", {}) or {}
+        team_role_text = ((cfg.get("role_instructions") or {}).get(profile.role) or "").strip()
+        if team_role_text:
+            team_role = f"## Team instructions for {profile.role} agents\n\n{team_role_text}\n\n---\n\n"
+    except Exception:
+        pass
+
+    full_prompt = preamble + protocol + team_role + prompt
 
     timeout = 600 if skill_name in ("investigate", "brainstorm", "repo-analysis") else 120
     from planet_maiko.agents.routing import resolve_model

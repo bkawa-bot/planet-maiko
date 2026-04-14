@@ -104,6 +104,19 @@ export default function Settings() {
     }));
   };
 
+  const updateRoleInstructions = (role, value) => {
+    setConfig((prev) => ({
+      ...prev,
+      agents: {
+        ...(prev.agents || {}),
+        role_instructions: {
+          ...(prev.agents?.role_instructions || {}),
+          [role]: value,
+        },
+      },
+    }));
+  };
+
   if (loading) return <p className="settings-loading">Loading settings...</p>;
   if (!config) return <p className="settings-loading">Failed to load settings.</p>;
 
@@ -370,17 +383,57 @@ export default function Settings() {
           <div className="collapsible-body">
             <div className="integration-section">
               <div className="setup-hint">
-                Custom instructions added to every agent's context. Use this for your workflow preferences,
-                coding standards, or anything you want all agents to follow.
+                <strong>Role instructions</strong> apply team-wide to every agent of a given role.
+                They get injected after the built-in role protocol and before each agent's own
+                personality, so you can say "every reviewer cares about accessibility" once instead
+                of editing every agent. Markdown is fine.
               </div>
               <div className="integration-fields">
                 <label>
-                  Custom Instructions
+                  Coder instructions
                   <textarea
-                    rows={5}
+                    rows={4}
+                    value={config.agents?.role_instructions?.coding || ""}
+                    onChange={(e) => updateRoleInstructions("coding", e.target.value)}
+                    placeholder={"e.g.\nAlways run tests before opening a PR.\nPrefer existing utilities in src/utils/ over adding new deps.\nNever commit TODO comments without an issue link."}
+                    style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}
+                  />
+                </label>
+                <label>
+                  Reviewer instructions
+                  <textarea
+                    rows={4}
+                    value={config.agents?.role_instructions?.review || ""}
+                    onChange={(e) => updateRoleInstructions("review", e.target.value)}
+                    placeholder={"e.g.\nAlways call out missing tests for new code paths.\nFlag any new dependency additions for discussion.\nCheck that error messages are user-facing-safe."}
+                    style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}
+                  />
+                </label>
+                <label>
+                  Investigator instructions
+                  <textarea
+                    rows={4}
+                    value={config.agents?.role_instructions?.investigation || ""}
+                    onChange={(e) => updateRoleInstructions("investigation", e.target.value)}
+                    placeholder={"e.g.\nCross-reference incidents with the on-call runbook.\nAlways propose a rollback path as the first mitigation.\nIf the stack trace crosses services, list each service involved."}
+                    style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}
+                  />
+                </label>
+              </div>
+
+              <div className="setup-hint" style={{ marginTop: 16 }}>
+                <strong>Legacy:</strong> the field below is the pre-roles global instruction string.
+                Still honored — appended to every coding agent's CLAUDE.md alongside the role-specific
+                block above. Safe to leave blank if you've moved to the per-role fields.
+              </div>
+              <div className="integration-fields">
+                <label>
+                  Global coding custom instructions (legacy)
+                  <textarea
+                    rows={3}
                     value={config.agents?.custom_instructions || ""}
                     onChange={(e) => updateField("agents", "custom_instructions", e.target.value)}
-                    placeholder="e.g. Always write tests first. Use conventional commits. Follow the error handling patterns in src/utils/errors.py."
+                    placeholder="e.g. Always write tests first. Use conventional commits."
                     style={{ fontFamily: "var(--font)", fontSize: 12 }}
                   />
                 </label>

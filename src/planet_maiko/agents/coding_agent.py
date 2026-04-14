@@ -120,10 +120,12 @@ def _write_claude_md(working_path, task_id, task_title, maiko_port=None):
         maiko_port = MAIKO_PORT
 
     custom_instructions = ""
+    role_instructions_coding = ""
     try:
         from planet_maiko.config import load_config
-        config = load_config()
-        custom_instructions = config.get("agents", {}).get("custom_instructions", "")
+        agents_cfg = load_config().get("agents", {}) or {}
+        custom_instructions = agents_cfg.get("custom_instructions", "") or ""
+        role_instructions_coding = (agents_cfg.get("role_instructions") or {}).get("coding", "") or ""
     except Exception:
         pass
 
@@ -154,6 +156,12 @@ def _write_claude_md(working_path, task_id, task_title, maiko_port=None):
         except Exception:
             content = f"# Agent Protocol\n\nTask: {task_title}\nTask ID: {task_id}\n\nRead TASK.md for instructions."
 
+    # Team-wide coding instructions from Settings > Agents. Separate
+    # from the legacy custom_instructions field (which we still honor
+    # for back-compat) so users who adopted role_instructions don't
+    # need to migrate anything.
+    if role_instructions_coding:
+        content += f"\n\n## Team instructions for coding agents\n\n{role_instructions_coding.strip()}\n"
     if custom_instructions:
         content += f"\n\n## Owner's Workflow Preferences\n\n{custom_instructions}\n"
 

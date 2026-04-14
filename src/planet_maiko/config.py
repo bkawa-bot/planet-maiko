@@ -47,8 +47,17 @@ DEFAULT_CONFIG = {
         "poll_interval_minutes": 120,
     },
     "agents": {
-        "custom_instructions": "",  # Added to every agent's CLAUDE.md (your workflow preferences)
+        "custom_instructions": "",  # Legacy: appended to every coding agent's CLAUDE.md (still honored)
         "branch_prefix": "maiko",   # Prefix for auto-generated branch names (e.g. maiko/fix-auth-bug)
+        # Team-wide instructions per agent role. Concatenated into the
+        # prompt for every agent of that role, after the built-in
+        # protocol and before the per-agent instructions. Empty by
+        # default — users customize via Settings > Agents.
+        "role_instructions": {
+            "coding": "",
+            "review": "",
+            "investigation": "",
+        },
     },
     "brain": {
         "runtime": "claude-code",  # or a custom runtime
