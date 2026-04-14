@@ -58,6 +58,13 @@ DEFAULT_CONFIG = {
             "review": "",
             "investigation": "",
         },
+        # When True, new review/investigation tasks auto-run in the brain
+        # cycle the moment they're routed to an agent. When False, they
+        # wait for a manual Launch click. Off by default because
+        # investigations can be token-heavy; users who want full
+        # autonomy can flip it on here. Per-task overrides via
+        # task.extra.auto_launch still win.
+        "auto_launch_one_shot": False,
     },
     "brain": {
         "runtime": "claude-code",  # or a custom runtime

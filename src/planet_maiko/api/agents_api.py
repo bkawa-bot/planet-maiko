@@ -91,10 +91,19 @@ def delete_skill(skill_id):
 
 @agents_bp.route("/agents/assign", methods=["POST"])
 def assign_agent():
-    """Assign an agent to a task — prepares worktree and links them."""
+    """Assign an agent to a task.
+
+    Coding agents: prepares a worktree + CLAUDE.md as before. Requires
+    repo_path.
+
+    Review / investigation agents: just links the task to the profile
+    and coerces the task type so the one-shot execution path picks
+    it up. No worktree, no prepare(), no repo_path needed.
+    """
     from planet_maiko.models.task import Task
     from planet_maiko.models.agent_profile import AgentProfile
     from planet_maiko.agents.coding_agent import prepare
+    from planet_maiko.agents.brain_session import ONE_SHOT_ROLE_FOR_TYPE
 
     data = request.get_json()
     task_id = data.get("task_id")
@@ -107,11 +116,34 @@ def assign_agent():
     if not task_id or not profile_id:
         return jsonify({"error": "task_id and profile_id are required"}), 400
 
-    if not repo_path:
-        return jsonify({"error": "repo_path is required. Select a repo in the assign modal."}), 400
-
     task = db.get_or_404(Task, task_id)
     profile = db.get_or_404(AgentProfile, profile_id)
+
+    # One-shot roles (review, investigation) take a different path:
+    # no worktree, just link + coerce type so the cycle / launch
+    # endpoint knows how to run them.
+    if profile.role in ("review", "investigation"):
+        task.assigned_agent_id = profile.id
+        if task.type not in ONE_SHOT_ROLE_FOR_TYPE:
+            coerced = {"review": "review", "investigation": "investigation"}[profile.role]
+            task.type = coerced
+        if task.status == "blocked":
+            # Don't change; blocked tasks unblock later via the cascade
+            pass
+        elif task.status == "done":
+            pass
+        else:
+            task.status = "new"  # ready for launch / auto-run
+        db.session.commit()
+        return jsonify({
+            "task": task.to_dict(),
+            "agent": profile.to_dict(),
+            "mode": profile.role,
+        }), 201
+
+    # Coding path below — unchanged.
+    if not repo_path:
+        return jsonify({"error": "repo_path is required. Select a repo in the assign modal."}), 400
 
     # Build rich prompt from task + source pupdate + project
     prompt_parts = [task.title]

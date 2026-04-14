@@ -11,13 +11,50 @@ profiles_bp = Blueprint("profiles", __name__)
 
 @profiles_bp.route("/profiles", methods=["GET"])
 def list_profiles():
-    """List agent profiles. ?archived=true to include archived."""
+    """List agent profiles with each one's 3 most-recent completed tasks.
+
+    Query params:
+        archived=true: include archived profiles in the response.
+    """
+    from planet_maiko.models.task import Task
+
     include_archived = request.args.get("archived", "false").lower() == "true"
     query = AgentProfile.query
     if not include_archived:
         query = query.filter((AgentProfile.archived == False) | (AgentProfile.archived == None))
     profiles = query.order_by(AgentProfile.tasks_completed.desc()).all()
-    return jsonify([p.to_dict() for p in profiles])
+    if not profiles:
+        return jsonify([])
+
+    # Bulk-fetch recent done tasks for every profile in one query,
+    # then bucket by agent in Python. Faster than querying per profile.
+    ids = [p.id for p in profiles]
+    recent_tasks = (
+        Task.query
+        .filter(Task.assigned_agent_id.in_(ids))
+        .filter(Task.status == "done")
+        .order_by(Task.updated_at.desc())
+        .limit(500)  # soft cap; 3 per profile from ~hundred still fits
+        .all()
+    )
+    by_agent = {}
+    for t in recent_tasks:
+        bucket = by_agent.setdefault(t.assigned_agent_id, [])
+        if len(bucket) < 3:
+            bucket.append({
+                "id": t.id,
+                "title": t.title,
+                "type": t.type,
+                "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+                "has_artifact": bool((t.extra or {}).get("artifact")),
+            })
+
+    out = []
+    for p in profiles:
+        d = p.to_dict()
+        d["recent_tasks"] = by_agent.get(p.id, [])
+        out.append(d)
+    return jsonify(out)
 
 
 @profiles_bp.route("/profiles/<profile_id>", methods=["GET"])

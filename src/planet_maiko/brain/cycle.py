@@ -425,137 +425,66 @@ def _phase_stuck_escalation():
 
 
 def _phase_execute_agent_tasks():
-    """Phase 8c: Run one-shot skill-based agents (review / investigation)
-    on their assigned tasks.
+    """Phase 8c: Auto-run one-shot review/investigation tasks whose
+    auto_launch flag is true.
+
+    Each task's actual execution lives in
+    agents.brain_session.execute_one_shot_task so the Launch endpoint
+    can reuse it. This phase only decides which tasks to execute and
+    in what order.
 
     Coding tasks are NOT handled here — those go through coding_agent's
-    worktree + session flow when the user (or an auto-start setting)
-    kicks them off. Only review-role and investigation-role agents whose
-    work is a single skill call get executed here.
+    worktree + session flow.
 
-    Limited to 2 per cycle to bound token spend. When a task completes,
-    the artifact is stored on task.extra, a result pupdate is created
-    for visibility in From Maiko, and the task is marked done.
+    Candidates must have:
+      - status == "new"
+      - assigned_agent_id set
+      - type in ONE_SHOT_ROLE_FOR_TYPE
+      - auto_launch resolved to True (either task.extra.auto_launch or
+        the global config.agents.auto_launch_one_shot default)
+
+    Limited to 2 per cycle to bound token spend.
     """
     from planet_maiko.models.task import Task
-    from planet_maiko.models.pupdate import Pupdate
-    from planet_maiko.models.agent_profile import AgentProfile
     from planet_maiko.database import db
-    import uuid
-    from datetime import datetime, timezone
-
-    ROLE_FOR_TYPE = {
-        "investigation": ("investigation", "investigate"),
-        "repo_analysis": ("investigation", "repo-analysis"),
-        "review": ("review", "pr-review"),
-        "pr_review": ("review", "pr-review"),
-    }
+    from planet_maiko.agents.brain_session import (
+        ONE_SHOT_ROLE_FOR_TYPE, execute_one_shot_task,
+    )
+    from planet_maiko.config import load_config
 
     try:
-        # Candidates: tasks in "new" status, assigned, with a type we
-        # can execute via a single skill call.
+        default_auto = bool(
+            (load_config().get("agents", {}) or {}).get("auto_launch_one_shot", False)
+        )
+
         candidates = Task.query.filter(
             Task.status == "new",
             Task.assigned_agent_id.isnot(None),
-            Task.type.in_(list(ROLE_FOR_TYPE.keys())),
-        ).limit(2).all()
+            Task.type.in_(list(ONE_SHOT_ROLE_FOR_TYPE.keys())),
+        ).all()
 
-        if not candidates:
+        # Filter by auto_launch — honor per-task override, fall back to
+        # the global default. Cap at 2 per cycle.
+        runnable = []
+        for t in candidates:
+            flag = (t.extra or {}).get("auto_launch")
+            auto = flag if isinstance(flag, bool) else default_auto
+            if auto:
+                runnable.append(t)
+            if len(runnable) >= 2:
+                break
+
+        if not runnable:
             return {"executed": 0}
 
-        from planet_maiko.agents.brain_session import run_skill_as_agent
-
         executed = 0
-        for task in candidates:
-            role, skill_name = ROLE_FOR_TYPE[task.type]
-            agent = db.session.get(AgentProfile, task.assigned_agent_id)
-            if not agent or agent.role != role:
-                # Router mis-assigned — skip, next cycle will re-route
-                continue
+        for task in runnable:
+            result = execute_one_shot_task(task)
+            if result.get("success"):
+                executed += 1
+            else:
+                logger.debug(f"[cycle] task {task.id}: {result.get('error')}")
 
-            task.status = "in_progress"
-            db.session.commit()
-
-            meta = task.extra or {}
-            context = {
-                "query": task.title,
-                "context": f"URL: {task.url or ''}\nRepo: {meta.get('repo', '')}",
-                "pupdates": "[]", "tasks": "[]", "calendar": "[]",
-            }
-
-            try:
-                result = run_skill_as_agent(
-                    agent.id, skill_name, context=context,
-                )
-            except Exception as e:
-                logger.warning(f"[cycle] Agent task {task.id} run failed: {e}")
-                task.status = "new"  # allow retry next cycle
-                task.extra = {**(task.extra or {}), "last_error": str(e)[:200]}
-                db.session.commit()
-                continue
-
-            if not result or not result.get("success") or not result.get("output"):
-                task.status = "new"
-                task.extra = {**(task.extra or {}), "last_error": (result or {}).get("error", "no output")[:200]}
-                db.session.commit()
-                continue
-
-            raw_output = result["output"]
-
-            # Parse any PATTERN: / PROPOSAL: / CONFIDENCE: blocks the
-            # agent embedded, emit the corresponding Signals + proposal
-            # pupdates, and use the cleaned text (blocks stripped) as
-            # the stored artifact. See agent_output.py for the format.
-            from planet_maiko.brain.learning.agent_output import parse_and_apply_blocks
-            parsed = parse_and_apply_blocks(
-                raw_output,
-                agent=agent,
-                task=task,
-                repo=(task.extra or {}).get("repo"),
-            )
-            output = parsed["cleaned_output"]
-
-            task.status = "done"
-            task.extra = {
-                **(task.extra or {}),
-                "artifact": output[:16000],
-                "completed_by": agent.id,
-                "completed_at": datetime.now(timezone.utc).isoformat(),
-                "patterns_emitted": parsed["patterns_emitted"],
-                "proposals_emitted": parsed["proposals_emitted"],
-                "confidence": parsed["confidence"],
-            }
-
-            # Publish a pupdate so the artifact surfaces in "From Maiko"
-            result_type = "pr_review_complete" if role == "review" else "investigation_complete"
-            action_hint = "Open review" if role == "review" else "Open investigation"
-            title_prefix = "Review ready" if role == "review" else "Investigation ready"
-
-            # Low-confidence investigations get bumped to high priority
-            # so the user sees them as "needs a human look".
-            pri = "high" if parsed["confidence"] == "low" else "normal"
-
-            result_pupdate = Pupdate(
-                id=f"{role}-result-{uuid.uuid4().hex[:8]}",
-                source="maiko",
-                type=result_type,
-                priority=pri,
-                title=f"{title_prefix}: {task.title}",
-                body=output[:8000],
-                url=task.url,
-                actionable=True,
-                action_hint=action_hint,
-                tags=[role, "maiko", agent.id] + (["low_confidence"] if parsed["confidence"] == "low" else []),
-            )
-            db.session.add(result_pupdate)
-
-            # Attribution — increment the agent's completed count.
-            agent.tasks_completed = (agent.tasks_completed or 0) + 1
-            agent.last_active_at = datetime.now(timezone.utc)
-
-            executed += 1
-
-        db.session.commit()
         return {"executed": executed}
     except Exception as e:
         logger.debug(f"[cycle] Execute agent tasks skipped: {e}")

@@ -156,6 +156,23 @@
   text-transform: none; letter-spacing: 0;
 }
 .scope-tag { background: var(--blue-soft); color: var(--blue); font-size: 9px; padding: 1px 6px; border-radius: 8px; }
+
+/* Recent completed tasks on the profile card */
+.strategy-recent { margin-top: 8px; }
+.strategy-recent-list {
+  list-style: none; padding: 0; margin: 4px 0 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.strategy-recent-item {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--text-dim);
+  overflow: hidden;
+}
+.strategy-recent-title {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%;
+}
+.strategy-recent-dot { color: var(--pink); flex-shrink: 0; }
 .adapter-tag { background: var(--pink-soft); color: var(--pink); font-size: 9px; padding: 1px 6px; border-radius: 8px; }
 
 /* Agent edit modal */

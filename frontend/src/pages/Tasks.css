@@ -96,6 +96,47 @@
 }
 .task-due-input:focus { border-color: var(--pink); outline: none; }
 
+.agent-thinking-chip {
+  background: var(--lavender-soft); color: var(--lavender); font-weight: 600;
+  display: inline-flex; align-items: center; gap: 3px;
+}
+.agent-done-chip {
+  background: var(--green-soft); color: var(--green); font-weight: 600;
+  display: inline-flex; align-items: center; gap: 3px;
+}
+
+/* Artifact viewer (review / investigation reports rendered inline) */
+.agent-artifact {
+  margin-top: 10px; padding: 8px 10px;
+  background: var(--bg); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+}
+.agent-artifact-toggle {
+  background: none; border: none; padding: 0;
+  color: var(--pink); font-size: 11px; font-weight: 600; cursor: pointer;
+  font-family: inherit;
+}
+.agent-artifact-toggle:hover { text-decoration: underline; }
+.agent-artifact-body {
+  margin-top: 8px;
+  font-size: 12px; line-height: 1.55; color: var(--text);
+}
+.agent-artifact-body h1, .agent-artifact-body h2,
+.agent-artifact-body h3, .agent-artifact-body h4 {
+  margin-top: 10px; margin-bottom: 4px;
+}
+.agent-artifact-body code {
+  background: var(--bg-card); padding: 1px 4px; border-radius: 3px;
+  font-family: var(--font-mono); font-size: 11px;
+}
+.agent-artifact-body pre {
+  background: var(--bg-card); padding: 8px 10px; border-radius: var(--radius-xs);
+  overflow-x: auto; margin: 6px 0;
+}
+.agent-artifact-body ul, .agent-artifact-body ol {
+  padding-left: 20px; margin: 4px 0;
+}
+
 .agent-assigned-chip {
   background: var(--blue-soft); color: var(--blue); font-weight: 600;
   display: inline-flex; align-items: center; gap: 3px;

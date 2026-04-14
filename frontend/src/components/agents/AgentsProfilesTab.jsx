@@ -190,6 +190,20 @@ export default function AgentsProfilesTab({
                       </span>
                     </div>
 
+                    {p.recent_tasks && p.recent_tasks.length > 0 && (
+                      <div className="strategy-recent">
+                        <div className="strategy-section-label"><CheckSquare size={10} /> Recent</div>
+                        <ul className="strategy-recent-list">
+                          {p.recent_tasks.map((rt) => (
+                            <li key={rt.id} className="strategy-recent-item" title={rt.title}>
+                              {rt.has_artifact && <span className="strategy-recent-dot">•</span>}
+                              <span className="strategy-recent-title">{rt.title}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
                     <div className="strategy-card-actions">
                       <button className="btn btn-sm" onClick={() => openEdit(p)}>
                         <Pencil size={10} /> Edit

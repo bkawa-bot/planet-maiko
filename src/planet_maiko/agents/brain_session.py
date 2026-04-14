@@ -252,6 +252,127 @@ def run_skill_as_agent(agent_profile_id, skill_name, context=None, working_dir=N
     return result
 
 
+# Task type → (required role, skill name). Shared by the cycle's
+# auto-execution phase and the manual /tasks/<id>/launch endpoint.
+ONE_SHOT_ROLE_FOR_TYPE = {
+    "investigation": ("investigation", "investigate"),
+    "repo_analysis": ("investigation", "repo-analysis"),
+    "review": ("review", "pr-review"),
+    "pr_review": ("review", "pr-review"),
+}
+
+
+def execute_one_shot_task(task):
+    """Run a single review/investigation/repo_analysis task as its
+    assigned agent, parse output blocks, publish a result pupdate, and
+    mark the task done. Shared by the cycle's auto-execution path and
+    the manual Launch endpoint.
+
+    Returns dict with:
+        success: bool
+        status: final task.status ("done" or "new" on retryable fail)
+        artifact: str (cleaned output), or None
+        patterns_emitted / proposals_emitted: ints
+        confidence: "low"|"medium"|"high"|None
+        error: str or None
+    """
+    import uuid as _uuid
+    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.models.pupdate import Pupdate
+    from planet_maiko.brain.learning.agent_output import parse_and_apply_blocks
+
+    mapping = ONE_SHOT_ROLE_FOR_TYPE.get(task.type)
+    if not mapping:
+        return {"success": False, "status": task.status,
+                "error": f"Task type '{task.type}' isn't a one-shot role"}
+    role, skill_name = mapping
+
+    if not task.assigned_agent_id:
+        return {"success": False, "status": task.status, "error": "No agent assigned"}
+    agent = db.session.get(AgentProfile, task.assigned_agent_id)
+    if not agent:
+        return {"success": False, "status": task.status, "error": "Assigned agent not found"}
+    if agent.role != role:
+        return {"success": False, "status": task.status,
+                "error": f"Agent role '{agent.role}' doesn't match task type '{task.type}'"}
+
+    task.status = "in_progress"
+    db.session.commit()
+
+    meta = task.extra or {}
+    context = {
+        "query": task.title,
+        "context": f"URL: {task.url or ''}\nRepo: {meta.get('repo', '')}",
+        "pupdates": "[]", "tasks": "[]", "calendar": "[]",
+    }
+
+    try:
+        result = run_skill_as_agent(agent.id, skill_name, context=context)
+    except Exception as e:
+        logger.warning(f"[execute] Task {task.id} run failed: {e}")
+        task.status = "new"
+        task.extra = {**(task.extra or {}), "last_error": str(e)[:200]}
+        db.session.commit()
+        return {"success": False, "status": "new", "error": str(e)[:200]}
+
+    if not result or not result.get("success") or not result.get("output"):
+        task.status = "new"
+        err = (result or {}).get("error", "no output")
+        task.extra = {**(task.extra or {}), "last_error": err[:200]}
+        db.session.commit()
+        return {"success": False, "status": "new", "error": err}
+
+    raw_output = result["output"]
+    parsed = parse_and_apply_blocks(
+        raw_output, agent=agent, task=task,
+        repo=(task.extra or {}).get("repo"),
+    )
+    output = parsed["cleaned_output"]
+
+    task.status = "done"
+    task.extra = {
+        **(task.extra or {}),
+        "artifact": output[:16000],
+        "completed_by": agent.id,
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "patterns_emitted": parsed["patterns_emitted"],
+        "proposals_emitted": parsed["proposals_emitted"],
+        "confidence": parsed["confidence"],
+    }
+
+    result_type = "pr_review_complete" if role == "review" else "investigation_complete"
+    action_hint = "Open review" if role == "review" else "Open investigation"
+    title_prefix = "Review ready" if role == "review" else "Investigation ready"
+    pri = "high" if parsed["confidence"] == "low" else "normal"
+
+    result_pupdate = Pupdate(
+        id=f"{role}-result-{_uuid.uuid4().hex[:8]}",
+        source="maiko",
+        type=result_type,
+        priority=pri,
+        title=f"{title_prefix}: {task.title}",
+        body=output[:8000],
+        url=task.url,
+        actionable=True,
+        action_hint=action_hint,
+        tags=[role, "maiko", agent.id] + (["low_confidence"] if parsed["confidence"] == "low" else []),
+    )
+    db.session.add(result_pupdate)
+
+    agent.tasks_completed = (agent.tasks_completed or 0) + 1
+    agent.last_active_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    return {
+        "success": True,
+        "status": "done",
+        "artifact": output,
+        "patterns_emitted": parsed["patterns_emitted"],
+        "proposals_emitted": parsed["proposals_emitted"],
+        "confidence": parsed["confidence"],
+    }
+
+
 def reorder_tasks_with_hint(tasks, instructions):
     """Ask the brain to reorder tasks given a free-text user instruction.
 

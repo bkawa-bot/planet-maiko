@@ -107,6 +107,83 @@ def cancel_task(task_id):
     return jsonify({"status": "deleted", "id": task_id})
 
 
+@tasks_bp.route("/tasks/<task_id>/launch", methods=["POST"])
+def launch_task(task_id):
+    """Start the assigned agent's work on this task NOW.
+
+    Dispatches by the assigned agent's role:
+      - coding: hands off to the existing prepare() flow (worktree +
+        CLAUDE.md + optional auto_kickoff). The client should still
+        call open-terminal afterward if the user wants a terminal.
+      - review / investigation / repo_analysis: runs the one-shot skill
+        inline and returns the artifact immediately. Equivalent to
+        the brain cycle picking it up, but synchronous and scoped to
+        this single task.
+
+    Returns a dict describing what happened + any artifact produced.
+    """
+    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.agents.brain_session import (
+        ONE_SHOT_ROLE_FOR_TYPE, execute_one_shot_task,
+    )
+
+    task = db.get_or_404(Task, task_id)
+    if not task.assigned_agent_id:
+        return jsonify({"error": "No agent assigned"}), 400
+
+    agent = db.session.get(AgentProfile, task.assigned_agent_id)
+    if not agent:
+        return jsonify({"error": "Assigned agent no longer exists"}), 404
+
+    if agent.role == "coding":
+        # Delegate to the coding-agent flow. The client opens a terminal
+        # after this returns (same contract as /agents/prepare today).
+        from planet_maiko.agents.coding_agent import prepare
+        from planet_maiko.config import load_config
+        branch_prefix = (load_config().get("agents", {}) or {}).get("branch_prefix", "maiko")
+        result = prepare(
+            task_id=task.id,
+            task_title=task.title,
+            repo=(task.extra or {}).get("repo"),
+            branch_prefix=branch_prefix,
+            auto_kickoff=True,
+            use_worktree=True,
+            agent_profile_id=agent.id,
+        )
+        return jsonify({"mode": "coding", "prepare_result": result}), 200
+
+    # Role is review / investigation → one-shot skill call. Coerce the
+    # task type if necessary so execute_one_shot_task accepts it.
+    if task.type not in ONE_SHOT_ROLE_FOR_TYPE:
+        coerced = {"review": "review", "investigation": "investigation"}.get(agent.role)
+        if coerced:
+            task.type = coerced
+            db.session.commit()
+
+    result = execute_one_shot_task(task)
+    status = 200 if result.get("success") else 502
+    return jsonify({"mode": agent.role, **result}), status
+
+
+@tasks_bp.route("/tasks/<task_id>/auto-launch", methods=["POST"])
+def set_auto_launch(task_id):
+    """Toggle (or explicitly set) task.extra.auto_launch.
+
+    Body: { enabled: bool }. When absent, flips whatever's there.
+    Per-task override of config.agents.auto_launch_one_shot.
+    """
+    task = db.get_or_404(Task, task_id)
+    data = request.get_json(silent=True) or {}
+    extra = dict(task.extra or {})
+    if "enabled" in data:
+        extra["auto_launch"] = bool(data["enabled"])
+    else:
+        extra["auto_launch"] = not bool(extra.get("auto_launch", False))
+    task.extra = extra
+    db.session.commit()
+    return jsonify({"auto_launch": extra["auto_launch"], "task_id": task_id})
+
+
 @tasks_bp.route("/tasks/<task_id>/reassign", methods=["POST"])
 def reassign_task(task_id):
     """Reassign a task to a different agent.
@@ -128,6 +205,7 @@ def reassign_task(task_id):
         if not profile:
             return jsonify({"error": "agent not found"}), 404
         task.assigned_agent_id = profile.id
+        _coerce_task_type_for_role(task, profile.role)
     else:
         # Auto-pick: force a new agent of the same role. Archive the
         # current so the router's simple find-match lookup skips it,
@@ -144,6 +222,7 @@ def reassign_task(task_id):
         if new_profile.id == current:
             return jsonify({"error": "no alternative agent available"}), 409
         task.assigned_agent_id = new_profile.id
+        _coerce_task_type_for_role(task, new_profile.role)
 
     # Reset status so the new agent picks it up next cycle.
     if task.status == "in_progress":
@@ -151,6 +230,22 @@ def reassign_task(task_id):
     task.updated_at = datetime.now(timezone.utc)
     db.session.commit()
     return jsonify(task.to_dict())
+
+
+def _coerce_task_type_for_role(task, role):
+    """If assigning a review/investigation agent to a task whose type
+    doesn't match one of the one-shot executable types, upgrade the
+    type so the cycle's one-shot phase actually picks it up.
+
+    Silent-fixes the common footgun: "I assigned an investigator to a
+    todo-type task and nothing happened."
+    """
+    from planet_maiko.agents.brain_session import ONE_SHOT_ROLE_FOR_TYPE
+    if task.type in ONE_SHOT_ROLE_FOR_TYPE:
+        return
+    coerced = {"review": "review", "investigation": "investigation"}.get(role)
+    if coerced:
+        task.type = coerced
 
 
 @tasks_bp.route("/tasks/<task_id>/linear", methods=["POST"])
