@@ -178,3 +178,77 @@ def test_pack_insights_get_state(client):
     assert resp.status_code == 200
     data = resp.get_json()
     assert "status" in data
+
+
+# ---------------------------------------------------------------------------
+# Diff review API — comment CRUD + request-changes composition
+# ---------------------------------------------------------------------------
+
+
+def _make_task(client, task_id="task-diff-1", title="Fix the widget"):
+    resp = client.post("/api/tasks", json={
+        "id": task_id,
+        "title": title,
+        "type": "todo",
+    })
+    assert resp.status_code == 201
+    return resp.get_json()
+
+
+def test_diff_comment_create_and_list(client):
+    _make_task(client, "task-diff-list")
+    resp = client.post("/api/tasks/task-diff-list/comments", json={
+        "file_path": "src/widget.py",
+        "line_number": 42,
+        "side": "new",
+        "body": "Should this handle the None case?",
+    })
+    assert resp.status_code == 201
+    c = resp.get_json()
+    assert c["author"] == "user"
+    assert c["status"] == "draft"
+    assert c["line_number"] == 42
+
+    listing = client.get("/api/tasks/task-diff-list/comments")
+    assert listing.status_code == 200
+    body = listing.get_json()
+    assert len(body) == 1
+    assert body[0]["body"] == "Should this handle the None case?"
+
+
+def test_diff_comment_delete_only_drafts(client):
+    _make_task(client, "task-diff-del")
+    created = client.post("/api/tasks/task-diff-del/comments", json={
+        "file_path": "a.py", "line_number": 1, "body": "draft",
+    }).get_json()
+    # Submitted comments can't be deleted
+    client.patch(f"/api/comments/{created['id']}", json={"status": "submitted"})
+    resp = client.delete(f"/api/comments/{created['id']}")
+    assert resp.status_code == 400
+
+    # New draft can be deleted
+    draft = client.post("/api/tasks/task-diff-del/comments", json={
+        "file_path": "b.py", "line_number": 2, "body": "draft",
+    }).get_json()
+    resp = client.delete(f"/api/comments/{draft['id']}")
+    assert resp.status_code == 200
+
+
+def test_agent_authored_comment(client):
+    _make_task(client, "task-diff-agent")
+    resp = client.post("/api/tasks/task-diff-agent/comments/agent", json={
+        "file_path": "src/thing.py",
+        "line_number": 7,
+        "body": "This branch is load-bearing — please double-check the ordering.",
+    })
+    assert resp.status_code == 201
+    c = resp.get_json()
+    assert c["author"] == "agent"
+    assert c["status"] == "submitted"
+
+
+def test_request_changes_requires_drafts(client):
+    _make_task(client, "task-diff-req")
+    # No drafts yet
+    resp = client.post("/api/tasks/task-diff-req/review/request-changes")
+    assert resp.status_code == 400
