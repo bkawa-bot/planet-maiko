@@ -362,9 +362,7 @@ def cluster_signals_into_learnings():
     Returns a dict with counts (matches the shape process_signals used
     to return so callers don't need to change).
     """
-    from planet_maiko.brain.learning.processor import (
-        _is_junk_signal, _apply_positive_signal,
-    )
+    from planet_maiko.brain.learning.processor import _apply_positive_signal
 
     unprocessed = Signal.query.filter_by(aggregated=False).all()
     if not unprocessed:
@@ -375,17 +373,14 @@ def cluster_signals_into_learnings():
         "new_learnings": 0,
         "updated_learnings": 0,
         "graduated": 0,
-        "skipped_junk": 0,
         "deferred": 0,
     }
 
-    # Junk filter + group by category
+    # Group by category. Junk is filtered upstream — synthesis marks
+    # non-actionable signals and deletes them, so by the time we get
+    # here everything is rule-shaped.
     by_category = {}
     for s in unprocessed:
-        if _is_junk_signal(s.text):
-            s.aggregated = True
-            counts["skipped_junk"] += 1
-            continue
         by_category.setdefault(s.category or "pattern", []).append(s)
 
     # Unclassified "pattern" signals stay in the queue — wait for the

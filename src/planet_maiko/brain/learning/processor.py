@@ -7,8 +7,10 @@ signal_count is just metadata (how many confirming signals), used by
 the UI to sort/highlight rules with more evidence.
 
 The main aggregation path now lives in clustering.cluster_signals_into_learnings.
-The helpers below (_is_junk_signal, _apply_positive_signal) are still
-used by that module.
+The helpers below (_apply_positive_signal, etc.) are still used by
+that module. Junk filtering is handled upstream — the LLM synthesis
+step flags non-actionable signals and we delete them before they ever
+reach aggregation.
 """
 
 import logging
@@ -25,25 +27,6 @@ logger = logging.getLogger(__name__)
 # "how strongly does the evidence back this rule" score the UI shows
 # — it doesn't gate graduation.
 CONFIDENCE_PER_SIGNAL = 0.1
-
-
-JUNK_PATTERNS = [
-    "<!-- sidekick",
-    "<!-- model",
-    "<sub>",
-    "review complete. no comments",
-    "no actionable rule",
-    "mission approval",
-    "feedback? react with",
-    "have feedback for sidekick",
-    "react to this review",
-]
-
-
-def _is_junk_signal(text):
-    """Return True if the signal text is bot boilerplate or HTML noise."""
-    lower = text.strip().lower()
-    return any(p in lower for p in JUNK_PATTERNS)
 
 
 def _make_aggregation_key(signal):
@@ -120,7 +103,7 @@ def process_signals():
 
     Returns:
         dict with counts: {processed, new_learnings, updated_learnings,
-        graduated, skipped_junk}
+        graduated}
     """
     unprocessed = Signal.query.filter_by(aggregated=False).all()
     if not unprocessed:
@@ -128,14 +111,9 @@ def process_signals():
 
     logger.info(f"[learning] Processing {len(unprocessed)} signal(s)...")
     counts = {"processed": 0, "new_learnings": 0, "updated_learnings": 0,
-              "graduated": 0, "skipped_junk": 0}
+              "graduated": 0}
 
     for signal in unprocessed:
-        if _is_junk_signal(signal.text):
-            signal.aggregated = True
-            counts["skipped_junk"] += 1
-            continue
-
         agg_key = _make_aggregation_key(signal)
         learning = Learning.query.filter_by(aggregation_key=agg_key).first()
 
@@ -150,10 +128,6 @@ def process_signals():
         counts["processed"] += 1
 
     db.session.commit()
-
-    # Export coding guidelines if any learnings graduated
-    if counts["graduated"] > 0:
-        export_coding_guidelines()
 
     logger.info(f"[learning] Done: {counts}")
     return counts
