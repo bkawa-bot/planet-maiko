@@ -52,9 +52,12 @@ const mcp = new Server(
       tools: {},
     },
     instructions: [
-      `You have two tools for talking to Planet Maiko:`,
-      `- reply: send a message back to Maiko / the user`,
+      `You have three tools for talking to Planet Maiko:`,
+      `- reply: send a message back to Maiko / the user (status, done,`,
+      `  stuck, ready_for_review, message)`,
       `- check_inbox: pull any pending messages from Maiko / the user`,
+      `- leave_comment: pin an inline comment to a specific diff line`,
+      `  for the user to see while reviewing your changes`,
       ``,
       `The user can send you messages from the Channel Log at any time.`,
       `Those messages accumulate in your inbox until you read them.`,
@@ -62,8 +65,13 @@ const mcp = new Server(
       `check_inbox to see what's new, then reply to what you find.`,
       ``,
       `Guidelines:`,
-      `- If a reply tells you the task is done, use reply with message_type="done"`,
-      `- If you're stuck, use reply with message_type="stuck"`,
+      `- Coding agents: after your first meaningful commit, call reply`,
+      `  with message_type="ready_for_review" summarizing what you did.`,
+      `  Then loop: check_inbox every ~30s; on a message_type="review"`,
+      `  message, iterate on the comments, commit, and reply ready again.`,
+      `- Use leave_comment sparingly (~5 max per review round) on`,
+      `  uncertain or load-bearing lines you want human eyes on.`,
+      `- If you're stuck, use reply with message_type="stuck".`,
       `- Check your inbox whenever you're about to end a response or`,
       `  wait for input — there may be a message queued.`,
       `Your task ID is: ${TASK_ID}`,
@@ -115,6 +123,29 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
       },
     },
+    {
+      name: "leave_comment",
+      description:
+        "Pin an inline comment to a specific diff line for the user to " +
+        "see while reviewing your changes. Use this sparingly on lines " +
+        "that are uncertain, load-bearing, or deserve a second pair of " +
+        "eyes. Comments appear in the Review Diff page alongside the " +
+        "user's own comments but styled distinctly.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          file_path:   { type: "string", description: "Path from the repo root (same as in the diff)" },
+          line_number: { type: "integer", description: "Line number in the file" },
+          side:        {
+            type: "string",
+            enum: ["old", "new"],
+            description: "Which side of the diff. \"new\" for added / modified code (default), \"old\" for removed lines.",
+          },
+          body:        { type: "string", description: "The comment body (markdown supported)" },
+        },
+        required: ["file_path", "line_number", "body"],
+      },
+    },
   ],
 }));
 
@@ -150,6 +181,24 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       return {
         content: [{ type: "text", text: `Error: ${err.message}` }],
       };
+    }
+  }
+
+  if (req.params.name === "leave_comment") {
+    const { file_path, line_number, side = "new", body } = req.params.arguments;
+    try {
+      const resp = await fetch(`${API_URL}/tasks/${TASK_ID}/comments/agent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_path, line_number, side, body }),
+      });
+      if (!resp.ok) {
+        const err = await resp.text();
+        return { content: [{ type: "text", text: `Failed to leave comment: ${err}` }] };
+      }
+      return { content: [{ type: "text", text: `Comment pinned to ${file_path}:${line_number}` }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
     }
   }
 
