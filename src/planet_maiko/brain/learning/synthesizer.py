@@ -72,14 +72,34 @@ def synthesize_unsynthesized_signals(max_signals=None, batch_size=BATCH_SIZE,
             f"id={s.id} [{s.repo or 'unknown'}] {s.text[:300]}"
             for s in batch
         ]
-        prompt = f"""Synthesize these PR review comments into clean, actionable coding rules.
+        prompt = f"""Synthesize these PR review comments into clean, actionable coding rules for an autonomous coding agent.
 
-For each comment, decide whether it expresses a generalizable coding rule
-a reviewer would want to reuse — "always prefer X over Y", "don't do Z
-in this context". If it does, extract the core lesson as a short one-
-sentence rule and classify it. If it doesn't — e.g. greetings, praise,
-questions, bot comments, personal opinions, PR-specific logistics — set
-actionable: false and we'll drop that signal from the pool.
+The agent can read code, write code, run tests, and check patterns. It
+CANNOT talk to teammates, consult product managers, weigh business
+trade-offs, or make judgment calls that require human context.
+
+For each comment, decide:
+
+Mark actionable: true ONLY if the rule is something the agent can
+verify or apply by reading or writing code on its own. Good examples:
+  - "Always validate input lengths at API boundaries"
+  - "Prefer connection pooling over new connections in batch jobs"
+  - "Don't swallow exceptions without logging them"
+If actionable, extract the core lesson as a short one-sentence rule
+and classify it.
+
+Mark actionable: false for anything requiring human judgment, team
+coordination, or external decision-making. Examples to drop:
+  - "Confirm with the platform team before changing this"
+  - "Verify the product use case is worth this complexity"
+  - "Check with @alice whether we need this feature"
+  - "Make sure leadership signed off on the migration"
+  - Greetings, praise, questions, bot comments, PR-specific logistics
+  - Rules referencing specific people, tickets, or ongoing discussions
+
+Rule of thumb: if the rule has words like "confirm with", "check with",
+"verify with the team", "consult", "get approval", "make sure X agrees",
+it's NOT actionable for a coding agent — mark it false.
 
 Echo back every id exactly as given. Include one entry per input.
 
@@ -95,7 +115,7 @@ Respond as JSON:
     "rule": "Always validate input lengths at API boundaries",
     "category": "security"}},
   {{"id": 1235, "actionable": false,
-    "reason": "Praise without a pattern"}},
+    "reason": "Requires confirming with the platform team"}},
   ...
 ]}}"""
 
