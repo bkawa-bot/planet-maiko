@@ -44,13 +44,63 @@ class ClaudeCodeRuntime(AgentRuntime):
         return self._find_claude() is not None
 
     def _get_allowed_tools(self):
-        """Load allowed tools from config."""
+        """Load allowed tools: config.brain.allowed_tools plus every MCP
+        server that's globally registered with Claude Code.
+
+        Users who've already configured Linear / Slack / Sentry / etc.
+        in their Claude Code settings shouldn't have to re-list them in
+        brain.allowed_tools — one-shot skill calls just get everything
+        their interactive Claude Code sessions already have.
+        """
         try:
             from planet_maiko.config import load_config
-            config = load_config()
-            return config.get("brain", {}).get("allowed_tools", [])
+            base = list(load_config().get("brain", {}).get("allowed_tools", []))
         except Exception:
-            return []
+            base = []
+        for mcp_tool in self._discover_global_mcps():
+            if mcp_tool not in base:
+                base.append(mcp_tool)
+        return base
+
+    def _discover_global_mcps(self):
+        """Return [mcp__<server>, ...] for every MCP registered with
+        Claude Code — both globally and across all known projects.
+        Best-effort: returns [] if no settings file is readable.
+
+        Claude Code stores MCPs in two places in ~/.claude.json:
+            - top-level `mcpServers` (globally available)
+            - `projects[<path>].mcpServers` (project-specific)
+        We union both so a user who configured Linear once in a
+        project doesn't have to re-add it globally for skill runs.
+        """
+        import os
+        import json as _json
+        names = set()
+        candidates = [
+            os.path.expanduser("~/.claude.json"),
+            os.path.expanduser("~/.claude/settings.json"),
+            os.path.expanduser("~/.config/claude/settings.json"),
+        ]
+        for path in candidates:
+            try:
+                if not os.path.isfile(path):
+                    continue
+                with open(path, encoding="utf-8") as f:
+                    data = _json.load(f)
+                global_servers = data.get("mcpServers") or {}
+                if isinstance(global_servers, dict):
+                    names.update(global_servers.keys())
+                projects = data.get("projects") or {}
+                if isinstance(projects, dict):
+                    for proj in projects.values():
+                        if not isinstance(proj, dict):
+                            continue
+                        proj_servers = proj.get("mcpServers") or {}
+                        if isinstance(proj_servers, dict):
+                            names.update(proj_servers.keys())
+            except Exception:
+                continue
+        return [f"mcp__{name}" for name in sorted(names)]
 
     def _get_thinking_budget(self):
         """Load thinking budget from config."""
@@ -60,7 +110,7 @@ class ClaudeCodeRuntime(AgentRuntime):
         except Exception:
             return "medium"
 
-    def send(self, prompt, working_dir=None, timeout=300, model=None):
+    def send(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None):
         """Send a prompt to claude CLI in print mode.
 
         Uses --print for single prompt/response (no interactive session).
@@ -78,9 +128,12 @@ class ClaudeCodeRuntime(AgentRuntime):
         if budget in ("low", "medium", "high", "max"):
             cmd.extend(["--effort", budget])
 
-        # Pre-approve tools to avoid permission prompts
-        allowed = self._get_allowed_tools()
-        for tool in allowed:
+        # Pre-approve tools to avoid permission prompts. Per-call
+        # allowed_tools overrides the config default; this is how
+        # per-skill MCP wiring grants specific MCPs for a given run.
+        if allowed_tools is None:
+            allowed_tools = self._get_allowed_tools()
+        for tool in allowed_tools:
             cmd.extend(["--allowedTools", tool])
 
         cmd.append(prompt)

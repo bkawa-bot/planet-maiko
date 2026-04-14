@@ -27,7 +27,7 @@ class AgentRuntime(ABC):
         ...
 
     @abstractmethod
-    def send(self, prompt, working_dir=None, timeout=300, model=None):
+    def send(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None):
         """Send a prompt to the agent and get a response.
 
         Args:
@@ -35,6 +35,12 @@ class AgentRuntime(ABC):
             working_dir: Directory the agent should work in (optional)
             timeout: Max seconds to wait for a response
             model: Model tier override (e.g. "haiku", "sonnet", "opus")
+            allowed_tools: Optional list of tool identifiers to pre-
+                authorize for this call. When None, the runtime falls
+                back to its configured default (e.g.
+                config.brain.allowed_tools). When provided, overrides —
+                typically this is the base allowlist merged with any
+                per-skill MCPs declared on the skill definition.
 
         Returns:
             dict with:
