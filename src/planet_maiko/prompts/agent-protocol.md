@@ -29,7 +29,7 @@ All communication goes through the `maiko` CLI (connects to http://localhost:{ma
 | `maiko task done` | When the task is complete and tests pass |
 | `maiko task stuck -m "description"` | When you're blocked and need help |
 
-**You do NOT need to poll for messages.** The maiko-channel MCP server delivers messages to you automatically as notifications. Just respond when you receive one.
+**Pull messages with the `check_inbox` MCP tool** from the maiko-channel. Call it whenever you finish a step, before you end a response, or whenever you suspect the user has replied — messages accumulate in the inbox until you read them, and retrieval marks them read so repeat calls are cheap.
 
 ### Status Update Convention
 
@@ -107,7 +107,7 @@ This records a corrective VIOLATION training pair. **If you notice something the
 
 ## 3. Messages
 
-Messages from Maiko arrive automatically via the channel — you'll see them as notifications. No need to poll. Maiko may send:
+Call the `check_inbox` MCP tool (maiko-channel) to pull pending messages. Maiko may send:
 - Updated context or changed requirements
 - Answers to questions you asked
 - A nudge if you haven't reported in a while
@@ -140,7 +140,7 @@ Send one feedback per distinct code pattern (not per file — if the same patter
 
 - Stay focused on the task in TASK.md
 - Commit frequently with clear, descriptive messages
-- Watch for channel notifications — Maiko may send new context
+- Check your inbox (`check_inbox` MCP tool) between steps — Maiko may send new context
 - Match existing patterns in the files you're modifying
 - If stuck for more than a few minutes, report it — don't spin
 - When done, verify tests pass before reporting completion

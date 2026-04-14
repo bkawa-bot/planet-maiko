@@ -52,14 +52,20 @@ const mcp = new Server(
       tools: {},
     },
     instructions: [
-      `Messages from Planet Maiko arrive as <channel source="maiko-channel" ...>.`,
-      `These are messages from Maiko (the orchestrator) or the user.`,
-      `When you receive a channel message:`,
-      `- If it's a question, respond using the reply tool`,
-      `- If it's a nudge/heartbeat, report your current status using the reply tool`,
-      `- If it's a new instruction, follow it`,
-      `- If it's a sleep signal, stop work and wait`,
-      `You can also proactively report status using the reply tool at any time.`,
+      `You have two tools for talking to Planet Maiko:`,
+      `- reply: send a message back to Maiko / the user`,
+      `- check_inbox: pull any pending messages from Maiko / the user`,
+      ``,
+      `The user can send you messages from the Channel Log at any time.`,
+      `Those messages accumulate in your inbox until you read them.`,
+      `When the user asks a follow-up question or sends a nudge, call`,
+      `check_inbox to see what's new, then reply to what you find.`,
+      ``,
+      `Guidelines:`,
+      `- If a reply tells you the task is done, use reply with message_type="done"`,
+      `- If you're stuck, use reply with message_type="stuck"`,
+      `- Check your inbox whenever you're about to end a response or`,
+      `  wait for input — there may be a message queued.`,
       `Your task ID is: ${TASK_ID}`,
     ].join("\n"),
   }
@@ -88,6 +94,25 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
         },
         required: ["content"],
+      },
+    },
+    {
+      name: "check_inbox",
+      description:
+        "Pull any pending messages the user or Maiko has sent to you. " +
+        "Returns an array of { sender, content, message_type } objects. " +
+        "Messages are marked read on retrieval — call this before ending " +
+        "a response or whenever you suspect the user has replied.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          unread_only: {
+            type: "boolean",
+            description:
+              "If true (default), only return unread messages and mark them read. " +
+              "Set false to see the full thread history without side effects.",
+          },
+        },
       },
     },
   ],
@@ -121,6 +146,41 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       }
 
       return { content: [{ type: "text", text: "sent" }] };
+    } catch (err) {
+      return {
+        content: [{ type: "text", text: `Error: ${err.message}` }],
+      };
+    }
+  }
+
+  if (req.params.name === "check_inbox") {
+    const unreadOnly = req.params.arguments?.unread_only !== false;
+    const url = `${API_URL}/agents/${TASK_ID}/inbox?unread_only=${unreadOnly}&mark_read=${unreadOnly}`;
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        const err = await resp.text();
+        return {
+          content: [{ type: "text", text: `Failed to read inbox: ${err}` }],
+        };
+      }
+      const messages = await resp.json();
+      if (!messages.length) {
+        return {
+          content: [{ type: "text", text: "No messages. Inbox is empty." }],
+        };
+      }
+      // Return as structured text the agent can reason over directly.
+      const formatted = messages
+        .map((m) => {
+          const who = m.sender || "user";
+          const mt = m.message_type || "message";
+          return `[${who} · ${mt}] ${m.content}`;
+        })
+        .join("\n\n");
+      return {
+        content: [{ type: "text", text: formatted }],
+      };
     } catch (err) {
       return {
         content: [{ type: "text", text: `Error: ${err.message}` }],
