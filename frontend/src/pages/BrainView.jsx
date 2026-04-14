@@ -75,7 +75,7 @@ export default function BrainView() {
             const summary = perRepo
               .map((x) => x.error
                 ? `${x.repo}: error (${x.error.slice(0, 40)})`
-                : `${x.repo}: ${x.signals_created}/${x.prs_scanned} PRs`)
+                : `${x.repo}: ${x.signals_created} signals from ${x.comments_scanned} comments`)
               .join("\n");
             if (r.signals_created === 0 && errored.length === 0) {
               showToast("No new PR comments found.\n" + summary, "normal");
@@ -342,7 +342,7 @@ export default function BrainView() {
             </div>
             <div className="modal-body">
               <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>
-                Scans recent merged PRs for review comments. Each comment becomes a raw signal that gets classified and aggregated into learnings.
+                Scans every inline (per-file) PR review comment in the selected repo(s). Each becomes a raw signal — paired with the diff hunk around the comment — that feeds classification, aggregation, and LoRA training. Summary "LGTM" bodies and conversation comments are skipped on purpose.
               </p>
               <div className="form-row">
                 <label>
@@ -360,14 +360,14 @@ export default function BrainView() {
               </div>
               <div className="form-row">
                 <label>
-                  PRs to scan {backfillRepo ? "" : "per repo"}
+                  Max comments {backfillRepo ? "" : "per repo"} (optional cap)
                   <input
                     type="text"
                     inputMode="numeric"
                     pattern="[0-9]*"
                     value={backfillLimit}
                     onChange={(e) => setBackfillLimit(e.target.value.replace(/[^0-9]/g, ""))}
-                    placeholder="20"
+                    placeholder="leave blank for all"
                     autoFocus
                   />
                 </label>
@@ -380,7 +380,7 @@ export default function BrainView() {
                   disabled={backfilling}
                   onClick={() => setConfirmingBackfill(true)}
                 >
-                  {backfilling ? <><Loader size={12} className="spin" /> Scanning...</> : <><Download size={12} /> Scan {backfillLimit || 20} PRs{backfillRepo ? ` in ${backfillRepo.split("/").pop()}` : ""}</>}
+                  {backfilling ? <><Loader size={12} className="spin" /> Scanning...</> : <><Download size={12} /> Scan{backfillLimit ? ` up to ${backfillLimit} comments` : " all comments"}{backfillRepo ? ` in ${backfillRepo.split("/").pop()}` : ""}</>}
                 </button>
               </div>
             </div>
@@ -393,12 +393,12 @@ export default function BrainView() {
         title="Backfill is resource-intensive"
         body={<>
           <p>
-            This scans merged PRs in {backfillRepo ? <code>{backfillRepo}</code> : "every configured repo"} via the <code>gh</code> CLI,
-            then runs an LLM synthesis pass to turn review comments into clean rules.
+            This scrapes every inline PR review comment in {backfillRepo ? <code>{backfillRepo}</code> : "every configured repo"} via the <code>gh</code> CLI,
+            then runs an LLM synthesis pass to turn the comments into clean rules.
           </p>
           <p>Typically a few minutes of wall time and a handful of LLM calls. You can keep working — it runs in the background.</p>
           <span className="confirm-estimate">
-            ~{backfillLimit || 20} PRs{backfillRepo ? "" : " × each configured repo"} · ≤20 LLM calls for synthesis
+            {backfillLimit ? `≤ ${backfillLimit} comments` : "all comments"}{backfillRepo ? "" : " × each configured repo"} · ≤20 LLM calls for synthesis
           </span>
         </>}
         confirmText="Start backfill"
@@ -406,7 +406,9 @@ export default function BrainView() {
         onCancel={() => setConfirmingBackfill(false)}
         onConfirm={async () => {
           setStartingBackfill(true);
-          const limit = Math.min(500, Math.max(1, parseInt(backfillLimit, 10) || 20));
+          // blank = no cap; any other input gets clamped to a sane range.
+          const trimmed = backfillLimit.trim();
+          const limit = trimmed ? Math.max(1, parseInt(trimmed, 10)) : null;
           try {
             await api.backfillKnowledge(limit, backfillRepo || null);
             setConfirmingBackfill(false);

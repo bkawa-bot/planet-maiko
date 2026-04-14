@@ -31,10 +31,9 @@ export default function BackfillProgress({ progress }) {
   if (!progress) return null;
   const {
     phase = "idle",
-    stage,
     current_repo,
-    prs_done = 0,
-    prs_in_repo = 0,
+    comments_done = 0,
+    comments_total = 0,
     signals_created = 0,
     repos_done = 0,
     repos_total = 0,
@@ -44,13 +43,14 @@ export default function BackfillProgress({ progress }) {
   const Icon = PHASE_ICON[phase] || Loader;
   const isActive = phase !== "done" && phase !== "error";
 
-  // Visual bar: inside "fetching" we have per-PR granularity; outside
-  // of it we only know the phase transition so the bar pulses.
+  // Visual bar: inside "fetching" we have per-comment granularity once
+  // the batch endpoint has told us the total; outside of that the bar
+  // pulses indeterminately.
   let percent = null;
-  if (phase === "fetching" && prs_in_repo > 0) {
-    const reposDenominator = Math.max(repos_total, 1);
-    const fetchedRatio = (repos_done + (prs_done / prs_in_repo)) / reposDenominator;
-    percent = Math.min(100, Math.round(fetchedRatio * 100));
+  if (phase === "fetching" && comments_total > 0) {
+    const reposDenom = Math.max(repos_total, 1);
+    const ratio = (repos_done + (comments_done / comments_total)) / reposDenom;
+    percent = Math.min(100, Math.round(ratio * 100));
   }
 
   return (
@@ -69,11 +69,9 @@ export default function BackfillProgress({ progress }) {
 
       {phase === "fetching" && current_repo && (
         <div className="backfill-progress-detail">
-          {stage === "listing" && <>Listing merged PRs in <code>{current_repo}</code>...</>}
-          {stage === "inline" && <>Fetching inline review comments for <code>{current_repo}</code>...</>}
-          {(stage === "processing" || !stage) && (
-            <>Scanning <code>{current_repo}</code>{prs_in_repo > 0 && <> — {prs_done}/{prs_in_repo} PRs</>}</>
-          )}
+          {comments_total > 0
+            ? <>Scanning <code>{current_repo}</code> — {comments_done}/{comments_total} inline comments</>
+            : <>Fetching inline comments for <code>{current_repo}</code>...</>}
         </div>
       )}
       {phase === "synthesizing" && (
@@ -106,10 +104,10 @@ export default function BackfillProgress({ progress }) {
         <span><strong>{signals_created}</strong> signals</span>
         <span>·</span>
         <span><strong>{repos_done}</strong>/{repos_total} repos complete</span>
-        {phase === "fetching" && prs_in_repo > 0 && (
+        {phase === "fetching" && comments_total > 0 && (
           <>
             <span>·</span>
-            <span><strong>{prs_done}</strong>/{prs_in_repo} PRs in {current_repo?.split("/").pop()}</span>
+            <span><strong>{comments_done}</strong>/{comments_total} comments in {current_repo?.split("/").pop()}</span>
           </>
         )}
       </div>

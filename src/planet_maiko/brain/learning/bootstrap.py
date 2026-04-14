@@ -21,11 +21,15 @@ def _fetch_inline_review_comments(repo, timeout=120):
 
     Uses the repo-level REST endpoint (/repos/{owner}/{repo}/pulls/comments)
     which returns all inline review comments across all PRs, paginated.
-    That's one gh api call per repo regardless of PR count — the per-PR
-    alternative would take ~309 calls for a busy repo.
+    That's one gh api --paginate call per repo regardless of PR count.
 
-    Returns a dict mapping PR number → list of comment-like dicts with
-    body, author, path, line. Best-effort: on failure returns {}.
+    Review summary bodies ("LGTM", "Just one small nit") and PR
+    conversation comments are intentionally skipped — they're mostly
+    praise / clarifying questions and don't pair with code for training.
+    Only inline comments carry the diff_hunk that makes signals useful.
+
+    Returns a flat list of comment-like dicts with body, author, path,
+    line, diff_hunk, pr_number. Best-effort: on failure returns [].
     """
     try:
         result = subprocess.run(
@@ -35,10 +39,10 @@ def _fetch_inline_review_comments(repo, timeout=120):
         )
         if result.returncode != 0:
             logger.warning(f"[bootstrap] Inline comments fetch failed for {repo}: {result.stderr.strip()[:160]}")
-            return {}
+            return []
         raw = result.stdout.strip()
         if not raw:
-            return {}
+            return []
         # gh api --paginate on array endpoints returns a single merged
         # JSON array. For safety fall back to line-by-line parsing if
         # that assumption changes upstream.
@@ -60,36 +64,35 @@ def _fetch_inline_review_comments(repo, timeout=120):
                     continue
     except subprocess.TimeoutExpired:
         logger.warning(f"[bootstrap] Inline comments timeout for {repo}")
-        return {}
+        return []
     except Exception as e:
         logger.warning(f"[bootstrap] Inline comments error for {repo}: {e}")
-        return {}
+        return []
 
-    by_pr = {}
+    out = []
     for c in comments:
         if not isinstance(c, dict):
-            continue
-        pr_url = c.get("pull_request_url") or ""
-        if not pr_url:
-            continue
-        try:
-            pr_number = int(pr_url.rsplit("/", 1)[-1])
-        except (ValueError, AttributeError):
             continue
         body = (c.get("body") or "").strip()
         if not body:
             continue
-        by_pr.setdefault(pr_number, []).append({
+        pr_url = c.get("pull_request_url") or ""
+        try:
+            pr_number = int(pr_url.rsplit("/", 1)[-1]) if pr_url else None
+        except (ValueError, AttributeError):
+            pr_number = None
+        out.append({
             "body": body,
-            "author": {"login": (c.get("user") or {}).get("login", "")},
+            "author": (c.get("user") or {}).get("login", ""),
             "path": c.get("path"),
             "line": c.get("line"),
             # diff_hunk is the code context — a few lines of diff around
             # where the reviewer left the comment. Gold for LoRA training:
             # the model sees both the code and the human's reaction to it.
             "diff_hunk": c.get("diff_hunk"),
+            "pr_number": pr_number,
         })
-    return by_pr
+    return out
 
 
 # Progress state for the async backfill job. Accessed through the helpers
@@ -99,13 +102,12 @@ _progress_lock = threading.Lock()
 _progress = {
     "running": False,
     "phase": "idle",          # idle | fetching | synthesizing | aggregating | done | error
-    "stage": None,            # within "fetching": listing | inline | processing
     "repos_total": 0,
     "repos_done": 0,
     "current_repo": None,
-    "prs_in_repo": 0,         # total PRs fetched for the current repo
-    "prs_done": 0,            # how many of those we've processed so far
-    "signals_created": 0,     # running count across all repos (updated per-PR)
+    "comments_total": 0,      # inline comments found in the current repo
+    "comments_done": 0,       # how many we've processed so far
+    "signals_created": 0,     # running count of new signals across all repos
     "synthesized": 0,
     "new_learnings": 0,
     "graduated": 0,
@@ -129,28 +131,30 @@ def update_backfill_progress(**kwargs):
 def reset_backfill_progress():
     with _progress_lock:
         _progress.update({
-            "running": False, "phase": "idle", "stage": None,
+            "running": False, "phase": "idle",
             "repos_total": 0, "repos_done": 0,
-            "current_repo": None, "prs_in_repo": 0, "prs_done": 0,
+            "current_repo": None, "comments_total": 0, "comments_done": 0,
             "signals_created": 0, "synthesized": 0, "new_learnings": 0,
             "graduated": 0, "error": None,
             "started_at": None, "finished_at": None, "result": None,
         })
 
 
-def bootstrap_from_prs(limit=20, repos=None):
-    """Scan recent merged PRs and extract review comments as signals.
+def bootstrap_from_prs(limit=None, repos=None):
+    """Scan a repo's inline PR review comments and store them as signals.
 
-    Uses gh CLI to fetch PR review comments. Each comment becomes a signal
-    with 0.5x confidence weight (historical, not live).
+    Only inline (per-file, per-line) comments are fetched — review
+    summary bodies ("LGTM") and PR conversation comments are intentionally
+    skipped. Inline comments are where the real pattern feedback lives
+    and they come with a diff_hunk we persist as the signal's
+    code_context (directly usable for LoRA training).
 
     Args:
-        limit: max PRs to scan per repo
-        repos: list of repos to scan (None = all configured repos)
+        limit: optional cap on inline comments per repo. None = all.
+        repos: list of repos to scan (None = all configured repos).
 
     Returns:
-        dict with: total_created, per_repo (list of {repo, prs_scanned,
-                   signals_created, error})
+        dict with total_created and per_repo stats.
     """
     if repos is None:
         config = load_config()
@@ -165,102 +169,69 @@ def bootstrap_from_prs(limit=20, repos=None):
     update_backfill_progress(repos_total=len(repos), repos_done=0)
 
     for repo in repos:
-        update_backfill_progress(current_repo=repo, prs_in_repo=0, prs_done=0, stage="listing")
-        repo_stats = {"repo": repo, "prs_scanned": 0, "signals_created": 0, "error": None}
+        update_backfill_progress(
+            current_repo=repo, comments_total=0, comments_done=0,
+        )
+        repo_stats = {"repo": repo, "comments_scanned": 0, "signals_created": 0, "error": None}
 
         try:
-            # We fetch both `reviews` (top-level review summary bodies) and
-            # `comments` (PR conversation comments) because most real
-            # feedback lives in the conversation, not the review summary —
-            # bare approvals + inline comments are common patterns and
-            # `reviews` alone captures almost none of that.
-            # (Inline per-file review comments require a separate per-PR
-            # API call and aren't pulled here yet — follow-up.)
-            result = subprocess.run(
-                ["gh", "pr", "list", "--repo", repo, "--state", "merged",
-                 "--limit", str(limit), "--json", "number,title,reviews,comments"],
-                capture_output=True, text=True, timeout=60,
-            )
-            if result.returncode != 0:
-                err = result.stderr.strip()[:200]
-                repo_stats["error"] = err or f"gh exited {result.returncode}"
-                logger.warning(f"[bootstrap] Failed to list PRs for {repo}: {err}")
-                per_repo.append(repo_stats)
-                continue
+            # One paginated API call gives us every inline comment in
+            # the repo (across all PRs, open or closed).
+            inline = _fetch_inline_review_comments(repo)
+            if limit is not None and limit > 0 and len(inline) > limit:
+                inline = inline[:limit]
 
-            prs = json.loads(result.stdout)
-            repo_stats["prs_scanned"] = len(prs)
-            update_backfill_progress(prs_in_repo=len(prs), stage="inline")
+            repo_stats["comments_scanned"] = len(inline)
+            update_backfill_progress(comments_total=len(inline))
 
-            # Batch-fetch every inline review comment in the repo (single
-            # API call, regardless of PR count). Indexed by PR number so
-            # we can merge them into each PR's entry stream below.
-            inline_by_pr = _fetch_inline_review_comments(repo)
+            # Dedup widened to include file_path + code_context: the same
+            # comment text on a different hunk is a distinct training
+            # example, so we want a separate signal. Preloading into a
+            # set keeps the inner loop O(1) instead of issuing a DB
+            # query per comment.
+            existing_keys = {
+                (s.text, s.file_path or "", s.code_context or "")
+                for s in Signal.query.filter_by(
+                    repo=repo, source_type="pr_comment"
+                ).all()
+            }
 
-            update_backfill_progress(stage="processing")
             created_for_repo = 0
+            for i, entry in enumerate(inline, start=1):
+                body = entry["body"][:500]
+                file_path = entry.get("path") or None
+                diff_hunk = entry.get("diff_hunk") or None
 
-            for pr_index, pr in enumerate(prs, start=1):
-                # Three kinds of feedback on a PR, all just "someone
-                # wrote something" to the backfill:
-                #   1. review summary bodies (the "Files changed" Review box)
-                #   2. conversation comments (the PR discussion tab)
-                #   3. inline code review comments (per-file, per-line)
-                # Duplicates get filtered below by text+repo.
-                entries = []
-                for review in (pr.get("reviews") or []):
-                    entries.append(review)
-                for comment in (pr.get("comments") or []):
-                    entries.append(comment)
-                pr_number = pr.get("number")
-                if pr_number is not None:
-                    for inline in inline_by_pr.get(pr_number, []):
-                        entries.append(inline)
+                key = (body, file_path or "", diff_hunk or "")
+                if key in existing_keys:
+                    continue
 
-                for entry in entries:
-                    body = (entry.get("body") or "").strip()
-                    if not body:
-                        continue
-
-                    # Inline comments carry the diff hunk + file path;
-                    # review bodies and conversation comments don't.
-                    # When present, these fields turn the signal into
-                    # gold LoRA training data (code + human reaction).
-                    diff_hunk = entry.get("diff_hunk") or None
-                    file_path = entry.get("path") or None
-
-                    existing = Signal.query.filter_by(
-                        text=body[:500], repo=repo, source_type="pr_comment"
-                    ).first()
-                    if existing:
-                        continue
-
-                    signal = Signal(
-                        category="pattern",
-                        text=body[:500],
-                        source_type="pr_comment",
-                        reviewer=(entry.get("author") or {}).get("login", ""),
-                        severity="suggestion",
-                        repo=repo,
-                        file_path=file_path,
-                        code_context=diff_hunk,
-                    )
-                    db.session.add(signal)
-                    created_for_repo += 1
-
-                # Emit live progress every PR so the UI actually moves.
-                # total_created + created_for_repo = cumulative across this run.
-                update_backfill_progress(
-                    prs_done=pr_index,
-                    signals_created=total_created + created_for_repo,
+                signal = Signal(
+                    category="pattern",
+                    text=body,
+                    source_type="pr_comment",
+                    reviewer=entry.get("author", ""),
+                    severity="suggestion",
+                    repo=repo,
+                    file_path=file_path,
+                    code_context=diff_hunk,
                 )
+                db.session.add(signal)
+                existing_keys.add(key)
+                created_for_repo += 1
+
+                # Emit live progress so the UI actually moves. Every 25
+                # comments is enough — polling runs every 1.5s and this
+                # keeps per-write overhead low.
+                if i % 25 == 0 or i == len(inline):
+                    update_backfill_progress(
+                        comments_done=i,
+                        signals_created=total_created + created_for_repo,
+                    )
 
             repo_stats["signals_created"] = created_for_repo
             total_created += created_for_repo
 
-        except subprocess.TimeoutExpired:
-            repo_stats["error"] = "timeout"
-            logger.warning(f"[bootstrap] Timeout scanning {repo}")
         except Exception as e:
             repo_stats["error"] = str(e)[:200]
             logger.warning(f"[bootstrap] Error scanning {repo}: {e}")

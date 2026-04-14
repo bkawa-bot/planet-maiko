@@ -179,7 +179,14 @@ export const api = {
 
   // Learnings management
   createLearning: (data) => request("/learnings", { method: "POST", body: JSON.stringify(data) }),
-  backfillKnowledge: (limit = 20, repo = null) => request("/learnings/backfill", { method: "POST", body: JSON.stringify(repo ? { limit, repo } : { limit }) }),
+  backfillKnowledge: (limit = null, repo = null) => {
+    // limit=null means "all comments in the repo"; don't send the
+    // field at all so the backend default kicks in.
+    const body = {};
+    if (limit != null) body.limit = limit;
+    if (repo) body.repo = repo;
+    return request("/learnings/backfill", { method: "POST", body: JSON.stringify(body) });
+  },
   getBackfillStatus: () => request("/learnings/backfill/status"),
   approveLearning: (id) => request(`/learnings/${id}/approve`, { method: "POST" }),
   dismissLearning: (id) => request(`/learnings/${id}/dismiss`, { method: "POST" }),

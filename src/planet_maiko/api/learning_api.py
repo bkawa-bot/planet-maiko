@@ -282,7 +282,10 @@ def backfill_learnings():
         return jsonify({"error": "A backfill is already running", "progress": progress}), 409
 
     data = request.get_json(silent=True) or {}
-    limit = data.get("limit", 20)
+    # Default to no cap — the inline-only flow fetches via one paginated
+    # gh api call per repo, so the "per-repo limit" knob is mostly a
+    # sanity cap for users with very large histories.
+    limit = data.get("limit")
     repo = data.get("repo")
 
     reset_backfill_progress()
