@@ -121,8 +121,11 @@ export default function Layout() {
     showToast("Maiko is going to sleep. Restart with: maiko serve", "normal");
   };
 
+  const skyLabel = weatherEnabled ? scene?.scene?.sky : null;
+
   return (
     <div className="layout">
+      {skyLabel && <div className={`sky-overlay sky-${skyLabel}`} aria-hidden="true" />}
       <WeatherOverlay scene={scene} enabled={weatherEnabled} />
       <Sidebar />
       <main className="main-content">

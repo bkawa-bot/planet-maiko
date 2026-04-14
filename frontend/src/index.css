@@ -161,6 +161,107 @@ html[data-hills="off"] body {
   background-color: var(--bg-plain, var(--bg));
 }
 
+/* ========================================================================
+   Sky overlays — tint the body sky based on scene.scene.sky from the
+   creativity engine. The backend computes this from (weather, time_bucket);
+   the frontend applies a vertical gradient on top of the world-*.svg so
+   "stormy" feels dim, "fog" washes grey, "dawn" adds warm pinks, etc.
+   Pointer-events: none so it never eats clicks; z-index: 0 sits above the
+   body background but below all content (layout children start at z-index
+   auto/positive).
+   ======================================================================== */
+.sky-overlay {
+  position: fixed;
+  inset: 0;
+  /* -1 keeps us above body's background-image but below all sibling
+     content (sidebar, main, footer — none of which set a z-index, so
+     they render in the default layer above negatively-indexed fixed
+     elements). */
+  z-index: -1;
+  pointer-events: none;
+  transition: background 800ms ease;
+}
+
+/* Clear skies — essentially no tint, keep the SVG pure. */
+.sky-overlay.sky-clear_day,
+.sky-overlay.sky-clear_day_winter { background: transparent; }
+
+/* Dawn — soft warm pink wash from the horizon up. */
+.sky-overlay.sky-dawn {
+  background: linear-gradient(to bottom,
+    rgba(255, 182, 160, 0.18) 0%,
+    rgba(255, 200, 180, 0.08) 40%,
+    transparent 70%);
+}
+
+/* Dusk — amber-to-purple, heavier than dawn. */
+.sky-overlay.sky-dusk {
+  background: linear-gradient(to bottom,
+    rgba(90, 56, 104, 0.22) 0%,
+    rgba(208, 96, 112, 0.18) 30%,
+    rgba(232, 112, 48, 0.12) 60%,
+    transparent 85%);
+}
+
+/* Night clear — deepen the existing SVG just a touch. */
+.sky-overlay.sky-night_clear {
+  background: linear-gradient(to bottom,
+    rgba(4, 4, 16, 0.25) 0%,
+    rgba(16, 24, 56, 0.10) 60%,
+    transparent 100%);
+}
+
+/* Night cloudy — darker, flatter. */
+.sky-overlay.sky-night_cloudy {
+  background: linear-gradient(to bottom,
+    rgba(12, 16, 32, 0.40) 0%,
+    rgba(40, 46, 64, 0.25) 100%);
+}
+
+/* Overcast — grey wash, denser near top. */
+.sky-overlay.sky-overcast {
+  background: linear-gradient(to bottom,
+    rgba(110, 118, 128, 0.38) 0%,
+    rgba(140, 148, 156, 0.22) 60%,
+    rgba(160, 168, 176, 0.14) 100%);
+}
+
+/* Stormy — dark blue-grey, heavy. Hints at incoming weather. */
+.sky-overlay.sky-stormy {
+  background: linear-gradient(to bottom,
+    rgba(28, 32, 52, 0.55) 0%,
+    rgba(56, 64, 84, 0.38) 50%,
+    rgba(72, 80, 100, 0.25) 100%);
+}
+
+/* Snow day — pale cool wash. */
+.sky-overlay.sky-snow_day {
+  background: linear-gradient(to bottom,
+    rgba(220, 228, 240, 0.32) 0%,
+    rgba(200, 212, 228, 0.20) 60%,
+    rgba(180, 196, 212, 0.10) 100%);
+}
+
+/* Snow night — dark base with a whiter upper haze. */
+.sky-overlay.sky-snow_night {
+  background: linear-gradient(to bottom,
+    rgba(56, 70, 96, 0.38) 0%,
+    rgba(100, 118, 148, 0.22) 50%,
+    rgba(140, 158, 188, 0.12) 100%);
+}
+
+/* Fog — uniform pale grey with slight vertical falloff. */
+.sky-overlay.sky-fog {
+  background: linear-gradient(to bottom,
+    rgba(200, 204, 212, 0.42) 0%,
+    rgba(190, 196, 204, 0.36) 60%,
+    rgba(180, 186, 196, 0.30) 100%);
+}
+
+/* If the hills are off, soften the overlay — the SVG isn't there to
+   compete with, and a heavy tint on --bg-plain looks flat. */
+html[data-hills="off"] .sky-overlay { opacity: 0.5; }
+
 a { color: var(--pink); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
