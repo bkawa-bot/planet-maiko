@@ -195,6 +195,28 @@ def _phase_llm_triage():
         return {"processed": 0, "error": str(e)}
 
 
+def _phase_synthesis():
+    """Phase 3.8: Self-healing synthesis.
+
+    Drains the queue of synthesized=False pr_comment signals one small
+    batch at a time. Transient LLM failures during a backfill (timeout,
+    malformed JSON) used to leave signals orphaned — stuck forever
+    because nothing else re-synthesized them. This phase retries them
+    on every cycle tick until the queue is empty.
+
+    Capped at one batch (40 signals) per tick so the cycle stays
+    snappy even when there's a big backlog.
+    """
+    try:
+        from planet_maiko.brain.learning.synthesizer import (
+            synthesize_unsynthesized_signals, BATCH_SIZE,
+        )
+        return synthesize_unsynthesized_signals(max_signals=BATCH_SIZE)
+    except Exception as e:
+        logger.warning(f"[cycle] Synthesis phase error: {e}")
+        return {"found": 0, "processed": 0, "synthesized": 0, "error": str(e)}
+
+
 def _phase_learning():
     """Phase 4: Aggregate feedback signals into learnings."""
     from planet_maiko.brain.learning.clustering import cluster_signals_into_learnings
@@ -520,6 +542,7 @@ _PHASES = [
     ("correlator", _phase_correlator),
     ("pupdates", _phase_pupdates),
     ("llm_triage", _phase_llm_triage),
+    ("synthesis", _phase_synthesis),
     ("learning", _phase_learning),
     ("classification", _phase_classification),
     ("heartbeats", _phase_heartbeats),

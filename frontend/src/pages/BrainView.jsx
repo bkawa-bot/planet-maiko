@@ -19,6 +19,7 @@ const CATEGORY_ICONS = {
 
 export default function BrainView() {
   const [learnings, setLearnings] = useState([]);
+  const [rawSignals, setRawSignals] = useState([]);
   const [kLoading, setKLoading] = useState(true);
   const [expandedCats, setExpandedCats] = useState({});
   const [addText, setAddText] = useState("");
@@ -37,7 +38,14 @@ export default function BrainView() {
 
   const fetchLearnings = async () => {
     setKLoading(true);
-    try { setLearnings(await api.getLearnings()); } catch (err) { console.error(err); }
+    try {
+      const [ls, sigs] = await Promise.all([
+        api.getLearnings(),
+        api.getSignals({ synthesized: false, limit: 500 }).catch(() => []),
+      ]);
+      setLearnings(ls);
+      setRawSignals(sigs);
+    } catch (err) { console.error(err); }
     setKLoading(false);
   };
 
@@ -101,15 +109,36 @@ export default function BrainView() {
     return () => { cancelled = true; clearInterval(interval); };
   }, [backfilling]);
 
-  const active = learnings.filter((l) => l.status === "active" && l.category !== "pattern");
-  const pending = learnings.filter((l) => l.status === "pending" && l.category !== "pattern");
-  const unsynthesized = learnings.filter((l) => l.category === "pattern" && l.status !== "dismissed");
+  // Learnings with category="pattern" are now legitimate — the LLM
+  // chose "pattern" as the real bucket. "Unsynthesized" is reserved
+  // for raw signals that haven't been through LLM synthesis yet;
+  // those live in a separate table and show up here as signal-shaped
+  // rows so the user can see what's waiting for the queue.
+  const active = learnings.filter((l) => l.status === "active");
+  const pending = learnings.filter((l) => l.status === "pending");
+
+  // Normalize signals to learning-shape so the existing category
+  // rendering works without branching. Status "unsynthesized" is a
+  // UI-only marker; these rows can't be approved, only deleted.
+  const unsynthesized = rawSignals.map((s) => ({
+    id: `signal-${s.id}`,
+    _signal_id: s.id,
+    rule: s.text,
+    category: s.category || "pattern",
+    scope_repo: s.repo,
+    scope_language: s.language,
+    is_global: false,
+    confidence: 0,
+    signal_count: 1,
+    source: s.source_type,
+    status: "unsynthesized",
+  }));
 
   const visible = tab === "unsynthesized"
     ? unsynthesized
     : tab === "pending"
       ? pending
-      : learnings.filter((l) => l.status !== "dismissed" && l.category !== "pattern");
+      : learnings.filter((l) => l.status !== "dismissed");
 
   const byCategory = {};
   for (const l of visible) {
@@ -136,10 +165,14 @@ export default function BrainView() {
 
   const handleSynthesize = async () => {
     setSynthesizing(true);
-    showToast(`Synthesizing ${unsynthesized.length} learnings...`, "normal");
+    showToast(`Synthesizing ${unsynthesized.length} signals...`, "normal");
     try {
       const result = await api.classifyLearnings(50);
-      showToast(`Reclassified ${result.classified_learnings || 0} learnings, ${result.classified_signals || 0} signals`, "normal");
+      const parts = [];
+      if (result.synthesized) parts.push(`${result.synthesized} synthesized`);
+      if (result.new_learnings) parts.push(`${result.new_learnings} new learnings`);
+      if (result.dropped_junk) parts.push(`${result.dropped_junk} dropped as junk`);
+      showToast(parts.length ? parts.join(", ") : "Nothing to synthesize", "normal");
       fetchLearnings();
     } catch (err) {
       showToast("Synthesis failed: " + err.message, "high");
@@ -181,7 +214,7 @@ export default function BrainView() {
         {tab === "unsynthesized" && unsynthesized.length > 0 && (
           <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 0", marginBottom: 8 }}>
             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, flex: 1 }}>
-              These are raw signals from PR comments waiting to be classified into proper categories. They run through the brain cycle automatically, or you can synthesize them now.
+              Raw PR-comment signals waiting for LLM synthesis. The brain cycle drains the queue automatically, one batch per tick. Click "Synthesize Now" to run the whole queue immediately.
             </p>
             <button
               className="btn btn-primary btn-sm"
@@ -283,6 +316,7 @@ export default function BrainView() {
                         <div key={l.id} className={`learning-row status-${l.status}`}>
                           <div className="learning-left">
                             {l.status === "pending" && <span className="badge paused">pending</span>}
+                            {l.status === "unsynthesized" && <span className="badge" title="Raw PR-comment signal waiting for LLM synthesis">raw</span>}
                             {l.source && <span className="tag">{l.source}</span>}
                             {l.is_global
                               ? <span className="tag tag-global" title="Seen in 3+ repos — feeds every LoRA">🌐 global</span>
@@ -292,7 +326,7 @@ export default function BrainView() {
                           <div className="confidence-bar-wrapper">
                             <div className="confidence-bar" style={{ width: `${l.confidence * 100}%` }} />
                           </div>
-                          <span className="signal-count">{l.signal_count} signals</span>
+                          <span className="signal-count">{l.signal_count} signal{l.signal_count === 1 ? "" : "s"}</span>
                           <span className={`learning-rule ${expandedLearning === l.id ? "expanded" : ""}`} onClick={(e) => { e.stopPropagation(); setExpandedLearning(expandedLearning === l.id ? null : l.id); }}>
                             {l.rule}
                           </span>
@@ -302,11 +336,11 @@ export default function BrainView() {
                                 <Check size={10} /> Approve
                               </button>
                             )}
-                            {l.status !== "dismissed" && (
+                            {l.status === "active" || l.status === "pending" ? (
                               <button className="btn btn-sm btn-danger" onClick={() => handleDismiss(l.id)}>
                                 <X size={10} />
                               </button>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       ))}

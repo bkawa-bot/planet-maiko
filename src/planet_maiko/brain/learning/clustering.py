@@ -377,7 +377,7 @@ def cluster_signals_into_learnings():
         if waiting_unsynthesized:
             logger.info(
                 f"[clustering] {waiting_unsynthesized} signal(s) still waiting for "
-                "synthesis — next backfill cycle will pick them up"
+                "synthesis — the synthesis cycle phase will retry them"
             )
         return {"processed": 0, "new_learnings": 0, "updated_learnings": 0, "graduated": 0}
 

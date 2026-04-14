@@ -14,10 +14,20 @@ learning_bp = Blueprint("learning", __name__)
 
 @learning_bp.route("/signals", methods=["GET"])
 def list_signals():
-    """List signals, optionally filtered."""
+    """List signals, optionally filtered.
+
+    Query params:
+        category, source_type, aggregated, synthesized — all optional
+        filters. `synthesized=false` is how the Knowledge tab surfaces
+        raw signals that haven't made it through LLM synthesis yet.
+        limit — default 500 (up from 100) so big backfill queues stay
+        visible in one page.
+    """
     category = request.args.get("category")
     source_type = request.args.get("source_type")
     aggregated = request.args.get("aggregated")
+    synthesized = request.args.get("synthesized")
+    limit = min(int(request.args.get("limit", 500)), 2000)
 
     query = Signal.query
     if category:
@@ -26,8 +36,10 @@ def list_signals():
         query = query.filter_by(source_type=source_type)
     if aggregated is not None:
         query = query.filter_by(aggregated=aggregated.lower() == "true")
+    if synthesized is not None:
+        query = query.filter_by(synthesized=synthesized.lower() == "true")
 
-    signals = query.order_by(Signal.created_at.desc()).limit(100).all()
+    signals = query.order_by(Signal.created_at.desc()).limit(limit).all()
     return jsonify([s.to_dict() for s in signals])
 
 
@@ -138,30 +150,26 @@ def edit_learning(learning_id):
 
 @learning_bp.route("/learnings/classify", methods=["POST"])
 def classify_pending():
-    """Manually synthesize pending pattern signals AND learnings via LLM."""
-    from planet_maiko.brain.learning.classifier import (
-        classify_unclassified_signals, classify_pattern_learnings
-    )
+    """Manually run synthesis + clustering on the current queue.
+
+    Used by the "Synthesize Now" button on the Unsynthesized tab — same
+    work the cycle's synthesis + learning phases do, but kicked off
+    immediately so the user doesn't wait for the next tick.
+    """
+    from planet_maiko.brain.learning.synthesizer import synthesize_unsynthesized_signals
     from planet_maiko.brain.learning.clustering import cluster_signals_into_learnings
 
-    data = request.get_json(silent=True) or {}
-    batch_size = data.get("batch_size", 50)
-
-    # Release DB before LLM call
     db.session.close()
 
-    # First: classify any unaggregated signals
-    classified_signals = classify_unclassified_signals(batch_size=batch_size)
-    learning_results = cluster_signals_into_learnings()
-
-    # Then: reclassify any existing pattern-category learnings
-    classified_learnings = classify_pattern_learnings(batch_size=batch_size)
+    synth = synthesize_unsynthesized_signals()
+    cluster = cluster_signals_into_learnings()
 
     return jsonify({
-        "classified_signals": classified_signals,
-        "classified_learnings": classified_learnings,
-        "new_learnings": learning_results.get("new_learnings", 0),
-        "graduated": learning_results.get("graduated", 0),
+        "synthesized": synth.get("synthesized", 0),
+        "dropped_junk": synth.get("dropped_junk", 0),
+        "processed": synth.get("processed", 0),
+        "new_learnings": cluster.get("new_learnings", 0),
+        "graduated": cluster.get("graduated", 0),
     })
 
 
@@ -190,92 +198,18 @@ def _run_backfill_job(app, limit, repo):
             synth_error = None
 
             if signals_created > 0:
-                # Phase 2: LLM synthesis — batch through EVERY unsynthesized
-                # pr_comment signal (not just the first 20). Keeping the
-                # batch size modest so the model stays precise on each.
-                SYNTH_BATCH = 40
+                # Phase 2: LLM synthesis. Delegates to the shared
+                # synthesizer so the cycle's self-healing phase runs the
+                # exact same logic on a smaller budget per tick.
                 update_backfill_progress(phase="synthesizing")
                 try:
-                    from planet_maiko.models.signal import Signal as BackfillSignal
-                    from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
-                    from planet_maiko.agents.routing import resolve_model
-
-                    raw = BackfillSignal.query.filter_by(
-                        source_type="pr_comment", aggregated=False
-                    ).all()
-
-                    runtime = ClaudeCodeRuntime()
-                    model = resolve_model("classify")
-
-                    dropped_junk = 0
-                    for start in range(0, len(raw), SYNTH_BATCH):
-                        batch = raw[start:start + SYNTH_BATCH]
-                        comments = [
-                            f"id={s.id} [{s.repo or 'unknown'}] {s.text[:300]}"
-                            for s in batch
-                        ]
-                        prompt = f"""Synthesize these PR review comments into clean, actionable coding rules.
-
-For each comment, decide whether it expresses a generalizable coding rule
-a reviewer would want to reuse — "always prefer X over Y", "don't do Z
-in this context". If it does, extract the core lesson as a short one-
-sentence rule and classify it. If it doesn't — e.g. greetings, praise,
-questions, bot comments, personal opinions, PR-specific logistics — set
-actionable: false and we'll drop that signal from the pool.
-
-Echo back every id exactly as given. Include one entry per input.
-
-Comments:
-{chr(10).join(comments)}
-
-Categories: security, error_handling, testing, performance, api_design,
-architecture, null_safety, style, naming, docs, pattern, domain_knowledge
-
-Respond as JSON:
-{{"rules": [
-  {{"id": 1234, "actionable": true,
-    "rule": "Always validate input lengths at API boundaries",
-    "category": "security"}},
-  {{"id": 1235, "actionable": false,
-    "reason": "Praise without a pattern"}},
-  ...
-]}}"""
-
-                        db.session.close()
-                        result = runtime.send_json(prompt, timeout=120, model=model)
-
-                        parsed_rules = (result.get("parsed") or {}).get("rules") if result else None
-                        if parsed_rules:
-                            from planet_maiko.models.signal import Signal as RefetchSignal
-                            returned_ids = [
-                                r["id"] for r in parsed_rules
-                                if isinstance(r, dict) and isinstance(r.get("id"), int)
-                            ]
-                            refetched = RefetchSignal.query.filter(
-                                RefetchSignal.id.in_(returned_ids)
-                            ).all() if returned_ids else []
-                            by_id = {s.id: s for s in refetched}
-                            for rule_data in parsed_rules:
-                                target = by_id.get(rule_data.get("id"))
-                                if target is None:
-                                    continue
-                                # Treat missing "actionable" as true so we
-                                # don't silently drop rules when the LLM
-                                # forgets the field.
-                                actionable = rule_data.get("actionable", True)
-                                if not actionable:
-                                    db.session.delete(target)
-                                    dropped_junk += 1
-                                    continue
-                                target.text = rule_data.get("rule", target.text)
-                                target.category = rule_data.get("category", "pattern")
-                                target.synthesized = True
-                                synthesized += 1
-                            db.session.commit()
-
-                        update_backfill_progress(synthesized=synthesized)
-                    if dropped_junk:
-                        logger.info(f"[backfill] Dropped {dropped_junk} non-actionable signal(s)")
+                    from planet_maiko.brain.learning.synthesizer import synthesize_unsynthesized_signals
+                    synth_result = synthesize_unsynthesized_signals(
+                        on_progress=lambda n: update_backfill_progress(synthesized=n),
+                    )
+                    synthesized = synth_result["synthesized"]
+                    if synth_result.get("error"):
+                        synth_error = synth_result["error"]
                 except Exception as e:
                     synth_error = str(e)
 

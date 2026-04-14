@@ -134,6 +134,10 @@ export const api = {
     const query = new URLSearchParams(params).toString();
     return request(`/learnings/brief${query ? `?${query}` : ""}`);
   },
+  getSignals: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/signals${query ? `?${query}` : ""}`);
+  },
 
   // Pack Insights
   getPackInsightsState: () => request("/pack-insights"),
