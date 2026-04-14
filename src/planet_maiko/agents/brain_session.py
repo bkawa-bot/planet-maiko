@@ -199,7 +199,31 @@ def run_skill_as_agent(agent_profile_id, skill_name, context=None, working_dir=N
         preamble_lines.append(profile.instructions.strip())
     preamble = "\n".join(preamble_lines) + "\n\n---\n\n"
 
-    full_prompt = preamble + prompt
+    # Role-specific communication protocol. One-shot agents (review,
+    # investigation) can't call a CLI or open an MCP channel, so the
+    # "protocol" is a set of structured blocks they include in their
+    # output which the server parses out after the call returns.
+    # Injected inline here — there's no other delivery channel for a
+    # single-send LLM call.
+    protocol = ""
+    protocol_filename = {
+        "review": "review-agent-protocol.md",
+        "investigation": "investigation-agent-protocol.md",
+    }.get(profile.role)
+    if protocol_filename:
+        from pathlib import Path
+        proto_path = (Path(__file__).resolve().parent.parent
+                      / "prompts" / protocol_filename)
+        try:
+            if proto_path.is_file():
+                protocol = proto_path.read_text(encoding="utf-8") + "\n\n---\n\n"
+        except Exception:
+            # If the file is missing or unreadable, proceed without —
+            # the agent will still produce its main output, just without
+            # the structured blocks the server would have parsed.
+            logger.debug(f"[brain] Could not load {protocol_filename}")
+
+    full_prompt = preamble + protocol + prompt
 
     timeout = 600 if skill_name in ("investigate", "brainstorm", "repo-analysis") else 120
     from planet_maiko.agents.routing import resolve_model

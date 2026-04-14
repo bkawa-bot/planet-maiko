@@ -500,30 +500,52 @@ def _phase_execute_agent_tasks():
                 db.session.commit()
                 continue
 
-            output = result["output"]
+            raw_output = result["output"]
+
+            # Parse any PATTERN: / PROPOSAL: / CONFIDENCE: blocks the
+            # agent embedded, emit the corresponding Signals + proposal
+            # pupdates, and use the cleaned text (blocks stripped) as
+            # the stored artifact. See agent_output.py for the format.
+            from planet_maiko.brain.learning.agent_output import parse_and_apply_blocks
+            parsed = parse_and_apply_blocks(
+                raw_output,
+                agent=agent,
+                task=task,
+                repo=(task.extra or {}).get("repo"),
+            )
+            output = parsed["cleaned_output"]
+
             task.status = "done"
             task.extra = {
                 **(task.extra or {}),
                 "artifact": output[:16000],
                 "completed_by": agent.id,
                 "completed_at": datetime.now(timezone.utc).isoformat(),
+                "patterns_emitted": parsed["patterns_emitted"],
+                "proposals_emitted": parsed["proposals_emitted"],
+                "confidence": parsed["confidence"],
             }
 
             # Publish a pupdate so the artifact surfaces in "From Maiko"
             result_type = "pr_review_complete" if role == "review" else "investigation_complete"
             action_hint = "Open review" if role == "review" else "Open investigation"
             title_prefix = "Review ready" if role == "review" else "Investigation ready"
+
+            # Low-confidence investigations get bumped to high priority
+            # so the user sees them as "needs a human look".
+            pri = "high" if parsed["confidence"] == "low" else "normal"
+
             result_pupdate = Pupdate(
                 id=f"{role}-result-{uuid.uuid4().hex[:8]}",
                 source="maiko",
                 type=result_type,
-                priority="normal",
+                priority=pri,
                 title=f"{title_prefix}: {task.title}",
                 body=output[:8000],
                 url=task.url,
                 actionable=True,
                 action_hint=action_hint,
-                tags=[role, "maiko", agent.id],
+                tags=[role, "maiko", agent.id] + (["low_confidence"] if parsed["confidence"] == "low" else []),
             )
             db.session.add(result_pupdate)
 
