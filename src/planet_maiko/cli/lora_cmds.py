@@ -329,26 +329,29 @@ def cmd_lora_miss(args):
 
 
 def cmd_dedup(args):
-    """Merge semantically duplicate learnings."""
+    """Merge semantically duplicate learnings via LLM clustering.
+
+    Global promotion now happens automatically — signals from 3+
+    distinct repos flip a learning's is_global flag during the normal
+    cluster pass (see brain.learning.clustering._maybe_promote_global).
+    No separate --promote-global phase is needed.
+    """
     from planet_maiko.app import create_app
     app = create_app()
 
     with app.app_context():
-        from planet_maiko.brain.learning.classifier import dedup_learnings, promote_global_rules
-        prefix = "[DRY RUN] " if args.dry_run else ""
+        from planet_maiko.brain.learning.clustering import cluster_learnings
 
-        print("Phase 1: Within-repo dedup...")
-        result = dedup_learnings(dry_run=args.dry_run)
-        print(f"{prefix}Groups checked: {result['groups_checked']}")
-        print(f"{prefix}Merges: {result['merges']}")
-        print(f"{prefix}Dismissed: {result['dismissed']}")
+        if args.dry_run:
+            print("[DRY RUN] not supported by cluster_learnings — it commits merges as it goes.")
+            print("Re-run without --dry-run to apply, or inspect the Knowledge tab first.")
+            return
 
-        if args.promote_global:
-            print("\nPhase 2: Cross-repo promotion to global rules...")
-            promo = promote_global_rules(dry_run=args.dry_run)
-            print(f"{prefix}Groups checked: {promo['groups_checked']}")
-            print(f"{prefix}Promoted to global: {promo['promoted']}")
-            print(f"{prefix}Dismissed (merged into global): {promo['dismissed']}")
+        result = cluster_learnings()
+        print(f"Categories scanned: {result['categories_scanned']}")
+        print(f"Clusters processed: {result['clusters_processed']}")
+        print(f"Learnings merged:   {result['learnings_merged']}")
+        print(f"Skipped (singletons): {result['skipped']}")
 
 
 def cmd_add_rule(args):
@@ -575,8 +578,7 @@ def register(subparsers):
 
     # maiko dedup
     p = subparsers.add_parser("dedup", help="Merge semantically duplicate learnings")
-    p.add_argument("--dry-run", action="store_true", help="Report what would be merged without applying")
-    p.add_argument("--promote-global", action="store_true", help="Also promote cross-repo duplicates to global rules")
+    p.add_argument("--dry-run", action="store_true", help="Not currently supported; kept for compatibility")
     p.set_defaults(func=cmd_dedup)
 
     # maiko add-rule

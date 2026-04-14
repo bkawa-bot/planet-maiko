@@ -162,7 +162,7 @@ export default function TaskCard({
             </span>
           )}
           {/* Live status for one-shot tasks while the skill is running */}
-          {isOneShotTask && t.status === "in_progress" && !launching && (
+          {isOneShotTask && t.status === "in_progress" && (
             <span className="tag agent-thinking-chip">
               <Loader size={9} className="spin" /> {agentName || "Agent"} is thinking…
             </span>

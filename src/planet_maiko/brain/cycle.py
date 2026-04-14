@@ -13,7 +13,6 @@ Pipeline (phases run in this order):
     3.5 pupdates             — match remaining pupdates against rules
     3.6 llm_triage           — Tier 2 LLM triage for unmatched pupdates
     4.  learning             — aggregate signals into learnings
-    4.5 classification       — batch classify unclassified PR feedback
     5.  heartbeats           — nudge silent agents
     6.  projects             — auto-advance project phases
     7.  scheduled_skills     — run skills on their schedules
@@ -221,23 +220,6 @@ def _phase_learning():
     """Phase 4: Aggregate feedback signals into learnings."""
     from planet_maiko.brain.learning.clustering import cluster_signals_into_learnings
     return cluster_signals_into_learnings()
-
-
-def _phase_classification():
-    """Phase 4.5: Batch classify unclassified signals + pattern learnings."""
-    try:
-        from planet_maiko.brain.learning.classifier import (
-            classify_unclassified_signals, classify_pattern_learnings
-        )
-        classified = classify_unclassified_signals(batch_size=20)
-        reclassified = classify_pattern_learnings(batch_size=20)
-        return {
-            "classified_signals": classified,
-            "classified_learnings": reclassified,
-        }
-    except Exception as e:
-        logger.warning(f"[cycle] Classification error: {e}")
-        return {"classified_signals": 0, "classified_learnings": 0, "error": str(e)}
 
 
 def _phase_heartbeats():
@@ -544,7 +526,6 @@ _PHASES = [
     ("llm_triage", _phase_llm_triage),
     ("synthesis", _phase_synthesis),
     ("learning", _phase_learning),
-    ("classification", _phase_classification),
     ("heartbeats", _phase_heartbeats),
     ("projects", _phase_projects),
     ("scheduled_skills", _phase_scheduled_skills),

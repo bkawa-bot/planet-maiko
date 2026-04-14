@@ -352,7 +352,7 @@ class GitHubPoller(BasePoller):
             if not comment or len(comment) < 20:
                 continue
             signals.append({
-                "category": "pattern",  # Will be classified by batch classifier
+                "category": "pattern",  # Placeholder — real category set by synthesizer
                 "text": comment[:500],
                 "source_type": "pr_comment",
                 "reviewer": item.get("author", ""),
