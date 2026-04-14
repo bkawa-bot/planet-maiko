@@ -15,133 +15,92 @@ maiko report "Starting work on {task_id}. Reading plan and exploring codebase."
 maiko task start
 ```
 
-## 1. Communication
+## 1. Scope — local commits only
 
-All communication goes through the `maiko` CLI (connects to http://localhost:{maiko_port}).
+You work inside an isolated git worktree. You may read, write, run tests, and commit locally. You MUST NOT:
 
-### Commands
+- Run `git push`, `git tag`, `git merge` into main
+- Run `gh pr create`, `gh pr merge`, `gh pr review`, or any `gh` subcommand that modifies remote state
+- Publish artifacts outside the worktree
 
-| Command | When to use |
-|---------|-------------|
-| `maiko report "message"` | After every major step — keeps your status fresh |
-| `maiko reply "message"` | When responding to a message from Maiko or the user |
-| `maiko feedback "message" --category testing` | When you discover something that should become a learning |
-| `maiko task done` | When the task is complete and tests pass |
-| `maiko task stuck -m "description"` | When you're blocked and need help |
+Maiko handles the push and the PR after the user approves your work. Your only deliverable is local commits on your branch plus the report messages described below.
 
-**Pull messages with the `check_inbox` MCP tool** from the maiko-channel. Call it whenever you finish a step, before you end a response, or whenever you suspect the user has replied — messages accumulate in the inbox until you read them, and retrieval marks them read so repeat calls are cheap.
+## 2. Communication
 
-### Status Update Convention
+Two MCP tools from the maiko-channel drive communication:
 
-**Your report messages appear as speech bubbles on the dashboard.** Write them like you'd talk to the user if they walked by your desk — conversational, first person, one sentence.
+- **`reply`** — send a message to Maiko / the user. Use `message_type="ready_for_review"` when you've committed work for review, `"stuck"` if you're blocked, `"message"` for general status.
+- **`check_inbox`** — pull pending messages from the user. Returns structured text. Call it before finishing a step or when you suspect a review was left.
+- **`leave_comment`** — drop an inline comment on a specific diff line for the user to see during their review. Use sparingly on uncertain / load-bearing spots (~5 max per round).
 
-Good: "Tests passing, pushing to remote now!"
+The `maiko` CLI still works for legacy reporting (`maiko report`, `maiko task start`, `maiko feedback`) but messaging goes through MCP.
+
+### Status reports
+
+`maiko report "..."` messages appear as speech bubbles on the dashboard. Write them like you'd talk to the user if they walked by your desk — conversational, first person, one sentence.
+
+Good: "Tests passing, committing now."
 Bad: "agent_status: build complete for task-123"
 
-### When to Report
-
-Send a `maiko report` after every major workflow step:
-- After reading the plan and exploring the codebase
-- After implementing a significant piece
-- After each build attempt (pass or fail)
-- After committing and pushing
-- After opening a PR
-- When blocked or waiting
-
-**Do NOT sit idle without reporting.** If you're blocked, say so immediately via `maiko task stuck`.
-
-## 2. Workflow
+## 3. Workflow — the review loop
 
 ```
 1. Read TASK.md → report "Reading the plan..."
-2. Explore codebase → report "Exploring the codebase and checking existing patterns."
-3. Implement changes → report "Implementing changes to X..."
-4. Run tests/build → report "Tests passing!" or "Build failed, fixing..."
-5. Compliance review → run `maiko review <changed-files>` on each file you modified
-6. Fix any violations found by the review
-7. Commit & push → report "Changes pushed to branch."
-8. Open draft PR → report "Draft PR #N opened."
-9. Self-review the diff → report "Self-reviewing the diff..."
-10. Fix any issues found → commit & push
-11. Report "PR #{task_id} ready for review."
-12. maiko task done
+2. Explore the codebase → report "Checking existing patterns in X..."
+3. Implement the change → commit locally
+4. Run tests → fix until green
+5. (Optional) Use leave_comment to flag uncertain spots in your diff
+6. reply(message_type="ready_for_review", content="<summary of what you did + what to double-check>")
+7. check_inbox every ~30 seconds until a review message arrives
+8. When a message_type="review" arrives, parse its @@ file:line headers,
+   iterate on each comment, commit, go back to step 6
+9. Exit ONLY when you receive message_type="approved" or "cancelled"
 ```
 
-### Compliance Review (Automatic)
+The user — not you — decides when the task is done. Never exit early on your own `message_type="done"`; that flow is retired in favor of review cycles.
 
-A LoRA compliance model reviews your commits automatically via a Claude Code hook. If it finds violations after you commit, you'll get feedback directly — fix the issues and commit again. You can also run a manual check before committing:
+### Compliance review (automatic)
+
+A LoRA compliance model reviews your commits via a Claude Code hook. Violations surface as feedback you should address before declaring ready_for_review. Manual check:
+
 ```bash
 maiko review src/path/to/changed_file.py
 ```
 
-### Reporting False Positives
+### Reporting false positives / negatives
 
-If the LoRA model flags code that is actually correct, **report it** so the model improves:
+If the LoRA model flags correct code, record a corrective PASS:
+
 ```bash
-# Flag a file as a false positive
 maiko lora-feedback --file src/path/to/clean_file.java --output "VIOLATION: [naming] ..."
-
-# Or pipe code directly
-echo "clean code here" | maiko lora-feedback --repo org/repo
 ```
 
-This records a corrective PASS training pair — the next retrain will learn from it. **Do not silently bypass false positives** — always report them so the model gets better.
+If it misses a real issue, record a corrective VIOLATION:
 
-### Reporting False Negatives
-
-If during your review you spot an issue that the LoRA model *should* have caught but didn't (it said PASS when there was a real problem), **report it** so the model learns:
 ```bash
-# Pipe the diff chunk and describe the missed violation
 git diff -- src/path/to/file.java | maiko lora-miss -v "Missing null check on response field" --category error_handling
-
-# Or provide code inline
-maiko lora-miss -c 'executor.submit(task)' -v "Unbounded executor with no shutdown hook" --category architecture
-
-# From a file
-maiko lora-miss -f /tmp/chunk.diff -v "Test injects mock but never verifies it" --category testing --repo org/repo
 ```
 
 Valid categories: `security`, `error_handling`, `testing`, `performance`, `api_design`, `architecture`, `null_safety`, `style`, `naming`, `pattern`, `domain_knowledge`, `gotcha`, `team`.
 
-This records a corrective VIOLATION training pair. **If you notice something the model missed, always report it** — this is how the model gets smarter over time.
+## 4. Post-review learning extraction
 
-## 3. Messages
+After a review round finishes (user sent changes you addressed), pull out reusable patterns:
 
-Call the `check_inbox` MCP tool (maiko-channel) to pull pending messages. Maiko may send:
-- Updated context or changed requirements
-- Answers to questions you asked
-- A nudge if you haven't reported in a while
-- A sleep signal (stop work and wait)
-
-If you receive a nudge, immediately report your current status.
-
-## 4. Post-Review Feedback
-
-After the user reviews your work and requests changes, extract learnings:
-
-For EACH specific pattern change the reviewer requested, send feedback **with a code snippet**:
 ```bash
 maiko feedback "Use orElseThrow instead of .get() on Optional" \
   --category error_handling \
   --code "// Before: user.get()\n// After: user.orElseThrow(() -> new NotFoundException())"
 ```
 
-Or reference a file directly:
-```bash
-maiko feedback "Always use connection pooling for batch DB operations" \
-  --category performance \
-  --file src/services/BatchProcessor.java
-```
-
-The code snippet becomes training data for the LoRA model, so include the before/after pattern when possible.
-Send one feedback per distinct code pattern (not per file — if the same pattern was applied in 3 files, that's 1 feedback).
+One feedback per distinct pattern, not per file. Include the before/after snippet so the LoRA training set gets the code context, not just the rule.
 
 ## 5. Rules
 
 - Stay focused on the task in TASK.md
-- Commit frequently with clear, descriptive messages
-- Check your inbox (`check_inbox` MCP tool) between steps — Maiko may send new context
-- Match existing patterns in the files you're modifying
-- If stuck for more than a few minutes, report it — don't spin
-- When done, verify tests pass before reporting completion
-- NEVER commit agent scaffolding files (TASK.md, CLAUDE.md, .claude/ plans)
+- Commit frequently with clear messages
+- Call `check_inbox` between steps — new context may have arrived
+- Match existing patterns in the files you modify
+- Never commit agent scaffolding (TASK.md, CLAUDE.md, .claude/, .maiko-env.json, .mcp.json)
+- Never run `git push` or `gh pr create` — Maiko handles that on approval
+- If stuck more than a few minutes, `reply(message_type="stuck", ...)`

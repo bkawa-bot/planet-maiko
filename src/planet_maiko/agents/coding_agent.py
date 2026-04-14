@@ -304,6 +304,92 @@ _SAFE_BRANCH_RE = re.compile(r"^[A-Za-z0-9_./-]+$")
 _UNSAFE_PATH_CHARS = re.compile(r'[;&|`$<>!"*?\n\r]')
 
 
+def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None):
+    """Start the coding agent as a background daemon thread — no terminal.
+
+    Mirrors the review / investigation autonomous flow: `claude --print`
+    runs in the worktree, tees its transcript to agent.log, and exits
+    when it's reached a stopping point (in the coding case, sent a
+    ready_for_review message via MCP). The session id is registered
+    so "View Session" can later `claude --resume` into it for the
+    user to iterate alongside the agent.
+
+    Returns immediately after spawning the thread.
+    """
+    import shutil
+    import threading
+
+    claude_path = shutil.which("claude")
+    if not claude_path:
+        return {"success": False, "error": "claude CLI not found"}
+    if branch_name and not _SAFE_BRANCH_RE.match(branch_name):
+        return {"success": False, "error": f"Unsafe branch name: {branch_name!r}"}
+    if _UNSAFE_PATH_CHARS.search(worktree_path):
+        return {"success": False, "error": f"Unsafe worktree path: {worktree_path!r}"}
+
+    session_id = str(uuid.uuid4())
+    from planet_maiko.api.agents_api import _set_session
+    _set_session(task_id, session_id, worktree_path)
+
+    # Pre-approve the MCP channel + user's configured tools. Redundant
+    # with --dangerously-skip-permissions, but harmless and keeps the
+    # tool list visible when resuming the session later.
+    allowed_tools = ["mcp__maiko-channel"]
+    try:
+        from planet_maiko.config import load_config
+        user_tools = load_config().get("brain", {}).get("allowed_tools", [])
+        allowed_tools.extend(user_tools)
+    except Exception:
+        pass
+
+    initial_prompt = (
+        "Read TASK.md and CLAUDE.md in this directory. Begin working on the "
+        "task following the protocol. After your first meaningful commit, "
+        "call reply(message_type=\"ready_for_review\", content=\"...\") via "
+        "the maiko-channel MCP and then use check_inbox to receive any "
+        "review feedback. Do not git push or open PRs — Maiko handles that "
+        "once the human approves."
+    )
+
+    cmd = [
+        claude_path, "--print", "--output-format", "text",
+        "--session-id", session_id,
+        "--dangerously-skip-permissions",
+    ]
+    for tool in allowed_tools:
+        cmd.extend(["--allowedTools", tool])
+
+    log_path = os.path.join(worktree_path, "agent.log")
+
+    def _run():
+        try:
+            with open(log_path, "w", encoding="utf-8") as log:
+                log.write(f"# Headless coding agent run\n# session_id: {session_id}\n\n")
+                log.flush()
+                subprocess.run(
+                    cmd,
+                    input=initial_prompt,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    cwd=worktree_path,
+                )
+        except Exception as e:
+            logger.warning(f"[agent] Headless run for {task_id} failed: {e}")
+
+    threading.Thread(target=_run, daemon=True, name=f"coding-{task_id}").start()
+    logger.info(f"[agent] Headless coding agent launched for {agent_id} (session {session_id[:8]})")
+    return {
+        "success": True,
+        "working_path": worktree_path,
+        "session_id": session_id,
+        "mode": "headless",
+        "log_path": log_path,
+    }
+
+
 def _kickoff_agent(agent_id, worktree_path, task_id, branch_name=None):
     """Start the agent in a detached tmux session. View with 'View Session'."""
     import shutil

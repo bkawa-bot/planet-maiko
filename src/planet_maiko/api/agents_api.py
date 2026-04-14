@@ -263,7 +263,7 @@ def assign_agent():
             prompt=full_prompt,
             repo_path=repo_path,
             branch_prefix=branch_name or "maiko",
-            auto_kickoff=auto_kickoff,
+            auto_kickoff=False,  # we do our own headless kickoff below
             use_worktree=use_worktree,
             agent_profile_id=profile_id,
         )
@@ -272,6 +272,26 @@ def assign_agent():
 
     if not result:
         return jsonify({"error": "Failed to prepare agent"}), 500
+
+    # Coding agents now run autonomously by default — headless subprocess,
+    # no tmux, no terminal. User reviews the agent's diff in-app when
+    # the agent reports ready_for_review. The old interactive launch is
+    # preserved behind the explicit `auto_kickoff: true` flag for users
+    # who still want to watch a terminal.
+    from planet_maiko.agents.coding_agent import _kickoff_agent_headless, _kickoff_agent
+    branch = result.get("branch")
+    working_path = result.get("working_path")
+    if auto_kickoff:
+        kickoff = _kickoff_agent(
+            profile_id, working_path, task_id,
+            branch_name=branch if not use_worktree else None,
+        )
+    else:
+        kickoff = _kickoff_agent_headless(
+            profile_id, working_path, task_id,
+            branch_name=branch if not use_worktree else None,
+        )
+    result["kickoff_result"] = kickoff
 
     # Link task to agent
     task.assigned_agent_id = profile_id
@@ -641,25 +661,43 @@ def agent_sends_message(task_id):
         if len(preview) > 80:
             preview = preview[:77] + "…"
 
-        # Priority: done/stuck are important; plain messages are normal.
-        priority = "high" if message_type == "stuck" else "normal"
+        # Priority: stuck is high (blocked, needs help);
+        # ready_for_review is high (user needs to act);
+        # plain messages are normal.
+        priority = "high" if message_type in ("stuck", "ready_for_review") else "normal"
         type_label = {
             "done": "completed",
             "stuck": "is stuck",
+            "ready_for_review": "ready for review",
             "message": "replied",
         }.get(message_type, "replied")
+
+        # Distinct pupdate types so the UI can route them to different
+        # actions: ready_for_review → "Review diff" button, others →
+        # generic "Open task".
+        pupdate_type = {
+            "ready_for_review": "agent_ready_for_review",
+            "done": "agent_done",
+            "stuck": "agent_stuck",
+        }.get(message_type, "agent_message")
+
+        action_hint = {
+            "ready_for_review": "Review diff",
+            "stuck": "Help the agent",
+            "done": "Open task",
+        }.get(message_type, "Open task")
 
         from planet_maiko.models.pupdate import Pupdate
         pupdate = Pupdate(
             id=f"agent-msg-{task_id}-{uuid.uuid4().hex[:8]}",
             source="maiko",
             source_id=f"agent-msg/{task_id}/{msg.id or uuid.uuid4().hex[:8]}",
-            type=f"agent_{message_type}" if message_type in ("done", "stuck") else "agent_message",
+            type=pupdate_type,
             priority=priority,
             title=f"{agent_name} {type_label}: {preview}",
             body=content,
             actionable=True,
-            action_hint="Open task",
+            action_hint=action_hint,
             tags=[task_id, "agent-message"],
             extra={
                 "task_id": task_id,
