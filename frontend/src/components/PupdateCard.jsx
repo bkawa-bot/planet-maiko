@@ -107,9 +107,9 @@ export default function PupdateCard({
                 <Eye size={10} /> {reviewing === p.id ? "Reviewing..." : "Review PR"}
               </button>
             )}
-            {p.type === "agent_ready_for_review" && p.extra?.task_id && (
+            {p.type === "agent_ready_for_review" && p.metadata?.task_id && (
               <Link
-                to={`/tasks/${p.extra.task_id}/review`}
+                to={`/tasks/${p.metadata.task_id}/review`}
                 className="btn btn-sm btn-primary"
                 onClick={(e) => e.stopPropagation()}
               >

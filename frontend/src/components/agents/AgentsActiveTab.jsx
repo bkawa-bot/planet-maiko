@@ -145,6 +145,15 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
                   </div>
                 </div>
                 <div className="agent-actions">
+                  {a.role === "coding" && a.task_id && (
+                    <Link
+                      to={`/tasks/${a.task_id}/review`}
+                      className="btn btn-sm btn-primary"
+                      title="Review the agent's changes"
+                    >
+                      <GitPullRequest size={12} /> Review diff
+                    </Link>
+                  )}
                   <button
                     className="btn btn-sm btn-approve"
                     onClick={() => handleLaunch(a)}
