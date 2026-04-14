@@ -138,6 +138,10 @@ export const api = {
     const query = new URLSearchParams(params).toString();
     return request(`/signals${query ? `?${query}` : ""}`);
   },
+  getSignalsCount: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/signals/count${query ? `?${query}` : ""}`);
+  },
 
   // Pack Insights
   getPackInsightsState: () => request("/pack-insights"),

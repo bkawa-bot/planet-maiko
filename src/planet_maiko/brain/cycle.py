@@ -217,9 +217,28 @@ def _phase_synthesis():
 
 
 def _phase_learning():
-    """Phase 4: Aggregate feedback signals into learnings."""
-    from planet_maiko.brain.learning.clustering import cluster_signals_into_learnings
-    return cluster_signals_into_learnings()
+    """Phase 4: Aggregate feedback signals into learnings, then drift-
+    dedupe the categories we just touched.
+
+    Between-cycle duplicates happen when two signals in different
+    cycles each create a new Learning with similar content (e.g.
+    "prefer X over Y" and "always use X instead of Y"). The attach
+    step doesn't catch these because each batch only sees its own
+    Learnings at the moment it ran.
+
+    Event-triggered dedupe: we re-cluster only the categories that
+    actually changed this tick, so quiet cycles cost nothing. If no
+    new signals came in, this phase is a single cheap filter query.
+    """
+    from planet_maiko.brain.learning.clustering import (
+        cluster_signals_into_learnings, cluster_learnings,
+    )
+    result = cluster_signals_into_learnings()
+    touched = result.get("touched_categories") or []
+    if touched:
+        drift = cluster_learnings(categories=touched)
+        result["drift"] = drift
+    return result
 
 
 def _phase_heartbeats():

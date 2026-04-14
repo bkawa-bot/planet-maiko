@@ -114,10 +114,26 @@ Respond as JSON:
             logger.info(f"[synthesizer] Batch {start}-{start + len(batch)} had no parseable rules; deferring")
             continue
 
-        returned_ids = [
-            r["id"] for r in parsed_rules
-            if isinstance(r, dict) and isinstance(r.get("id"), int)
-        ]
+        # LLMs occasionally return ids as strings ("1234") instead of
+        # ints, which used to silently drop the whole row. Coerce
+        # numeric strings and log anything we actually have to skip.
+        returned_ids = []
+        skipped_ids = 0
+        for r in parsed_rules:
+            if not isinstance(r, dict):
+                continue
+            rid = r.get("id")
+            if isinstance(rid, int):
+                returned_ids.append(rid)
+                continue
+            if isinstance(rid, str) and rid.strip().isdigit():
+                coerced = int(rid.strip())
+                r["id"] = coerced  # normalize so the lookup loop matches
+                returned_ids.append(coerced)
+                continue
+            skipped_ids += 1
+        if skipped_ids:
+            logger.debug(f"[synthesizer] Dropped {skipped_ids} rule(s) with non-numeric id in batch {start}-{start + len(batch)}")
         refetched = Signal.query.filter(Signal.id.in_(returned_ids)).all() if returned_ids else []
         by_id = {s.id: s for s in refetched}
         for rule_data in parsed_rules:

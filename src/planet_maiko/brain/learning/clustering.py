@@ -180,7 +180,8 @@ def _merge_cluster(canonical_text, member_ids):
     return keeper.id, len(losers)
 
 
-def cluster_learnings(statuses=DEFAULT_STATUSES, batch_size=BATCH_SIZE, on_progress=None):
+def cluster_learnings(statuses=DEFAULT_STATUSES, batch_size=BATCH_SIZE,
+                      on_progress=None, categories=None):
     """Run semantic clustering across eligible Learnings, category by
     category. Merges duplicates in the DB.
 
@@ -190,19 +191,18 @@ def cluster_learnings(statuses=DEFAULT_STATUSES, batch_size=BATCH_SIZE, on_progr
             precise but slower.
         on_progress: optional callback (current_category: str,
             processed: int, total: int) -> None.
+        categories: optional iterable limiting the scan to these
+            category names. Used by the cycle's drift-dedupe phase to
+            only re-check categories that got new signals this tick.
 
     Returns:
         dict with counts: {clusters_processed, learnings_merged,
                            categories_scanned, skipped}
     """
-    learnings = (
-        Learning.query
-        .filter(Learning.status.in_(list(statuses)))
-        # Skip placeholder-category signals that still haven't been
-        # classified — clustering those is noise.
-        .filter(Learning.category != "pattern")
-        .all()
-    )
+    q = Learning.query.filter(Learning.status.in_(list(statuses)))
+    if categories:
+        q = q.filter(Learning.category.in_(list(categories)))
+    learnings = q.all()
 
     # Group by category (we never cluster across categories).
     by_category = {}
@@ -379,7 +379,8 @@ def cluster_signals_into_learnings():
                 f"[clustering] {waiting_unsynthesized} signal(s) still waiting for "
                 "synthesis — the synthesis cycle phase will retry them"
             )
-        return {"processed": 0, "new_learnings": 0, "updated_learnings": 0, "graduated": 0}
+        return {"processed": 0, "new_learnings": 0, "updated_learnings": 0,
+                "graduated": 0, "touched_categories": []}
 
     counts = {
         "processed": 0,
@@ -390,6 +391,10 @@ def cluster_signals_into_learnings():
     }
     if waiting_unsynthesized:
         counts["awaiting_synthesis"] = waiting_unsynthesized
+    # Categories we actually modified this pass — the drift-dedupe
+    # phase re-clusters just these to catch between-cycle duplicates
+    # without re-scanning every category every tick.
+    touched = set()
 
     # Group by category. Junk filtering happens upstream (synthesis
     # marks non-actionable signals and deletes them), so by the time
@@ -469,6 +474,7 @@ def cluster_signals_into_learnings():
                     sig.aggregated = True
                     placed.add(sid)
                     counts["processed"] += 1
+                    touched.add(category)
 
                 # If signals from 3+ distinct repos now back this rule,
                 # flip it to global so training feeds it into every LoRA.
@@ -499,9 +505,11 @@ def cluster_signals_into_learnings():
                 _apply_positive_signal(sig, learning, counts)
                 sig.aggregated = True
                 counts["processed"] += 1
+                touched.add(category)
                 if _maybe_promote_global(learning):
                     counts["promoted_global"] = counts.get("promoted_global", 0) + 1
 
             db.session.commit()
 
+    counts["touched_categories"] = sorted(touched)
     return counts

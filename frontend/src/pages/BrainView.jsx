@@ -20,6 +20,7 @@ const CATEGORY_ICONS = {
 export default function BrainView() {
   const [learnings, setLearnings] = useState([]);
   const [rawSignals, setRawSignals] = useState([]);
+  const [rawSignalsTotal, setRawSignalsTotal] = useState(0);
   const [kLoading, setKLoading] = useState(true);
   const [expandedCats, setExpandedCats] = useState({});
   const [addText, setAddText] = useState("");
@@ -39,12 +40,14 @@ export default function BrainView() {
   const fetchLearnings = async () => {
     setKLoading(true);
     try {
-      const [ls, sigs] = await Promise.all([
+      const [ls, sigs, sigCount] = await Promise.all([
         api.getLearnings(),
         api.getSignals({ synthesized: false, limit: 500 }).catch(() => []),
+        api.getSignalsCount({ synthesized: false }).catch(() => ({ count: 0 })),
       ]);
       setLearnings(ls);
       setRawSignals(sigs);
+      setRawSignalsTotal(sigCount?.count ?? 0);
     } catch (err) { console.error(err); }
     setKLoading(false);
   };
@@ -208,14 +211,14 @@ export default function BrainView() {
             className={`inbox-tab ${tab === "unsynthesized" ? "active" : ""}`}
             onClick={() => setTab("unsynthesized")}
           >
-            Unsynthesized {unsynthesized.length > 0 && <span className="tab-badge">{unsynthesized.length}</span>}
+            Unsynthesized {rawSignalsTotal > 0 && <span className="tab-badge">{rawSignalsTotal}</span>}
           </button>
         </div>
 
         {tab === "unsynthesized" && unsynthesized.length > 0 && (
           <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 0", marginBottom: 8 }}>
             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, flex: 1 }}>
-              Raw PR-comment signals waiting for LLM synthesis. The brain cycle drains the queue automatically, one batch per tick. Click "Synthesize Now" to run the whole queue immediately.
+              Raw PR-comment signals waiting for LLM synthesis ({rawSignalsTotal} total{rawSignalsTotal > unsynthesized.length ? `, showing ${unsynthesized.length}` : ""}). The brain cycle drains the queue automatically, one batch per tick. Click "Synthesize Now" to run a batch immediately.
             </p>
             <button
               className="btn btn-primary btn-sm"

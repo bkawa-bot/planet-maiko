@@ -43,6 +43,33 @@ def list_signals():
     return jsonify([s.to_dict() for s in signals])
 
 
+@learning_bp.route("/signals/count", methods=["GET"])
+def count_signals():
+    """Fast count of signals matching the given filters.
+
+    Same filter params as /signals (category, source_type, aggregated,
+    synthesized). The Knowledge tab uses this for the Unsynthesized
+    badge so the number is the real queue size, not the row-limited
+    list length.
+    """
+    category = request.args.get("category")
+    source_type = request.args.get("source_type")
+    aggregated = request.args.get("aggregated")
+    synthesized = request.args.get("synthesized")
+
+    query = Signal.query
+    if category:
+        query = query.filter_by(category=category)
+    if source_type:
+        query = query.filter_by(source_type=source_type)
+    if aggregated is not None:
+        query = query.filter_by(aggregated=aggregated.lower() == "true")
+    if synthesized is not None:
+        query = query.filter_by(synthesized=synthesized.lower() == "true")
+
+    return jsonify({"count": query.count()})
+
+
 @learning_bp.route("/signals", methods=["POST"])
 def create_signal():
     """Record a new feedback signal."""
