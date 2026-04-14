@@ -206,41 +206,61 @@ def _extract_from_repo(repo, limit):
 
 
 def _extract_from_signals():
-    """Pull unincorporated feedback signals that have code context."""
+    """Pull unincorporated feedback signals that have code context.
+
+    One signal can have multiple examples (same comment left on multiple
+    files/hunks). Each example becomes its own training pair — that's
+    the point of keeping them separate: the model gets diverse code
+    snippets paired with the same human reaction.
+    """
     try:
         from planet_maiko.models.signal import Signal
-        from planet_maiko.database import db
 
-        signals = Signal.query.filter(
-            Signal.code_context.isnot(None),
-            Signal.code_context != "",
-            Signal.incorporated_at.is_(None),
-        ).all()
+        # A signal is training-usable if it has ANY source of code
+        # context — either a filled code_context (old rows / non-inline
+        # sources) or at least one entry in examples (new rows).
+        signals = Signal.query.filter(Signal.incorporated_at.is_(None)).all()
 
         pairs = []
         signal_ids = []
         for s in signals:
-            context_parts = []
-            if s.file_path:
-                context_parts.append(f"File: {s.file_path}")
-            if s.repo:
-                context_parts.append(f"Repo: {s.repo}")
-            context_parts.append(f"```\n{s.code_context}\n```")
+            # Build the example list. Prefer examples[] when present;
+            # fall back to the single code_context column for back-compat.
+            examples = []
+            for ex in (s.examples or []):
+                hunk = (ex.get("diff_hunk") or "").strip()
+                if not hunk:
+                    continue
+                examples.append({
+                    "path": ex.get("path") or s.file_path or "",
+                    "diff_hunk": hunk,
+                })
+            if not examples and s.code_context:
+                examples.append({
+                    "path": s.file_path or "",
+                    "diff_hunk": s.code_context,
+                })
+            if not examples:
+                continue
 
-            # Rejected signals = false positives → train as PASS
-            if s.severity == "rejected":
-                output = "PASS"
-            else:
-                output = f"VIOLATION: [{s.category}] {s.text}"
+            output = "PASS" if s.severity == "rejected" else f"VIOLATION: [{s.category}] {s.text}"
 
-            pairs.append({
-                "input": "\n".join(context_parts),
-                "output": output,
-                "repo": s.repo or "unknown",
-                "file_path": s.file_path or "",
-                "source": "signal",
-                "signal_id": s.id,
-            })
+            for ex in examples:
+                context_parts = []
+                if ex["path"]:
+                    context_parts.append(f"File: {ex['path']}")
+                if s.repo:
+                    context_parts.append(f"Repo: {s.repo}")
+                context_parts.append(f"```\n{ex['diff_hunk']}\n```")
+
+                pairs.append({
+                    "input": "\n".join(context_parts),
+                    "output": output,
+                    "repo": s.repo or "unknown",
+                    "file_path": ex["path"],
+                    "source": "signal",
+                    "signal_id": s.id,
+                })
             signal_ids.append(s.id)
 
         return pairs, signal_ids

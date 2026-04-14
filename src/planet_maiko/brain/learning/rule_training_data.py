@@ -156,18 +156,39 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None, 
     for learning in learnings:
         logger.info(f"[rule-data] Rule #{learning.id}: {learning.rule[:60]}...")
 
-        # Step 1: Pull real signals for this learning
+        # Step 1: Pull real signals for this learning, flatten to one row
+        # per (signal, example) so each distinct code snippet becomes its
+        # own training pair. Signals without any code context are skipped.
         real_signals = Signal.query.filter_by(learning_id=learning.id).all()
-        real_with_code = [s for s in real_signals if s.code_context]
+        real_examples = []  # list of {signal, path, diff_hunk}
+        for s in real_signals:
+            if s.examples:
+                for ex in s.examples:
+                    hunk = (ex.get("diff_hunk") or "").strip()
+                    if not hunk:
+                        continue
+                    real_examples.append({
+                        "signal": s,
+                        "path": ex.get("path") or s.file_path,
+                        "diff_hunk": hunk,
+                    })
+            elif s.code_context:
+                # Back-compat for rows created before examples existed.
+                real_examples.append({
+                    "signal": s,
+                    "path": s.file_path,
+                    "diff_hunk": s.code_context,
+                })
 
-        # Add real signal pairs
-        for s in real_with_code:
+        # Add one training pair per example.
+        for ex in real_examples:
+            s = ex["signal"]
             context_parts = []
-            if s.file_path:
-                context_parts.append(f"File: {s.file_path}")
+            if ex["path"]:
+                context_parts.append(f"File: {ex['path']}")
             if s.repo:
                 context_parts.append(f"Repo: {s.repo}")
-            context_parts.append(f"```\n{s.code_context}\n```")
+            context_parts.append(f"```\n{ex['diff_hunk']}\n```")
 
             all_pairs.append({
                 "input": "\n".join(context_parts),
@@ -180,7 +201,7 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None, 
             })
 
         # Step 2: Calculate how many synthetic examples we need
-        real_violation_count = len(real_with_code)
+        real_violation_count = len(real_examples)
         num_violations = max(0, (examples_per_rule // 2) - real_violation_count)
         num_passes = examples_per_rule // 2
 
@@ -190,13 +211,12 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None, 
 
         # Step 3: Build prompt with real examples and inferred context
         real_examples_section = ""
-        if real_with_code:
+        if real_examples:
             examples_text = ""
-            for s in real_with_code[:3]:  # Show up to 3 real examples
-                label = ""
-                if s.file_path:
-                    label = f" ({s.file_path})"
-                examples_text += f"\n- Code{label}: {s.code_context[:300]}\n  Feedback: {s.text}\n"
+            for ex in real_examples[:3]:  # Show up to 3 real examples
+                s = ex["signal"]
+                label = f" ({ex['path']})" if ex["path"] else ""
+                examples_text += f"\n- Code{label}: {ex['diff_hunk'][:300]}\n  Feedback: {s.text}\n"
             real_examples_section = f"Here are real examples of this rule being violated in the team's codebase:\n{examples_text}\nUse these as reference for the language, style, and severity of violations. Generate examples in the SAME language and framework as these real examples."
 
         # Build scope info — explicit fields + inferred from signals

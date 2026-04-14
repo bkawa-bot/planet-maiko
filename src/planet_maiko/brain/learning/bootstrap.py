@@ -184,41 +184,56 @@ def bootstrap_from_prs(limit=None, repos=None):
             repo_stats["comments_scanned"] = len(inline)
             update_backfill_progress(comments_total=len(inline))
 
-            # Dedup widened to include file_path + code_context: the same
-            # comment text on a different hunk is a distinct training
-            # example, so we want a separate signal. Preloading into a
-            # set keeps the inner loop O(1) instead of issuing a DB
-            # query per comment.
-            existing_keys = {
-                (s.text, s.file_path or "", s.code_context or "")
+            # Preload existing signals for this repo keyed by text so we
+            # can merge new occurrences onto the same signal row
+            # (one Signal per unique comment, many examples per signal).
+            preload = {
+                s.text: s
                 for s in Signal.query.filter_by(
                     repo=repo, source_type="pr_comment"
                 ).all()
             }
 
             created_for_repo = 0
+            examples_added = 0
             for i, entry in enumerate(inline, start=1):
                 body = entry["body"][:500]
-                file_path = entry.get("path") or None
-                diff_hunk = entry.get("diff_hunk") or None
+                example = {
+                    "path": entry.get("path") or None,
+                    "diff_hunk": entry.get("diff_hunk") or None,
+                    "author": entry.get("author", "") or "",
+                    "line": entry.get("line"),
+                }
+                ex_key = (example["path"] or "", example["diff_hunk"] or "")
 
-                key = (body, file_path or "", diff_hunk or "")
-                if key in existing_keys:
-                    continue
-
-                signal = Signal(
-                    category="pattern",
-                    text=body,
-                    source_type="pr_comment",
-                    reviewer=entry.get("author", ""),
-                    severity="suggestion",
-                    repo=repo,
-                    file_path=file_path,
-                    code_context=diff_hunk,
-                )
-                db.session.add(signal)
-                existing_keys.add(key)
-                created_for_repo += 1
+                existing = preload.get(body)
+                if existing:
+                    # Same comment — append this occurrence to the
+                    # signal's example list unless it's already there.
+                    current = list(existing.examples or [])
+                    already = any(
+                        ((e.get("path") or ""), (e.get("diff_hunk") or "")) == ex_key
+                        for e in current
+                    )
+                    if not already:
+                        current.append(example)
+                        existing.examples = current
+                        examples_added += 1
+                else:
+                    signal = Signal(
+                        category="pattern",
+                        text=body,
+                        source_type="pr_comment",
+                        reviewer=example["author"],
+                        severity="suggestion",
+                        repo=repo,
+                        file_path=example["path"],
+                        code_context=example["diff_hunk"],
+                        examples=[example],
+                    )
+                    db.session.add(signal)
+                    preload[body] = signal
+                    created_for_repo += 1
 
                 # Emit live progress so the UI actually moves. Every 25
                 # comments is enough — polling runs every 1.5s and this
@@ -228,6 +243,9 @@ def bootstrap_from_prs(limit=None, repos=None):
                         comments_done=i,
                         signals_created=total_created + created_for_repo,
                     )
+
+            if examples_added:
+                logger.info(f"[bootstrap] {repo}: {created_for_repo} new signals + {examples_added} examples appended to existing")
 
             repo_stats["signals_created"] = created_for_repo
             total_created += created_for_repo

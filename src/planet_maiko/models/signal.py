@@ -28,7 +28,17 @@ class Signal(db.Model):
     language = db.Column(db.String(50), nullable=True)
     file_path = db.Column(db.String(512), nullable=True)
 
-    code_context = db.Column(db.Text, nullable=True)  # The code that triggered this feedback
+    # First-seen code context. Kept for backward compat with readers
+    # that expect a single "primary" example on the row. The complete
+    # list of occurrences (including this one) lives in `examples`.
+    code_context = db.Column(db.Text, nullable=True)
+
+    # Every place this signal's text showed up, with its own diff hunk.
+    # Same comment on 3 files = 1 signal with 3 examples = 3 training
+    # pairs. Shape:
+    #   [{"path": str|None, "diff_hunk": str|None,
+    #     "author": str, "line": int|None}, ...]
+    examples = db.Column(db.JSON, default=list)
 
     learning_id = db.Column(db.Integer, db.ForeignKey("learnings.id"), nullable=True)
     aggregated = db.Column(db.Boolean, default=False)  # Has this been processed?
@@ -50,6 +60,7 @@ class Signal(db.Model):
             "language": self.language,
             "file_path": self.file_path,
             "code_context": self.code_context,
+            "examples": self.examples or [],
             "learning_id": self.learning_id,
             "aggregated": self.aggregated,
             "incorporated_at": self.incorporated_at.isoformat() if self.incorporated_at else None,
