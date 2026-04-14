@@ -162,13 +162,7 @@ def assign_agent():
         repo = (task.extra or {}).get("repo") or (task.extra or {}).get("repository")
         local_path = resolve_repo_path(repo)
         if not local_path:
-            return jsonify({
-                "error": (
-                    f"No local clone found for {repo}. "
-                    "Set config.github.repo_roots to the directories "
-                    "where your repos live."
-                ),
-            }), 400
+            return jsonify({"error": f"No local clone found for {repo}"}), 400
 
         task.assigned_agent_id = profile.id
         if task.type not in ONE_SHOT_ROLE_FOR_TYPE:

@@ -141,9 +141,7 @@ def launch_task(task_id):
         (task.extra or {}).get("repo")
     )
     if not repo_path:
-        return jsonify({
-            "error": "No local clone found. Set config.github.repo_roots or assign via /agents/assign with an explicit repo_path.",
-        }), 400
+        return jsonify({"error": "No local clone found"}), 400
     result = prepare(
         task_id=task.id,
         task_title=task.title,

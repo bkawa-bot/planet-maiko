@@ -44,22 +44,17 @@ def scope_for_task(task: Task) -> Optional[str]:
 def resolve_repo_path(repo: Optional[str]) -> Optional[str]:
     """Resolve a GitHub-style "org/repo" to a local filesystem path.
 
-    Walks config.github.repo_roots looking for a directory that is a
-    git repo and whose name matches the last segment of `repo`. Also
-    tries the full "org/repo" subpath in case the user clones under
-    nested dirs. Returns the first match or None.
-
-    Used by the one-shot assign path to find a local clone to create
-    a worktree in — no UI prompt needed since the user's already
-    told us where repos live.
+    Walks config.github.repo_roots (set under Settings) looking for a
+    directory that is a git repo and whose name matches the last
+    segment of `repo`. Also tries the full "org/repo" subpath in case
+    the user clones under nested dirs. Returns None when nothing
+    matches.
     """
     if not repo:
         return None
     import os
     from planet_maiko.config import load_config
     roots = (load_config().get("github", {}) or {}).get("repo_roots") or []
-    if not roots:
-        return None
     name = repo.rsplit("/", 1)[-1]
     for root in roots:
         root = os.path.expanduser(root)

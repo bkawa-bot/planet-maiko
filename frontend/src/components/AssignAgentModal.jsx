@@ -174,11 +174,6 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
                     onChange={(e) => setRepoPath(e.target.value)}
                     placeholder={repoRoots.length ? `${repoRoots[0]}/repo-name` : "/path/to/your/repo"}
                   />
-                  {!repoPath && repoRoots.length === 0 && (
-                    <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
-                      Set repository roots in Settings to auto-fill this field.
-                    </div>
-                  )}
 
                   <div className="assign-section-label" style={{ marginTop: 16 }}>Branch Name (optional)</div>
                   <input
