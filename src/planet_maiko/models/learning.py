@@ -3,13 +3,13 @@ from planet_maiko.database import db
 
 
 class Learning(db.Model):
-    """A graduated rule learned from accumulated signals.
+    """A rule learned from accumulated signals.
 
-    Learnings start as "pending" and graduate to "active" once enough
-    signals confirm them. Different categories have different thresholds.
-
-    Active learnings become part of the coding guidelines that agents
-    use when working on code.
+    Every Learning starts as "pending" and only becomes "active" when
+    the user explicitly approves it — there's no auto-graduation.
+    signal_count is just metadata (how many confirming signals back
+    this rule) so the UI can sort or gate approval on evidence; it's
+    not a graduation gate.
     """
     __tablename__ = "learnings"
 
@@ -17,9 +17,13 @@ class Learning(db.Model):
     rule = db.Column(db.Text, nullable=False)  # The learned rule in plain English
     category = db.Column(db.String(50), nullable=False, index=True)
 
-    # Scope: which repos/languages this applies to (null = global)
+    # Origin repo (where the first signal came from). Stays fixed for
+    # provenance. When the same rule shows up across >= GLOBAL_PROMOTE
+    # distinct repos, we flip is_global so training pipes this learning
+    # into every repo's LoRA dataset.
     scope_repo = db.Column(db.String(256), nullable=True, index=True)
     scope_language = db.Column(db.String(50), nullable=True)
+    is_global = db.Column(db.Boolean, default=False, index=True)
 
     confidence = db.Column(db.Float, default=0.0)  # 0.0 to 1.0
     signal_count = db.Column(db.Integer, default=0)
@@ -43,6 +47,7 @@ class Learning(db.Model):
             "category": self.category,
             "scope_repo": self.scope_repo,
             "scope_language": self.scope_language,
+            "is_global": bool(self.is_global),
             "confidence": self.confidence,
             "signal_count": self.signal_count,
             "source": self.source,

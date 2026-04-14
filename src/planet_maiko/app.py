@@ -24,6 +24,7 @@ def _ensure_columns():
         "ALTER TABLE signals ADD COLUMN code_context TEXT",
         "ALTER TABLE signals ADD COLUMN incorporated_at DATETIME",
         "ALTER TABLE signals ADD COLUMN examples JSON DEFAULT '[]'",
+        "ALTER TABLE learnings ADD COLUMN is_global BOOLEAN DEFAULT 0",
         "ALTER TABLE custom_skills ADD COLUMN user_edited BOOLEAN DEFAULT 0",
         "ALTER TABLE agent_profiles ADD COLUMN extra JSON DEFAULT '{}'",
         "ALTER TABLE agent_profiles ADD COLUMN role VARCHAR(32) DEFAULT 'coding'",

@@ -136,8 +136,17 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None, 
     if rule_ids:
         query = query.filter(Learning.id.in_(rule_ids))
     if repo:
-        # Include rules scoped to this repo + global rules (scope_repo IS NULL)
-        query = query.filter(or_(Learning.scope_repo == repo, Learning.scope_repo.is_(None)))
+        # Include rules scoped to this repo + rules that have been
+        # promoted to global (observed across 3+ repos). Legacy rows
+        # with scope_repo=NULL and is_global=False (pre-migration)
+        # are also included as implicitly-global.
+        query = query.filter(
+            or_(
+                Learning.scope_repo == repo,
+                Learning.is_global == True,  # noqa: E712
+                Learning.scope_repo.is_(None),
+            )
+        )
     learnings = query.all()
 
     if not learnings:

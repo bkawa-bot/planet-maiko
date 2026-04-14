@@ -268,7 +268,18 @@ class TestBrainCycle:
         refreshed = db.session.get(Pupdate, "pup-cycle-proc")
         assert refreshed.brain_processed is True
 
-    def test_brain_cycle_processes_signals(self, app, db):
+    def test_brain_cycle_processes_signals(self, app, db, monkeypatch):
+        # Clustering is LLM-driven; stub the call so offline tests still
+        # exercise the cycle's aggregation path. One cluster per signal
+        # → one new Learning per signal (simplest valid clustering).
+        from planet_maiko.brain.learning import clustering as _clustering
+        def fake_attach(category, existing, signals):
+            return [
+                {"existing_id": None, "canonical": s.text[:80], "member_ids": [s.id]}
+                for s in signals
+            ], True
+        monkeypatch.setattr(_clustering, "_call_attach_llm", fake_attach)
+
         sig = Signal(
             category="style", text="Keep functions under 30 lines",
             source_type="manual",
@@ -456,46 +467,26 @@ class TestLearningPipeline:
         assert learning is not None
         assert learning.signal_count == 5
 
-    def test_graduation_at_threshold(self, app, db):
-        """Style threshold is 5 -- exactly 5 signals should graduate."""
-        from planet_maiko.brain.learning.processor import GRADUATION_THRESHOLDS
-        threshold = GRADUATION_THRESHOLDS["style"]
-
-        for i in range(threshold):
-            sig = Signal(
-                category="style",
-                text="Prefer f-strings over .format()",
-                source_type="pr_comment",
-            )
-            db.session.add(sig)
-        db.session.commit()
-
-        from planet_maiko.brain.learning.processor import process_signals
-        counts = process_signals()
-
-        assert counts["graduated"] == 1
-
-        learning = Learning.query.first()
-        assert learning.status == "active"
-        assert learning.signal_count >= threshold
-
-    def test_approval_category_does_not_auto_graduate(self, app, db):
-        """Security is in NEEDS_APPROVAL -- should stay pending."""
-        for i in range(5):
-            sig = Signal(
-                category="security",
-                text="Never expose API keys in responses",
-                source_type="pr_comment",
-            )
-            db.session.add(sig)
+    def test_never_auto_graduates(self, app, db):
+        """Auto-graduation was removed. Learnings always stay "pending"
+        until the user explicitly approves them in the Knowledge UI —
+        regardless of signal_count or category."""
+        for category in ("style", "security", "error_handling"):
+            for i in range(5):
+                db.session.add(Signal(
+                    category=category,
+                    text=f"Rule for {category}",
+                    source_type="pr_comment",
+                ))
         db.session.commit()
 
         from planet_maiko.brain.learning.processor import process_signals
         counts = process_signals()
 
         assert counts["graduated"] == 0
-        learning = Learning.query.first()
-        assert learning.status == "pending"
+        for l in Learning.query.all():
+            assert l.status == "pending"
+            assert l.signal_count >= 5
 
     def test_idempotent_processing(self, app, db):
         """Already-aggregated signals should not be processed again."""

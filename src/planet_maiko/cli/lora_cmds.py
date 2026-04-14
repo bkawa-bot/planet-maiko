@@ -177,7 +177,11 @@ def cmd_retrain(args):
             if repo:
                 all_active = Learning.query.filter(
                     Learning.status == "active",
-                    or_(Learning.scope_repo == repo, Learning.scope_repo.is_(None)),
+                    or_(
+                        Learning.scope_repo == repo,
+                        Learning.is_global == True,  # noqa: E712
+                        Learning.scope_repo.is_(None),
+                    ),
                 ).all()
             else:
                 all_active = Learning.query.filter_by(status="active").all()

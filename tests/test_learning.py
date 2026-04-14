@@ -8,7 +8,6 @@ from planet_maiko.models.context_selection import ContextSelection
 from planet_maiko.brain.learning.processor import (
     process_signals,
     compile_brief,
-    GRADUATION_THRESHOLDS,
 )
 
 
@@ -61,47 +60,28 @@ def test_process_signals_aggregates_duplicate_signals(app, db):
     assert learning.signal_count == 3
 
 
-def test_process_signals_graduates_when_threshold_reached(app, db):
-    # error_handling threshold is 3
-    threshold = GRADUATION_THRESHOLDS["error_handling"]
-    for i in range(threshold):
-        sig = Signal(
-            category="error_handling",
-            text="Wrap external API calls in try/except",
-            source_type="pr_comment",
-            repo="api-service",
-            language="python",
-        )
-        db.session.add(sig)
+def test_process_signals_never_auto_graduates(app, db):
+    # Auto-graduation was removed — every Learning stays "pending"
+    # until the user approves it, regardless of signal_count or
+    # category. This test asserts that invariant across several
+    # categories that used to have different thresholds.
+    for category in ("error_handling", "security", "style"):
+        for i in range(5):
+            db.session.add(Signal(
+                category=category,
+                text=f"Rule for {category}",
+                source_type="pr_comment",
+                repo="api-service",
+                language="python",
+            ))
     db.session.commit()
 
     result = process_signals()
-    assert result["graduated"] == 1
-
-    learning = Learning.query.first()
-    assert learning.status == "active"
-    assert learning.signal_count >= threshold
-
-
-def test_process_signals_does_not_graduate_approval_categories(app, db):
-    # security threshold is 2, but needs approval
-    for i in range(3):
-        sig = Signal(
-            category="security",
-            text="Never log PII in request bodies",
-            source_type="pr_comment",
-            repo="api-service",
-            language="python",
-        )
-        db.session.add(sig)
-    db.session.commit()
-
-    result = process_signals()
-    # Should not auto-graduate since security is in NEEDS_APPROVAL
     assert result["graduated"] == 0
 
-    learning = Learning.query.first()
-    assert learning.status == "pending"
+    for l in Learning.query.all():
+        assert l.status == "pending", f"{l.category} Learning should stay pending"
+        assert l.signal_count >= 5
 
 
 def test_process_signals_noop_when_no_signals(app, db):

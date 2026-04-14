@@ -284,7 +284,9 @@ export default function BrainView() {
                           <div className="learning-left">
                             {l.status === "pending" && <span className="badge paused">pending</span>}
                             {l.source && <span className="tag">{l.source}</span>}
-                            {l.scope_repo && <span className="tag">{l.scope_repo}</span>}
+                            {l.is_global
+                              ? <span className="tag tag-global" title="Seen in 3+ repos — feeds every LoRA">🌐 global</span>
+                              : l.scope_repo && <span className="tag">{l.scope_repo}</span>}
                             {l.scope_language && <span className="tag">{l.scope_language}</span>}
                           </div>
                           <div className="confidence-bar-wrapper">

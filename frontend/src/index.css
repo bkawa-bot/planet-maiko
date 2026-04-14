@@ -250,6 +250,9 @@ a:hover { text-decoration: underline; }
   background: var(--bg); padding: 1px 6px; border-radius: 4px;
   font-size: 10px; color: var(--text-muted);
 }
+.tag.tag-global {
+  background: var(--pink-soft); color: var(--pink); font-weight: 600;
+}
 
 .mono { font-family: var(--font-mono); }
 

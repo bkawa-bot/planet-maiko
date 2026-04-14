@@ -33,6 +33,34 @@ BATCH_SIZE = 40
 # unless the caller explicitly asks for it — they're still volatile.
 DEFAULT_STATUSES = ("active", "pending")
 
+# Flip a Learning to is_global=True once its signals have come from
+# this many distinct repos. Once global, the rule feeds every repo's
+# LoRA training dataset.
+GLOBAL_PROMOTE_REPOS = 3
+
+
+def _maybe_promote_global(learning):
+    """Flip is_global=True once signals come from >= GLOBAL_PROMOTE_REPOS
+    distinct repos. Idempotent; once promoted, stays promoted."""
+    if learning.is_global:
+        return False
+    # Distinct repos via a straight SELECT DISTINCT on the signals table.
+    # Cheap — signal_count per learning is small.
+    from sqlalchemy import distinct, func
+    repo_count = (
+        db.session.query(func.count(distinct(Signal.repo)))
+        .filter(Signal.learning_id == learning.id, Signal.repo.isnot(None))
+        .scalar() or 0
+    )
+    if repo_count >= GLOBAL_PROMOTE_REPOS:
+        learning.is_global = True
+        logger.info(
+            f"[clustering] Promoted learning #{learning.id} to global "
+            f"({repo_count} distinct repos): {learning.rule[:60]}"
+        )
+        return True
+    return False
+
 
 CLUSTER_PROMPT = """You are deduping a list of short coding rules.
 
@@ -326,16 +354,16 @@ def cluster_signals_into_learnings():
     attach to it; signals that introduce a genuinely new idea become a
     brand-new Learning.
 
-    Falls back to prefix-based aggregation (the old processor.process_signals
-    logic) when the LLM runtime is unavailable so offline / early-boot
-    environments still make forward progress.
+    If the LLM runtime is unavailable, signals are left in the queue —
+    we don't degrade to prefix-matching anymore. Clustering is the
+    single source of truth for getting signals into rules; the next
+    cycle tick tries again when the runtime comes back.
 
     Returns a dict with counts (matches the shape process_signals used
     to return so callers don't need to change).
     """
     from planet_maiko.brain.learning.processor import (
-        _is_junk_signal, _apply_positive_signal, _maybe_graduate,
-        CONFIDENCE_PER_SIGNAL, process_signals,
+        _is_junk_signal, _apply_positive_signal,
     )
 
     unprocessed = Signal.query.filter_by(aggregated=False).all()
@@ -348,7 +376,7 @@ def cluster_signals_into_learnings():
         "updated_learnings": 0,
         "graduated": 0,
         "skipped_junk": 0,
-        "fallback_prefix": 0,
+        "deferred": 0,
     }
 
     # Junk filter + group by category
@@ -380,16 +408,15 @@ def cluster_signals_into_learnings():
             clusters, ok = _call_attach_llm(category, existing, batch)
 
             if not ok:
-                # Degrade to prefix-matching for this batch — old logic.
-                counts["fallback_prefix"] += len(batch)
-                fallback = process_signals()
-                # process_signals hit all unaggregated signals, not just
-                # this batch — reconcile the counts.
-                counts["new_learnings"] += fallback.get("new_learnings", 0)
-                counts["updated_learnings"] += fallback.get("updated_learnings", 0)
-                counts["graduated"] += fallback.get("graduated", 0)
-                counts["processed"] += fallback.get("processed", 0)
-                return counts
+                # LLM unavailable or returned unparseable output. Leave
+                # the batch's signals aggregated=False so the next cycle
+                # tries again. Nothing degrades — we just wait.
+                logger.info(
+                    f"[clustering] LLM unavailable for {category} "
+                    f"(batch {start}-{start + len(batch)}); deferring"
+                )
+                counts["deferred"] = counts.get("deferred", 0) + len(batch)
+                continue
 
             batch_by_id = {s.id: s for s in batch}
             placed = set()
@@ -439,6 +466,11 @@ def cluster_signals_into_learnings():
                     placed.add(sid)
                     counts["processed"] += 1
 
+                # If signals from 3+ distinct repos now back this rule,
+                # flip it to global so training feeds it into every LoRA.
+                if _maybe_promote_global(learning):
+                    counts["promoted_global"] = counts.get("promoted_global", 0) + 1
+
             # Any signal the LLM dropped on the floor — park it as its
             # own new Learning using its own text. Safer than losing it.
             for sid, sig in batch_by_id.items():
@@ -463,6 +495,8 @@ def cluster_signals_into_learnings():
                 _apply_positive_signal(sig, learning, counts)
                 sig.aggregated = True
                 counts["processed"] += 1
+                if _maybe_promote_global(learning):
+                    counts["promoted_global"] = counts.get("promoted_global", 0) + 1
 
             db.session.commit()
 

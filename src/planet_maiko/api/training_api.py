@@ -172,7 +172,11 @@ def rule_coverage():
 
     query = Learning.query.filter_by(status="active")
     if repo:
-        query = query.filter(or_(Learning.scope_repo == repo, Learning.scope_repo.is_(None)))
+        query = query.filter(or_(
+            Learning.scope_repo == repo,
+            Learning.is_global == True,  # noqa: E712
+            Learning.scope_repo.is_(None),
+        ))
     active = query.all()
 
     # Also list available repos from learnings for the dropdown
@@ -228,7 +232,11 @@ def generate_from_rules_endpoint():
         covered = get_covered_rule_ids(repo=repo)
         query = Learning.query.filter_by(status="active")
         if repo:
-            query = query.filter(or_(Learning.scope_repo == repo, Learning.scope_repo.is_(None)))
+            query = query.filter(or_(
+            Learning.scope_repo == repo,
+            Learning.is_global == True,  # noqa: E712
+            Learning.scope_repo.is_(None),
+        ))
         active = query.all()
         new_ids = [l.id for l in active if l.id not in covered]
 

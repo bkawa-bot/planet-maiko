@@ -1,12 +1,14 @@
-"""Learning processor - aggregates signals into learnings and graduates them.
+"""Learning processor - helpers for signal → learning aggregation.
 
-Pipeline: raw signals → aggregation → graduation → active rules
+Historical auto-graduation (per-category thresholds, NEEDS_APPROVAL
+categories) has been removed — every Learning now stays in "pending"
+status until the user explicitly approves it in the Knowledge UI.
+signal_count is just metadata (how many confirming signals), used by
+the UI to sort/highlight rules with more evidence.
 
-Graduation thresholds vary by category:
-    - Style/naming/docs: 5 signals (low-stakes, need more evidence)
-    - Error handling/null safety/performance/testing: 3 signals
-    - API design/architecture/security: 2 signals (high-stakes, graduate faster
-      but start as "pending" for user approval)
+The main aggregation path now lives in clustering.cluster_signals_into_learnings.
+The helpers below (_is_junk_signal, _apply_positive_signal) are still
+used by that module.
 """
 
 import logging
@@ -19,28 +21,9 @@ from planet_maiko.models.learning import Learning
 
 logger = logging.getLogger(__name__)
 
-# How many signals before a learning graduates
-GRADUATION_THRESHOLDS = {
-    "style": 5,
-    "naming": 5,
-    "docs": 5,
-    "error_handling": 3,
-    "null_safety": 3,
-    "performance": 3,
-    "testing": 3,
-    "api_design": 2,
-    "architecture": 2,
-    "security": 2,
-    "domain_knowledge": 2,
-    "pattern": 3,
-    "gotcha": 2,
-    "team": 3,
-}
-
-# Categories that need user approval before becoming active
-NEEDS_APPROVAL = {"api_design", "architecture", "security"}
-
-# Confidence increment per signal (capped at 1.0)
+# Confidence increment per signal (capped at 1.0). Confidence is a
+# "how strongly does the evidence back this rule" score the UI shows
+# — it doesn't gate graduation.
 CONFIDENCE_PER_SIGNAL = 0.1
 
 
@@ -99,35 +82,15 @@ def _apply_negative_signal(signal, learning, counts):
 
 
 def _apply_positive_signal(signal, learning, counts):
-    """A confirming signal — bump signal count + confidence and check
-    whether it's time to graduate the learning from pending → active.
+    """A confirming signal — bump signal count + confidence, link the
+    signal to the learning. The learning's status stays "pending" — the
+    user has to explicitly approve it in the Knowledge UI.
     """
     learning.signal_count += 1
     learning.confidence = min(1.0, learning.confidence + CONFIDENCE_PER_SIGNAL)
     learning.last_signal_at = datetime.now(timezone.utc)
     signal.learning_id = learning.id
     counts["updated_learnings"] += 1
-    _maybe_graduate(learning, counts)
-
-
-def _maybe_graduate(learning, counts):
-    """If the learning has crossed its category threshold, graduate it."""
-    threshold = GRADUATION_THRESHOLDS.get(learning.category, 3)
-    if learning.signal_count < threshold or learning.status != "pending":
-        return
-
-    # Don't graduate unclassified "pattern" signals — wait for LLM classification
-    if learning.category == "pattern" and learning.source == "auto":
-        return
-
-    if learning.category in NEEDS_APPROVAL:
-        # High-stakes categories stay pending; user approves manually
-        logger.info(f"[learning] Ready for approval: {learning.rule[:60]}")
-        return
-
-    learning.status = "active"
-    counts["graduated"] += 1
-    logger.info(f"[learning] Graduated: {learning.rule[:60]}")
 
 
 def _create_new_learning(signal, agg_key, counts):
@@ -260,7 +223,7 @@ def compile_brief(repo=None, language=None, max_learnings=15, task_id=None,
     # Filter by scope
     scoped = []
     for l in learnings:
-        repo_match = l.scope_repo is None or l.scope_repo == repo
+        repo_match = l.is_global or l.scope_repo is None or l.scope_repo == repo
         lang_match = l.scope_language is None or l.scope_language == language
         if repo_match and lang_match:
             scoped.append(l)
