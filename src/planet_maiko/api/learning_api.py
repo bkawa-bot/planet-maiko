@@ -204,6 +204,7 @@ def _run_backfill_job(app, limit, repo):
                     runtime = ClaudeCodeRuntime()
                     model = resolve_model("classify")
 
+                    dropped_junk = 0
                     for start in range(0, len(raw), SYNTH_BATCH):
                         batch = raw[start:start + SYNTH_BATCH]
                         comments = [
@@ -212,8 +213,14 @@ def _run_backfill_job(app, limit, repo):
                         ]
                         prompt = f"""Synthesize these PR review comments into clean, actionable coding rules.
 
-For each comment, extract the core lesson as a short rule (one sentence).
-Also classify each into a category. Echo back the id exactly as given.
+For each comment, decide whether it expresses a generalizable coding rule
+a reviewer would want to reuse — "always prefer X over Y", "don't do Z
+in this context". If it does, extract the core lesson as a short one-
+sentence rule and classify it. If it doesn't — e.g. greetings, praise,
+questions, bot comments, personal opinions, PR-specific logistics — set
+actionable: false and we'll drop that signal from the pool.
+
+Echo back every id exactly as given. Include one entry per input.
 
 Comments:
 {chr(10).join(comments)}
@@ -223,7 +230,11 @@ architecture, null_safety, style, naming, docs, pattern, domain_knowledge
 
 Respond as JSON:
 {{"rules": [
-  {{"id": 1234, "rule": "Always validate input lengths at API boundaries", "category": "security"}},
+  {{"id": 1234, "actionable": true,
+    "rule": "Always validate input lengths at API boundaries",
+    "category": "security"}},
+  {{"id": 1235, "actionable": false,
+    "reason": "Praise without a pattern"}},
   ...
 ]}}"""
 
@@ -232,10 +243,6 @@ Respond as JSON:
 
                         parsed_rules = (result.get("parsed") or {}).get("rules") if result else None
                         if parsed_rules:
-                            # Look up only the signals the LLM actually
-                            # returned — refetch is still needed because
-                            # db.session.close() invalidated the batch objects
-                            # during the long LLM call.
                             from planet_maiko.models.signal import Signal as RefetchSignal
                             returned_ids = [
                                 r["id"] for r in parsed_rules
@@ -249,12 +256,22 @@ Respond as JSON:
                                 target = by_id.get(rule_data.get("id"))
                                 if target is None:
                                     continue
+                                # Treat missing "actionable" as true so we
+                                # don't silently drop rules when the LLM
+                                # forgets the field.
+                                actionable = rule_data.get("actionable", True)
+                                if not actionable:
+                                    db.session.delete(target)
+                                    dropped_junk += 1
+                                    continue
                                 target.text = rule_data.get("rule", target.text)
                                 target.category = rule_data.get("category", "pattern")
                                 synthesized += 1
                             db.session.commit()
 
                         update_backfill_progress(synthesized=synthesized)
+                    if dropped_junk:
+                        logger.info(f"[backfill] Dropped {dropped_junk} non-actionable signal(s)")
                 except Exception as e:
                     synth_error = str(e)
 
