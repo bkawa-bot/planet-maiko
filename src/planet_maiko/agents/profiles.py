@@ -225,9 +225,6 @@ def record_task_outcome(task_id, outcome, initial_summary=None, final_summary=No
                     lens["territory"] = territory
                     profile.lens = lens
 
-                # Update rank
-                profile.breed = profile.rank()
-
     if selections:
         db.session.commit()
         logger.info(f"[profiles] Recorded outcome '{outcome}' for task {task_id}")
@@ -257,88 +254,6 @@ def record_session_feedback(task_id, feedback_category, severity="suggestion"):
         logger.info(f"[feedback] {feedback_category}/{severity} for task {task_id}")
 
     return len(selections)
-
-
-def recommend_agent(repo=None, task_type=None, categories=None):
-    """Recommend the best agent for a task based on specialization.
-
-    Returns:
-        list of {profile, score, reasons, gap_detected} sorted by score descending.
-        If gap_detected is True for all, suggests creating a new agent.
-    """
-    profiles = AgentProfile.query.filter(
-        (AgentProfile.archived == False) | (AgentProfile.archived == None)
-    ).all()
-
-    if not profiles:
-        return [{"gap_detected": True, "reason": "No agents exist yet"}]
-
-    GAP_THRESHOLD = 0.3
-    scored = []
-
-    for p in profiles:
-        score = 0.0
-        reasons = []
-        specs = p.specializations or {}
-
-        # Repo:category specialization scoring
-        if repo and categories:
-            cat_scores = []
-            for cat in categories:
-                spec_key = f"{repo}:{cat}"
-                cat_score = specs.get(spec_key, 0.0)
-                cat_scores.append(cat_score)
-            if cat_scores:
-                avg_spec = sum(cat_scores) / len(cat_scores)
-                score += avg_spec * 0.5
-                if avg_spec > 0.5:
-                    reasons.append(f"experienced with {repo}:{','.join(categories)}")
-        elif repo:
-            # Fallback: check any repo-prefixed specializations
-            repo_scores = [v for k, v in specs.items() if k.startswith(f"{repo}:")]
-            if repo_scores:
-                avg_spec = sum(repo_scores) / len(repo_scores)
-                score += avg_spec * 0.5
-                if avg_spec > 0.5:
-                    reasons.append(f"experienced with {repo}")
-
-        # Overall success rate
-        rate = p.success_rate()
-        score += rate * 0.3
-        if rate > 0.8 and (p.tasks_completed + p.tasks_failed) >= 3:
-            reasons.append(f"{rate*100:.0f}% success rate")
-
-        # Experience volume
-        total = p.tasks_completed + p.tasks_failed
-        score += min(0.2, total * 0.02)
-        if total >= 10:
-            reasons.append(f"{total} tasks completed")
-
-        # Exploration bonus for new agents (Thompson sampling-inspired)
-        if total < 3:
-            exploration_bonus = 0.15 * (1 - total / 3)  # Decays: 0.15 at 0 tasks, 0.05 at 2 tasks
-            score += exploration_bonus
-            reasons.append("exploration candidate")
-
-        scored.append({
-            "profile": p.to_dict(),
-            "score": round(score, 2),
-            "reasons": reasons or ["new agent"],
-            "gap_detected": False,
-        })
-
-    scored.sort(key=lambda x: -x["score"])
-
-    # Gap detection: if best agent scores below threshold, recommend creating a new one
-    if scored and scored[0]["score"] < GAP_THRESHOLD:
-        scored.insert(0, {
-            "profile": None,
-            "score": 0,
-            "reasons": [f"No agent experienced with {repo or 'this task'}. Consider creating a new agent to explore."],
-            "gap_detected": True,
-        })
-
-    return scored
 
 
 def get_learning_stats():

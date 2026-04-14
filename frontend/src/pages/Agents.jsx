@@ -10,8 +10,6 @@ import AgentsProfilesTab from "../components/agents/AgentsProfilesTab";
 import AgentsInsightsTab from "../components/agents/AgentsInsightsTab";
 import "./Agents.css";
 
-const RANK_LABELS = { pup: "🌱 Pup", junior: "⭐ Junior", senior: "🌟 Senior", expert: "👑 Expert" };
-
 export default function Agents() {
   const [tab, setTab] = useState("active");
   const [profiles, setProfiles] = useState([]);
@@ -145,7 +143,6 @@ export default function Agents() {
               <div className="arrival-avatar"><Bot size={32} /></div>
               <h2 className="arrival-greeting">{showArrival.display_name}</h2>
               <p className="arrival-flavor">{showArrival.flavor_text}</p>
-              <div className="arrival-rank">{RANK_LABELS[showArrival.rank] || "🌱 Pup"}</div>
               <div className="arrival-role">
                 {(showArrival.role || "coding") === "coding" && <><Code2 size={10} /> Coder</>}
                 {showArrival.role === "review" && <><Eye size={10} /> Reviewer</>}

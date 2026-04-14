@@ -5,8 +5,6 @@ import {
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
 
-const RANK_LABELS = { pup: "🌱 Pup", junior: "⭐ Junior", senior: "🌟 Senior", expert: "👑 Expert" };
-
 const ROLE_META = {
   coding: { icon: Code2, label: "Coder", color: "var(--pink)" },
   review: { icon: Eye, label: "Reviewer", color: "var(--blue)" },
@@ -145,16 +143,11 @@ export default function AgentsProfilesTab({
                       <div className="strategy-identity">
                         <div className="strategy-name">{p.display_name}</div>
                         <div className="strategy-meta">
-                          <span className={`strategy-rank rank-${p.rank || "pup"}`}>{RANK_LABELS[p.rank] || "🌱 Pup"}</span>
                           {p.scope_repo && <span className="strategy-tag scope-tag">{p.scope_repo}</span>}
-                          {!p.scope_repo && p.role === "investigation" && <span className="strategy-tag scope-tag">global</span>}
+                          {!p.scope_repo && <span className="strategy-tag scope-tag">global</span>}
                           {hasAdapter && <span className="strategy-tag adapter-tag" title="has LoRA adapter">LoRA</span>}
                           {p.archived && <span className="strategy-tag archived-tag">archived</span>}
                         </div>
-                      </div>
-                      <div className="strategy-score-ring">
-                        <span className="strategy-score-val">{(p.success_rate * 100).toFixed(0)}%</span>
-                        <span className="strategy-score-label">success</span>
                       </div>
                     </div>
 

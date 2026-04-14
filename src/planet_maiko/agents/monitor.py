@@ -139,7 +139,7 @@ def check_heartbeats():
     active_profiles = AgentProfile.query.filter(
         AgentProfile.last_active_at.isnot(None),
         AgentProfile.last_active_at < threshold,
-        AgentProfile.breed != "completed",
+        (AgentProfile.archived == False) | (AgentProfile.archived == None),  # noqa: E712
     ).all()
 
     nudged = 0

@@ -3,7 +3,7 @@ from planet_maiko.database import db
 from planet_maiko.models.agent_profile import AgentProfile
 from planet_maiko.agents.profiles import (
     create_profile, record_task_outcome, record_session_feedback,
-    recommend_agent, get_learning_stats, AVATARS,
+    get_learning_stats, AVATARS,
 )
 
 profiles_bp = Blueprint("profiles", __name__)
@@ -19,9 +19,20 @@ def list_profiles():
     from planet_maiko.models.task import Task
 
     include_archived = request.args.get("archived", "false").lower() == "true"
+    role = request.args.get("role")
+    repo = request.args.get("repo")
+
     query = AgentProfile.query
     if not include_archived:
         query = query.filter((AgentProfile.archived == False) | (AgentProfile.archived == None))
+    if role:
+        query = query.filter(AgentProfile.role == role)
+    if repo:
+        # Either scoped to this repo OR global (scope_repo IS NULL) —
+        # global agents cover any repo.
+        query = query.filter(
+            (AgentProfile.scope_repo == repo) | (AgentProfile.scope_repo.is_(None))
+        )
     profiles = query.order_by(AgentProfile.tasks_completed.desc()).all()
     if not profiles:
         return jsonify([])
@@ -138,17 +149,6 @@ def unarchive_profile(profile_id):
 def list_avatars():
     """List available avatars."""
     return jsonify(AVATARS)
-
-
-@profiles_bp.route("/profiles/recommend", methods=["GET"])
-def recommend():
-    """Recommend best agent for a task."""
-    repo = request.args.get("repo")
-    task_type = request.args.get("task_type")
-    categories = request.args.get("categories")
-    if categories:
-        categories = [c.strip() for c in categories.split(",")]
-    return jsonify(recommend_agent(repo=repo, task_type=task_type, categories=categories))
 
 
 @profiles_bp.route("/profiles/outcome", methods=["POST"])

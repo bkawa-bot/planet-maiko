@@ -4,13 +4,6 @@ import { Trophy, Bot, Crown, CheckSquare, GitPullRequest } from "lucide-react";
 
 const MEDAL_COLORS = ["#FFD700", "#C0C0C0", "#CD7F32"];
 
-function rateColor(rate) {
-  if (rate >= 0.8) return "var(--green)";
-  if (rate >= 0.6) return "var(--lemon)";
-  if (rate >= 0.4) return "var(--high)";
-  return "var(--text-muted)";
-}
-
 export default function LeaderboardWidget() {
   const [profiles, setProfiles] = useState([]);
 
@@ -18,10 +11,15 @@ export default function LeaderboardWidget() {
     api.getProfiles().then((p) => setProfiles(p || [])).catch(() => {});
   }, []);
 
-  // Rank by tasks completed, then success rate
+  // Rank by tasks completed, then PRs merged as the tiebreaker. No
+  // success-rate ranking — "failing" a task is a fuzzy concept given
+  // most tasks now end by user completion, not a pass/fail judgement.
   const ranked = profiles
-    .filter((p) => p.tasks_completed + p.tasks_failed > 0)
-    .sort((a, b) => b.tasks_completed - a.tasks_completed || b.success_rate - a.success_rate);
+    .filter((p) => (p.tasks_completed || 0) > 0)
+    .sort((a, b) =>
+      (b.tasks_completed || 0) - (a.tasks_completed || 0)
+      || (b.prs_merged || 0) - (a.prs_merged || 0),
+    );
 
   if (ranked.length === 0) return null;
 
@@ -42,9 +40,6 @@ export default function LeaderboardWidget() {
               <span className="lb-widget-name">{p.display_name}</span>
               <span className="lb-widget-tasks"><CheckSquare size={9} /> {p.tasks_completed}</span>
               <span className="lb-widget-prs"><GitPullRequest size={9} /> {p.prs_merged}</span>
-              <span className="lb-widget-rate" style={{ color: rateColor(p.success_rate) }}>
-                {(p.success_rate * 100).toFixed(0)}%
-              </span>
             </div>
           );
         })}

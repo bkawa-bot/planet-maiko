@@ -14,7 +14,6 @@ class AgentProfile(db.Model):
     id = db.Column(db.String(128), primary_key=True)
     display_name = db.Column(db.String(100), nullable=False)
     avatar = db.Column(db.String(50), default="shiba")  # shiba, corgi, husky, poodle, golden, etc.
-    breed = db.Column(db.String(50), default="pup")  # pup, junior, senior, expert
     flavor_text = db.Column(db.String(256), nullable=True)  # "Loves debugging. Afraid of CSS."
 
     # Orchestration identity. Role picks what kind of work this agent takes
@@ -52,30 +51,11 @@ class AgentProfile(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     last_active_at = db.Column(db.DateTime, nullable=True)
 
-    def rank(self):
-        """Compute rank from experience."""
-        total = self.tasks_completed + self.tasks_failed
-        if total >= 20 and self.success_rate() >= 0.8:
-            return "expert"
-        if total >= 10:
-            return "senior"
-        if total >= 3:
-            return "junior"
-        return "pup"
-
-    def success_rate(self):
-        total = self.tasks_completed + self.tasks_failed
-        if total == 0:
-            return 0.0
-        return self.tasks_completed / total
-
     def to_dict(self):
         return {
             "id": self.id,
             "display_name": self.display_name,
             "avatar": self.avatar,
-            "breed": self.breed,
-            "rank": self.rank(),
             "flavor_text": self.flavor_text,
             "role": self.role or "coding",
             "scope_repo": self.scope_repo,
@@ -85,7 +65,6 @@ class AgentProfile(db.Model):
             "prs_merged": self.prs_merged,
             "prs_changes_requested": self.prs_changes_requested,
             "learnings_contributed": self.learnings_contributed,
-            "success_rate": round(self.success_rate(), 2),
             "specializations": self.specializations,
             "context_set": self.context_set or [],
             "extra": self.extra or {},

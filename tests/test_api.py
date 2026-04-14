@@ -127,23 +127,18 @@ def test_create_profile_via_api_no_body(client):
     assert data["display_name"] is not None
 
 
-def test_get_recommend_returns_list(client):
-    # Create a profile first
-    client.post("/api/profiles", json={"agent_id": "agent-rec-1"})
+def test_get_profiles_with_role_filter(client):
+    # The /profiles endpoint supports role + repo filters for the
+    # assign-agent modal; /profiles/recommend (the old ranking
+    # endpoint) was dropped along with rank/success_rate/breed.
+    client.post("/api/profiles", json={"agent_id": "agent-rec-1", "role": "coding"})
+    client.post("/api/profiles", json={"agent_id": "agent-rec-2", "role": "review"})
 
-    resp = client.get("/api/profiles/recommend")
+    resp = client.get("/api/profiles?role=review")
     assert resp.status_code == 200
     data = resp.get_json()
     assert isinstance(data, list)
-    assert len(data) >= 1
-
-
-def test_get_recommend_with_repo_param(client):
-    client.post("/api/profiles", json={"agent_id": "agent-rec-2"})
-    resp = client.get("/api/profiles/recommend?repo=my-repo&categories=testing,style")
-    assert resp.status_code == 200
-    data = resp.get_json()
-    assert isinstance(data, list)
+    assert all(p["role"] == "review" for p in data)
 
 
 def test_post_feedback(client):

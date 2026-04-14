@@ -259,7 +259,6 @@ export const api = {
   archiveProfile: (id) => request(`/profiles/${id}/archive`, { method: "POST" }),
   unarchiveProfile: (id) => request(`/profiles/${id}/unarchive`, { method: "POST" }),
   getAvatars: () => request("/profiles/avatars"),
-  recommendAgent: (repo) => request(`/profiles/recommend?repo=${encodeURIComponent(repo || "")}`),
 
   // Agent assignment
   assignAgent: (data) =>

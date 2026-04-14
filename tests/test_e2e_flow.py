@@ -119,12 +119,8 @@ class TestFullAgentLifecycle:
         learnings = _seed_learnings(db)
         db.session.commit()
 
-        # ---- 4. Recommend an agent (no agents yet -> gap) ----
-        from planet_maiko.agents.profiles import recommend_agent
-        recs = recommend_agent(repo="org/repo")
-        assert any(r.get("gap_detected") for r in recs), (
-            "Expected gap_detected since no agents exist"
-        )
+        # ---- 4. No agents exist yet — routing will lazy-spawn one ----
+        assert AgentProfile.query.count() == 0
 
         # ---- 5. Create an agent profile ----
         from planet_maiko.agents.profiles import create_profile
@@ -1045,40 +1041,6 @@ class TestPrepareIntegration:
 # ---------------------------------------------------------------------------
 # Test 13: Specialization scoring in recommendations
 # ---------------------------------------------------------------------------
-
-
-class TestRecommendationScoring:
-
-    def test_experienced_agent_recommended_first(self, app, db):
-        experienced = AgentProfile(
-            id="agent-exp-rec", display_name="Exp Bot", avatar="shiba",
-            tasks_completed=15, tasks_failed=2,
-            specializations={"org/repo:testing": 0.9, "org/repo:style": 0.7},
-        )
-        newbie = AgentProfile(
-            id="agent-new-rec", display_name="New Bot", avatar="corgi",
-            tasks_completed=0, tasks_failed=0,
-        )
-        db.session.add_all([experienced, newbie])
-        db.session.commit()
-
-        from planet_maiko.agents.profiles import recommend_agent
-        recs = recommend_agent(repo="org/repo", categories=["testing"])
-
-        profiled = [r for r in recs if r.get("profile")]
-        assert profiled[0]["profile"]["id"] == "agent-exp-rec"
-
-    def test_gap_inserted_when_all_below_threshold(self, app, db):
-        weak = AgentProfile(
-            id="agent-weak-rec", display_name="Weak Bot", avatar="shiba",
-            tasks_completed=0, tasks_failed=5,
-        )
-        db.session.add(weak)
-        db.session.commit()
-
-        from planet_maiko.agents.profiles import recommend_agent
-        recs = recommend_agent(repo="unknown-repo", categories=["security"])
-        assert any(r.get("gap_detected") for r in recs)
 
 
 # ---------------------------------------------------------------------------
