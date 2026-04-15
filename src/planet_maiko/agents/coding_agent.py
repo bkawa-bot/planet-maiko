@@ -198,8 +198,74 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
         f.write(content)
 
 
-def _write_mcp_json(working_path, task_id):
-    """Write .mcp.json so the maiko-channel auto-loads when claude starts."""
+def _inherit_mcp_servers(parent_repo_path):
+    """Pull MCP server defs the user has configured for the parent repo
+    plus their global set, so they're available inside the worktree.
+
+    Without this, an agent in <parent>/.maiko-worktrees/<branch>/ only
+    sees the maiko-channel MCP we wrote ourselves — Claude Code keys
+    project-specific MCPs by absolute path, and the worktree's path
+    doesn't match the parent's. Linear / Slack / GitHub / etc. that
+    work in the user's normal session silently disappear in agent
+    sessions, which is the "some MCP tools aren't available" report.
+
+    Reads ~/.claude.json (the canonical store) and pulls:
+      - top-level mcpServers (globals — should be available everywhere
+        already, but bundling them is harmless and makes the worktree
+        config self-contained)
+      - projects.<parent_repo_path>.mcpServers (the per-repo set the
+        user enabled when they were working in the parent)
+
+    Returns a dict { name: server_config }, possibly empty.
+    """
+    import json as _json
+    if not parent_repo_path:
+        return {}
+    parent_abs = os.path.abspath(parent_repo_path)
+    config_path = os.path.expanduser("~/.claude.json")
+    if not os.path.isfile(config_path):
+        return {}
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            data = _json.load(f)
+    except Exception:
+        return {}
+
+    inherited = {}
+    globals_ = data.get("mcpServers") or {}
+    if isinstance(globals_, dict):
+        inherited.update(globals_)
+
+    projects = data.get("projects") or {}
+    if isinstance(projects, dict):
+        # Match either the exact path or a normalized variant — Claude
+        # Code sometimes stores paths with trailing slashes / different
+        # case on Windows.
+        for key, proj in projects.items():
+            if not isinstance(proj, dict):
+                continue
+            try:
+                key_abs = os.path.abspath(key)
+            except Exception:
+                continue
+            if key_abs.lower().rstrip(os.sep) != parent_abs.lower().rstrip(os.sep):
+                continue
+            proj_servers = proj.get("mcpServers") or {}
+            if isinstance(proj_servers, dict):
+                inherited.update(proj_servers)
+            break
+    return inherited
+
+
+def _write_mcp_json(working_path, task_id, parent_repo_path=None):
+    """Write .mcp.json so maiko-channel + the user's parent-repo MCPs
+    auto-load when claude starts inside the worktree.
+
+    parent_repo_path lets us inherit the per-project MCPs the user had
+    enabled in the parent repo (Linear / Slack / GitHub / etc.) so the
+    agent has the same MCP surface area as the user's normal session.
+    Without it the agent only sees maiko-channel.
+    """
     import json
 
     # Find the channel script path relative to the planet-maiko repo root
@@ -214,22 +280,30 @@ def _write_mcp_json(working_path, task_id):
         channel_path = os.path.join(working_path, "..", "..", "channel", "index.mjs")
 
     from planet_maiko.config import maiko_api_url
-    mcp_config = {
-        "mcpServers": {
-            "maiko-channel": {
-                "command": "node",
-                "args": [channel_path],
-                "env": {
-                    "MAIKO_TASK_ID": task_id,
-                    "MAIKO_API_URL": maiko_api_url(),
-                    "MAIKO_POLL_MS": "60000",
-                },
-            }
-        }
+
+    # Start with everything inherited from the parent repo / globals,
+    # then layer maiko-channel on top so our entry always wins.
+    servers = _inherit_mcp_servers(parent_repo_path)
+    servers["maiko-channel"] = {
+        "command": "node",
+        "args": [channel_path],
+        "env": {
+            "MAIKO_TASK_ID": task_id,
+            "MAIKO_API_URL": maiko_api_url(),
+            "MAIKO_POLL_MS": "60000",
+        },
     }
+
+    mcp_config = {"mcpServers": servers}
 
     with open(os.path.join(working_path, ".mcp.json"), "w") as f:
         json.dump(mcp_config, f, indent=2)
+
+    if len(servers) > 1:
+        logger.info(
+            f"[agent] Wrote .mcp.json with {len(servers)} server(s) "
+            f"({sorted(servers.keys())})"
+        )
 
 
 def _write_claude_settings(working_path, task_id, agent_id):
@@ -309,7 +383,15 @@ def _write_claude_settings(working_path, task_id, agent_id):
     if not hooks:
         return
 
-    settings = {"hooks": hooks}
+    # enableAllProjectMcpServers auto-approves every server in the
+    # worktree's .mcp.json on session start — without it, project-level
+    # MCPs (including our own maiko-channel and any inherited from the
+    # parent repo) prompt for trust and stall headless / resumed
+    # sessions. Worktree isolation already bounds blast radius.
+    settings = {
+        "hooks": hooks,
+        "enableAllProjectMcpServers": True,
+    }
 
     # Write .claude/settings.json
     claude_dir = os.path.join(working_path, ".claude")
@@ -635,7 +717,11 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     # Write task files
     _write_task_file(working_path, task_id, task_title, prompt)
     _write_claude_md(working_path, task_id, task_title, role=role)
-    _write_mcp_json(working_path, task_id)
+    # Pass repo_path so the worktree's .mcp.json inherits the user's
+    # per-project MCPs (Linear / Slack / etc.) — otherwise the agent
+    # session only has maiko-channel and feels MCP-blind compared to
+    # the user's normal Claude Code session in the parent repo.
+    _write_mcp_json(working_path, task_id, parent_repo_path=repo_path)
 
     # Use existing profile if provided, otherwise generate an ID
     agent_id = agent_profile_id or f"agent-{branch_name}"
