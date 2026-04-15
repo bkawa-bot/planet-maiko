@@ -16,6 +16,7 @@ Two public entry points:
 
 import json
 import logging
+import time
 from datetime import datetime, timezone
 
 from planet_maiko.database import db
@@ -23,6 +24,14 @@ from planet_maiko.models.learning import Learning
 from planet_maiko.models.signal import Signal
 
 logger = logging.getLogger(__name__)
+
+# Circuit breaker for the clustering LLM call. If the runtime is
+# unavailable, we don't want every brain cycle (and every batch within
+# it) to retry and spam the logs. Track the cooldown until-time globally;
+# while we're inside that window, skip clustering entirely with a single
+# log line per cycle.
+_LLM_COOLDOWN_SECONDS = 15 * 60  # 15 minutes
+_llm_cooldown_until = 0.0
 
 # Keep batches small enough that Claude reasons about each rule
 # carefully instead of skimming. Empirically ~40 works well for short
@@ -393,6 +402,22 @@ def cluster_signals_into_learnings():
         return {"processed": 0, "new_learnings": 0, "updated_learnings": 0,
                 "graduated": 0, "touched_categories": []}
 
+    # Circuit breaker: if a recent attempt failed because the LLM
+    # runtime was unavailable, skip clustering entirely until the
+    # cooldown elapses. One log line per cycle instead of one per batch.
+    global _llm_cooldown_until
+    now = time.time()
+    if now < _llm_cooldown_until:
+        remaining = int(_llm_cooldown_until - now)
+        logger.info(
+            f"[clustering] Skipping {len(unprocessed)} signal(s) — "
+            f"LLM cooldown active ({remaining}s remaining). "
+            f"Signals stay queued for the next cycle."
+        )
+        return {"processed": 0, "new_learnings": 0, "updated_learnings": 0,
+                "graduated": 0, "deferred": len(unprocessed),
+                "touched_categories": []}
+
     counts = {
         "processed": 0,
         "new_learnings": 0,
@@ -430,13 +455,21 @@ def cluster_signals_into_learnings():
             if not ok:
                 # LLM unavailable or returned unparseable output. Leave
                 # the batch's signals aggregated=False so the next cycle
-                # tries again. Nothing degrades — we just wait.
-                logger.info(
-                    f"[clustering] LLM unavailable for {category} "
-                    f"(batch {start}-{start + len(batch)}); deferring"
+                # tries again. Trip the circuit breaker so subsequent
+                # batches in this same cycle (and the next 15 min of
+                # cycles) skip immediately instead of repeating the
+                # same failure for every category × batch.
+                global _llm_cooldown_until
+                _llm_cooldown_until = time.time() + _LLM_COOLDOWN_SECONDS
+                remaining_signals = sum(len(s) for s in by_category.values()) - counts["processed"]
+                logger.warning(
+                    f"[clustering] LLM unavailable on first batch — tripping "
+                    f"cooldown for {_LLM_COOLDOWN_SECONDS // 60}min. "
+                    f"{remaining_signals} signal(s) deferred to next cycle."
                 )
                 counts["deferred"] = counts.get("deferred", 0) + len(batch)
-                continue
+                # Bail out of the whole pass; cooldown handles the rest.
+                return counts
 
             batch_by_id = {s.id: s for s in batch}
             placed = set()

@@ -13,6 +13,14 @@ import "./Layout.css";
 // weather + season across every page, not just Home. Polls at the same
 // cadence as the pupdate watcher so Settings changes take effect
 // without a manual refresh.
+// Scene + config don't change minute-to-minute. The hill background is
+// driven by a config flag (set in Settings, persists across sessions);
+// scene context is weather + season + time-of-day, which only meaningfully
+// shifts every few minutes at most. Polling every 15s was hammering
+// /api/scene (which used to do an inline LLM call → constant timeouts)
+// for no real UX benefit.
+const SCENE_POLL_MS = 5 * 60 * 1000;
+
 function useSceneVisibility() {
   const [scene, setScene] = useState(null);
   const [weatherEnabled, setWeatherEnabled] = useState(true);
@@ -30,11 +38,16 @@ function useSceneVisibility() {
       } catch { /* ignore */ }
     };
     apply();
-    const interval = setInterval(apply, 15000);
+    const interval = setInterval(apply, SCENE_POLL_MS);
     return () => clearInterval(interval);
   }, []);
   return { scene, weatherEnabled };
 }
+
+// New pupdates come in via background pollers (5+ min cadence). Toast
+// detection doesn't need to run faster than that — 15s was overkill
+// and meant we hit /api/pupdates four times per minute on every page.
+const PUPDATE_POLL_MS = 60 * 1000;
 
 function usePupdateWatcher() {
   const knownIds = useRef(new Set());
@@ -60,7 +73,7 @@ function usePupdateWatcher() {
     };
 
     check();
-    const interval = setInterval(check, 15000);
+    const interval = setInterval(check, PUPDATE_POLL_MS);
     return () => clearInterval(interval);
   }, []);
 }

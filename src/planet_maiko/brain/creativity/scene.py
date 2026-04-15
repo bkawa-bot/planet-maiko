@@ -161,21 +161,35 @@ SEASON_SPECIALS = {
 }
 
 
-_creative_note_cache = {"text": None, "expires": 0}
+import threading
+
+# In-memory cache for the LLM-generated atmospheric note.
+#   text       — last successful sentence (or None if we've never gotten one)
+#   expires    — when to refresh on the next request
+#   refreshing — guards against multiple background refreshes piling up
+#   next_retry — negative cache: when the last attempt failed, don't try
+#                again until this timestamp (avoids hammering Claude on
+#                every /api/scene poll if the runtime is down)
+_creative_note_cache = {
+    "text": None,
+    "expires": 0,
+    "refreshing": False,
+    "next_retry": 0,
+}
 
 
-def _generate_creative_note(weather, season, time_bucket, mood):
-    """Generate a one-sentence atmospheric description via LLM."""
+def _refresh_creative_note(weather, season, time_bucket, mood):
+    """Background worker that runs the LLM call and updates the cache.
+    Runs in a daemon thread so /api/scene can return instantly."""
     import time
-    now = time.time()
-    if _creative_note_cache["text"] and now < _creative_note_cache["expires"]:
-        return _creative_note_cache["text"]
-
     try:
         from planet_maiko.agents.brain_session import _get_runtime
         runtime = _get_runtime()
         if not runtime or not runtime.is_available():
-            return None
+            # Negative-cache for 5 min so we don't keep checking
+            # availability on every poll.
+            _creative_note_cache["next_retry"] = time.time() + 300
+            return
 
         from planet_maiko.agents.routing import resolve_model
         prompt = (
@@ -187,11 +201,52 @@ def _generate_creative_note(weather, season, time_bucket, mood):
         if result and result.get("success") and result.get("output"):
             text = result["output"].strip().strip('"')
             _creative_note_cache["text"] = text
-            _creative_note_cache["expires"] = now + 3600  # 1 hour cache
-            return text
-    except Exception:
-        pass
-    return None
+            _creative_note_cache["expires"] = time.time() + 3600  # 1 hour
+            _creative_note_cache["next_retry"] = 0
+        else:
+            # LLM responded but with no usable output — back off shorter
+            _creative_note_cache["next_retry"] = time.time() + 300
+    except Exception as e:
+        logger.debug(f"[scene] creative note refresh failed: {e}")
+        _creative_note_cache["next_retry"] = time.time() + 300
+    finally:
+        _creative_note_cache["refreshing"] = False
+
+
+def _generate_creative_note(weather, season, time_bucket, mood):
+    """Return the cached atmospheric sentence, kicking off a refresh
+    in a background thread when the cache is empty / expired.
+
+    Never blocks the caller — /api/scene is polled by every page in the
+    UI, and a 15s LLM call inline would (and did) flood the logs with
+    "Claude code timed out after 15s" every few seconds.
+    """
+    import time
+    now = time.time()
+    cached = _creative_note_cache["text"]
+
+    # Fresh cache — return as-is.
+    if cached and now < _creative_note_cache["expires"]:
+        return cached
+
+    # Cache stale or empty. Maybe schedule a refresh — but only one at a
+    # time, and not while we're in negative-cache cooldown.
+    if (
+        not _creative_note_cache["refreshing"]
+        and now >= _creative_note_cache["next_retry"]
+    ):
+        _creative_note_cache["refreshing"] = True
+        threading.Thread(
+            target=_refresh_creative_note,
+            args=(weather, season, time_bucket, mood),
+            daemon=True,
+            name="scene-creative-note",
+        ).start()
+
+    # Return the previous value if we have one (slightly stale beats
+    # blocking); otherwise None and the UI will fall back to the
+    # season poem.
+    return cached
 
 
 def generate(weather="clear", temperature_f=70, latitude=37.7, now=None):

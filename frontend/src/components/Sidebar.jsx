@@ -104,7 +104,11 @@ export default function Sidebar() {
       } catch (err) { /* ignore */ }
     };
     fetchBadges();
-    const interval = setInterval(fetchBadges, 15000);
+    // Badges hit /api/pupdates + /api/tasks + /api/learnings + /api/focus
+    // on every tick. 30s is the right balance — visible enough that a
+    // freshly-arrived pupdate shows up quickly, slow enough that we're
+    // not hammering the backend from every page.
+    const interval = setInterval(fetchBadges, 30000);
     return () => clearInterval(interval);
   }, []);
 

@@ -64,6 +64,24 @@ class PollerScheduler:
             thread.start()
             logger.info(f"[scheduler] Started {name} poller (every {interval}s)")
 
+        # Start the periodic brain cycle. This was previously
+        # event-driven only — the cycle ran whenever a poller created a
+        # pupdate. Without enabled pollers (or during quiet periods)
+        # the brain effectively stopped ticking, so phases like
+        # synthesis / clustering / scheduled skills stalled until the
+        # user manually hit POST /brain/cycle. Now there's a steady
+        # heartbeat regardless of poller activity.
+        brain_interval = config.get("brain", {}).get("cycle_interval_minutes", 5) * 60
+        brain_thread = threading.Thread(
+            target=self._brain_cycle_loop,
+            args=(brain_interval,),
+            daemon=True,
+            name="brain-cycle",
+        )
+        self._threads["brain_cycle"] = brain_thread
+        brain_thread.start()
+        logger.info(f"[scheduler] Started brain cycle (every {brain_interval}s)")
+
         # Start scheduled skills
         self._start_scheduled_skills()
 
@@ -98,6 +116,25 @@ class PollerScheduler:
                 logger.error(f"[scheduler] {name} poll error: {e}")
 
             # Wait for the interval, but check stop_event periodically
+            for _ in range(int(interval)):
+                if self._stop_event.is_set():
+                    break
+                time.sleep(1)
+
+    def _brain_cycle_loop(self, interval):
+        """Tick the brain cycle on a fixed interval, independent of pollers."""
+        # Stagger so we don't fire at literal startup before pollers
+        # have had a chance to run their first poll.
+        time.sleep(30)
+
+        while not self._stop_event.is_set():
+            try:
+                with self.app.app_context():
+                    from planet_maiko.brain.cycle import run as brain_cycle
+                    brain_cycle(self.app)
+            except Exception as e:
+                logger.error(f"[scheduler] brain cycle error: {e}")
+
             for _ in range(int(interval)):
                 if self._stop_event.is_set():
                     break

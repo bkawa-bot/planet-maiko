@@ -15,7 +15,11 @@ import "./Home.css";
 import "./Tasks.css";
 import "./Inbox.css";
 
-const HOME_POLL_INTERVAL_MS = 15000;
+// Home polls a lot (scene, pupdates, tasks×2, projects, focus, brain,
+// schedule, config) — was 15s, which meant ~9 backend hits every 15s
+// just from this page. None of the data changes that fast in a
+// wellbeing-companion app; bump to 60s.
+const HOME_POLL_INTERVAL_MS = 60000;
 
 const STATUS_COLORS = {
   new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
