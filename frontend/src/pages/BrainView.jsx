@@ -40,14 +40,23 @@ export default function BrainView() {
   const fetchLearnings = async () => {
     setKLoading(true);
     try {
-      const [ls, sigs, sigCount] = await Promise.all([
+      const [ls, sigsResult, sigCountResult] = await Promise.allSettled([
         api.getLearnings(),
-        api.getSignals({ synthesized: false, limit: 500 }).catch(() => []),
-        api.getSignalsCount({ synthesized: false }).catch(() => ({ count: 0 })),
+        api.getSignals({ synthesized: false, limit: 500 }),
+        api.getSignalsCount({ synthesized: false }),
       ]);
-      setLearnings(ls);
-      setRawSignals(sigs);
-      setRawSignalsTotal(sigCount?.count ?? 0);
+      // Surface each fetch's outcome so we can tell whether one endpoint
+      // is silently failing while the other succeeds.
+      console.log("[unsynth-debug] getSignals:", sigsResult);
+      console.log("[unsynth-debug] getSignalsCount:", sigCountResult);
+
+      setLearnings(ls.status === "fulfilled" ? ls.value : []);
+      setRawSignals(sigsResult.status === "fulfilled" ? sigsResult.value : []);
+      setRawSignalsTotal(
+        sigCountResult.status === "fulfilled"
+          ? (sigCountResult.value?.count ?? 0)
+          : 0,
+      );
     } catch (err) { console.error(err); }
     setKLoading(false);
   };
@@ -123,9 +132,15 @@ export default function BrainView() {
   // Normalize signals to learning-shape so the existing category
   // rendering works without branching. Status "unsynthesized" is a
   // UI-only marker; these rows can't be approved, only deleted.
+  // Carrying _raw_synthesized + _raw_aggregated so the row can show
+  // a debug badge — useful for verifying the filter is doing what
+  // we think it's doing.
   const unsynthesized = rawSignals.map((s) => ({
     id: `signal-${s.id}`,
     _signal_id: s.id,
+    _raw_synthesized: s.synthesized,
+    _raw_aggregated: s.aggregated,
+    _raw_learning_id: s.learning_id,
     rule: s.text,
     category: s.category || "pattern",
     scope_repo: s.repo,
@@ -321,6 +336,15 @@ export default function BrainView() {
                           <div className="learning-left">
                             {l.status === "pending" && <span className="badge paused">pending</span>}
                             {l.status === "unsynthesized" && <span className="badge" title="Raw PR-comment signal waiting for LLM synthesis">raw</span>}
+                            {l.status === "unsynthesized" && (
+                              <span
+                                className="tag"
+                                style={{ fontFamily: "var(--font-mono)", fontSize: 9 }}
+                                title="Actual DB flags on this signal — debug aid for the Unsynthesized filter"
+                              >
+                                synth={String(l._raw_synthesized)} · agg={String(l._raw_aggregated)} · lid={l._raw_learning_id ?? "null"}
+                              </span>
+                            )}
                             {l.source && <span className="tag">{l.source}</span>}
                             {l.is_global
                               ? <span className="tag tag-global" title="Seen in 3+ repos — feeds every LoRA">🌐 global</span>
