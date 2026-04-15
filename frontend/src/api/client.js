@@ -90,6 +90,11 @@ export const api = {
     request(`/projects/${id}/generate-plan`, { method: "POST" }),
   generateTasks: (id) =>
     request(`/projects/${id}/generate-tasks`, { method: "POST" }),
+  reviseTasks: (id, feedback, currentTasks) =>
+    request(`/projects/${id}/revise-tasks`, {
+      method: "POST",
+      body: JSON.stringify({ feedback, current_tasks: currentTasks }),
+    }),
 
   // Config
   getConfig: () => request("/config"),
@@ -157,11 +162,11 @@ export const api = {
   approveDiffReview: (taskId) =>
     request(`/tasks/${taskId}/review/approve`, { method: "POST" }),
 
-  // Plan mode
+  // Plan mode (per-task)
   getTaskPlan: (taskId) => request(`/tasks/${taskId}/plan`),
-  approvePlan: (taskId) =>
+  approveTaskPlan: (taskId) =>
     request(`/tasks/${taskId}/plan/approve`, { method: "POST" }),
-  revisePlan: (taskId, feedback) =>
+  reviseTaskPlan: (taskId, feedback) =>
     request(`/tasks/${taskId}/plan/revise`, {
       method: "POST",
       body: JSON.stringify({ feedback }),
@@ -183,6 +188,8 @@ export const api = {
   getAgentMessages: (taskId) => request(`/agents/${taskId}/messages`),
   sendToAgent: (taskId, data) =>
     request(`/agents/${taskId}/inbox`, { method: "POST", body: JSON.stringify(data) }),
+  nudgeAgent: (taskId) =>
+    request(`/agents/${taskId}/nudge`, { method: "POST" }),
   getConflicts: () => request("/agents/conflicts"),
 
   // Skills
@@ -228,7 +235,7 @@ export const api = {
   togglePlugin: (name) => request(`/plugins/${name}/toggle`, { method: "POST" }),
 
   // Project plan orchestration
-  approvePlan: (projectId, tasks) =>
+  approveProjectPlan: (projectId, tasks) =>
     request(`/projects/${projectId}/approve-plan`, { method: "POST", body: JSON.stringify({ tasks }) }),
 
   // Agent proposals (From Maiko approval queue)

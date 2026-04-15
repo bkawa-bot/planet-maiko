@@ -62,6 +62,16 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
     }
   };
 
+  const handleNudge = async (taskId) => {
+    if (!taskId) return;
+    try {
+      await api.nudgeAgent(taskId);
+      showToast("Nudge sent — agent will report in", "normal");
+    } catch (err) {
+      showToast(err.message || "Could not send nudge", "high");
+    }
+  };
+
   const handleResume = async (a) => {
     try {
       await api.resumeAgentSession(a.task_id);
@@ -122,7 +132,7 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
             {dormantAgents.map((a) => (
               <div key={a.agent_id} className="agent-card card">
                 <div className="speech-bubble">
-                  Ready to launch
+                  Starting up — first message hasn't landed yet
                   <div className="speech-time">
                     {formatTime(a.prepared_at)}
                   </div>
@@ -136,7 +146,7 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
                       <span className="agent-name">
                         {profiles.find((p) => p.id === a.agent_id)?.display_name || a.agent_id?.replace("agent-", "")}
                       </span>
-                      <span className="badge new">ready</span>
+                      <span className="badge new">warming up</span>
                     </div>
                     <div className="agent-chips">
                       <span className="agent-chip"><GitBranch size={10} /> {a.branch}</span>
@@ -155,21 +165,21 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
                     </Link>
                   )}
                   <button
-                    className="btn btn-sm btn-approve"
-                    onClick={() => handleLaunch(a)}
-                    title="Open a terminal to launch the agent"
-                  >
-                    <Play size={12} /> Launch
-                  </button>
-                  <button
                     className="btn btn-sm"
                     onClick={() => handleResume(a)}
-                    title="Resume the agent's Claude Code session in a terminal"
+                    title="Attach to the agent's session in a terminal"
                   >
                     <ExternalLink size={12} /> View Session
                   </button>
                   <button className="btn btn-sm" onClick={() => loadThread(a.task_id)}>
                     <MessageCircle size={12} /> Channel Log
+                  </button>
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => handleLaunch(a)}
+                    title="Manually relaunch in a terminal — only needed if the auto-start failed"
+                  >
+                    <Play size={12} /> Relaunch
                   </button>
                 </div>
               </div>
@@ -230,7 +240,13 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
                   <button className="btn btn-sm" onClick={() => loadThread(a.task_id)}>
                     <MessageCircle size={12} /> Channel Log
                   </button>
-                  <button className="btn btn-sm btn-comms"><Bone size={12} /> Nudge</button>
+                  <button
+                    className="btn btn-sm btn-comms"
+                    onClick={() => handleNudge(a.task_id)}
+                    title="Ping the agent for a status update"
+                  >
+                    <Bone size={12} /> Nudge
+                  </button>
                 </div>
               </div>
               );

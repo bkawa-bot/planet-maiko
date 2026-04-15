@@ -138,6 +138,29 @@ def _preview_agent(role, scope_repo):
     return {"id": None, "display_name": f"(new {role} agent for {scope_repo or 'global'})", "spawn_new": True}
 
 
+def _enrich_draft_tasks(tasks):
+    """Sanitize depends_on and attach suggested agent previews.
+
+    Shared by /generate-tasks and /revise-tasks so the draft shape the
+    plan editor receives is identical regardless of which flow produced
+    it. Mutates each draft in place and also returns the list.
+    """
+    from planet_maiko.orchestration import TYPE_TO_ROLE
+    for idx, draft in enumerate(tasks):
+        draft["temp_index"] = idx
+        draft.setdefault("depends_on", [])
+        draft["depends_on"] = [
+            d for d in draft["depends_on"]
+            if isinstance(d, int) and 0 <= d < len(tasks) and d != idx
+        ]
+        role = TYPE_TO_ROLE.get(draft.get("type") or "", "coding")
+        scope = draft.get("repo") or None
+        draft["suggested_role"] = role
+        draft["suggested_scope_repo"] = scope
+        draft["suggested_agent"] = _preview_agent(role, scope)
+    return tasks
+
+
 @projects_bp.route("/projects/<project_id>/generate-tasks", methods=["POST"])
 def generate_tasks(project_id):
     """Generate a draft task plan with dependencies and proposed assignments.
@@ -150,8 +173,6 @@ def generate_tasks(project_id):
     yet, nothing is routed. The draft sits in project.extra.generated_tasks
     until the user calls /approve-plan.
     """
-    from planet_maiko.orchestration import TYPE_TO_ROLE
-
     project = db.get_or_404(Project, project_id)
 
     prompt = f"""Break down this project into concrete tasks with dependencies. Return ONLY valid JSON — an array of task objects.
@@ -204,23 +225,100 @@ Rules:
     if not isinstance(tasks, list):
         tasks = [tasks]
 
-    # Enrich: pre-compute suggested agent for each draft task.
     project = db.get_or_404(Project, project_id)
-    for idx, draft in enumerate(tasks):
-        draft["temp_index"] = idx
-        draft.setdefault("depends_on", [])
-        # Sanitize depends_on — drop self-refs and out-of-range indices
-        draft["depends_on"] = [
-            d for d in draft["depends_on"]
-            if isinstance(d, int) and 0 <= d < len(tasks) and d != idx
-        ]
-        role = TYPE_TO_ROLE.get(draft.get("type") or "", "coding")
-        scope = draft.get("repo") or None
-        draft["suggested_role"] = role
-        draft["suggested_scope_repo"] = scope
-        draft["suggested_agent"] = _preview_agent(role, scope)
+    _enrich_draft_tasks(tasks)
 
     # Persist the draft on the project so it survives reload.
+    meta = dict(project.extra or {}) if project.extra else {}
+    meta["generated_tasks"] = tasks
+    project.extra = meta
+    db.session.commit()
+
+    return jsonify({"tasks": tasks, "project_id": project_id})
+
+
+@projects_bp.route("/projects/<project_id>/revise-tasks", methods=["POST"])
+def revise_tasks(project_id):
+    """Revise the current draft task breakdown with user feedback.
+
+    Body: { feedback: str, current_tasks: [...] }. We feed the LLM the
+    project plan, the current drafts (including any manual edits the
+    user made in the editor), and the freeform feedback, and ask it to
+    return a new draft array with the same schema. Manual edits are
+    preserved unless the feedback contradicts them. Drop/add/reorder/
+    reshape is all fair game.
+
+    The returned draft replaces project.extra.generated_tasks so a
+    page reload shows the revised version.
+    """
+    import json as _json
+
+    project = db.get_or_404(Project, project_id)
+    data = request.get_json(silent=True) or {}
+    feedback = (data.get("feedback") or "").strip()
+    current = data.get("current_tasks")
+
+    if not feedback:
+        return jsonify({"error": "feedback is required"}), 400
+    if not isinstance(current, list) or not current:
+        return jsonify({"error": "current_tasks array is required"}), 400
+
+    # Strip enrichment fields — they're preview-only and shouldn't
+    # confuse the LLM into thinking they're part of the schema.
+    SCHEMA_KEYS = {
+        "title", "type", "priority", "description",
+        "repo", "category", "depends_on", "plan_first",
+    }
+    current_clean = [
+        {k: v for k, v in draft.items() if k in SCHEMA_KEYS}
+        for draft in current
+    ]
+
+    prompt = f"""Revise this draft task plan based on the user's feedback. Return ONLY valid JSON — an array of task objects.
+
+Project: {project.title}
+Plan/Description:
+{project.description or "No description provided."}
+
+Current draft tasks (the user has already reviewed and possibly edited these):
+{_json.dumps(current_clean, indent=2)}
+
+User's revision feedback:
+{feedback}
+
+Return JSON array where each task has the same schema as the current drafts:
+- title: concise (≤80 chars)
+- type: todo | bug | feature | review | investigation | repo_analysis
+- priority: urgent | high | normal | low
+- description: 1-2 sentences
+- repo: "org/name" or ""
+- category: short tag
+- depends_on: array of 0-based INDICES in THIS returned array (NOT the old array — renumber if you reorder)
+- plan_first: optional bool — preserve from the current draft if present
+
+Rules:
+- Preserve each current task's title / repo / category / priority / type / plan_first UNLESS the feedback explicitly asks to change it. The user may have hand-edited these.
+- Add, remove, reorder, split, or merge tasks as the feedback requires.
+- 3-10 tasks total unless the feedback explicitly asks for more or fewer.
+- depends_on uses indices in THIS returned array; no cycles; no self-references.
+- Tasks in different repos with no real dep should NOT be artificially linked.
+"""
+
+    db.session.close()
+    from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
+    runtime = ClaudeCodeRuntime()
+    result = runtime.send_json(prompt, timeout=300)
+
+    if not result.get("success") or not result.get("parsed"):
+        return jsonify({"error": result.get("error", "Failed to revise tasks")}), 500
+
+    tasks = result["parsed"]
+    if not isinstance(tasks, list):
+        tasks = [tasks]
+
+    project = db.get_or_404(Project, project_id)
+    _enrich_draft_tasks(tasks)
+
     meta = dict(project.extra or {}) if project.extra else {}
     meta["generated_tasks"] = tasks
     project.extra = meta

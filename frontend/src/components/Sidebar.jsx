@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Home, Inbox, CheckSquare, Bot, Brain, Wand2, GraduationCap, Settings, Bell, Shield, HelpCircle, X, Palette } from "lucide-react";
+import { Home, Inbox, CheckSquare, Bot, Brain, Wand2, GraduationCap, Settings, Shield, HelpCircle, X, Palette } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api/client";
 import { applyCustomTheme, clearCustomTheme, hydrateCachedCustomTheme } from "../utils/themes";
@@ -8,9 +8,9 @@ import "./Sidebar.css";
 const NAV_ITEMS = [
   { to: "/", icon: Home, label: "Home", end: true },
   { to: "/inbox", icon: Inbox, label: "Inbox", badgeKey: "pupdates" },
-  { to: "/tasks", icon: CheckSquare, label: "Tasks", badgeKey: "tasks" },
+  { to: "/tasks", icon: CheckSquare, label: "Tasks" },
   { to: "/agents", icon: Bot, label: "Agents" },
-  { to: "/knowledge", icon: Brain, label: "Knowledge", badgeKey: "learnings" },
+  { to: "/knowledge", icon: Brain, label: "Knowledge" },
   { to: "/skills", icon: Wand2, label: "Skills" },
   { to: "/training", icon: GraduationCap, label: "Training" },
 ];
@@ -186,11 +186,6 @@ export default function Sidebar() {
               </div>
             )}
           </div>
-
-          <NavLink to="/inbox" className="topbar-action" title="Notifications">
-            <Bell size={14} />
-            {badges.pupdates > 0 && <span className="topbar-action-badge">{badges.pupdates}</span>}
-          </NavLink>
 
           <div className="theme-wrapper" ref={themeRef}>
             <button className="topbar-action" onClick={() => setShowThemeMenu(!showThemeMenu)} title="Theme">

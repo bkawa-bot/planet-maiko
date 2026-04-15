@@ -119,7 +119,7 @@ export default function TaskCard({
     onEdit(t, {
       title: t.title || "",
       description: t.extra?.description || t.metadata?.description || "",
-      type: t.type || "todo",
+      type: t.type || "coding",
       priority: t.priority || "normal",
       status: t.status || "new",
       project_id: t.project_id || "",

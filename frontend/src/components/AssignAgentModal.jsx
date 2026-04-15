@@ -35,7 +35,6 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
   const [repoRoots, setRepoRoots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [assigning, setAssigning] = useState(false);
-  const [useWorktree, setUseWorktree] = useState(false);
   const [planFirst, setPlanFirst] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
   const [branchName, setBranchName] = useState("");
@@ -94,7 +93,6 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
         task_id: task.id,
         profile_id: selectedId,
         repo_path: repoPath,
-        use_worktree: useWorktree,
         plan_first: planFirst,
         custom_prompt: customPrompt || undefined,
         branch_name: branchName || undefined,
@@ -187,13 +185,6 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
                   <div className="assign-section-label" style={{ marginTop: 16 }}>Options</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text-dim)", cursor: "pointer" }}>
-                      <input type="checkbox" checked={useWorktree} onChange={(e) => setUseWorktree(e.target.checked)} />
-                      Use git worktree
-                      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                        Agent works in an isolated copy of the repo
-                      </span>
-                    </label>
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text-dim)", cursor: "pointer" }}>
                       <input type="checkbox" checked={planFirst} onChange={(e) => setPlanFirst(e.target.checked)} />
                       Plan first
                       <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
@@ -202,7 +193,7 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
                     </label>
                   </div>
                   <div style={{ marginTop: 12, padding: "8px 10px", background: "var(--pink-soft)", borderRadius: "var(--radius-xs)", fontSize: 11, color: "var(--text-dim)" }}>
-                    Coding agents now run autonomously. Maiko will prepare the worktree, launch the agent in the background, and drop a pupdate when it's ready for your review.
+                    Maiko prepares an isolated worktree, launches the agent in the background, and drops a pupdate when it's ready for review.
                   </div>
 
                   <div className="assign-section-label" style={{ marginTop: 16 }}>Additional Instructions (optional)</div>

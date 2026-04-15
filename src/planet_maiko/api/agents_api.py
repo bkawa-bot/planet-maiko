@@ -144,7 +144,11 @@ def assign_agent():
     task_id = data.get("task_id")
     profile_id = data.get("profile_id")
     repo_path = data.get("repo_path", "")
-    use_worktree = data.get("use_worktree", True)
+    # Worktree is always on — every agent role works on an isolated copy
+    # of the repo, no exceptions. Keeps the assign flow uniform across
+    # coding / review / investigation and avoids the "I forgot to check
+    # the box and now my main branch is dirty" footgun.
+    use_worktree = True
     auto_kickoff = data.get("auto_kickoff", False)
     plan_first = bool(data.get("plan_first", False))
     branch_name = data.get("branch_name")
@@ -640,6 +644,54 @@ def send_to_agent(task_id):
     return jsonify(msg.to_dict()), 201
 
 
+@agents_bp.route("/agents/<task_id>/nudge", methods=["POST"])
+def nudge_agent(task_id):
+    """User-triggered nudge: drop a message in the agent's inbox asking
+    for a status check, and resume the claude session if there is one
+    so the agent actually wakes up to read it.
+    """
+    from planet_maiko.models.task import Task
+    from planet_maiko.models.agent_profile import AgentProfile
+
+    task = db.session.get(Task, task_id)
+    if not task:
+        return jsonify({"error": "task not found"}), 404
+
+    agent_name = "the agent"
+    if task.assigned_agent_id:
+        profile = db.session.get(AgentProfile, task.assigned_agent_id)
+        if profile:
+            agent_name = profile.display_name
+
+    db.session.add(AgentMessage(
+        task_id=task_id,
+        direction="to_agent",
+        sender="user",
+        content=(
+            "Hi! Just checking in — please post a quick status update "
+            "via reply(message_type='status') so I know where you're at."
+        ),
+        message_type="message",
+    ))
+    db.session.commit()
+
+    resumed = False
+    working_path = (task.extra or {}).get("working_path")
+    if working_path:
+        try:
+            from planet_maiko.api.diff_api import _resume_agent_with_review
+            _resume_agent_with_review(task_id, working_path)
+            resumed = True
+        except Exception as e:
+            logger.warning(f"[nudge] Resume failed for {task_id}: {e}")
+
+    return jsonify({
+        "status": "nudged",
+        "agent": agent_name,
+        "resumed": resumed,
+    }), 201
+
+
 @agents_bp.route("/agents/<task_id>/outbox", methods=["POST"])
 def agent_sends_message(task_id):
     """Agent sends a message back (alternative to pupdate-based reporting)."""
@@ -999,28 +1051,9 @@ def hook_notification():
 
 @agents_bp.route("/hooks/subagent-stop", methods=["POST"])
 def hook_subagent_stop():
-    """Handle subagent-stop hook: create low-priority pupdate."""
-    from datetime import datetime, timezone
-    from planet_maiko.models.pupdate import Pupdate
-
-    data = request.get_json()
-    task_id = data.get("task_id", "")
-    agent_id = data.get("agent_id", "")
-
-    pupdate = Pupdate(
-        id=f"hook-subagent-{agent_id}-{uuid.uuid4().hex[:8]}",
-        source="agent",
-        source_id=f"agent/{agent_id}",
-        type="agent_update",
-        priority="low",
-        title="Subagent finished",
-        body=f"A subagent for {agent_id} completed its work.",
-        tags=[task_id, "agent", "subagent"],
-        extra={
-            "agent_id": agent_id,
-            "task_id": task_id,
-        },
-    )
-    db.session.add(pupdate)
-    db.session.commit()
-    return jsonify({"status": "ok"}), 201
+    """Handle subagent-stop hook. Subagent completion is internal noise —
+    we acknowledge the hook so Claude Code is happy but don't surface it
+    as a pupdate. The parent agent's status updates are what the user
+    actually cares about.
+    """
+    return jsonify({"status": "ok"}), 200

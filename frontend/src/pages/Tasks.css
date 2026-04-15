@@ -270,3 +270,16 @@
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 20px; border-top: 1px solid var(--border-subtle);
 }
+.generated-tasks-revise {
+  display: flex; gap: 8px; align-items: center;
+  padding: 10px 20px; border-top: 1px solid var(--border-subtle);
+  background: var(--bg-subtle, var(--bg));
+}
+.plan-revise-input {
+  flex: 1; padding: 6px 10px; font-size: 12px;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-xs);
+  font-family: inherit;
+}
+.plan-revise-input:focus { border-color: var(--pink); outline: none; }
+.plan-revise-input:disabled { opacity: 0.6; cursor: not-allowed; }

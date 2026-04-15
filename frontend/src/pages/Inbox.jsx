@@ -44,22 +44,25 @@ export default function Inbox() {
   const [reviewResult, setReviewResult] = useState(null);
   const [reviewing, setReviewing] = useState(null);
   const [brainStatus, setBrainStatus] = useState(null);
-  const [tasks, setTasks] = useState([]);
+  const [schedule, setSchedule] = useState(null);
+  const [inProgressCount, setInProgressCount] = useState(0);
 
   const fetchPupdates = async () => {
     setLoading(true);
     try {
-      const [data, foc, brain, t] = await Promise.all([
+      const [data, foc, brain, sched, ip] = await Promise.all([
         api.getPupdates(),
         api.getFocus().catch(() => null),
         api.getBrainStatus().catch(() => null),
+        api.getSchedule().catch(() => null),
         api.getTasks({ status: "in_progress" }).catch(() => []),
       ]);
       data.sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99));
       setPupdates(data);
       setFocus(foc);
       setBrainStatus(brain);
-      setTasks(t);
+      setSchedule(sched);
+      setInProgressCount(ip.length);
     } catch (err) { console.error(err); }
     setLoading(false);
   };
@@ -225,17 +228,23 @@ export default function Inbox() {
       <div className="inbox-sidebar">
         <div className="home-widget">
           <div className="widget-header"><CheckSquare size={12} /> Focus</div>
-          {tasks.length > 0 ? (
+          {schedule?.blocks?.length > 0 && schedule.blocks[0].tasks?.length > 0 ? (
             <div className="sidebar-task-list">
-              {tasks.slice(0, 4).map((t) => (
-                <div key={t.id} className="sidebar-task">
-                  <span className="sidebar-task-dot" style={{ background: "#60a5fa" }} />
-                  <span className="sidebar-task-title">{t.title}</span>
-                </div>
-              ))}
+              {schedule.blocks[0].tasks.slice(0, 4).map((t) => {
+                const dotColor = {
+                  new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
+                  review: "#a78bfa", done: "#4ade80", blocked: "#d1a050",
+                }[t.status] || "var(--text-muted)";
+                return (
+                  <div key={t.id} className="sidebar-task">
+                    <span className="sidebar-task-dot" style={{ background: dotColor }} />
+                    <span className="sidebar-task-title">{t.title}</span>
+                  </div>
+                );
+              })}
             </div>
           ) : (
-            <div className="widget-empty">No active tasks</div>
+            <div className="widget-empty">No focus tasks scheduled</div>
           )}
         </div>
         <div className="home-widget">
@@ -246,7 +255,7 @@ export default function Inbox() {
               <span className="sidebar-stat-label">Unread</span>
             </div>
             <div className="sidebar-stat">
-              <span className="sidebar-stat-val" style={{ color: "var(--blue)" }}>{tasks.length}</span>
+              <span className="sidebar-stat-val" style={{ color: "var(--blue)" }}>{inProgressCount}</span>
               <span className="sidebar-stat-label">In Progress</span>
             </div>
             <div className="sidebar-stat">

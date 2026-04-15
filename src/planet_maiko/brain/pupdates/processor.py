@@ -230,6 +230,32 @@ def _extract_pr_number(pr_url):
         return ""
 
 
+_PUPDATE_TYPE_TO_TASK_TYPE = {
+    "pr_review_requested": "review",
+    "pr_changes_requested": "bug",
+    "pr_ci_failed": "bug",
+    "linear_assigned": "coding",
+    "linear_mention": "coding",
+    "github_mention": "coding",
+}
+
+
+def _infer_task_type(pupdate, triage_result=None):
+    """Pick a task type for an LLM-triaged create_task action.
+
+    Order:
+      1. Whatever the LLM explicitly returned (if it learned to set task_type).
+      2. A static map keyed on pupdate.type for the well-known categories.
+      3. "coding" as the catch-all default — better than "todo" because
+         it tells the agent router this needs a coding agent.
+    """
+    if triage_result and triage_result.get("task_type"):
+        return triage_result["task_type"]
+    if pupdate.type in _PUPDATE_TYPE_TO_TASK_TYPE:
+        return _PUPDATE_TYPE_TO_TASK_TYPE[pupdate.type]
+    return "coding"
+
+
 def _execute_create_task(pupdate, rule):
     """Create a task from a pupdate."""
     task_id = f"task-{_slugify(pupdate.title)}-{pupdate.id[:6]}"
@@ -307,7 +333,7 @@ def process():
                     counts["read"] += 1
                 elif action == ACTION_CREATE_TASK:
                     _execute_create_task(pupdate, {
-                        "task_type": "todo",
+                        "task_type": _infer_task_type(pupdate, triage_result),
                         "task_priority": triage_result.get("task_priority", pupdate.priority),
                     })
                     counts["tasks_created"] += 1

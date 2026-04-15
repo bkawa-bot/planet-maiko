@@ -5,7 +5,7 @@ import AssignAgentModal from "../components/AssignAgentModal";
 import TaskCard from "../components/TaskCard";
 import {
   CheckSquare, Plus, FolderPlus, FolderOpen, ExternalLink,
-  ChevronDown, ChevronRight, Folder,
+  ChevronDown, ChevronRight, Folder, Loader,
   Play, X, Download, Sparkles, Trash2, Pencil, Brain,
 } from "lucide-react";
 import "./Tasks.css";
@@ -22,12 +22,14 @@ export default function Tasks() {
   const [assigningTask, setAssigningTask] = useState(null);
   const [generatedTasks, setGeneratedTasks] = useState(null); // { project_id, tasks: [...] }
   const [generating, setGenerating] = useState(null); // project_id being generated
+  const [reviseFeedback, setReviseFeedback] = useState(""); // free-form text for "Revise" button
+  const [revising, setRevising] = useState(false); // true while LLM is rewriting the draft
   const [planning, setPlanning] = useState(null); // project_id being planned
   const [viewingPlan, setViewingPlan] = useState(null); // project object to view plan
-  const [taskForm, setTaskForm] = useState({ title: "", description: "", type: "todo", priority: "normal", url: "", project_id: "", due_date: "" });
+  const [taskForm, setTaskForm] = useState({ title: "", description: "", type: "coding", priority: "normal", url: "", project_id: "", due_date: "" });
   const [projectForm, setProjectForm] = useState({ title: "", description: "", priority: "normal" });
   const [editingTask, setEditingTask] = useState(null);
-  const [editForm, setEditForm] = useState({ title: "", description: "", type: "todo", priority: "normal", status: "new", project_id: "", url: "", due_date: "" });
+  const [editForm, setEditForm] = useState({ title: "", description: "", type: "coding", priority: "normal", status: "new", project_id: "", url: "", due_date: "" });
   const [askingMaiko, setAskingMaiko] = useState(null);
   const [maikoQuery, setMaikoQuery] = useState("");
   const [maikoResult, setMaikoResult] = useState(null);
@@ -74,7 +76,7 @@ export default function Tasks() {
     const payload = { id: `task-${Date.now()}`, ...rest };
     if (description) payload.metadata = { description };
     await api.createTask(payload);
-    setTaskForm({ title: "", description: "", type: "todo", priority: "normal", url: "", project_id: "", due_date: "" });
+    setTaskForm({ title: "", description: "", type: "coding", priority: "normal", url: "", project_id: "", due_date: "" });
     setShowTaskForm(false);
     fetchData();
   };
@@ -157,9 +159,13 @@ export default function Tasks() {
                 <label>
                   Type
                   <select value={taskForm.type} onChange={(e) => setTaskForm((f) => ({ ...f, type: e.target.value }))}>
-                    <option value="todo">Todo</option>
-                    <option value="pr_review">PR Review</option>
+                    <option value="coding">Coding</option>
+                    <option value="bug">Bug</option>
+                    <option value="feature">Feature</option>
+                    <option value="review">Review</option>
                     <option value="investigation">Investigation</option>
+                    <option value="repo_analysis">Repo Analysis</option>
+                    <option value="todo">Todo</option>
                     <option value="follow_up">Follow Up</option>
                   </select>
                 </label>
@@ -492,13 +498,56 @@ export default function Tasks() {
                 ))}
               </div>
             </div>
+            <div className="generated-tasks-revise">
+              <input
+                className="plan-revise-input"
+                placeholder="Ask for changes — e.g. 'break step 2 into smaller tasks', 'add a testing phase', 'drop the ui work'"
+                value={reviseFeedback}
+                onChange={(e) => setReviseFeedback(e.target.value)}
+                disabled={revising}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && reviseFeedback.trim() && !revising) {
+                    e.preventDefault();
+                    e.currentTarget.blur();
+                    document.getElementById("plan-revise-btn")?.click();
+                  }
+                }}
+              />
+              <button
+                id="plan-revise-btn"
+                className="btn"
+                disabled={revising || !reviseFeedback.trim()}
+                title="Send the drafts and your feedback back to Maiko for another pass"
+                onClick={async () => {
+                  setRevising(true);
+                  try {
+                    const res = await api.reviseTasks(
+                      generatedTasks.project_id,
+                      reviseFeedback.trim(),
+                      generatedTasks.tasks,
+                    );
+                    setGeneratedTasks({ project_id: res.project_id, tasks: res.tasks });
+                    setReviseFeedback("");
+                    showToast("Plan revised", "normal");
+                  } catch (err) {
+                    showToast("Revise failed: " + err.message, "high");
+                  } finally {
+                    setRevising(false);
+                  }
+                }}
+              >
+                {revising
+                  ? <><Loader size={10} className="spin" /> Revising…</>
+                  : <><Sparkles size={10} /> Revise</>}
+              </button>
+            </div>
             <div className="generated-tasks-footer">
               <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{generatedTasks.tasks.length} task(s)</span>
               <div style={{ display: "flex", gap: 6 }}>
-                <button className="btn" onClick={() => setGeneratedTasks(null)}>Cancel</button>
-                <button className="btn btn-primary" onClick={async () => {
+                <button className="btn" onClick={() => setGeneratedTasks(null)} disabled={revising}>Cancel</button>
+                <button className="btn btn-primary" disabled={revising} onClick={async () => {
                   try {
-                    const res = await api.approvePlan(generatedTasks.project_id, generatedTasks.tasks);
+                    const res = await api.approveProjectPlan(generatedTasks.project_id, generatedTasks.tasks);
                     const n = res.tasks_created?.length || 0;
                     const kickoffs = res.kickoffs || [];
                     const launched = kickoffs.filter((k) => k.success).length;
@@ -570,9 +619,13 @@ export default function Tasks() {
                 <label>
                   Type
                   <select value={editForm.type} onChange={(e) => setEditForm((f) => ({ ...f, type: e.target.value }))}>
-                    <option value="todo">Todo</option>
-                    <option value="pr_review">PR Review</option>
+                    <option value="coding">Coding</option>
+                    <option value="bug">Bug</option>
+                    <option value="feature">Feature</option>
+                    <option value="review">Review</option>
                     <option value="investigation">Investigation</option>
+                    <option value="repo_analysis">Repo Analysis</option>
+                    <option value="todo">Todo</option>
                     <option value="follow_up">Follow Up</option>
                   </select>
                 </label>
