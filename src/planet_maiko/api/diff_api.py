@@ -23,6 +23,7 @@ import os
 import subprocess
 import threading
 import uuid as _uuid
+from datetime import datetime, timezone
 
 from flask import Blueprint, current_app, jsonify, request
 
@@ -620,8 +621,6 @@ def approve(task_id):
     Tasks stay open (status=in_review) until the PR merges
     (github_poller → _complete_review_task).
     """
-    from datetime import datetime, timezone
-
     task, err = _task_or_404(task_id)
     if err:
         return err
