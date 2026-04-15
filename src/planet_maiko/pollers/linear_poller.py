@@ -188,73 +188,93 @@ class LinearPoller(BasePoller):
             db.session.commit()
         return {"updated": updated}
 
-    def import_led_projects(self, api_key):
-        """Create / update Maiko projects for Linear projects the user leads.
+    @staticmethod
+    def _upsert_project_from_linear(lp, role="member"):
+        """Create or update a Maiko Project from a Linear project node.
 
-        Called on every Linear poll so new lead assignments show up without
-        a manual import. Idempotent — existing projects are updated in place
-        (title / status / targetDate can change), not duplicated.
+        Idempotent. Returns (project_id, action) where action is
+        "created" | "updated" | "skipped". Description is set ONLY on
+        first import — once a Maiko user (or /generate-plan) has
+        edited it, we never overwrite. Title, status, source_url, and
+        the linear_state / target_date / start_date hints in extra
+        always refresh so Linear-side changes flow through.
 
-        Linear state → Maiko status: started → active, completed → done,
-        canceled → cancelled, anything else (planned/backlog/paused) → planning.
+        role: "lead" if the user leads the project on Linear,
+              "member" if they have an assigned issue under it.
+              Stored in extra.role for downstream display.
         """
         from planet_maiko.database import db
         from planet_maiko.models.project import Project
 
-        data = self._query(api_key, LED_PROJECTS_QUERY)
-        projects = (data.get("projects") or {}).get("nodes") or []
+        linear_id = lp.get("id")
+        if not linear_id:
+            return None, "skipped"
 
+        project_id = f"proj-linear-{linear_id[:8]}"
+        name = lp.get("name") or "Untitled Project"
+        linear_state = lp.get("state", "")
         state_to_status = {
             "started": "active",
             "completed": "done",
             "canceled": "cancelled",
             "paused": "paused",
         }
+        new_status = state_to_status.get(linear_state, "planning")
+
+        existing = db.session.get(Project, project_id)
+        if existing:
+            existing.title = name
+            existing.status = new_status
+            existing.source_url = lp.get("url") or existing.source_url
+            ex_extra = dict(existing.extra or {})
+            # Bump role to "lead" if the user is now the lead — never
+            # demote (lead is a strictly stronger relationship than member).
+            if role == "lead" or not ex_extra.get("role"):
+                ex_extra["role"] = role
+            ex_extra["linear_state"] = linear_state
+            if lp.get("targetDate"):
+                ex_extra["target_date"] = lp["targetDate"]
+            if lp.get("startDate"):
+                ex_extra["start_date"] = lp["startDate"]
+            existing.extra = ex_extra
+            return project_id, "updated"
+
+        proj = Project(
+            id=project_id,
+            title=name,
+            description=lp.get("description") or None,
+            status=new_status,
+            source_type="linear",
+            source_id=linear_id,
+            source_url=lp.get("url"),
+            extra={
+                "role": role,
+                "linear_state": linear_state,
+                "target_date": lp.get("targetDate"),
+                "start_date": lp.get("startDate"),
+            },
+        )
+        db.session.add(proj)
+        return project_id, "created"
+
+    def import_led_projects(self, api_key):
+        """Create / update Maiko projects for Linear projects the user leads.
+
+        Called on every Linear poll so new lead assignments show up without
+        a manual import. Idempotent.
+        """
+        from planet_maiko.database import db
+
+        data = self._query(api_key, LED_PROJECTS_QUERY)
+        projects = (data.get("projects") or {}).get("nodes") or []
 
         created, updated = 0, 0
         for lp in projects:
-            linear_id = lp.get("id")
-            if not linear_id:
-                continue
-            project_id = f"proj-linear-{linear_id[:8]}"
-            name = lp.get("name") or "Untitled Project"
-            linear_state = lp.get("state", "")
-            new_status = state_to_status.get(linear_state, "planning")
-
-            existing = db.session.get(Project, project_id)
-            if existing:
-                # Refresh surface fields; keep any Maiko-local edits to
-                # description / phases / priority alone.
-                existing.title = name
-                existing.status = new_status
-                existing.source_url = lp.get("url") or existing.source_url
-                ex_extra = dict(existing.extra or {})
-                ex_extra["role"] = "lead"
-                ex_extra["linear_state"] = linear_state
-                if lp.get("targetDate"):
-                    ex_extra["target_date"] = lp["targetDate"]
-                if lp.get("startDate"):
-                    ex_extra["start_date"] = lp["startDate"]
-                existing.extra = ex_extra
-                updated += 1
-            else:
-                proj = Project(
-                    id=project_id,
-                    title=name,
-                    description=lp.get("description") or None,
-                    status=new_status,
-                    source_type="linear",
-                    source_id=linear_id,
-                    source_url=lp.get("url"),
-                    extra={
-                        "role": "lead",
-                        "linear_state": linear_state,
-                        "target_date": lp.get("targetDate"),
-                        "start_date": lp.get("startDate"),
-                    },
-                )
-                db.session.add(proj)
+            _, action = self._upsert_project_from_linear(lp, role="lead")
+            if action == "created":
                 created += 1
+            elif action == "updated":
+                updated += 1
 
         if created or updated:
             db.session.commit()
@@ -398,21 +418,23 @@ class LinearPoller(BasePoller):
     def import_issues(api_key):
         """Import Linear issues as tasks, with project associations.
 
-        Creates Maiko projects for Linear projects (if not existing),
-        then creates tasks linked to those projects.
+        Upserts Maiko projects for any Linear project the issues belong to
+        (via the shared _upsert_project_from_linear helper, so existing
+        projects get their title/status/dates refreshed instead of being
+        skipped), then creates one task per issue linked to that project.
 
         Returns:
-            dict with counts: {projects_created, tasks_created, tasks_skipped}
+            dict with counts: {projects_created, projects_updated,
+            tasks_created, tasks_skipped}
         """
         from planet_maiko.database import db
         from planet_maiko.models.task import Task
-        from planet_maiko.models.project import Project
 
         poller = LinearPoller()
         data = poller._query(api_key, ASSIGNED_ISSUES_QUERY)
         issues = data.get("viewer", {}).get("assignedIssues", {}).get("nodes", [])
 
-        stats = {"projects_created": 0, "tasks_created": 0, "tasks_skipped": 0}
+        stats = {"projects_created": 0, "projects_updated": 0, "tasks_created": 0, "tasks_skipped": 0}
 
         for issue in issues:
             identifier = issue.get("identifier", "")
@@ -423,24 +445,18 @@ class LinearPoller(BasePoller):
                 stats["tasks_skipped"] += 1
                 continue
 
-            # Create project if issue has one
+            # Upsert the project via the shared helper so issue-path and
+            # led-path share state mapping + description semantics.
             project_id = None
             linear_project = issue.get("project")
             if linear_project and linear_project.get("id"):
-                project_id = f"proj-linear-{linear_project['id'][:8]}"
-                existing_project = db.session.get(Project, project_id)
-                if not existing_project:
-                    proj = Project(
-                        id=project_id,
-                        title=linear_project.get("name", "Untitled Project"),
-                        description=linear_project.get("description") or None,
-                        status="active" if linear_project.get("state") == "started" else "planning",
-                        source_type="linear",
-                        source_id=linear_project.get("id"),
-                        source_url=linear_project.get("url"),
-                    )
-                    db.session.add(proj)
+                project_id, action = LinearPoller._upsert_project_from_linear(
+                    linear_project, role="member",
+                )
+                if action == "created":
                     stats["projects_created"] += 1
+                elif action == "updated":
+                    stats["projects_updated"] += 1
 
             # Map Linear state to Maiko status
             state_type = issue.get("state", {}).get("type", "")

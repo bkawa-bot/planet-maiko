@@ -277,7 +277,13 @@ def send_task_to_linear(task_id):
 
 @tasks_bp.route("/tasks/import-linear", methods=["POST"])
 def import_from_linear():
-    """Import assigned issues from Linear as tasks with project associations."""
+    """Import assigned issues from Linear as tasks, plus led projects.
+
+    Two passes so both bring-in-what-you-own and bring-in-what-you-lead
+    happen from one click: issue import (creates tasks and member-role
+    projects) then led-project import (adds any projects the viewer
+    leads that don't show up via assigned issues).
+    """
     from planet_maiko.config import load_config
     config = load_config()
     api_key = config.get("linear", {}).get("api_key")
@@ -285,5 +291,12 @@ def import_from_linear():
         return jsonify({"error": "Linear API key not configured. Set it in Settings."}), 400
 
     from planet_maiko.pollers.linear_poller import LinearPoller
+    poller = LinearPoller()
     stats = LinearPoller.import_issues(api_key)
+    try:
+        led = poller.import_led_projects(api_key)
+        stats["projects_created"] = stats.get("projects_created", 0) + led.get("created", 0)
+        stats["projects_updated"] = stats.get("projects_updated", 0) + led.get("updated", 0)
+    except Exception as e:
+        stats["led_projects_note"] = f"Led-project import failed: {e}"
     return jsonify(stats)
