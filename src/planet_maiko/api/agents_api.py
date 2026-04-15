@@ -407,7 +407,24 @@ def resume_session():
         # check_inbox, etc.) don't get permission-prompted mid-resume
         # and stall the conversation. Worktree isolation already
         # bounds blast radius.
-        cmd = f"cd {working_path} && claude --resume {session_id} --dangerously-skip-permissions"
+        #
+        # Without an initial prompt, claude --resume drops into an
+        # idle interactive prompt — the agent stops working as soon as
+        # the user opens View Session, which is exactly the opposite
+        # of what View Session implies. Append a "keep going" nudge so
+        # the agent picks back up. Plain ASCII, no inner quotes (the
+        # cmd string gets interpolated through shells / AppleScript /
+        # cmd.exe on different platforms; quotes break escaping).
+        resume_prompt = (
+            "Resuming via View Session. Check your inbox for any new "
+            "messages from the user, give a brief one-line status of "
+            "where you left off, and continue working on the task."
+        )
+        cmd = (
+            f'cd {working_path} && '
+            f'claude --resume {session_id} --dangerously-skip-permissions '
+            f'"{resume_prompt}"'
+        )
         mode = "resume"
     else:
         session_file = _find_claude_session_file(working_path, session_id)
