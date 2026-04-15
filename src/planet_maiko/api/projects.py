@@ -108,8 +108,11 @@ Keep it concise and actionable. Use markdown formatting."""
     project_id_saved = project.id
     db.session.close()
 
+    # Plan generation can run long on dense descriptions — 300s matches
+    # the runtime default and leaves headroom so we don't bail before
+    # Claude finishes thinking through phases/risks.
     runtime = ClaudeCodeRuntime()
-    result = runtime.send(prompt, timeout=90, model=resolve_model("project_plan"))
+    result = runtime.send(prompt, timeout=300, model=resolve_model("project_plan"))
 
     if not result.get("success") or not result.get("output"):
         return jsonify({"error": result.get("error", "Failed to generate plan")}), 500
@@ -190,7 +193,9 @@ Rules:
     db.session.close()
     from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
     runtime = ClaudeCodeRuntime()
-    result = runtime.send_json(prompt, timeout=90)
+    # Task breakdown with dependency graph + JSON formatting is expensive
+    # enough to blow past 90s on bigger plans — match generate-plan.
+    result = runtime.send_json(prompt, timeout=300)
 
     if not result.get("success") or not result.get("parsed"):
         return jsonify({"error": result.get("error", "Failed to generate tasks")}), 500
