@@ -217,6 +217,16 @@
 }
 .plan-task-input { min-width: 120px; flex: 1; }
 .plan-task-select { min-width: 70px; }
+.plan-task-plan-first {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--text-muted);
+  padding: 4px 8px; border: 1px solid var(--border);
+  border-radius: var(--radius-xs); background: var(--bg);
+  cursor: pointer; user-select: none;
+  white-space: nowrap;
+}
+.plan-task-plan-first input { margin: 0; cursor: pointer; }
+.plan-task-plan-first:has(input:checked) { color: var(--pink); border-color: var(--pink); }
 .plan-task-desc { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; line-height: 1.4; }
 .plan-task-foot { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; font-size: 11px; color: var(--text-dim); }
 .plan-task-deps { display: flex; align-items: center; gap: 4px; flex: 1; flex-wrap: wrap; }

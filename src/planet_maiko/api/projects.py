@@ -231,11 +231,13 @@ Rules:
 
 @projects_bp.route("/projects/<project_id>/approve-plan", methods=["POST"])
 def approve_plan(project_id):
-    """Commit the (possibly user-edited) draft plan as real tasks.
+    """Commit the (possibly user-edited) draft plan as real tasks and
+    immediately kick off the ready ones.
 
     Body shape: { tasks: [...] } — same schema generate-tasks returned,
-    optionally edited. If omitted, we commit whatever's in
-    project.extra.generated_tasks.
+    optionally edited. Each draft may also carry a `plan_first` bool
+    so the kicked-off agent starts in plan mode. If omitted, we commit
+    whatever's in project.extra.generated_tasks.
 
     For each draft:
       - Create a Task row with a stable id (project-scoped + index).
@@ -244,10 +246,18 @@ def approve_plan(project_id):
       - Set initial status: "blocked" if it has unfinished deps,
         otherwise "new".
 
+    After commit, coding tasks in "new" status are kicked off via
+    kickoff_coding_task() so the user sees agents actually running in
+    Active Agents right after clicking Approve. Blocked tasks wait for
+    their deps; the user can hit Launch manually if the auto-kickoff
+    failed (bad repo path, no local clone, etc.).
+
     Project status flips to "active" on successful approval.
     """
     from planet_maiko.models.task import Task
+    from planet_maiko.models.agent_profile import AgentProfile
     from planet_maiko.orchestration import route, is_ready
+    from planet_maiko.agents.coding_agent import kickoff_coding_task
 
     project = db.get_or_404(Project, project_id)
 
@@ -279,6 +289,10 @@ def approve_plan(project_id):
                 "description": draft.get("description") or "",
                 "repo": draft.get("repo") or "",
                 "category": draft.get("category") or "",
+                # Carried onto the task so /tasks/<id>/launch can
+                # re-use the owner's plan-first preference if the
+                # initial kickoff failed and the user retries.
+                "plan_first": bool(draft.get("plan_first")),
             },
             tags=[],
             depends_on=dep_ids,
@@ -290,11 +304,11 @@ def approve_plan(project_id):
     # keeps the session consistent before routing).
     db.session.flush()
 
-    # Route every task and set initial status based on dep readiness.
-    for task in created:
-        # Honor explicit assigned_agent_id override from the UI if present.
-        draft = next((d for d in drafts if f"task-{project.id}-{now_ms}-{drafts.index(d):03d}" == task.id), None)
-        override = (draft or {}).get("assigned_agent_id")
+    # Pair drafts with their tasks by position so we can honor
+    # explicit agent overrides + plan_first per task cleanly, without
+    # the old lookup-by-structural-equality footgun.
+    for draft, task in zip(drafts, created):
+        override = draft.get("assigned_agent_id")
         if override:
             task.assigned_agent_id = override
         else:
@@ -311,7 +325,33 @@ def approve_plan(project_id):
     project.updated_at = datetime.now(timezone.utc)
     db.session.commit()
 
+    # Now that tasks are persisted and routed, spawn the ready coding
+    # agents. Best-effort: a failure on one task surfaces in the
+    # response but doesn't block the others. Blocked tasks stay
+    # parked until their deps finish.
+    kickoffs = []
+    for draft, task in zip(drafts, created):
+        if task.status != "new":
+            continue
+        if not task.assigned_agent_id:
+            continue
+        agent = db.session.get(AgentProfile, task.assigned_agent_id)
+        if not agent or agent.role != "coding":
+            # Review/investigation agents run via the brain cycle's
+            # one-shot execute phase; no kickoff needed here.
+            continue
+        plan_first = bool(draft.get("plan_first"))
+        result = kickoff_coding_task(task, plan_first=plan_first)
+        kickoffs.append({
+            "task_id": task.id,
+            "title": task.title,
+            "success": result.get("success", False),
+            "error": result.get("error"),
+            "plan_first": plan_first,
+        })
+
     return jsonify({
         "project_id": project.id,
         "tasks_created": [t.to_dict() for t in created],
+        "kickoffs": kickoffs,
     }), 201

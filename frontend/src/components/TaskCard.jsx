@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   CheckSquare, Square, FolderOpen, Pin, PinOff, ExternalLink,
-  ChevronRight, GitBranch, Clock, Bot, Eye,
+  ChevronRight, GitBranch, Clock, Bot, Eye, Play,
   X, Pencil, Brain, Circle, Send, Loader, FileText, GitPullRequest,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -279,6 +279,19 @@ export default function TaskCard({
               {!isDone && !t.assigned_agent_id && (
                 <button className="btn btn-sm btn-action" onClick={() => onAssignAgent(t)}>
                   <Bot size={10} /> Assign Agent
+                </button>
+              )}
+              {/* Assigned but never kicked off (plan-approve failed to
+                  spawn, or user manually assigned without auto-start).
+                  Coding agents only — one-shot roles spawn themselves
+                  on assign. */}
+              {!isDone && !isOneShotTask && t.assigned_agent_id && !t.extra?.working_path && (
+                <button
+                  className="btn btn-sm btn-primary"
+                  onClick={(e) => onAction(e, t.id, "launch")}
+                  title="Start the assigned agent working on this task now"
+                >
+                  <Play size={10} /> Launch
                 </button>
               )}
               {/* Any task whose assigned agent has a worktree (coding

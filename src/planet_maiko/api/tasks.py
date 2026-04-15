@@ -111,48 +111,27 @@ def cancel_task(task_id):
 def launch_task(task_id):
     """Start the assigned coding agent's work on this task NOW.
 
-    Only coding agents need a manual launch — review/investigation
-    agents run autonomously at assign time (see /agents/assign) and
-    via the brain cycle's execute phase as a safety net.
+    Kicks off the same headless agent flow as /agents/assign, but
+    against the existing assignment — used by the "Launch" button on
+    tasks that were assigned (e.g. via project plan approval) without
+    a kickoff, or where the initial kickoff failed. Optional body:
+    `{ plan_first: bool }` to override (defaults to whatever was
+    captured on task.extra.plan_first, else False).
 
-    Returns the prepare() result; the client typically follows up by
-    opening a terminal in the new worktree.
+    Only coding agents need a manual launch — review/investigation
+    agents run autonomously at assign time via /agents/assign.
     """
-    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.agents.coding_agent import kickoff_coding_task
 
     task = db.get_or_404(Task, task_id)
-    if not task.assigned_agent_id:
-        return jsonify({"error": "No agent assigned"}), 400
-
-    agent = db.session.get(AgentProfile, task.assigned_agent_id)
-    if not agent:
-        return jsonify({"error": "Assigned agent no longer exists"}), 404
-
-    if agent.role != "coding":
-        return jsonify({
-            "error": f"{agent.role} agents run autonomously — no manual launch",
-        }), 400
-
-    from planet_maiko.agents.coding_agent import prepare
-    from planet_maiko.config import load_config
-    from planet_maiko.orchestration import resolve_repo_path
-    branch_prefix = (load_config().get("agents", {}) or {}).get("branch_prefix", "maiko")
-    from planet_maiko.orchestration import scope_for_task
-    repo_path = (task.extra or {}).get("repo_path") or resolve_repo_path(scope_for_task(task))
-    if not repo_path:
-        return jsonify({"error": "No local clone found"}), 400
-    result = prepare(
-        task_id=task.id,
-        task_title=task.title,
-        prompt=task.title,
-        repo_path=repo_path,
-        branch_prefix=branch_prefix,
-        auto_kickoff=True,
-        use_worktree=True,
-        agent_profile_id=agent.id,
-        role="coding",
-    )
-    return jsonify({"mode": "coding", "prepare_result": result}), 200
+    data = request.get_json(silent=True) or {}
+    plan_first = data.get("plan_first")
+    if plan_first is None:
+        plan_first = bool((task.extra or {}).get("plan_first"))
+    result = kickoff_coding_task(task, plan_first=bool(plan_first))
+    if not result.get("success"):
+        return jsonify({"error": result.get("error", "Launch failed")}), 400
+    return jsonify({"mode": "coding", "launch_result": result}), 200
 
 
 @tasks_bp.route("/tasks/<task_id>/reassign", methods=["POST"])

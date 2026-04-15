@@ -56,6 +56,14 @@ export default function Tasks() {
     if (action === "start") await api.startTask(id);
     else if (action === "done") await api.completeTask(id);
     else if (action === "cancel") await api.cancelTask(id);
+    else if (action === "launch") {
+      try {
+        await api.launchTask(id);
+        showToast("Agent launched", "normal");
+      } catch (err) {
+        showToast("Launch failed: " + err.message, "high");
+      }
+    }
     fetchData();
   };
 
@@ -420,6 +428,21 @@ export default function Tasks() {
                           ...p, tasks: p.tasks.map((t, j) => j === i ? { ...t, category: e.target.value } : t),
                         }))}
                       />
+                      {!["review", "investigation", "repo_analysis"].includes(gt.type || "todo") && (
+                        <label
+                          className="plan-task-plan-first"
+                          title="Start the agent in plan mode — it produces a markdown plan first, waits for your approval, then implements. Good for bigger or fuzzier tasks."
+                        >
+                          <input
+                            type="checkbox"
+                            checked={!!gt.plan_first}
+                            onChange={(e) => setGeneratedTasks((p) => ({
+                              ...p, tasks: p.tasks.map((t, j) => j === i ? { ...t, plan_first: e.target.checked } : t),
+                            }))}
+                          />
+                          plan first
+                        </label>
+                      )}
                     </div>
                     {gt.description && (
                       <div className="plan-task-desc">{gt.description}</div>
@@ -477,7 +500,15 @@ export default function Tasks() {
                   try {
                     const res = await api.approvePlan(generatedTasks.project_id, generatedTasks.tasks);
                     const n = res.tasks_created?.length || 0;
-                    showToast(`Approved plan — ${n} task(s) created and routed`, "normal");
+                    const kickoffs = res.kickoffs || [];
+                    const launched = kickoffs.filter((k) => k.success).length;
+                    const failed = kickoffs.filter((k) => !k.success);
+                    let msg = `Approved plan — ${n} task(s) created, ${launched} agent(s) launched`;
+                    if (failed.length > 0) {
+                      msg += `. ${failed.length} failed to launch (use Launch button to retry)`;
+                      console.warn("[approve-plan] kickoff failures:", failed);
+                    }
+                    showToast(msg, failed.length > 0 ? "high" : "normal");
                     setGeneratedTasks(null);
                     fetchData();
                   } catch (err) {
