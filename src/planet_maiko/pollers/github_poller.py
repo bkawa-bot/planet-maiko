@@ -179,8 +179,19 @@ class GitHubPoller(BasePoller):
             if repo and number:
                 pr["_reviews"] = self._get_pr_reviews(repo, number)
                 pr["_checks"] = self._get_pr_checks(repo, number)
-                # Collect review comments for learning
                 comments = self._get_pr_comments(repo, number)
+                pr["_comments"] = comments
+                # Stash the latest comment timestamp on the pr so
+                # to_pupdates can use it as the source_id seed —
+                # changes when a genuinely new comment arrives, stays
+                # stable otherwise (so dedup works).
+                latest = ""
+                for c in comments:
+                    ts = c.get("created_at") or c.get("updated_at") or ""
+                    if ts > latest:
+                        latest = ts
+                pr["_latest_comment_at"] = latest
+                pr["_comment_count"] = len(comments)
                 for c in comments:
                     review_comments.append({
                         "type": c.get("_type", "issue_comment"),
@@ -201,6 +212,26 @@ class GitHubPoller(BasePoller):
     def to_pupdates(self, raw_data):
         """Transform GitHub data into pupdates."""
         pupdates = []
+
+        # Build a lookup of open Maiko-coding-task PR URLs so we can
+        # emit pr_review_commented events targeting our own agent
+        # rather than treating those PRs like generic external feedback.
+        # We match either task.url or task.extra.pr_url since both are
+        # set by the approve flow.
+        from planet_maiko.models.task import Task
+        try:
+            open_coding_tasks = Task.query.filter(
+                Task.status.in_(["new", "in_progress", "in_review"]),
+            ).all()
+        except Exception:
+            open_coding_tasks = []
+        task_by_pr_url = {}
+        for t in open_coding_tasks:
+            if t.url:
+                task_by_pr_url[t.url.rstrip("/")] = t
+            extra_url = (t.extra or {}).get("pr_url")
+            if extra_url:
+                task_by_pr_url[extra_url.rstrip("/")] = t
 
         # Review requests -> high priority pupdates
         for pr in raw_data.get("review_requests", []):
@@ -316,6 +347,36 @@ class GitHubPoller(BasePoller):
                         "repo": repo,
                         "number": number,
                         "failed_checks": check_names,
+                    },
+                })
+
+            # PR comments on a Maiko-owned coding task → wake the agent
+            # to fetch + address them. Source_id includes the latest
+            # comment timestamp so each genuinely new batch fires once;
+            # the agent uses `gh pr view N --comments` to read the
+            # actual content rather than us shipping it.
+            pr_url = (pr.get("url") or "").rstrip("/")
+            owning_task = task_by_pr_url.get(pr_url)
+            comment_count = pr.get("_comment_count", 0)
+            latest_at = pr.get("_latest_comment_at", "")
+            if owning_task and comment_count and latest_at:
+                pupdates.append({
+                    "source_id": f"pr-comment/{repo}#{number}/{latest_at}",
+                    "type": "pr_review_commented",
+                    "priority": "normal",
+                    "title": f"New PR feedback: {pr.get('title', '')}",
+                    "body": f"{comment_count} comment(s) on {pr.get('url', '')}",
+                    "url": pr.get("url", ""),
+                    "actionable": True,
+                    "action_hint": "Address feedback",
+                    "tags": [repo.split("/")[-1], "pr-feedback", owning_task.id],
+                    "metadata": {
+                        "repo": repo,
+                        "number": number,
+                        "task_id": owning_task.id,
+                        "pr_url": pr.get("url", ""),
+                        "comment_count": comment_count,
+                        "latest_comment_at": latest_at,
                     },
                 })
 

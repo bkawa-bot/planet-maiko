@@ -7,6 +7,7 @@ This is the brain's equivalent of fetch → decode → execute for pupdates:
 """
 
 import logging
+import os
 from datetime import datetime, timezone, timedelta
 
 from planet_maiko.database import db
@@ -68,17 +69,117 @@ def _execute_mark_read(pupdate):
 
 
 def _complete_review_task(pr_url):
-    """Find and complete any open review task matching this PR URL."""
+    """Close any task whose linked PR just merged / got approved.
+
+    Two match paths:
+      1. Review-request tasks: task.type in (review, pr_review) AND
+         task.url == pr_url — the user was asked to review someone
+         else's PR and that PR's now merged, so the ask is done.
+      2. Coding-agent tasks that opened a PR: any task where
+         task.url == pr_url OR task.extra.pr_url == pr_url, in
+         status new / in_progress / in_review. These are Maiko's own
+         autonomous-coding outputs; they stay open through the review
+         cycle and only close when the PR actually merges.
+    """
     review_tasks = Task.query.filter(
         Task.url == pr_url,
         Task.type.in_(["review", "pr_review"]),
         Task.status.in_(["new", "in_progress"]),
     ).all()
-
     for task in review_tasks:
         task.status = "done"
         task.updated_at = datetime.now(timezone.utc)
         logger.info(f"  -> auto-completed review task: {task.id}")
+
+    # Coding tasks whose PR matches — match either field so url set
+    # via approve() or pre-existing task.url both work.
+    coding_tasks = Task.query.filter(
+        Task.status.in_(["new", "in_progress", "in_review"]),
+    ).all()
+    for task in coding_tasks:
+        if task.url == pr_url or (task.extra or {}).get("pr_url") == pr_url:
+            if task.status == "done":
+                continue
+            task.status = "done"
+            task.updated_at = datetime.now(timezone.utc)
+            # Now that the PR has landed, cleanup the worktree.
+            branch = (task.extra or {}).get("branch")
+            wp = (task.extra or {}).get("working_path")
+            if branch and wp and ".maiko-worktrees" in wp:
+                try:
+                    from planet_maiko.agents.coding_agent import cleanup
+                    repo_path = os.path.dirname(os.path.dirname(wp))
+                    cleanup(repo_path, branch)
+                except Exception as e:
+                    logger.info(f"  -> worktree cleanup skipped for {task.id}: {e}")
+            logger.info(f"  -> auto-completed coding task (PR merged): {task.id}")
+
+
+def _resume_agent_for_pr_comments(pupdate):
+    """Wake the coding agent so it can fetch + address new PR feedback.
+
+    The pupdate carries task_id + pr_url. We post a message into the
+    agent's inbox telling it to run `gh pr view N --comments` (since
+    the agent already has the gh CLI available in the worktree),
+    then fire `claude --resume <session>` so it actually runs. The
+    agent iterates locally and ends with a fresh ready_for_review
+    that the user reviews + approves in Maiko's diff viewer; approve
+    pushes the new commits to the same PR branch.
+    """
+    extra = pupdate.extra or {}
+    task_id = extra.get("task_id")
+    pr_url = extra.get("pr_url")
+    if not task_id:
+        logger.warning(f"[pr-feedback] Pupdate {pupdate.id} has no task_id, skipping")
+        return
+
+    task = db.session.get(Task, task_id)
+    if not task:
+        logger.warning(f"[pr-feedback] Task {task_id} not found, skipping")
+        return
+    working_path = (task.extra or {}).get("working_path")
+    if not working_path:
+        logger.warning(f"[pr-feedback] Task {task_id} has no worktree, skipping")
+        return
+
+    # Drop a message into the agent's inbox so the conversation
+    # history shows what triggered the resume, not just the prompt.
+    from planet_maiko.models.agent_message import AgentMessage
+    msg_body = (
+        f"New review feedback was posted on the PR ({pr_url}).\n\n"
+        f"Run `gh pr view {_extract_pr_number(pr_url)} --comments` "
+        f"(or `gh api repos/<owner>/<repo>/pulls/<n>/comments` for "
+        f"inline review comments) to read what the reviewers wrote, "
+        f"then iterate on the changes. Commit locally — Maiko will "
+        f"push the updates to the same branch after the user "
+        f"approves the new diff."
+    )
+    db.session.add(AgentMessage(
+        task_id=task_id,
+        direction="to_agent",
+        sender="maiko",
+        content=msg_body,
+        message_type="review",
+    ))
+    db.session.commit()
+
+    # Fire the resume in a daemon thread — same pattern the local
+    # request-changes flow uses.
+    try:
+        from planet_maiko.api.diff_api import _resume_agent_with_review
+        _resume_agent_with_review(task_id, working_path)
+    except Exception as e:
+        logger.warning(f"[pr-feedback] Resume failed for {task_id}: {e}")
+
+
+def _extract_pr_number(pr_url):
+    """https://github.com/org/repo/pull/123 → '123'. Empty string on no match."""
+    if not pr_url:
+        return ""
+    try:
+        return pr_url.rstrip("/").split("/")[-1]
+    except Exception:
+        return ""
 
 
 def _execute_create_task(pupdate, rule):
@@ -131,6 +232,17 @@ def process():
             hold_pupdate(pupdate)
             counts["held"] += 1
             # Still process through rules (actions happen, just not surfaced)
+
+        # PR-comment events on a Maiko-owned coding task → wake the
+        # agent autonomously. The pupdate's source_id includes the
+        # latest comment timestamp so the poller emits this exactly
+        # once per new batch; we just translate the event to an
+        # inbox message + claude --resume kick.
+        if pupdate.type == "pr_review_commented":
+            _resume_agent_for_pr_comments(pupdate)
+            pupdate.brain_processed = True
+            counts["processed"] += 1
+            continue
 
         rule = evaluate(pupdate)
 

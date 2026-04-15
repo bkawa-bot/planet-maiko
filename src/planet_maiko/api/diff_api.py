@@ -388,12 +388,17 @@ def _build_pr_body(task, comments):
 
 @diff_bp.route("/tasks/<task_id>/review/approve", methods=["POST"])
 def approve(task_id):
-    """Push the branch to origin and open a GitHub PR.
+    """Push the branch to origin; open a PR if this is the first approval.
 
-    Task is marked done, task.url points at the new PR, the worktree
-    is cleaned up. If gh isn't installed / authed, we surface a
-    pupdate telling the user to push manually and leave the worktree
-    alone so they can recover.
+    Tasks stay open (status=in_review) across review rounds. The first
+    approve runs `gh pr create` and stores pr_url on task.extra.
+    Subsequent approves (after the agent iterates on reviewer
+    comments) just push the updated commits to the same branch — the
+    existing PR updates automatically. The task only closes when the
+    PR actually merges (github_poller → _complete_review_task).
+
+    Worktree stays around for the lifetime of the review cycle so the
+    agent can resume into it on future pr_review_commented events.
     """
     import shutil
     from datetime import datetime, timezone
@@ -409,22 +414,25 @@ def approve(task_id):
     if not branch:
         return jsonify({"error": "No branch tracked for this task"}), 400
 
-    # Submitted comments → all got addressed by the approve action, so
-    # flip them resolved for the audit trail.
     submitted = DiffComment.query.filter_by(task_id=task_id, status="submitted").all()
     for c in submitted:
         c.status = "resolved"
-
     all_comments = DiffComment.query.filter_by(task_id=task_id).all()
+
+    existing_pr_url = (task.extra or {}).get("pr_url")
 
     rc, _, perr = _git(["push", "-u", "origin", branch], cwd=worktree, timeout=120)
     if rc != 0:
         db.session.commit()
         return jsonify({"error": f"git push failed: {perr.strip()[:300]}"}), 500
 
-    pr_url = None
+    pr_url = existing_pr_url
+    pr_created = False
     gh_path = shutil.which("gh")
-    if gh_path:
+    # Only open a new PR if this is the first approve for this task.
+    # Subsequent approves push updates to the existing branch; GitHub
+    # reflects the new commits on the open PR automatically.
+    if gh_path and not existing_pr_url:
         body = _build_pr_body(task, all_comments)
         try:
             result = subprocess.run(
@@ -433,37 +441,30 @@ def approve(task_id):
                 encoding="utf-8", errors="replace", timeout=60,
             )
             if result.returncode == 0:
-                # gh prints the PR URL on stdout
                 out = result.stdout.strip()
                 pr_url = out.splitlines()[-1] if out else None
+                pr_created = bool(pr_url)
             else:
                 logger.warning(f"[diff] gh pr create failed: {result.stderr.strip()[:200]}")
         except Exception as e:
             logger.warning(f"[diff] gh pr create raised: {e}")
 
-    task.status = "done"
+    # Task stays in_review until the PR merges — _complete_review_task
+    # closes it when the github_poller sees pr_merged.
+    task.status = "in_review"
     task.updated_at = datetime.now(timezone.utc)
     extra = dict(task.extra or {})
     if pr_url:
         task.url = pr_url
         extra["pr_url"] = pr_url
-    extra["reviewed_at"] = datetime.now(timezone.utc).isoformat()
+    extra["last_approved_at"] = datetime.now(timezone.utc).isoformat()
     task.extra = extra
     db.session.commit()
-
-    # Clean up the worktree — user has the PR on GitHub (or the branch
-    # pushed locally), no need for the ephemeral checkout anymore.
-    try:
-        repo_path = os.path.dirname(os.path.dirname(worktree)) if ".maiko-worktrees" in worktree else None
-        if repo_path:
-            from planet_maiko.agents.coding_agent import cleanup
-            cleanup(repo_path, branch)
-    except Exception as e:
-        logger.info(f"[diff] Worktree cleanup skipped for {task_id}: {e}")
 
     return jsonify({
         "task_id": task_id,
         "branch": branch,
         "pr_url": pr_url,
+        "pr_created": pr_created,
         "gh_installed": bool(gh_path),
     })

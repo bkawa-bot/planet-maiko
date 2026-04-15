@@ -714,6 +714,10 @@ def agent_sends_message(task_id):
                 "agent_id": task.assigned_agent_id if task else None,
                 "message_type": message_type,
             },
+            # These pupdates already link back to the task — LLM triage
+            # would otherwise spawn a duplicate task for every
+            # ready_for_review / agent_done / agent_stuck event.
+            brain_processed=True,
         )
         db.session.add(pupdate)
 
