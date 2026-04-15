@@ -141,6 +141,44 @@ def _is_config_file(filepath):
     ) or name in ("pom.xml", "build.gradle", "settings.gradle")
 
 
+# Files Maiko itself writes into every prepared worktree. They show up
+# in every agent's git diff and would cause a "conflict" between every
+# pair of agents on TASK.md / CLAUDE.md / .claude/settings.json / etc.
+# None of them are real conflicts — they're per-task scaffolding.
+_MAIKO_OWNED_FILES = frozenset({
+    "TASK.md",
+    "CLAUDE.md",
+    ".mcp.json",
+    ".maiko-env.json",
+    "agent.log",
+    "REVIEW.md",          # written by the review agent into its own worktree
+    "INVESTIGATION.md",   # ditto for investigation agents
+})
+
+_MAIKO_OWNED_PREFIXES = (
+    ".claude/",   # session settings + hook config Maiko writes per-worktree
+    ".maiko-",    # any future .maiko-* scaffolding files
+)
+
+
+def _is_maiko_managed(filepath):
+    """True for files Maiko writes into every worktree.
+
+    These are per-task scaffolding (TASK.md describing this task,
+    CLAUDE.md with the protocol, .claude/settings.json with hooks,
+    etc.) — not user code. They show up in every agent's diff and
+    cause false-positive conflict warnings.
+    """
+    if not filepath:
+        return False
+    # Normalize Windows-style separators so the prefix check works
+    # regardless of how git emits the path.
+    norm = filepath.replace("\\", "/")
+    if os.path.basename(norm) in _MAIKO_OWNED_FILES:
+        return True
+    return any(norm.startswith(p) for p in _MAIKO_OWNED_PREFIXES)
+
+
 def _get_workspace_snapshot(worktree_path):
     """Get the files an agent is working on from git diff.
 
@@ -174,8 +212,13 @@ def _get_workspace_snapshot(worktree_path):
             ["diff", "--cached", "--name-only"], cwd=worktree_path,
         )
 
-        # Merge and deduplicate (no unstaged layer)
-        all_files = list(dict.fromkeys(committed_files + staged_files))
+        # Merge and deduplicate (no unstaged layer), then strip out
+        # the per-task scaffolding Maiko writes into every worktree.
+        # Without this filter, every agent's diff includes TASK.md,
+        # CLAUDE.md, .claude/settings.json etc., and awareness flags
+        # every pair of agents as conflicting on those files.
+        merged = list(dict.fromkeys(committed_files + staged_files))
+        all_files = [f for f in merged if not _is_maiko_managed(f)]
 
         # --- Method extraction per file ---
         methods = {}
