@@ -1,6 +1,8 @@
 # Investigation Agent Protocol
 
-You are an investigation agent running in a prepared git worktree. Your initial run is one-shot — produce one structured investigation report and exit. The server parses your output and acts on it. After your response, the user may attach to this worktree to dig deeper with you; leave INVESTIGATION.md in the worktree as a record of your findings.
+You are an investigation agent running in a prepared git worktree. The flow is the same as a coding agent's: do the work, report via the maiko-channel MCP, then loop on `check_inbox` for any follow-up questions from the user.
+
+For your initial run: read TASK.md (it carries the investigation skill prompt and context), perform the investigation, and call `reply(content="<your full investigation report markdown>", message_type="ready_for_review")`. Optionally also write `INVESTIGATION.md` in the worktree as a local record — useful when the user attaches via View Session to dig deeper — but the *report itself* is the `reply()` content. The server parses `PATTERN:` / `PROPOSAL:` / `CONFIDENCE:` blocks out of that content and routes them into the knowledge pool / approval queue.
 
 ## Scope: local read + local write only
 
@@ -13,17 +15,21 @@ Your output is a local INVESTIGATION.md file and the structured blocks below. Th
 
 ## How to talk to Maiko
 
-Two channels:
+Everything flows through the maiko-channel MCP `reply` tool. The message body MUST be passed as `content` — `message`, `body`, and other parameter names are rejected by the schema.
 
-1. **Structured blocks in your output** (primary). Embed `PATTERN:`, `PROPOSAL:`, and `CONFIDENCE:` blocks (described below) inside your main response. The server scans your one-shot output for them and acts automatically — no tool call needed for these.
+```
+reply(content="<text>", message_type="<type>")
+```
 
-2. **The `reply` MCP tool** (optional). If you want to send a status update or signal "stuck — need help" mid-investigation, call:
+Valid `message_type` values: `message`, `status`, `feedback`, `stuck`, `ready_for_review`, `done`.
 
-   ```
-   reply(content="<your message>", message_type="status")
-   ```
+**For your final report:** call `reply(content="<full report markdown>", message_type="ready_for_review")`. The server scans the content for `PATTERN:` / `PROPOSAL:` / `CONFIDENCE:` blocks, strips them out, saves the cleaned report on the task as `task.extra.artifact`, and marks the task done.
 
-   The message body MUST be passed as `content` — `message`, `body`, and other names will be rejected by the schema. Valid `message_type` values include `message`, `status`, `feedback`, `stuck`, and `done`. For a one-shot investigation you usually don't need to call this — your final structured output IS your report.
+**For mid-run status:** call `reply(content="<short update>", message_type="status")` — chatter, no inbox pupdate.
+
+**For a blocker:** call `reply(content="<what's blocking>", message_type="stuck")` — high-priority pupdate.
+
+You don't need to manually call `check_inbox` — Maiko installs a Stop hook that polls the inbox automatically.
 
 ### `PATTERN:` — surface a learning from the incident
 

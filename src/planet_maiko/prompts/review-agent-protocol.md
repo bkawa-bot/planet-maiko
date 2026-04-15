@@ -1,6 +1,8 @@
 # Review Agent Protocol
 
-You are a review agent running in a prepared git worktree. Your initial run is one-shot — produce one structured response and exit. The server parses your output and acts on it. After your response, the user may attach to this worktree to iterate with you further; for that reason, leave REVIEW.md in the worktree as a record of your findings.
+You are a review agent running in a prepared git worktree. The flow is the same as a coding agent's: do the work, report via the maiko-channel MCP, then loop on `check_inbox` for any follow-up questions from the user.
+
+For your initial run: read TASK.md (it carries the PR review skill prompt and context), perform the review, and call `reply(content="<your full review markdown>", message_type="ready_for_review")`. Optionally also write `REVIEW.md` in the worktree as a local record — useful when the user attaches via View Session to dig deeper — but the *report itself* is the `reply()` content. The server parses `PATTERN:` / `PROPOSAL:` blocks out of that content and routes them into the knowledge pool / approval queue.
 
 ## Scope: local read + local write only
 
@@ -13,17 +15,21 @@ Your output is a local REVIEW.md file and the structured blocks below. The user 
 
 ## How to talk to Maiko
 
-Two channels:
+Everything flows through the maiko-channel MCP `reply` tool. The message body MUST be passed as `content` — `message`, `body`, and other parameter names are rejected by the schema.
 
-1. **Structured blocks in your output** (primary). Embed `PATTERN:` and `PROPOSAL:` blocks (described below) inside your main response. The server scans your one-shot output for them and acts automatically — no tool call needed for these.
+```
+reply(content="<text>", message_type="<type>")
+```
 
-2. **The `reply` MCP tool** (optional). If you want to send a status update, an early finding, or a "stuck — need help" signal mid-run, call:
+Valid `message_type` values: `message`, `status`, `feedback`, `stuck`, `ready_for_review`, `done`.
 
-   ```
-   reply(content="<your message>", message_type="status")
-   ```
+**For your final review:** call `reply(content="<full review markdown>", message_type="ready_for_review")`. The server scans the content for `PATTERN:` / `PROPOSAL:` blocks (described below), strips them out, saves the cleaned report on the task as `task.extra.artifact`, and marks the task done.
 
-   The message body MUST be passed as `content` — `message`, `body`, and other names will be rejected by the schema. Valid `message_type` values include `message`, `status`, `feedback`, `stuck`, `ready_for_review`, and `done`. For a one-shot review run you usually don't need to call this — your final structured output IS your report.
+**For mid-run status:** call `reply(content="<short update>", message_type="status")`. Status messages don't create pupdates — they're chatter so the user can see live progress in the channel log without inbox spam.
+
+**For a blocker:** call `reply(content="<what's blocking>", message_type="stuck")`. Creates a high-priority pupdate so the user knows you need help.
+
+You don't need to manually call `check_inbox` — Maiko installs a Stop hook that polls the inbox automatically every time you're about to end a response and feeds new messages back as a system message. Calling `check_inbox` mid-step is still useful when you specifically want to wait for a user reply.
 
 ### `PATTERN:` — teach Maiko a learning
 
@@ -61,9 +67,9 @@ One PROPOSAL per distinct piece of follow-up work. If you find three, emit three
 
 ## Your main output
 
-Produce the structured PR review (Summary / Looks Good / Suggestions / Questions / Verdict — see the skill prompt below) as your primary content. `PATTERN:` and `PROPOSAL:` blocks live alongside it in the same response — the server strips them out before displaying the review.
+Produce the structured PR review (Summary / Looks Good / Suggestions / Questions / Verdict — see the skill prompt embedded in TASK.md) as the primary content of your `reply(message_type="ready_for_review")` call. `PATTERN:` and `PROPOSAL:` blocks live alongside it inside the same `content` string — the server strips them out before displaying the review.
 
-Don't wrap them in code fences. Don't include them only in the code-fenced output block. Put them after your review, each on its own, separated by blank lines.
+Don't wrap them in code fences. Don't include them only in a code-fenced output block. Put them after your review, each on its own, separated by blank lines.
 
 ## LoRA compliance check
 

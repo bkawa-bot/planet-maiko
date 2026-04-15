@@ -2,10 +2,11 @@ import logging
 import os
 import threading
 import uuid
+from datetime import datetime, timezone
 from flask import Blueprint, current_app, jsonify, request
 from planet_maiko.database import db
 from planet_maiko.models.agent_message import AgentMessage
-from planet_maiko.agents.brain_session import run_skill, get_status as brain_status
+from planet_maiko.agents.brain_session import run_skill, get_status as brain_status, ONE_SHOT_ROLE_FOR_TYPE
 from planet_maiko.agents.coding_agent import prepare, list_prepared, cleanup
 from planet_maiko.agents.monitor import get_agent_activity, get_queued_agent_tasks, process_agent_pupdates, get_stuck_agents
 from planet_maiko.agents.skills import list_skills
@@ -16,12 +17,13 @@ agents_bp = Blueprint("agents", __name__)
 
 
 def _spawn_one_shot_thread(task_id, working_path):
-    """Fire a daemon thread that runs execute_one_shot_task for a
-    freshly-assigned review/investigation task.
+    """Re-fire the autonomous run for a one-shot task on the unified
+    headless flow (same as a fresh assign would do — claude --print
+    in the worktree, agent uses the channel MCP to reply
+    ready_for_review with the report content).
 
-    Runs in its own app context so the thread has DB access. Any
-    failure is logged but doesn't reach the caller — the cycle's
-    execute-one-shot phase picks up stragglers on its next tick.
+    Used by the rerun endpoint and by the cycle's safety-net
+    execute phase. No-op if the task or its agent has gone away.
     """
     app = current_app._get_current_object()
 
@@ -29,16 +31,25 @@ def _spawn_one_shot_thread(task_id, working_path):
         with app.app_context():
             try:
                 from planet_maiko.models.task import Task
-                from planet_maiko.agents.brain_session import execute_one_shot_task
+                from planet_maiko.models.agent_profile import AgentProfile
+                from planet_maiko.agents.coding_agent import _kickoff_agent_headless
                 task = db.session.get(Task, task_id)
                 if not task:
-                    logger.warning(f"[assign-thread] Task {task_id} vanished before run")
+                    logger.warning(f"[one-shot] Task {task_id} vanished before run")
                     return
                 if task.status not in ("new", "blocked"):
                     return  # Already running or done — let the cycle handle it
-                execute_one_shot_task(task, working_dir=working_path)
+                if not task.assigned_agent_id:
+                    logger.warning(f"[one-shot] Task {task_id} has no assigned agent")
+                    return
+                profile = db.session.get(AgentProfile, task.assigned_agent_id)
+                role = (profile.role if profile else None) or "investigation"
+                _kickoff_agent_headless(
+                    task.assigned_agent_id, working_path, task_id,
+                    branch_name=None, plan_first=False, role=role,
+                )
             except Exception as e:
-                logger.exception(f"[assign-thread] execute_one_shot_task failed for {task_id}: {e}")
+                logger.exception(f"[one-shot] kickoff failed for {task_id}: {e}")
 
     threading.Thread(target=_run, daemon=True, name=f"one-shot-{task_id}").start()
 
@@ -158,108 +169,38 @@ def assign_agent():
 
     task = db.get_or_404(Task, task_id)
     profile = db.get_or_404(AgentProfile, profile_id)
+    role = profile.role or "coding"
 
-    # Review / investigation: prepare a worktree (for later "dig
-    # deeper"), fire a daemon thread that runs the skill, return
-    # immediately. The thread writes the result pupdate.
-    if profile.role in ("review", "investigation"):
+    # Resolve repo_path. For coding the user picks one in the modal;
+    # for review/investigation the task's scope plus repo_roots
+    # determines it (no UI input needed).
+    if role in ("review", "investigation"):
         from planet_maiko.orchestration import resolve_repo_path, scope_for_task
         repo = scope_for_task(task)
         local_path = resolve_repo_path(repo)
         if not local_path:
             return jsonify({"error": f"No local clone found for {repo or 'this task'}"}), 400
-
-        task.assigned_agent_id = profile.id
+        repo_path = local_path
+        # Coerce task.type so the cycle's "find one-shot tasks" query
+        # picks this up if the kickoff thread dies and we need a retry.
         if task.type not in ONE_SHOT_ROLE_FOR_TYPE:
-            task.type = {"review": "review", "investigation": "investigation"}[profile.role]
+            task.type = {"review": "review", "investigation": "investigation"}[role]
         if task.status not in ("blocked", "done"):
             task.status = "new"
+    else:
+        if not repo_path:
+            return jsonify({"error": "repo_path is required. Select a repo in the assign modal."}), 400
+        if not os.path.isdir(repo_path):
+            return jsonify({"error": f"Repository path not found: {repo_path}"}), 400
+        if not os.path.isdir(os.path.join(repo_path, ".git")):
+            return jsonify({"error": f"Not a git repository: {repo_path}"}), 400
 
-        prompt_parts = [task.title]
-        if task.source_pupdate_id:
-            from planet_maiko.models.pupdate import Pupdate
-            source = db.session.get(Pupdate, task.source_pupdate_id)
-            if source and source.body:
-                prompt_parts.append(f"\n## Source Context\n\n{source.body}")
-            if source and source.url:
-                prompt_parts.append(f"\nSource URL: {source.url}")
-        if task.url:
-            prompt_parts.append(f"\nTask URL: {task.url}")
-        full_prompt = "\n".join(prompt_parts)
-
-        try:
-            prep_result = prepare(
-                task_id=task.id,
-                task_title=task.title,
-                prompt=full_prompt,
-                repo_path=local_path,
-                branch_prefix=branch_name or "maiko",
-                auto_kickoff=False,
-                use_worktree=True,
-                agent_profile_id=profile.id,
-                role=profile.role,
-            )
-        except Exception as e:
-            return jsonify({"error": f"Prepare failed: {e}"}), 500
-        if not prep_result:
-            return jsonify({"error": "Prepare failed"}), 500
-
-        extra = dict(task.extra or {})
-        extra["working_path"] = prep_result["working_path"]
-        extra["branch"] = prep_result["branch"]
-        task.extra = extra
-        db.session.commit()
-
-        _spawn_one_shot_thread(task.id, prep_result["working_path"])
-
-        return jsonify({
-            "task": task.to_dict(),
-            "agent": profile.to_dict(),
-            "mode": profile.role,
-            "worktree": prep_result,
-        }), 201
-
-    # Coding path below — unchanged.
-    if not repo_path:
-        return jsonify({"error": "repo_path is required. Select a repo in the assign modal."}), 400
-
-    # Build rich prompt from task + source pupdate + project
-    prompt_parts = [task.title]
-
-    # Pull in source context (Linear issue body, GitHub PR description, etc.)
-    if task.source_pupdate_id:
-        from planet_maiko.models.pupdate import Pupdate
-        source = db.session.get(Pupdate, task.source_pupdate_id)
-        if source and source.body:
-            prompt_parts.append(f"\n## Source Context\n\n{source.body}")
-        if source and source.url:
-            prompt_parts.append(f"\nSource URL: {source.url}")
-
-    # Pull in project description
-    if task.project_id:
-        from planet_maiko.models.project import Project
-        project = db.session.get(Project, task.project_id)
-        if project and project.description:
-            prompt_parts.append(f"\n## Project: {project.title}\n\n{project.description}")
-
-    # Add task metadata
-    if task.url:
-        prompt_parts.append(f"\nTask URL: {task.url}")
-    if task.tags:
-        prompt_parts.append(f"\nTags: {', '.join(task.tags)}")
-
-    # Add user's custom instructions if provided in request
-    user_prompt = data.get("custom_prompt", "")
-    if user_prompt:
-        prompt_parts.append(f"\n## Additional Instructions\n\n{user_prompt}")
-
-    full_prompt = "\n".join(prompt_parts)
-
-    # Validate repo path exists and is a git repo
-    if not os.path.isdir(repo_path):
-        return jsonify({"error": f"Repository path not found: {repo_path}"}), 400
-    if not os.path.isdir(os.path.join(repo_path, ".git")):
-        return jsonify({"error": f"Not a git repository: {repo_path}"}), 400
+    # Build the prompt that lands in TASK.md. Coding gets task title +
+    # source body + project + tags + custom instructions. Review and
+    # investigation additionally embed the skill prompt so the agent
+    # has the full execution recipe in TASK.md and we can use the
+    # same _kickoff_agent_headless path that coding uses.
+    full_prompt = _build_task_prompt(task, role, data.get("custom_prompt", ""))
 
     try:
         result = prepare(
@@ -268,51 +209,37 @@ def assign_agent():
             prompt=full_prompt,
             repo_path=repo_path,
             branch_prefix=branch_name or "maiko",
-            auto_kickoff=False,  # we do our own headless kickoff below
-            use_worktree=use_worktree,
-            agent_profile_id=profile_id,
+            auto_kickoff=False,
+            use_worktree=True,
+            agent_profile_id=profile.id,
+            role=role,
         )
     except Exception as e:
         return jsonify({"error": f"Agent preparation failed: {str(e)}"}), 500
-
     if not result:
         return jsonify({"error": "Failed to prepare agent"}), 500
 
-    # Coding agents now run autonomously by default — headless subprocess,
-    # no tmux, no terminal. User reviews the agent's diff in-app when
-    # the agent reports ready_for_review. The old interactive launch is
-    # preserved behind the explicit `auto_kickoff: true` flag for users
-    # who still want to watch a terminal.
-    from planet_maiko.agents.coding_agent import _kickoff_agent_headless, _kickoff_agent
     branch = result.get("branch")
     working_path = result.get("working_path")
-    if auto_kickoff:
-        kickoff = _kickoff_agent(
-            profile_id, working_path, task_id,
-            branch_name=branch if not use_worktree else None,
-        )
-    else:
-        kickoff = _kickoff_agent_headless(
-            profile_id, working_path, task_id,
-            branch_name=branch if not use_worktree else None,
-            plan_first=plan_first,
-        )
+
+    from planet_maiko.agents.coding_agent import _kickoff_agent_headless
+    kickoff = _kickoff_agent_headless(
+        profile.id, working_path, task_id,
+        branch_name=None,  # always worktree mode
+        plan_first=plan_first if role == "coding" else False,
+        role=role,
+    )
     result["kickoff_result"] = kickoff
 
-    # Link task to agent
-    task.assigned_agent_id = profile_id
+    task.assigned_agent_id = profile.id
     if task.status == "new":
         task.status = "in_progress"
-    # Persist the worktree info on the task itself so the frontend can
-    # always surface a "Review diff" link — even if the agent never
-    # sends ready_for_review, the task carries enough state to find
-    # the worktree and render its diff.
     extra = dict(task.extra or {})
     if working_path:
         extra["working_path"] = working_path
     if branch:
         extra["branch"] = branch
-    if plan_first:
+    if plan_first and role == "coding":
         extra["plan_first"] = True
     task.extra = extra
     db.session.commit()
@@ -320,8 +247,59 @@ def assign_agent():
     return jsonify({
         "task": task.to_dict(),
         "agent": profile.to_dict(),
+        "mode": role,
         "worktree": result,
     }), 201
+
+
+def _build_task_prompt(task, role, custom_prompt=""):
+    """Compose the TASK.md body for a freshly-assigned task. Same
+    base context for every role (title + source pupdate + project +
+    URL + tags). For review/investigation we additionally embed the
+    skill prompt so the agent has the full recipe in TASK.md and can
+    just follow it — no separate skill-runner code path needed."""
+    from planet_maiko.models.pupdate import Pupdate
+    from planet_maiko.models.project import Project as _Project
+
+    parts = [task.title]
+
+    if task.source_pupdate_id:
+        source = db.session.get(Pupdate, task.source_pupdate_id)
+        if source and source.body:
+            parts.append(f"\n## Source Context\n\n{source.body}")
+        if source and source.url:
+            parts.append(f"\nSource URL: {source.url}")
+
+    if task.project_id:
+        project = db.session.get(_Project, task.project_id)
+        if project and project.description:
+            parts.append(f"\n## Project: {project.title}\n\n{project.description}")
+
+    if task.url:
+        parts.append(f"\nTask URL: {task.url}")
+    if task.tags:
+        parts.append(f"\nTags: {', '.join(task.tags)}")
+
+    if role in ("review", "investigation"):
+        try:
+            from planet_maiko.agents.skills import get_skill_prompt
+            skill_name = ONE_SHOT_ROLE_FOR_TYPE.get(task.type, (None, None))[1]
+            if skill_name:
+                context = {
+                    "query": task.title,
+                    "context": f"URL: {task.url or ''}\nRepo: {(task.extra or {}).get('repo', '')}",
+                    "pupdates": "[]", "tasks": "[]", "calendar": "[]",
+                }
+                skill_prompt = get_skill_prompt(skill_name, context) or ""
+                if skill_prompt.strip():
+                    parts.append(f"\n## Skill: {skill_name}\n\n{skill_prompt}")
+        except Exception as e:
+            logger.warning(f"[assign] Could not embed skill prompt: {e}")
+
+    if custom_prompt:
+        parts.append(f"\n## Additional Instructions\n\n{custom_prompt}")
+
+    return "\n".join(parts)
 
 
 def _launch_terminal(cmd):
@@ -772,8 +750,9 @@ def rerun_agent(task_id):
     if not working_path or not os.path.isdir(working_path):
         return jsonify({"error": "no worktree on disk for this task — re-assign the agent"}), 400
 
-    # Reset to "new" so execute_one_shot_task doesn't bail on the
-    # "already running" guard at the top of _spawn_one_shot_thread.
+    # Reset to "new" so _spawn_one_shot_thread doesn't bail on the
+    # "already running / done" guard. The unified kickoff inside
+    # that helper re-fires the same headless flow assign uses.
     if task.status == "in_progress":
         task.status = "new"
     db.session.commit()
@@ -843,12 +822,48 @@ def agent_sends_message(task_id):
     )
     db.session.add(msg)
 
-    # Emit a pupdate so the user actually sees the message in their
-    # inbox — otherwise it just sits in the Channel Log nobody checks.
-    # Full content goes in the body; title gets a one-line preview.
-    # Skip "status" messages (those are chatter), skip "feedback"
-    # (the Signal creation below already surfaces it).
+    # For one-shot tasks (review / investigation / repo_analysis), the
+    # ready_for_review reply IS the report. Parse PATTERN: /
+    # PROPOSAL: / CONFIDENCE: blocks out, save the cleaned content as
+    # task.extra.artifact, and mark the task done. Coding tasks use
+    # ready_for_review to mean "go look at the diff" and stay in
+    # in_progress until the user explicitly approves — different
+    # semantics, gated by task.type below.
     message_type = data.get("message_type", "message")
+    if message_type == "ready_for_review":
+        from planet_maiko.models.task import Task as _Task
+        from planet_maiko.models.agent_profile import AgentProfile as _AgentProfile
+        from planet_maiko.agents.brain_session import ONE_SHOT_ROLE_FOR_TYPE
+        from planet_maiko.brain.learning.agent_output import parse_and_apply_blocks
+        t = db.session.get(_Task, task_id)
+        if t and t.type in ONE_SHOT_ROLE_FOR_TYPE:
+            ag = db.session.get(_AgentProfile, t.assigned_agent_id) if t.assigned_agent_id else None
+            try:
+                parsed = parse_and_apply_blocks(
+                    data["content"], agent=ag, task=t,
+                    repo=(t.extra or {}).get("repo"),
+                )
+                cleaned = parsed.get("cleaned_output", data["content"])
+                extra = dict(t.extra or {})
+                extra["artifact"] = cleaned[:16000]
+                extra["patterns_emitted"] = parsed.get("patterns_emitted", 0)
+                extra["proposals_emitted"] = parsed.get("proposals_emitted", 0)
+                if parsed.get("confidence"):
+                    extra["confidence"] = parsed["confidence"]
+                extra["completed_at"] = datetime.now(timezone.utc).isoformat()
+                t.extra = extra
+                t.status = "done"
+                if ag:
+                    ag.last_active_at = datetime.now(timezone.utc)
+                logger.info(
+                    f"[outbox] {t.type} task {task_id} done — "
+                    f"{parsed.get('patterns_emitted', 0)} patterns, "
+                    f"{parsed.get('proposals_emitted', 0)} proposals"
+                )
+            except Exception as e:
+                logger.warning(f"[outbox] artifact save failed for {task_id}: {e}")
+
+
     if message_type not in ("status", "feedback"):
         from planet_maiko.models.task import Task
         from planet_maiko.models.agent_profile import AgentProfile

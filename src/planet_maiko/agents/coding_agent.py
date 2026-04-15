@@ -419,22 +419,32 @@ _SAFE_BRANCH_RE = re.compile(r"^[A-Za-z0-9_./-]+$")
 _UNSAFE_PATH_CHARS = re.compile(r'[;&|`$<>!"*?\n\r]')
 
 
-def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, plan_first=False):
-    """Start the coding agent as a background daemon thread — no terminal.
+def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, plan_first=False, role="coding"):
+    """Start an autonomous agent as a background daemon thread — no terminal.
 
-    Mirrors the review / investigation autonomous flow: `claude --print`
-    runs in the worktree, tees its transcript to agent.log, and exits
-    when it's reached a stopping point (in the coding case, sent a
-    ready_for_review message via MCP). The session id is registered
-    so "View Session" can later `claude --resume` into it for the
-    user to iterate alongside the agent.
+    Single entry point for every role (coding / review / investigation).
+    `claude --print` runs in the worktree, tees its transcript to
+    agent.log, and exits when the agent stops responding. The session
+    id is registered so "View Session" can later `claude --resume`
+    into it for the user to iterate alongside the agent.
+
+    The initial prompt is role-specific:
+      - coding: "work, reply ready_for_review on first commit, loop"
+      - review: "execute the PR review skill from TASK.md, reply
+        ready_for_review with the review content (PATTERN: /
+        PROPOSAL: blocks live inside it), loop"
+      - investigation: same shape, but for the investigate skill
+        and INVESTIGATION.md output.
+
+    For review/investigation, TASK.md must already contain the skill
+    prompt (the caller embeds it before calling prepare()).
 
     plan_first=True starts the run in Claude's plan mode and prompts
     the agent to produce a markdown plan first — it calls
     reply(message_type="plan_for_approval") and exits without writing
     code. The user approves or requests changes in the plan UI; the
     approve endpoint resumes the session without plan mode so the
-    agent can actually implement.
+    agent can actually implement. Plan-first only applies to coding.
 
     Returns immediately after spawning the thread.
     """
@@ -459,19 +469,45 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
             "any code yet. Produce a detailed implementation plan "
             "(markdown, 500 words max) covering: what you'll change, in "
             "which files, in what order, and the key decisions / risks. "
-            "When the plan is ready, call reply(message_type=\"plan_for_approval\", "
-            "content=<your plan>) via the maiko-channel MCP and exit. "
-            "The user will approve or request changes; Maiko will resume "
-            "you with their decision."
+            "When the plan is ready, call reply(content=<your plan>, "
+            "message_type=\"plan_for_approval\") via the maiko-channel "
+            "MCP and exit. The user will approve or request changes; "
+            "Maiko will resume you with their decision."
         )
-    else:
+    elif role == "review":
         initial_prompt = (
-            "Read TASK.md and CLAUDE.md in this directory. Begin working on the "
-            "task following the protocol. After your first meaningful commit, "
-            "call reply(message_type=\"ready_for_review\", content=\"...\") via "
-            "the maiko-channel MCP and then use check_inbox to receive any "
-            "review feedback. Do not git push or open PRs — Maiko handles that "
-            "once the human approves."
+            "Read TASK.md and CLAUDE.md in this directory. TASK.md "
+            "carries the PR review instructions and context — execute "
+            "them following the review-agent-protocol in CLAUDE.md. "
+            "When done, call reply(content=<your full review markdown, "
+            "including any PATTERN: / PROPOSAL: blocks>, "
+            "message_type=\"ready_for_review\") via the maiko-channel "
+            "MCP. The server parses PATTERN: / PROPOSAL: blocks out "
+            "of your content automatically — keep them inside the "
+            "reply, not in stdout. After replying, check_inbox for "
+            "any follow-up questions and iterate."
+        )
+    elif role == "investigation":
+        initial_prompt = (
+            "Read TASK.md and CLAUDE.md in this directory. TASK.md "
+            "carries the investigation instructions and context — "
+            "execute them following the investigation-agent-protocol "
+            "in CLAUDE.md. When done, call reply(content=<your full "
+            "investigation report markdown, including any PATTERN: / "
+            "PROPOSAL: / CONFIDENCE: blocks>, "
+            "message_type=\"ready_for_review\") via the maiko-channel "
+            "MCP. After replying, check_inbox for any follow-up "
+            "questions."
+        )
+    else:  # coding
+        initial_prompt = (
+            "Read TASK.md and CLAUDE.md in this directory. Begin "
+            "working on the task following the protocol. After your "
+            "first meaningful commit, call reply(content=\"<one-line "
+            "summary>\", message_type=\"ready_for_review\") via the "
+            "maiko-channel MCP and then use check_inbox to receive "
+            "any review feedback. Do not git push or open PRs — "
+            "Maiko handles that once the human approves."
         )
 
     # No --allowedTools alongside --dangerously-skip-permissions — the
