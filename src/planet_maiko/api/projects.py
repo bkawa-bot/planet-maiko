@@ -274,7 +274,7 @@ def generate_tasks(project_id):
 
 ## How to plan well
 
-You are running in plan mode (read-only — Read / Glob / Grep / read-only Bash are all available, plus any MCP tools). Before writing tasks:
+You have read-only access to the primary repo above (Read / Glob / Grep, plus read-only Bash patterns like `git log` / `git show` / `cat` / `ls` / `find`, plus any MCP tools that are configured). Use them. Before writing tasks:
 
 1. Read the relevant repo's README or root files to understand what kind of project it is.
 2. Grep for terms from the project description so the tasks reference real files / modules / functions, not invented ones.
@@ -312,23 +312,37 @@ Rules:
 - Don't propose tasks that duplicate the existing open tasks above
 """
 
-    # Pre-discover global MCPs so plan mode has access to Linear / Slack /
-    # etc. exactly the way an interactive Claude Code session would.
+    # Pre-discover global MCPs so the planner has access to Linear /
+    # Slack / etc. exactly the way an interactive Claude Code session
+    # would. Then build an explicit read-only allowlist instead of
+    # using --permission-mode plan: plan mode is designed for
+    # interactive sessions where the agent ends by calling
+    # ExitPlanMode, which doesn't have a clean path back through
+    # `claude --print`. An allowlist gives us the same "explore but
+    # can't mutate" property and still lets the agent print JSON to
+    # stdout normally.
     from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
     runtime = ClaudeCodeRuntime()
     mcp_tools = runtime._discover_global_mcps()
+    read_only_tools = [
+        "Read", "Glob", "Grep",
+        # Read-only bash patterns commonly useful for code exploration:
+        # git log/show/diff, ls, cat, head/tail, wc, find. Anything
+        # not listed (Write/Edit/Bash without a matching pattern) hits
+        # a permission prompt and is silently denied in --print mode.
+        "Bash(git log:*)", "Bash(git show:*)", "Bash(git diff:*)",
+        "Bash(git status)", "Bash(git log)", "Bash(git status:*)",
+        "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)",
+        "Bash(wc:*)", "Bash(find:*)",
+    ] + (mcp_tools or [])
 
     # Release DB before long LLM call to avoid SQLite locks
     db.session.close()
-    # Plan mode = read-only Read / Glob / Grep / restricted Bash, so
-    # the LLM can actually explore the repo without being able to
-    # mutate it. working_dir points at the primary repo if we have one.
     result = runtime.send_json(
         prompt,
         working_dir=primary_path,
         timeout=300,
-        permission_mode="plan" if primary_path else None,
-        allowed_tools=mcp_tools or None,
+        allowed_tools=read_only_tools if primary_path else (mcp_tools or None),
     )
 
     if not result.get("success") or not result.get("parsed"):
@@ -398,7 +412,7 @@ def revise_tasks(project_id):
     ]
     repos_block = "\n".join(repo_lines) if repo_lines else "(no repos identified yet)"
 
-    prompt = f"""Revise this draft task plan based on the user's feedback. You can use Read / Glob / Grep / read-only Bash / MCP tools to ground new or changed tasks in real code. Return ONLY valid JSON — an array of task objects.
+    prompt = f"""Revise this draft task plan based on the user's feedback. You have read-only tools (Read / Glob / Grep / read-only Bash patterns / MCP tools) — use them to ground any new or changed task descriptions in real code. Return ONLY valid JSON — an array of task objects.
 
 ## Project
 {project.title}
@@ -436,13 +450,22 @@ Rules:
     from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
     runtime = ClaudeCodeRuntime()
     mcp_tools = runtime._discover_global_mcps()
+    # Same read-only allowlist as generate-tasks — see the long
+    # comment there for why an allowlist beats --permission-mode plan
+    # in --print mode.
+    read_only_tools = [
+        "Read", "Glob", "Grep",
+        "Bash(git log:*)", "Bash(git show:*)", "Bash(git diff:*)",
+        "Bash(git status)", "Bash(git log)", "Bash(git status:*)",
+        "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)",
+        "Bash(wc:*)", "Bash(find:*)",
+    ] + (mcp_tools or [])
     db.session.close()
     result = runtime.send_json(
         prompt,
         working_dir=primary_path,
         timeout=300,
-        permission_mode="plan" if primary_path else None,
-        allowed_tools=mcp_tools or None,
+        allowed_tools=read_only_tools if primary_path else (mcp_tools or None),
     )
 
     if not result.get("success") or not result.get("parsed"):
