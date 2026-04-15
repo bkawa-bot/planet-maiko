@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
-  AlertTriangle, Bot, Bone, CheckSquare, ExternalLink, GitBranch,
-  GitPullRequest, HeartPulse, MessageCircle, Moon, Play, X,
+  AlertTriangle, Bot, Bone, CheckSquare, Clock, ExternalLink, GitBranch,
+  GitPullRequest, HeartPulse, Loader, MessageCircle, Moon, Play, Sparkles, X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
@@ -10,16 +10,36 @@ import LeaderboardWidget from "../LeaderboardWidget";
 import { formatTime } from "../../utils/dates";
 
 /**
- * Active tab — pack awareness, ready-to-launch agents, live activity, and
- * the channel-log thread modal. Right sidebar shows the leaderboard.
+ * Active tab — pack awareness, queued tasks, ready-to-launch agents, live
+ * activity, and the channel-log thread modal. Right sidebar shows the
+ * leaderboard.
  *
  * Props:
  *   agents     — Agent[] from /api/agents (prepared/ready)
  *   activity   — agent activity entries from /api/agents/activity
+ *   queued     — tasks routed to agents but not yet started
  *   conflicts  — conflict warning entries
  *   profiles   — for resolving display names
+ *   onRefresh  — () => void; refetch agents/activity/queued after actions
  */
-export default function AgentsActiveTab({ agents, activity, conflicts, profiles }) {
+export default function AgentsActiveTab({ agents, activity, queued = [], conflicts, profiles, onRefresh }) {
+  const [triggeringCycle, setTriggeringCycle] = useState(false);
+
+  const triggerCycle = async () => {
+    if (triggeringCycle) return;
+    setTriggeringCycle(true);
+    showToast("Running brain cycle...", "normal");
+    try {
+      await api.runBrainCycle();
+      showToast("Cycle done — refreshing", "normal");
+      onRefresh?.();
+    } catch (err) {
+      showToast(err.message || "Cycle failed", "high");
+    } finally {
+      setTriggeringCycle(false);
+    }
+  };
+
   // With autonomous agents, every prepared agent also has an active
   // session and an entry in `activity` as soon as it sends its first
   // pupdate. Rendering both `agents` and `activity` would show two
@@ -121,11 +141,65 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles 
           </div>
         )}
 
-        {dormantAgents.length === 0 && activity.length === 0 ? (
+        {/* Queued: tasks routed to an agent but not yet started.
+            Without this section, when the brain cycle has assigned
+            an agent but the next cycle hasn't prepared the worktree
+            yet (e.g. cycle just ran assignment, hasn't yet hit the
+            execute phase), the user sees an empty Active tab and
+            thinks nothing is happening. */}
+        {queued.length > 0 && (
+          <div className="queued-section card">
+            <div className="queued-header">
+              <Clock size={14} /> Queued
+              <span className="badge">{queued.length}</span>
+              <button
+                className="btn btn-sm queued-cycle-btn"
+                onClick={triggerCycle}
+                disabled={triggeringCycle}
+                title="Run a brain cycle now to start these tasks"
+              >
+                {triggeringCycle
+                  ? <><Loader size={10} className="spin" /> Running…</>
+                  : <><Sparkles size={10} /> Run cycle now</>}
+              </button>
+            </div>
+            <div className="queued-list">
+              {queued.map((q) => (
+                <div key={q.task_id} className="queued-item">
+                  <span className="queued-type">{q.type}</span>
+                  <span className="queued-title" title={q.title}>{q.title}</span>
+                  <span className="queued-agent"><Bot size={10} /> {q.agent_name}</span>
+                  <span className="queued-time">
+                    {q.queued_for_minutes < 1 ? "just now" : `${q.queued_for_minutes}m queued`}
+                  </span>
+                  {q.url && (
+                    <a href={q.url} target="_blank" rel="noreferrer" className="queued-link">
+                      <ExternalLink size={10} />
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {dormantAgents.length === 0 && activity.length === 0 && queued.length === 0 ? (
           <div className="empty-state">
             <span style={{ fontSize: 48 }}>🐾</span>
             <div className="empty-title">No active agents</div>
-            <div className="empty-sub">Create a new agent to get started. They'll arrive in town ready to help!</div>
+            <div className="empty-sub">
+              Create a new agent to get started, or
+              {" "}
+              <button
+                className="btn-link"
+                onClick={triggerCycle}
+                disabled={triggeringCycle}
+                style={{ background: "none", border: "none", padding: 0, color: "var(--pink)", cursor: "pointer", textDecoration: "underline" }}
+              >
+                run a brain cycle now
+              </button>
+              {" "}to route any waiting tasks.
+            </div>
           </div>
         ) : (
           <div className="agent-grid">

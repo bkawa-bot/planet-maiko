@@ -95,6 +95,69 @@ def get_agent_activity():
     return list(keep.values())
 
 
+def get_queued_agent_tasks():
+    """Tasks that have an assigned agent but haven't started yet.
+
+    "Haven't started" means the cycle's execute phase hasn't prepared
+    a worktree for it (no working_path on task.extra) and there are no
+    agent pupdates yet. These are the tasks the user assigned (or that
+    the cycle routed) but that are still waiting for the next cycle
+    tick to fire — without surfacing them, the AgentsActiveTab looks
+    empty and the user thinks "did the review actually start?"
+
+    Returns:
+        list of dicts with task_id, title, type, agent_id, agent_name,
+        assigned_at, queued_for_minutes.
+    """
+    from planet_maiko.models.task import Task
+    from planet_maiko.models.agent_profile import AgentProfile
+
+    candidates = Task.query.filter(
+        Task.status.in_(["new", "blocked"]),
+        Task.assigned_agent_id.isnot(None),
+    ).all()
+
+    now = datetime.now(timezone.utc)
+    out = []
+    for t in candidates:
+        meta = t.extra or {}
+        if meta.get("working_path"):
+            continue  # worktree already prepared — covered by /agents
+        # Skip tasks that already have agent pupdates (covered by activity).
+        has_activity = (
+            Pupdate.query.filter(
+                Pupdate.source == "agent",
+                Pupdate.tags.contains(t.id),
+            ).first() is not None
+        )
+        if has_activity:
+            continue
+
+        agent_name = t.assigned_agent_id or "?"
+        if t.assigned_agent_id:
+            profile = db.session.get(AgentProfile, t.assigned_agent_id)
+            if profile:
+                agent_name = profile.display_name
+
+        updated = t.updated_at or t.created_at
+        if updated and updated.tzinfo is None:
+            updated = updated.replace(tzinfo=timezone.utc)
+        queued_minutes = round((now - updated).total_seconds() / 60) if updated else 0
+
+        out.append({
+            "task_id": t.id,
+            "title": t.title,
+            "type": t.type,
+            "agent_id": t.assigned_agent_id,
+            "agent_name": agent_name,
+            "queued_for_minutes": queued_minutes,
+            "url": t.url,
+        })
+
+    out.sort(key=lambda x: x["queued_for_minutes"], reverse=True)
+    return out
+
+
 def process_agent_pupdates():
     """Process unhandled agent pupdates.
 

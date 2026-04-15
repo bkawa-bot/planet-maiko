@@ -335,16 +335,22 @@ def _phase_orchestrate():
         ).limit(50).all()
         for t in unrouted:
             try:
-                route(t)
+                agent_id = route(t)
                 routed += 1
+                logger.info(f"[cycle] Routed task {t.id} ({t.type}) -> {agent_id}")
             except Exception as e:
-                logger.debug(f"[cycle] route() failed for {t.id}: {e}")
+                # Used to be debug — but if routing silently fails, the
+                # task sits forever with no agent and the user has no
+                # signal anything's wrong. Bump to warning.
+                logger.warning(f"[cycle] route() failed for {t.id}: {e}")
 
         if created or routed:
             db.session.commit()
         return {"investigation_tasks_created": created, "routed": routed}
     except Exception as e:
-        logger.debug(f"[cycle] Orchestrate skipped: {e}")
+        # Same reasoning — orchestrate failures left tasks unrouted
+        # silently. Warn so it actually shows up in logs.
+        logger.warning(f"[cycle] Orchestrate skipped: {e}")
         return {"investigation_tasks_created": 0, "routed": 0, "error": str(e)}
 
 
@@ -447,6 +453,66 @@ def _phase_stuck_escalation():
         return {"escalated": 0, "auto_dismissed": 0}
 
 
+def _emit_missing_clone_pupdate(task, repo):
+    """Surface "I can't find a local clone for this repo" as an
+    actionable pupdate, dedup'd by repo so the user gets one entry
+    per missing repo, not one per stuck task per cycle.
+
+    Without this, review tasks for repos missing from
+    config.github.repo_roots silently sit unrouted forever — agent is
+    assigned, no worktree ever appears, AgentsActiveTab stays empty,
+    and the user has no signal anything is wrong.
+    """
+    from planet_maiko.models.pupdate import Pupdate
+    from planet_maiko.database import db
+
+    if not repo:
+        repo = "(unknown repo)"
+
+    source_id = f"missing-clone/{repo}"
+    existing = Pupdate.query.filter_by(source_id=source_id).first()
+    if existing and not existing.dismissed:
+        # Already surfaced this repo; don't pile up duplicates.
+        return
+
+    if existing and existing.dismissed:
+        # User dismissed but the problem is back — resurrect.
+        existing.dismissed = False
+        existing.dismissed_at = None
+        existing.read = False
+        existing.timestamp = datetime.now(timezone.utc)
+        existing.body = (
+            f"Maiko routed a {task.type} task ({task.id}) to an agent but "
+            f"can't find a local clone of {repo} on disk. Add the parent "
+            f"directory to Settings → GitHub → Repo Roots so worktrees "
+            f"can be created."
+        )
+        existing.tags = list(set((existing.tags or []) + [repo, task.id]))
+        db.session.flush()
+        return
+
+    p = Pupdate(
+        id=f"missing-clone-{repo.replace('/', '-')}"[:64],
+        source="maiko",
+        source_id=source_id,
+        type="missing_local_clone",
+        priority="high",
+        title=f"Can't find a local clone for {repo}",
+        body=(
+            f"Maiko routed a {task.type} task ({task.id}) to an agent but "
+            f"can't find a local clone of {repo} on disk. Add the parent "
+            f"directory to Settings → GitHub → Repo Roots so worktrees "
+            f"can be created."
+        ),
+        actionable=True,
+        action_hint="Open Settings",
+        tags=[repo, task.id, "missing_clone"],
+        extra={"repo": repo, "task_id": task.id},
+    )
+    db.session.add(p)
+    db.session.flush()
+
+
 def _phase_execute_agent_tasks():
     """Phase 8c: Auto-run one-shot review/investigation tasks that
     have been assigned but haven't started yet.
@@ -493,7 +559,16 @@ def _phase_execute_agent_tasks():
                 repo = scope_for_task(task)
                 local_path = resolve_repo_path(repo)
                 if not local_path:
-                    logger.info(f"[cycle] task {task.id}: no local clone for {repo}, skipping")
+                    # Used to silently info-log and skip every cycle
+                    # forever, leaving the user with a routed-but-never-
+                    # started task and no idea why. Surface it as a
+                    # one-shot actionable pupdate (dedup'd by repo) so
+                    # the user knows to add the repo to repo_roots.
+                    _emit_missing_clone_pupdate(task, repo)
+                    logger.warning(
+                        f"[cycle] task {task.id}: no local clone for "
+                        f"{repo}, skipping (added pupdate)"
+                    )
                     continue
                 try:
                     prep = prepare(

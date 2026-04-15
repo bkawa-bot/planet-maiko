@@ -42,5 +42,18 @@
   background: var(--pink-soft); color: var(--pink); font-weight: 600;
 }
 
+.footer-cycle-btn {
+  background: none; border: none; padding: 2px 4px;
+  margin-left: 4px;
+  color: var(--text-muted); cursor: pointer;
+  display: inline-flex; align-items: center;
+  border-radius: var(--radius-xs);
+  transition: color 0.15s, background 0.15s;
+}
+.footer-cycle-btn:hover { color: var(--pink); background: var(--bg-hover); }
+.footer-cycle-btn:disabled { opacity: 0.6; cursor: wait; }
+.footer-cycle-btn .spin { animation: footer-spin 1s linear infinite; }
+@keyframes footer-spin { to { transform: rotate(360deg); } }
+
 .footer-bug { text-decoration: none; color: var(--text-muted); margin-left: auto; }
 .footer-bug:hover { color: var(--urgent); }

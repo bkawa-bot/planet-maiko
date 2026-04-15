@@ -458,8 +458,10 @@ def cluster_signals_into_learnings():
                 # tries again. Trip the circuit breaker so subsequent
                 # batches in this same cycle (and the next 15 min of
                 # cycles) skip immediately instead of repeating the
-                # same failure for every category × batch.
-                global _llm_cooldown_until
+                # same failure for every category × batch. (The outer
+                # `global _llm_cooldown_until` declaration up top covers
+                # this assignment too — re-declaring it here would be a
+                # SyntaxError because the name was already read above.)
                 _llm_cooldown_until = time.time() + _LLM_COOLDOWN_SECONDS
                 remaining_signals = sum(len(s) for s in by_category.values()) - counts["processed"]
                 logger.warning(

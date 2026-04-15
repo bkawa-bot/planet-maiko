@@ -15,6 +15,7 @@ export default function Agents() {
   const [profiles, setProfiles] = useState([]);
   const [agents, setAgents] = useState([]);
   const [activity, setActivity] = useState([]);
+  const [queued, setQueued] = useState([]);
   const [conflicts, setConflicts] = useState([]);
   const [allLearnings, setAllLearnings] = useState({});
   const [loading, setLoading] = useState(true);
@@ -25,16 +26,18 @@ export default function Agents() {
 
   const fetchData = async () => {
     try {
-      const [p, a, act, conf, learnings] = await Promise.all([
+      const [p, a, act, q, conf, learnings] = await Promise.all([
         api.getProfiles(),
         api.getAgents(),
         api.getAgentActivity(),
+        api.getQueuedAgentTasks().catch(() => []),
         api.getConflicts().catch(() => []),
         api.getLearnings().catch(() => []),
       ]);
       setProfiles(p);
       setAgents(a);
       setActivity(act);
+      setQueued(q);
       setConflicts(conf);
       setAllLearnings(Object.fromEntries(learnings.map((l) => [l.id, l])));
     } catch (err) {
@@ -212,8 +215,10 @@ export default function Agents() {
         <AgentsActiveTab
           agents={agents}
           activity={activity}
+          queued={queued}
           conflicts={conflicts}
           profiles={profiles}
+          onRefresh={fetchData}
         />
       )}
 

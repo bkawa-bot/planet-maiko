@@ -185,6 +185,7 @@ export const api = {
   // Agents
   getAgents: () => request("/agents"),
   getAgentActivity: () => request("/agents/activity"),
+  getQueuedAgentTasks: () => request("/agents/queued"),
   getAgentMessages: (taskId) => request(`/agents/${taskId}/messages`),
   sendToAgent: (taskId, data) =>
     request(`/agents/${taskId}/inbox`, { method: "POST", body: JSON.stringify(data) }),

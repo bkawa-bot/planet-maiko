@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
-import { Brain, Shield, CloudSun, Bot, Bug } from "lucide-react";
+import { Brain, Shield, CloudSun, Bot, Bug, Sparkles } from "lucide-react";
+import { showToast } from "./Toast";
 import "./Footer.css";
 
 export default function Footer() {
@@ -9,27 +10,46 @@ export default function Footer() {
   const [focusState, setFocusState] = useState("available");
   const [scene, setScene] = useState(null);
   const [agentCount, setAgentCount] = useState(0);
+  const [cycling, setCycling] = useState(false);
   const navigate = useNavigate();
 
+  const refresh = async () => {
+    try {
+      const [brain, focus, sc, profiles] = await Promise.all([
+        api.getBrainStatus().catch(() => null),
+        api.getFocus().catch(() => null),
+        api.getScene().catch(() => null),
+        api.getProfiles().catch(() => []),
+      ]);
+      if (brain) setBrainStatus(brain);
+      if (focus) setFocusState(focus.current_state || "available");
+      if (sc?.context?.weather) setScene(sc.context);
+      setAgentCount(profiles.length);
+    } catch (err) { /* ignore */ }
+  };
+
   useEffect(() => {
-    const refresh = async () => {
-      try {
-        const [brain, focus, sc, profiles] = await Promise.all([
-          api.getBrainStatus().catch(() => null),
-          api.getFocus().catch(() => null),
-          api.getScene().catch(() => null),
-          api.getProfiles().catch(() => []),
-        ]);
-        if (brain) setBrainStatus(brain);
-        if (focus) setFocusState(focus.current_state || "available");
-        if (sc?.context?.weather) setScene(sc.context);
-        setAgentCount(profiles.length);
-      } catch (err) { /* ignore */ }
-    };
     refresh();
     const interval = setInterval(refresh, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  const triggerCycle = async (e) => {
+    // Stop the parent click from also navigating to /knowledge.
+    e.stopPropagation();
+    if (cycling) return;
+    setCycling(true);
+    showToast("Brain cycle running...", "normal");
+    try {
+      await api.runBrainCycle();
+      showToast("Brain cycle done", "normal");
+      refresh();
+    } catch (err) {
+      showToast(err.message || "Cycle failed", "high");
+    } finally {
+      setCycling(false);
+    }
+  };
 
   return (
     <footer className="footer">
@@ -42,6 +62,14 @@ export default function Footer() {
             {Object.values(brainStatus.pending).reduce((a, b) => a + b, 0)} pending
           </span>
         )}
+        <button
+          className="footer-cycle-btn"
+          onClick={triggerCycle}
+          disabled={cycling}
+          title="Run a brain cycle now (route tasks, process pupdates, etc.)"
+        >
+          <Sparkles size={9} className={cycling ? "spin" : ""} />
+        </button>
       </div>
 
       <div className="footer-section">

@@ -7,7 +7,7 @@ from planet_maiko.database import db
 from planet_maiko.models.agent_message import AgentMessage
 from planet_maiko.agents.brain_session import run_skill, get_status as brain_status
 from planet_maiko.agents.coding_agent import prepare, list_prepared, cleanup
-from planet_maiko.agents.monitor import get_agent_activity, process_agent_pupdates, get_stuck_agents
+from planet_maiko.agents.monitor import get_agent_activity, get_queued_agent_tasks, process_agent_pupdates, get_stuck_agents
 from planet_maiko.agents.skills import list_skills
 
 logger = logging.getLogger(__name__)
@@ -553,6 +553,18 @@ def get_agents():
 def get_activity():
     """Get recent agent activity (pupdates from agents)."""
     return jsonify(get_agent_activity())
+
+
+@agents_bp.route("/agents/queued", methods=["GET"])
+def get_queued():
+    """Get tasks with an assigned agent but no worktree/activity yet.
+
+    These are review/investigation/coding tasks that have been routed
+    by the brain cycle but haven't yet been prepared and run. Surfaced
+    on the Agents tab so users can see "yes, the agent is queued and
+    will start on the next cycle" instead of staring at an empty page.
+    """
+    return jsonify(get_queued_agent_tasks())
 
 
 @agents_bp.route("/agents/stuck", methods=["GET"])
