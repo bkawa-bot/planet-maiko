@@ -306,18 +306,24 @@ SIGNAL_BATCH = 30  # new signals per LLM call
 
 ATTACH_PROMPT = """You are the rule-indexer for a coding guidelines system.
 
-For each NEW_SIGNAL below, decide:
-  - Does it match an EXISTING_RULE (same idea, even if worded differently)?
-  - If yes, attach it to that rule.
-  - If no, propose a new rule: a short, actionable one-sentence version.
+For each NEW_SIGNAL below, choose ONE of:
+  - Match an EXISTING_RULE (same idea, even if worded differently) -> cluster with that existing_id.
+  - Match a REJECTED_RULE (the user has explicitly dismissed this pattern as not worth tracking) -> put in a "drop" cluster. Don't propose a new rule for it.
+  - Neither -> propose a new rule: a short, actionable one-sentence version.
 
 Never merge signals across different ideas. Every NEW_SIGNAL id must
-appear in exactly one cluster. Clusters of size 1 are allowed and common.
+appear in exactly one cluster. Clusters of size 1 are allowed and
+common. Be liberal about matching to REJECTED_RULES — if a new signal
+is clearly the same pattern (or a near-rephrase) of one the user
+dismissed, drop it. The user has told us they don't want that rule.
 
 Category for all items: {category}
 
 EXISTING_RULES (attach to these when possible):
 {existing_json}
+
+REJECTED_RULES (the user dismissed these — drop signals matching them):
+{rejected_json}
 
 NEW_SIGNALS (place each into a cluster):
 {signals_json}
@@ -326,14 +332,21 @@ Return ONLY valid JSON matching this schema. No markdown, no commentary.
 {{
   "clusters": [
     {{"existing_id": 42,   "canonical": null, "member_ids": [1, 5]}},
+    {{"drop": true, "rejected_id": 7, "member_ids": [3]}},
     {{"existing_id": null, "canonical": "Short new rule",
-      "member_ids": [3]}}
+      "member_ids": [4]}}
   ]
 }}
 """
 
+# Cap on dismissed rules in the prompt so it doesn't balloon over time.
+# Most categories have a handful at most; pulling the latest 50 keeps
+# the LLM context small while covering anything the user actually cares
+# about. Older dismissals naturally lose relevance.
+REJECTED_RULES_LIMIT = 50
 
-def _call_attach_llm(category, existing, signals):
+
+def _call_attach_llm(category, existing, signals, rejected=None):
     """Send a batch to Claude and parse clusters.
 
     Returns (clusters: list[dict], ok: bool). ok=False means caller
@@ -347,11 +360,17 @@ def _call_attach_llm(category, existing, signals):
         return [], False
 
     existing_payload = [{"id": l.id, "rule": (l.rule or "").strip()} for l in existing]
+    rejected_payload = [
+        {"id": l.id, "rule": (l.rule or "").strip()}
+        for l in (rejected or [])
+        if (l.rule or "").strip()
+    ]
     signal_payload = [{"id": s.id, "text": (s.text or "").strip()[:300]} for s in signals]
 
     prompt = ATTACH_PROMPT.format(
         category=category,
         existing_json=json.dumps(existing_payload, indent=2),
+        rejected_json=json.dumps(rejected_payload, indent=2),
         signals_json=json.dumps(signal_payload, indent=2),
     )
 
@@ -447,10 +466,22 @@ def cluster_signals_into_learnings():
             Learning.status != "dismissed",
         ).all()
         existing_by_id = {l.id: l for l in existing}
+        # Pull the user's recently-dismissed rules in this category so
+        # the LLM knows to DROP matching new signals instead of
+        # cheerfully re-creating the same pending Learning every cycle.
+        # Without this, dismissing a rule was theatre — the next batch
+        # of similar signals would resurrect it under a new id.
+        rejected = (
+            Learning.query
+            .filter(Learning.category == category, Learning.status == "dismissed")
+            .order_by(Learning.updated_at.desc())
+            .limit(REJECTED_RULES_LIMIT)
+            .all()
+        )
 
         for start in range(0, len(signals), SIGNAL_BATCH):
             batch = signals[start:start + SIGNAL_BATCH]
-            clusters, ok = _call_attach_llm(category, existing, batch)
+            clusters, ok = _call_attach_llm(category, existing, batch, rejected=rejected)
 
             if not ok:
                 # LLM unavailable or returned unparseable output. Leave
@@ -482,6 +513,21 @@ def cluster_signals_into_learnings():
                     if isinstance(mid, int) and mid in batch_by_id
                 ]
                 if not member_ids:
+                    continue
+
+                # Drop cluster: signals matched a user-dismissed rule.
+                # Mark them aggregated=True so the queue stops carrying
+                # them, but DON'T attach to a Learning and DON'T create
+                # a new one. The dismissed Learning's signal_count
+                # stays accurate to its pre-dismissal state.
+                if cluster.get("drop"):
+                    for sid in member_ids:
+                        sig = batch_by_id[sid]
+                        sig.aggregated = True
+                        placed.add(sid)
+                        counts["processed"] += 1
+                        counts["dropped_rejected"] = counts.get("dropped_rejected", 0) + 1
+                        touched.add(category)
                     continue
 
                 existing_id = cluster.get("existing_id")
