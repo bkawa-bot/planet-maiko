@@ -29,6 +29,10 @@ mutation IssueCreate($input: IssueCreateInput!) {
 }
 """
 
+# `description` is Linear's short summary (one-liner shown under the
+# title); `content` is the full markdown body the user actually edits in
+# the project's description editor. We need `content` for /generate-plan
+# to have real material to plan against.
 LED_PROJECTS_QUERY = """
 query {
   projects(filter: { lead: { isMe: { eq: true } } }, first: 50) {
@@ -36,6 +40,7 @@ query {
       id
       name
       description
+      content
       url
       state
       targetDate
@@ -77,6 +82,7 @@ query {
           id
           name
           description
+          content
           url
           state
         }
@@ -221,11 +227,24 @@ class LinearPoller(BasePoller):
         }
         new_status = state_to_status.get(linear_state, "planning")
 
+        # Linear splits the project description across two fields:
+        # `content` holds the full markdown body the user writes in the
+        # UI description editor; `description` is a short summary. Prefer
+        # content so /generate-plan has the real material to work against.
+        linear_body = (lp.get("content") or "").strip()
+        linear_summary = (lp.get("description") or "").strip()
+        linear_desc = linear_body or linear_summary or None
+
         existing = db.session.get(Project, project_id)
         if existing:
             existing.title = name
             existing.status = new_status
             existing.source_url = lp.get("url") or existing.source_url
+            # Backfill description when we never had one. Safe — we
+            # still won't overwrite a description the user or
+            # /generate-plan has written.
+            if linear_desc and not (existing.description or "").strip():
+                existing.description = linear_desc
             ex_extra = dict(existing.extra or {})
             # Bump role to "lead" if the user is now the lead — never
             # demote (lead is a strictly stronger relationship than member).
@@ -242,7 +261,7 @@ class LinearPoller(BasePoller):
         proj = Project(
             id=project_id,
             title=name,
-            description=lp.get("description") or None,
+            description=linear_desc,
             status=new_status,
             source_type="linear",
             source_id=linear_id,
