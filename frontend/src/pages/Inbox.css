@@ -120,6 +120,14 @@
 .pupdate-card.read:hover { opacity: 0.8; }
 .pupdate-card.expanded { opacity: 1; }
 
+/* Unread cards: bold the title and source so the eye snaps to them.
+   Toggle-expand auto-marks the card read, fading them back. */
+.pupdate-card:not(.read) .card-title,
+.pupdate-card:not(.read) .card-title a {
+  font-weight: 700;
+}
+.pupdate-card:not(.read) .card-source { font-weight: 600; }
+
 /* Left priority bar */
 .card-left-bar {
   width: 3px; flex-shrink: 0;
