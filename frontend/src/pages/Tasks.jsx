@@ -38,15 +38,17 @@ export default function Tasks() {
 
   const [config, setConfig] = useState(null);
   const [agentNames, setAgentNames] = useState({});
+  const [profiles, setProfiles] = useState([]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [t, p, cfg, profiles] = await Promise.all([api.getTasks(), api.getProjects(), api.getConfig(), api.getProfiles()]);
+      const [t, p, cfg, prof] = await Promise.all([api.getTasks(), api.getProjects(), api.getConfig(), api.getProfiles()]);
       setTasks(t);
       setProjects(p);
       setConfig(cfg);
-      setAgentNames(Object.fromEntries(profiles.map((a) => [a.id, a.display_name])));
+      setProfiles(prof || []);
+      setAgentNames(Object.fromEntries((prof || []).map((a) => [a.id, a.display_name])));
     } catch (err) { console.error(err); }
     setLoading(false);
   };
@@ -492,9 +494,52 @@ export default function Tasks() {
                       </div>
                       <div className="plan-task-agent">
                         <span className="plan-task-deps-label">Agent:</span>
-                        {gt.suggested_agent?.spawn_new
-                          ? <span className="plan-agent-chip new">{gt.suggested_agent.display_name}</span>
-                          : <span className="plan-agent-chip">{gt.suggested_agent?.display_name || "unrouted"}</span>}
+                        {(() => {
+                          // Compatible agents = same role as the suggested
+                          // role AND either same scope_repo or global. The
+                          // user can also pick "spawn new" to let the
+                          // backend lazy-spawn (matches the suggested
+                          // chip's behavior when the suggested agent is
+                          // marked spawn_new).
+                          const role = gt.suggested_role || "coding";
+                          const scope = gt.suggested_scope_repo || null;
+                          const compatible = profiles.filter((p) => {
+                            if (p.archived) return false;
+                            if (p.role !== role) return false;
+                            // Prefer exact scope match; allow global agents
+                            // (no scope) as a fallback in the same dropdown.
+                            if (scope && p.scope_repo && p.scope_repo !== scope) return false;
+                            return true;
+                          });
+                          // Default selection: explicit override > suggested existing > spawn new
+                          const currentValue = gt.assigned_agent_id
+                            || (gt.suggested_agent?.spawn_new ? "__spawn__" : (gt.suggested_agent?.id || "__spawn__"));
+                          return (
+                            <select
+                              className="plan-agent-select"
+                              value={currentValue}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setGeneratedTasks((p) => ({
+                                  ...p,
+                                  tasks: p.tasks.map((t, j) => j === i
+                                    ? { ...t, assigned_agent_id: v === "__spawn__" ? null : v }
+                                    : t),
+                                }));
+                              }}
+                              title={`Pick a ${role} agent for ${scope || "global"} scope`}
+                            >
+                              {compatible.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.display_name}{p.scope_repo ? ` · ${p.scope_repo}` : " · global"}
+                                </option>
+                              ))}
+                              <option value="__spawn__">
+                                ✨ Spawn new {role} agent{scope ? ` for ${scope}` : ""}
+                              </option>
+                            </select>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>

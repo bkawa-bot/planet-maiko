@@ -297,6 +297,16 @@
 }
 .plan-agent-chip.new { background: var(--lavender-soft); color: var(--lavender); font-style: italic; }
 
+.plan-agent-select {
+  padding: 4px 8px; font-size: 11px; font-weight: 500;
+  background: var(--pink-soft); color: var(--pink);
+  border: 1px solid transparent; border-radius: var(--radius-xs);
+  font-family: inherit; cursor: pointer;
+  max-width: 280px;
+}
+.plan-agent-select:hover { border-color: var(--pink); }
+.plan-agent-select:focus { outline: none; border-color: var(--pink); box-shadow: 0 0 0 2px rgba(255, 128, 165, 0.2); }
+
 /* Generated tasks modal (legacy / simple generation UI) */
 .generated-tasks-modal {
   background: var(--bg-card); border-radius: 16px;
