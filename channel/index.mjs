@@ -96,7 +96,7 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           message_type: {
             type: "string",
-            enum: ["message", "status", "feedback", "done", "stuck", "ready_for_review", "plan_for_approval"],
+            enum: ["message", "status", "feedback", "done", "stuck", "ready_for_review", "plan_for_approval", "pr_opened"],
             description:
               "Type of message: " +
               "'message' for general replies to the user, " +
@@ -104,6 +104,7 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
               "'feedback' to record a learning / training signal, " +
               "'plan_for_approval' when the task was started in plan mode and you've produced a markdown plan for the user to approve before you implement, " +
               "'ready_for_review' when you've committed work and the user should review the diff, " +
+              "'pr_opened' after you've run `gh pr create` in response to an approved message — put the PR URL on its own line in the content, " +
               "'done' for task completion, " +
               "'stuck' when you're blocked and need the user's help.",
           },

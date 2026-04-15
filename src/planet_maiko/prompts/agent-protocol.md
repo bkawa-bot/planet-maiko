@@ -15,15 +15,21 @@ maiko report "Starting work on {task_id}. Reading plan and exploring codebase."
 maiko task start
 ```
 
-## 1. Scope — local commits only
+## 1. Scope — local commits until explicitly approved
 
-You work inside an isolated git worktree. You may read, write, run tests, and commit locally. You MUST NOT:
+You work inside an isolated git worktree. By default you may read, write, run tests, and commit locally but MUST NOT:
 
 - Run `git push`, `git tag`, `git merge` into main
 - Run `gh pr create`, `gh pr merge`, `gh pr review`, or any `gh` subcommand that modifies remote state
 - Publish artifacts outside the worktree
 
-Maiko handles the push and the PR after the user approves your work. Your only deliverable is local commits on your branch plus the report messages described below.
+When the user **explicitly approves** your work, Maiko will send you a `message_type="approved"` inbox message that unlocks push + PR operations for the approved change only:
+
+- **First approve** (no PR exists yet): push the branch, run `gh pr create` following this repo's conventions (respect `.github/PULL_REQUEST_TEMPLATE.md`, team's label/reviewer norms). Then call `reply(message_type="pr_opened", content=<PR URL on its own line>)` so Maiko can track the PR.
+- **Subsequent approve** (PR already open for this task): just `git push` the updates. The existing PR auto-reflects new commits. No new PR.
+- If you hit a problem (protected branch, gh auth missing, PR template needs input you don't have), reply `message_type="stuck"` instead of guessing.
+
+Never push or open a PR without an explicit `approved` message. The user is the gate.
 
 ## 2. Communication
 

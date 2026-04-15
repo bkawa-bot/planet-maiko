@@ -684,6 +684,7 @@ def agent_sends_message(task_id):
             "stuck": "is stuck",
             "ready_for_review": "ready for review",
             "plan_for_approval": "has a plan",
+            "pr_opened": "opened PR",
             "message": "replied",
         }.get(message_type, "replied")
 
@@ -693,6 +694,7 @@ def agent_sends_message(task_id):
         pupdate_type = {
             "ready_for_review": "agent_ready_for_review",
             "plan_for_approval": "agent_plan_for_approval",
+            "pr_opened": "agent_pr_opened",
             "done": "agent_done",
             "stuck": "agent_stuck",
         }.get(message_type, "agent_message")
@@ -700,6 +702,7 @@ def agent_sends_message(task_id):
         action_hint = {
             "ready_for_review": "Review diff",
             "plan_for_approval": "Review plan",
+            "pr_opened": "Open PR",
             "stuck": "Help the agent",
             "done": "Open task",
         }.get(message_type, "Open task")
@@ -727,6 +730,26 @@ def agent_sends_message(task_id):
             brain_processed=True,
         )
         db.session.add(pupdate)
+
+    # Agent reporting it just opened a PR (in response to an
+    # approved message from the user). Parse the URL out of the
+    # content and pin it onto the task so the rest of the pipeline
+    # (pr_review_commented, _complete_review_task on merge) can
+    # match comments / merges back to this task.
+    if data.get("message_type") == "pr_opened":
+        import re as _re
+        from planet_maiko.models.task import Task as _Task
+        content = data.get("content", "")
+        match = _re.search(r"https?://[^\s]+", content or "")
+        if match:
+            pr_url = match.group(0).rstrip(".,;")
+            _task = db.session.get(_Task, task_id)
+            if _task:
+                _extra = dict(_task.extra or {})
+                _extra["pr_url"] = pr_url
+                _task.url = pr_url
+                _task.extra = _extra
+                logger.info(f"[outbox] Stored pr_url for {task_id}: {pr_url}")
 
     # If feedback message, create a training signal with code context
     if data.get("message_type") == "feedback":

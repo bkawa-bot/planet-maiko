@@ -598,19 +598,28 @@ def revise_plan(task_id):
 
 @diff_bp.route("/tasks/<task_id>/review/approve", methods=["POST"])
 def approve(task_id):
-    """Push the branch to origin; open a PR if this is the first approval.
+    """Hand the task back to the agent with an 'approved' message so
+    the agent can push + open a PR following the repo's own conventions.
 
-    Tasks stay open (status=in_review) across review rounds. The first
-    approve runs `gh pr create` and stores pr_url on task.extra.
-    Subsequent approves (after the agent iterates on reviewer
-    comments) just push the updated commits to the same branch — the
-    existing PR updates automatically. The task only closes when the
-    PR actually merges (github_poller → _complete_review_task).
+    Rationale for not running `gh pr create` from Maiko: PR creation
+    is loaded with repo-specific conventions (templates, required
+    labels, reviewers, draft vs. ready, release branch rules) that
+    Maiko can't reliably reproduce. The agent is already logged in
+    to `gh`, has access to `.github/PULL_REQUEST_TEMPLATE.md`, and
+    knows the team's patterns via its LoRA / instructions. Better to
+    say "approved, open the PR" and let it handle the nuance.
 
-    Worktree stays around for the lifetime of the review cycle so the
-    agent can resume into it on future pr_review_commented events.
+    Flow:
+      - First approve (no pr_url yet): agent pushes + gh pr create,
+        then reply(message_type="pr_opened", content=<url>)
+        which the outbox handler uses to set task.extra.pr_url.
+      - Subsequent approve (pr_url set): agent just pushes the
+        updates; GitHub reflects new commits on the open PR
+        automatically.
+
+    Tasks stay open (status=in_review) until the PR merges
+    (github_poller → _complete_review_task).
     """
-    import shutil
     from datetime import datetime, timezone
 
     task, err = _task_or_404(task_id)
@@ -627,54 +636,57 @@ def approve(task_id):
     submitted = DiffComment.query.filter_by(task_id=task_id, status="submitted").all()
     for c in submitted:
         c.status = "resolved"
-    all_comments = DiffComment.query.filter_by(task_id=task_id).all()
 
     existing_pr_url = (task.extra or {}).get("pr_url")
 
-    rc, _, perr = _git(["push", "-u", "origin", branch], cwd=worktree, timeout=120)
-    if rc != 0:
-        db.session.commit()
-        return jsonify({"error": f"git push failed: {perr.strip()[:300]}"}), 500
+    # Build the instruction we hand to the agent. Different wording
+    # for first approve (open PR) vs subsequent (just push updates).
+    if existing_pr_url:
+        instruction = (
+            f"Your updated changes are approved. Push branch "
+            f"`{branch}` to origin so the existing PR ({existing_pr_url}) "
+            f"picks up the new commits. You do NOT need to run "
+            f"`gh pr create` — the PR is already open. If the push "
+            f"fails (protected branch, diverged remote), reply with "
+            f"message_type='stuck' and describe the error."
+        )
+    else:
+        instruction = (
+            f"Your work is approved. Time to open the PR:\n\n"
+            f"1. Push branch `{branch}` to origin.\n"
+            f"2. Run `gh pr create` following this repo's conventions —"
+            f" respect any PR template at .github/PULL_REQUEST_TEMPLATE.md,"
+            f" use appropriate labels, assign reviewers per team norms.\n"
+            f"3. Once the PR is open, call "
+            f"reply(message_type='pr_opened', content=<PR URL>) with "
+            f"the URL on its own line.\n\n"
+            f"Task: {task.title}\n\n"
+            f"If you hit a problem (push rejected, gh auth missing, "
+            f"template question), reply with message_type='stuck'."
+        )
 
-    pr_url = existing_pr_url
-    pr_created = False
-    gh_path = shutil.which("gh")
-    # Only open a new PR if this is the first approve for this task.
-    # Subsequent approves push updates to the existing branch; GitHub
-    # reflects the new commits on the open PR automatically.
-    if gh_path and not existing_pr_url:
-        body = _build_pr_body(task, all_comments)
-        try:
-            result = subprocess.run(
-                [gh_path, "pr", "create", "--title", task.title, "--body", body],
-                cwd=worktree, capture_output=True, text=True,
-                encoding="utf-8", errors="replace", timeout=60,
-            )
-            if result.returncode == 0:
-                out = result.stdout.strip()
-                pr_url = out.splitlines()[-1] if out else None
-                pr_created = bool(pr_url)
-            else:
-                logger.warning(f"[diff] gh pr create failed: {result.stderr.strip()[:200]}")
-        except Exception as e:
-            logger.warning(f"[diff] gh pr create raised: {e}")
+    from planet_maiko.models.agent_message import AgentMessage
+    db.session.add(AgentMessage(
+        task_id=task_id,
+        direction="to_agent",
+        sender="user",
+        content=instruction,
+        message_type="approved",
+    ))
 
-    # Task stays in_review until the PR merges — _complete_review_task
-    # closes it when the github_poller sees pr_merged.
     task.status = "in_review"
     task.updated_at = datetime.now(timezone.utc)
     extra = dict(task.extra or {})
-    if pr_url:
-        task.url = pr_url
-        extra["pr_url"] = pr_url
     extra["last_approved_at"] = datetime.now(timezone.utc).isoformat()
     task.extra = extra
     db.session.commit()
 
+    # Resume the agent so it sees the approved message immediately.
+    resumed = _resume_agent_with_review(task_id, worktree)
+
     return jsonify({
         "task_id": task_id,
         "branch": branch,
-        "pr_url": pr_url,
-        "pr_created": pr_created,
-        "gh_installed": bool(gh_path),
+        "existing_pr_url": existing_pr_url,
+        "agent_resumed": resumed,
     })
