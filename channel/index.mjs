@@ -53,11 +53,15 @@ const mcp = new Server(
     },
     instructions: [
       `You have three tools for talking to Planet Maiko:`,
-      `- reply: send a message back to Maiko / the user (status, done,`,
-      `  stuck, ready_for_review, message)`,
-      `- check_inbox: pull any pending messages from Maiko / the user`,
-      `- leave_comment: pin an inline comment to a specific diff line`,
-      `  for the user to see while reviewing your changes`,
+      `- reply(content, message_type) — send a message back to Maiko / the`,
+      `  user. The message body goes in the "content" parameter (NOT`,
+      `  "message" or "body" — those will be rejected). Example:`,
+      `      reply(content="Done with the auth refactor.", message_type="ready_for_review")`,
+      `- check_inbox(unread_only?) — pull any pending messages from Maiko`,
+      `  or the user.`,
+      `- leave_comment(file_path, line_number, body) — pin an inline`,
+      `  comment to a specific diff line for the user to see while`,
+      `  reviewing your changes.`,
       ``,
       `The user can send you messages from the Channel Log at any time.`,
       `Those messages accumulate in your inbox until you read them.`,
@@ -65,13 +69,13 @@ const mcp = new Server(
       `check_inbox to see what's new, then reply to what you find.`,
       ``,
       `Guidelines:`,
-      `- Coding agents: after your first meaningful commit, call reply`,
-      `  with message_type="ready_for_review" summarizing what you did.`,
+      `- Coding agents: after your first meaningful commit, call`,
+      `  reply(content="<summary>", message_type="ready_for_review").`,
       `  Then loop: check_inbox every ~30s; on a message_type="review"`,
       `  message, iterate on the comments, commit, and reply ready again.`,
       `- Use leave_comment sparingly (~5 max per review round) on`,
       `  uncertain or load-bearing lines you want human eyes on.`,
-      `- If you're stuck, use reply with message_type="stuck".`,
+      `- If you're stuck, call reply(content="<what's blocking>", message_type="stuck").`,
       `- Check your inbox whenever you're about to end a response or`,
       `  wait for input — there may be a message queued.`,
       `Your task ID is: ${TASK_ID}`,
@@ -86,13 +90,19 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "reply",
       description:
-        "Send a message back to Planet Maiko (status update, review request, task completion, or help request)",
+        "Send a message back to Planet Maiko (status update, review request, " +
+        "task completion, or help request). The message body goes in the " +
+        "REQUIRED `content` parameter — NOT `message` or `body` (those will " +
+        "fail). Example: reply(content=\"All tests pass.\", message_type=\"ready_for_review\")",
       inputSchema: {
         type: "object",
         properties: {
           content: {
             type: "string",
-            description: "The message to send back to Maiko",
+            description:
+              "REQUIRED. The full message body / report text. Pass your " +
+              "actual message string here. Do NOT use 'message' or 'body' " +
+              "as the parameter name — only 'content' is accepted.",
           },
           message_type: {
             type: "string",

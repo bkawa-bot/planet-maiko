@@ -137,12 +137,37 @@ class BasePoller(ABC):
             return 0
 
         created = 0
+        resurrected = 0
         for pd in pupdate_dicts:
             pupdate_id = self.generate_id(pd["source_id"])
 
-            # Skip if we already have this pupdate
             existing = db_session.get(Pupdate, pupdate_id)
             if existing:
+                # Active duplicate — skip
+                if not existing.dismissed:
+                    continue
+                # Dismissed but the source is asserting it again. For
+                # actionable items (review re-requests, new CI
+                # failures on the same PR, etc.) this is a real "hey,
+                # please look again" — resurrect the pupdate instead
+                # of silently dropping it. Non-actionable status
+                # pupdates (PR is open, PR is approved) stay
+                # dismissed so they don't keep popping back.
+                if not pd.get("actionable", False):
+                    continue
+                existing.dismissed = False
+                existing.dismissed_at = None
+                existing.read = False
+                existing.brain_processed = False
+                existing.title = pd["title"]
+                existing.body = pd.get("body")
+                existing.priority = pd.get("priority", existing.priority)
+                existing.url = pd.get("url") or existing.url
+                existing.action_hint = pd.get("action_hint") or existing.action_hint
+                existing.tags = pd.get("tags", existing.tags or [])
+                existing.extra = pd.get("metadata", existing.extra or {})
+                existing.timestamp = datetime.now(timezone.utc)
+                resurrected += 1
                 continue
 
             pupdate = Pupdate(
@@ -202,12 +227,14 @@ class BasePoller(ABC):
         except Exception as e:
             logger.warning(f"[{self.name}] _after_sync hook failed: {e}")
 
-        if created or signal_dicts:
+        if created or resurrected or signal_dicts:
             db_session.commit()
             if created:
                 logger.info(f"[{self.name}] Created {created} new pupdate(s)")
+            if resurrected:
+                logger.info(f"[{self.name}] Resurrected {resurrected} dismissed pupdate(s)")
 
-        return created
+        return created + resurrected
 
     def _after_sync(self, raw_data, db_session):
         """Hook called after pupdates + signals have been staged but

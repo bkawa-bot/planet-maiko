@@ -13,7 +13,17 @@ Your output is a local REVIEW.md file and the structured blocks below. The user 
 
 ## How to talk to Maiko
 
-Embed any number of these blocks inside your main output. Each block must appear on its own, separated by blank lines. The server scans for them and acts automatically — you don't need to call anything.
+Two channels:
+
+1. **Structured blocks in your output** (primary). Embed `PATTERN:` and `PROPOSAL:` blocks (described below) inside your main response. The server scans your one-shot output for them and acts automatically — no tool call needed for these.
+
+2. **The `reply` MCP tool** (optional). If you want to send a status update, an early finding, or a "stuck — need help" signal mid-run, call:
+
+   ```
+   reply(content="<your message>", message_type="status")
+   ```
+
+   The message body MUST be passed as `content` — `message`, `body`, and other names will be rejected by the schema. Valid `message_type` values include `message`, `status`, `feedback`, `stuck`, `ready_for_review`, and `done`. For a one-shot review run you usually don't need to call this — your final structured output IS your report.
 
 ### `PATTERN:` — teach Maiko a learning
 

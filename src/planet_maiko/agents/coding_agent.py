@@ -36,27 +36,50 @@ def _slugify(text, max_len=40):
 
 
 def _create_worktree(repo_path, branch_name):
-    """Create a git worktree for an agent to work in."""
+    """Create a git worktree on a *new* branch for an agent to work in.
+
+    Uses ``git worktree add -b <branch>`` so the branch is always fresh.
+    Without ``-b``, ``git worktree add <path> <branch>`` will silently
+    reuse an existing branch — and any TASK.md / PLAN.md / NOTES.md
+    that previous agent left behind on that branch leaks straight into
+    the next task. If the branch name happens to collide, retry once
+    with a uuid suffix instead of stomping the old branch.
+
+    Returns the absolute worktree path on success, or None on failure.
+    """
     worktree_base = os.path.join(repo_path, ".maiko-worktrees")
     os.makedirs(worktree_base, exist_ok=True)
-    worktree_path = os.path.join(worktree_base, branch_name)
 
-    try:
-        subprocess.run(
-            ["git", "branch", branch_name],
-            cwd=repo_path, capture_output=True, text=True,
-        )
-        result = subprocess.run(
-            ["git", "worktree", "add", worktree_path, branch_name],
-            cwd=repo_path, capture_output=True, text=True,
-        )
-        if result.returncode != 0:
-            logger.error(f"Failed to create worktree: {result.stderr}")
+    candidates = [branch_name, f"{branch_name}-{uuid.uuid4().hex[:6]}"]
+    for candidate in candidates:
+        worktree_path = os.path.join(worktree_base, candidate)
+        if os.path.exists(worktree_path):
+            logger.warning(
+                f"[worktree] Path {worktree_path} already exists, trying next candidate"
+            )
+            continue
+        try:
+            result = subprocess.run(
+                ["git", "worktree", "add", "-b", candidate, worktree_path],
+                cwd=repo_path, capture_output=True, text=True,
+            )
+        except Exception as e:
+            logger.error(f"[worktree] git invocation failed: {e}")
             return None
-        return worktree_path
-    except Exception as e:
-        logger.error(f"Worktree creation failed: {e}")
-        return None
+        if result.returncode == 0:
+            return worktree_path
+        # -b fails when the branch already exists — that's the leak we
+        # want to avoid. Try the next candidate (uuid-suffixed) before
+        # giving up.
+        logger.warning(
+            f"[worktree] Create failed for {candidate}: "
+            f"{(result.stderr or '').strip()[:200]}"
+        )
+
+    logger.error(
+        f"[worktree] Failed to create worktree after {len(candidates)} attempts"
+    )
+    return None
 
 
 def _install_pre_commit_hook(working_path):
@@ -564,13 +587,17 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     Returns:
         dict with agent info and launch instructions, or None on failure
     """
-    # Build a descriptive branch name from the task title
+    # Build a descriptive branch name from the task title.
+    # Suffix = last 5 digits of unix time + 4 hex chars of uuid. The
+    # short timestamp keeps branch names skim-readable; the uuid chars
+    # make collisions effectively impossible even when two tasks land
+    # on the same second with the same title (which used to silently
+    # land both agents on the same branch via a 4-digit timestamp).
     import time as _time
     slug = _slugify(task_title, max_len=40)
     if not slug:
         slug = _slugify(task_id)
-    # Add short timestamp to avoid collisions
-    slug = f"{slug}-{str(int(_time.time()))[-4:]}"
+    slug = f"{slug}-{str(int(_time.time()))[-5:]}-{uuid.uuid4().hex[:4]}"
 
     # If the user typed a full branch name (contains /), use it as-is.
     # Otherwise treat it as a prefix and append the auto-generated slug.
