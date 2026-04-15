@@ -96,12 +96,13 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           message_type: {
             type: "string",
-            enum: ["message", "status", "feedback", "done", "stuck", "ready_for_review"],
+            enum: ["message", "status", "feedback", "done", "stuck", "ready_for_review", "plan_for_approval"],
             description:
               "Type of message: " +
               "'message' for general replies to the user, " +
               "'status' for live progress updates (chatter, no pupdate), " +
               "'feedback' to record a learning / training signal, " +
+              "'plan_for_approval' when the task was started in plan mode and you've produced a markdown plan for the user to approve before you implement, " +
               "'ready_for_review' when you've committed work and the user should review the diff, " +
               "'done' for task completion, " +
               "'stuck' when you're blocked and need the user's help.",
@@ -127,6 +128,59 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
               "Set false to see the full thread history without side effects.",
           },
         },
+      },
+    },
+    {
+      name: "lora_check",
+      description:
+        "Run your repo's LoRA compliance model against your current " +
+        "branch diff (or just the last commit) and get a list of " +
+        "violations the model detected. Call this before every " +
+        "ready_for_review — address real issues, and use " +
+        "lora_false_positive for lines where you believe the model is wrong.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          scope: {
+            type: "string",
+            enum: ["branch", "last_commit"],
+            description: "'branch' (default) reviews everything since the merge-base with the default branch; 'last_commit' reviews just HEAD~1..HEAD.",
+          },
+        },
+      },
+    },
+    {
+      name: "lora_false_positive",
+      description:
+        "Record that the LoRA model flagged a line as a violation but " +
+        "it's actually correct. Feeds the next retrain as a corrective " +
+        "PASS. Use sparingly — only when you're confident the model is wrong.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          code:   { type: "string", description: "The code snippet the model flagged" },
+          file:   { type: "string", description: "File path (relative to repo root)" },
+          category: { type: "string", description: "Category the model assigned (e.g. 'testing', 'security')" },
+          reason: { type: "string", description: "Why you think the model is wrong" },
+        },
+        required: ["code"],
+      },
+    },
+    {
+      name: "lora_false_negative",
+      description:
+        "Record that the LoRA model said a piece of code was clean but " +
+        "it's actually a real violation the model missed. Feeds the next " +
+        "retrain as a corrective VIOLATION.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          code:      { type: "string", description: "The code snippet the model missed" },
+          violation: { type: "string", description: "Description of the issue the model should have caught" },
+          category:  { type: "string", description: "Which category the violation falls into (e.g. 'error_handling')" },
+          file:      { type: "string", description: "File path (relative to repo root)" },
+        },
+        required: ["code", "violation"],
       },
     },
     {
@@ -187,6 +241,79 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       return {
         content: [{ type: "text", text: `Error: ${err.message}` }],
       };
+    }
+  }
+
+  if (req.params.name === "lora_check") {
+    const { scope = "branch" } = req.params.arguments || {};
+    try {
+      const resp = await fetch(`${API_URL}/lora/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task_id: TASK_ID, scope }),
+      });
+      if (!resp.ok) {
+        const err = await resp.text();
+        return { content: [{ type: "text", text: `Failed to run LoRA: ${err}` }] };
+      }
+      const data = await resp.json();
+      if (data.no_model_for_repo) {
+        return { content: [{ type: "text", text: `No LoRA configured for repo ${data.repo || "(unknown)"} — skipping check.` }] };
+      }
+      if (data.no_changes) {
+        return { content: [{ type: "text", text: "No changes to review — worktree is at the base." }] };
+      }
+      const violations = data.violations || [];
+      if (violations.length === 0) {
+        return { content: [{ type: "text", text: "LoRA check: PASS. No violations detected." }] };
+      }
+      const formatted = violations
+        .map((v, i) => `${i + 1}. [${v.category}] ${v.message}`)
+        .join("\n");
+      return {
+        content: [{
+          type: "text",
+          text: `LoRA check found ${violations.length} violation(s):\n${formatted}\n\nAddress each one you agree with. For any you believe the model got wrong, call lora_false_positive.`,
+        }],
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
+    }
+  }
+
+  if (req.params.name === "lora_false_positive") {
+    const { code, file, category, reason } = req.params.arguments;
+    try {
+      const resp = await fetch(`${API_URL}/lora/false_positive`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, file, category, reason }),
+      });
+      if (!resp.ok) {
+        const err = await resp.text();
+        return { content: [{ type: "text", text: `Failed: ${err}` }] };
+      }
+      return { content: [{ type: "text", text: "Recorded false positive — next retrain will learn from it." }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
+    }
+  }
+
+  if (req.params.name === "lora_false_negative") {
+    const { code, violation, category, file } = req.params.arguments;
+    try {
+      const resp = await fetch(`${API_URL}/lora/false_negative`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, violation, category, file }),
+      });
+      if (!resp.ok) {
+        const err = await resp.text();
+        return { content: [{ type: "text", text: `Failed: ${err}` }] };
+      }
+      return { content: [{ type: "text", text: "Recorded false negative — next retrain will learn from it." }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
     }
   }
 

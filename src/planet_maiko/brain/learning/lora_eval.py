@@ -16,6 +16,29 @@ import random
 logger = logging.getLogger(__name__)
 
 
+def resolve_lora_for_repo(repo):
+    """Return the adapter path for a repo, or None if none configured.
+
+    Reads config.lora.models_by_repo — a flat dict of
+    "org/repo-name" → adapter path. Used by the lora_check endpoint so
+    the agent doesn't need to know or care which adapter to load;
+    it's implicit from the repo it's scoped to. The path is
+    os.path.expanduser-ed so ~ works in the config file.
+    """
+    if not repo:
+        return None
+    try:
+        from planet_maiko.config import load_config
+        mapping = (load_config().get("lora", {}) or {}).get("models_by_repo", {}) or {}
+    except Exception:
+        return None
+    path = mapping.get(repo)
+    if not path:
+        return None
+    path = os.path.expanduser(path)
+    return path if os.path.exists(path) else None
+
+
 def evaluate_adapter(adapter_path=None, repo=None, holdout_fraction=0.2):
     """Evaluate a LoRA adapter on held-out training data.
 

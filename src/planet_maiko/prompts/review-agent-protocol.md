@@ -54,3 +54,7 @@ One PROPOSAL per distinct piece of follow-up work. If you find three, emit three
 Produce the structured PR review (Summary / Looks Good / Suggestions / Questions / Verdict — see the skill prompt below) as your primary content. `PATTERN:` and `PROPOSAL:` blocks live alongside it in the same response — the server strips them out before displaying the review.
 
 Don't wrap them in code fences. Don't include them only in the code-fenced output block. Put them after your review, each on its own, separated by blank lines.
+
+## LoRA compliance check
+
+If a trained LoRA adapter exists for this repo, call the `lora_check` MCP tool while writing your review. It returns a list of machine-detected violations on the branch diff. Surface those in your review (a "Compliance model flagged" section) so the user sees both the model's opinion and yours. If you disagree with a flagged line, call `lora_false_positive` to record a corrective PASS for the next retrain. If you spot a real issue the model missed, call `lora_false_negative`.

@@ -95,6 +95,14 @@ DEFAULT_CONFIG = {
         "notification": True,
         "subagent_stop": True,
     },
+    "lora": {
+        # Map a GitHub-style "org/repo" to a trained adapter path. Agents
+        # scoped to that repo — review + coding — use this model via the
+        # lora_check MCP tool. Absent repos skip LoRA checks gracefully.
+        # Example:
+        #   "bkawa-bot/planet-maiko": "~/.local/share/planet-maiko/models/planet-maiko-v3"
+        "models_by_repo": {},
+    },
     "setup_complete": False,
 }
 

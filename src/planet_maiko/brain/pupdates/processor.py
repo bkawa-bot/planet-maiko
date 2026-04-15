@@ -118,17 +118,20 @@ def _complete_review_task(pr_url):
 def _resume_agent_for_pr_comments(pupdate):
     """Wake the coding agent so it can fetch + address new PR feedback.
 
-    The pupdate carries task_id + pr_url. We post a message into the
-    agent's inbox telling it to run `gh pr view N --comments` (since
-    the agent already has the gh CLI available in the worktree),
-    then fire `claude --resume <session>` so it actually runs. The
-    agent iterates locally and ends with a fresh ready_for_review
-    that the user reviews + approves in Maiko's diff viewer; approve
-    pushes the new commits to the same PR branch.
+    Two side effects:
+      1. Each new PR inline comment is harvested server-side as a
+         corrective-VIOLATION training pair — the reviewer's comment
+         body is the violation description, the diff_hunk is the code
+         context. Feeds the next LoRA retrain whether or not the
+         agent explicitly calls lora_false_negative.
+      2. Posts a message into the agent's inbox pointing at the PR
+         and resumes the claude session so the agent can iterate.
     """
     extra = pupdate.extra or {}
     task_id = extra.get("task_id")
     pr_url = extra.get("pr_url")
+    repo = extra.get("repo")
+    pr_number = extra.get("number")
     if not task_id:
         logger.warning(f"[pr-feedback] Pupdate {pupdate.id} has no task_id, skipping")
         return
@@ -142,8 +145,15 @@ def _resume_agent_for_pr_comments(pupdate):
         logger.warning(f"[pr-feedback] Task {task_id} has no worktree, skipping")
         return
 
-    # Drop a message into the agent's inbox so the conversation
-    # history shows what triggered the resume, not just the prompt.
+    # Harvest reviewer comments as training pairs before waking the
+    # agent. Best-effort — if gh isn't available, we still fire the
+    # resume; the agent can still read comments via its own gh.
+    if repo and pr_number:
+        try:
+            _harvest_pr_comments(repo, pr_number)
+        except Exception as e:
+            logger.warning(f"[pr-feedback] Harvest failed for {repo}#{pr_number}: {e}")
+
     from planet_maiko.models.agent_message import AgentMessage
     msg_body = (
         f"New review feedback was posted on the PR ({pr_url}).\n\n"
@@ -163,13 +173,51 @@ def _resume_agent_for_pr_comments(pupdate):
     ))
     db.session.commit()
 
-    # Fire the resume in a daemon thread — same pattern the local
-    # request-changes flow uses.
     try:
         from planet_maiko.api.diff_api import _resume_agent_with_review
         _resume_agent_with_review(task_id, working_path)
     except Exception as e:
         logger.warning(f"[pr-feedback] Resume failed for {task_id}: {e}")
+
+
+def _harvest_pr_comments(repo, pr_number):
+    """Pull inline PR review comments via gh + record as training pairs.
+
+    Uses the diff_hunk each comment carries as the code context —
+    exactly what the LoRA trains on. Skips comments without a
+    diff_hunk (issue-level conversation comments) since those don't
+    map to a specific code location cleanly.
+    """
+    import subprocess
+    import json as _json
+    from planet_maiko.brain.learning.feedback import add_corrective_violation
+
+    result = subprocess.run(
+        ["gh", "api", f"repos/{repo}/pulls/{pr_number}/comments"],
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        logger.debug(f"[harvest] gh api failed: {result.stderr.strip()[:160]}")
+        return
+    try:
+        comments = _json.loads(result.stdout)
+    except Exception:
+        return
+    for c in comments:
+        body = (c.get("body") or "").strip()
+        diff_hunk = c.get("diff_hunk")
+        if not body or not diff_hunk:
+            continue
+        try:
+            add_corrective_violation(
+                code=diff_hunk,
+                violation=body,
+                category=None,
+                file_path=c.get("path"),
+                repo=repo,
+            )
+        except Exception as e:
+            logger.debug(f"[harvest] Failed recording PR comment {c.get('id')}: {e}")
 
 
 def _extract_pr_number(pr_url):

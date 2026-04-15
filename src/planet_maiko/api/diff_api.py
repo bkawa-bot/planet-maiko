@@ -353,12 +353,70 @@ def request_changes(task_id):
     db.session.add(inbox_msg)
     db.session.commit()
 
+    # Harvest each comment as a corrective-VIOLATION training pair.
+    # The user's comment body is the violation the model should have
+    # caught; we pull a small code window from the worktree file so
+    # the pair has the code context the LoRA trains on. Best-effort —
+    # failures here don't block the review flow.
+    try:
+        repo = (task.extra or {}).get("repo") or (task.extra or {}).get("repository")
+        _harvest_comments_as_training_pairs(drafts, worktree, repo)
+    except Exception as e:
+        logger.warning(f"[harvest] Local comment harvest failed for {task_id}: {e}")
+
     resumed = _resume_agent_with_review(task_id, worktree)
 
     return jsonify({
         "submitted_comments": len(drafts),
         "agent_resumed": resumed,
     })
+
+
+def _harvest_comments_as_training_pairs(comments, worktree, repo):
+    """Record each submitted comment as a corrective-VIOLATION pair.
+
+    The comment's body is the description of what the reviewer wanted
+    fixed — same grammar as the LoRA's training labels. The code
+    snippet is a +/-3 line window from the worktree file at the
+    comment's line. Categories are left to the LLM classifier
+    downstream since reviewers don't write in categories.
+    """
+    from planet_maiko.brain.learning.feedback import add_corrective_violation
+    for c in comments:
+        code_snippet = _extract_code_window(worktree, c.file_path, c.line_number)
+        if not code_snippet:
+            continue
+        try:
+            add_corrective_violation(
+                code=code_snippet,
+                violation=c.body,
+                category=None,  # classifier picks it up
+                file_path=c.file_path,
+                repo=repo,
+            )
+        except Exception as e:
+            logger.debug(f"[harvest] Failed recording comment {c.id}: {e}")
+
+
+def _extract_code_window(worktree, file_path, line_number, window=3):
+    """Return ~(window*2+1) lines around line_number from the file in worktree.
+
+    Returns None if the file can't be read. Keeps things best-effort —
+    training-pair harvest shouldn't hard-fail on a missing file.
+    """
+    full_path = os.path.join(worktree, file_path)
+    if not os.path.isfile(full_path):
+        return None
+    try:
+        with open(full_path, encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+    except Exception:
+        return None
+    if not lines:
+        return None
+    start = max(0, line_number - 1 - window)
+    end = min(len(lines), line_number + window)
+    return "".join(lines[start:end])
 
 
 def _build_pr_body(task, comments):
@@ -384,6 +442,158 @@ def _build_pr_body(task, comments):
         lines.append("")
     lines.append("_Opened by Planet Maiko after local review._")
     return "\n".join(lines)
+
+
+@diff_bp.route("/tasks/<task_id>/plan", methods=["GET"])
+def get_plan(task_id):
+    """Return the latest plan_for_approval content the agent sent, plus
+    the task's plan_approved_at timestamp so the UI can tell the user
+    what state they're in.
+    """
+    task, err = _task_or_404(task_id)
+    if err:
+        return err
+    from planet_maiko.models.agent_message import AgentMessage
+    latest = (
+        AgentMessage.query
+        .filter_by(task_id=task_id, direction="from_agent", message_type="plan_for_approval")
+        .order_by(AgentMessage.created_at.desc())
+        .first()
+    )
+    extra = task.extra or {}
+    return jsonify({
+        "task_id": task_id,
+        "plan_first": bool(extra.get("plan_first")),
+        "plan_approved_at": extra.get("plan_approved_at"),
+        "plan": latest.content if latest else None,
+        "plan_at": latest.created_at.isoformat() if latest and latest.created_at else None,
+    })
+
+
+def _resume_for_plan(task_id, working_path, instruction, plan_mode):
+    """Fire a daemon thread that resumes the agent with the given
+    instruction. If plan_mode is True, re-applies --permission-mode
+    plan so a requested revision stays read-only until another
+    approval. Same pattern as _resume_agent_with_review.
+    """
+    import shutil
+    import threading
+
+    claude_path = shutil.which("claude")
+    if not claude_path:
+        return False
+    from planet_maiko.api.agents_api import _get_sessions
+    info = _get_sessions().get(task_id)
+    if not info or not info.get("session_id"):
+        return False
+    session_id = info["session_id"]
+
+    cmd = [
+        claude_path, "--print", "--output-format", "text",
+        "--resume", session_id,
+        "--dangerously-skip-permissions",
+    ]
+    if plan_mode:
+        cmd.extend(["--permission-mode", "plan"])
+
+    def _run():
+        try:
+            log_path = os.path.join(working_path, "agent.log")
+            with open(log_path, "a", encoding="utf-8") as log:
+                log.write(f"\n\n# Plan resume ({'revise' if plan_mode else 'approved'}) @ {datetime.now(timezone.utc).isoformat()}\n\n")
+                log.flush()
+                subprocess.run(
+                    cmd, input=instruction,
+                    stdout=log, stderr=subprocess.STDOUT,
+                    text=True, encoding="utf-8", errors="replace",
+                    cwd=working_path,
+                )
+        except Exception as e:
+            logger.warning(f"[plan] Resume for {task_id} failed: {e}")
+
+    threading.Thread(target=_run, daemon=True, name=f"plan-{task_id}").start()
+    return True
+
+
+@diff_bp.route("/tasks/<task_id>/plan/approve", methods=["POST"])
+def approve_plan(task_id):
+    """User approved the agent's proposed plan — resume without plan
+    mode so the agent can actually write code now.
+    """
+    from planet_maiko.models.agent_message import AgentMessage
+
+    task, err = _task_or_404(task_id)
+    if err:
+        return err
+    worktree = _worktree_path(task)
+    if not worktree:
+        return jsonify({"error": "No worktree for this task"}), 400
+
+    # Log the approval into the conversation so the transcript is
+    # complete, then resume without plan mode.
+    db.session.add(AgentMessage(
+        task_id=task_id,
+        direction="to_agent",
+        sender="user",
+        content="Plan approved. Go implement it — make the changes, commit locally, and call reply(message_type='ready_for_review') when done.",
+        message_type="plan_approved",
+    ))
+    extra = dict(task.extra or {})
+    extra["plan_approved_at"] = datetime.now(timezone.utc).isoformat()
+    task.extra = extra
+    db.session.commit()
+
+    resumed = _resume_for_plan(
+        task_id, worktree,
+        instruction=(
+            "Your plan was approved. Implement it now: follow the plan, "
+            "commit your changes locally, and call "
+            "reply(message_type='ready_for_review') when you're ready for "
+            "the user to review the diff. Don't git push."
+        ),
+        plan_mode=False,
+    )
+    return jsonify({"task_id": task_id, "agent_resumed": resumed, "mode": "implementing"})
+
+
+@diff_bp.route("/tasks/<task_id>/plan/revise", methods=["POST"])
+def revise_plan(task_id):
+    """User wants the agent to revise the plan before implementing."""
+    from planet_maiko.models.agent_message import AgentMessage
+
+    task, err = _task_or_404(task_id)
+    if err:
+        return err
+    worktree = _worktree_path(task)
+    if not worktree:
+        return jsonify({"error": "No worktree for this task"}), 400
+
+    data = request.get_json(silent=True) or {}
+    feedback = (data.get("feedback") or "").strip()
+    if not feedback:
+        return jsonify({"error": "feedback is required"}), 400
+
+    db.session.add(AgentMessage(
+        task_id=task_id,
+        direction="to_agent",
+        sender="user",
+        content=feedback,
+        message_type="plan_revision",
+    ))
+    db.session.commit()
+
+    resumed = _resume_for_plan(
+        task_id, worktree,
+        instruction=(
+            "The user reviewed your plan and has feedback. Revise the "
+            "plan based on their comments and call "
+            "reply(message_type='plan_for_approval') with the updated "
+            "version. Do NOT write code yet.\n\n"
+            f"User feedback:\n{feedback}"
+        ),
+        plan_mode=True,
+    )
+    return jsonify({"task_id": task_id, "agent_resumed": resumed, "mode": "revising"})
 
 
 @diff_bp.route("/tasks/<task_id>/review/approve", methods=["POST"])

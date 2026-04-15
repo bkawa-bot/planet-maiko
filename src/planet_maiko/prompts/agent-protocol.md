@@ -49,17 +49,33 @@ Bad: "agent_status: build complete for task-123"
 2. Explore the codebase → report "Checking existing patterns in X..."
 3. Implement the change → commit locally
 4. Run tests → fix until green
-5. (Optional) Use leave_comment to flag uncertain spots in your diff
-6. reply(message_type="ready_for_review", content="<summary of what you did + what to double-check>")
-7. check_inbox every ~30 seconds until a review message arrives
-8. When a message_type="review" arrives, parse its @@ file:line headers
+5. Run `lora_check` to see if your repo's compliance model flags
+   anything (see LoRA section below)
+6. (Optional) Use leave_comment to flag uncertain spots in your diff
+7. reply(message_type="ready_for_review", content="<summary>")
+8. check_inbox every ~30 seconds until a review message arrives
+9. When a message_type="review" arrives, parse its @@ file:line headers
    (for local comments) OR run gh to fetch PR-side comments (see
    "Post-PR feedback" below), iterate on each comment, commit,
-   go back to step 6
-9. Exit ONLY when you receive message_type="approved" or "cancelled"
+   go back to step 5
+10. Exit ONLY when you receive message_type="approved" or "cancelled"
 ```
 
 The user — not you — decides when the task is done. Never exit early on your own `message_type="done"`; that flow is retired in favor of review cycles.
+
+### LoRA compliance check
+
+Before every `ready_for_review`, call the `lora_check` MCP tool. It runs your repo's trained compliance model against your branch diff and returns a list of violations. Your response:
+
+- **Agree with a violation** → fix it, commit, re-run `lora_check`.
+- **Disagree with a violation** → call `lora_false_positive({code, file, category, reason})`. This records a corrective PASS for the next retrain. Use sparingly.
+- **Spot a real issue the model missed** while iterating → call `lora_false_negative({code, violation, category, file})`.
+
+If `lora_check` reports `no_model_for_repo`, skip it and move on — this repo has no trained adapter yet.
+
+### Plan-first tasks
+
+If the task was started in plan mode, your VERY FIRST action after reading TASK.md is to produce a detailed implementation plan and call `reply(message_type="plan_for_approval", content=<markdown plan>)` — then exit. Do NOT write code. The user will either approve the plan (Maiko resumes you with full permissions to implement) or request revisions (resumes you still in plan mode with their feedback). You can detect plan mode by trying to Write a file — if the tool is blocked, you're in plan mode.
 
 ### Post-PR feedback (after the user approves and Maiko opens a PR)
 
@@ -100,19 +116,7 @@ git diff -- src/path/to/file.java | maiko lora-miss -v "Missing null check on re
 
 Valid categories: `security`, `error_handling`, `testing`, `performance`, `api_design`, `architecture`, `null_safety`, `style`, `naming`, `pattern`, `domain_knowledge`, `gotcha`, `team`.
 
-## 4. Post-review learning extraction
-
-After a review round finishes (user sent changes you addressed), pull out reusable patterns:
-
-```bash
-maiko feedback "Use orElseThrow instead of .get() on Optional" \
-  --category error_handling \
-  --code "// Before: user.get()\n// After: user.orElseThrow(() -> new NotFoundException())"
-```
-
-One feedback per distinct pattern, not per file. Include the before/after snippet so the LoRA training set gets the code context, not just the rule.
-
-## 5. Rules
+## 4. Rules
 
 - Stay focused on the task in TASK.md
 - Commit frequently with clear messages
