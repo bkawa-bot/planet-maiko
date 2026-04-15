@@ -371,8 +371,11 @@ export default function Tasks() {
               <button className="btn btn-sm" onClick={() => setGeneratedTasks(null)} style={{ marginLeft: "auto" }}><X size={10} /></button>
             </div>
             <div className="modal-body">
-              <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>
-                Maiko drafted this plan. Tweak titles, deps, or agents before approving. On approve, tasks are created, routed, and ready ones go active.
+              <p className="plan-editor-intro">
+                Maiko drafted this plan. Tweak titles, deps, or agents inline. If
+                the whole shape is off, ask Maiko to revise it (input at the
+                bottom). When you're happy, Approve creates the tasks and routes
+                them.
               </p>
               <div className="plan-task-list">
                 {generatedTasks.tasks.map((gt, i) => (
@@ -416,7 +419,7 @@ export default function Tasks() {
                           ...p, tasks: p.tasks.map((t, j) => j === i ? { ...t, type: e.target.value } : t),
                         }))}
                       >
-                        {["todo", "bug", "feature", "review", "investigation", "repo_analysis"].map((x) => <option key={x} value={x}>{x}</option>)}
+                        {["coding", "bug", "feature", "review", "investigation", "repo_analysis", "todo"].map((x) => <option key={x} value={x}>{x}</option>)}
                       </select>
                       <input
                         className="plan-task-input"
@@ -499,47 +502,52 @@ export default function Tasks() {
               </div>
             </div>
             <div className="generated-tasks-revise">
-              <input
-                className="plan-revise-input"
-                placeholder="Ask for changes — e.g. 'break step 2 into smaller tasks', 'add a testing phase', 'drop the ui work'"
-                value={reviseFeedback}
-                onChange={(e) => setReviseFeedback(e.target.value)}
-                disabled={revising}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && reviseFeedback.trim() && !revising) {
-                    e.preventDefault();
-                    e.currentTarget.blur();
-                    document.getElementById("plan-revise-btn")?.click();
-                  }
-                }}
-              />
-              <button
-                id="plan-revise-btn"
-                className="btn"
-                disabled={revising || !reviseFeedback.trim()}
-                title="Send the drafts and your feedback back to Maiko for another pass"
-                onClick={async () => {
-                  setRevising(true);
-                  try {
-                    const res = await api.reviseTasks(
-                      generatedTasks.project_id,
-                      reviseFeedback.trim(),
-                      generatedTasks.tasks,
-                    );
-                    setGeneratedTasks({ project_id: res.project_id, tasks: res.tasks });
-                    setReviseFeedback("");
-                    showToast("Plan revised", "normal");
-                  } catch (err) {
-                    showToast("Revise failed: " + err.message, "high");
-                  } finally {
-                    setRevising(false);
-                  }
-                }}
-              >
-                {revising
-                  ? <><Loader size={10} className="spin" /> Revising…</>
-                  : <><Sparkles size={10} /> Revise</>}
-              </button>
+              <div className="plan-revise-label">
+                <Sparkles size={11} /> Ask Maiko to revise
+              </div>
+              <div className="plan-revise-row">
+                <input
+                  className="plan-revise-input"
+                  placeholder="e.g. 'break step 2 into smaller tasks' · 'add a testing phase' · 'drop the ui work'"
+                  value={reviseFeedback}
+                  onChange={(e) => setReviseFeedback(e.target.value)}
+                  disabled={revising}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && reviseFeedback.trim() && !revising) {
+                      e.preventDefault();
+                      e.currentTarget.blur();
+                      document.getElementById("plan-revise-btn")?.click();
+                    }
+                  }}
+                />
+                <button
+                  id="plan-revise-btn"
+                  className="btn btn-primary"
+                  disabled={revising || !reviseFeedback.trim()}
+                  title="Send your edits and feedback back to Maiko for another pass"
+                  onClick={async () => {
+                    setRevising(true);
+                    try {
+                      const res = await api.reviseTasks(
+                        generatedTasks.project_id,
+                        reviseFeedback.trim(),
+                        generatedTasks.tasks,
+                      );
+                      setGeneratedTasks({ project_id: res.project_id, tasks: res.tasks });
+                      setReviseFeedback("");
+                      showToast("Plan revised", "normal");
+                    } catch (err) {
+                      showToast("Revise failed: " + err.message, "high");
+                    } finally {
+                      setRevising(false);
+                    }
+                  }}
+                >
+                  {revising
+                    ? <><Loader size={10} className="spin" /> Revising…</>
+                    : <><Sparkles size={10} /> Revise</>}
+                </button>
+              </div>
             </div>
             <div className="generated-tasks-footer">
               <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{generatedTasks.tasks.length} task(s)</span>
