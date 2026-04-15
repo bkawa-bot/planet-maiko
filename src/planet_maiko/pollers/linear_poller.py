@@ -9,6 +9,7 @@ Generates pupdates for:
 import logging
 import requests
 
+from planet_maiko.config import load_config
 from planet_maiko.pollers.base import BasePoller
 
 logger = logging.getLogger(__name__)
