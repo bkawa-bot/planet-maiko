@@ -155,6 +155,27 @@ class BasePoller(ABC):
                 # dismissed so they don't keep popping back.
                 if not pd.get("actionable", False):
                     continue
+
+                # Don't resurrect when the user has already triaged
+                # this pupdate via a Task — the task is in their list
+                # and resurrecting just clutters the inbox with a
+                # duplicate signal. Re-events on the *same* source_id
+                # (PR re-requested, same Linear issue re-asserted) are
+                # the responsibility of the poller to disambiguate
+                # (include event id / timestamp in source_id) — the
+                # base layer can't tell "user wants to know again"
+                # from "this is the same notification I already saw".
+                from planet_maiko.models.task import Task as _Task
+                related_task = _Task.query.filter_by(
+                    source_pupdate_id=pupdate_id
+                ).first()
+                if related_task is not None:
+                    continue
+
+                # No task ever existed for this pupdate — the user
+                # really did just dismiss it. Resurrect so they see
+                # the re-asserted source. Re-fire the rule too so a
+                # task gets created if the rule decides one is needed.
                 existing.dismissed = False
                 existing.dismissed_at = None
                 existing.read = False

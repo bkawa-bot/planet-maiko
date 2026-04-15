@@ -455,12 +455,40 @@ class LinearPoller(BasePoller):
 
         stats = {"projects_created": 0, "projects_updated": 0, "tasks_created": 0, "tasks_skipped": 0}
 
+        # Pre-fetch all task.extra blobs once so the "already imported?"
+        # check is O(N + M) instead of O(N * M). The poll-driven flow
+        # creates tasks with IDs like task-<slug>-<pupdate_id_prefix>,
+        # so the manual-import check by `task-<identifier>` ID alone
+        # missed those — and we ended up with one task per Linear
+        # issue from each path. Look up by linear_id / identifier in
+        # extra instead.
+        existing_linear_ids = set()
+        existing_identifiers = set()
+        for t in Task.query.with_entities(Task.extra).all():
+            ext = t.extra or {}
+            lid = ext.get("linear_id")
+            if lid:
+                existing_linear_ids.add(lid)
+            ident = ext.get("identifier") or ext.get("linear_identifier")
+            if ident:
+                existing_identifiers.add(ident)
+
         for issue in issues:
             identifier = issue.get("identifier", "")
+            linear_id = issue.get("id")
             task_id = f"task-{identifier.lower()}"
 
-            # Skip if task already exists
-            if db.session.get(Task, task_id):
+            # Skip if task already exists — by id, by linear_id, or by
+            # identifier (covers all three paths a task for this issue
+            # could have been created through: this importer, the
+            # auto-poll → rule pipeline, and a manual /tasks/<id>/linear
+            # roundtrip).
+            already_present = (
+                db.session.get(Task, task_id) is not None
+                or (linear_id and linear_id in existing_linear_ids)
+                or (identifier and identifier in existing_identifiers)
+            )
+            if already_present:
                 stats["tasks_skipped"] += 1
                 continue
 
