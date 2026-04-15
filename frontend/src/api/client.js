@@ -207,9 +207,6 @@ export const api = {
   getExpertise: () => request("/expertise"),
   getExperts: (repo) => request(`/expertise/experts?repo=${encodeURIComponent(repo)}`),
 
-  // Signals
-  getSignals: () => request("/signals"),
-
   // Learnings management
   createLearning: (data) => request("/learnings", { method: "POST", body: JSON.stringify(data) }),
   backfillKnowledge: (limit = null, repo = null) => {
