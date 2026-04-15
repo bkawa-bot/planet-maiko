@@ -82,6 +82,17 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
     }
   };
 
+  const handleRerun = async (taskId) => {
+    if (!taskId) return;
+    try {
+      await api.rerunAgent(taskId);
+      showToast("Re-running agent — first message should land in a moment", "normal");
+      onRefresh?.();
+    } catch (err) {
+      showToast(err.message || "Could not re-run agent", "high");
+    }
+  };
+
   const handleNudge = async (taskId) => {
     if (!taskId) return;
     try {
@@ -203,10 +214,22 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
           </div>
         ) : (
           <div className="agent-grid">
-            {dormantAgents.map((a) => (
+            {dormantAgents.map((a) => {
+              // If the agent has been "starting up" for more than 5
+              // minutes without sending a single pupdate, the
+              // headless run almost certainly died silently — don't
+              // keep telling the user it's "warming up", say it's
+              // stuck and offer the re-run path.
+              const preparedAtMs = a.prepared_at ? Date.parse(a.prepared_at) : null;
+              const ageMin = preparedAtMs ? Math.round((Date.now() - preparedAtMs) / 60000) : 0;
+              const isStuck = ageMin >= 5;
+              const isOneShot = a.role === "review" || a.role === "investigation";
+              return (
               <div key={a.agent_id} className="agent-card card">
                 <div className="speech-bubble">
-                  Starting up — first message hasn't landed yet
+                  {isStuck
+                    ? `Stuck — no pupdates for ${ageMin}m. Try Re-run${isOneShot ? "" : " or open a terminal"}.`
+                    : "Starting up — first message hasn't landed yet"}
                   <div className="speech-time">
                     {formatTime(a.prepared_at)}
                   </div>
@@ -238,6 +261,20 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                       <GitPullRequest size={12} /> Review diff
                     </Link>
                   )}
+                  {/* Re-run is the right escape hatch for one-shot
+                      agents (review / investigation): re-fires the
+                      autonomous skill in the same worktree without
+                      needing a terminal. For coding agents, fall
+                      back to Relaunch (open a terminal). */}
+                  {isOneShot && a.task_id && (
+                    <button
+                      className="btn btn-sm btn-approve"
+                      onClick={() => handleRerun(a.task_id)}
+                      title="Re-fire the autonomous run for this review/investigation"
+                    >
+                      <Sparkles size={12} /> Re-run
+                    </button>
+                  )}
                   <button
                     className="btn btn-sm"
                     onClick={() => handleResume(a)}
@@ -248,16 +285,19 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                   <button className="btn btn-sm" onClick={() => loadThread(a.task_id)}>
                     <MessageCircle size={12} /> Channel Log
                   </button>
-                  <button
-                    className="btn btn-sm"
-                    onClick={() => handleLaunch(a)}
-                    title="Manually relaunch in a terminal — only needed if the auto-start failed"
-                  >
-                    <Play size={12} /> Relaunch
-                  </button>
+                  {!isOneShot && (
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => handleLaunch(a)}
+                      title="Open a terminal in the worktree (use if the auto-start failed)"
+                    >
+                      <Play size={12} /> Relaunch
+                    </button>
+                  )}
                 </div>
               </div>
-            ))}
+              );
+            })}
 
             {activity.map((a, i) => {
               // Resolve display name: try prepared agents first, then profiles, then fallback

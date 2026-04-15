@@ -191,6 +191,8 @@ export const api = {
     request(`/agents/${taskId}/inbox`, { method: "POST", body: JSON.stringify(data) }),
   nudgeAgent: (taskId) =>
     request(`/agents/${taskId}/nudge`, { method: "POST" }),
+  rerunAgent: (taskId) =>
+    request(`/agents/${taskId}/rerun`, { method: "POST" }),
   getConflicts: () => request("/agents/conflicts"),
 
   // Skills

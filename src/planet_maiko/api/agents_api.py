@@ -324,6 +324,79 @@ def assign_agent():
     }), 201
 
 
+def _launch_terminal(cmd):
+    # Open a new terminal window that runs `cmd` and stays open.
+    #
+    # All three platforms route through a temp script file (.sh on
+    # macOS / Linux, .bat on Windows). When `cmd` contains double
+    # quotes -- and ours always does, because we pass an initial
+    # prompt to claude in quotes -- the platform-native incantations
+    # all break in different ways:
+    #   * macOS: osascript's `do script "..."` collapses on the
+    #     first inner quote, emitting AppleScript's "an identifier
+    #     can't go after this" error before anything runs.
+    #   * Windows: `cmd /c start cmd /k "..."` mispairs the inner
+    #     quotes with start's title arg.
+    #   * Linux: bash -c handles quotes ok but is inconsistent across
+    #     terminals.
+    # A script file's contents are plain text -- no shell or
+    # AppleScript parser sees the quotes. We just hand the launcher
+    # a path.
+    import sys as _sys
+    import subprocess as _subprocess
+    import tempfile as _tempfile
+    import os as _os
+
+    if _sys.platform == "darwin":
+        with _tempfile.NamedTemporaryFile(
+            "w", suffix=".sh", delete=False, encoding="utf-8",
+        ) as f:
+            f.write("#!/bin/bash\n")
+            f.write(cmd + "\n")
+            sh_path = f.name
+        _os.chmod(sh_path, 0o755)
+        # Telling Terminal to "do script <path>" runs the file; no
+        # quotes inside the script body to worry about. If the user
+        # closes the window the .sh stays in /tmp and is reaped by
+        # the OS's normal temp-file cleanup.
+        _subprocess.Popen([
+            "osascript", "-e",
+            f'tell application "Terminal" to do script "{sh_path}"',
+        ])
+        return
+
+    if _sys.platform == "win32":
+        with _tempfile.NamedTemporaryFile(
+            "w", suffix=".bat", delete=False, encoding="utf-8",
+        ) as f:
+            f.write("@echo off\r\n")
+            f.write(cmd + "\r\n")
+            bat_path = f.name
+        # `start "" cmd /k <bat>` — the empty "" is required as the
+        # window-title placeholder, otherwise start treats the next
+        # quoted thing as the title and the actual command never runs.
+        _subprocess.Popen(
+            ["cmd", "/c", "start", "", "cmd", "/k", bat_path],
+            shell=False,
+        )
+        return
+
+    # Linux: same approach for consistency.
+    with _tempfile.NamedTemporaryFile(
+        "w", suffix=".sh", delete=False, encoding="utf-8",
+    ) as f:
+        f.write("#!/bin/bash\n")
+        f.write(cmd + "\n")
+        sh_path = f.name
+    _os.chmod(sh_path, 0o755)
+    for term in ["gnome-terminal", "xterm", "konsole"]:
+        try:
+            _subprocess.Popen([term, "--", "bash", sh_path])
+            return
+        except FileNotFoundError:
+            continue
+
+
 def _find_claude_session_file(working_path, session_id):
     """Find the Claude Code session JSONL file for a given worktree + session ID.
 
@@ -438,17 +511,7 @@ def resume_session():
             return jsonify({"error": "No session file or worktree found."}), 404
 
     try:
-        if sys.platform == "darwin":
-            subprocess.Popen(["osascript", "-e", f'tell application "Terminal" to do script "{cmd}"'])
-        elif sys.platform == "win32":
-            subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", cmd], shell=True)
-        else:
-            for term in ["gnome-terminal", "xterm", "konsole"]:
-                try:
-                    subprocess.Popen([term, "--", "bash", "-c", cmd])
-                    break
-                except FileNotFoundError:
-                    continue
+        _launch_terminal(cmd)
         return jsonify({
             "status": "opened",
             "session_id": session_id,
@@ -509,17 +572,7 @@ def open_terminal():
         attach_cmd = f'{checkout}cd {path} && claude --session-id {session_id} {tools_flags} "{initial_prompt}"'
 
     try:
-        if sys.platform == "darwin":
-            subprocess.Popen(["osascript", "-e", f'tell application "Terminal" to do script "{attach_cmd}"'])
-        elif sys.platform == "win32":
-            subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", attach_cmd], shell=True)
-        else:
-            for term in ["gnome-terminal", "xterm", "konsole"]:
-                try:
-                    subprocess.Popen([term, "--", "bash", "-c", attach_cmd])
-                    break
-                except FileNotFoundError:
-                    continue
+        _launch_terminal(attach_cmd)
         info = _get_sessions().get(task_id, {})
         return jsonify({"status": "opened", "path": path, "tmux_attached": has_tmux_session, "session_id": info.get("session_id") if isinstance(info, dict) else info})
     except Exception as e:
@@ -689,6 +742,44 @@ def send_to_agent(task_id):
     db.session.add(msg)
     db.session.commit()
     return jsonify(msg.to_dict()), 201
+
+
+@agents_bp.route("/agents/<task_id>/rerun", methods=["POST"])
+def rerun_agent(task_id):
+    """Re-fire the autonomous one-shot run for a review/investigation
+    task that's stuck on "Starting up" — the original headless run
+    silently died (claude crashed, MCP failed to load, network blip)
+    and the agent never sent its first pupdate, so the UI has no
+    way to know what went wrong. This kicks a fresh thread that
+    re-uses the same worktree and session_id so the user's View
+    Session is still valid afterwards.
+
+    No-op for coding tasks — those don't have a single "skill" to
+    re-run; the user should use Relaunch to open a terminal.
+    """
+    from planet_maiko.models.task import Task
+    from planet_maiko.agents.brain_session import ONE_SHOT_ROLE_FOR_TYPE
+
+    task = db.session.get(Task, task_id)
+    if not task:
+        return jsonify({"error": "task not found"}), 404
+    if task.type not in ONE_SHOT_ROLE_FOR_TYPE:
+        return jsonify({"error": f"task type '{task.type}' isn't a one-shot role"}), 400
+    if not task.assigned_agent_id:
+        return jsonify({"error": "task has no assigned agent"}), 400
+
+    working_path = (task.extra or {}).get("working_path")
+    if not working_path or not os.path.isdir(working_path):
+        return jsonify({"error": "no worktree on disk for this task — re-assign the agent"}), 400
+
+    # Reset to "new" so execute_one_shot_task doesn't bail on the
+    # "already running" guard at the top of _spawn_one_shot_thread.
+    if task.status == "in_progress":
+        task.status = "new"
+    db.session.commit()
+
+    _spawn_one_shot_thread(task.id, working_path)
+    return jsonify({"status": "rerunning", "task_id": task.id, "working_path": working_path}), 202
 
 
 @agents_bp.route("/agents/<task_id>/nudge", methods=["POST"])
