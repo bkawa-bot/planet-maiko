@@ -62,17 +62,17 @@ def _maybe_promote_global(learning):
     return False
 
 
-CLUSTER_PROMPT = """You are deduping a list of short coding rules.
-
-Group rules that say essentially the SAME thing, even if the wording
-differs. Rules with different scope, severity, or category should NOT
-be merged — only merge true synonyms.
+CLUSTER_PROMPT = """You are deduping a list of short coding rules, all
+in the same category. Group rules that say essentially the SAME thing
+even when worded differently — cross-repo duplicates (same rule
+observed in different codebases) are expected and should merge so the
+rule gets promoted to a global guideline.
 
 For each cluster you identify, pick a canonical rule text: the clearest,
 most actionable one-sentence version. Prefer existing wording when
 possible; rewrite only if the existing options are unclear.
 
-Input: a JSON array of {{id, rule, category}} objects.
+Input: a JSON array of {{id, rule}} objects.
 
 Return ONLY valid JSON matching this schema. No markdown fencing, no
 commentary:
@@ -88,6 +88,7 @@ Rules:
 - Every input id MUST appear in exactly one cluster.
 - Clusters of size 1 (no duplicates) are allowed and expected.
 - Pick the canonical so it reads like a rule a linter would print.
+- Don't merge rules that describe genuinely different behaviors.
 
 Rules to cluster:
 {rules_json}
@@ -108,7 +109,10 @@ def _call_cluster_llm(rules):
         logger.warning("[clustering] Brain runtime unavailable")
         return []
 
-    payload = [{"id": r["id"], "rule": r["rule"], "category": r["category"]} for r in rules]
+    # Category is implied by the batch (cluster_learnings groups by
+    # category before calling); not including it in the payload keeps
+    # the LLM focused on the semantic-duplicate question.
+    payload = [{"id": r["id"], "rule": r["rule"]} for r in rules]
     prompt = CLUSTER_PROMPT.format(rules_json=json.dumps(payload, indent=2))
 
     db.session.close()
@@ -173,6 +177,13 @@ def _merge_cluster(canonical_text, member_ids):
         loser.updated_at = datetime.now(timezone.utc)
 
     keeper.updated_at = datetime.now(timezone.utc)
+
+    # After absorbing losers' signals, the keeper may now have signals
+    # from 3+ distinct repos → auto-promote to global. Without this,
+    # duplicate rules scattered across repos would merge but stay
+    # scope-locked to whichever repo the keeper originated from.
+    _maybe_promote_global(keeper)
+
     logger.info(
         f"[clustering] Merged {len(losers)} learning(s) into #{keeper.id}: "
         f"'{keeper.rule[:60]}' (+{merged_signals} signals)"
