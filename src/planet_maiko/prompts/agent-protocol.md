@@ -35,8 +35,8 @@ Never push or open a PR without an explicit `approved` message. The user is the 
 
 Two MCP tools from the maiko-channel drive communication:
 
-- **`reply`** — send a message to Maiko / the user. Use `message_type="ready_for_review"` when you've committed work for review, `"stuck"` if you're blocked, `"message"` for general status.
-- **`check_inbox`** — pull pending messages from the user. Returns structured text. Call it before finishing a step or when you suspect a review was left.
+- **`reply`** — send a message to Maiko / the user. The body MUST go in the `content` parameter, e.g. `reply(content="Tests pass.", message_type="ready_for_review")`. Use `message_type="ready_for_review"` when you've committed work for review, `"stuck"` if you're blocked, `"message"` for general status.
+- **`check_inbox`** — pull pending messages from the user. Returns structured text. You normally don't have to remember this — Maiko installs a `Stop` hook that polls the inbox automatically every time you're about to end a response, blocks the stop if there are unread messages, and feeds them back as a system message. Calling `check_inbox` mid-step is still useful when you specifically want to wait for input (e.g. asked the user a question and want to gate on their reply).
 - **`leave_comment`** — drop an inline comment on a specific diff line for the user to see during their review. Use sparingly on uncertain / load-bearing spots (~5 max per round).
 
 The `maiko` CLI still works for legacy reporting (`maiko report`, `maiko task start`, `maiko feedback`) but messaging goes through MCP.

@@ -362,6 +362,21 @@ def resume_session():
     task_id = data.get("task_id", "")
     session_info = _get_sessions().get(task_id)
 
+    # Fall back to the task's own record if the in-memory cache lost
+    # track (e.g. older review/investigation tasks whose session was
+    # registered before the cache was persistent, or any flow where
+    # _set_session was skipped). The session_id + working_path stored
+    # on task.extra are the canonical record.
+    if not session_info:
+        from planet_maiko.models.task import Task
+        task = db.session.get(Task, task_id) if task_id else None
+        if task and (task.extra or {}).get("session_id"):
+            extra = task.extra
+            session_info = {
+                "session_id": extra["session_id"],
+                "working_path": extra.get("working_path", ""),
+            }
+
     if not session_info:
         return jsonify({"error": "No session found. Launch the agent first."}), 404
 
@@ -387,9 +402,12 @@ def resume_session():
         # For autonomous review/investigation agents (and any coding
         # agent launched without tmux), `claude --resume <id>` opens
         # an interactive session restored to the point the background
-        # run reached. Works both mid-run and after completion, and
-        # lets the user continue the conversation to dig deeper.
-        cmd = f"cd {working_path} && claude --resume {session_id}"
+        # run reached. --dangerously-skip-permissions matches the
+        # original headless run so MCP tools (maiko-channel reply,
+        # check_inbox, etc.) don't get permission-prompted mid-resume
+        # and stall the conversation. Worktree isolation already
+        # bounds blast radius.
+        cmd = f"cd {working_path} && claude --resume {session_id} --dangerously-skip-permissions"
         mode = "resume"
     else:
         session_file = _find_claude_session_file(working_path, session_id)

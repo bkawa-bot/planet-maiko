@@ -296,6 +296,16 @@ def _write_claude_settings(working_path, task_id, agent_id):
             "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/subagent_stop.py"}],
         }]
 
+    # Stop hook: before the agent ends its response, poll the Maiko
+    # inbox; if there are unread messages, block the stop and feed the
+    # messages back so the agent picks them up automatically. Removes
+    # the "agent forgot to call check_inbox" failure mode entirely.
+    if hooks_config.get("stop", True):
+        hooks["Stop"] = [{
+            "matcher": "*",
+            "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/stop.py"}],
+        }]
+
     if not hooks:
         return
 
