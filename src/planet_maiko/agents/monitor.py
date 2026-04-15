@@ -77,7 +77,10 @@ def get_agent_activity():
             agents[agent_key]["pupdate_count"] += 1
 
     # Drop tasks that are finished or no longer exist, and enrich
-    # the rest with agent profile info.
+    # the rest with agent profile info + the task's title (the UI
+    # needs the title to render one card per (agent, task) instead of
+    # one per agent — same agent profile working two tasks should
+    # show two cards, distinguished by task title).
     keep = {}
     for key, a in agents.items():
         task = db.session.get(Task, a["task_id"])
@@ -85,6 +88,9 @@ def get_agent_activity():
             continue  # task was deleted out from under the agent
         if task.status in ("done", "cancelled"):
             continue  # agent's work on this one is over
+        a["task_title"] = task.title
+        a["task_status"] = task.status
+        a["task_type"] = task.type
         if task.assigned_agent_id:
             profile = db.session.get(AgentProfile, task.assigned_agent_id)
             if profile:

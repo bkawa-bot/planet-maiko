@@ -225,7 +225,11 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
               const isStuck = ageMin >= 5;
               const isOneShot = a.role === "review" || a.role === "investigation";
               return (
-              <div key={a.agent_id} className="agent-card card">
+              // key on task_id, not agent_id — the same agent profile
+              // can be assigned to multiple tasks at once. Keying on
+              // agent_id collapsed those into a single card and made
+              // siblings disappear into React's reconciler.
+              <div key={a.task_id || a.agent_id} className="agent-card card">
                 <div className="speech-bubble">
                   {isStuck
                     ? `Stuck — no pupdates for ${ageMin}m. Try Re-run${isOneShot ? "" : " or open a terminal"}.`
@@ -245,9 +249,14 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                       </span>
                       <span className="badge new">warming up</span>
                     </div>
+                    {a.task_title && (
+                      <div className="agent-task-title" title={a.task_title}>
+                        <CheckSquare size={11} /> {a.task_title}
+                      </div>
+                    )}
                     <div className="agent-chips">
                       <span className="agent-chip"><GitBranch size={10} /> {a.branch}</span>
-                      {a.task_id && <span className="agent-chip"><CheckSquare size={10} /> {a.task_id}</span>}
+                      {a.task_id && <span className="agent-chip">{a.task_id}</span>}
                     </div>
                   </div>
                 </div>
@@ -299,15 +308,21 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
               );
             })}
 
-            {activity.map((a, i) => {
-              // Resolve display name: try prepared agents first, then profiles, then fallback
+            {activity.map((a) => {
+              // Resolve display name: backend now sets agent_name on
+              // the activity payload, fall back to the prepared list
+              // / profiles for older entries.
               const prepared = agents.find((ag) => ag.task_id === a.task_id);
-              const profileId = prepared?.agent_id || a.task_id;
-              const profile = profiles.find((p) => p.id === profileId);
-              const displayName = profile?.display_name || a.task_id.replace(/^(task-|agent-report-|agent-)/, "");
+              const profileId = a.agent_id || prepared?.agent_id;
+              const profile = profileId ? profiles.find((p) => p.id === profileId) : null;
+              const displayName = a.agent_name || profile?.display_name || a.task_id.replace(/^(task-|agent-report-|agent-)/, "");
 
               return (
-              <div key={i} className="agent-card card">
+              // Same per-(agent, task) keying — task_id is the unique
+              // identifier for a single workstream. activity has one
+              // entry per task already, so this just stops React's
+              // index-based key from churning on reorder.
+              <div key={a.task_id} className="agent-card card">
                 <div className={`speech-bubble status-${a.status}`}>
                   {a.last_message || "No recent messages"}
                   <div className="speech-time">
@@ -321,9 +336,15 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                       <span className="agent-name">{displayName}</span>
                       <span className={`badge ${a.status}`}>{a.status}</span>
                     </div>
+                    {a.task_title && (
+                      <div className="agent-task-title" title={a.task_title}>
+                        <CheckSquare size={11} /> {a.task_title}
+                      </div>
+                    )}
                     <div className="agent-chips">
                       <span className="agent-chip"><HeartPulse size={10} /> {a.idle_minutes}m ago</span>
                       <span className="agent-chip">{a.pupdate_count} updates</span>
+                      {a.task_type && <span className="agent-chip">{a.task_type}</span>}
                     </div>
                   </div>
                 </div>

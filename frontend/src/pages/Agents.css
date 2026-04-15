@@ -119,6 +119,19 @@
 .agent-name-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 .agent-name { font-weight: 600; font-size: 14px; color: var(--text); }
 
+/* The task this agent-card is working on. Sits between the agent
+   name and the chips so the user can scan "who is working on what"
+   at a glance — same agent profile across multiple tasks now shows
+   one card per task with the title clearly visible. */
+.agent-task-title {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--text-dim); font-weight: 500;
+  margin-bottom: 6px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%;
+}
+.agent-task-title svg { color: var(--pink); flex-shrink: 0; }
+
 .agent-chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .agent-chip {
   display: inline-flex; align-items: center; gap: 3px;

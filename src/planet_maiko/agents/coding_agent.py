@@ -865,6 +865,36 @@ def cleanup(repo_path, branch_name):
         logger.warning(f"Worktree cleanup failed: {e}")
 
 
+def cleanup_task_worktree(task):
+    """Best-effort: remove the agent worktree backing this task.
+
+    Called when a task is closed (done / cancelled / deleted) so
+    .maiko-worktrees doesn't accumulate stale dirs and we stop
+    burning disk on workstreams the user is no longer interested in.
+
+    Idempotent — silently no-ops on tasks without a worktree, paths
+    that aren't under .maiko-worktrees (paranoia: never run on a
+    user's main checkout), or repos we can't locate.
+    """
+    extra = task.extra or {}
+    wp = extra.get("working_path")
+    branch = extra.get("branch")
+    if not wp or not branch:
+        return
+    # Normalize separators so the marker check works on Windows too.
+    norm = wp.replace("\\", "/")
+    if "/.maiko-worktrees/" not in norm:
+        return  # never touch a user-owned path
+    repo_path = norm.split("/.maiko-worktrees/", 1)[0]
+    if not repo_path or not os.path.isdir(repo_path):
+        return
+    try:
+        cleanup(repo_path, branch)
+        logger.info(f"[task] Cleaned up worktree for {task.id}: {wp}")
+    except Exception as e:
+        logger.warning(f"[task] Worktree cleanup failed for {task.id}: {e}")
+
+
 def kickoff_coding_task(task, *, plan_first=False, use_worktree=True, branch_name=None):
     """Prepare a worktree and fire the headless agent for a coding task.
 

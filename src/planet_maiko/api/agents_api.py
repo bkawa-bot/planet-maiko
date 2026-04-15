@@ -860,6 +860,15 @@ def agent_sends_message(task_id):
                     f"{parsed.get('patterns_emitted', 0)} patterns, "
                     f"{parsed.get('proposals_emitted', 0)} proposals"
                 )
+                # Tear down the worktree now that the artifact is
+                # saved. The user can still re-open the artifact via
+                # the task; the throwaway scratch dir isn't doing
+                # anything for them anymore.
+                try:
+                    from planet_maiko.agents.coding_agent import cleanup_task_worktree
+                    cleanup_task_worktree(t)
+                except Exception as e:
+                    logger.warning(f"[outbox] worktree cleanup failed for {task_id}: {e}")
             except Exception as e:
                 logger.warning(f"[outbox] artifact save failed for {task_id}: {e}")
 

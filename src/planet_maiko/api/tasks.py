@@ -91,8 +91,13 @@ def start_task(task_id):
 
 @tasks_bp.route("/tasks/<task_id>/done", methods=["POST"])
 def complete_task(task_id):
-    """Mark a task as done — deletes it from the active list."""
+    """Mark a task as done — deletes it from the active list and
+    removes any agent worktree backing it. The agent's last reply
+    + its task.extra.artifact already capture the result; the
+    worktree itself is just throwaway scratch space at this point."""
+    from planet_maiko.agents.coding_agent import cleanup_task_worktree
     task = db.get_or_404(Task, task_id)
+    cleanup_task_worktree(task)
     db.session.delete(task)
     db.session.commit()
     return jsonify({"status": "deleted", "id": task_id})
@@ -100,8 +105,11 @@ def complete_task(task_id):
 
 @tasks_bp.route("/tasks/<task_id>/cancel", methods=["POST"])
 def cancel_task(task_id):
-    """Cancel a task — deletes it from the active list."""
+    """Cancel a task — deletes it from the active list and removes
+    any agent worktree backing it."""
+    from planet_maiko.agents.coding_agent import cleanup_task_worktree
     task = db.get_or_404(Task, task_id)
+    cleanup_task_worktree(task)
     db.session.delete(task)
     db.session.commit()
     return jsonify({"status": "deleted", "id": task_id})
