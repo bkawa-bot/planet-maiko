@@ -304,7 +304,7 @@ _SAFE_BRANCH_RE = re.compile(r"^[A-Za-z0-9_./-]+$")
 _UNSAFE_PATH_CHARS = re.compile(r'[;&|`$<>!"*?\n\r]')
 
 
-def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None):
+def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, plan_first=False):
     """Start the coding agent as a background daemon thread — no terminal.
 
     Mirrors the review / investigation autonomous flow: `claude --print`
@@ -313,6 +313,13 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None):
     ready_for_review message via MCP). The session id is registered
     so "View Session" can later `claude --resume` into it for the
     user to iterate alongside the agent.
+
+    plan_first=True starts the run in Claude's plan mode and prompts
+    the agent to produce a markdown plan first — it calls
+    reply(message_type="plan_for_approval") and exits without writing
+    code. The user approves or requests changes in the plan UI; the
+    approve endpoint resumes the session without plan mode so the
+    agent can actually implement.
 
     Returns immediately after spawning the thread.
     """
@@ -331,14 +338,26 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None):
     from planet_maiko.api.agents_api import _set_session
     _set_session(task_id, session_id, worktree_path)
 
-    initial_prompt = (
-        "Read TASK.md and CLAUDE.md in this directory. Begin working on the "
-        "task following the protocol. After your first meaningful commit, "
-        "call reply(message_type=\"ready_for_review\", content=\"...\") via "
-        "the maiko-channel MCP and then use check_inbox to receive any "
-        "review feedback. Do not git push or open PRs — Maiko handles that "
-        "once the human approves."
-    )
+    if plan_first:
+        initial_prompt = (
+            "Read TASK.md and CLAUDE.md in this directory. Do NOT write "
+            "any code yet. Produce a detailed implementation plan "
+            "(markdown, 500 words max) covering: what you'll change, in "
+            "which files, in what order, and the key decisions / risks. "
+            "When the plan is ready, call reply(message_type=\"plan_for_approval\", "
+            "content=<your plan>) via the maiko-channel MCP and exit. "
+            "The user will approve or request changes; Maiko will resume "
+            "you with their decision."
+        )
+    else:
+        initial_prompt = (
+            "Read TASK.md and CLAUDE.md in this directory. Begin working on the "
+            "task following the protocol. After your first meaningful commit, "
+            "call reply(message_type=\"ready_for_review\", content=\"...\") via "
+            "the maiko-channel MCP and then use check_inbox to receive any "
+            "review feedback. Do not git push or open PRs — Maiko handles that "
+            "once the human approves."
+        )
 
     # No --allowedTools alongside --dangerously-skip-permissions — the
     # skip flag is the blanket bypass, and passing allowlists on top
@@ -350,6 +369,12 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None):
         "--session-id", session_id,
         "--dangerously-skip-permissions",
     ]
+    if plan_first:
+        # Claude's plan mode restricts the tool set to read-only
+        # (Read/Glob/Grep/etc.), so the agent can't write even if its
+        # prompt discipline slips. Reply via MCP still works since
+        # MCP tools aren't disk-modifying.
+        cmd.extend(["--permission-mode", "plan"])
 
     log_path = os.path.join(worktree_path, "agent.log")
 

@@ -1,0 +1,133 @@
+/* Plan-review page — single column since the plan is just text,
+   no diff gutters to reserve space for. */
+
+.review-plan-page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 16px 20px 40px;
+}
+
+.review-plan-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  position: sticky;
+  top: 58px;
+  z-index: 5;
+  backdrop-filter: blur(6px);
+}
+
+.review-plan-title {
+  flex: 1;
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.review-plan-status {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--green-soft);
+  color: var(--green);
+  margin-left: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.review-plan-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+.review-plan-body {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+}
+
+.review-plan-content {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.review-plan-content h1,
+.review-plan-content h2,
+.review-plan-content h3 {
+  margin-top: 18px;
+  margin-bottom: 8px;
+}
+.review-plan-content h1 { font-size: 17px; }
+.review-plan-content h2 { font-size: 15px; }
+.review-plan-content h3 { font-size: 13.5px; }
+.review-plan-content p { margin: 10px 0; }
+.review-plan-content ul,
+.review-plan-content ol { margin: 10px 0; padding-left: 22px; }
+.review-plan-content li { margin: 4px 0; }
+.review-plan-content code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 1px 5px;
+  background: var(--bg);
+  border-radius: 3px;
+}
+.review-plan-content pre {
+  background: var(--bg);
+  padding: 10px 12px;
+  border-radius: var(--radius-xs);
+  overflow-x: auto;
+  font-size: 11.5px;
+}
+
+.review-plan-actions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.review-plan-revise {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.review-plan-revise-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.review-plan-revise textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  resize: vertical;
+}
+
+.review-plan-approve {
+  align-self: flex-end;
+}

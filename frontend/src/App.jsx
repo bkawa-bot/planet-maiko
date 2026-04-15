@@ -12,6 +12,7 @@ import Skills from "./pages/Skills";
 import Training from "./pages/Training";
 import Themes from "./pages/Themes";
 import ReviewDiff from "./pages/ReviewDiff";
+import ReviewPlan from "./pages/ReviewPlan";
 import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
 
 function AppRoutes() {
@@ -30,6 +31,7 @@ function AppRoutes() {
         <Route path="/themes" element={<Themes />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/tasks/:taskId/review" element={<ReviewDiff />} />
+        <Route path="/tasks/:taskId/plan" element={<ReviewPlan />} />
         {/* Legacy routes */}
         <Route path="/brain" element={<Navigate to="/knowledge" replace />} />
         <Route path="/learn" element={<Navigate to="/knowledge" replace />} />

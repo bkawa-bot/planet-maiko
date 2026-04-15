@@ -36,6 +36,7 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
   const [loading, setLoading] = useState(true);
   const [assigning, setAssigning] = useState(false);
   const [useWorktree, setUseWorktree] = useState(false);
+  const [planFirst, setPlanFirst] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
   const [branchName, setBranchName] = useState("");
 
@@ -94,6 +95,7 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
         profile_id: selectedId,
         repo_path: repoPath,
         use_worktree: useWorktree,
+        plan_first: planFirst,
         custom_prompt: customPrompt || undefined,
         branch_name: branchName || undefined,
       });
@@ -189,6 +191,13 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
                       Use git worktree
                       <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
                         Agent works in an isolated copy of the repo
+                      </span>
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text-dim)", cursor: "pointer" }}>
+                      <input type="checkbox" checked={planFirst} onChange={(e) => setPlanFirst(e.target.checked)} />
+                      Plan first
+                      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                        Agent proposes a plan for your approval before writing code
                       </span>
                     </label>
                   </div>

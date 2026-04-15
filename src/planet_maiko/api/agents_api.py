@@ -146,6 +146,7 @@ def assign_agent():
     repo_path = data.get("repo_path", "")
     use_worktree = data.get("use_worktree", True)
     auto_kickoff = data.get("auto_kickoff", False)
+    plan_first = bool(data.get("plan_first", False))
     branch_name = data.get("branch_name")
 
     if not task_id or not profile_id:
@@ -290,6 +291,7 @@ def assign_agent():
         kickoff = _kickoff_agent_headless(
             profile_id, working_path, task_id,
             branch_name=branch if not use_worktree else None,
+            plan_first=plan_first,
         )
     result["kickoff_result"] = kickoff
 
@@ -306,6 +308,8 @@ def assign_agent():
         extra["working_path"] = working_path
     if branch:
         extra["branch"] = branch
+    if plan_first:
+        extra["plan_first"] = True
     task.extra = extra
     db.session.commit()
 
@@ -672,13 +676,14 @@ def agent_sends_message(task_id):
             preview = preview[:77] + "…"
 
         # Priority: stuck is high (blocked, needs help);
-        # ready_for_review is high (user needs to act);
+        # ready_for_review / plan_for_approval are high (user needs to act);
         # plain messages are normal.
-        priority = "high" if message_type in ("stuck", "ready_for_review") else "normal"
+        priority = "high" if message_type in ("stuck", "ready_for_review", "plan_for_approval") else "normal"
         type_label = {
             "done": "completed",
             "stuck": "is stuck",
             "ready_for_review": "ready for review",
+            "plan_for_approval": "has a plan",
             "message": "replied",
         }.get(message_type, "replied")
 
@@ -687,12 +692,14 @@ def agent_sends_message(task_id):
         # generic "Open task".
         pupdate_type = {
             "ready_for_review": "agent_ready_for_review",
+            "plan_for_approval": "agent_plan_for_approval",
             "done": "agent_done",
             "stuck": "agent_stuck",
         }.get(message_type, "agent_message")
 
         action_hint = {
             "ready_for_review": "Review diff",
+            "plan_for_approval": "Review plan",
             "stuck": "Help the agent",
             "done": "Open task",
         }.get(message_type, "Open task")

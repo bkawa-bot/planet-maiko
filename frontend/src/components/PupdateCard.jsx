@@ -1,5 +1,5 @@
 import {
-  CheckSquare, FolderKanban, ChevronRight, Eye, Search, X, GitPullRequest,
+  CheckSquare, FolderKanban, ChevronRight, Eye, Search, X, GitPullRequest, FileText,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
@@ -114,6 +114,15 @@ export default function PupdateCard({
                 onClick={(e) => e.stopPropagation()}
               >
                 <GitPullRequest size={10} /> Review diff
+              </Link>
+            )}
+            {p.type === "agent_plan_for_approval" && p.metadata?.task_id && (
+              <Link
+                to={`/tasks/${p.metadata.task_id}/plan`}
+                className="btn btn-sm btn-primary"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <FileText size={10} /> Review plan
               </Link>
             )}
             {(p.type === "pr_ci_failed" || p.type === "incident") && (

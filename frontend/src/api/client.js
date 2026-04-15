@@ -157,6 +157,16 @@ export const api = {
   approveDiffReview: (taskId) =>
     request(`/tasks/${taskId}/review/approve`, { method: "POST" }),
 
+  // Plan mode
+  getTaskPlan: (taskId) => request(`/tasks/${taskId}/plan`),
+  approvePlan: (taskId) =>
+    request(`/tasks/${taskId}/plan/approve`, { method: "POST" }),
+  revisePlan: (taskId, feedback) =>
+    request(`/tasks/${taskId}/plan/revise`, {
+      method: "POST",
+      body: JSON.stringify({ feedback }),
+    }),
+
   // Pack Insights
   getPackInsightsState: () => request("/pack-insights"),
   startPackInsights: () => request("/pack-insights/start", { method: "POST" }),
