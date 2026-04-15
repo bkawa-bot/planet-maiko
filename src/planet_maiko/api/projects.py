@@ -138,6 +138,67 @@ def _preview_agent(role, scope_repo):
     return {"id": None, "display_name": f"(new {role} agent for {scope_repo or 'global'})", "spawn_new": True}
 
 
+def _collect_project_repo_context(project):
+    """Figure out which repos this project touches and where their
+    local clones live. Used by /generate-tasks and /revise-tasks so
+    the planning LLM can actually grep + read code instead of
+    word-associating off the project description.
+
+    Aggregates (in order of trust):
+      1. project.extra.repo / project.extra.repos
+      2. Each project.phase[*].repo
+      3. Each existing task in this project's extra.repo
+      4. project.source_url if it parses as github.com/<org>/<repo>
+
+    For each unique repo string, resolves to a local filesystem path
+    via orchestration.resolve_repo_path. Returns:
+        {
+          "primary_path": "<absolute path or None>",
+          "repos": [{"name": "org/foo", "local_path": "/path or None"}, ...],
+        }
+
+    primary_path is the first repo with a resolvable local path, or
+    None if no repo resolved (then the LLM falls back to text-only
+    reasoning, same as today).
+    """
+    from planet_maiko.orchestration import resolve_repo_path
+    from planet_maiko.models.task import Task
+
+    seen = []  # preserve insertion order
+
+    def _add(name):
+        if name and name not in seen:
+            seen.append(name)
+
+    extra = project.extra or {}
+    _add(extra.get("repo"))
+    for r in (extra.get("repos") or []):
+        _add(r)
+
+    for phase in (project.phases or []):
+        if isinstance(phase, dict):
+            _add(phase.get("repo"))
+
+    project_tasks = Task.query.filter_by(project_id=project.id).all()
+    for t in project_tasks:
+        te = t.extra or {}
+        _add(te.get("repo"))
+
+    src_url = (project.source_url or "")
+    if "github.com/" in src_url:
+        try:
+            tail = src_url.split("github.com/", 1)[1].split("?")[0]
+            parts = tail.rstrip("/").split("/")
+            if len(parts) >= 2 and parts[0] and parts[1]:
+                _add(f"{parts[0]}/{parts[1]}")
+        except Exception:
+            pass
+
+    repos = [{"name": name, "local_path": resolve_repo_path(name)} for name in seen]
+    primary_path = next((r["local_path"] for r in repos if r["local_path"]), None)
+    return {"primary_path": primary_path, "repos": repos, "tasks": project_tasks}
+
+
 def _enrich_draft_tasks(tasks):
     """Sanitize depends_on and attach suggested agent previews.
 
@@ -175,48 +236,100 @@ def generate_tasks(project_id):
     """
     project = db.get_or_404(Project, project_id)
 
-    prompt = f"""Break down this project into concrete tasks with dependencies. Return ONLY valid JSON — an array of task objects.
+    # Build a real exploration context: which repos does this project
+    # touch, where do they live on disk, and what's already in flight.
+    # Without this, the LLM is doing pure word association on the
+    # project description and produces tasks unmoored from actual code.
+    ctx = _collect_project_repo_context(project)
+    repos = ctx["repos"]
+    primary_path = ctx["primary_path"]
+    project_tasks = ctx["tasks"]
 
-Project: {project.title}
-Plan/Description:
-{project.description or "No description provided."}
+    repo_lines = []
+    for r in repos:
+        loc = r["local_path"] or "(no local clone — add to Settings → GitHub → Repo Roots)"
+        repo_lines.append(f"- {r['name']} → {loc}")
+    repos_block = "\n".join(repo_lines) if repo_lines else "(no repos identified yet)"
 
-Return JSON array where each task has:
+    existing_lines = []
+    for t in project_tasks:
+        if t.status in ("done", "cancelled"):
+            continue
+        existing_lines.append(f"- [{t.status}] {t.title} (type={t.type}, repo={(t.extra or {}).get('repo', '')})")
+    existing_block = "\n".join(existing_lines) if existing_lines else "(no existing tasks)"
+
+    prompt = f"""You are planning a project. Your job: produce a JSON array of concrete tasks. Before writing them, USE YOUR TOOLS to actually look at the codebase — don't just word-associate off the description.
+
+## Project
+{project.title}
+
+## Plan / Description
+{project.description or "(no description provided)"}
+
+## Repos in scope
+{repos_block}
+
+## Existing open tasks under this project (don't duplicate these)
+{existing_block}
+
+## How to plan well
+
+You are running in plan mode (read-only — Read / Glob / Grep / read-only Bash are all available, plus any MCP tools). Before writing tasks:
+
+1. Read the relevant repo's README or root files to understand what kind of project it is.
+2. Grep for terms from the project description so the tasks reference real files / modules / functions, not invented ones.
+3. Check for existing patterns the new work should follow (existing tests, error handling style, schema conventions).
+4. If you have Linear / Slack / GitHub / etc. MCP tools available, use them to pull related issues, recent PRs, or context the description references.
+
+Each task you propose should be specific enough that another agent can pick it up and start working without asking what you meant.
+
+## Output schema
+
+Return ONLY valid JSON — an array of task objects, each with:
 - title: concise (≤80 chars)
-- type: todo | bug | feature | review | investigation | repo_analysis
+- type: coding | bug | feature | review | investigation | repo_analysis | todo
 - priority: urgent | high | normal | low
-- description: 1-2 sentences of what to do
-- repo: the repo this task belongs to (e.g. "org/auth-service"), or "" if cross-cutting
+- description: 1-2 sentences. Reference real files / functions where possible.
+- repo: the repo this task belongs to (one of the repos listed above), or "" if cross-cutting
 - category: short tag ("schema", "api", "ui", "test", "docs", "infra", ...)
 - depends_on: array of 0-based INDICES of earlier tasks in THIS array that must complete first
 
 Example:
 [
   {{"title": "Add sessions table migration", "type": "feature", "priority": "high",
-    "description": "SQL migration with index on user_id", "repo": "org/auth-service",
+    "description": "Alembic migration in src/auth/migrations/ adding a sessions table with index on user_id (mirrors users table style)", "repo": "org/auth-service",
     "category": "schema", "depends_on": []}},
   {{"title": "Wire /sessions endpoint", "type": "feature", "priority": "normal",
-    "description": "Handler + validation + tests", "repo": "org/auth-service",
-    "category": "api", "depends_on": [0]}},
-  {{"title": "Update web client", "type": "feature", "priority": "normal",
-    "description": "Call new endpoint from login flow", "repo": "org/web-app",
-    "category": "client", "depends_on": [1]}}
+    "description": "New handler in src/auth/api/sessions.py + validation + tests under tests/auth/", "repo": "org/auth-service",
+    "category": "api", "depends_on": [0]}}
 ]
 
 Rules:
 - 3-10 tasks total
 - depends_on uses indices in THIS array; no cycles; no self-references
 - Tasks in different repos with no real dep should NOT be artificially linked
-- If a task is purely investigation / analysis, use type "investigation"
+- If a task is purely analysis / discovery, use type "investigation"
+- Don't propose tasks that duplicate the existing open tasks above
 """
+
+    # Pre-discover global MCPs so plan mode has access to Linear / Slack /
+    # etc. exactly the way an interactive Claude Code session would.
+    from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
+    runtime = ClaudeCodeRuntime()
+    mcp_tools = runtime._discover_global_mcps()
 
     # Release DB before long LLM call to avoid SQLite locks
     db.session.close()
-    from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
-    runtime = ClaudeCodeRuntime()
-    # Task breakdown with dependency graph + JSON formatting is expensive
-    # enough to blow past 90s on bigger plans — match generate-plan.
-    result = runtime.send_json(prompt, timeout=300)
+    # Plan mode = read-only Read / Glob / Grep / restricted Bash, so
+    # the LLM can actually explore the repo without being able to
+    # mutate it. working_dir points at the primary repo if we have one.
+    result = runtime.send_json(
+        prompt,
+        working_dir=primary_path,
+        timeout=300,
+        permission_mode="plan" if primary_path else None,
+        allowed_tools=mcp_tools or None,
+    )
 
     if not result.get("success") or not result.get("parsed"):
         return jsonify({"error": result.get("error", "Failed to generate tasks")}), 500
@@ -274,23 +387,39 @@ def revise_tasks(project_id):
         for draft in current
     ]
 
-    prompt = f"""Revise this draft task plan based on the user's feedback. Return ONLY valid JSON — an array of task objects.
+    # Same exploration context as generate-tasks — the revise pass
+    # often introduces new tasks ("add a testing phase") that benefit
+    # from grounding in actual code, not just the description.
+    ctx = _collect_project_repo_context(project)
+    repos = ctx["repos"]
+    primary_path = ctx["primary_path"]
+    repo_lines = [
+        f"- {r['name']} → {r['local_path'] or '(no local clone)'}" for r in repos
+    ]
+    repos_block = "\n".join(repo_lines) if repo_lines else "(no repos identified yet)"
 
-Project: {project.title}
-Plan/Description:
-{project.description or "No description provided."}
+    prompt = f"""Revise this draft task plan based on the user's feedback. You can use Read / Glob / Grep / read-only Bash / MCP tools to ground new or changed tasks in real code. Return ONLY valid JSON — an array of task objects.
 
-Current draft tasks (the user has already reviewed and possibly edited these):
+## Project
+{project.title}
+
+## Plan / Description
+{project.description or "(no description provided)"}
+
+## Repos in scope
+{repos_block}
+
+## Current draft tasks (the user has already reviewed and possibly edited these)
 {_json.dumps(current_clean, indent=2)}
 
-User's revision feedback:
+## User's revision feedback
 {feedback}
 
 Return JSON array where each task has the same schema as the current drafts:
 - title: concise (≤80 chars)
-- type: todo | bug | feature | review | investigation | repo_analysis
+- type: coding | bug | feature | review | investigation | repo_analysis | todo
 - priority: urgent | high | normal | low
-- description: 1-2 sentences
+- description: 1-2 sentences. Reference real files / functions when possible.
 - repo: "org/name" or ""
 - category: short tag
 - depends_on: array of 0-based INDICES in THIS returned array (NOT the old array — renumber if you reorder)
@@ -304,10 +433,17 @@ Rules:
 - Tasks in different repos with no real dep should NOT be artificially linked.
 """
 
-    db.session.close()
     from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
     runtime = ClaudeCodeRuntime()
-    result = runtime.send_json(prompt, timeout=300)
+    mcp_tools = runtime._discover_global_mcps()
+    db.session.close()
+    result = runtime.send_json(
+        prompt,
+        working_dir=primary_path,
+        timeout=300,
+        permission_mode="plan" if primary_path else None,
+        allowed_tools=mcp_tools or None,
+    )
 
     if not result.get("success") or not result.get("parsed"):
         return jsonify({"error": result.get("error", "Failed to revise tasks")}), 500

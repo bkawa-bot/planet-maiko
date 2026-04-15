@@ -110,7 +110,7 @@ class ClaudeCodeRuntime(AgentRuntime):
         except Exception:
             return "medium"
 
-    def send(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None, session_id=None, skip_permissions=False):
+    def send(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None, session_id=None, skip_permissions=False, permission_mode=None):
         """Send a prompt to claude CLI in print mode.
 
         Uses --print for single prompt/response (no interactive session).
@@ -129,6 +129,13 @@ class ClaudeCodeRuntime(AgentRuntime):
         autonomous runs where there's no human to answer tool-approval
         prompts. Only safe inside isolated worktrees we own — the
         caller is responsible for the sandbox.
+
+        permission_mode (e.g. "plan") maps to Claude Code's
+        --permission-mode flag. "plan" restricts to read-only tools
+        (Read/Glob/Grep/Bash without writes) — perfect for analysis
+        runs that should explore the repo without being able to
+        modify it. Mutually useful with skip_permissions=False so the
+        sandbox is enforced by the runtime, not by trust.
         """
         if not prompt or not prompt.strip():
             return {
@@ -145,6 +152,9 @@ class ClaudeCodeRuntime(AgentRuntime):
 
         if skip_permissions:
             cmd.append("--dangerously-skip-permissions")
+
+        if permission_mode:
+            cmd.extend(["--permission-mode", permission_mode])
 
         # Model override for cost-aware routing
         if model:
@@ -213,7 +223,7 @@ class ClaudeCodeRuntime(AgentRuntime):
                 "error": "claude CLI not found. Install Claude Code first.",
             }
 
-    def send_json(self, prompt, working_dir=None, timeout=300, model=None):
+    def send_json(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None, permission_mode=None):
         """Send a prompt and parse the response as JSON.
 
         Wraps the prompt with instructions to return JSON.
@@ -224,7 +234,7 @@ class ClaudeCodeRuntime(AgentRuntime):
             "Respond with ONLY valid JSON, no markdown fencing, no explanation."
         )
 
-        result = self.send(json_prompt, working_dir=working_dir, timeout=timeout, model=model)
+        result = self.send(json_prompt, working_dir=working_dir, timeout=timeout, model=model, allowed_tools=allowed_tools, permission_mode=permission_mode)
 
         if not result["success"]:
             return result
