@@ -8,7 +8,7 @@ import Tasks from "./pages/Tasks";
 import Settings from "./pages/Settings";
 import Agents from "./pages/Agents";
 import BrainView from "./pages/BrainView";
-import Skills from "./pages/Skills";
+import Automations from "./pages/Automations";
 import Training from "./pages/Training";
 import Themes from "./pages/Themes";
 import ReviewDiff from "./pages/ReviewDiff";
@@ -26,13 +26,14 @@ function AppRoutes() {
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/agents" element={<Agents />} />
         <Route path="/knowledge" element={<BrainView />} />
-        <Route path="/skills" element={<Skills />} />
+        <Route path="/automations" element={<Automations />} />
         <Route path="/training" element={<Training />} />
         <Route path="/themes" element={<Themes />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/tasks/:taskId/review" element={<ReviewDiff />} />
         <Route path="/tasks/:taskId/plan" element={<ReviewPlan />} />
         {/* Legacy routes */}
+        <Route path="/skills" element={<Navigate to="/automations" replace />} />
         <Route path="/brain" element={<Navigate to="/knowledge" replace />} />
         <Route path="/learn" element={<Navigate to="/knowledge" replace />} />
         <Route path="/projects" element={<Navigate to="/tasks" replace />} />

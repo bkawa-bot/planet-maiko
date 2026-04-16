@@ -2,28 +2,33 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import {
-  Wand2, Sunrise, Brain, Coffee, Search, GitFork,
+  Zap, Wand2, Sunrise, Brain, Coffee, Search, GitFork,
   Rocket, Clipboard, X, Loader, Plus, Save, Eye, Pencil, Trash2, Clock,
 } from "lucide-react";
-import "./Skills.css";
+import "./Automations.css";
 
 const ICON_MAP = {
   "sunrise": Sunrise, "brain": Brain, "coffee": Coffee,
   "search": Search, "git-fork": GitFork, "wand": Wand2,
 };
 
-// Digest skills moved to Settings > Scheduled Briefings; repo-analysis /
-// investigate moved to auto-spawned agent tasks; agent-protocol lives in
-// Settings > Agent Preferences. Filtered out here so the Skills page is
-// just custom skills + the remaining one-off utilities.
+// Automations = the thinned-out Skills surface. Digest briefings live
+// in Settings > Scheduled Briefings, investigation-class skills are
+// now auto-spawned agent tasks, theme-designer is driven from the
+// Theme menu, and pr-review is invoked internally by the review
+// agent. agent-protocol stays visible here because it's the full
+// coding-agent protocol template — an advanced knob power users may
+// want to edit, distinct from Settings > Agent Preferences >
+// role_instructions which only appends extra rules.
 const HIDDEN_SKILL_IDS = new Set([
   "morning-brief", "brainstorm", "pack-insights",
   "checkin", "plan", "team", "verify",
   "investigate", "repo-analysis",
-  "agent-protocol",
+  "theme-designer",
+  "pr-review",
 ]);
 
-export default function Skills() {
+export default function Automations() {
   const [skills, setSkills] = useState([]);
   const [selected, setSelected] = useState(null);
   const [editing, setEditing] = useState(false);
@@ -66,7 +71,7 @@ export default function Skills() {
       schedule_interval_minutes: editSchedule ? parseInt(editSchedule) : null,
       creates_pupdates: editCreatesPupdates,
     });
-    showToast("Skill updated! ✏️", "normal");
+    showToast("Automation updated! ✏️", "normal");
     setEditing(false);
     fetchSkills();
     const updated = await api.getSkill(selected.id);
@@ -76,7 +81,7 @@ export default function Skills() {
   const runSkill = async (name) => {
     setRunning(true);
     setResult(null);
-    showToast("Running skill... 🐕", "normal");
+    showToast("Running automation... 🐕", "normal");
     try {
       const pupdates = await api.getPupdates();
       const tasks = await api.getTasks();
@@ -102,7 +107,7 @@ export default function Skills() {
         working_dir,
       });
       setResult(res);
-      showToast(res.success ? "Skill complete! ✨" : "Skill had trouble", res.success ? "normal" : "high");
+      showToast(res.success ? "Automation complete! ✨" : "Automation had trouble", res.success ? "normal" : "high");
     } catch (err) {
       setResult({ success: false, error: err.message });
     }
@@ -120,38 +125,38 @@ export default function Skills() {
         mcps: newSkill.mcps.split(",").map(s => s.trim()).filter(Boolean),
         schedule_interval_minutes: newSkill.schedule_interval_minutes ? parseInt(newSkill.schedule_interval_minutes) : null,
       });
-      showToast(`Skill "${newSkill.name}" created! 🎉`, "normal");
+      showToast(`Automation "${newSkill.name}" created! 🎉`, "normal");
       setShowCreate(false);
       setNewSkill({ id: "", name: "", description: "", prompt: "", mcps: "", schedule_interval_minutes: "", creates_pupdates: false });
       fetchSkills();
     } catch (err) {
-      showToast(err.message || "Couldn't create skill", "high");
+      showToast(err.message || "Couldn't create automation", "high");
     }
   };
 
   const handleDelete = async (id) => {
     try {
       await api.deleteSkill(id);
-      showToast("Skill deleted", "normal");
+      showToast("Automation deleted", "normal");
       setSelected(null);
       fetchSkills();
     } catch (err) {
-      showToast(err.message || "Can't delete this skill", "high");
+      showToast(err.message || "Can't delete this automation", "high");
     }
   };
 
   const openCreate = () => {
-    setNewSkill({ id: "", name: "", description: "", prompt: "# My Skill\n\nUse {pupdates} and {tasks} for context.\n\n## Instructions\n1. ...", mcps: "" });
+    setNewSkill({ id: "", name: "", description: "", prompt: "# My Automation\n\nUse {pupdates} and {tasks} for context.\n\n## Instructions\n1. ...", mcps: "" });
     setShowCreate(true);
   };
 
   return (
     <div className="skills-page">
       <div className="skills-header">
-        <Wand2 size={18} />
-        <h2>Skills</h2>
+        <Zap size={18} />
+        <h2>Automations</h2>
         <button className="btn btn-primary" onClick={openCreate} style={{ marginLeft: "auto" }}>
-          <Plus size={12} /> New Skill
+          <Plus size={12} /> New Automation
         </button>
       </div>
 
@@ -160,17 +165,17 @@ export default function Skills() {
         <div className="modal-overlay" onClick={() => setShowCreate(false)}>
           <div className="skill-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <Wand2 size={14} />
-              <span>New Skill</span>
+              <Zap size={14} />
+              <span>New Automation</span>
               <button className="btn btn-sm" onClick={() => setShowCreate(false)} style={{ marginLeft: "auto" }}><X size={10} /></button>
             </div>
             <div className="modal-body">
               <div className="skill-editor">
                 <div className="skill-form-row">
                   <label>ID <input type="text" value={newSkill.id} onChange={e => setNewSkill(s => ({ ...s, id: e.target.value }))} placeholder="my-skill" /></label>
-                  <label>Name <input type="text" value={newSkill.name} onChange={e => setNewSkill(s => ({ ...s, name: e.target.value }))} placeholder="My Custom Skill" /></label>
+                  <label>Name <input type="text" value={newSkill.name} onChange={e => setNewSkill(s => ({ ...s, name: e.target.value }))} placeholder="My Custom Automation" /></label>
                 </div>
-                <label>Description <input type="text" value={newSkill.description} onChange={e => setNewSkill(s => ({ ...s, description: e.target.value }))} placeholder="What this skill does" /></label>
+                <label>Description <input type="text" value={newSkill.description} onChange={e => setNewSkill(s => ({ ...s, description: e.target.value }))} placeholder="What this automation does" /></label>
                 <label>MCPs (comma-separated) <input type="text" value={newSkill.mcps} onChange={e => setNewSkill(s => ({ ...s, mcps: e.target.value }))} placeholder="slack, linear, figma" /></label>
                 <div className="skill-form-row">
                   <label>Schedule
@@ -196,7 +201,7 @@ export default function Skills() {
                 </label>
                 <div className="skill-form-actions">
                   <button className="btn" onClick={() => setShowCreate(false)}>Cancel</button>
-                  <button className="btn btn-primary" onClick={handleCreate}><Plus size={12} /> Create Skill</button>
+                  <button className="btn btn-primary" onClick={handleCreate}><Plus size={12} /> Create Automation</button>
                 </div>
               </div>
             </div>
