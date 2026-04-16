@@ -12,6 +12,17 @@ const ICON_MAP = {
   "search": Search, "git-fork": GitFork, "wand": Wand2,
 };
 
+// Digest skills moved to Settings > Scheduled Briefings; repo-analysis /
+// investigate moved to auto-spawned agent tasks; agent-protocol lives in
+// Settings > Agent Preferences. Filtered out here so the Skills page is
+// just custom skills + the remaining one-off utilities.
+const HIDDEN_SKILL_IDS = new Set([
+  "morning-brief", "brainstorm", "pack-insights",
+  "checkin", "plan", "team", "verify",
+  "investigate", "repo-analysis",
+  "agent-protocol",
+]);
+
 export default function Skills() {
   const [skills, setSkills] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -26,7 +37,9 @@ export default function Skills() {
   const [showCreate, setShowCreate] = useState(false);
   const [newSkill, setNewSkill] = useState({ id: "", name: "", description: "", prompt: "", mcps: "", schedule_interval_minutes: "", creates_pupdates: false });
 
-  const fetchSkills = () => api.getSkills().then(setSkills).catch(console.error);
+  const fetchSkills = () => api.getSkills()
+    .then((list) => setSkills(list.filter((s) => !HIDDEN_SKILL_IDS.has(s.id))))
+    .catch(console.error);
   useEffect(() => { fetchSkills(); }, []);
 
   const openSkill = async (s) => {

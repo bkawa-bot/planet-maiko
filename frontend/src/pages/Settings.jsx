@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { ChevronDown, ChevronRight, MapPin, Search, Loader, FolderGit2, Plug, AlertTriangle } from "lucide-react";
+import ScheduledBriefings from "../components/ScheduledBriefings";
 import "./Settings.css";
 
 export default function Settings() {
@@ -10,7 +11,7 @@ export default function Settings() {
   const [pollerStatus, setPollerStatus] = useState({});
   const [message, setMessage] = useState("");
 
-  const [openSections, setOpenSections] = useState({ integrations: false, agents: false, routing: false, scene: true, plugins: false });
+  const [openSections, setOpenSections] = useState({ briefings: true, integrations: false, agents: false, routing: false, scene: false, plugins: false });
   const toggleSection = (key) => setOpenSections(s => ({ ...s, [key]: !s[key] }));
 
   const [locationQuery, setLocationQuery] = useState("");
@@ -147,6 +148,19 @@ export default function Settings() {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* Scheduled Briefings (morning brief, pack insights, etc.) */}
+      <section className="settings-collapsible">
+        <div className="collapsible-header" onClick={() => toggleSection("briefings")}>
+          {openSections.briefings ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <span>Scheduled Briefings</span>
+        </div>
+        {openSections.briefings && (
+          <div className="collapsible-body">
+            <ScheduledBriefings />
+          </div>
+        )}
       </section>
 
       {/* Integrations (collapsed by default) */}
