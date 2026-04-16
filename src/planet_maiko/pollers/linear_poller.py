@@ -7,14 +7,26 @@ Generates pupdates for:
 """
 
 import logging
+import re
 import requests
 
-from planet_maiko.config import load_config
+from planet_maiko.config import load_config, save_config
 from planet_maiko.pollers.base import BasePoller
 
 logger = logging.getLogger(__name__)
 
 LINEAR_API = "https://api.linear.app/graphql"
+
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
+
+
+def _looks_like_uuid(value):
+    return bool(value and isinstance(value, str) and _UUID_RE.match(value.lower()))
+
+
+TEAMS_QUERY = "query { teams { nodes { id name key } } }"
 
 # Maiko priority → Linear priority. Linear uses 0=No priority, 1=Urgent,
 # 2=High, 3=Normal/Medium, 4=Low. We pick 3 for "normal" so new issues land
@@ -368,6 +380,33 @@ class LinearPoller(BasePoller):
         return pupdates
 
     @staticmethod
+    def fetch_teams(api_key=None):
+        """Fetch the user's Linear teams.
+
+        Returns:
+            list of dicts with {id, name, key}.
+        """
+        import certifi
+
+        config = load_config()
+        api_key = api_key or config.get("linear", {}).get("api_key", "")
+        if not api_key:
+            raise ValueError("Linear API key not configured")
+
+        resp = requests.post(
+            LINEAR_API,
+            json={"query": TEAMS_QUERY},
+            headers={"Authorization": api_key, "Content-Type": "application/json"},
+            timeout=15,
+            verify=certifi.where(),
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if "errors" in data:
+            raise RuntimeError(f"Linear API errors: {data['errors']}")
+        return (data.get("data") or {}).get("teams", {}).get("nodes", []) or []
+
+    @staticmethod
     def create_issue(task, description="", team_id=None, project_id=None, api_key=None):
         """Create a Linear issue from a Maiko task.
 
@@ -396,8 +435,25 @@ class LinearPoller(BasePoller):
         if not api_key:
             raise ValueError("Linear API key not configured")
         team_id = team_id or linear_cfg.get("team_id", "")
-        if not team_id:
-            raise ValueError("Linear team_id not configured")
+
+        # Linear's issueCreate wants a UUID. The older Settings hint
+        # pointed at the team *key* from the URL, so many configs hold
+        # a short code like "ENG" instead. Auto-recover: fetch teams,
+        # auto-pick if there's exactly one, and persist so we don't
+        # re-query.
+        if not _looks_like_uuid(team_id):
+            teams = LinearPoller.fetch_teams(api_key=api_key)
+            if len(teams) == 1:
+                team_id = teams[0]["id"]
+                linear_cfg["team_id"] = team_id
+                config["linear"] = linear_cfg
+                save_config(config)
+            elif len(teams) > 1:
+                raise ValueError(
+                    "Pick your Linear team in Settings — we need the team UUID, not the key."
+                )
+            else:
+                raise ValueError("No Linear teams found for this API key")
 
         input_data = {
             "teamId": team_id,

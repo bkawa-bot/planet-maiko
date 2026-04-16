@@ -81,6 +81,20 @@ def test_integration(integration):
     return jsonify({"status": "error", "message": f"Unknown integration: {integration}"}), 400
 
 
+@config_bp.route("/config/linear/teams", methods=["GET"])
+def linear_teams():
+    """List the user's Linear teams so the Settings UI can offer a picker."""
+    from planet_maiko.pollers.linear_poller import LinearPoller
+
+    try:
+        teams = LinearPoller.fetch_teams()
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Linear teams fetch failed: {e}"}), 502
+    return jsonify({"teams": teams})
+
+
 @config_bp.route("/github/discover", methods=["POST"])
 def discover_github_repos():
     """Discover recent repos the user has committed to via gh CLI."""

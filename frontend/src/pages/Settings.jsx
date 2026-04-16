@@ -18,6 +18,7 @@ export default function Settings() {
   const [lookingUp, setLookingUp] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [plugins, setPlugins] = useState([]);
+  const [linearTeams, setLinearTeams] = useState([]);
 
   useEffect(() => {
     Promise.all([
@@ -286,7 +287,7 @@ export default function Settings() {
               <h3>Linear</h3>
               <div className="setup-hint">
                 Get your API key from Linear: <strong>Settings → API → Personal API keys → Create key</strong>.
-                Find your Team ID in the URL when viewing your team (e.g. <code>linear.app/team/<strong>TEAM-ID</strong>/...</code>).
+                Save the key, then pick your team below.
               </div>
               <div className="integration-fields">
                 <label>
@@ -307,13 +308,41 @@ export default function Settings() {
                   />
                 </label>
                 <label>
-                  Team ID
-                  <input
-                    type="text"
-                    value={config.linear?.team_id || ""}
-                    onChange={(e) => updateField("linear", "team_id", e.target.value)}
-                  />
+                  Team
+                  {linearTeams.length > 0 ? (
+                    <select
+                      value={config.linear?.team_id || ""}
+                      onChange={(e) => updateField("linear", "team_id", e.target.value)}
+                    >
+                      <option value="">— pick a team —</option>
+                      {linearTeams.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}{t.key ? ` (${t.key})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="linear-team-picker-empty">
+                      {config.linear?.team_id
+                        ? <><code>{config.linear.team_id}</code> — click "Fetch my teams" to switch</>
+                        : <>No team picked yet. Save your API key, then fetch teams.</>}
+                    </div>
+                  )}
                 </label>
+                <button className="btn btn-sm" onClick={async () => {
+                  try {
+                    const result = await api.getLinearTeams();
+                    if (result?.teams?.length) {
+                      setLinearTeams(result.teams);
+                      setMessage(`Found ${result.teams.length} team${result.teams.length === 1 ? "" : "s"}`);
+                    } else if (result?.error) {
+                      setMessage(result.error);
+                    } else {
+                      setMessage("No teams found for this API key");
+                    }
+                  } catch (err) { setMessage(err.message || "Fetch failed"); }
+                  setTimeout(() => setMessage(""), 5000);
+                }}>Fetch my teams</button>
                 {pollerStatus.linear && (
                   <div className="poller-status">
                     Status: {pollerStatus.linear.running ? "Running" : "Stopped"}

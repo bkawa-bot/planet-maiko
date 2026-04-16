@@ -103,6 +103,7 @@ export const api = {
 
   discoverGithubRepos: () => request("/github/discover", { method: "POST" }),
   testIntegration: (name) => request(`/config/test/${name}`, { method: "POST" }),
+  getLinearTeams: () => request("/config/linear/teams"),
 
   // Pollers
   getPollerStatus: () => request("/pollers/status"),
