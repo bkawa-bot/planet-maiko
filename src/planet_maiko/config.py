@@ -87,7 +87,7 @@ DEFAULT_CONFIG = {
         # runaway loops when upstream signals spike.
         "auto_investigate": {
             "enabled": True,
-            "dry_run": True,
+            "dry_run": False,
             "daily_budget": 5,
         },
     },

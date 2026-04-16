@@ -119,10 +119,14 @@ def _install_pre_commit_hook(working_path):
 
 def _write_task_file(working_path, task_id, task_title, prompt):
     """Write TASK.md so the agent knows what to do."""
+    # Human-readable file — show the user's local time, not UTC. Agents
+    # and users both read this; a "Created: 23:30 UTC" line is confusing
+    # when the user thinks of it as 3:30pm Pacific.
+    from planet_maiko.config import user_now
     content = f"""# Task: {task_title}
 
 **Task ID:** {task_id}
-**Created:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}
+**Created:** {user_now().strftime('%Y-%m-%d %H:%M %Z')}
 
 ## Instructions
 

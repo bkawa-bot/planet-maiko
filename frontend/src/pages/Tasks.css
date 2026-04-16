@@ -85,6 +85,7 @@
 .task-type-label { font-size: 10px; color: var(--text-muted); }
 .task-time { font-size: 10px; color: var(--text-muted); display: flex; align-items: center; gap: 2px; }
 .tag-project { background: var(--lavender-soft); color: var(--lavender); font-weight: 600; text-transform: uppercase; }
+.tag-auto-spawned { background: var(--lavender-soft); color: var(--lavender); display: inline-flex; align-items: center; gap: 3px; font-weight: 500; }
 
 .tag-due { background: var(--lemon-soft); color: var(--lemon); font-weight: 600; display: inline-flex; align-items: center; gap: 2px; }
 .tag-overdue { background: var(--urgent-soft); color: var(--urgent); font-weight: 600; display: inline-flex; align-items: center; gap: 2px; }

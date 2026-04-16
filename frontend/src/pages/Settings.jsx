@@ -150,6 +150,79 @@ export default function Settings() {
         </div>
       </section>
 
+      {/* Autopilot — master switch for auto-investigating incidents */}
+      <section className="settings-collapsible">
+        <div className="collapsible-header" style={{ cursor: "default" }}>
+          <span>Autopilot</span>
+        </div>
+        <div className="collapsible-body">
+          <div className="integration-section">
+            <div className="setup-hint">
+              When the correlator detects an incident (CI fail + deploy rollback,
+              error spike chain, etc.), Maiko can auto-create an investigation
+              task and kick off an investigation agent on it. Turn this off to
+              require manual triage of every incident.
+            </div>
+            <div className="integration-fields">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={config.brain?.auto_investigate?.enabled ?? true}
+                  onChange={(e) => setConfig((c) => ({
+                    ...c,
+                    brain: {
+                      ...(c.brain || {}),
+                      auto_investigate: {
+                        ...((c.brain && c.brain.auto_investigate) || {}),
+                        enabled: e.target.checked,
+                      },
+                    },
+                  }))}
+                />
+                Auto-investigate incidents
+              </label>
+              <label style={{ opacity: (config.brain?.auto_investigate?.enabled ?? true) ? 1 : 0.5 }}>
+                <input
+                  type="checkbox"
+                  checked={config.brain?.auto_investigate?.dry_run ?? false}
+                  disabled={!(config.brain?.auto_investigate?.enabled ?? true)}
+                  onChange={(e) => setConfig((c) => ({
+                    ...c,
+                    brain: {
+                      ...(c.brain || {}),
+                      auto_investigate: {
+                        ...((c.brain && c.brain.auto_investigate) || {}),
+                        dry_run: e.target.checked,
+                      },
+                    },
+                  }))}
+                />
+                Dry-run only (create the task so you can see what would've fired, skip the agent kickoff)
+              </label>
+              <label>
+                Daily budget — hard stop after N auto-investigations per day
+                <input
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={config.brain?.auto_investigate?.daily_budget ?? 5}
+                  onChange={(e) => setConfig((c) => ({
+                    ...c,
+                    brain: {
+                      ...(c.brain || {}),
+                      auto_investigate: {
+                        ...((c.brain && c.brain.auto_investigate) || {}),
+                        daily_budget: parseInt(e.target.value) || 5,
+                      },
+                    },
+                  }))}
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Scheduled Briefings (morning brief, pack insights, etc.) */}
       <section className="settings-collapsible">
         <div className="collapsible-header" onClick={() => toggleSection("briefings")}>

@@ -14,12 +14,13 @@ function _toDate(value) {
 }
 
 /**
- * Time of day, no date. Used for "last seen at 14:23".
- * Default rendering: 2:23 PM (locale-dependent).
+ * Time of day, no date. Used for "last seen at 14:23". Strips seconds
+ * — the default toLocaleTimeString() leaks "14:23:47" everywhere,
+ * which makes the UI feel like ops tooling.
  */
 export function formatTime(value) {
   const d = _toDate(value);
-  return d ? d.toLocaleTimeString() : "";
+  return d ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
 }
 
 /**
@@ -42,11 +43,14 @@ export function formatDate(value) {
 
 /**
  * Full date + time: "4/9/2026, 2:23 PM". Used in pupdate card meta where
- * both pieces matter.
+ * both pieces matter. No seconds — see formatTime for rationale.
  */
 export function formatDateTime(value) {
   const d = _toDate(value);
-  return d ? d.toLocaleString() : "";
+  if (!d) return "";
+  const date = d.toLocaleDateString();
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return `${date}, ${time}`;
 }
 
 /**

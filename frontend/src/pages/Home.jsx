@@ -9,7 +9,7 @@ import {
   CheckSquare, Inbox as InboxIcon, Brain, Calendar,
   AlertCircle, Palette, Video, Sunrise, Clock,
   ExternalLink, ChevronRight, ChevronDown, Play, Pin,
-  Sparkles, X,
+  Sparkles, X, Zap, Loader,
 } from "lucide-react";
 import "./Home.css";
 import "./Tasks.css";
@@ -119,6 +119,7 @@ export default function Home() {
   const [schedule, setSchedule] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [morningBrief, setMorningBrief] = useState(null);
+  const [autoInvestigations, setAutoInvestigations] = useState([]);
   const [briefLoading, setBriefLoading] = useState(false);
   const [showBrief, setShowBrief] = useState(false);
   const [homeConfig, setHomeConfig] = useState(null);
@@ -168,6 +169,15 @@ export default function Home() {
           .filter((p) => p.source === "calendar")
           .sort((a, b) => (a.metadata?.start || "").localeCompare(b.metadata?.start || ""))
       );
+
+      // Autopilot surface — investigations Maiko spun up on her own so
+      // the user can audit what happened overnight. Active tasks only;
+      // done ones roll off and can be found in the Tasks page.
+      const autos = [...tasksNew, ...tasksIp]
+        .filter((t) => (t.extra?.auto_spawned || t.metadata?.auto_spawned))
+        .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""))
+        .slice(0, 5);
+      setAutoInvestigations(autos);
 
       // Show the most recent morning brief if it's still fresh. "Fresh"
       // means same local calendar day OR less than 12 hours old — the
@@ -276,6 +286,44 @@ export default function Home() {
           >
             <Sunrise size={12} /> {briefLoading ? "Brewing... ☕" : morningBrief ? "View Morning Brief" : "Start Morning Brief"}
           </button>
+
+          {/* Autopilot — only renders when there's activity, so it can
+              drop in quietly on a busy day and vanish on a quiet one. */}
+          {autoInvestigations.length > 0 && (
+            <div className="home-card home-autopilot-card">
+              <div className="home-card-header">
+                <Zap size={14} /> Autopilot
+                <span className="autopilot-count">{autoInvestigations.length}</span>
+              </div>
+              <div className="autopilot-list">
+                {autoInvestigations.map((t) => {
+                  const pattern = (t.extra?.pattern || t.metadata?.pattern || []).join(" + ");
+                  const repo = t.extra?.repo || t.metadata?.repo;
+                  const running = t.status === "in_progress";
+                  return (
+                    <div
+                      key={t.id}
+                      className="autopilot-item"
+                      onClick={() => navigate("/tasks")}
+                      role="button"
+                    >
+                      <div className="autopilot-item-title">
+                        {running ? <Loader size={10} className="spin" /> : <Zap size={10} />}
+                        <span>{t.title}</span>
+                      </div>
+                      <div className="autopilot-item-meta">
+                        {repo && <span className="tag">{repo}</span>}
+                        {pattern && <span className="autopilot-pattern">{pattern}</span>}
+                        {t.updated_at && (
+                          <span className="autopilot-time">{relativeTime(t.updated_at)}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Focus Card */}
           <div className="home-card home-focus-card">

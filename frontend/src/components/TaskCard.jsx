@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   CheckSquare, Square, FolderOpen, Pin, PinOff, ExternalLink,
   ChevronRight, GitBranch, Clock, Bot, Eye, Play,
-  X, Pencil, Brain, Circle, Send, Loader, FileText, GitPullRequest,
+  X, Pencil, Brain, Circle, Send, Loader, FileText, GitPullRequest, Zap,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
@@ -153,6 +153,18 @@ export default function TaskCard({
         </div>
         <div className="card-meta">
           <span className="card-type">{t.type}</span>
+          {(t.extra?.auto_spawned || t.metadata?.auto_spawned) && (
+            <span
+              className="tag tag-auto-spawned"
+              title={
+                (t.extra?.pattern || t.metadata?.pattern || []).length
+                  ? `Auto-spawned from incident: ${(t.extra?.pattern || t.metadata?.pattern || []).join(" + ")}`
+                  : "Auto-spawned by Maiko"
+              }
+            >
+              <Zap size={9} /> auto
+            </span>
+          )}
           {t.project_id && <span className="tag tag-project">{t.project_id}</span>}
           {(t.metadata?.repo || t.extra?.repo) && (
             <span className="tag"><GitBranch size={9} /> {t.metadata?.repo || t.extra?.repo}</span>

@@ -91,7 +91,12 @@
   margin-bottom: 14px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, var(--pink-soft) 0%, rgba(255,255,255,0.02) 100%);
+  /* Frosted-glass panel matching .card-list-container — the old
+     linear gradient faded to ~0.02 alpha on the right, which made
+     the "Needs your hands" text unreadable on some themes. */
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--pink);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
@@ -127,7 +132,15 @@
   cursor: pointer; transition: all 0.15s;
 }
 .inbox-tab:hover { color: var(--text); border-color: var(--pink); }
-.inbox-tab.active { background: var(--pink-soft); border-color: var(--pink); color: var(--pink); font-weight: 600; }
+.inbox-tab.active {
+  /* Solid card bg + pink border for contrast — --pink-soft alone is
+     0.15 alpha and left the active tab label hard to read. */
+  background: var(--bg-card);
+  border-color: var(--pink);
+  color: var(--pink);
+  font-weight: 600;
+  box-shadow: 0 1px 6px var(--pink-glow);
+}
 .tab-badge {
   font-size: 9px; padding: 1px 5px; border-radius: 8px;
   background: var(--pink); color: #fff; font-weight: 700; min-width: 16px; text-align: center;

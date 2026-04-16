@@ -110,6 +110,36 @@
 
 .home-focus-card { border-color: var(--pink-soft); }
 
+/* Autopilot card — renders only when Maiko has auto-spawned
+   investigations the user should glance at. Lavender accent keeps
+   it visually distinct from the pink Focus card. */
+.home-autopilot-card { border-color: var(--lavender-soft); }
+.autopilot-count {
+  margin-left: auto;
+  font-size: 10px; font-weight: 700;
+  background: var(--lavender); color: #fff;
+  padding: 1px 7px; border-radius: 10px; min-width: 18px; text-align: center;
+}
+.autopilot-list { display: flex; flex-direction: column; gap: 6px; }
+.autopilot-item {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 6px 10px; border-radius: var(--radius-xs);
+  background: var(--bg-card); cursor: pointer;
+  border: 1px solid var(--border-subtle);
+  transition: border-color 0.15s;
+}
+.autopilot-item:hover { border-color: var(--lavender); }
+.autopilot-item-title {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text);
+}
+.autopilot-item-meta {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  font-size: 10px; color: var(--text-muted);
+}
+.autopilot-pattern { font-family: var(--font-mono); font-size: 10px; color: var(--lavender); }
+.autopilot-time { margin-left: auto; }
+
 .focus-regen-toggle {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 11px; padding: 3px 8px; line-height: 1;

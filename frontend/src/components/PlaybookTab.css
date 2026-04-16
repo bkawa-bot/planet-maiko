@@ -22,7 +22,8 @@
 }
 .playbook-filter-pill:hover { border-color: var(--pink); color: var(--pink); }
 .playbook-filter-pill.active {
-  background: var(--pink-soft); border-color: var(--pink); color: var(--pink);
+  background: var(--bg-card); border-color: var(--pink); color: var(--pink);
+  box-shadow: 0 1px 6px var(--pink-glow);
 }
 
 .playbook-groups { display: flex; flex-direction: column; gap: 14px; }
