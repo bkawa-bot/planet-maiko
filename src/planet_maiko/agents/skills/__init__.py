@@ -92,9 +92,12 @@ def get_skill_prompt(skill_name, context):
 
     # Auto-inject the current local date/day so skills always know "when"
     # without relying on the model's guess. Callers can override by passing
-    # these keys explicitly in context.
-    from datetime import datetime
-    now = datetime.now()
+    # these keys explicitly in context. Uses the user's configured tz so
+    # "current_date" matches their calendar day (the morning brief was
+    # dropping to yesterday when the server and user were in different
+    # zones).
+    from planet_maiko.config import user_now
+    now = user_now()
     base_context = {
         "current_date": now.strftime("%Y-%m-%d"),
         "day_of_week": now.strftime("%A"),

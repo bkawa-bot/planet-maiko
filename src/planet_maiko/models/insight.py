@@ -17,7 +17,7 @@ scoped to repo.
 """
 
 from datetime import datetime, timezone
-from planet_maiko.database import db
+from planet_maiko.database import db, iso_utc
 
 
 class Insight(db.Model):
@@ -78,9 +78,9 @@ class Insight(db.Model):
             "tags": self.tags or [],
             "author_agent_id": self.author_agent_id,
             "status": self.status,
-            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "last_confirmed_at": self.last_confirmed_at.isoformat() if self.last_confirmed_at else None,
+            "expires_at": iso_utc(self.expires_at),
+            "created_at": iso_utc(self.created_at),
+            "updated_at": iso_utc(self.updated_at),
+            "last_confirmed_at": iso_utc(self.last_confirmed_at),
             "expired": self.is_expired(),
         }

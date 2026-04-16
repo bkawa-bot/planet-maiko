@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from planet_maiko.database import db
+from planet_maiko.database import db, iso_utc
 
 
 class Signal(db.Model):
@@ -69,6 +69,6 @@ class Signal(db.Model):
             "learning_id": self.learning_id,
             "aggregated": self.aggregated,
             "synthesized": bool(self.synthesized),
-            "incorporated_at": self.incorporated_at.isoformat() if self.incorporated_at else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "incorporated_at": iso_utc(self.incorporated_at),
+            "created_at": iso_utc(self.created_at),
         }

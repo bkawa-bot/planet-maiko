@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from sqlalchemy import event
-from planet_maiko.database import db
+from planet_maiko.database import db, iso_utc
 
 
 # Pupdate types that block on Brigitte's hands vs. everything else
@@ -60,7 +60,7 @@ class Pupdate(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "timestamp": iso_utc(self.timestamp),
             "source": self.source,
             "source_id": self.source_id,
             "type": self.type,
@@ -74,8 +74,8 @@ class Pupdate(db.Model):
             "tags": self.tags,
             "read": self.read,
             "dismissed": self.dismissed,
-            "dismissed_at": self.dismissed_at.isoformat() if self.dismissed_at else None,
-            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "dismissed_at": iso_utc(self.dismissed_at),
+            "expires_at": iso_utc(self.expires_at),
             "metadata": self.extra,
             "brain_processed": self.brain_processed,
         }

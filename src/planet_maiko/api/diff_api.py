@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, current_app, jsonify, request
 
-from planet_maiko.database import db
+from planet_maiko.database import db, iso_utc
 from planet_maiko.models.diff_comment import DiffComment
 from planet_maiko.models.task import Task
 
@@ -492,7 +492,7 @@ def get_plan(task_id):
         "plan_first": bool(extra.get("plan_first")),
         "plan_approved_at": extra.get("plan_approved_at"),
         "plan": latest.content if latest else None,
-        "plan_at": latest.created_at.isoformat() if latest and latest.created_at else None,
+        "plan_at": iso_utc(latest.created_at) if latest else None,
     })
 
 

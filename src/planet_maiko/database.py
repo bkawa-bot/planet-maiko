@@ -2,6 +2,7 @@ import logging
 import sqlite3
 import time
 import traceback
+from datetime import timezone
 
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import event
@@ -10,6 +11,22 @@ from sqlalchemy.engine import Engine
 logger = logging.getLogger(__name__)
 
 db = SQLAlchemy()
+
+
+def iso_utc(dt):
+    """Serialize a datetime as ISO 8601 with an explicit UTC offset.
+
+    SQLite doesn't preserve tzinfo across round-trips, so values stored
+    as tz-aware UTC come back naive. Browsers then parse naive ISO
+    strings as local time, silently shifting timestamps by the user's
+    offset (e.g. a brief saved at 23:30 UTC displays as "yesterday"
+    for Pacific users). Re-attaching UTC here keeps the frontend honest.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat()
 
 # Warn when a single query takes longer than this. SQLite queries on a
 # local file should all be sub-100ms; 500ms means something is off

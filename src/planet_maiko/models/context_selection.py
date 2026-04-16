@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from planet_maiko.database import db
+from planet_maiko.database import db, iso_utc
 
 
 class ContextSelection(db.Model):
@@ -38,6 +38,6 @@ class ContextSelection(db.Model):
             "learning_ids": self.learning_ids,
             "learning_count": self.learning_count,
             "outcome": self.outcome,
-            "outcome_recorded_at": self.outcome_recorded_at.isoformat() if self.outcome_recorded_at else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "outcome_recorded_at": iso_utc(self.outcome_recorded_at),
+            "created_at": iso_utc(self.created_at),
         }

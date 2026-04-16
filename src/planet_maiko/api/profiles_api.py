@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from planet_maiko.database import db
+from planet_maiko.database import db, iso_utc
 from planet_maiko.models.agent_profile import AgentProfile
 from planet_maiko.agents.profiles import (
     create_profile, record_task_outcome, record_session_feedback,
@@ -56,7 +56,7 @@ def list_profiles():
                 "id": t.id,
                 "title": t.title,
                 "type": t.type,
-                "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+                "updated_at": iso_utc(t.updated_at),
                 "has_artifact": bool((t.extra or {}).get("artifact")),
             })
 

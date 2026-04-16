@@ -262,7 +262,11 @@ def generate(weather="clear", temperature_f=70, latitude=37.7, now=None):
         dict with full scene descriptor
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        # Scene time-of-day (dawn/morning/dusk/night) has to line up with
+        # the user's wall clock — a UTC hour silently makes the pixel
+        # art say "afternoon" at 7am Pacific.
+        from planet_maiko.config import user_now
+        now = user_now()
 
     today = now.date() if isinstance(now, datetime) else now
     hour = now.hour if isinstance(now, datetime) else 12

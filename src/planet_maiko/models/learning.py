@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from planet_maiko.database import db
+from planet_maiko.database import db, iso_utc
 
 
 class Learning(db.Model):
@@ -52,7 +52,7 @@ class Learning(db.Model):
             "signal_count": self.signal_count,
             "source": self.source,
             "status": self.status,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "last_signal_at": self.last_signal_at.isoformat() if self.last_signal_at else None,
+            "created_at": iso_utc(self.created_at),
+            "updated_at": iso_utc(self.updated_at),
+            "last_signal_at": iso_utc(self.last_signal_at),
         }

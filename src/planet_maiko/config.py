@@ -21,6 +21,11 @@ def maiko_api_url():
 DEFAULT_CONFIG = {
     "user": {
         "name": "",  # Your name (Maiko addresses you by this)
+        # IANA timezone name (e.g. "America/Los_Angeles"). Leave blank to
+        # use the system's local timezone. Controls what "today" means for
+        # the morning brief, skill-injected current_date, scene time-of-day,
+        # and every other "when is it for Brigitte" check.
+        "timezone": "",
     },
     "github": {
         "enabled": True,
@@ -141,3 +146,29 @@ def get_integration_config(name):
     """Get config for a specific integration."""
     config = load_config()
     return config.get(name, {})
+
+
+def user_tz():
+    """Return a tzinfo for the user.
+
+    Prefers the IANA zone in user.timezone (e.g. "America/Los_Angeles"),
+    falls back to the system's local tz. Returned object is always safe
+    to pass to datetime.now() / astimezone().
+    """
+    from datetime import datetime
+    tz_name = (load_config().get("user", {}) or {}).get("timezone", "")
+    if tz_name:
+        try:
+            from zoneinfo import ZoneInfo
+            return ZoneInfo(tz_name)
+        except Exception:
+            # Bad zone name — fall through to local. Don't crash the app
+            # on a typo'd config value; the rest of the system still works.
+            pass
+    return datetime.now().astimezone().tzinfo
+
+
+def user_now():
+    """Current time in the user's timezone. Always tz-aware."""
+    from datetime import datetime
+    return datetime.now(user_tz())

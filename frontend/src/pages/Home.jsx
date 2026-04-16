@@ -169,13 +169,22 @@ export default function Home() {
           .sort((a, b) => (a.metadata?.start || "").localeCompare(b.metadata?.start || ""))
       );
 
-      // Load most recent morning brief — only if from today
+      // Show the most recent morning brief if it's still fresh. "Fresh"
+      // means same local calendar day OR less than 12 hours old — the
+      // latter catches briefs run the night before and opened over
+      // morning coffee, which a strict same-day check would hide.
+      // Timestamps now come through with explicit UTC offsets
+      // (database.py:iso_utc), so new Date() parses them correctly.
       if (!morningBrief) {
         api.getSkillResults("morning-brief").then((results) => {
-          if (results.length > 0) {
-            const briefDate = new Date(results[0].created_at).toDateString();
-            const today = new Date().toDateString();
-            if (briefDate === today) setMorningBrief(results[0].content);
+          if (results.length > 0 && results[0].created_at) {
+            const created = new Date(results[0].created_at);
+            const now = new Date();
+            const sameLocalDay = created.toDateString() === now.toDateString();
+            const hoursOld = (now - created) / 3_600_000;
+            if (sameLocalDay || hoursOld < 12) {
+              setMorningBrief(results[0].content);
+            }
           }
         }).catch(() => {});
       }

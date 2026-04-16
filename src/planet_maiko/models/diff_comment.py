@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from planet_maiko.database import db
+from planet_maiko.database import db, iso_utc
 
 
 class DiffComment(db.Model):
@@ -61,6 +61,6 @@ class DiffComment(db.Model):
             "parent_id": self.parent_id,
             "status": self.status,
             "author": self.author,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": iso_utc(self.created_at),
+            "updated_at": iso_utc(self.updated_at),
         }

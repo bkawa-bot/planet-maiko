@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from planet_maiko.database import db
+from planet_maiko.database import db, iso_utc
 
 
 class AgentProfile(db.Model):
@@ -69,6 +69,6 @@ class AgentProfile(db.Model):
             "context_set": self.context_set or [],
             "extra": self.extra or {},
             "archived": self.archived or False,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "last_active_at": self.last_active_at.isoformat() if self.last_active_at else None,
+            "created_at": iso_utc(self.created_at),
+            "last_active_at": iso_utc(self.last_active_at),
         }

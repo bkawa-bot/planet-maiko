@@ -34,9 +34,11 @@ class CalendarPoller(BasePoller):
             return {"events": []}
 
         all_events = []
-        # Use the user's local timezone for "today" so evening meetings
-        # don't get filtered out as "tomorrow UTC".
-        local_now = datetime.now().astimezone()
+        # Use the user's timezone for "today" so evening meetings don't
+        # get filtered out as "tomorrow UTC". Honors user.timezone config
+        # when set; falls back to the system's local tz.
+        from planet_maiko.config import user_now
+        local_now = user_now()
         today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
         today_end = today_start + timedelta(days=1)
 

@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from planet_maiko.database import db
+from planet_maiko.database import db, iso_utc
 
 
 class SkillResult(db.Model):
@@ -25,5 +25,5 @@ class SkillResult(db.Model):
             "title": self.title,
             "content": self.content,
             "context_summary": self.context_summary,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": iso_utc(self.created_at),
         }

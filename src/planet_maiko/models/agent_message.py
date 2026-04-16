@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from planet_maiko.database import db
+from planet_maiko.database import db, iso_utc
 
 
 class AgentMessage(db.Model):
@@ -23,5 +23,5 @@ class AgentMessage(db.Model):
             "content": self.content,
             "message_type": self.message_type,
             "read": self.read,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": iso_utc(self.created_at),
         }

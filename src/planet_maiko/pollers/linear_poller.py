@@ -314,10 +314,38 @@ class LinearPoller(BasePoller):
         return {"created": created, "updated": updated}
 
     def to_pupdates(self, raw_data):
+        # Skip issues that already have a Maiko task tracking them. Without
+        # this, every poll re-asserts "you have PROJ-123 assigned" as an
+        # actionable pupdate; the user dismisses it (task already exists),
+        # but because the task wasn't created from *this specific pupdate*
+        # (import flow / earlier poll / manual roundtrip), base.py's
+        # dismissal-resurrection lookup via source_pupdate_id misses it
+        # and the dismissed pupdate gets resurrected on the next poll.
+        # Matches the linear_id/identifier check in import_issues().
+        from planet_maiko.database import db
+        from planet_maiko.models.task import Task
+
+        tracked_linear_ids = set()
+        tracked_identifiers = set()
+        for t in Task.query.with_entities(Task.extra).all():
+            ext = t.extra or {}
+            lid = ext.get("linear_id")
+            if lid:
+                tracked_linear_ids.add(lid)
+            ident = ext.get("identifier") or ext.get("linear_identifier")
+            if ident:
+                tracked_identifiers.add(ident)
+
         pupdates = []
 
         for issue in raw_data.get("issues", []):
             identifier = issue.get("identifier", "")
+            linear_id = issue.get("id")
+            if (linear_id and linear_id in tracked_linear_ids) or (
+                identifier and identifier in tracked_identifiers
+            ):
+                continue
+
             title = issue.get("title", "")
             state = issue.get("state", {})
             state_name = state.get("name", "")
@@ -337,7 +365,7 @@ class LinearPoller(BasePoller):
                 "action_hint": "Create task",
                 "tags": [identifier] + labels,
                 "metadata": {
-                    "linear_id": issue.get("id"),
+                    "linear_id": linear_id,
                     "identifier": identifier,
                     "state": state_name,
                     "due_date": due_date,

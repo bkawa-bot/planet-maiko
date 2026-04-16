@@ -587,17 +587,18 @@ def run_skill_endpoint(skill_name):
     # Auto-save successful results
     if result.get("success") and result.get("output"):
         from planet_maiko.models.skill_result import SkillResult
-        from datetime import datetime
+        from planet_maiko.config import user_now
+        now_local = user_now()
         title_map = {
-            "morning-brief": f"Morning Brief — {datetime.now().strftime('%B %d')}",
-            "brainstorm": f"Brainstorm — {datetime.now().strftime('%B %d')}",
-            "pack-insights": f"Pack Insights — {datetime.now().strftime('%B %d')}",
-            "investigate": f"Investigation — {datetime.now().strftime('%B %d %H:%M')}",
-            "repo-analysis": f"Repo Analysis — {datetime.now().strftime('%B %d')}",
+            "morning-brief": f"Morning Brief — {now_local.strftime('%B %d')}",
+            "brainstorm": f"Brainstorm — {now_local.strftime('%B %d')}",
+            "pack-insights": f"Pack Insights — {now_local.strftime('%B %d')}",
+            "investigate": f"Investigation — {now_local.strftime('%B %d %H:%M')}",
+            "repo-analysis": f"Repo Analysis — {now_local.strftime('%B %d')}",
         }
         sr = SkillResult(
             skill_name=skill_name,
-            title=title_map.get(skill_name, f"{skill_name} — {datetime.now().strftime('%B %d %H:%M')}"),
+            title=title_map.get(skill_name, f"{skill_name} — {now_local.strftime('%B %d %H:%M')}"),
             content=result["output"],
         )
         db.session.add(sr)

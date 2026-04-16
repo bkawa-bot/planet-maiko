@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from planet_maiko.database import db
+from planet_maiko.database import db, iso_utc
 
 
 class Project(db.Model):
@@ -28,8 +28,8 @@ class Project(db.Model):
             "description": self.description,
             "status": self.status,
             "priority": self.priority,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": iso_utc(self.created_at),
+            "updated_at": iso_utc(self.updated_at),
             "source_type": self.source_type,
             "source_id": self.source_id,
             "source_url": self.source_url,

@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from planet_maiko.database import db
+from planet_maiko.database import db, iso_utc
 
 
 class CustomSkill(db.Model):
@@ -41,7 +41,7 @@ class CustomSkill(db.Model):
             "user_edited": self.user_edited,
             "schedule_interval_minutes": self.schedule_interval_minutes,
             "creates_pupdates": self.creates_pupdates,
-            "last_run_at": self.last_run_at.isoformat() if self.last_run_at else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "last_run_at": iso_utc(self.last_run_at),
+            "created_at": iso_utc(self.created_at),
+            "updated_at": iso_utc(self.updated_at),
         }

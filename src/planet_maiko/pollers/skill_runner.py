@@ -126,9 +126,10 @@ def run_scheduled_skill(skill_id, app):
             return
 
         # Save result
+        from planet_maiko.config import user_now
         sr = SkillResult(
             skill_name=skill_id,
-            title=f"{skill.name} — {datetime.now().strftime('%B %d %H:%M')}",
+            title=f"{skill.name} — {user_now().strftime('%B %d %H:%M')}",
             content=result["output"],
         )
         db.session.add(sr)
