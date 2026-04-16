@@ -118,6 +118,15 @@ def correlate():
                 incidents_created += 1
                 logger.info(f"[correlator] Created incident for {service}: {sorted(matching)}")
 
+                # Auto-investigate hook. Gated behind config so this is
+                # a no-op unless the user has opted in. Best-effort —
+                # failures here must never break the pupdate pipeline.
+                try:
+                    from planet_maiko.brain.pupdates.auto_investigate import maybe_auto_investigate
+                    maybe_auto_investigate(incident)
+                except Exception as e:
+                    logger.warning(f"[correlator] auto_investigate hook failed for {service}: {e}")
+
     if incidents_created:
         db.session.commit()
 
