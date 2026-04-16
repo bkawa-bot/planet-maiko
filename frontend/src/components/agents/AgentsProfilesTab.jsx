@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Bot, Brain, CheckSquare, Plus, Target, TrendingUp, X, Pencil, Save, Code2, Eye, Search,
+  Bot, Brain, CheckSquare, Plus, Target, TrendingUp, X, Pencil, Save, Code2, Eye, Search, Map,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
@@ -9,10 +9,11 @@ const ROLE_META = {
   coding: { icon: Code2, label: "Coder", color: "var(--pink)" },
   review: { icon: Eye, label: "Reviewer", color: "var(--blue)" },
   investigation: { icon: Search, label: "Investigator", color: "var(--lavender)" },
+  cartographer: { icon: Map, label: "Cartographer", color: "var(--lemon)" },
 };
 
 // Section order for the role-grouped view.
-const ROLE_ORDER = ["coding", "review", "investigation"];
+const ROLE_ORDER = ["coding", "review", "investigation", "cartographer"];
 
 /**
  * Profiles tab — agent context-set strategy view.

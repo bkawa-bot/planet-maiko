@@ -223,7 +223,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
               const preparedAtMs = a.prepared_at ? Date.parse(a.prepared_at) : null;
               const ageMin = preparedAtMs ? Math.round((Date.now() - preparedAtMs) / 60000) : 0;
               const isStuck = ageMin >= 5;
-              const isOneShot = a.role === "review" || a.role === "investigation";
+              const isOneShot = a.role === "review" || a.role === "investigation" || a.role === "cartographer";
               return (
               // key on task_id, not agent_id — the same agent profile
               // can be assigned to multiple tasks at once. Keying on

@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   CheckSquare, Square, FolderOpen, Pin, PinOff, ExternalLink,
   ChevronRight, GitBranch, Clock, Bot, Eye, Play,
-  X, Pencil, Brain, Circle, Send, Loader, FileText, GitPullRequest, Zap,
+  X, Pencil, Brain, Circle, Send, Loader, FileText, GitPullRequest, Zap, Map,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
@@ -88,11 +88,15 @@ export default function TaskCard({
   const linearUrl = t.extra?.linear_url || t.metadata?.linear_url || (t.url?.includes("linear.app") ? t.url : null);
   const [sendingToLinear, setSendingToLinear] = useState(false);
 
-  // One-shot agent work (review / investigation) runs autonomously
-  // after assignment — no manual launch needed. Shows a "working"
-  // badge while in_progress, and the artifact once it's done.
-  const ONE_SHOT_TYPES = new Set(["review", "pr_review", "investigation", "repo_analysis"]);
+  // One-shot agent work (review / investigation / cartograph) runs
+  // autonomously after assignment — no manual launch needed. Shows a
+  // "working" badge while in_progress, and the artifact once it's done.
+  // Cartograph tasks don't store an artifact on the task — they write
+  // an Insight instead — so we route the user to the Playbook rather
+  // than showing an inline viewer for that subtype.
+  const ONE_SHOT_TYPES = new Set(["review", "pr_review", "investigation", "repo_analysis", "cartograph"]);
   const isOneShotTask = ONE_SHOT_TYPES.has(t.type);
+  const isCartographTask = t.type === "cartograph";
   const hasArtifact = !!(t.extra?.artifact);
   const agentName = agentNames?.[t.assigned_agent_id] || t.assigned_agent_id?.replace(/^agent-/, "");
   const [showArtifact, setShowArtifact] = useState(false);
@@ -177,13 +181,26 @@ export default function TaskCard({
           {/* Live status for one-shot tasks while the skill is running */}
           {isOneShotTask && t.status === "in_progress" && (
             <span className="tag agent-thinking-chip">
-              <Loader size={9} className="spin" /> {agentName || "Agent"} is thinking…
+              <Loader size={9} className="spin" />
+              {isCartographTask
+                ? ` ${agentName || "Atlas"} is drawing the map…`
+                : ` ${agentName || "Agent"} is thinking…`}
             </span>
           )}
           {isOneShotTask && t.status === "done" && hasArtifact && (
             <span className="tag agent-done-chip">
               <FileText size={9} /> Report ready
             </span>
+          )}
+          {isCartographTask && t.status === "done" && (
+            <Link
+              to="/knowledge"
+              className="tag agent-done-chip"
+              onClick={(e) => e.stopPropagation()}
+              title="Atlas's Repo Overview lives in the Playbook tab"
+            >
+              <Map size={9} /> Overview in Playbook
+            </Link>
           )}
           {t.due_date && <span className="card-time"><Clock size={9} /> {t.due_date}</span>}
           {!t.due_date && t.updated_at && (
