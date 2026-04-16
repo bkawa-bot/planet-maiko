@@ -664,6 +664,9 @@ def approve(task_id):
             f"template question), reply with message_type='stuck'."
         )
 
+    from planet_maiko.agents.signature import signature_instruction_for_agent
+    instruction += signature_instruction_for_agent(task.assigned_agent_id)
+
     from planet_maiko.models.agent_message import AgentMessage
     db.session.add(AgentMessage(
         task_id=task_id,
