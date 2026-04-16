@@ -279,7 +279,17 @@ export default function ReviewDiff() {
                 className={`review-diff-sidebar-thread ${isFocused ? "is-focused" : ""}`}
               >
                 <div className="review-diff-sidebar-anchor">
-                  <code>{first.file_path}:{first.line_number}</code>
+                  {(() => {
+                    const segs = (first.file_path || "").split("/");
+                    const filename = segs.pop() || first.file_path;
+                    const dir = segs.join("/");
+                    return (
+                      <>
+                        {dir && <span className="sidebar-anchor-dir">{dir}/</span>}
+                        <code className="sidebar-anchor-file">{filename}:{first.line_number}</code>
+                      </>
+                    );
+                  })()}
                   {first.side === "old" && <span className="side-badge">old</span>}
                 </div>
                 <CommentThread
