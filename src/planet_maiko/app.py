@@ -76,6 +76,7 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.agents_api import agents_bp
     from planet_maiko.api.learning_api import learning_bp
     from planet_maiko.api.pack_insights_api import pack_insights_bp
+    from planet_maiko.api.insights_api import insights_bp
     from planet_maiko.api.focus_api import focus_bp
     from planet_maiko.api.scene_api import scene_bp
     from planet_maiko.api.expertise_api import expertise_bp
@@ -94,6 +95,7 @@ def create_app(start_scheduler=False):
     app.register_blueprint(agents_bp, url_prefix="/api")
     app.register_blueprint(learning_bp, url_prefix="/api")
     app.register_blueprint(pack_insights_bp, url_prefix="/api")
+    app.register_blueprint(insights_bp, url_prefix="/api")
     app.register_blueprint(focus_bp, url_prefix="/api")
     app.register_blueprint(scene_bp, url_prefix="/api")
     app.register_blueprint(expertise_bp, url_prefix="/api")
@@ -122,6 +124,7 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.skill_result import SkillResult  # noqa: F401
         from planet_maiko.models.custom_skill import CustomSkill  # noqa: F401
         from planet_maiko.models.diff_comment import DiffComment  # noqa: F401
+        from planet_maiko.models.insight import Insight  # noqa: F401
         db.create_all()
 
         # Schema migrations for existing DBs (SQLite ALTER TABLE is safe)

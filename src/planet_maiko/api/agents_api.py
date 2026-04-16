@@ -886,8 +886,37 @@ def agent_sends_message(task_id):
             except Exception as e:
                 logger.warning(f"[outbox] artifact save failed for {task_id}: {e}")
 
+    # Agent-reported insight: tribal / operational knowledge (tooling
+    # tips, migration state, team conventions) that should be injected
+    # into future agents' CLAUDE.md. Lands as a pending Insight so the
+    # user reviews before it goes into every new session's prompt.
+    # Intentionally separate from Learnings — no LoRA training, no
+    # confidence scoring, just a note.
+    if message_type == "insight":
+        try:
+            from planet_maiko.models.insight import Insight
+            from planet_maiko.models.task import Task as _Task
+            t = db.session.get(_Task, task_id)
+            repo_scope = None
+            if t:
+                extra = t.extra or {}
+                repo_scope = extra.get("repo") or extra.get("repository")
+            ins = Insight(
+                text=(data["content"] or "").strip()[:2000],
+                repo_scope=repo_scope,
+                tags=data.get("tags") or [],
+                author_agent_id=(t.assigned_agent_id if t else None),
+                status="pending",
+            )
+            db.session.add(ins)
+            logger.info(
+                f"[outbox] Agent insight recorded (task={task_id}, "
+                f"repo={repo_scope or 'global'}): {ins.text[:80]}"
+            )
+        except Exception as e:
+            logger.warning(f"[outbox] insight save failed for {task_id}: {e}")
 
-    if message_type not in ("status", "feedback"):
+    if message_type not in ("status", "feedback", "insight"):
         from planet_maiko.models.task import Task
         from planet_maiko.models.agent_profile import AgentProfile
         task = db.session.get(Task, task_id)

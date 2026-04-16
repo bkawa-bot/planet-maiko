@@ -39,6 +39,15 @@ Two MCP tools from the maiko-channel drive communication:
 - **`check_inbox`** — pull pending messages from the user. Returns structured text. You normally don't have to remember this — Maiko installs a `Stop` hook that polls the inbox automatically every time you're about to end a response, blocks the stop if there are unread messages, and feeds them back as a system message. Calling `check_inbox` mid-step is still useful when you specifically want to wait for input (e.g. asked the user a question and want to gate on their reply).
 - **`leave_comment`** — drop an inline comment on a specific diff line for the user to see during their review. Use sparingly on uncertain / load-bearing spots (~5 max per round).
 
+### Feedback vs Insight — two different things
+
+Two reply `message_type` values exist for sharing what you learned, and they mean genuinely different things:
+
+- **`feedback`** — a *coding rule* you think the team should follow. "Always use the error-handling pattern from `errors.py`", "Don't mutate Redux state directly", etc. These become Signals, get clustered into Learnings, eventually train the repo's LoRA compliance model. Use this for rules about the *code*.
+- **`insight`** — *tribal / operational knowledge* a future agent would benefit from knowing before they start work. "Use IntelliJ to run tests in this repo, the CLI runner is broken", "The personalization repo is mid-migration — column names don't match ORM fields yet", "Slack channel #auth-team has the context if you're touching session handling". These get injected verbatim into every new agent's CLAUDE.md. Use this for rules about *how to work in the repo*, not about the code itself.
+
+If in doubt: if it would go in a linter config, it's `feedback`. If it would go in a README or an onboarding doc, it's `insight`.
+
 The `maiko` CLI still works for legacy reporting (`maiko report`, `maiko task start`, `maiko feedback`) but messaging goes through MCP.
 
 ### Status reports

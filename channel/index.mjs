@@ -76,6 +76,12 @@ const mcp = new Server(
       `- Use leave_comment sparingly (~5 max per review round) on`,
       `  uncertain or load-bearing lines you want human eyes on.`,
       `- If you're stuck, call reply(content="<what's blocking>", message_type="stuck").`,
+      `- If you learn something about *how to work in this repo* that a`,
+      `  future agent would benefit from (tooling quirks, migration state,`,
+      `  team conventions, useful Slack channels), call reply with`,
+      `  message_type="insight". These get injected into every new agent's`,
+      `  CLAUDE.md — do NOT use this for coding rules (use "feedback"`,
+      `  for those). One insight per call, keep it to a sentence.`,
       `- Check your inbox whenever you're about to end a response or`,
       `  wait for input — there may be a message queued.`,
       `Your task ID is: ${TASK_ID}`,
@@ -106,12 +112,13 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           message_type: {
             type: "string",
-            enum: ["message", "status", "feedback", "done", "stuck", "ready_for_review", "plan_for_approval", "pr_opened"],
+            enum: ["message", "status", "feedback", "insight", "done", "stuck", "ready_for_review", "plan_for_approval", "pr_opened"],
             description:
               "Type of message: " +
               "'message' for general replies to the user, " +
               "'status' for live progress updates (chatter, no pupdate), " +
-              "'feedback' to record a learning / training signal, " +
+              "'feedback' to record a learning / training signal (coding rule — feeds the LoRA pipeline), " +
+              "'insight' to share tribal / operational knowledge that future agents should know (e.g. \"use IntelliJ to run tests\", \"the personalization repo is mid-migration\") — these get injected into every agent's CLAUDE.md, NOT trained on. One fact per reply. Reserve 'feedback' for coding rules and 'insight' for workflow / tooling / team context. " +
               "'plan_for_approval' when the task was started in plan mode and you've produced a markdown plan for the user to approve before you implement, " +
               "'ready_for_review' when you've committed work and the user should review the diff, " +
               "'pr_opened' after you've run `gh pr create` in response to an approved message — put the PR URL on its own line in the content, " +

@@ -132,7 +132,7 @@ def _write_task_file(working_path, task_id, task_title, prompt):
         f.write(content)
 
 
-def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_port=None):
+def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_port=None, parent_repo_path=None):
     """Write CLAUDE.md with full agent protocol.
 
     Loads the protocol template for the given role. "coding" uses the
@@ -140,6 +140,11 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
     review/investigation use their own protocol prompts which describe
     the structured-block output contract their initial one-shot run
     follows.
+
+    parent_repo_path drives the Insights injection — active, non-
+    expired Insights scoped to that repo (or global) get appended
+    as a "Team Playbook" section so every agent inherits the tribal
+    knowledge the pack has built up.
     """
     if maiko_port is None:
         from planet_maiko.config import MAIKO_PORT
@@ -192,10 +197,72 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
     if custom_instructions and role == "coding":
         content += f"\n\n## Owner's Workflow Preferences\n\n{custom_instructions}\n"
 
+    # Active Insights for this repo (and globals). Unlike Learnings,
+    # Insights aren't confidence-gated or trainable — they're the
+    # "things every new agent in this repo should know" playbook:
+    # tooling quirks, mid-migration state, team conventions that
+    # aren't code rules. Injected verbatim so the agent sees them
+    # at session start.
+    playbook = _build_playbook_section(parent_repo_path)
+    if playbook:
+        content += f"\n\n{playbook}\n"
+
     claude_dir = os.path.join(working_path, ".claude")
     os.makedirs(claude_dir, exist_ok=True)
     with open(os.path.join(working_path, "CLAUDE.md"), "w", encoding="utf-8") as f:
         f.write(content)
+
+
+def _build_playbook_section(parent_repo_path):
+    """Render the Team Playbook section of CLAUDE.md from active
+    Insights scoped to this repo (or global).
+
+    Best-effort: DB errors, no matching repo, or empty insight set
+    all return "" so the agent just doesn't get a playbook section.
+    """
+    try:
+        from planet_maiko.models.insight import Insight
+        # Extract "org/repo" or just "repo" from the parent path if we
+        # can — insights are keyed by the repo name the user stored.
+        # Fall back to matching any globals.
+        repo_key = None
+        if parent_repo_path:
+            repo_key = os.path.basename(parent_repo_path.rstrip(os.sep))
+
+        q = Insight.query.filter(Insight.status == "active")
+        if repo_key:
+            from sqlalchemy import or_
+            q = q.filter(
+                or_(
+                    Insight.repo_scope == repo_key,
+                    Insight.repo_scope.is_(None),
+                    Insight.repo_scope.like(f"%/{repo_key}"),
+                )
+            )
+        else:
+            q = q.filter(Insight.repo_scope.is_(None))
+
+        insights = q.order_by(Insight.last_confirmed_at.desc()).limit(40).all()
+        now = datetime.now(timezone.utc)
+        fresh = [i for i in insights if not i.is_expired(now)]
+        if not fresh:
+            return ""
+
+        lines = [
+            "## Team Playbook",
+            "",
+            "Tribal knowledge the pack has captured about this repo and how to work in it. Read before starting — saves you from re-discovering things another agent already figured out.",
+            "",
+        ]
+        for ins in fresh:
+            tag_str = ""
+            if ins.tags:
+                tag_str = " _" + ", ".join(ins.tags) + "_"
+            lines.append(f"- {ins.text.strip()}{tag_str}")
+        return "\n".join(lines)
+    except Exception as e:
+        logger.debug(f"[claude_md] playbook build skipped: {e}")
+        return ""
 
 
 def _inherit_mcp_servers(parent_repo_path):
@@ -766,7 +833,10 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
 
     # Write task files
     _write_task_file(working_path, task_id, task_title, prompt)
-    _write_claude_md(working_path, task_id, task_title, role=role)
+    _write_claude_md(
+        working_path, task_id, task_title,
+        role=role, parent_repo_path=repo_path,
+    )
     # Pass repo_path so the worktree's .mcp.json inherits the user's
     # per-project MCPs (Linear / Slack / etc.) — otherwise the agent
     # session only has maiko-channel and feels MCP-blind compared to
