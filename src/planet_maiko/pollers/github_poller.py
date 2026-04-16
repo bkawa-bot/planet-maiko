@@ -42,16 +42,43 @@ class GitHubPoller(BasePoller):
         return json.loads(result.stdout) if result.stdout.strip() else []
 
     def _get_review_requests(self, username):
-        """Get PRs where the user's review is requested. Includes
-        headRefOid so we can disambiguate re-requests on the same PR
-        (new commit pushed after a prior dismissal should fire a new
-        pupdate, not get deduped)."""
-        return self._gh([
+        """Get PRs where the user's review is requested.
+
+        `gh search prs --json` does NOT accept `headRefOid` (that field
+        is only available on `gh pr list` / `gh pr view` / graphql), and
+        passing it here makes the whole poll fail with "unknown JSON
+        field". We fetch the core PR data via search, then enrich each
+        hit with its head SHA via `gh pr view` so the source_id can
+        still embed the SHA and re-requests on new commits don't get
+        silently deduped.
+        """
+        prs = self._gh([
             "search", "prs",
             "--review-requested", username,
             "--state", "open",
-            "--json", "number,title,url,repository,author,createdAt,labels,headRefOid",
+            "--json", "number,title,url,repository,author,createdAt,labels",
         ])
+        for pr in prs:
+            repo = (pr.get("repository") or {}).get("nameWithOwner")
+            number = pr.get("number")
+            if not repo or not number:
+                continue
+            try:
+                detail = subprocess.run(
+                    ["gh", "pr", "view", str(number),
+                     "--repo", repo, "--json", "headRefOid"],
+                    capture_output=True, text=True, timeout=15,
+                )
+                if detail.returncode == 0 and detail.stdout.strip():
+                    data = json.loads(detail.stdout)
+                    sha = (data or {}).get("headRefOid")
+                    if sha:
+                        pr["headRefOid"] = sha
+            except Exception:
+                # Best-effort. Missing SHA falls back to the plain
+                # review/repo#N source_id path already in to_pupdates.
+                pass
+        return prs
 
     def _get_my_prs(self, username):
         """Get the user's open PRs with review status."""
