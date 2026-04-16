@@ -16,7 +16,7 @@ _SKILL_IDS = [
     "morning-brief",
     "brainstorm",
     "investigate",
-    "pack-insights",
+    "evening-wrap",
     "repo-analysis",
     "checkin",
     "plan",

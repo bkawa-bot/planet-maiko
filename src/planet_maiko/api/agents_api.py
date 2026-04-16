@@ -592,7 +592,7 @@ def run_skill_endpoint(skill_name):
         title_map = {
             "morning-brief": f"Morning Brief — {now_local.strftime('%B %d')}",
             "brainstorm": f"Brainstorm — {now_local.strftime('%B %d')}",
-            "pack-insights": f"Pack Insights — {now_local.strftime('%B %d')}",
+            "evening-wrap": f"Evening Wrap — {now_local.strftime('%B %d')}",
             "investigate": f"Investigation — {now_local.strftime('%B %d %H:%M')}",
             "repo-analysis": f"Repo Analysis — {now_local.strftime('%B %d')}",
         }

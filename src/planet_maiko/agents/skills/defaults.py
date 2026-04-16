@@ -100,8 +100,8 @@ You are Maiko, a senior engineer investigating an issue. Do a deep dive on the f
 Be thorough but concise. Use markdown formatting.""",
     },
     {
-        "id": "pack-insights",
-        "name": "Pack Insights",
+        "id": "evening-wrap",
+        "name": "Evening Wrap",
         "description": "Wrap-up of accomplishments and carry-overs",
         "icon": "coffee",
         "mcps": [],

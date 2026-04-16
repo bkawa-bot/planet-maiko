@@ -193,16 +193,20 @@ export default function Agents() {
         </button>
         {tab === "insights" && (
           <InfoButton title={<><Flame size={16} /> Pack Insights</>}>
-            <p>A collaborative session where you and your agents share what you've learned.</p>
-            <h4>The pipeline</h4>
+            <p>An end-of-day ritual: the pack gathers around the campfire and shares what they noticed today.</p>
+            <h4>What agents share</h4>
+            <ul>
+              <li><strong>Feedback</strong> — coding rules that should apply to future work in a repo (goes to Knowledge Pool → LoRA).</li>
+              <li><strong>Insights</strong> — tribal knowledge future agents should inherit, like tooling quirks or repo state (goes to the Pack Insights library → every agent's CLAUDE.md).</li>
+            </ul>
+            <h4>The flow</h4>
             <ol>
-              <li><strong>Start</strong> — signals agents to report their discoveries from recent work.</li>
-              <li><strong>Collect</strong> — gathers feedback from agents, plus anything you add manually.</li>
-              <li><strong>Synthesize</strong> — Maiko deduplicates, identifies what's already known, and proposes new rules.</li>
-              <li><strong>Finalize</strong> — approved learnings merge into the Knowledge Pool and get used in future agent briefs.</li>
+              <li><strong>Start the gathering</strong> — Maiko messages each active agent.</li>
+              <li><strong>Watch speech bubbles appear</strong> as agents reply at the fire.</li>
+              <li><strong>Wrap up</strong> when you're ready, then approve what sticks.</li>
+              <li><strong>Finalize</strong> — learnings land in the pool, insights land in the library below.</li>
             </ol>
-            <h4>When to use it</h4>
-            <p>Run it after a productive session, at end of day, or whenever agents have been working on tasks. It's how the system gets smarter over time.</p>
+            <p>The library (collapsed below the ritual) holds the active playbook — the insights that currently get injected into every new agent's CLAUDE.md.</p>
           </InfoButton>
         )}
 

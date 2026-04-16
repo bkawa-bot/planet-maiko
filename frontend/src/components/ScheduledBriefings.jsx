@@ -9,7 +9,7 @@ import { ChevronDown, ChevronRight, Loader, Rocket, Save } from "lucide-react";
 const DIGEST_SKILL_IDS = [
   "morning-brief",
   "brainstorm",
-  "pack-insights",
+  "evening-wrap",
   "checkin",
   "plan",
   "team",

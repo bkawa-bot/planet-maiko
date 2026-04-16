@@ -1,0 +1,277 @@
+/* === Pack Insights campfire === */
+
+.campfire-tab {
+  display: flex; flex-direction: column; gap: 16px;
+  padding: 16px 0;
+}
+
+/* Idle hero — the fire is dim; clicking Start lights it up. */
+.campfire-idle {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 10px; padding: 32px 24px; text-align: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+.campfire-idle h3 {
+  margin: 0; font-size: 1.1rem; color: var(--text); font-weight: 600;
+}
+.campfire-idle p {
+  max-width: 440px; margin: 0; font-size: 12px; line-height: 1.6;
+  color: var(--text-muted);
+}
+.campfire-idle em {
+  color: var(--text-dim); font-style: normal; font-weight: 500;
+}
+.campfire-start { margin-top: 8px; }
+
+/* The fire itself. Live state pulses / flickers; dim state is frozen. */
+.campfire-fire {
+  font-size: 56px; line-height: 1;
+  filter: drop-shadow(0 0 24px var(--peach));
+}
+.campfire-fire-dim {
+  filter: grayscale(0.4) drop-shadow(0 0 12px rgba(255,140,90,0.2));
+  opacity: 0.7;
+}
+.campfire-fire-live {
+  font-size: 72px;
+  animation: campfire-flicker 1.8s ease-in-out infinite;
+}
+@keyframes campfire-flicker {
+  0%, 100% {
+    transform: scale(1) rotate(-1deg);
+    filter: drop-shadow(0 0 28px var(--peach)) drop-shadow(0 0 12px var(--lemon));
+  }
+  50% {
+    transform: scale(1.08) rotate(1deg);
+    filter: drop-shadow(0 0 40px var(--peach)) drop-shadow(0 0 20px var(--lemon));
+  }
+}
+
+/* Scene — fire at top, ring of agents below. */
+.campfire-scene {
+  display: flex; flex-direction: column; align-items: center; gap: 24px;
+  padding: 32px 16px 24px;
+  background: linear-gradient(180deg,
+    rgba(255, 175, 120, 0.08) 0%,
+    rgba(180, 120, 200, 0.06) 50%,
+    transparent 100%);
+  border: 1px solid var(--peach);
+  border-radius: var(--radius);
+}
+
+.campfire-ring {
+  display: flex; flex-wrap: wrap; justify-content: center;
+  gap: 20px 24px; width: 100%; max-width: 920px;
+}
+
+.campfire-empty {
+  font-size: 12px; color: var(--text-muted); font-style: italic;
+  padding: 24px 0;
+}
+.campfire-empty-small {
+  font-size: 12px; color: var(--text-muted); padding: 12px 0; text-align: center;
+}
+
+/* One agent at the fire: bubbles stack above, avatar + name below. */
+.campfire-agent {
+  display: flex; flex-direction: column; align-items: center;
+  width: 140px;
+  /* Alternating vertical offset creates a gentle arc — every other
+     agent sits 8px lower, suggesting the semicircle without doing
+     absolute positioning math. */
+}
+.campfire-agent:nth-child(even) { transform: translateY(10px); }
+
+.campfire-bubbles {
+  display: flex; flex-direction: column; gap: 4px;
+  margin-bottom: 8px; min-height: 32px;
+  width: 100%;
+}
+
+.campfire-bubble {
+  position: relative;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 11px; line-height: 1.4;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-dim);
+  animation: campfire-bubble-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  max-width: 100%;
+  word-break: break-word;
+}
+@keyframes campfire-bubble-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* Little tail pointing down toward the avatar. */
+.campfire-bubble::after {
+  content: ""; position: absolute;
+  bottom: -5px; left: 50%; transform: translateX(-50%);
+  width: 0; height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid var(--bg-card);
+}
+
+.campfire-bubble-waiting {
+  background: transparent; border-style: dashed; opacity: 0.6;
+  text-align: center;
+}
+.campfire-bubble-waiting::after { border-top-color: transparent; }
+.thinking-dots {
+  letter-spacing: 2px; font-size: 10px;
+  animation: campfire-dots 1.4s ease-in-out infinite;
+}
+@keyframes campfire-dots {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.campfire-bubble-quiet {
+  background: var(--bg-card-alt); color: var(--text-muted);
+  display: inline-flex; align-items: center; gap: 4px;
+  font-style: italic;
+}
+
+.campfire-bubble-feedback {
+  background: var(--pink-soft); border-color: var(--pink); color: var(--text-dim);
+}
+.campfire-bubble-feedback::after { border-top-color: var(--pink-soft); }
+
+.campfire-bubble-insight {
+  background: var(--lavender-soft); border-color: var(--lavender); color: var(--text-dim);
+}
+.campfire-bubble-insight::after { border-top-color: var(--lavender-soft); }
+
+.campfire-bubble-type {
+  display: block;
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; opacity: 0.7;
+  margin-bottom: 2px;
+}
+.campfire-bubble-text { display: block; }
+
+.campfire-agent-avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px;
+  background: var(--bg-card-alt);
+  border: 2px solid var(--peach);
+  box-shadow: 0 2px 8px rgba(255, 140, 90, 0.15);
+}
+.campfire-agent-shared .campfire-agent-avatar { border-color: var(--pink); }
+.campfire-agent-quiet .campfire-agent-avatar { border-color: var(--border); opacity: 0.7; }
+.campfire-agent-waiting .campfire-agent-avatar { border-style: dashed; opacity: 0.7; }
+
+.campfire-agent-name {
+  font-size: 11px; font-weight: 500; color: var(--text-dim);
+  margin-top: 4px; max-width: 140px;
+  text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;
+}
+
+.campfire-progress {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; max-width: 520px;
+  padding: 10px 14px; border-radius: var(--radius-xs);
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+}
+.campfire-progress-text { font-size: 12px; color: var(--text-dim); }
+.campfire-progress-actions { display: flex; gap: 6px; }
+
+/* Panels — reviewing / synthesized / finalized use the same shape */
+.campfire-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.campfire-panel-header {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: var(--text);
+}
+.campfire-panel-count {
+  margin-left: auto;
+  font-size: 10px; font-weight: 700;
+  background: var(--pink); color: #fff;
+  padding: 1px 7px; border-radius: 10px;
+}
+
+.campfire-manual-add {
+  display: flex; gap: 6px;
+}
+.campfire-manual-add input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border); border-radius: var(--radius-xs);
+  background: var(--bg); color: var(--text); font-size: 12px;
+}
+.campfire-manual-add input:focus { border-color: var(--pink); outline: none; }
+.campfire-manual-add select {
+  padding: 4px 8px;
+  border: 1px solid var(--border); border-radius: var(--radius-xs);
+  background: var(--bg); color: var(--text); font-size: 11px;
+}
+
+.campfire-collected {
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 320px; overflow-y: auto;
+}
+.campfire-collected-item {
+  padding: 8px 12px; border-radius: var(--radius-xs);
+  background: var(--bg-card-alt); border: 1px solid var(--border-subtle);
+}
+.campfire-collected-text { font-size: 12px; color: var(--text); line-height: 1.4; }
+.campfire-collected-meta {
+  display: flex; gap: 4px; margin-top: 4px;
+}
+
+.campfire-panel-footer {
+  display: flex; justify-content: flex-end; gap: 6px;
+  border-top: 1px solid var(--border-subtle); padding-top: 10px;
+}
+
+.campfire-synth-bullets {
+  margin: 0; padding-left: 18px;
+  font-size: 12px; color: var(--text-dim); line-height: 1.8;
+}
+.campfire-proposed-rules {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px; border-radius: var(--radius-xs);
+  background: var(--lavender-soft); border: 1px solid var(--lavender);
+}
+.campfire-proposed-rule {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--text);
+}
+
+.campfire-panel-finalized {
+  align-items: center; text-align: center; padding: 28px 20px;
+}
+.campfire-finalized-check { color: var(--green); }
+.campfire-panel-finalized h3 { margin: 0; font-size: 1rem; color: var(--text); }
+.campfire-panel-finalized p {
+  margin: 0; max-width: 360px; font-size: 12px; color: var(--text-muted); line-height: 1.5;
+}
+
+/* Library (the collapsed Playbook at the bottom) */
+.campfire-library {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 12px;
+}
+.campfire-library-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: none;
+  font-size: 12px; color: var(--text-dim); font-weight: 500;
+  cursor: pointer; padding: 6px 0;
+}
+.campfire-library-toggle:hover { color: var(--text); }
+.campfire-library-body {
+  margin-top: 8px;
+  padding: 12px;
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+}

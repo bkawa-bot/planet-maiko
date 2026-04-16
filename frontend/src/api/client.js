@@ -182,6 +182,8 @@ export const api = {
     request("/pack-insights/add", { method: "POST", body: JSON.stringify({ text, category }) }),
   finalizePackInsights: (decisions) =>
     request("/pack-insights/finalize", { method: "POST", body: JSON.stringify({ decisions }) }),
+  getPackInsightsGatheringReplies: () => request("/pack-insights/gathering-replies"),
+  resetPackInsights: () => request("/pack-insights/reset", { method: "POST" }),
 
   // Agents
   getAgents: () => request("/agents"),
