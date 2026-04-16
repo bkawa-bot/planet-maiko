@@ -213,6 +213,42 @@
 }
 .recent-title { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* === Also Waiting — action-required pupdates === */
+.waiting-list { display: flex; flex-direction: column; gap: 6px; }
+
+.waiting-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  border-left: 3px solid var(--pink);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+.waiting-item:hover { background: var(--bg-card); transform: translateX(1px); }
+.waiting-item.urgent { border-left-color: var(--urgent); }
+.waiting-item.high { border-left-color: var(--high); }
+.waiting-item.low { border-left-color: var(--low); }
+
+.waiting-avatar {
+  font-size: 20px; line-height: 1; flex-shrink: 0;
+  width: 28px; text-align: center;
+}
+.waiting-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.waiting-line {
+  display: flex; align-items: baseline; gap: 6px;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.waiting-name { font-weight: 600; font-size: 12px; color: var(--text); }
+.waiting-summary { font-size: 12px; color: var(--text-dim); }
+.waiting-sub {
+  display: flex; gap: 8px; align-items: baseline;
+  font-size: 11px; color: var(--text-muted);
+  overflow: hidden;
+}
+.waiting-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.waiting-time { white-space: nowrap; }
+.waiting-cta { flex-shrink: 0; font-size: 11px; padding: 4px 10px; }
+
 /* === Widgets === */
 .home-widget {
   background: rgba(45, 54, 60, 0.55);

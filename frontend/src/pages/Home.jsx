@@ -37,6 +37,60 @@ const MOON_EMOJI = {
   last_quarter: "🌗", waning_crescent: "🌘",
 };
 
+// Mirror of frontend/src/components/AssignAgentModal.jsx AVATAR_EMOJI +
+// src/planet_maiko/agents/signature.py — keep all three in sync.
+const AVATAR_EMOJI = {
+  shiba: "🐕", corgi: "🐶", husky: "🐺", poodle: "🐩", golden: "🦮",
+  beagle: "🐕‍🦺", dalmatian: "🐾", samoyed: "☁️", akita: "🐕", pomeranian: "🧸",
+  calico_cat: "🐱", tabby_cat: "🐈", black_cat: "🐈‍⬛",
+  bunny: "🐰", hamster: "🐹", fox: "🦊",
+};
+
+// Pupdate types that block Brigitte on a decision or action.
+// "agent_pr_opened" / "pr_approved" / "pr_merged" are FYIs — excluded.
+const WAITING_TYPES = new Set([
+  "agent_plan_for_approval",
+  "agent_ready_for_review",
+  "agent_stuck",
+  "agent_proposal",
+  "pr_review_requested",
+  "pr_changes_requested",
+]);
+
+const PRIORITY_RANK = { urgent: 0, high: 1, normal: 2, low: 3 };
+
+function waitingCta(p) {
+  const taskId = p.metadata?.task_id;
+  if (p.type === "agent_plan_for_approval" && taskId) {
+    return { label: "Review plan", to: `/tasks/${taskId}/plan` };
+  }
+  if (p.type === "agent_ready_for_review" && taskId) {
+    return { label: "Review diff", to: `/tasks/${taskId}/review` };
+  }
+  if (p.type === "agent_stuck" && taskId) {
+    return { label: "Help out", to: `/tasks/${taskId}` };
+  }
+  if (p.type === "agent_proposal") {
+    return { label: "Decide", to: "/inbox" };
+  }
+  if (p.type === "pr_review_requested" || p.type === "pr_changes_requested") {
+    return p.url
+      ? { label: p.type === "pr_review_requested" ? "Review PR" : "Revise", href: p.url }
+      : { label: "Open", to: "/inbox" };
+  }
+  return { label: "Open", to: "/inbox" };
+}
+
+function waitingSummary(p) {
+  if (p.type === "agent_plan_for_approval") return "has a plan ready for you";
+  if (p.type === "agent_ready_for_review") return "finished a round — diff ready";
+  if (p.type === "agent_stuck") return "is stuck and needs a paw";
+  if (p.type === "agent_proposal") return "proposed something for you";
+  if (p.type === "pr_review_requested") return "is asking for a PR review";
+  if (p.type === "pr_changes_requested") return "requested changes on your PR";
+  return p.title;
+}
+
 function weatherEmoji(w) {
   if (w === "clear") return "☀️";
   if (w === "rain") return "🌧️";
@@ -60,7 +114,8 @@ export default function Home() {
   const [stats, setStats] = useState({ pupdates: 0, unread: 0, tasks_new: 0, tasks_ip: 0, projects: 0 });
   const [focus, setFocus] = useState(null);
   const [brainStatus, setBrainStatus] = useState(null);
-  const [recentPupdates, setRecentPupdates] = useState([]);
+  const [waitingItems, setWaitingItems] = useState([]);
+  const [profilesById, setProfilesById] = useState({});
   const [schedule, setSchedule] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [morningBrief, setMorningBrief] = useState(null);
@@ -74,7 +129,7 @@ export default function Home() {
 
   const fetchAll = async () => {
     try {
-      const [sc, pupdates, tasksNew, tasksIp, projects, foc, brain, sched, cfg] = await Promise.all([
+      const [sc, pupdates, tasksNew, tasksIp, projects, foc, brain, sched, cfg, profiles] = await Promise.all([
         api.getScene(),
         api.getPupdates(),
         api.getTasks({ status: "new" }),
@@ -84,7 +139,9 @@ export default function Home() {
         api.getBrainStatus().catch(() => null),
         api.getSchedule().catch(() => null),
         api.getConfig().catch(() => null),
+        api.getProfiles().catch(() => []),
       ]);
+      setProfilesById(Object.fromEntries((profiles || []).map((pr) => [pr.id, pr])));
       setHomeConfig(cfg);
       setScene(sc);
       setStats({
@@ -96,7 +153,15 @@ export default function Home() {
       });
       setFocus(foc);
       setBrainStatus(brain);
-      setRecentPupdates(pupdates.slice(0, 5));
+      const waiting = pupdates
+        .filter((p) => WAITING_TYPES.has(p.type) && !p.dismissed)
+        .sort((a, b) => {
+          const pa = PRIORITY_RANK[a.priority] ?? 2;
+          const pb = PRIORITY_RANK[b.priority] ?? 2;
+          if (pa !== pb) return pa - pb;
+          return (a.timestamp || "").localeCompare(b.timestamp || "");
+        });
+      setWaitingItems(waiting);
       setSchedule(sched);
       setCalendarEvents(
         pupdates
@@ -319,21 +384,40 @@ export default function Home() {
             <div className="home-card-header">
               <AlertCircle size={14} /> Also Waiting
             </div>
-            {recentPupdates.length > 0 ? (
-              <div className="recent-list">
-                {recentPupdates.map((p) => (
-                  <div key={p.id} className={`recent-item ${p.read ? "read" : ""}`} onClick={() => navigate('/inbox')}>
-                    <span className={`priority-dot-sm ${p.priority}`} />
-                    <span className="recent-source">{p.source}</span>
-                    <span className="recent-title">{p.title}</span>
-                    <span className="recent-type-tag">{p.type?.replace(/_/g, " ")}</span>
-                    <span className="recent-time">{relativeTime(p.timestamp)}</span>
-                    {p.action_hint && <span className="recent-hint">{p.action_hint}</span>}
-                  </div>
-                ))}
+            {waitingItems.length > 0 ? (
+              <div className="waiting-list">
+                {waitingItems.map((p) => {
+                  const cta = waitingCta(p);
+                  const profile = p.metadata?.agent_id ? profilesById[p.metadata.agent_id] : null;
+                  const emoji = profile ? (AVATAR_EMOJI[profile.avatar] || "🐾") : "🐾";
+                  const name = profile?.display_name || p.source || "Agent";
+                  const go = (e) => {
+                    e.stopPropagation();
+                    if (cta.href) window.open(cta.href, "_blank", "noreferrer");
+                    else navigate(cta.to);
+                  };
+                  return (
+                    <div key={p.id} className={`waiting-item ${p.priority}`} onClick={go}>
+                      <span className="waiting-avatar">{emoji}</span>
+                      <div className="waiting-text">
+                        <div className="waiting-line">
+                          <span className="waiting-name">{name}</span>
+                          <span className="waiting-summary">{waitingSummary(p)}</span>
+                        </div>
+                        <div className="waiting-sub">
+                          <span className="waiting-title">{p.title}</span>
+                          <span className="waiting-time">{relativeTime(p.timestamp)}</span>
+                        </div>
+                      </div>
+                      <button className="btn btn-sm btn-primary waiting-cta" onClick={go}>
+                        {cta.label}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <div className="focus-empty">Nothing waiting. All clear!</div>
+              <div className="focus-empty">Nothing waiting — the pack is self-sufficient today 🌱</div>
             )}
           </div>
         </div>
