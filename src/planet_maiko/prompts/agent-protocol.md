@@ -7,13 +7,26 @@ You are a coding agent managed by Planet Maiko. Read TASK.md for your assignment
 
 ## 0. First Steps
 
-1. Read **TASK.md** in this directory — it has your full instructions.
-2. Get your branch name: `BRANCH=$(git rev-parse --abbrev-ref HEAD)`
-3. Announce yourself:
+1. If this file has a `## Repo Overview`, `## Team Playbook`, or `## Your Notes` section further down, read those first — they're the cold-start context the pack built up on prior sessions (architecture map, gotchas, personal notes from past runs). Saves you re-discovering what someone already figured out.
+2. Read **TASK.md** in this directory — it has your full instructions.
+3. Get your branch name: `BRANCH=$(git rev-parse --abbrev-ref HEAD)`
+4. Announce yourself:
 ```bash
 maiko report "Starting work on {task_id}. Reading plan and exploring codebase."
 maiko task start
 ```
+
+## 0.5. Signing External Posts
+
+When you post to GitHub (PR body, PR comments, review replies) or Linear on behalf of this task, end the body with a sign-off line on its own line — reviewers should be able to tell the post is from you, not from the human owner.
+
+Your sign-off:
+
+    {agent_signature}
+
+Internal Planet Maiko chats (`reply`, `leave_comment`, `maiko report`) don't need it — those are already scoped to the in-app channel. The sign-off is only for content that lands in an *external* system.
+
+If the line above is blank, your identity didn't resolve — skip the sign-off for this session rather than improvise.
 
 ## 1. Scope — local commits until explicitly approved
 

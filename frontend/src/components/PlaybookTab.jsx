@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
+import { renderMarkdown } from "../utils/markdown";
 import {
   Check, X, Edit3, Plus, RefreshCw, Clock, Loader, Map as MapIcon,
+  ChevronDown, ChevronRight,
 } from "lucide-react";
 import "./PlaybookTab.css";
 
@@ -30,6 +32,7 @@ export default function PlaybookTab({ onCountsChange }) {
   const [addTags, setAddTags] = useState("");
   const [adding, setAdding] = useState(false);
   const [cartographing, setCartographing] = useState(null); // repo name while spawn in flight
+  const [expandedOverviews, setExpandedOverviews] = useState({});
 
   const fetchAll = async () => {
     setLoading(true);
@@ -183,9 +186,31 @@ export default function PlaybookTab({ onCountsChange }) {
                           className="playbook-edit-input"
                           value={editText}
                           onChange={(e) => setEditText(e.target.value)}
-                          rows={3}
+                          rows={(ins.tags || []).includes("overview") ? 20 : 3}
                           autoFocus
                         />
+                      ) : (ins.tags || []).includes("overview") ? (
+                        <div className="playbook-overview">
+                          <button
+                            className="playbook-overview-toggle"
+                            onClick={() => setExpandedOverviews((s) => ({ ...s, [ins.id]: !s[ins.id] }))}
+                          >
+                            {expandedOverviews[ins.id]
+                              ? <ChevronDown size={12} />
+                              : <ChevronRight size={12} />}
+                            <MapIcon size={12} />
+                            <span>Repo Overview</span>
+                            <span className="playbook-overview-preview">
+                              {ins.text.split("\n").find((l) => l.trim() && !l.startsWith("#")) || "—"}
+                            </span>
+                          </button>
+                          {expandedOverviews[ins.id] && (
+                            <div
+                              className="playbook-overview-body"
+                              dangerouslySetInnerHTML={{ __html: renderMarkdown(ins.text) }}
+                            />
+                          )}
+                        </div>
                       ) : (
                         <div className="playbook-item-text">{ins.text}</div>
                       )}

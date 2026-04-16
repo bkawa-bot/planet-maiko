@@ -172,6 +172,16 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
         "cartographer": "cartographer-agent-protocol",
     }.get(role, "agent-protocol")
 
+    # Agent signature — used by the protocol's "Signing External Posts"
+    # block. Blank when we can't resolve the profile; the protocol
+    # template instructs agents to skip signing in that case.
+    agent_signature = ""
+    try:
+        from planet_maiko.agents.signature import format_agent_signature
+        agent_signature = format_agent_signature(agent_profile_id) or ""
+    except Exception:
+        pass
+
     # Load protocol from skill prompt (editable via Skills page)
     content = None
     try:
@@ -180,6 +190,7 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
             "task_title": task_title,
             "task_id": task_id,
             "maiko_port": str(maiko_port),
+            "agent_signature": agent_signature,
         })
     except Exception:
         pass
@@ -196,6 +207,7 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
             content = content.replace("{task_title}", task_title)
             content = content.replace("{task_id}", task_id)
             content = content.replace("{maiko_port}", str(maiko_port))
+            content = content.replace("{agent_signature}", agent_signature)
         except Exception:
             content = f"# Agent Protocol\n\nTask: {task_title}\nTask ID: {task_id}\nRole: {role}\n\nRead TASK.md for instructions."
 
@@ -676,11 +688,12 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
     if budget in ("low", "medium", "high", "max"):
         cmd.extend(["--effort", budget])
 
-    if plan_first:
+    if plan_first or role == "cartographer":
         # Claude's plan mode restricts the tool set to read-only
         # (Read/Glob/Grep/etc.), so the agent can't write even if its
         # prompt discipline slips. Reply via MCP still works since
-        # MCP tools aren't disk-modifying.
+        # MCP tools aren't disk-modifying. Cartographers run read-only
+        # by design — no exceptions.
         cmd.extend(["--permission-mode", "plan"])
 
     log_path = os.path.join(worktree_path, "agent.log")

@@ -60,6 +60,72 @@
   color: #fff;
 }
 
+/* Overview insight — collapsed card by default, expands to full
+   rendered markdown. These docs are 1–1.5K tokens, too big to spill
+   inline. */
+.playbook-overview {
+  display: flex; flex-direction: column; gap: 6px;
+  width: 100%;
+}
+.playbook-overview-toggle {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--lavender, #a78bfa);
+  background: var(--lavender-soft, rgba(167, 139, 250, 0.12));
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.15s;
+}
+.playbook-overview-toggle:hover {
+  background: rgba(167, 139, 250, 0.22);
+}
+.playbook-overview-preview {
+  font-weight: 400;
+  color: var(--text-dim);
+  font-size: 11px;
+  margin-left: 6px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  flex: 1; min-width: 0;
+}
+.playbook-overview-body {
+  padding: 12px 14px;
+  background: var(--bg-card-alt, var(--bg));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.playbook-overview-body h2 {
+  font-size: 14px; margin: 14px 0 6px;
+  color: var(--pink);
+  font-weight: 700;
+}
+.playbook-overview-body h2:first-child { margin-top: 0; }
+.playbook-overview-body h3 { font-size: 13px; margin: 10px 0 4px; }
+.playbook-overview-body p { margin: 4px 0 8px; }
+.playbook-overview-body ul, .playbook-overview-body ol { margin: 4px 0 8px; padding-left: 22px; }
+.playbook-overview-body li { margin: 2px 0; }
+.playbook-overview-body code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--bg-hover);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.playbook-overview-body pre {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--bg);
+  padding: 8px 10px;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
 .playbook-group-items {
   display: flex; flex-direction: column;
 }
