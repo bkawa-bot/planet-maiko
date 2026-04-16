@@ -132,7 +132,7 @@ def _write_task_file(working_path, task_id, task_title, prompt):
         f.write(content)
 
 
-def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_port=None, parent_repo_path=None):
+def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_port=None, parent_repo_path=None, agent_profile_id=None):
     """Write CLAUDE.md with full agent protocol.
 
     Loads the protocol template for the given role. "coding" uses the
@@ -142,9 +142,15 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
     follows.
 
     parent_repo_path drives the Insights injection — active, non-
-    expired Insights scoped to that repo (or global) get appended
-    as a "Team Playbook" section so every agent inherits the tribal
-    knowledge the pack has built up.
+    expired Insights scoped to that repo (or global) get appended.
+    Insights tagged `overview` get hoisted into a top-level `Repo
+    Overview` H2 block (the cold-start map); the rest land as the
+    usual "Team Playbook" bullet list.
+
+    agent_profile_id, when set, pulls the agent's personal
+    `instructions` field off their AgentProfile and appends it as a
+    per-agent "Your Notes" section — carry-forward context so the
+    agent doesn't re-learn the same things every session.
     """
     if maiko_port is None:
         from planet_maiko.config import MAIKO_PORT
@@ -201,11 +207,16 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
     # Insights aren't confidence-gated or trainable — they're the
     # "things every new agent in this repo should know" playbook:
     # tooling quirks, mid-migration state, team conventions that
-    # aren't code rules. Injected verbatim so the agent sees them
-    # at session start.
+    # aren't code rules. Insights tagged "overview" get promoted to
+    # a Repo Overview block at the top; the rest render as the usual
+    # Team Playbook bullets.
     playbook = _build_playbook_section(parent_repo_path)
     if playbook:
         content += f"\n\n{playbook}\n"
+
+    agent_notes = _build_agent_notes_section(agent_profile_id)
+    if agent_notes:
+        content += f"\n\n{agent_notes}\n"
 
     claude_dir = os.path.join(working_path, ".claude")
     os.makedirs(claude_dir, exist_ok=True)
@@ -214,8 +225,13 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
 
 
 def _build_playbook_section(parent_repo_path):
-    """Render the Team Playbook section of CLAUDE.md from active
+    """Render the Repo Overview + Team Playbook sections from active
     Insights scoped to this repo (or global).
+
+    Insights tagged "overview" are cold-start context — the full
+    architecture / conventions / gotchas map. They render verbatim
+    as an H2 so the agent sees them before anything else. All other
+    insights render as the usual bullet list.
 
     Best-effort: DB errors, no matching repo, or empty insight set
     all return "" so the agent just doesn't get a playbook section.
@@ -248,20 +264,65 @@ def _build_playbook_section(parent_repo_path):
         if not fresh:
             return ""
 
-        lines = [
-            "## Team Playbook",
-            "",
-            "Tribal knowledge the pack has captured about this repo and how to work in it. Read before starting — saves you from re-discovering things another agent already figured out.",
-            "",
-        ]
-        for ins in fresh:
-            tag_str = ""
-            if ins.tags:
-                tag_str = " _" + ", ".join(ins.tags) + "_"
-            lines.append(f"- {ins.text.strip()}{tag_str}")
-        return "\n".join(lines)
+        overviews = [i for i in fresh if i.tags and "overview" in i.tags]
+        bullets = [i for i in fresh if not (i.tags and "overview" in i.tags)]
+
+        parts = []
+        if overviews:
+            parts.append("## Repo Overview")
+            parts.append("")
+            parts.append(
+                "Cold-start map for this repo — architecture, conventions, "
+                "gotchas, and what NOT to do. Read first so you don't "
+                "rediscover what another agent already mapped."
+            )
+            parts.append("")
+            for ins in overviews:
+                parts.append(ins.text.strip())
+                parts.append("")
+        if bullets:
+            parts.append("## Team Playbook")
+            parts.append("")
+            parts.append(
+                "Tribal knowledge the pack has captured about this repo "
+                "and how to work in it. Read before starting — saves you "
+                "from re-discovering things another agent already figured out."
+            )
+            parts.append("")
+            for ins in bullets:
+                tag_str = ""
+                if ins.tags:
+                    tag_str = " _" + ", ".join(ins.tags) + "_"
+                parts.append(f"- {ins.text.strip()}{tag_str}")
+        return "\n".join(parts).rstrip()
     except Exception as e:
         logger.debug(f"[claude_md] playbook build skipped: {e}")
+        return ""
+
+
+def _build_agent_notes_section(agent_profile_id):
+    """Render the agent's personal Your Notes section from their
+    AgentProfile.instructions — carry-forward context distinct from
+    the shared-per-repo playbook above.
+
+    Best-effort: missing profile or empty instructions returns "".
+    """
+    if not agent_profile_id:
+        return ""
+    try:
+        from planet_maiko.database import db
+        from planet_maiko.models.agent_profile import AgentProfile
+        profile = db.session.get(AgentProfile, agent_profile_id)
+        if not profile or not (profile.instructions or "").strip():
+            return ""
+        return (
+            "## Your Notes\n\n"
+            "Things you personally learned in past sessions on this or "
+            "adjacent work. Review before starting.\n\n"
+            f"{profile.instructions.strip()}"
+        )
+    except Exception as e:
+        logger.debug(f"[claude_md] agent notes skipped: {e}")
         return ""
 
 
@@ -836,6 +897,7 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     _write_claude_md(
         working_path, task_id, task_title,
         role=role, parent_repo_path=repo_path,
+        agent_profile_id=agent_profile_id,
     )
     # Pass repo_path so the worktree's .mcp.json inherits the user's
     # per-project MCPs (Linear / Slack / etc.) — otherwise the agent
