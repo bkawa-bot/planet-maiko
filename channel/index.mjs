@@ -395,8 +395,14 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
 
 async function pollMessages() {
   try {
+    // mark_read=false: the channel notification is best-effort (it relies
+    // on an experimental MCP channel that may not surface to the model).
+    // If we marked read here and the notification got dropped, the Stop
+    // hook would see an empty inbox and the message would be lost.
+    // Leaving messages unread lets the Stop hook catch anything the
+    // notification channel missed — that's the guaranteed delivery path.
     const resp = await fetch(
-      `${API_URL}/agents/${TASK_ID}/inbox?unread_only=true&mark_read=true`
+      `${API_URL}/agents/${TASK_ID}/inbox?unread_only=true&mark_read=false`
     );
     if (!resp.ok) return;
 

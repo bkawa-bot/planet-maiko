@@ -42,12 +42,15 @@ class GitHubPoller(BasePoller):
         return json.loads(result.stdout) if result.stdout.strip() else []
 
     def _get_review_requests(self, username):
-        """Get PRs where the user's review is requested."""
+        """Get PRs where the user's review is requested. Includes
+        headRefOid so we can disambiguate re-requests on the same PR
+        (new commit pushed after a prior dismissal should fire a new
+        pupdate, not get deduped)."""
         return self._gh([
             "search", "prs",
             "--review-requested", username,
             "--state", "open",
-            "--json", "number,title,url,repository,author,createdAt,labels",
+            "--json", "number,title,url,repository,author,createdAt,labels,headRefOid",
         ])
 
     def _get_my_prs(self, username):
@@ -233,15 +236,24 @@ class GitHubPoller(BasePoller):
             if extra_url:
                 task_by_pr_url[extra_url.rstrip("/")] = t
 
-        # Review requests -> high priority pupdates
+        # Review requests -> high priority pupdates. source_id includes
+        # the head SHA so a re-request on a new commit isn't dedup-swallowed
+        # by the base poller (see base.py:162-167 note). Falls back to the
+        # plain `review/repo#number` form if the SHA isn't present — keeps
+        # behavior stable for gh versions that don't return headRefOid.
         for pr in raw_data.get("review_requests", []):
             repo = pr.get("repository", {}).get("nameWithOwner", "")
             number = pr.get("number")
             author = pr.get("author", {}).get("login", "unknown")
             labels = [l.get("name", "") for l in pr.get("labels", [])]
+            head_sha = pr.get("headRefOid") or ""
+
+            source_id = f"review/{repo}#{number}"
+            if head_sha:
+                source_id = f"{source_id}@{head_sha[:10]}"
 
             pupdates.append({
-                "source_id": f"review/{repo}#{number}",
+                "source_id": source_id,
                 "type": "pr_review_requested",
                 "priority": "high",
                 "title": f"Review requested: {pr.get('title', '')}",

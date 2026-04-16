@@ -381,11 +381,36 @@ def _harvest_comments_as_training_pairs(comments, worktree, repo):
     snippet is a +/-3 line window from the worktree file at the
     comment's line. Categories are left to the LLM classifier
     downstream since reviewers don't write in categories.
+
+    When the code window can't be extracted (file renamed, deleted,
+    line shifted by edits before the user clicked Request Changes),
+    we still emit a Signal so the rule pipeline sees the violation —
+    we just skip the training pair since corrections.jsonl needs real
+    code to be useful to the LoRA fine-tune.
     """
-    from planet_maiko.brain.learning.feedback import add_corrective_violation
+    from planet_maiko.brain.learning.feedback import (
+        add_corrective_violation, _emit_signal,
+    )
     for c in comments:
         code_snippet = _extract_code_window(worktree, c.file_path, c.line_number)
         if not code_snippet:
+            logger.warning(
+                f"[harvest] No code window for comment {c.id} "
+                f"({c.file_path}:{c.line_number}); emitting signal "
+                "without a training pair"
+            )
+            try:
+                _emit_signal(
+                    category="pattern",
+                    text=c.body,
+                    source_type="review_comment",
+                    severity="suggestion",
+                    repo=repo,
+                    file_path=c.file_path,
+                    code_context=None,
+                )
+            except Exception as e:
+                logger.debug(f"[harvest] Signal emit failed for {c.id}: {e}")
             continue
         try:
             add_corrective_violation(
