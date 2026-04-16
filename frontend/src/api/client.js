@@ -233,6 +233,24 @@ export const api = {
   dismissLearning: (id) => request(`/learnings/${id}/dismiss`, { method: "POST" }),
   classifyLearnings: (batchSize = 50) => request("/learnings/classify", { method: "POST", body: JSON.stringify({ batch_size: batchSize }) }),
 
+  // Insights (Team Playbook — tribal / operational notes injected into CLAUDE.md)
+  getInsights: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/insights${query ? `?${query}` : ""}`);
+  },
+  createInsight: (data) =>
+    request("/insights", { method: "POST", body: JSON.stringify(data) }),
+  updateInsight: (id, data) =>
+    request(`/insights/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  approveInsight: (id) =>
+    request(`/insights/${id}/approve`, { method: "POST" }),
+  dismissInsight: (id) =>
+    request(`/insights/${id}/dismiss`, { method: "POST" }),
+  confirmInsight: (id) =>
+    request(`/insights/${id}/confirm`, { method: "POST" }),
+  deleteInsight: (id) =>
+    request(`/insights/${id}`, { method: "DELETE" }),
+
   // Plugins
   getPlugins: () => request("/plugins"),
   togglePlugin: (name) => request(`/plugins/${name}/toggle`, { method: "POST" }),

@@ -1,0 +1,114 @@
+.playbook-tab {
+  display: flex; flex-direction: column; gap: 16px;
+  padding-top: 10px;
+}
+
+.playbook-intro {
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--pink);
+  border-radius: var(--radius-xs);
+  font-size: 12.5px; color: var(--text-dim); line-height: 1.55;
+}
+
+.playbook-filter-row { display: flex; align-items: center; gap: 8px; }
+.playbook-filter-pills { display: flex; gap: 4px; }
+.playbook-filter-pill {
+  padding: 4px 10px; border: 1px solid var(--border);
+  border-radius: 999px; font-size: 11px; font-weight: 500;
+  background: var(--bg-card); color: var(--text-dim);
+  cursor: pointer; text-transform: capitalize;
+}
+.playbook-filter-pill:hover { border-color: var(--pink); color: var(--pink); }
+.playbook-filter-pill.active {
+  background: var(--pink-soft); border-color: var(--pink); color: var(--pink);
+}
+
+.playbook-groups { display: flex; flex-direction: column; gap: 14px; }
+
+.playbook-group {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.playbook-group-header {
+  padding: 10px 14px;
+  background: var(--bg);
+  font-size: 12px; font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: var(--font-mono);
+}
+
+.playbook-group-items {
+  display: flex; flex-direction: column;
+}
+
+.playbook-item {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.playbook-item:last-child { border-bottom: none; }
+.playbook-item.pending { background: var(--lavender-soft); }
+.playbook-item.dismissed { opacity: 0.5; }
+.playbook-item.expired { opacity: 0.55; font-style: italic; }
+
+.playbook-item-main { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.playbook-item-text {
+  font-size: 12.5px; color: var(--text); line-height: 1.5;
+  word-break: break-word;
+}
+.playbook-item-meta {
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+  font-size: 10px;
+}
+.playbook-item-meta .tag {
+  font-size: 10px; padding: 1px 6px;
+  background: var(--border-subtle); color: var(--text-muted);
+  border-radius: 3px;
+}
+.playbook-item-meta .badge.paused {
+  background: var(--lavender-soft); color: var(--lavender); font-weight: 600;
+}
+
+.playbook-item-actions {
+  display: flex; gap: 4px; flex-shrink: 0; align-items: flex-start;
+}
+
+.playbook-edit-input {
+  width: 100%; padding: 6px 8px; font-size: 12px;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--pink); border-radius: var(--radius-xs);
+  font-family: inherit; resize: vertical;
+}
+
+.playbook-add-section {
+  padding: 14px;
+  background: var(--pink-soft);
+  border-radius: var(--radius);
+  margin-top: 6px;
+}
+.playbook-add-header {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 700;
+  color: var(--pink);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  margin-bottom: 10px;
+}
+.playbook-add-form {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.playbook-add-input,
+.playbook-add-textarea {
+  padding: 8px 10px; font-size: 12.5px;
+  background: var(--bg-card); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-xs);
+  font-family: inherit;
+}
+.playbook-add-input:focus,
+.playbook-add-textarea:focus { border-color: var(--pink); outline: none; }
+.playbook-add-textarea { resize: vertical; min-height: 48px; }

@@ -4,10 +4,12 @@ import { showToast } from "../components/Toast";
 import {
   BookOpen, Brain, Clock, Layers, Check, X, Edit3,
   ChevronDown, ChevronRight, Plus, Shield, Download, Loader, Sparkles,
+  Flame, RefreshCw,
 } from "lucide-react";
 import InfoButton from "../components/InfoButton";
 import ConfirmModal from "../components/ConfirmModal";
 import BackfillProgress from "../components/BackfillProgress";
+import PlaybookTab from "../components/PlaybookTab";
 import "./Knowledge.css";
 
 const CATEGORY_ICONS = {
@@ -36,6 +38,7 @@ export default function BrainView() {
   const [configuredRepos, setConfiguredRepos] = useState([]);
   const [tab, setTab] = useState("pool");
   const [synthesizing, setSynthesizing] = useState(false);
+  const [pendingInsightsCount, setPendingInsightsCount] = useState(0);
 
   const fetchLearnings = async () => {
     setKLoading(true);
@@ -213,7 +216,17 @@ export default function BrainView() {
           >
             Unsynthesized {rawSignalsTotal > 0 && <span className="tab-badge">{rawSignalsTotal}</span>}
           </button>
+          <button
+            className={`inbox-tab ${tab === "playbook" ? "active" : ""}`}
+            onClick={() => setTab("playbook")}
+          >
+            Playbook {pendingInsightsCount > 0 && <span className="tab-badge">{pendingInsightsCount}</span>}
+          </button>
         </div>
+
+        {tab === "playbook" && (
+          <PlaybookTab onCountsChange={setPendingInsightsCount} />
+        )}
 
         {tab === "unsynthesized" && unsynthesized.length > 0 && (
           <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 0", marginBottom: 8 }}>

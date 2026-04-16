@@ -42,8 +42,21 @@ def get_state():
 def start_gathering():
     """Begin the Pack Insights gathering process.
 
-    Sends a signal to all active agents asking them to report learnings.
+    Messages every active agent's channel inbox directly asking them
+    to report both coding-rule feedback (becomes Signals -> Learnings
+    -> LoRA) and operational insights (becomes pending Insights ->
+    Team Playbook). Previously this function just dropped a pupdate
+    into the user's inbox with a "(agents watch for this)" comment,
+    but nothing was actually watching — so the ritual quietly
+    collected almost nothing. Now the agents actually get asked.
+
+    Also resumes each active agent's Claude session so they pick up
+    the inbox message on their next Stop-hook check, instead of
+    waiting for the next time the user happens to interact.
     """
+    from planet_maiko.models.task import Task
+    from planet_maiko.models.agent_message import AgentMessage
+
     global _pack_insights_state
     now = datetime.now(timezone.utc)
 
@@ -54,25 +67,76 @@ def start_gathering():
         "collected": [],
         "synthesis": None,
         "agents_reported": [],
+        "agents_messaged": [],
     }
 
-    # Create a Pack Insights signal pupdate (agents watch for this)
+    # Summary pupdate so the user has something to see in their own
+    # inbox (and so the pack-insights API state loads on refresh).
     signal_pupdate = Pupdate(
         id=f"pack-insights-signal-{now.strftime('%Y%m%d')}",
         source="maiko",
         source_id=f"pack-insights/{now.strftime('%Y-%m-%d')}",
         type="pack_insights_signal",
         priority="normal",
-        title="Pack Insights: share your learnings",
-        body="Report any learnings, patterns, or gotchas you discovered today.",
-        actionable=True,
-        action_hint="Report learnings",
+        title="Pack Insights: gathering from the pack",
+        body="Maiko is asking every active agent to share feedback and insights from their work today.",
+        actionable=False,
         tags=["pack-insights"],
     )
     db.session.add(signal_pupdate)
-    db.session.commit()
 
-    logger.info("[pack_insights] Started gathering")
+    # Message each active agent's inbox via the same channel agents
+    # already poll on every Stop hook. Scope to tasks that have a
+    # working_path (meaning the agent has a live worktree + session)
+    # and haven't been closed out.
+    prompt = (
+        "End-of-day check-in. Reflect on your work today on this task "
+        "and share two kinds of things via separate reply calls:\n\n"
+        "1. FEEDBACK — coding rules or patterns you think should apply "
+        "to future work in this repo. Use:\n"
+        "   reply(content=\"<one sentence rule>\", message_type=\"feedback\")\n"
+        "   These feed the LoRA compliance model. Skip if nothing "
+        "rule-like came up.\n\n"
+        "2. INSIGHTS — tribal / operational knowledge a future agent "
+        "would benefit from knowing before starting work in this repo. "
+        "Tooling quirks, repo state, team conventions — stuff that "
+        "would go in an onboarding doc, not a linter. Use:\n"
+        "   reply(content=\"<one sentence note>\", message_type=\"insight\")\n"
+        "   These get injected into every new agent's CLAUDE.md.\n\n"
+        "One fact per reply. If you don't have anything to say, a short "
+        "reply(content=\"nothing new\", message_type=\"status\") is fine. "
+        "You can continue working on the task afterward."
+    )
+
+    active_tasks = Task.query.filter(
+        Task.assigned_agent_id.isnot(None),
+        Task.status.in_(("new", "in_progress", "blocked", "review", "in_review")),
+    ).all()
+
+    messaged = 0
+    for t in active_tasks:
+        wp = (t.extra or {}).get("working_path")
+        if not wp:
+            continue  # No live worktree — agent has nothing to reply from
+        db.session.add(AgentMessage(
+            task_id=t.id,
+            direction="to_agent",
+            sender="maiko",
+            message_type="pack_insights_request",
+            content=prompt,
+        ))
+        _pack_insights_state["agents_messaged"].append(t.assigned_agent_id)
+        messaged += 1
+        # Best-effort: wake the agent so it reads the message now
+        # instead of waiting for the next user interaction.
+        try:
+            from planet_maiko.api.diff_api import _resume_agent_with_review
+            _resume_agent_with_review(t.id, wp)
+        except Exception as e:
+            logger.debug(f"[pack_insights] Resume failed for {t.id}: {e}")
+
+    db.session.commit()
+    logger.info(f"[pack_insights] Started gathering — messaged {messaged} active agent(s)")
     return _pack_insights_state
 
 
@@ -270,6 +334,7 @@ def reset():
         "collected": [],
         "synthesis": None,
         "agents_reported": [],
+        "agents_messaged": [],
     }
 
 
