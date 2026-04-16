@@ -288,19 +288,39 @@ def process():
     Returns:
         dict with counts: {processed, dismissed, read, tasks_created, skipped, unmatched}
     """
-    unprocessed = Pupdate.query.filter_by(brain_processed=False, dismissed=False).all()
+    # Grab just the IDs up front. triage_pupdate internally calls
+    # db.session.close() to release the SQLite write lock before its
+    # LLM call; that detaches every Pupdate object held in Python,
+    # including the ones still in this loop. Iterating over IDs and
+    # re-fetching each pass keeps every mutation on an attached row,
+    # so dismiss / mark_read / brain_processed actually persist.
+    # (Previously: every triage decision was logged but silently
+    # dropped at commit time because the mutated object was detached.)
+    pupdate_ids = [
+        p.id for p in
+        Pupdate.query
+        .filter_by(brain_processed=False, dismissed=False)
+        .with_entities(Pupdate.id)
+        .all()
+    ]
 
-    if not unprocessed:
+    if not pupdate_ids:
         return {"processed": 0, "dismissed": 0, "read": 0, "tasks_created": 0, "skipped": 0, "unmatched": 0}
 
-    logger.info(f"Processing {len(unprocessed)} pupdate(s)...")
+    logger.info(f"Processing {len(pupdate_ids)} pupdate(s)...")
 
     counts = {"processed": 0, "dismissed": 0, "read": 0, "tasks_created": 0, "skipped": 0, "unmatched": 0, "held": 0}
 
     # Import focus manager for gating
     from planet_maiko.brain.focus.manager import should_surface, hold_pupdate
 
-    for pupdate in unprocessed:
+    for pid in pupdate_ids:
+        pupdate = db.session.get(Pupdate, pid)
+        if pupdate is None or pupdate.brain_processed or pupdate.dismissed:
+            # Got consumed by another worker or a rule that already
+            # committed — skip.
+            continue
+
         # Focus mode gating: hold pupdates that shouldn't surface right now
         if not should_surface(pupdate):
             hold_pupdate(pupdate)
@@ -316,13 +336,19 @@ def process():
             _resume_agent_for_pr_comments(pupdate)
             pupdate.brain_processed = True
             counts["processed"] += 1
+            db.session.commit()
             continue
 
         rule = evaluate(pupdate)
 
         if rule is None:
-            # No rule matched - try LLM triage if available
+            # No rule matched - try LLM triage if available. The LLM
+            # call detaches objects, so we re-fetch right after.
             triage_result = _try_llm_triage(pupdate)
+            pupdate = db.session.get(Pupdate, pid)
+            if pupdate is None:
+                continue  # deleted while we waited on the LLM
+
             if triage_result:
                 action = triage_result.get("action", "skip")
                 if action == ACTION_DISMISS:
@@ -344,6 +370,10 @@ def process():
 
             pupdate.brain_processed = True
             counts["processed"] += 1
+            # Commit per-pupdate in the LLM path so a crash or
+            # subsequent triage failure can't silently rollback the
+            # decisions we already made.
+            db.session.commit()
             continue
 
         action = rule.get("action")

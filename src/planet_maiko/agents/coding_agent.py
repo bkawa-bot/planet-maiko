@@ -520,6 +520,20 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
         "--session-id", session_id,
         "--dangerously-skip-permissions",
     ]
+
+    # Effort level: autonomous agents used to silently run at Claude
+    # Code's default because this path built its own cmd and never
+    # passed --effort. Read the same routing.thinking_budget setting
+    # the short runtime.send() calls honor so a single Settings knob
+    # controls every LLM call Maiko makes.
+    try:
+        from planet_maiko.config import load_config
+        budget = (load_config().get("routing", {}) or {}).get("thinking_budget", "medium")
+    except Exception:
+        budget = "medium"
+    if budget in ("low", "medium", "high", "max"):
+        cmd.extend(["--effort", budget])
+
     if plan_first:
         # Claude's plan mode restricts the tool set to read-only
         # (Read/Glob/Grep/etc.), so the agent can't write even if its

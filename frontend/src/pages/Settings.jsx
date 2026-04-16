@@ -516,6 +516,15 @@ export default function Settings() {
                     <option value="opus">Opus</option>
                   </select>
                 </label>
+                <label title="Controls Claude's reasoning depth for every LLM call — triage, clustering, skill runs, AND the autonomous coding/review/investigation agents. Max burns more tokens but produces noticeably better agent output.">
+                  Effort
+                  <select value={config.routing?.thinking_budget || "medium"} onChange={(e) => updateField("routing", "thinking_budget", e.target.value)} className="routing-select">
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="max">Max</option>
+                  </select>
+                </label>
               </div>
               <div className="routing-rules-table">
                 <div className="routing-rules-header">

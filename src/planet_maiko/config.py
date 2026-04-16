@@ -86,7 +86,11 @@ DEFAULT_CONFIG = {
     "routing": {
         "enabled": True,
         "default_model": "sonnet",
-        "thinking_budget": "medium",  # low, medium, high — controls Claude's reasoning depth
+        # low | medium | high | max — passed as `claude --effort <budget>`
+        # to every LLM call: triage, clustering, skill runs, and the
+        # autonomous coding / review / investigation agents. Max costs
+        # more tokens but noticeably better for agent work.
+        "thinking_budget": "medium",
     },
     "hooks": {
         "enabled": True,
