@@ -76,13 +76,37 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
     }
   };
 
+  const isReassign = !!task.assigned_agent_id;
+
   const handleAssign = async () => {
     if (!selectedId) {
       showToast("Select an agent", "high");
       return;
     }
-    // Coding agents still need a repo path the user chooses. Review
-    // and investigation agents resolve the path from config.
+
+    // Reassign mode: task already has an agent, and the user wants
+    // to swap. Skip the prepare/kickoff dance — the backend's
+    // reassign_task clears working_path so the cycle preps a fresh
+    // worktree for the new assignee on the next tick. Simpler flow,
+    // no repo-path prompt needed.
+    if (isReassign) {
+      setAssigning(true);
+      try {
+        await api.reassignTask(task.id, selectedId);
+        const agent = profiles.find((p) => p.id === selectedId);
+        showToast(`Reassigned to ${agent?.display_name || "agent"}`, "normal");
+        onAssigned();
+        onClose();
+      } catch (err) {
+        showToast(err.message || "Reassign failed", "high");
+      }
+      setAssigning(false);
+      return;
+    }
+
+    // Fresh assign: coding agents still need a repo path the user
+    // chooses. Review / investigation agents resolve the path from
+    // config.
     if (expectedRole === "coding" && !repoPath) {
       showToast("Enter a repo path", "high");
       return;
@@ -114,7 +138,7 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
       <div className="assign-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <Bot size={16} />
-          <span>Assign Agent</span>
+          <span>{isReassign ? "Reassign Agent" : "Assign Agent"}</span>
           <span className="assign-task-title">{task.title}</span>
         </div>
 
@@ -162,7 +186,7 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
                 <Plus size={10} /> Create a new {ROLE_META[expectedRole]?.label.toLowerCase() || "agent"}
               </button>
 
-              {isCoding && (
+              {isCoding && !isReassign && (
                 <>
                   <div className="assign-section-label" style={{ marginTop: 16 }}>Repository Path</div>
                   <input
@@ -211,9 +235,15 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
                 </>
               )}
 
-              {!isCoding && (
+              {!isCoding && !isReassign && (
                 <div style={{ marginTop: 16, padding: "10px 12px", background: "var(--pink-soft)", borderRadius: "var(--radius-xs)", fontSize: 12, color: "var(--text-dim)" }}>
                   {ROLE_META[expectedRole]?.label || "This agent"} runs autonomously — Maiko prepares a worktree and starts it in the background. You'll see the result in your inbox.
+                </div>
+              )}
+
+              {isReassign && (
+                <div style={{ marginTop: 16, padding: "10px 12px", background: "var(--pink-soft)", borderRadius: "var(--radius-xs)", fontSize: 12, color: "var(--text-dim)" }}>
+                  Reassigning drops the current agent's worktree and resets the task so the next cycle preps a fresh one for whomever you pick. The old commits aren't deleted (they're on the branch) — just the worktree checkout goes.
                 </div>
               )}
             </>
@@ -222,8 +252,12 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
 
         <div className="assign-footer">
           <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleAssign} disabled={assigning || !selectedId || (isCoding && !repoPath)}>
-            <Rocket size={12} /> {assigning ? "Preparing..." : "Assign"}
+          <button
+            className="btn btn-primary"
+            onClick={handleAssign}
+            disabled={assigning || !selectedId || (isCoding && !isReassign && !repoPath) || selectedId === task.assigned_agent_id}
+          >
+            <Rocket size={12} /> {assigning ? (isReassign ? "Reassigning..." : "Preparing...") : (isReassign ? "Reassign" : "Assign")}
           </button>
         </div>
       </div>

@@ -182,6 +182,20 @@ def reassign_task(task_id):
         task.assigned_agent_id = new_profile.id
         _coerce_task_type_for_role(task, new_profile.role)
 
+    # Blow away the previous agent's worktree so the new agent
+    # doesn't inherit stale TASK.md / commits. The cycle's
+    # execute-agent-tasks phase (or a fresh assign) will prepare a
+    # clean one for the new assignee. Clearing working_path + branch
+    # on task.extra is what tells the cycle to prepare a new
+    # worktree instead of re-using.
+    from planet_maiko.agents.coding_agent import cleanup_task_worktree
+    cleanup_task_worktree(task)
+    new_extra = dict(task.extra or {})
+    new_extra.pop("working_path", None)
+    new_extra.pop("branch", None)
+    new_extra.pop("session_id", None)
+    task.extra = new_extra
+
     # Reset status so the new agent picks it up next cycle.
     if task.status == "in_progress":
         task.status = "new"

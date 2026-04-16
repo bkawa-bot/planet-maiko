@@ -281,6 +281,20 @@ export default function TaskCard({
                   <Bot size={10} /> Assign Agent
                 </button>
               )}
+              {/* Reassign: swap to a different agent. Backend clears
+                  working_path / branch / session_id so the cycle
+                  preps a fresh worktree for the new assignee —
+                  stops the new agent from inheriting the old one's
+                  TASK.md and mid-progress commits. */}
+              {!isDone && t.assigned_agent_id && (
+                <button
+                  className="btn btn-sm btn-action"
+                  onClick={() => onAssignAgent(t)}
+                  title={`Currently: ${agentName || t.assigned_agent_id}. Click to switch.`}
+                >
+                  <Bot size={10} /> Reassign
+                </button>
+              )}
               {/* Assigned but never kicked off (plan-approve failed to
                   spawn, or user manually assigned without auto-start).
                   Coding agents only — one-shot roles spawn themselves
