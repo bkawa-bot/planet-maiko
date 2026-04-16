@@ -78,15 +78,17 @@ DEFAULT_CONFIG = {
             ["batch_job_failing", "error_spike"],
             ["deploy_rollback", "batch_job_failing"],
         ],
-        # When the correlator fires an incident, should Maiko spin up an
-        # investigation agent automatically? Off + dry-run by default so
-        # the first week you can see what *would* have fired without
-        # burning tokens. Flip "enabled" on, leave "dry_run" on: tasks
-        # get created but no agent kickoff. Flip both: full autopilot.
+        # When the correlator fires an incident, Maiko auto-creates an
+        # investigation task. `dry_run` keeps the secondary safety on:
+        # task appears in your list with extra.auto_spawned=true, but no
+        # agent kickoff yet — flip dry_run off when you trust the
+        # trigger to not surprise you. `enabled=false` turns the whole
+        # feature off (no task, no agent). `daily_budget` hard-stops
+        # runaway loops when upstream signals spike.
         "auto_investigate": {
-            "enabled": False,
+            "enabled": True,
             "dry_run": True,
-            "daily_budget": 5,  # hard stop after N auto-spawned investigations per day
+            "daily_budget": 5,
         },
     },
     "scene": {
