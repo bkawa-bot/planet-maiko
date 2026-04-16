@@ -31,6 +31,7 @@ def _ensure_columns():
         "ALTER TABLE agent_profiles ADD COLUMN role VARCHAR(32) DEFAULT 'coding'",
         "ALTER TABLE agent_profiles ADD COLUMN scope_repo VARCHAR(256)",
         "ALTER TABLE agent_profiles ADD COLUMN instructions TEXT",
+        "ALTER TABLE pupdates ADD COLUMN category VARCHAR(16) DEFAULT 'activity'",
         # Tournament system removed — drop legacy tables if present
         "DROP TABLE IF EXISTS tournament_entries",
         "DROP TABLE IF EXISTS tournaments",
@@ -40,6 +41,24 @@ def _ensure_columns():
             db.session.execute(db.text(sql))
         except Exception:
             pass
+
+    # Backfill category for rows that pre-date the column. ACTION_TYPES
+    # lives on the model so this list doesn't drift.
+    try:
+        from planet_maiko.models.pupdate import ACTION_TYPES
+        action_list = ",".join(f"'{t}'" for t in sorted(ACTION_TYPES))
+        db.session.execute(db.text(
+            f"UPDATE pupdates SET category = 'action' "
+            f"WHERE category IS NULL OR category = '' OR "
+            f"(category = 'activity' AND type IN ({action_list}))"
+        ))
+        db.session.execute(db.text(
+            f"UPDATE pupdates SET category = 'activity' "
+            f"WHERE (category IS NULL OR category = '') AND type NOT IN ({action_list})"
+        ))
+    except Exception:
+        pass
+
     db.session.commit()
 
 

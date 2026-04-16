@@ -154,7 +154,7 @@ export default function Home() {
       setFocus(foc);
       setBrainStatus(brain);
       const waiting = pupdates
-        .filter((p) => WAITING_TYPES.has(p.type) && !p.dismissed)
+        .filter((p) => (p.category === "action" || WAITING_TYPES.has(p.type)) && !p.dismissed)
         .sort((a, b) => {
           const pa = PRIORITY_RANK[a.priority] ?? 2;
           const pb = PRIORITY_RANK[b.priority] ?? 2;

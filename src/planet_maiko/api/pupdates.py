@@ -11,6 +11,7 @@ def list_pupdates():
     """List active pupdates, with optional filtering and pagination."""
     source = request.args.get("source")
     priority = request.args.get("priority")
+    category = request.args.get("category")  # "action" | "activity"
     show_dismissed = request.args.get("dismissed", "false").lower() == "true"
     limit = min(int(request.args.get("limit", 200)), 500)
     offset = int(request.args.get("offset", 0))
@@ -22,6 +23,8 @@ def list_pupdates():
         query = query.filter_by(source=source)
     if priority:
         query = query.filter_by(priority=priority)
+    if category:
+        query = query.filter_by(category=category)
 
     pupdates = query.order_by(Pupdate.timestamp.desc()).limit(limit).offset(offset).all()
     return jsonify([p.to_dict() for p in pupdates])

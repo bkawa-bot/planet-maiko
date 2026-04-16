@@ -85,6 +85,37 @@
   .inbox-sidebar { display: none; }
 }
 
+/* Action strip — the calm top band that surfaces pupdates blocking
+   on Brigitte's hands. Activity tabs below show everything else. */
+.action-strip {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--pink-soft) 0%, rgba(255,255,255,0.02) 100%);
+  border: 1px solid var(--pink);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+.action-strip-header {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600;
+  color: var(--pink);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+.action-strip-count {
+  margin-left: auto;
+  font-size: 10px; font-weight: 700;
+  background: var(--pink); color: #fff;
+  padding: 1px 7px; border-radius: 10px;
+  min-width: 18px; text-align: center;
+  text-transform: none; letter-spacing: 0;
+}
+.action-strip-list { display: flex; flex-direction: column; gap: 6px; }
+.action-strip-list .pupdate-card {
+  background: var(--bg-card);
+  border-left: 3px solid var(--pink);
+}
+
 /* Inbox tabs */
 .inbox-tab-bar {
   display: flex; align-items: center; gap: 8px; margin-bottom: 16px;

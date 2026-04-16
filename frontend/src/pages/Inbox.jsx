@@ -4,18 +4,21 @@ import { showToast } from "../components/Toast";
 import PupdateCard from "../components/PupdateCard";
 import { renderMarkdown } from "../utils/markdown";
 import { formatTime } from "../utils/dates";
-import { ExternalLink, X, Inbox as InboxIcon, ClipboardCheck, CheckSquare, MoreHorizontal, MessageCircle, Pencil, GitBranch, Calendar as CalendarIcon, Bot, Lightbulb, AlertTriangle, MessageSquare, Play, Loader, FileText, Folder } from "lucide-react";
+import { ExternalLink, X, Inbox as InboxIcon, ClipboardCheck, CheckSquare, MoreHorizontal, MessageCircle, Pencil, GitBranch, Calendar as CalendarIcon, Bot, Lightbulb, AlertTriangle, MessageSquare, Play, Loader, FileText, Folder, AlertCircle, Eye } from "lucide-react";
 import ProposalCard from "../components/ProposalCard";
 import "./Inbox.css";
 import "./Brainstorm.css";
 import "./Suggestions.css";
 
+// Tabs below the Action strip — they show the Activity feed, so
+// action-category pupdates are excluded (the strip owns them).
+const notAction = (p) => p.category !== "action";
 const TABS = [
-  { id: "all", label: "All", filter: (p) => p.type !== "approval" && p.type !== "suggestion" },
-  { id: "prs", label: "PRs", filter: (p) => p.type?.startsWith("pr_") },
+  { id: "all", label: "All", filter: (p) => p.type !== "approval" && p.type !== "suggestion" && notAction(p) },
+  { id: "prs", label: "PRs", filter: (p) => p.type?.startsWith("pr_") && notAction(p) },
   { id: "calendar", label: "Calendar", filter: (p) => p.source === "calendar" },
-  { id: "from_maiko", label: "From Maiko", filter: (p) => p.source === "maiko" || p.source === "agent" || p.type === "suggestion" || p.type === "approval" },
-  { id: "system", label: "System", filter: (p) => p.source === "system" || p.source === "scheduler" },
+  { id: "from_maiko", label: "From Maiko", filter: (p) => (p.source === "maiko" || p.source === "agent" || p.type === "suggestion" || p.type === "approval") && notAction(p) },
+  { id: "system", label: "System", filter: (p) => (p.source === "system" || p.source === "scheduler") && notAction(p) },
 ];
 
 const PRIORITY_ORDER = { urgent: 0, high: 1, normal: 2, low: 3 };
@@ -132,6 +135,7 @@ export default function Inbox() {
 
   const currentFilter = TABS.find((t) => t.id === tab)?.filter || (() => true);
   const filtered = pupdates.filter(currentFilter);
+  const actionItems = pupdates.filter((p) => p.category === "action");
 
   const tabCounts = TABS.reduce((acc, t) => {
     acc[t.id] = pupdates.filter(t.filter).length;
@@ -142,6 +146,34 @@ export default function Inbox() {
     <div className="inbox">
     <div className="inbox-grid">
       <div className="inbox-main">
+      {actionItems.length > 0 && (
+        <div className="action-strip">
+          <div className="action-strip-header">
+            <AlertCircle size={12} />
+            <span>Needs your hands</span>
+            <span className="action-strip-count">{actionItems.length}</span>
+          </div>
+          <div className="action-strip-list">
+            {actionItems.map((p) => (
+              p.type === "agent_proposal" ? (
+                <ProposalCard key={p.id} proposal={p} onAction={fetchPupdates} />
+              ) : (
+                <PupdateCard
+                  key={p.id}
+                  pupdate={p}
+                  isExpanded={expanded === p.id}
+                  onToggleExpand={() => toggleExpand(p)}
+                  onMarkRead={handleMarkRead}
+                  onDismiss={handleDismiss}
+                  onReviewPR={handleReviewPR}
+                  reviewing={reviewing}
+                  sourceIcon={sourceIcon}
+                />
+              )
+            ))}
+          </div>
+        </div>
+      )}
       <div className="inbox-tab-bar">
         {TABS.map((t) => (
           <button
