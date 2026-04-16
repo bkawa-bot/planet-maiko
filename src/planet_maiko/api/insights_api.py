@@ -109,8 +109,114 @@ def approve_insight(insight_id):
     insight = db.get_or_404(Insight, insight_id)
     insight.status = "active"
     insight.last_confirmed_at = datetime.now(timezone.utc)
+
+    # Only one active Repo Overview per repo — approving a new overview
+    # automatically supersedes the prior one. (Bullet-style insights
+    # stack, so this rule is limited to the "overview" tag.)
+    if insight.tags and "overview" in insight.tags:
+        others = Insight.query.filter(
+            Insight.id != insight.id,
+            Insight.status == "active",
+            Insight.repo_scope == insight.repo_scope,
+        ).all()
+        for o in others:
+            if o.tags and "overview" in o.tags:
+                o.status = "dismissed"
+
     db.session.commit()
     return jsonify(insight.to_dict())
+
+
+@insights_bp.route("/insights/cartograph", methods=["POST"])
+def cartograph_repo():
+    """Spawn a one-shot Cartographer agent to draft a Repo Overview
+    insight for the given repo.
+
+    The agent walks the tree read-only, produces a structured overview,
+    and replies via MCP as a pending insight tagged ["overview",
+    "cartographer"]. User approves in the Playbook UI; approving
+    supersedes any prior overview for the same repo.
+    """
+    import uuid as _uuid
+    from planet_maiko.models.task import Task
+    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.agents.coding_agent import (
+        prepare, _kickoff_agent_headless,
+    )
+    from planet_maiko.api.agents_api import _build_task_prompt
+    from planet_maiko.orchestration import resolve_repo_path
+
+    data = request.get_json() or {}
+    repo = (data.get("repo") or "").strip()
+    if not repo:
+        return jsonify({"error": "repo is required"}), 400
+
+    local_path = resolve_repo_path(repo)
+    if not local_path:
+        return jsonify({"error": f"No local clone found for {repo}"}), 400
+
+    # Find or seed a cartographer profile. One is enough — cartography
+    # runs don't need per-repo specialization the way coding pups do.
+    profile = (AgentProfile.query
+               .filter(AgentProfile.role == "cartographer",
+                       (AgentProfile.archived.is_(False)) | (AgentProfile.archived.is_(None)))
+               .first())
+    if not profile:
+        profile = AgentProfile(
+            id=f"cartographer-{_uuid.uuid4().hex[:6]}",
+            display_name="Atlas",
+            avatar="fox",
+            flavor_text="Walks new repos and draws the map.",
+            role="cartographer",
+            scope_repo=None,
+        )
+        db.session.add(profile)
+        db.session.flush()
+
+    task = Task(
+        id=f"task-{_uuid.uuid4().hex[:10]}",
+        title=f"Cartograph {repo}",
+        type="cartograph",
+        priority="normal",
+        status="new",
+        assigned_agent_id=profile.id,
+        extra={"repo": repo, "cartograph": True},
+    )
+    db.session.add(task)
+    db.session.commit()
+
+    full_prompt = _build_task_prompt(task, "cartographer", "")
+    try:
+        result = prepare(
+            task_id=task.id,
+            task_title=task.title,
+            prompt=full_prompt,
+            repo_path=local_path,
+            branch_prefix="cartographer",
+            auto_kickoff=False,
+            use_worktree=True,
+            agent_profile_id=profile.id,
+            role="cartographer",
+        )
+    except Exception as e:
+        return jsonify({"error": f"Cartographer preparation failed: {e}"}), 500
+    if not result:
+        return jsonify({"error": "Failed to prepare cartographer"}), 500
+
+    working_path = result.get("working_path")
+    _kickoff_agent_headless(
+        profile.id, working_path, task.id,
+        branch_name=None,
+        plan_first=False,
+        role="cartographer",
+    )
+
+    return jsonify({
+        "task_id": task.id,
+        "profile_id": profile.id,
+        "profile_name": profile.display_name,
+        "working_path": working_path,
+    }), 201
 
 
 @insights_bp.route("/insights/<int:insight_id>/dismiss", methods=["POST"])

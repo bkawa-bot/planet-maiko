@@ -169,6 +169,7 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
     protocol_skill = {
         "review": "review-agent-protocol",
         "investigation": "investigation-agent-protocol",
+        "cartographer": "cartographer-agent-protocol",
     }.get(role, "agent-protocol")
 
     # Load protocol from skill prompt (editable via Skills page)
@@ -626,6 +627,19 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
             "message_type=\"ready_for_review\") via the maiko-channel "
             "MCP. After replying, check_inbox for any follow-up "
             "questions."
+        )
+    elif role == "cartographer":
+        initial_prompt = (
+            "Read CLAUDE.md in this directory — it carries the "
+            "cartographer-agent-protocol. TASK.md names the repo "
+            "you're mapping. Walk the tree (README, manifests, "
+            "top-level dirs, entry points, recent git log, a few "
+            "sample source files), then call reply(content=<your "
+            "overview markdown>, message_type=\"insight\") via the "
+            "maiko-channel MCP exactly once. The server auto-tags "
+            "cartographer insights — no need to pass tags yourself. "
+            "Read-only: do not commit, push, or modify anything. "
+            "Exit after the reply."
         )
     else:  # coding
         initial_prompt = (

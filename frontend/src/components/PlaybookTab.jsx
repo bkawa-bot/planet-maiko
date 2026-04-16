@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import {
-  Check, X, Edit3, Plus, RefreshCw, Clock, Loader,
+  Check, X, Edit3, Plus, RefreshCw, Clock, Loader, Map as MapIcon,
 } from "lucide-react";
 import "./PlaybookTab.css";
 
@@ -29,6 +29,7 @@ export default function PlaybookTab({ onCountsChange }) {
   const [addRepo, setAddRepo] = useState("");
   const [addTags, setAddTags] = useState("");
   const [adding, setAdding] = useState(false);
+  const [cartographing, setCartographing] = useState(null); // repo name while spawn in flight
 
   const fetchAll = async () => {
     setLoading(true);
@@ -73,6 +74,18 @@ export default function PlaybookTab({ onCountsChange }) {
     setEditingId(null);
     setEditText("");
     fetchAll();
+  };
+
+  const handleCartograph = async (repo) => {
+    if (!repo || repo === "(global)" || cartographing) return;
+    setCartographing(repo);
+    try {
+      const result = await api.cartographRepo(repo);
+      showToast(`${result.profile_name || "Atlas"} is walking ${repo} — check the Pending queue in a few minutes`, "normal");
+    } catch (err) {
+      showToast(err.message || "Couldn't spawn cartographer", "high");
+    }
+    setCartographing(null);
   };
 
   const handleAdd = async () => {
@@ -143,7 +156,21 @@ export default function PlaybookTab({ onCountsChange }) {
         <div className="playbook-groups">
           {Object.entries(byRepo).sort().map(([repo, items]) => (
             <div key={repo} className="playbook-group">
-              <div className="playbook-group-header">{repo}</div>
+              <div className="playbook-group-header">
+                <span>{repo}</span>
+                {repo !== "(global)" && (
+                  <button
+                    className="btn btn-sm playbook-cartograph-btn"
+                    onClick={() => handleCartograph(repo)}
+                    disabled={cartographing === repo}
+                    title="Spawn Atlas the cartographer to draft a Repo Overview for this repo"
+                  >
+                    {cartographing === repo
+                      ? <><Loader size={11} className="spin" /> Mapping…</>
+                      : <><MapIcon size={11} /> Cartograph</>}
+                  </button>
+                )}
+              </div>
               <div className="playbook-group-items">
                 {items.map((ins) => (
                   <div

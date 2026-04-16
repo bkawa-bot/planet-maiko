@@ -251,6 +251,8 @@ export const api = {
     request(`/insights/${id}/confirm`, { method: "POST" }),
   deleteInsight: (id) =>
     request(`/insights/${id}`, { method: "DELETE" }),
+  cartographRepo: (repo) =>
+    request("/insights/cartograph", { method: "POST", body: JSON.stringify({ repo }) }),
 
   // Plugins
   getPlugins: () => request("/plugins"),

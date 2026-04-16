@@ -172,9 +172,9 @@ def assign_agent():
     role = profile.role or "coding"
 
     # Resolve repo_path. For coding the user picks one in the modal;
-    # for review/investigation the task's scope plus repo_roots
-    # determines it (no UI input needed).
-    if role in ("review", "investigation"):
+    # for review/investigation/cartographer the task's scope plus
+    # repo_roots determines it (no UI input needed).
+    if role in ("review", "investigation", "cartographer"):
         from planet_maiko.orchestration import resolve_repo_path, scope_for_task
         repo = scope_for_task(task)
         local_path = resolve_repo_path(repo)
@@ -184,7 +184,11 @@ def assign_agent():
         # Coerce task.type so the cycle's "find one-shot tasks" query
         # picks this up if the kickoff thread dies and we need a retry.
         if task.type not in ONE_SHOT_ROLE_FOR_TYPE:
-            task.type = {"review": "review", "investigation": "investigation"}[role]
+            task.type = {
+                "review": "review",
+                "investigation": "investigation",
+                "cartographer": "cartograph",
+            }[role]
         if task.status not in ("blocked", "done"):
             task.status = "new"
     else:
@@ -896,22 +900,42 @@ def agent_sends_message(task_id):
         try:
             from planet_maiko.models.insight import Insight
             from planet_maiko.models.task import Task as _Task
+            from planet_maiko.models.agent_profile import AgentProfile as _AP
             t = db.session.get(_Task, task_id)
             repo_scope = None
             if t:
                 extra = t.extra or {}
                 repo_scope = extra.get("repo") or extra.get("repository")
+
+            # Cartographer replies are Repo Overview docs — auto-tag so
+            # _build_playbook_section promotes them on approve, and
+            # give them more room since the overview format is a
+            # structured multi-section markdown doc.
+            author_role = None
+            if t and t.assigned_agent_id:
+                author = db.session.get(_AP, t.assigned_agent_id)
+                if author:
+                    author_role = author.role
+            is_cartographer = author_role == "cartographer"
+
+            tags = list(data.get("tags") or [])
+            if is_cartographer:
+                for t_ in ("overview", "cartographer"):
+                    if t_ not in tags:
+                        tags.append(t_)
+
+            max_len = 8000 if is_cartographer else 2000
             ins = Insight(
-                text=(data["content"] or "").strip()[:2000],
+                text=(data["content"] or "").strip()[:max_len],
                 repo_scope=repo_scope,
-                tags=data.get("tags") or [],
+                tags=tags,
                 author_agent_id=(t.assigned_agent_id if t else None),
                 status="pending",
             )
             db.session.add(ins)
             logger.info(
                 f"[outbox] Agent insight recorded (task={task_id}, "
-                f"repo={repo_scope or 'global'}): {ins.text[:80]}"
+                f"repo={repo_scope or 'global'}, tags={tags}): {ins.text[:80]}"
             )
         except Exception as e:
             logger.warning(f"[outbox] insight save failed for {task_id}: {e}")
