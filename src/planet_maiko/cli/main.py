@@ -35,10 +35,16 @@ def main():
     admin_cmds.register(subparsers)
     lora_cmds.register(subparsers)
 
-    # Let plugins register CLI commands
+    # Let plugins register CLI commands. discover_plugins() returns
+    # (plugins, discovery_results) — iterating the tuple directly meant
+    # we were calling .register_commands on the list of plugins and
+    # then on the results list, both of which have no such method.
+    # The outer try/except swallowed the AttributeError, so plugin CLI
+    # commands never actually registered.
     try:
         from planet_maiko.plugins.loader import discover_plugins
-        for plugin in discover_plugins():
+        plugins, _ = discover_plugins()
+        for plugin in plugins:
             plugin.register_commands(subparsers)
     except Exception as e:
         logging.getLogger(__name__).debug(f"[cli] Plugin command registration skipped: {e}")
