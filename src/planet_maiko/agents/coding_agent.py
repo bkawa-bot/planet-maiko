@@ -172,12 +172,21 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
         "cartographer": "cartographer-agent-protocol",
     }.get(role, "agent-protocol")
 
-    # Agent signature — used by the protocol's "Signing External Posts"
-    # block. Blank when we can't resolve the profile; the protocol
-    # template instructs agents to skip signing in that case.
+    # Agent identity + signature — filled into the protocol template so
+    # the agent knows its own name (for first-person self-reference in
+    # PR comments) and the exact sign-off line to append on external
+    # posts. When the profile can't be resolved we use a grammatical
+    # fallback so the protocol still reads sensibly, plus the protocol
+    # tells agents to skip the sign-off in that case.
+    agent_identity = "an unnamed agent"
     agent_signature = ""
     try:
-        from planet_maiko.agents.signature import format_agent_signature
+        from planet_maiko.agents.signature import (
+            format_agent_signature, format_agent_identity,
+        )
+        resolved_identity = format_agent_identity(agent_profile_id)
+        if resolved_identity:
+            agent_identity = resolved_identity
         agent_signature = format_agent_signature(agent_profile_id) or ""
     except Exception:
         pass
@@ -190,6 +199,7 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
             "task_title": task_title,
             "task_id": task_id,
             "maiko_port": str(maiko_port),
+            "agent_identity": agent_identity,
             "agent_signature": agent_signature,
         })
     except Exception:
@@ -207,6 +217,7 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
             content = content.replace("{task_title}", task_title)
             content = content.replace("{task_id}", task_id)
             content = content.replace("{maiko_port}", str(maiko_port))
+            content = content.replace("{agent_identity}", agent_identity)
             content = content.replace("{agent_signature}", agent_signature)
         except Exception:
             content = f"# Agent Protocol\n\nTask: {task_title}\nTask ID: {task_id}\nRole: {role}\n\nRead TASK.md for instructions."

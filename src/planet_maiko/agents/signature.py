@@ -56,6 +56,20 @@ def format_agent_signature(profile_or_id):
     )
 
 
+def format_agent_identity(profile_or_id):
+    """Return the bare "Name Emoji" identity string for an agent, used
+    when they self-refer. Returns "" if the profile can't be resolved
+    — agents are instructed to fall back to "the agent" in that case.
+    """
+    profile = _resolve_profile(profile_or_id)
+    if not profile:
+        return ""
+    name = (profile.display_name or "").strip()
+    if not name:
+        return ""
+    return f"{name} {emoji_for_avatar(profile.avatar)}"
+
+
 def sign_external_message(body, profile_or_id):
     """Append the signature to body. Idempotent: re-signing the same
     body doesn't stack signatures. If the profile can't be resolved,
