@@ -7,18 +7,61 @@ warnings through the agent inbox system.
 Edge types:
     file_overlap:    Two agents editing the same files
     api_dependency:  One agent modifying an API that another consumes
+
+Dedup posture:
+    Every detected conflict has a stable key — `{sorted_agents}:{file}`
+    — and a deterministic pupdate ID derived from it. The cycle runs
+    every 5 minutes and will keep re-detecting the same overlap until
+    code actually changes; we rely on:
+
+    1. DB lookup by source_id before creating the escalation pupdate.
+       If one exists and isn't dismissed, skip — agents + user have
+       already been warned for this exact conflict.
+    2. If the user dismissed the escalation, leave it dismissed. The
+       auto-resolution path below still re-opens a new one if the
+       underlying overlap changes (new file, new agent pair, etc.).
+
+    No more in-memory `_resolved_conflicts` set — that was resetting
+    on every server restart and re-spawning every previous conflict
+    as a fresh pupdate.
 """
 
+import hashlib
 import logging
 import os
 import subprocess
-import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from planet_maiko.database import db
 from planet_maiko.models.agent_message import AgentMessage
 from planet_maiko.models.pupdate import Pupdate
+
+
+def _conflict_key(agents, file_name):
+    """Stable, order-independent dedup key for a (agent_set, file) conflict."""
+    return f"{':'.join(sorted(str(a) for a in agents))}|{file_name}"
+
+
+def _pupdate_id(kind, conflict_key):
+    """Deterministic Pupdate.id derived from the conflict key.
+
+    `kind` distinguishes escalation vs duplicate vs warning so they
+    don't collide on the same PK. The hash keeps the id short enough
+    to fit Pupdate.id's 64-char column.
+    """
+    h = hashlib.sha256(conflict_key.encode()).hexdigest()[:16]
+    return f"conflict-{kind}-{h}"
+
+
+def _source_id(conflict_key):
+    return f"conflict/{conflict_key}"
+
+
+# Grace period before a dismissed conflict escalation can re-fire.
+# Gives the user room to actually coordinate the agents without the
+# pupdate nagging them back into existence every 5-minute brain cycle.
+_RE_OPEN_AFTER = timedelta(hours=6)
 
 logger = logging.getLogger(__name__)
 
@@ -354,14 +397,35 @@ def detect_conflicts(agent_worktrees):
 # Warning / resolution system (updated for multi-agent conflict format)
 # ---------------------------------------------------------------------------
 
+def _already_escalated(conflict_key):
+    """True if an escalation pupdate exists for this conflict and
+    either hasn't been dismissed OR was dismissed within the grace
+    window (so we respect the user's "I'm handling it" signal).
+    """
+    pup = Pupdate.query.filter_by(source_id=_source_id(conflict_key)).first()
+    if pup is None:
+        return False
+    if not pup.dismissed:
+        return True
+    dismissed_at = pup.dismissed_at
+    if dismissed_at is None:
+        return False
+    if dismissed_at.tzinfo is None:
+        dismissed_at = dismissed_at.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - dismissed_at) < _RE_OPEN_AFTER
+
+
 def send_conflict_warnings(conflicts):
     """Send A2A warnings for detected conflicts.
 
-    Sends messages to all agents involved in each conflict,
-    through the agent inbox system.
+    Sends one AgentMessage per agent per conflict, but only the first
+    time this exact conflict is seen — checked against an existing
+    escalation pupdate with a deterministic source_id. Without this
+    guard, every 5-minute brain cycle re-sent the same warning into
+    each agent's inbox for as long as the files stayed in both diffs.
 
     Returns:
-        int: number of warnings sent
+        int: number of warnings actually sent (not counting dedupes)
     """
     warnings_sent = 0
 
@@ -371,8 +435,9 @@ def send_conflict_warnings(conflicts):
         file_name = conflict.get("file", "unknown")
         overlapping = conflict.get("overlapping_methods", [])
 
-        priority_map = {"stop": "urgent", "hard": "high", "soft": "normal"}
-        priority = priority_map.get(severity, "normal")
+        conflict_key = _conflict_key(agents, file_name)
+        if _already_escalated(conflict_key):
+            continue
 
         for agent_id in agents:
             other_agents = [a for a in agents if a != agent_id]
@@ -404,15 +469,27 @@ def send_conflict_warnings(conflicts):
             db.session.add(msg)
             warnings_sent += 1
 
+        # Record a light-touch escalation pupdate so the next cycle's
+        # `_already_escalated` check sees it. Uses the same source_id
+        # the full `_act_on_resolution` escalation uses — either path
+        # going first will dedupe the other.
+        db.session.add(Pupdate(
+            id=_pupdate_id("warning", conflict_key),
+            source="maiko",
+            source_id=_source_id(conflict_key),
+            type="conflict_warning",
+            priority={"stop": "urgent", "hard": "high", "soft": "normal"}.get(severity, "normal"),
+            title=f"Conflict warning: agents editing {file_name}",
+            body=f"{len(agents)} agents share {file_name}. Warnings sent to each agent's inbox.",
+            actionable=False,
+            tags=list(agents) + [file_name, "conflict"],
+        ))
+
     if warnings_sent:
         db.session.commit()
         logger.info(f"[awareness] Sent {warnings_sent} conflict warning(s)")
 
     return warnings_sent
-
-
-# Track resolved conflicts so we don't re-resolve every cycle
-_resolved_conflicts = set()
 
 
 def resolve_conflicts(conflicts):
@@ -433,7 +510,7 @@ def resolve_conflicts(conflicts):
     except Exception:
         return {"resolved": 0, "escalated": 0, "failed": 0, "skipped": "runtime error"}
 
-    stats = {"resolved": 0, "escalated": 0, "failed": 0}
+    stats = {"resolved": 0, "escalated": 0, "failed": 0, "skipped": 0}
 
     for conflict in conflicts:
         agents = conflict["agents"]
@@ -445,9 +522,14 @@ def resolve_conflicts(conflicts):
         agent_a = agents[0]
         agent_b = agents[1]
 
-        # Skip if already resolved
-        conflict_key = f"{agent_a}:{agent_b}:{file_name}"
-        if conflict_key in _resolved_conflicts:
+        # DB-backed dedup: if we've already escalated this conflict
+        # (either via the LLM resolution below or via the simpler
+        # warning path), don't re-run the expensive LLM calls. The
+        # pupdate will auto-close when the overlap disappears (no
+        # conflict → no pupdate → source_id query misses → re-eligible).
+        conflict_key = _conflict_key(agents, file_name)
+        if _already_escalated(conflict_key):
+            stats["skipped"] += 1
             continue
 
         logger.info(f"[awareness] Resolving conflict: {agent_a} <-> {agent_b} on {file_name}")
@@ -508,8 +590,6 @@ def resolve_conflicts(conflicts):
             file_name, conflict, stats,
         )
 
-        _resolved_conflicts.add(conflict_key)
-
     if stats["resolved"] or stats["escalated"]:
         db.session.commit()
 
@@ -534,62 +614,76 @@ def _act_on_resolution(agent_a, agent_b, result_a, result_b,
         logger.info("[awareness] Compatible -- no user notification needed")
 
     elif "conflict" in (result_a, result_b):
-        # At least one says conflict -- escalate to user
-        pupdate = Pupdate(
-            id=f"conflict-escalation-{agent_a}-{agent_b}-{uuid.uuid4().hex[:8]}",
-            source="maiko",
-            source_id=f"conflict/{agent_a}/{agent_b}",
-            type="conflict_escalation",
-            priority="high",
-            title=f"Conflict: {agent_a} vs {agent_b} on {files_str}",
-            body=(
-                f"**Agent A** ({agent_a}): {desc_a}\n"
-                f"Classification: {result_a} -- {reason_a}\n\n"
-                f"**Agent B** ({agent_b}): {desc_b}\n"
-                f"Classification: {result_b} -- {reason_b}\n\n"
-                f"These agents need your help resolving this conflict."
-            ),
-            actionable=True,
-            action_hint="Resolve conflict",
-            tags=[agent_a, agent_b, "conflict"],
-        )
-        db.session.add(pupdate)
-        stats["escalated"] += 1
-        logger.info("[awareness] Conflict escalated to user")
+        # At least one says conflict -- escalate to user. Deterministic
+        # id means a second detection of the same conflict upserts
+        # instead of creating a duplicate pupdate.
+        conflict_key = _conflict_key([agent_a, agent_b], files_str)
+        pup_id = _pupdate_id("escalation", conflict_key)
+        src_id = _source_id(conflict_key)
+
+        existing = db.session.get(Pupdate, pup_id)
+        if existing is None:
+            db.session.add(Pupdate(
+                id=pup_id,
+                source="maiko",
+                source_id=src_id,
+                type="conflict_escalation",
+                priority="high",
+                title=f"Conflict: {agent_a} vs {agent_b} on {files_str}",
+                body=(
+                    f"**Agent A** ({agent_a}): {desc_a}\n"
+                    f"Classification: {result_a} -- {reason_a}\n\n"
+                    f"**Agent B** ({agent_b}): {desc_b}\n"
+                    f"Classification: {result_b} -- {reason_b}\n\n"
+                    f"These agents need your help resolving this conflict."
+                ),
+                actionable=True,
+                action_hint="Resolve conflict",
+                tags=[agent_a, agent_b, "conflict"],
+            ))
+            stats["escalated"] += 1
+            logger.info("[awareness] Conflict escalated to user")
 
     elif "duplicate" in (result_a, result_b):
         # One or both say duplicate -- notify user, suggest one stops
         who_stops = agent_b if result_a == "duplicate" else agent_a
         who_continues = agent_a if who_stops == agent_b else agent_b
 
+        conflict_key = _conflict_key([agent_a, agent_b], files_str)
+        pup_id = _pupdate_id("duplicate", conflict_key)
+        src_id = _source_id(conflict_key)
+
+        # Skip the whole branch — messages + pupdate — if we've
+        # already flagged this as duplicate work. One reminder per
+        # conflict, not one per cycle.
+        if db.session.get(Pupdate, pup_id) is not None:
+            return
+
         # Tell the one who should stop
-        msg_stop = AgentMessage(
+        db.session.add(AgentMessage(
             task_id=who_stops, direction="to_agent", sender="maiko",
             message_type="conflict_directive",
             content=f"Heads up -- another agent ({who_continues}) is doing similar work on {files_str}. "
                     f"Consider pausing to avoid duplicate effort. Check with your human!",
-        )
-        db.session.add(msg_stop)
+        ))
 
         # Tell the one who continues
-        msg_continue = AgentMessage(
+        db.session.add(AgentMessage(
             task_id=who_continues, direction="to_agent", sender="maiko",
             message_type="conflict_resolved",
             content=f"The other agent ({who_stops}) has been notified about duplicate work on {files_str}. "
                     f"You can keep going -- they'll coordinate with you.",
-        )
-        db.session.add(msg_continue)
+        ))
 
-        # Notify user
-        pupdate = Pupdate(
-            id=f"conflict-dup-{agent_a}-{agent_b}-{uuid.uuid4().hex[:8]}",
+        db.session.add(Pupdate(
+            id=pup_id,
             source="maiko",
+            source_id=src_id,
             type="conflict_duplicate",
             priority="normal",
             title=f"Duplicate work detected: {agent_a} & {agent_b}",
             body=f"Both agents are working on similar changes to {files_str}. Suggested {who_stops} pause.",
             tags=[agent_a, agent_b, "duplicate"],
-        )
-        db.session.add(pupdate)
+        ))
         stats["escalated"] += 1
         logger.info(f"[awareness] Duplicate -- {who_stops} told to pause")
