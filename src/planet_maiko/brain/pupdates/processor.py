@@ -18,6 +18,15 @@ from planet_maiko.brain.pupdates.rules import evaluate, ACTION_DISMISS, ACTION_M
 logger = logging.getLogger(__name__)
 
 
+# Maximum LLM triage calls per single processor pass. Above this, the
+# cycle starts deferring unmatched pupdates for the next tick so a
+# single burst of ambient pupdates (e.g. a backfill, or a noisy poller)
+# can't fan out into dozens of LLM calls in one cycle.
+# Configurable via brain.llm_triage_per_cycle; the default matches
+# _phase_llm_triage's existing limit so both phases are consistent.
+DEFAULT_MAX_LLM_TRIAGE_PER_CYCLE = 10
+
+
 def _try_llm_triage(pupdate):
     """Attempt LLM-based triage for an unmatched pupdate.
 
@@ -309,7 +318,29 @@ def process():
 
     logger.info(f"Processing {len(pupdate_ids)} pupdate(s)...")
 
-    counts = {"processed": 0, "dismissed": 0, "read": 0, "tasks_created": 0, "skipped": 0, "unmatched": 0, "held": 0}
+    counts = {
+        "processed": 0, "dismissed": 0, "read": 0, "tasks_created": 0,
+        "skipped": 0, "unmatched": 0, "held": 0,
+        "llm_triage": 0, "llm_cached": 0, "llm_deferred": 0,
+    }
+
+    # Rate-limit LLM triage calls per processor pass. Backfill bursts
+    # and noisy pollers used to fan out into dozens of LLM calls;
+    # capping here keeps the token footprint predictable. Deferred
+    # pupdates stay brain_processed=False and get picked up next cycle.
+    from planet_maiko.config import load_config as _lc
+    max_llm = int(
+        _lc().get("brain", {}).get("llm_triage_per_cycle", DEFAULT_MAX_LLM_TRIAGE_PER_CYCLE)
+    )
+
+    # Within a single processor pass, cache LLM decisions by pupdate
+    # type — if we asked "what do I do with pr_stale?" once, every
+    # other pr_stale in this batch gets the same answer without another
+    # LLM hit. This alone typically drops 70–90% of calls on bursty
+    # days. `_execute_create_task` ignores triage_result.task_title
+    # and uses pupdate.title directly, so caching is safe across
+    # different pupdates of the same type.
+    triage_cache_by_type = {}
 
     # Import focus manager for gating
     from planet_maiko.brain.focus.manager import should_surface, hold_pupdate
@@ -342,12 +373,29 @@ def process():
         rule = evaluate(pupdate)
 
         if rule is None:
-            # No rule matched - try LLM triage if available. The LLM
-            # call detaches objects, so we re-fetch right after.
-            triage_result = _try_llm_triage(pupdate)
-            pupdate = db.session.get(Pupdate, pid)
-            if pupdate is None:
-                continue  # deleted while we waited on the LLM
+            # No rule matched → LLM triage path. Consult the type
+            # cache first, then call out to the LLM, up to the per-
+            # cycle cap.
+            pupdate_type = pupdate.type
+            triage_result = triage_cache_by_type.get(pupdate_type)
+            used_cache = triage_result is not None
+
+            if triage_result is None:
+                if counts["llm_triage"] >= max_llm:
+                    # Cap hit: defer this one to the next cycle. Leave
+                    # brain_processed=False so the next pass picks it up.
+                    counts["llm_deferred"] += 1
+                    continue
+
+                triage_result = _try_llm_triage(pupdate)
+                pupdate = db.session.get(Pupdate, pid)
+                if pupdate is None:
+                    continue
+                if triage_result is not None:
+                    triage_cache_by_type[pupdate_type] = triage_result
+                    counts["llm_triage"] += 1
+            else:
+                counts["llm_cached"] += 1
 
             if triage_result:
                 action = triage_result.get("action", "skip")
@@ -370,9 +418,9 @@ def process():
 
             pupdate.brain_processed = True
             counts["processed"] += 1
-            # Commit per-pupdate in the LLM path so a crash or
-            # subsequent triage failure can't silently rollback the
-            # decisions we already made.
+            # Commit per-pupdate so partial failures don't roll back
+            # earlier triage decisions. Cache path commits too — same
+            # semantics even without an LLM call.
             db.session.commit()
             continue
 

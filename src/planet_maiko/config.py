@@ -67,6 +67,12 @@ DEFAULT_CONFIG = {
     "brain": {
         "runtime": "claude-code",  # or a custom runtime
         "llm_triage": True,  # use LLM for unmatched pupdates
+        # Max LLM triage calls per processor pass. The processor caches
+        # decisions by pupdate.type within a single pass, so this cap
+        # is unusual to hit — a burst of 50 same-type pupdates costs
+        # 1 LLM call, not 50. Raise if you're seeing `llm_deferred` in
+        # cycle logs regularly.
+        "llm_triage_per_cycle": 10,
         # Tools pre-approved for Claude Code sessions (avoids permission prompts)
         "allowed_tools": ["Bash", "Read", "Edit", "Write", "Glob", "Grep", "mcp__maiko-channel"],
         "correlation_window_minutes": 30,
