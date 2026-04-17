@@ -191,11 +191,28 @@
 /* === Context Strategies === */
 .strategies-view { }
 .profiles-toolbar {
-  display: flex; justify-content: flex-end; margin-bottom: 8px;
+  display: flex; justify-content: flex-end; align-items: center;
+  gap: 12px; margin-bottom: 8px;
 }
 .show-archived-toggle {
   display: flex; align-items: center; gap: 6px;
   font-size: 11px; color: var(--text-muted); cursor: pointer;
+}
+
+.cartograph-launcher { position: relative; }
+.cartograph-launcher-popover {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  display: flex; gap: 6px; z-index: 10;
+  padding: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: var(--radius-xs);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  white-space: nowrap;
+}
+.cartograph-launcher-popover select {
+  padding: 4px 8px;
+  border: 1px solid var(--border); border-radius: var(--radius-xs);
+  background: var(--bg); color: var(--text); font-size: 11px;
 }
 .strategies-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
 .strategy-card.archived { opacity: 0.5; }

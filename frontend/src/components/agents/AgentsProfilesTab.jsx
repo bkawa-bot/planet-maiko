@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Bot, Brain, CheckSquare, Plus, Target, TrendingUp, X, Pencil, Save, Code2, Eye, Search, Map,
+  Bot, Brain, CheckSquare, Plus, Target, TrendingUp, X, Pencil, Save, Code2, Eye, Search, Map, Loader,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
@@ -14,6 +14,77 @@ const ROLE_META = {
 
 // Section order for the role-grouped view.
 const ROLE_ORDER = ["coding", "review", "investigation", "cartographer"];
+
+
+// Small inline control: picks a configured repo and fires Atlas to
+// cartograph it. Lives in the Profiles toolbar so there's a durable
+// entry point even before any Atlas profile or any insight exists —
+// the Playbook's per-repo Cartograph buttons only appear once insights
+// exist, which is the chicken-and-egg case a first-time user hits.
+function CartographLauncher() {
+  const [repos, setRepos] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState("");
+  const [spawning, setSpawning] = useState(false);
+
+  useEffect(() => {
+    api.getConfig().then((c) => {
+      const list = c?.github?.repos || [];
+      setRepos(list);
+      if (list.length > 0) setSelected(list[0]);
+    }).catch(() => {});
+  }, []);
+
+  const handleSpawn = async () => {
+    if (!selected || spawning) return;
+    setSpawning(true);
+    try {
+      await api.cartographRepo(selected);
+      showToast(`Atlas is mapping ${selected} 🗺️`, "normal");
+      setOpen(false);
+    } catch (err) {
+      showToast(err.message || "Couldn't spawn Atlas", "high");
+    }
+    setSpawning(false);
+  };
+
+  if (repos.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="cartograph-launcher">
+      <button
+        className="btn btn-sm"
+        onClick={() => setOpen((v) => !v)}
+        title="Send Atlas to walk a repo and write a Repo Overview"
+      >
+        <Map size={10} /> Cartograph a repo
+      </button>
+      {open && (
+        <div className="cartograph-launcher-popover">
+          <select
+            value={selected}
+            onChange={(e) => setSelected(e.target.value)}
+            disabled={spawning}
+          >
+            {repos.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={handleSpawn}
+            disabled={spawning || !selected}
+          >
+            {spawning ? <Loader size={10} className="spin" /> : <Map size={10} />}
+            {spawning ? " Sending…" : " Send Atlas"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * Profiles tab — agent context-set strategy view.
@@ -95,6 +166,7 @@ export default function AgentsProfilesTab({
     return (
       <div className="strategies-view">
         <div className="profiles-toolbar">
+          <CartographLauncher />
           <label className="show-archived-toggle">
             <input type="checkbox" checked={showArchived} onChange={handleToggleArchived} />
             Show archived
@@ -115,6 +187,7 @@ export default function AgentsProfilesTab({
   return (
     <div className="strategies-view">
       <div className="profiles-toolbar">
+        <CartographLauncher />
         <label className="show-archived-toggle">
           <input type="checkbox" checked={showArchived} onChange={handleToggleArchived} />
           Show archived
