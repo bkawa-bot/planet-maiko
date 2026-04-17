@@ -137,58 +137,29 @@ class BasePoller(ABC):
             return 0
 
         created = 0
-        resurrected = 0
         for pd in pupdate_dicts:
             pupdate_id = self.generate_id(pd["source_id"])
 
             existing = db_session.get(Pupdate, pupdate_id)
             if existing:
-                # Active duplicate — skip
-                if not existing.dismissed:
-                    continue
-                # Dismissed but the source is asserting it again. For
-                # actionable items (review re-requests, new CI
-                # failures on the same PR, etc.) this is a real "hey,
-                # please look again" — resurrect the pupdate instead
-                # of silently dropping it. Non-actionable status
-                # pupdates (PR is open, PR is approved) stay
-                # dismissed so they don't keep popping back.
-                if not pd.get("actionable", False):
-                    continue
-
-                # Don't resurrect when the user has already triaged
-                # this pupdate via a Task — the task is in their list
-                # and resurrecting just clutters the inbox with a
-                # duplicate signal. Re-events on the *same* source_id
-                # (PR re-requested, same Linear issue re-asserted) are
-                # the responsibility of the poller to disambiguate
-                # (include event id / timestamp in source_id) — the
-                # base layer can't tell "user wants to know again"
-                # from "this is the same notification I already saw".
-                from planet_maiko.models.task import Task as _Task
-                related_task = _Task.query.filter_by(
-                    source_pupdate_id=pupdate_id
-                ).first()
-                if related_task is not None:
-                    continue
-
-                # No task ever existed for this pupdate — the user
-                # really did just dismiss it. Resurrect so they see
-                # the re-asserted source. Re-fire the rule too so a
-                # task gets created if the rule decides one is needed.
-                existing.dismissed = False
-                existing.dismissed_at = None
-                existing.read = False
-                existing.brain_processed = False
-                existing.title = pd["title"]
-                existing.body = pd.get("body")
-                existing.priority = pd.get("priority", existing.priority)
-                existing.url = pd.get("url") or existing.url
-                existing.action_hint = pd.get("action_hint") or existing.action_hint
-                existing.tags = pd.get("tags", existing.tags or [])
-                existing.extra = pd.get("metadata", existing.extra or {})
-                existing.timestamp = datetime.now(timezone.utc)
-                resurrected += 1
+                # Dismissal is durable, regardless of dismissed/read
+                # state. If the user dismissed a pupdate and nothing
+                # else about the source changed, the same source_id
+                # produces the same hash — we skip. If the source
+                # *did* change in a way worth re-notifying (new commit
+                # on a PR, new batch of PR review comments, etc.) the
+                # poller is expected to disambiguate by including the
+                # changing bit (headRefOid, comment timestamp,
+                # updatedAt, etc.) in source_id, which yields a fresh
+                # id and a fresh pupdate.
+                #
+                # Previously this branch un-dismissed any actionable
+                # pupdate without a linked task on every poll — which
+                # meant dismissed Linear-assigned / PR-review pupdates
+                # came right back on the next 5-minute tick and again
+                # on every server restart. Durable dismissal is the
+                # right default; source re-assertion is the poller's
+                # responsibility.
                 continue
 
             pupdate = Pupdate(
@@ -248,14 +219,12 @@ class BasePoller(ABC):
         except Exception as e:
             logger.warning(f"[{self.name}] _after_sync hook failed: {e}")
 
-        if created or resurrected or signal_dicts:
+        if created or signal_dicts:
             db_session.commit()
             if created:
                 logger.info(f"[{self.name}] Created {created} new pupdate(s)")
-            if resurrected:
-                logger.info(f"[{self.name}] Resurrected {resurrected} dismissed pupdate(s)")
 
-        return created + resurrected
+        return created
 
     def _after_sync(self, raw_data, db_session):
         """Hook called after pupdates + signals have been staged but
