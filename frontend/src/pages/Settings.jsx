@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
-import { ChevronDown, ChevronRight, MapPin, Search, Loader, FolderGit2, Plug, AlertTriangle, BookOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, MapPin, Search, Loader, Plug, AlertTriangle, BookOpen } from "lucide-react";
 import ScheduledBriefings from "../components/ScheduledBriefings";
 import ConceptsModal from "../components/ConceptsModal";
+import IntegrationsSection from "../components/settings/IntegrationsSection";
 import "./Settings.css";
 
 export default function Settings() {
@@ -19,9 +20,7 @@ export default function Settings() {
   const [locationQuery, setLocationQuery] = useState("");
   const [locationResolved, setLocationResolved] = useState("");
   const [lookingUp, setLookingUp] = useState(false);
-  const [discovering, setDiscovering] = useState(false);
   const [plugins, setPlugins] = useState([]);
-  const [linearTeams, setLinearTeams] = useState([]);
 
   useEffect(() => {
     Promise.all([
@@ -248,8 +247,28 @@ export default function Settings() {
         )}
       </section>
 
-      {/* Integrations (collapsed by default) */}
-      <section className="settings-collapsible">
+      {/* NOTE on refactor pattern: big sections get their own file under
+          components/settings/ (see IntegrationsSection below). Each
+          takes the slice of config it needs plus shared helpers. Smaller
+          sections (Your Name, Autopilot, Scene, Plugins) stay inline
+          since extracting them would be more ceremony than payoff.
+          Follow this pattern when adding new settings sections. */}
+      <IntegrationsSection
+        config={config}
+        updateField={updateField}
+        pollerStatus={pollerStatus}
+        onRunPoller={handleRunPoller}
+        onMessage={(m) => { setMessage(m); setTimeout(() => setMessage(""), 5000); }}
+      />
+
+      {/* INLINE-DEAD-START: old Integrations JSX kept commented-out
+          temporarily to reduce the diff risk of the next extraction
+          pass. Pure dead weight today — the parent `{false && (...)}`
+          wrapper means React never renders it. Delete this block in a
+          follow-up commit once the other sections are extracted and
+          IntegrationsSection has soaked for a day. */}
+      {false && (
+        <section className="settings-collapsible">
         <div className="collapsible-header" onClick={() => toggleSection("integrations")}>
           {openSections.integrations ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           <span>Integrations</span>
@@ -499,7 +518,8 @@ export default function Settings() {
 
           </div>
         )}
-      </section>
+        </section>
+      )}
 
       {/* Agent Preferences */}
       <section className="settings-collapsible">
