@@ -284,6 +284,11 @@ export const api = {
   // System
   shutdown: () => request("/system/shutdown", { method: "POST" }),
 
+  // Shutdown / cleanup ritual (power button on the nav)
+  getShutdownPreview: () => request("/shutdown/preview"),
+  runShutdownStep: (name) =>
+    request("/shutdown/step", { method: "POST", body: JSON.stringify({ name }) }),
+
   // Agent terminal & sessions
   openTerminal: (path, taskId, branch) => request("/agents/open-terminal", { method: "POST", body: JSON.stringify({ path, task_id: taskId, branch }) }),
   getAgentSession: (taskId) => request(`/agents/${taskId}/session`),

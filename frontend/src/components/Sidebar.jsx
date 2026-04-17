@@ -1,9 +1,11 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Home, Inbox, CheckSquare, Bot, Brain, Wand2, Zap, GraduationCap, Settings, Shield, HelpCircle, X, Palette } from "lucide-react";
+import { Home, Inbox, CheckSquare, Bot, Brain, Wand2, Zap, GraduationCap, Settings, Shield, HelpCircle, X, Palette, Power } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api/client";
 import { applyCustomTheme, clearCustomTheme, hydrateCachedCustomTheme } from "../utils/themes";
+import ShutdownModal from "./ShutdownModal";
 import "./Sidebar.css";
+import "./ShutdownModal.css";
 
 const NAV_ITEMS = [
   { to: "/", icon: Home, label: "Home", end: true },
@@ -47,6 +49,7 @@ export default function Sidebar() {
   const [focusState, setFocusState] = useState("available");
   const [showFocusMenu, setShowFocusMenu] = useState(false);
   const [showFocusInfo, setShowFocusInfo] = useState(false);
+  const [showShutdown, setShowShutdown] = useState(false);
   const themeRef = useRef(null);
   const focusRef = useRef(null);
 
@@ -233,8 +236,18 @@ export default function Sidebar() {
           <NavLink to="/settings" className="topbar-action" title="Settings">
             <Settings size={14} />
           </NavLink>
+
+          <button
+            className="power-button"
+            onClick={() => setShowShutdown(true)}
+            title="Shutdown / cleanup"
+          >
+            <Power size={12} />
+          </button>
         </div>
       </div>
+
+      {showShutdown && <ShutdownModal onClose={() => setShowShutdown(false)} />}
 
       {showFocusInfo && (
         <div className="modal-overlay" onClick={() => setShowFocusInfo(false)}>
