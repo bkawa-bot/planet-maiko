@@ -42,19 +42,24 @@ class GitHubPoller(BasePoller):
         return json.loads(result.stdout) if result.stdout.strip() else []
 
     def _get_review_requests(self, username):
-        """Get PRs where the user's review is requested.
+        """Get PRs where the user is *individually* tagged for review.
 
-        `gh search prs --json` does NOT accept `headRefOid` (that field
-        is only available on `gh pr list` / `gh pr view` / graphql), and
-        passing it here makes the whole poll fail with "unknown JSON
-        field". We fetch the core PR data via search, then enrich each
-        hit with its head SHA via `gh pr view` so the source_id can
-        still embed the SHA and re-requests on new commits don't get
-        silently deduped.
+        The `--review-requested` flag (and the `review-requested:` query
+        qualifier it maps to) also matches team-level review requests
+        when the user is a member of that team. That was firing pupdates
+        for PRs the user wasn't personally tagged on, which the user
+        considered noise. `user-review-requested:` filters to direct
+        user tags only — team-level requests are filtered out.
+
+        Also: `gh search prs --json` does NOT accept `headRefOid` (that
+        field is only on `gh pr list` / `gh pr view` / graphql). We
+        fetch core PR data, then enrich each hit with its head SHA via
+        `gh pr view` so the dedup source_id can still include the SHA
+        and re-requests on new commits aren't silently swallowed.
         """
         prs = self._gh([
             "search", "prs",
-            "--review-requested", username,
+            f"user-review-requested:{username}",
             "--state", "open",
             "--json", "number,title,url,repository,author,createdAt,labels",
         ])
