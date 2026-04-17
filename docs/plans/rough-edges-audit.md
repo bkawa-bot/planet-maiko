@@ -253,19 +253,27 @@ Three passes, in priority order:
   give the user a single place to check "is Maiko OK?".
 - **#4 Collapse idle prompt into `ShutdownModal`.** Cheap cleanup.
 
-### Pass B — tell the user what happened (~1–2 days)
+### Pass B — tell the user what happened (~1–2 days)  ✅ shipped 2026-04-16
 
 - **#9 "What happened today" view.** Ties the whole system together
-  in one place.
+  in one place. Home card + `/api/today` endpoint. (`d0bcd69`)
 - **#1 Onboarding tour + README quickstart.** Makes the system
-  shareable.
-- **#7 Route-level code splitting.** Fast, unblocks bundle growth.
+  shareable. README mental-model section + in-app ConceptsModal
+  reachable from Settings. (`1f6f023`)
+- **#7 Route-level code splitting.** Main bundle 560 → 396 KB
+  (159 → 114 KB gzip). Vite stops warning. (`d782137`)
 
-### Pass C — shore up (~2–3 days)
+### Pass C — shore up (~2–3 days)  ✅ shipped 2026-04-16
 
 - **#5 Tests for pollers + shutdown + auto-investigate.**
-- **#6 Settings refactor into per-section files.**
-- **#2 Agent-crash e2e.**
+  16 new tests, 126 → 131 green. (`052f678`)
+- **#6 Settings refactor into per-section files.** Partial —
+  extracted the biggest section (Integrations) and established
+  the pattern; Agent Preferences / Model Routing / Scene / Plugins
+  are follow-up candidates under the same pattern. (`2dc9851`)
+- **#2 Agent-crash e2e.** Stuck-task escalation covered (5 tests);
+  uncovered and fixed a real PK-conflict bug on dismissed stuck
+  pupdates. (`6bf126c`)
 
 ### Parking lot
 
