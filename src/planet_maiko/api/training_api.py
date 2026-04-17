@@ -210,36 +210,81 @@ def rule_coverage():
     })
 
 
+# ---------------------------------------------------------------------------
+# Rule dataset generation — async with a progress endpoint
+# ---------------------------------------------------------------------------
+#
+# Generating training data calls Opus once per rule (plus synthesis for
+# violations/passes). 30+ rules can easily blow past the HTTP timeout
+# window, and the old synchronous handler left the browser staring at
+# a spinner while the work continued off in the void. Now we kick the
+# work to a background thread and expose
+# /training/generate-from-rules/progress so the UI can poll + show
+# live status.
+
+import threading as _threading
+from datetime import datetime as _datetime, timezone as _tz
+
+_rule_gen_state = {
+    "status": "idle",          # idle | running | done | failed
+    "started_at": None,
+    "finished_at": None,
+    "total_rules": 0,
+    "rules_processed": 0,
+    "current_rule": None,
+    "pairs": 0,
+    "errors": 0,
+    "message": None,
+    "file_path": None,
+    "force": False,
+    "repo": None,
+}
+_rule_gen_lock = _threading.Lock()
+
+
+def _rule_gen_update(**kwargs):
+    with _rule_gen_lock:
+        _rule_gen_state.update(kwargs)
+
+
 @training_bp.route("/training/generate-from-rules", methods=["POST"])
 def generate_from_rules_endpoint():
-    """Generate training data from active learnings (incremental by default)."""
+    """Kick off an async rule-dataset generation job.
+
+    Returns 202 Accepted immediately with the initial progress blob.
+    Clients poll /training/generate-from-rules/progress for updates
+    and the final result. Only one job may run at a time — a second
+    POST while running returns 409 with the current progress.
+    """
+    from flask import current_app
     from planet_maiko.brain.learning.rule_training_data import generate_rule_dataset, get_covered_rule_ids
     from planet_maiko.models.learning import Learning
     from sqlalchemy import or_
+
+    with _rule_gen_lock:
+        if _rule_gen_state["status"] == "running":
+            return jsonify({
+                "error": "already running",
+                "progress": dict(_rule_gen_state),
+            }), 409
 
     data = request.get_json(silent=True) or {}
     examples = data.get("examples_per_rule", 50)
     force = data.get("force", False)
     repo = data.get("repo") or None
 
-    # Release DB before long LLM call
-    db.session.close()
-
-    if force:
-        result = generate_rule_dataset(examples_per_rule=examples, repo=repo)
-    else:
-        # Incremental: only generate for rules not already covered
+    # Incremental path stays synchronous when there's nothing to do.
+    if not force:
         covered = get_covered_rule_ids(repo=repo)
         query = Learning.query.filter_by(status="active")
         if repo:
             query = query.filter(or_(
-            Learning.scope_repo == repo,
-            Learning.is_global == True,  # noqa: E712
-            Learning.scope_repo.is_(None),
-        ))
+                Learning.scope_repo == repo,
+                Learning.is_global == True,  # noqa: E712
+                Learning.scope_repo.is_(None),
+            ))
         active = query.all()
         new_ids = [l.id for l in active if l.id not in covered]
-
         if not new_ids:
             return jsonify({
                 "success": True,
@@ -250,11 +295,78 @@ def generate_from_rules_endpoint():
                 "errors": 0,
                 "message": "All active rules are already in training data. Use force=true to regenerate.",
             })
+    else:
+        new_ids = None
 
-        result = generate_rule_dataset(examples_per_rule=examples, rule_ids=new_ids, repo=repo)
+    _rule_gen_update(
+        status="running",
+        started_at=_datetime.now(_tz.utc).isoformat(),
+        finished_at=None,
+        total_rules=0,
+        rules_processed=0,
+        current_rule=None,
+        pairs=0,
+        errors=0,
+        message=None,
+        file_path=None,
+        force=force,
+        repo=repo,
+    )
 
-    status = 200 if result.get("success") else 500
-    return jsonify(result), status
+    app = current_app._get_current_object()
+
+    def _run():
+        with app.app_context():
+            try:
+                result = generate_rule_dataset(
+                    examples_per_rule=examples,
+                    rule_ids=new_ids,
+                    repo=repo,
+                    progress_cb=_rule_gen_update,
+                )
+                if result.get("success"):
+                    _rule_gen_update(
+                        status="done",
+                        finished_at=_datetime.now(_tz.utc).isoformat(),
+                        pairs=result.get("pairs", 0),
+                        rules_processed=result.get("rules_processed", 0),
+                        errors=result.get("errors", 0),
+                        file_path=result.get("file_path"),
+                        message=f"Generated {result.get('pairs', 0)} pairs from "
+                                f"{result.get('rules_processed', 0)} rules",
+                        current_rule=None,
+                    )
+                else:
+                    _rule_gen_update(
+                        status="failed",
+                        finished_at=_datetime.now(_tz.utc).isoformat(),
+                        message=result.get("error", "Generation failed"),
+                        current_rule=None,
+                    )
+            except Exception as e:
+                logger.exception("[training] Rule dataset generation crashed")
+                _rule_gen_update(
+                    status="failed",
+                    finished_at=_datetime.now(_tz.utc).isoformat(),
+                    message=str(e),
+                    current_rule=None,
+                )
+
+    _threading.Thread(target=_run, daemon=True, name="rule-gen").start()
+
+    return jsonify({
+        "status": "started",
+        "progress": dict(_rule_gen_state),
+    }), 202
+
+
+@training_bp.route("/training/generate-from-rules/progress", methods=["GET"])
+def generate_from_rules_progress():
+    """Current rule-dataset generation state. See the _rule_gen_state
+    dict for fields. Safe to poll every few seconds.
+    """
+    with _rule_gen_lock:
+        return jsonify(dict(_rule_gen_state))
 
 
 @training_bp.route("/training/generate-synthetic", methods=["POST"])

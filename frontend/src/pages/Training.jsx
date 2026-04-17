@@ -15,6 +15,7 @@ export default function Training() {
   const [running, setRunning] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generatingProgress, setGeneratingProgress] = useState("");
+  const [ruleGenState, setRuleGenState] = useState(null);
   const [datasets, setDatasets] = useState([]);
   const [showDatasets, setShowDatasets] = useState(false);
   const [progress, setProgress] = useState(null);
@@ -54,6 +55,40 @@ export default function Training() {
     return () => clearInterval(interval);
   }, [running]);
 
+  // Poll rule-generation progress while a job is running. The backend
+  // now runs the Opus calls in a thread, so the click returns in under
+  // a second with status="started"; the UI tracks progress here
+  // instead of waiting on the HTTP request (which used to time out
+  // and leave the spinner stuck).
+  useEffect(() => {
+    if (!generating) return undefined;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const s = await api.getRuleGenProgress();
+        if (cancelled) return;
+        setRuleGenState(s);
+        if (s.status === "done" || s.status === "failed") {
+          setGenerating(false);
+          if (s.status === "done") {
+            showToast(s.message || `Generated ${s.pairs} pairs from ${s.rules_processed} rules`, "normal");
+            fetchDatasets();
+            fetchCoverage(filterRepo);
+          } else {
+            showToast(s.message || "Rule generation failed", "high");
+          }
+        } else if (s.total_rules > 0) {
+          setGeneratingProgress(
+            `Rule ${s.rules_processed + 1} of ${s.total_rules}${s.current_rule ? ": " + s.current_rule : ""}`
+          );
+        }
+      } catch { /* poll errors are recoverable */ }
+    };
+    tick();
+    const interval = setInterval(tick, PROGRESS_POLL_MS);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [generating, filterRepo]);
+
   const totalDatasetExamples = datasets.reduce((sum, d) => sum + d.examples, 0);
 
   const startTraining = async () => {
@@ -79,21 +114,26 @@ export default function Training() {
   const startRegenerateAll = async () => {
     setConfirmRegenAll(false);
     setGenerating(true);
-    setGeneratingProgress(`Regenerating all ${coverage?.active_count} rules...`);
+    setGeneratingProgress(`Queuing ${coverage?.active_count} rules…`);
     try {
       const result = await api.generateFromRules({ force: true, repo: filterRepo || undefined });
-      if (result.success) {
-        showToast(`Generated ${result.pairs} pairs from ${result.rules_processed} rules`, "normal");
+      if (result?.status === "started") {
+        // Async — the polling effect above takes over from here.
+        showToast("Rule generation running in the background.", "normal");
+      } else if (result?.success) {
+        // Shouldn't hit on force=true, but handle graceful finish.
+        showToast(result.message || `Generated ${result.pairs} pairs from ${result.rules_processed} rules`, "normal");
         fetchDatasets();
         fetchCoverage(filterRepo);
+        setGenerating(false);
       } else {
-        showToast(result.error || "Generation failed", "high");
+        showToast(result?.error || "Generation failed", "high");
+        setGenerating(false);
       }
     } catch (err) {
       showToast("Generation failed: " + err.message, "high");
+      setGenerating(false);
     }
-    setGenerating(false);
-    setGeneratingProgress("");
   };
 
   return (
@@ -170,21 +210,26 @@ export default function Training() {
             onClick={async () => {
               setGenerating(true);
               const count = coverage?.uncovered_count || 0;
-              setGeneratingProgress(`Generating training data for ${count} rule(s)...`);
+              setGeneratingProgress(`Queuing ${count} rule(s)…`);
               try {
                 const result = await api.generateFromRules({ repo: filterRepo || undefined });
-                if (result.success) {
+                if (result?.status === "started") {
+                  // Async — polling effect handles completion.
+                  showToast("Rule generation running in the background.", "normal");
+                } else if (result?.success) {
+                  // Incremental path returned synchronously (nothing to do)
                   showToast(result.message || `Generated ${result.pairs} pairs from ${result.rules_processed} rules`, "normal");
                   fetchDatasets();
                   fetchCoverage(filterRepo);
+                  setGenerating(false);
                 } else {
-                  showToast(result.error || "Generation failed", "high");
+                  showToast(result?.error || "Generation failed", "high");
+                  setGenerating(false);
                 }
               } catch (err) {
                 showToast("Generation failed: " + err.message, "high");
+                setGenerating(false);
               }
-              setGenerating(false);
-              setGeneratingProgress("");
             }}
           >
             {generating ? <><Loader size={12} className="spin" /> Generating...</> : <><Sparkles size={12} /> Generate New Rules ({coverage?.uncovered_count || 0})</>}
@@ -199,12 +244,25 @@ export default function Training() {
           </button>
         </div>
 
-        {/* Generation progress indicator */}
-        {generating && generatingProgress && (
+        {/* Generation progress indicator — drives off the async
+            rule-gen state once it starts reporting, falls back to
+            the initial queuing message before the first poll lands. */}
+        {generating && (
           <div className="training-progress-bar">
             <Loader size={12} className="spin" />
-            <span>{generatingProgress}</span>
-            <span className="training-hint">This calls Opus per rule and may take a few minutes.</span>
+            <span>
+              {ruleGenState?.total_rules > 0
+                ? `${ruleGenState.rules_processed}/${ruleGenState.total_rules} rules processed${ruleGenState.pairs ? ` · ${ruleGenState.pairs} pairs` : ""}`
+                : generatingProgress || "Starting…"}
+            </span>
+            {ruleGenState?.current_rule && (
+              <span className="training-hint" title={ruleGenState.current_rule}>
+                {ruleGenState.current_rule.slice(0, 80)}…
+              </span>
+            )}
+            {!ruleGenState?.current_rule && (
+              <span className="training-hint">Opus per rule — runs in the background; safe to navigate away.</span>
+            )}
           </div>
         )}
 

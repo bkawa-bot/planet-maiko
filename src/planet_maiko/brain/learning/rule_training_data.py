@@ -158,12 +158,22 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None, 
     if not runtime or not runtime.is_available():
         return {"success": False, "error": "LLM runtime not available."}
 
+    if progress_cb:
+        progress_cb(total_rules=len(learnings), rules_processed=0)
+
     all_pairs = []
     rules_processed = 0
     errors = 0
 
     for learning in learnings:
         logger.info(f"[rule-data] Rule #{learning.id}: {learning.rule[:60]}...")
+        if progress_cb:
+            progress_cb(
+                current_rule=f"#{learning.id}: {learning.rule[:80]}",
+                rules_processed=rules_processed,
+                pairs=len(all_pairs),
+                errors=errors,
+            )
 
         # Step 1: Pull real signals for this learning, flatten to one row
         # per (signal, example) so each distinct code snippet becomes its
@@ -308,6 +318,12 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None, 
 
         rules_processed += 1
         logger.info(f"[rule-data] Rule #{learning.id}: {len(parsed.get('violations', []))} synthetic violations, {len(parsed.get('passes', []))} synthetic passes + {real_violation_count} real signals")
+        if progress_cb:
+            progress_cb(
+                rules_processed=rules_processed,
+                pairs=len(all_pairs),
+                errors=errors,
+            )
 
     if not all_pairs:
         return {"success": False, "error": "No training pairs generated."}

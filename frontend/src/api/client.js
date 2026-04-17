@@ -304,6 +304,7 @@ export const api = {
   checkTrainingRequirements: () => request("/training/check-requirements"),
   getTrainingProgress: () => request("/training/progress"),
   generateFromRules: (data) => request("/training/generate-from-rules", { method: "POST", body: JSON.stringify(data || {}) }),
+  getRuleGenProgress: () => request("/training/generate-from-rules/progress"),
   getRuleCoverage: (repo) => request(`/training/rule-coverage${repo ? `?repo=${encodeURIComponent(repo)}` : ""}`),
   generateSynthetic: (data) => request("/training/generate-synthetic", { method: "POST", body: JSON.stringify(data || {}) }),
   getAdapters: () => request("/training/adapters"),
