@@ -25,12 +25,7 @@ Run coding agents in the cloud instead of locally. Phased approach that works to
 - File-based relay fallback: `.maiko/inbox.json` committed to the branch
 - Graceful degradation if tunnel is unavailable
 
-### Phase 3 -- Async Tournaments
-- Dispatch tournament entries as independent cloud sessions
-- Collect results asynchronously; don't block the brain cycle
-- Enables parallel evaluation of multiple agent submissions
-
-### Phase 4 -- Native Remote (when Anthropic ships)
+### Phase 3 -- Native Remote (when Anthropic ships)
 - Swap in `claude --remote` command
 - Use session status API for monitoring
 - Cloud MCP support for real-time tool access

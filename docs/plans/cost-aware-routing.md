@@ -10,7 +10,7 @@ Intelligent model selection per task type, routing work to the cheapest capable 
 |------|-------|-----------|
 | Light | Haiku | Triage, classification, scene generation |
 | Standard | Sonnet | Skills, project planning |
-| Heavy | Opus | Coding agents, tournaments, training |
+| Heavy | Opus | Coding agents, training |
 
 ## Routing Mechanism
 

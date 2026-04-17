@@ -140,9 +140,8 @@ Brain Cycle (every 5 min)
   3. Correlator        → Group related events into incidents
   4. Pupdate Processor → Match rules (free) → LLM triage (pennies)
   5. Learning          → Aggregate signals into graduated rules
-  6. Tournaments       → Auto-train agents on merged PRs
-  7. Heartbeats        → Nudge silent agents
-  8. Project Driver    → Auto-advance project phases
+  6. Heartbeats        → Nudge silent agents
+  7. Project Driver    → Auto-advance project phases
 ```
 
 ### Self-Specializing Agents
