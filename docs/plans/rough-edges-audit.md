@@ -246,7 +246,7 @@ Each item has:
 
 Three passes, in priority order:
 
-### Pass A — protect the brain (do first, ~1 day)
+### Pass A — protect the brain (do first, ~1 day)  ✅ shipped 2026-04-16 (`8887372`)
 
 - **#13 Backups.** Catastrophic-risk ÷ tiny-effort = highest ROI.
 - **#3 System health strip** + **#8 poller status**. Combined they
