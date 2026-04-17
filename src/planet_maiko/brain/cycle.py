@@ -410,8 +410,15 @@ def _phase_stuck_escalation():
 
             source_id = f"stuck-task/{t.id}"
             existing = Pupdate.query.filter_by(source_id=source_id).first()
-            if existing and not existing.dismissed:
-                continue  # already surfaced
+            if existing:
+                # Already surfaced once — respect the user's dismissal.
+                # If they've decided they know about it, don't keep
+                # reminding them every cycle. (And the pupdate ID is
+                # fixed at `stuck-{task_id[:32]}`, so a second insert
+                # would PK-conflict anyway.) The auto-dismiss pass
+                # below still closes the pupdate when the task moves
+                # out of in_progress.
+                continue
 
             days = (now - updated).days
             agent_name = (t.assigned_agent_id or "unassigned")
