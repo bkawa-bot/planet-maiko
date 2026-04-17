@@ -43,15 +43,32 @@ export default function Training() {
 
   useEffect(() => { fetchCoverage(filterRepo); }, [filterRepo]);
 
-  // Poll training progress while running
+  // Poll training progress while running. The POST now returns 202
+  // immediately, so completion (done/failed) is detected here via the
+  // adapter's progress.json instead of from the POST response.
   useEffect(() => {
     if (!running) { setProgress(null); return; }
-    const interval = setInterval(() => {
-      api.getTrainingProgress().then((p) => {
-        if (p.status === "training") setProgress(p);
-        else if (p.status === "done" || p.status === "failed") setProgress(p);
-      }).catch(() => {});
-    }, PROGRESS_POLL_MS);
+    const tick = async () => {
+      try {
+        const p = await api.getTrainingProgress();
+        setProgress(p);
+        if (p.status === "done") {
+          showToast(
+            `Training complete! Adapter saved${p.adapter_name ? ` (${p.adapter_name})` : ""}`,
+            "normal",
+          );
+          api.getAdapters().then(setAdapters).catch(() => {});
+          api.getProfiles().then(setProfiles).catch(() => {});
+          setRunning(false);
+        } else if (p.status === "failed") {
+          showToast(p.error || "Training failed", "high");
+          if (p.install_hint) showToast(`Install: ${p.install_hint}`, "normal");
+          setRunning(false);
+        }
+      } catch { /* transient — keep polling */ }
+    };
+    tick();
+    const interval = setInterval(tick, PROGRESS_POLL_MS);
     return () => clearInterval(interval);
   }, [running]);
 
@@ -94,21 +111,28 @@ export default function Training() {
   const startTraining = async () => {
     setRunning(true);
     setConfirmTraining(false);
-    showToast("Training LoRA adapter... this may take 20-30 minutes", "normal");
+    showToast("Training LoRA adapter — this runs in the background (~20-30 min).", "normal");
     try {
       const result = await api.trainAgent({});
-      if (result.success) {
-        showToast(`Training complete! Adapter saved (${result.examples} examples, ${result.duration_seconds}s)`, "normal");
+      if (result?.status === "started") {
+        // Async path — the polling effect above tracks completion.
+        // Nothing else to do here; running stays true until progress
+        // reports done/failed.
+      } else if (result?.success) {
+        // Defensive: if the endpoint reverts to sync later, handle it.
+        showToast(`Training complete! Adapter saved`, "normal");
         api.getAdapters().then(setAdapters).catch(() => {});
         api.getProfiles().then(setProfiles).catch(() => {});
+        setRunning(false);
       } else {
-        showToast(result.error || "Training failed", "high");
-        if (result.install_hint) showToast(`Install: ${result.install_hint}`, "normal");
+        showToast(result?.error || "Training failed to start", "high");
+        if (result?.install_hint) showToast(`Install: ${result.install_hint}`, "normal");
+        setRunning(false);
       }
     } catch (err) {
       showToast("Training failed: " + err.message, "high");
+      setRunning(false);
     }
-    setRunning(false);
   };
 
   const startRegenerateAll = async () => {

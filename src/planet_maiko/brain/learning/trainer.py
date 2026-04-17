@@ -56,7 +56,7 @@ def get_backend():
     return None
 
 
-def train_agent(agent_profile_id, dataset_path=None, repo=None, config=None):
+def train_agent(agent_profile_id, dataset_path=None, repo=None, config=None, adapter_path=None):
     """Train a LoRA adapter for an agent.
 
     Args:
@@ -64,6 +64,10 @@ def train_agent(agent_profile_id, dataset_path=None, repo=None, config=None):
         dataset_path: path to JSONL training data (auto-selects latest if None)
         repo: optional repo filter for training data
         config: training config overrides
+        adapter_path: override the output adapter directory. If provided,
+            the API layer has typically pre-created the dir and seeded
+            progress.json so the UI can poll immediately; if None, a
+            timestamped path under data_dir/models/ is generated.
 
     Returns:
         dict with {adapter_path, examples, epochs, loss, duration_seconds}
@@ -115,12 +119,17 @@ def train_agent(agent_profile_id, dataset_path=None, repo=None, config=None):
     if example_count < 10:
         return {"success": False, "error": f"Only {example_count} examples — need at least 10 for training."}
 
-    # Prepare output path
-    models_dir = os.path.join(data_dir(), "models")
-    os.makedirs(models_dir, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    adapter_name = f"{agent_profile_id}-{timestamp}"
-    adapter_path = os.path.join(models_dir, adapter_name)
+    # Prepare output path. The API layer may pass an adapter_path it
+    # already created (and seeded with a progress.json) so the UI can
+    # poll the right adapter while we spin up; otherwise we generate.
+    if not adapter_path:
+        models_dir = os.path.join(data_dir(), "models")
+        os.makedirs(models_dir, exist_ok=True)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        adapter_name = f"{agent_profile_id}-{timestamp}"
+        adapter_path = os.path.join(models_dir, adapter_name)
+    else:
+        os.makedirs(adapter_path, exist_ok=True)
 
     # Convert JSONL to the format the backend expects
     train_file = _prepare_training_file(dataset_path, adapter_path, train_config)

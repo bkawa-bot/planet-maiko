@@ -51,12 +51,29 @@ def dataset_stats():
 
 @training_bp.route("/training/train-agent", methods=["POST"])
 def train_agent_endpoint():
-    """Train a LoRA adapter for an agent using extracted PR data."""
+    """Kick off a LoRA training job asynchronously.
+
+    Training runs 15-30 min of mlx-lm subprocess work; blocking the
+    HTTP request for that long always timed out. Now we validate
+    requirements + agent_id synchronously, pre-create the adapter
+    directory with `progress.json: {"status": "preparing"}` so the
+    UI can poll immediately, then hand off the heavy work to a
+    daemon thread. Returns 202 with the adapter_name so the client
+    confirms which job it started.
+
+    The existing /training/progress endpoint (which reads the latest
+    adapter's progress.json) is unchanged — this just decouples the
+    HTTP request lifecycle from the training run.
+    """
+    import os
+    import threading as _threading
+    from datetime import datetime, timezone
+    from flask import current_app
     from planet_maiko.brain.learning.trainer import train_agent, check_requirements
+    from planet_maiko.paths import data_dir
 
     data = request.get_json(silent=True) or {}
     agent_id = data.get("agent_profile_id")
-
     if not agent_id:
         return jsonify({"error": "agent_profile_id required"}), 400
 
@@ -68,15 +85,71 @@ def train_agent_endpoint():
             "details": reqs,
         }), 503
 
-    result = train_agent(
-        agent_profile_id=agent_id,
-        dataset_path=data.get("dataset_path"),
-        repo=data.get("repo"),
-        config=data.get("config"),
-    )
+    # Pre-create the adapter dir + initial progress.json so the poll
+    # picks up this specific job immediately (rather than a stale
+    # adapter from a previous run).
+    models_dir = os.path.join(data_dir(), "models")
+    os.makedirs(models_dir, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    adapter_name = f"{agent_id}-{timestamp}"
+    adapter_path = os.path.join(models_dir, adapter_name)
+    os.makedirs(adapter_path, exist_ok=True)
+    progress_path = os.path.join(adapter_path, "progress.json")
 
-    status = 200 if result.get("success") else 500
-    return jsonify(result), status
+    started_at = datetime.now(timezone.utc).isoformat()
+    with open(progress_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "status": "preparing",
+            "agent_profile_id": agent_id,
+            "adapter_name": adapter_name,
+            "started_at": started_at,
+            "iteration": 0,
+            "total_iters": 0,
+            "percent": 0,
+        }, f)
+
+    app = current_app._get_current_object()
+
+    def _run():
+        with app.app_context():
+            try:
+                result = train_agent(
+                    agent_profile_id=agent_id,
+                    dataset_path=data.get("dataset_path"),
+                    repo=data.get("repo"),
+                    config=data.get("config"),
+                    adapter_path=adapter_path,
+                )
+                if not result.get("success"):
+                    # train_agent early-exits (no dataset, no backend)
+                    # don't touch progress.json — write a failure state
+                    # so the poller doesn't sit on "preparing" forever.
+                    with open(progress_path, "w", encoding="utf-8") as pf:
+                        json.dump({
+                            "status": "failed",
+                            "error": result.get("error", "Unknown error"),
+                            "install_hint": result.get("install_hint"),
+                            "percent": 0,
+                        }, pf)
+            except Exception as e:
+                logger.exception("[training] Async train_agent crashed")
+                try:
+                    with open(progress_path, "w", encoding="utf-8") as pf:
+                        json.dump({
+                            "status": "failed",
+                            "error": str(e),
+                            "percent": 0,
+                        }, pf)
+                except Exception:
+                    pass
+
+    _threading.Thread(target=_run, daemon=True, name="train-agent").start()
+
+    return jsonify({
+        "status": "started",
+        "adapter_name": adapter_name,
+        "adapter_path": adapter_path,
+    }), 202
 
 
 @training_bp.route("/training/check-requirements", methods=["GET"])
