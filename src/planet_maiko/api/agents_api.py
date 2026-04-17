@@ -989,6 +989,16 @@ def agent_sends_message(task_id):
             "done": "Open task",
         }.get(message_type, "Open task")
 
+        # Pull the PR URL off the task (if the agent has opened one)
+        # so the pupdate card can link straight to GitHub. Covers both
+        # storage locations: task.url (set by approve / auto-open flows)
+        # and task.extra.pr_url (set by the agent MCP reply path).
+        pr_url = None
+        if task:
+            candidate = task.url or (task.extra or {}).get("pr_url")
+            if candidate and "github.com" in candidate:
+                pr_url = candidate
+
         from planet_maiko.models.pupdate import Pupdate
         pupdate = Pupdate(
             id=f"agent-msg-{task_id}-{uuid.uuid4().hex[:8]}",
@@ -1000,11 +1010,13 @@ def agent_sends_message(task_id):
             body=content,
             actionable=True,
             action_hint=action_hint,
+            url=pr_url,
             tags=[task_id, "agent-message"],
             extra={
                 "task_id": task_id,
                 "agent_id": task.assigned_agent_id if task else None,
                 "message_type": message_type,
+                "pr_url": pr_url,
             },
             # These pupdates already link back to the task — LLM triage
             # would otherwise spawn a duplicate task for every

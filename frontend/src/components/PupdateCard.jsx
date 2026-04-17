@@ -1,5 +1,5 @@
 import {
-  CheckSquare, FolderKanban, ChevronRight, Eye, Search, X, GitPullRequest, FileText,
+  CheckSquare, FolderKanban, ChevronRight, Eye, Search, X, GitPullRequest, FileText, ExternalLink,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
@@ -115,6 +115,17 @@ export default function PupdateCard({
               >
                 <GitPullRequest size={10} /> Review diff
               </Link>
+            )}
+            {p.type === "agent_ready_for_review" && (p.url || p.metadata?.pr_url) && (
+              <a
+                href={p.url || p.metadata?.pr_url}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-sm btn-action"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ExternalLink size={10} /> Open PR
+              </a>
             )}
             {p.type === "agent_plan_for_approval" && p.metadata?.task_id && (
               <Link
