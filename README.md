@@ -84,6 +84,51 @@ Open the app and go to **Settings** (gear icon in the topbar):
 4. **Calendar** — Paste your iCal/ICS URL (Google Calendar, Outlook, CalDAV).
 5. **Allowed Tools** — Under Agent Preferences, add tools like `Bash, Read, Edit, Write, WebFetch` so agents don't hit permission prompts.
 
+## Mental model
+
+Planet Maiko shuffles data between a few core concepts. Knowing which
+is which makes every page legible:
+
+- **Pupdates** — *things to notice.* Notifications from your pollers
+  (GitHub, Linear, Slack, Calendar) plus internal events. Land in the
+  **Inbox**. Some are "action" (blocks on you), most are "activity"
+  (ambient). Brain cycle triages them into the other concepts below.
+- **Tasks** — *things to finish.* Actual work items. Can be typed
+  into Maiko by hand, created automatically from an actionable
+  pupdate, or auto-spawned (e.g. an incident investigation). Live on
+  the **Tasks** page. An agent can be assigned to a task.
+- **Agents** — *your pack.* Personas with role (coding / review /
+  investigation / cartographer), scope (a repo or "global"), and a
+  context set that shapes their behavior. Live on the **Agents**
+  page. Each agent runs in a git worktree with its own CLAUDE.md.
+- **Insights** — *tribal knowledge your agents inherit.* Short notes
+  like *"Use IntelliJ for tests, the CLI runner is broken"*. Written
+  by agents during work, or typed by you. Live in the **Pack Insights
+  library** on the Agents page. Approved insights are injected
+  verbatim into every new agent's CLAUDE.md.
+- **Learnings** — *coding rules the LoRA trainer trains on.*
+  Extracted from PR review comments, agent feedback, and the Pack
+  Insights ritual. Live on the **Knowledge** page. Aggregate into a
+  per-repo LoRA adapter via the **Training** page.
+- **Automations** — *prompt templates Maiko can run on a schedule.*
+  Morning briefs, custom user-authored scripts. Live on the
+  **Automations** page. Scheduled briefings live under **Settings →
+  Scheduled Briefings** instead.
+
+The **Pack Insights** tab on Agents is where the pack gathers around
+the campfire at end of day — every active agent is asked to share
+feedback (→ Learnings → LoRA) and insights (→ CLAUDE.md). You approve
+per-agent what sticks.
+
+Status you can glance at:
+
+- **Home** — scene, morning brief, today's activity digest, what's
+  waiting on you.
+- **Topbar health dot** — green / yellow / red status for pollers,
+  brain cycle, and last backup. Hover for details.
+- **Topbar power button** — end-of-day shutdown ritual: prunes old
+  data, tucks agents in, stops the server.
+
 ## Architecture
 
 Planet Maiko's brain is modeled on a CPU — each cycle processes instructions through a pipeline:

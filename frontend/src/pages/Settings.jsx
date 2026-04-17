@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
-import { ChevronDown, ChevronRight, MapPin, Search, Loader, FolderGit2, Plug, AlertTriangle } from "lucide-react";
+import { ChevronDown, ChevronRight, MapPin, Search, Loader, FolderGit2, Plug, AlertTriangle, BookOpen } from "lucide-react";
 import ScheduledBriefings from "../components/ScheduledBriefings";
+import ConceptsModal from "../components/ConceptsModal";
 import "./Settings.css";
 
 export default function Settings() {
@@ -14,6 +15,7 @@ export default function Settings() {
   const [openSections, setOpenSections] = useState({ briefings: true, integrations: false, agents: false, routing: false, scene: false, plugins: false });
   const toggleSection = (key) => setOpenSections(s => ({ ...s, [key]: !s[key] }));
 
+  const [showConcepts, setShowConcepts] = useState(false);
   const [locationQuery, setLocationQuery] = useState("");
   const [locationResolved, setLocationResolved] = useState("");
   const [lookingUp, setLookingUp] = useState(false);
@@ -131,6 +133,14 @@ export default function Settings() {
       <section className="settings-collapsible">
         <div className="collapsible-header" style={{ cursor: "default" }}>
           <span>Your Name</span>
+          <button
+            className="btn btn-sm"
+            style={{ marginLeft: "auto", gap: 4 }}
+            onClick={() => setShowConcepts(true)}
+            title="Refresher on pupdates / tasks / agents / insights / learnings"
+          >
+            <BookOpen size={10} /> Concepts
+          </button>
         </div>
         <div className="collapsible-body">
           <div className="integration-section">
@@ -149,6 +159,8 @@ export default function Settings() {
           </div>
         </div>
       </section>
+
+      {showConcepts && <ConceptsModal onClose={() => setShowConcepts(false)} />}
 
       {/* Autopilot — master switch for auto-investigating incidents */}
       <section className="settings-collapsible">
