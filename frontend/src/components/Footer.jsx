@@ -3,7 +3,19 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { Brain, Shield, CloudSun, Bot, Bug, Sparkles } from "lucide-react";
 import { showToast } from "./Toast";
+import FooterPendingPopover from "./FooterPendingPopover";
 import "./Footer.css";
+
+
+// Rendered in k-notation (1.2k) once the count crosses this threshold
+// — a literal "3247 pending" chip is visually alarming and prone to
+// overflow the footer row.
+const COMPACT_THRESHOLD = 1000;
+
+function _formatCount(n) {
+  if (!n || n < COMPACT_THRESHOLD) return `${n}`;
+  return `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k`;
+}
 
 export default function Footer() {
   const [brainStatus, setBrainStatus] = useState(null);
@@ -11,6 +23,7 @@ export default function Footer() {
   const [scene, setScene] = useState(null);
   const [agentCount, setAgentCount] = useState(0);
   const [cycling, setCycling] = useState(false);
+  const [showPendingPopover, setShowPendingPopover] = useState(false);
   const navigate = useNavigate();
 
   const refresh = async () => {
@@ -58,9 +71,22 @@ export default function Footer() {
         <Brain size={10} />
         <span>{brainStatus?.cycle_count ? `${brainStatus.cycle_count} cycles` : "active"}</span>
         {brainStatus?.pending && Object.values(brainStatus.pending).some(v => v > 0) && (
-          <span className="footer-pending" title={`${brainStatus.pending.unprocessed_pupdates || 0} pupdates, ${brainStatus.pending.unclassified_signals || 0} signals, ${brainStatus.pending.pending_learnings || 0} learnings`}>
-            {Object.values(brainStatus.pending).reduce((a, b) => a + b, 0)} pending
-          </span>
+          <button
+            className="footer-pending"
+            title="Click for a breakdown"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowPendingPopover((v) => !v);
+            }}
+          >
+            {_formatCount(Object.values(brainStatus.pending).reduce((a, b) => a + b, 0))} pending
+          </button>
+        )}
+        {showPendingPopover && (
+          <FooterPendingPopover
+            pending={brainStatus?.pending || {}}
+            onClose={() => setShowPendingPopover(false)}
+          />
         )}
         <button
           className="footer-cycle-btn"
