@@ -1,19 +1,40 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/Layout";
 import ToastContainer from "./components/Toast";
 import AskMaiko from "./components/AskMaiko";
+// Eager: the four surfaces a user hits on almost every visit. Keeping
+// them in the main bundle avoids a suspense flicker on the critical
+// path.
 import Home from "./pages/Home";
 import Inbox from "./pages/Inbox";
 import Tasks from "./pages/Tasks";
-import Settings from "./pages/Settings";
 import Agents from "./pages/Agents";
-import BrainView from "./pages/BrainView";
-import Automations from "./pages/Automations";
-import Training from "./pages/Training";
-import Themes from "./pages/Themes";
-import ReviewDiff from "./pages/ReviewDiff";
-import ReviewPlan from "./pages/ReviewPlan";
+// Lazy: the heavier / less-frequently-visited surfaces. Settings,
+// Training, Review pages etc. ship as their own chunks so the first
+// paint doesn't drag them in. Watchers (the lint bundle warning above
+// 500KB) were complaining about exactly this.
+const Settings = lazy(() => import("./pages/Settings"));
+const BrainView = lazy(() => import("./pages/BrainView"));
+const Automations = lazy(() => import("./pages/Automations"));
+const Training = lazy(() => import("./pages/Training"));
+const Themes = lazy(() => import("./pages/Themes"));
+const ReviewDiff = lazy(() => import("./pages/ReviewDiff"));
+const ReviewPlan = lazy(() => import("./pages/ReviewPlan"));
 import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
+
+
+function RouteFallback() {
+  return (
+    <div style={{
+      padding: 40, textAlign: "center",
+      color: "var(--text-muted)", fontSize: 12,
+    }}>
+      …
+    </div>
+  );
+}
+
 
 function AppRoutes() {
   useKeyboardShortcuts();
@@ -25,13 +46,13 @@ function AppRoutes() {
         <Route path="/inbox" element={<Inbox />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/agents" element={<Agents />} />
-        <Route path="/knowledge" element={<BrainView />} />
-        <Route path="/automations" element={<Automations />} />
-        <Route path="/training" element={<Training />} />
-        <Route path="/themes" element={<Themes />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/tasks/:taskId/review" element={<ReviewDiff />} />
-        <Route path="/tasks/:taskId/plan" element={<ReviewPlan />} />
+        <Route path="/knowledge" element={<Suspense fallback={<RouteFallback />}><BrainView /></Suspense>} />
+        <Route path="/automations" element={<Suspense fallback={<RouteFallback />}><Automations /></Suspense>} />
+        <Route path="/training" element={<Suspense fallback={<RouteFallback />}><Training /></Suspense>} />
+        <Route path="/themes" element={<Suspense fallback={<RouteFallback />}><Themes /></Suspense>} />
+        <Route path="/settings" element={<Suspense fallback={<RouteFallback />}><Settings /></Suspense>} />
+        <Route path="/tasks/:taskId/review" element={<Suspense fallback={<RouteFallback />}><ReviewDiff /></Suspense>} />
+        <Route path="/tasks/:taskId/plan" element={<Suspense fallback={<RouteFallback />}><ReviewPlan /></Suspense>} />
         {/* Legacy routes */}
         <Route path="/skills" element={<Navigate to="/automations" replace />} />
         <Route path="/brain" element={<Navigate to="/knowledge" replace />} />
