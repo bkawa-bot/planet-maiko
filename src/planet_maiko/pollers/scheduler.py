@@ -1,6 +1,7 @@
 import logging
 import threading
 import time
+from datetime import datetime, timezone
 from importlib.metadata import entry_points
 
 from planet_maiko.config import load_config
@@ -41,6 +42,13 @@ class PollerScheduler:
         self.app = app
         self._threads = {}
         self._stop_event = threading.Event()
+        # Lightweight per-poller status for the system-health strip.
+        # Each entry: {last_run_at, last_success_at, last_error,
+        # last_created_count, interval_seconds}. Memory-only — we don't
+        # need cross-restart history for "is anything broken right now".
+        self.poller_status = {}
+        # Most-recent brain cycle timestamp (set inside _brain_cycle_loop).
+        self.last_brain_cycle = None
 
     def start(self):
         """Start all enabled pollers, scheduled skills, and script pollers."""
@@ -88,6 +96,20 @@ class PollerScheduler:
         # Start script pollers
         self._start_script_pollers(config)
 
+        # Nightly DB backups. Small insurance — one corrupted shutdown
+        # otherwise loses every task, learning, insight, and agent
+        # profile the user has built up.
+        from planet_maiko.backups import run_daily_loop as _backup_loop
+        backup_thread = threading.Thread(
+            target=_backup_loop,
+            args=(self._stop_event,),
+            daemon=True,
+            name="backup-loop",
+        )
+        self._threads["backups"] = backup_thread
+        backup_thread.start()
+        logger.info("[scheduler] Started backup loop (daily)")
+
     def stop(self):
         """Signal all poller threads to stop."""
         self._stop_event.set()
@@ -97,12 +119,29 @@ class PollerScheduler:
         # Small initial delay to let the app fully start
         time.sleep(2)
 
+        # Seed the status entry so /system/health shows the poller even
+        # before its first tick completes.
+        self.poller_status[name] = {
+            "last_run_at": None,
+            "last_success_at": None,
+            "last_error": None,
+            "last_created_count": 0,
+            "interval_seconds": int(interval),
+        }
+
         while not self._stop_event.is_set():
+            now = datetime.now(timezone.utc).isoformat()
             try:
                 with self.app.app_context():
                     created = poller.run(config, db.session)
                     if created:
                         logger.info(f"[scheduler] {name}: {created} new pupdate(s)")
+                    self.poller_status[name].update({
+                        "last_run_at": now,
+                        "last_success_at": now,
+                        "last_error": None,
+                        "last_created_count": created or 0,
+                    })
 
                     # Run brain cycle if there's new data OR unprocessed items
                     from planet_maiko.models.pupdate import Pupdate as SchedulerPupdate
@@ -114,6 +153,10 @@ class PollerScheduler:
                         brain_cycle(self.app)
             except Exception as e:
                 logger.error(f"[scheduler] {name} poll error: {e}")
+                self.poller_status[name].update({
+                    "last_run_at": now,
+                    "last_error": str(e)[:200],
+                })
 
             # Wait for the interval, but check stop_event periodically
             for _ in range(int(interval)):
@@ -132,6 +175,7 @@ class PollerScheduler:
                 with self.app.app_context():
                     from planet_maiko.brain.cycle import run as brain_cycle
                     brain_cycle(self.app)
+                self.last_brain_cycle = datetime.now(timezone.utc).isoformat()
             except Exception as e:
                 logger.error(f"[scheduler] brain cycle error: {e}")
 

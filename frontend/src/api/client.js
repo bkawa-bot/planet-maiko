@@ -283,6 +283,7 @@ export const api = {
 
   // System
   shutdown: () => request("/system/shutdown", { method: "POST" }),
+  getSystemHealth: () => request("/system/health"),
 
   // Shutdown / cleanup ritual (power button on the nav)
   getShutdownPreview: () => request("/shutdown/preview"),

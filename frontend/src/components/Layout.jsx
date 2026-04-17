@@ -3,9 +3,11 @@ import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Footer from "./Footer";
 import WeatherOverlay from "./WeatherOverlay";
+import ShutdownModal from "./ShutdownModal";
 import { showToast } from "./Toast";
 import { api } from "../api/client";
 import "./Layout.css";
+import "./ShutdownModal.css";
 
 // Mirror a few scene-visibility config flags onto html attributes so CSS
 // can opt out of the hill background (and future heavy visuals). Also
@@ -119,19 +121,21 @@ export default function Layout() {
   const { scene, weatherEnabled } = useSceneVisibility();
   usePupdateWatcher();
   const { showIdlePrompt, setShowIdlePrompt, resetActivity } = useIdleDetection();
+  // Lifted out of Sidebar so the idle-timeout modal can open the same
+  // cleanup flow as the power button — one code path, two entry points.
+  const [showShutdown, setShowShutdown] = useState(false);
 
   const handleStillWorking = () => {
     resetActivity();
     setShowIdlePrompt(false);
   };
 
-  const handleShutdown = async () => {
-    try {
-      await api.shutdown();
-    } catch (e) {}
+  const handleLetMaikoSleep = () => {
+    // Dismiss the nudge and hand off to the real shutdown ritual. The
+    // user gets the preview + confirm flow instead of a silent SIGTERM
+    // so they can uncheck cleanup or cancel entirely.
     setShowIdlePrompt(false);
-    document.title = "Planet Maiko (stopped)";
-    showToast("Maiko is going to sleep. Restart with: maiko serve", "normal");
+    setShowShutdown(true);
   };
 
   const skyLabel = weatherEnabled ? scene?.scene?.sky : null;
@@ -140,11 +144,13 @@ export default function Layout() {
     <div className="layout">
       {skyLabel && <div className={`sky-overlay sky-${skyLabel}`} aria-hidden="true" />}
       <WeatherOverlay scene={scene} enabled={weatherEnabled} />
-      <Sidebar />
+      <Sidebar onOpenShutdown={() => setShowShutdown(true)} />
       <main className="main-content">
         <Outlet />
       </main>
       <Footer />
+
+      {showShutdown && <ShutdownModal onClose={() => setShowShutdown(false)} />}
 
       {showIdlePrompt && (
         <div className="modal-overlay">
@@ -158,7 +164,7 @@ export default function Layout() {
               <button className="btn btn-primary" onClick={handleStillWorking}>
                 I'm still here!
               </button>
-              <button className="btn" onClick={handleShutdown}>
+              <button className="btn" onClick={handleLetMaikoSleep}>
                 Let Maiko sleep
               </button>
             </div>

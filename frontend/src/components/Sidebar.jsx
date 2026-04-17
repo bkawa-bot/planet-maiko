@@ -3,7 +3,7 @@ import { Home, Inbox, CheckSquare, Bot, Brain, Wand2, Zap, GraduationCap, Settin
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api/client";
 import { applyCustomTheme, clearCustomTheme, hydrateCachedCustomTheme } from "../utils/themes";
-import ShutdownModal from "./ShutdownModal";
+import SystemHealth from "./SystemHealth";
 import "./Sidebar.css";
 import "./ShutdownModal.css";
 
@@ -34,7 +34,7 @@ function getAutoTheme() {
   return "dark";
 }
 
-export default function Sidebar() {
+export default function Sidebar({ onOpenShutdown }) {
   const navigate = useNavigate();
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem("maiko-theme") || "dark";
@@ -49,7 +49,6 @@ export default function Sidebar() {
   const [focusState, setFocusState] = useState("available");
   const [showFocusMenu, setShowFocusMenu] = useState(false);
   const [showFocusInfo, setShowFocusInfo] = useState(false);
-  const [showShutdown, setShowShutdown] = useState(false);
   const themeRef = useRef(null);
   const focusRef = useRef(null);
 
@@ -233,21 +232,21 @@ export default function Sidebar() {
             )}
           </div>
 
+          <SystemHealth />
+
           <NavLink to="/settings" className="topbar-action" title="Settings">
             <Settings size={14} />
           </NavLink>
 
           <button
             className="power-button"
-            onClick={() => setShowShutdown(true)}
+            onClick={onOpenShutdown}
             title="Shutdown / cleanup"
           >
             <Power size={12} />
           </button>
         </div>
       </div>
-
-      {showShutdown && <ShutdownModal onClose={() => setShowShutdown(false)} />}
 
       {showFocusInfo && (
         <div className="modal-overlay" onClick={() => setShowFocusInfo(false)}>

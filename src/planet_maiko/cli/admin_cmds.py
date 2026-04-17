@@ -164,6 +164,55 @@ def cmd_bootstrap(args):
                 print(f"  {r['repo']:50s}  {r['prs_scanned']} PRs scanned, {r['signals_created']} signals")
 
 
+def cmd_backup(args):
+    """Take a one-off snapshot of the DB."""
+    from planet_maiko.backups import create_backup
+    result = create_backup("manual")
+    if result.get("error"):
+        print(f"Backup failed: {result['error']}")
+        return
+    print(f"Snapshot saved: {result['filename']} ({result['bytes'] // 1024} KB)")
+    print(f"Path: {result['path']}")
+
+
+def cmd_backup_list(args):
+    """List all existing snapshots."""
+    from planet_maiko.backups import list_backups
+    bks = list_backups()
+    if not bks:
+        print("No backups yet. Run `maiko backup` to take one now.")
+        return
+    print(f"{len(bks)} snapshot(s):\n")
+    for b in bks:
+        size_kb = b["bytes"] // 1024
+        print(f"  {b['filename']:40s}  {size_kb:>6} KB  {b['created_at']}")
+
+
+def cmd_restore(args):
+    """Restore a named snapshot over the live DB.
+
+    Requires the server to be stopped — restoring while pollers are
+    writing to the DB will corrupt it.
+    """
+    from planet_maiko.backups import restore_backup
+    import sys
+    prompt = (
+        f"\nThis will overwrite the current database with snapshot '{args.filename}'.\n"
+        f"The server must be stopped. Your current db will be copied aside first.\n"
+        f"Type YES to continue: "
+    )
+    reply = input(prompt).strip()
+    if reply != "YES":
+        print("Aborted.")
+        sys.exit(1)
+    result = restore_backup(args.filename)
+    if result.get("error"):
+        print(f"Restore failed: {result['error']}")
+        sys.exit(1)
+    print(f"Restored from {result['restored']}.")
+    print(f"Previous db stashed at: {result['previous_db']}")
+
+
 def register(subparsers):
     """Register admin/server lifecycle subcommands."""
     # maiko setup
@@ -195,3 +244,17 @@ def register(subparsers):
     p = subparsers.add_parser("bootstrap", help="Seed learnings from past PR reviews")
     p.add_argument("--limit", type=int, default=20, help="Max PRs to scan")
     p.set_defaults(func=cmd_bootstrap)
+
+    # maiko backup
+    p = subparsers.add_parser("backup", help="Take a DB snapshot now")
+    p.set_defaults(func=cmd_backup)
+
+    # maiko backup-list (separate command since argparse subparsers
+    # don't nest without extra scaffolding and this is fine for v1)
+    p = subparsers.add_parser("backup-list", help="List existing DB snapshots")
+    p.set_defaults(func=cmd_backup_list)
+
+    # maiko restore
+    p = subparsers.add_parser("restore", help="Restore a named snapshot (server must be stopped)")
+    p.add_argument("filename", help="Snapshot filename as shown in `maiko backup-list`")
+    p.set_defaults(func=cmd_restore)

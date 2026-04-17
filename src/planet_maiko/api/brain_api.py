@@ -81,6 +81,35 @@ def delete_schedule_override():
     return jsonify(compute_schedule())
 
 
+@brain_bp.route("/system/health", methods=["GET"])
+def system_health():
+    """Lightweight health snapshot for the topbar indicator.
+
+    Returns per-poller status, last brain-cycle time, and the most
+    recent backup. The UI uses this to decide if the health dot is
+    green (everything fresh, no errors) / yellow (stale or recent
+    error) / red (scheduler not running).
+    """
+    from flask import current_app
+    from planet_maiko.backups import latest_backup
+
+    scheduler = current_app.config.get("SCHEDULER")
+    if scheduler is None:
+        return jsonify({
+            "scheduler_running": False,
+            "pollers": {},
+            "last_brain_cycle": None,
+            "latest_backup": None,
+        })
+
+    return jsonify({
+        "scheduler_running": True,
+        "pollers": dict(scheduler.poller_status),
+        "last_brain_cycle": scheduler.last_brain_cycle,
+        "latest_backup": latest_backup(),
+    })
+
+
 @brain_bp.route("/system/shutdown", methods=["POST"])
 def shutdown():
     """Gracefully shut down the server (power saving mode)."""
