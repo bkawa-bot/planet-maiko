@@ -111,7 +111,7 @@ def pack_insights_gathering_replies():
             AgentMessage.task_id.in_(task_ids),
             AgentMessage.direction == "from_agent",
             AgentMessage.created_at >= triggered_utc,
-            AgentMessage.message_type.in_(("feedback", "insight", "status")),
+            AgentMessage.message_type.in_(("feedback", "insight", "status", "summary")),
         )
         .order_by(AgentMessage.created_at.asc())
         .all()
@@ -126,9 +126,17 @@ def pack_insights_gathering_replies():
             continue
         prof = profiles.get(t.assigned_agent_id)
         t_replies = replies_by_task.get(tid, [])
-        has_substance = any(r.message_type in ("feedback", "insight") for r in t_replies)
+        substantive = [r for r in t_replies if r.message_type in ("feedback", "insight")]
+        has_substance = bool(substantive)
         any_status = any(r.message_type == "status" for r in t_replies)
         state_label = "shared" if has_substance else ("quiet" if any_status else "waiting")
+
+        # Agent's own one-liner for the campfire bubble. Most recent
+        # summary reply wins if they sent multiple.
+        summary = None
+        for r in t_replies:
+            if r.message_type == "summary" and r.content:
+                summary = r.content.strip()
 
         agents.append({
             "agent_id": t.assigned_agent_id,
@@ -137,14 +145,15 @@ def pack_insights_gathering_replies():
             "task_id": tid,
             "task_title": t.title,
             "state": state_label,
+            "summary": summary,
             "replies": [
                 {
+                    "id": r.id,
                     "type": r.message_type,
                     "content": r.content,
                     "created_at": iso_utc(r.created_at),
                 }
-                for r in t_replies
-                if r.message_type in ("feedback", "insight")
+                for r in substantive
             ],
         })
 
@@ -153,4 +162,52 @@ def pack_insights_gathering_replies():
         "status": state.get("status"),
         "started_at": state["triggered_at"],
         "agents": agents,
+    })
+
+
+@pack_insights_bp.route("/pack-insights/wrap-up", methods=["POST"])
+def pack_insights_wrap_up():
+    """Finish the current gather, applying the user's drop decisions.
+
+    Body: { dropped_message_ids: [int, ...] }
+    For each dropped reply id, removes the Signal (for feedback replies)
+    or dismisses the Insight (for insight replies) that got written when
+    the reply landed. Kept replies stay as-is — they were already
+    written at reply time, so there's nothing more to do for them.
+    Resets the gather state to idle so the next ritual starts clean.
+    """
+    from planet_maiko.database import db
+    from planet_maiko.models.signal import Signal
+    from planet_maiko.models.insight import Insight
+
+    data = request.get_json(silent=True) or {}
+    dropped_ids = [int(i) for i in data.get("dropped_message_ids", []) if str(i).isdigit()]
+
+    signals_deleted = 0
+    insights_dismissed = 0
+
+    if dropped_ids:
+        # Signals: hard delete since they haven't been aggregated /
+        # incorporated into a Learning yet (Pack Insights commits within
+        # a ritual, before the clustering cycle runs).
+        sig_q = Signal.query.filter(Signal.source_message_id.in_(dropped_ids))
+        signals_deleted = sig_q.count()
+        sig_q.delete(synchronize_session=False)
+
+        # Insights: soft dismiss so the history is preserved in the DB.
+        ins_q = Insight.query.filter(
+            Insight.source_message_id.in_(dropped_ids),
+            Insight.status != "dismissed",
+        )
+        for ins in ins_q.all():
+            ins.status = "dismissed"
+            insights_dismissed += 1
+
+        db.session.commit()
+
+    reset()
+    return jsonify({
+        "status": "idle",
+        "signals_deleted": signals_deleted,
+        "insights_dismissed": insights_dismissed,
     })

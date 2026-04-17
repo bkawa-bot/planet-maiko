@@ -32,6 +32,11 @@ def _ensure_columns():
         "ALTER TABLE agent_profiles ADD COLUMN scope_repo VARCHAR(256)",
         "ALTER TABLE agent_profiles ADD COLUMN instructions TEXT",
         "ALTER TABLE pupdates ADD COLUMN category VARCHAR(16) DEFAULT 'activity'",
+        # Pack Insights ritual: link signals / insights back to the
+        # agent reply they came from so "drop this during review"
+        # can undo them cleanly.
+        "ALTER TABLE signals ADD COLUMN source_message_id INTEGER",
+        "ALTER TABLE insights ADD COLUMN source_message_id INTEGER",
         # Tournament system removed — drop legacy tables if present
         "DROP TABLE IF EXISTS tournament_entries",
         "DROP TABLE IF EXISTS tournaments",

@@ -49,6 +49,12 @@ class Signal(db.Model):
     # and may be wrong" — cluster should wait for synthesis first.
     synthesized = db.Column(db.Boolean, default=False, index=True)
 
+    # When this signal was created from a specific agent reply (feedback
+    # message_type), points at that AgentMessage.id. Lets the Pack
+    # Insights ritual undo a signal cleanly when the user drops the
+    # agent's contribution during review — no fuzzy text+time matching.
+    source_message_id = db.Column(db.Integer, nullable=True, index=True)
+
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     learning = db.relationship("Learning", backref="signals")

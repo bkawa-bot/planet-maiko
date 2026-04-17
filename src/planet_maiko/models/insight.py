@@ -53,6 +53,11 @@ class Insight(db.Model):
     # delete them.
     expires_at = db.Column(db.DateTime, nullable=True)
 
+    # When an agent submitted this insight via the Pack Insights ritual,
+    # points at the source AgentMessage.id. Lets "drop" in the ritual
+    # modal find the right row to dismiss without fuzzy matching.
+    source_message_id = db.Column(db.Integer, nullable=True, index=True)
+
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
                            onupdate=lambda: datetime.now(timezone.utc))

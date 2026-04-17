@@ -1,13 +1,12 @@
 import { useEffect, useState, useRef } from "react";
 import {
-  Flame, Check, X, Plus, Sparkles, ChevronDown, ChevronRight, Loader, Moon, RefreshCw,
+  Flame, Check, X, Loader, Moon, RefreshCw, MessageSquare,
+  ChevronDown, ChevronRight,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
 import PlaybookTab from "../PlaybookTab";
 import "./CampfireTab.css";
-
-const PACK_CATEGORIES = ["domain_knowledge", "pattern", "gotcha", "team"];
 
 // Mirror of Home.jsx AVATAR_EMOJI + src/planet_maiko/agents/signature.py —
 // keep all three in sync.
@@ -26,10 +25,14 @@ const GATHER_POLL_INTERVAL_MS = 4000;
 export default function AgentsInsightsTab() {
   const [packState, setPackState] = useState(null);
   const [replies, setReplies] = useState({ agents: [], status: "idle", started_at: null });
-  const [manualText, setManualText] = useState("");
-  const [manualCategory, setManualCategory] = useState("domain_knowledge");
   const [showPlaybook, setShowPlaybook] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [wrapping, setWrapping] = useState(false);
+  // Per-reply Keep/Drop decisions keyed by AgentMessage.id. Default is
+  // "keep" (opt-in drops) so agents the user doesn't click into stay
+  // fully approved. Lives here so decisions persist across modal opens.
+  const [decisions, setDecisions] = useState({});
+  const [activeAgent, setActiveAgent] = useState(null);
   const pollRef = useRef(null);
 
   const fetchAll = async () => {
@@ -47,9 +50,6 @@ export default function AgentsInsightsTab() {
 
   useEffect(() => { fetchAll(); }, []);
 
-  // Poll only while gathering. Idle / reviewing / synthesized states
-  // don't change without a user action, so polling them would be
-  // background noise.
   useEffect(() => {
     if (packState?.status === "gathering") {
       pollRef.current = setInterval(fetchAll, GATHER_POLL_INTERVAL_MS);
@@ -65,6 +65,7 @@ export default function AgentsInsightsTab() {
     try {
       await api.startPackInsights();
       showToast("Gathering the pack around the fire… 🔥", "normal");
+      setDecisions({});
       await fetchAll();
     } catch (err) {
       showToast(err.message || "Couldn't start gathering", "high");
@@ -72,36 +73,38 @@ export default function AgentsInsightsTab() {
     setStarting(false);
   };
 
-  const handleWrap = async () => {
-    await api.collectPackInsights();
-    showToast("Collected what the pack shared", "normal");
-    fetchAll();
-  };
-
-  const handleSynthesize = async () => {
-    await api.synthesizePackInsights();
-    showToast("Maiko is looking for patterns…", "normal");
-    fetchAll();
-  };
-
-  const handleFinalize = async () => {
-    const result = await api.finalizePackInsights({});
-    const kept = result?.kept || 0;
-    const rules = result?.rules_created || 0;
-    showToast(`Merged ${kept} into the pool · ${rules} proposed rules`, "normal");
-    fetchAll();
+  const handleWrapUp = async () => {
+    setWrapping(true);
+    const dropped = Object.entries(decisions)
+      .filter(([, v]) => v === "drop")
+      .map(([id]) => parseInt(id, 10))
+      .filter((n) => Number.isInteger(n));
+    try {
+      const result = await api.wrapUpPackInsights(dropped);
+      const kept = (result?.signals_deleted || 0) + (result?.insights_dismissed || 0);
+      if (kept > 0) {
+        showToast(`Dropped ${kept} · everything else merged into the pool`, "normal");
+      } else {
+        showToast("Wrapped up — everything the pack shared stays in the pool", "normal");
+      }
+      setDecisions({});
+      setActiveAgent(null);
+      await fetchAll();
+    } catch (err) {
+      showToast(err.message || "Couldn't wrap up", "high");
+    }
+    setWrapping(false);
   };
 
   const handleReset = async () => {
     await api.resetPackInsights();
+    setDecisions({});
+    setActiveAgent(null);
     fetchAll();
   };
 
-  const handleAddManual = async () => {
-    if (!manualText.trim()) return;
-    await api.addPackInsightsLearning(manualText, manualCategory);
-    setManualText("");
-    fetchAll();
+  const setReplyDecision = (replyId, decision) => {
+    setDecisions((prev) => ({ ...prev, [replyId]: decision }));
   };
 
   return (
@@ -113,38 +116,30 @@ export default function AgentsInsightsTab() {
       {status === "gathering" && (
         <CampfireScene
           agents={replies.agents}
-          onWrap={handleWrap}
+          decisions={decisions}
+          onOpenAgent={setActiveAgent}
+          onWrapUp={handleWrapUp}
           onReset={handleReset}
+          wrapping={wrapping}
         />
       )}
 
-      {status === "reviewing" && (
-        <ReviewingPanel
-          packState={packState}
-          manualText={manualText}
-          setManualText={setManualText}
-          manualCategory={manualCategory}
-          setManualCategory={setManualCategory}
-          onAddManual={handleAddManual}
-          onSynthesize={handleSynthesize}
-          onReset={handleReset}
+      {/* Legacy state transitions kept in case an external caller
+          (CLI, API) walks the old pipeline. The new in-app flow goes
+          straight from gathering → idle via /pack-insights/wrap-up. */}
+      {(status === "reviewing" || status === "synthesized" || status === "finalized") && (
+        <LegacyPanel packState={packState} onReset={handleReset} />
+      )}
+
+      {activeAgent && (
+        <AgentGatherModal
+          agent={activeAgent}
+          decisions={decisions}
+          onDecision={setReplyDecision}
+          onClose={() => setActiveAgent(null)}
         />
       )}
 
-      {status === "synthesized" && (
-        <SynthesizedPanel
-          packState={packState}
-          onFinalize={handleFinalize}
-          onReset={handleReset}
-        />
-      )}
-
-      {status === "finalized" && (
-        <FinalizedPanel onReset={handleReset} />
-      )}
-
-      {/* Always-visible library of active insights (the Playbook). Lives
-          here so agents + their captured context stay in one place. */}
       <div className="campfire-library">
         <button
           className="campfire-library-toggle"
@@ -171,9 +166,9 @@ function IdleHero({ onStart, starting }) {
       <h3>Gather the pack around the fire</h3>
       <p>
         Maiko will message every active agent and ask what they noticed today —
-        coding rules that should apply to future work (<em>feedback</em>) and
-        tribal knowledge future agents should inherit (<em>insights</em>).
-        You approve what sticks.
+        coding rules (<em>feedback</em>) and tribal knowledge (<em>insights</em>).
+        Each agent will also share a one-sentence summary of their day.
+        You click an agent to review what they said and approve what sticks.
       </p>
       <button
         className="btn btn-primary campfire-start"
@@ -188,7 +183,7 @@ function IdleHero({ onStart, starting }) {
 }
 
 
-function CampfireScene({ agents, onWrap, onReset }) {
+function CampfireScene({ agents, decisions, onOpenAgent, onWrapUp, onReset, wrapping }) {
   const sharedCount = agents.filter((a) => a.state === "shared").length;
   const total = agents.length;
 
@@ -202,7 +197,14 @@ function CampfireScene({ agents, onWrap, onReset }) {
             The pack hasn't arrived yet… Maiko is waking them up.
           </div>
         ) : (
-          agents.map((a) => <AgentAtFire key={a.agent_id} agent={a} />)
+          agents.map((a) => (
+            <AgentAtFire
+              key={a.agent_id}
+              agent={a}
+              decisions={decisions}
+              onOpen={() => onOpenAgent(a)}
+            />
+          ))
         )}
       </div>
 
@@ -213,11 +215,16 @@ function CampfireScene({ agents, onWrap, onReset }) {
             : `${sharedCount} of ${total} shared`}
         </span>
         <div className="campfire-progress-actions">
-          <button className="btn btn-sm btn-ghost" onClick={onReset} title="Cancel the gathering">
+          <button className="btn btn-sm btn-ghost" onClick={onReset}>
             <X size={10} /> Cancel
           </button>
-          <button className="btn btn-sm btn-primary" onClick={onWrap}>
-            <Check size={10} /> Wrap up
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={onWrapUp}
+            disabled={wrapping}
+          >
+            {wrapping ? <Loader size={10} className="spin" /> : <Check size={10} />}
+            {wrapping ? " Wrapping up…" : " Wrap up"}
           </button>
         </div>
       </div>
@@ -226,11 +233,32 @@ function CampfireScene({ agents, onWrap, onReset }) {
 }
 
 
-function AgentAtFire({ agent }) {
+function AgentAtFire({ agent, decisions, onOpen }) {
   const emoji = AVATAR_EMOJI[agent.avatar] || "🐾";
+  const replyCount = agent.replies?.length || 0;
+  const droppedCount = (agent.replies || []).filter((r) => decisions[r.id] === "drop").length;
+
+  // Fallback summary if the agent didn't send a summary reply yet: a
+  // dry count so the bubble isn't empty while you wait for them.
+  const fallbackCount = (() => {
+    if (!replyCount) return null;
+    const fb = (agent.replies || []).filter((r) => r.type === "feedback").length;
+    const ins = (agent.replies || []).filter((r) => r.type === "insight").length;
+    const parts = [];
+    if (fb) parts.push(`${fb} feedback`);
+    if (ins) parts.push(`${ins} insight${ins === 1 ? "" : "s"}`);
+    return `Shared ${parts.join(" · ")}`;
+  })();
+
+  const bubbleText = agent.summary || fallbackCount;
 
   return (
-    <div className={`campfire-agent campfire-agent-${agent.state}`} title={agent.task_title}>
+    <div
+      className={`campfire-agent campfire-agent-${agent.state} ${onOpen ? "clickable" : ""}`}
+      title={agent.task_title}
+      onClick={agent.state === "shared" ? onOpen : undefined}
+      role={agent.state === "shared" ? "button" : undefined}
+    >
       <div className="campfire-bubbles">
         {agent.state === "waiting" && (
           <div className="campfire-bubble campfire-bubble-waiting">
@@ -242,12 +270,20 @@ function AgentAtFire({ agent }) {
             <Moon size={10} /> quiet tonight
           </div>
         )}
-        {agent.replies.map((r, i) => (
-          <div key={i} className={`campfire-bubble campfire-bubble-${r.type}`}>
-            <span className="campfire-bubble-type">{r.type}</span>
-            <span className="campfire-bubble-text">{r.content}</span>
+        {agent.state === "shared" && bubbleText && (
+          <div className="campfire-bubble campfire-bubble-summary">
+            <span className="campfire-bubble-text">{bubbleText}</span>
+            <span className="campfire-bubble-meta">
+              <MessageSquare size={9} />
+              {replyCount}
+              {droppedCount > 0 && (
+                <span className="campfire-bubble-dropped" title={`${droppedCount} dropped`}>
+                  · −{droppedCount}
+                </span>
+              )}
+            </span>
           </div>
-        ))}
+        )}
       </div>
       <div className="campfire-agent-avatar">{emoji}</div>
       <div className="campfire-agent-name">{agent.display_name}</div>
@@ -256,90 +292,109 @@ function AgentAtFire({ agent }) {
 }
 
 
-function ReviewingPanel({
-  packState, manualText, setManualText, manualCategory, setManualCategory,
-  onAddManual, onSynthesize, onReset,
-}) {
-  const collected = packState?.collected || [];
-  return (
-    <div className="campfire-panel">
-      <div className="campfire-panel-header">
-        <Flame size={14} /> What the pack shared
-        <span className="campfire-panel-count">{collected.length}</span>
-      </div>
-      <div className="campfire-manual-add">
-        <input
-          value={manualText}
-          onChange={(e) => setManualText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && onAddManual()}
-          placeholder="Add your own note…"
-        />
-        <select value={manualCategory} onChange={(e) => setManualCategory(e.target.value)}>
-          {PACK_CATEGORIES.map((c) => (
-            <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
-          ))}
-        </select>
-        <button className="btn btn-sm" onClick={onAddManual}>
-          <Plus size={10} />
-        </button>
-      </div>
-      <div className="campfire-collected">
-        {collected.length === 0 ? (
-          <div className="campfire-empty-small">No replies collected yet.</div>
-        ) : (
-          collected.map((item, i) => (
-            <div key={i} className="campfire-collected-item">
-              <div className="campfire-collected-text">{item.text}</div>
-              <div className="campfire-collected-meta">
-                <span className="tag">{item.category?.replace(/_/g, " ")}</span>
-                {item.source_agent && <span className="tag">{item.source_agent}</span>}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-      <div className="campfire-panel-footer">
-        <button className="btn btn-ghost" onClick={onReset}>
-          <X size={10} /> Cancel
-        </button>
-        <button className="btn btn-primary" onClick={onSynthesize}>
-          <Sparkles size={12} /> Synthesize
-        </button>
-      </div>
-    </div>
-  );
-}
+function AgentGatherModal({ agent, decisions, onDecision, onClose }) {
+  const emoji = AVATAR_EMOJI[agent.avatar] || "🐾";
+  const feedback = (agent.replies || []).filter((r) => r.type === "feedback");
+  const insights = (agent.replies || []).filter((r) => r.type === "insight");
 
+  const decisionOf = (id) => decisions[id] || "keep";
 
-function SynthesizedPanel({ packState, onFinalize, onReset }) {
-  const synth = packState?.synthesis || {};
   return (
-    <div className="campfire-panel">
-      <div className="campfire-panel-header">
-        <Sparkles size={14} /> Maiko's synthesis
-      </div>
-      <ul className="campfire-synth-bullets">
-        <li>{synth.duplicates_merged || 0} duplicates merged</li>
-        <li>{(synth.already_known || []).length} already in the pool</li>
-        <li>{(synth.unique_learnings || []).length} fresh learnings</li>
-        <li>{(synth.proposed_rules || []).length} proposed rules</li>
-      </ul>
-      {(synth.proposed_rules || []).length > 0 && (
-        <div className="campfire-proposed-rules">
-          {synth.proposed_rules.map((r, i) => (
-            <div key={i} className="campfire-proposed-rule">
-              <span className="tag">{r.category}</span>
-              <span>{r.text}</span>
-            </div>
-          ))}
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="campfire-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="campfire-modal-header">
+          <div className="campfire-modal-avatar">{emoji}</div>
+          <div className="campfire-modal-identity">
+            <div className="campfire-modal-name">{agent.display_name}</div>
+            {agent.task_title && (
+              <div className="campfire-modal-task">{agent.task_title}</div>
+            )}
+          </div>
+          <button className="btn-ghost" onClick={onClose} title="Close">
+            <X size={14} />
+          </button>
         </div>
-      )}
-      <div className="campfire-panel-footer">
-        <button className="btn btn-ghost" onClick={onReset}>
-          <X size={10} /> Reset
+
+        {agent.summary && (
+          <div className="campfire-modal-summary">
+            <span className="campfire-modal-summary-quote">"{agent.summary}"</span>
+          </div>
+        )}
+
+        {feedback.length > 0 && (
+          <div className="campfire-modal-section">
+            <div className="campfire-modal-section-header campfire-modal-section-feedback">
+              Feedback <span className="campfire-modal-section-count">{feedback.length}</span>
+            </div>
+            <div className="campfire-modal-items">
+              {feedback.map((r) => (
+                <ReplyRow
+                  key={r.id}
+                  reply={r}
+                  decision={decisionOf(r.id)}
+                  onDecision={(d) => onDecision(r.id, d)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {insights.length > 0 && (
+          <div className="campfire-modal-section">
+            <div className="campfire-modal-section-header campfire-modal-section-insight">
+              Insights <span className="campfire-modal-section-count">{insights.length}</span>
+            </div>
+            <div className="campfire-modal-items">
+              {insights.map((r) => (
+                <ReplyRow
+                  key={r.id}
+                  reply={r}
+                  decision={decisionOf(r.id)}
+                  onDecision={(d) => onDecision(r.id, d)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {feedback.length === 0 && insights.length === 0 && (
+          <div className="campfire-modal-empty">
+            {agent.display_name} hasn't shared anything yet.
+          </div>
+        )}
+
+        <div className="campfire-modal-footer">
+          <span className="campfire-modal-hint">
+            Decisions are saved when you Wrap up the gathering.
+          </span>
+          <button className="btn btn-sm btn-primary" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function ReplyRow({ reply, decision, onDecision }) {
+  return (
+    <div className={`campfire-reply campfire-reply-${decision}`}>
+      <div className="campfire-reply-text">{reply.content}</div>
+      <div className="campfire-reply-actions">
+        <button
+          className={`btn btn-xs ${decision === "keep" ? "btn-primary" : ""}`}
+          onClick={() => onDecision("keep")}
+          title="Keep this — it'll merge into the pool on Wrap up"
+        >
+          <Check size={10} /> Keep
         </button>
-        <button className="btn btn-primary" onClick={onFinalize}>
-          <Check size={12} /> Finalize &amp; merge
+        <button
+          className={`btn btn-xs ${decision === "drop" ? "btn-danger" : ""}`}
+          onClick={() => onDecision("drop")}
+          title="Drop this — Maiko will remove it on Wrap up"
+        >
+          <X size={10} /> Drop
         </button>
       </div>
     </div>
@@ -347,15 +402,21 @@ function SynthesizedPanel({ packState, onFinalize, onReset }) {
 }
 
 
-function FinalizedPanel({ onReset }) {
+function LegacyPanel({ packState, onReset }) {
   return (
-    <div className="campfire-panel campfire-panel-finalized">
-      <Check size={28} className="campfire-finalized-check" />
-      <h3>Merged into the pool</h3>
-      <p>Learnings flowed into the knowledge pool. Insights went to the library below.</p>
-      <button className="btn" onClick={onReset}>
-        <RefreshCw size={10} /> Start a new gathering
-      </button>
+    <div className="campfire-panel">
+      <div className="campfire-panel-header">
+        <Flame size={14} /> Gathering in legacy state: {packState?.status}
+      </div>
+      <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
+        The ritual advanced via an older endpoint. Hit Reset to return to idle
+        and start a fresh gathering.
+      </p>
+      <div className="campfire-panel-footer">
+        <button className="btn" onClick={onReset}>
+          <RefreshCw size={10} /> Reset
+        </button>
+      </div>
     </div>
   );
 }

@@ -932,6 +932,7 @@ def agent_sends_message(task_id):
                 tags=tags,
                 author_agent_id=(t.assigned_agent_id if t else None),
                 status="pending",
+                source_message_id=msg.id,
             )
             db.session.add(ins)
             logger.info(
@@ -941,7 +942,7 @@ def agent_sends_message(task_id):
         except Exception as e:
             logger.warning(f"[outbox] insight save failed for {task_id}: {e}")
 
-    if message_type not in ("status", "feedback", "insight"):
+    if message_type not in ("status", "feedback", "insight", "summary"):
         from planet_maiko.models.task import Task
         from planet_maiko.models.agent_profile import AgentProfile
         task = db.session.get(Task, task_id)
@@ -1072,6 +1073,7 @@ def agent_sends_message(task_id):
             # Session feedback carries an explicit category from the
             # agent — skip re-synthesis.
             synthesized=True,
+            source_message_id=msg.id,
         )
         db.session.add(signal)
 

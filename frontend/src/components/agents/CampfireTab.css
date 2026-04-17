@@ -257,6 +257,134 @@
   margin: 0; max-width: 360px; font-size: 12px; color: var(--text-muted); line-height: 1.5;
 }
 
+/* Summary bubble — one-sentence agent-authored line, with a tiny
+   meta row below showing how many raw items it covers. */
+.campfire-bubble-summary {
+  background: var(--bg-card);
+  border-color: var(--peach);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.campfire-bubble-summary::after { border-top-color: var(--bg-card); }
+.campfire-bubble-meta {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 9px; color: var(--text-muted);
+  padding-top: 2px;
+  border-top: 1px dashed var(--border-subtle);
+}
+.campfire-bubble-dropped { color: var(--urgent); font-weight: 600; }
+
+/* Clickable agent tile — hover/active feel so people know to click. */
+.campfire-agent.clickable { cursor: pointer; }
+.campfire-agent.clickable:hover .campfire-agent-avatar {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(255, 140, 90, 0.25);
+}
+.campfire-agent.clickable:hover .campfire-bubble {
+  border-color: var(--peach);
+}
+
+/* === Per-agent review modal === */
+.campfire-modal {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--peach);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35);
+  width: min(560px, 92vw);
+  max-height: 80vh;
+  padding: 18px 20px;
+  display: flex; flex-direction: column; gap: 14px;
+  overflow-y: auto;
+}
+
+.campfire-modal-header {
+  display: flex; align-items: center; gap: 12px;
+}
+.campfire-modal-avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px;
+  background: var(--bg-card-alt);
+  border: 2px solid var(--peach);
+  flex-shrink: 0;
+}
+.campfire-modal-identity { flex: 1; min-width: 0; }
+.campfire-modal-name {
+  font-size: 1rem; font-weight: 600; color: var(--text);
+}
+.campfire-modal-task {
+  font-size: 11px; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.campfire-modal-summary {
+  padding: 10px 12px;
+  background: var(--bg);
+  border-radius: var(--radius-xs);
+  border-left: 3px solid var(--peach);
+}
+.campfire-modal-summary-quote {
+  font-size: 13px; font-style: italic; color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.campfire-modal-section { display: flex; flex-direction: column; gap: 8px; }
+.campfire-modal-section-header {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.campfire-modal-section-feedback { color: var(--pink); }
+.campfire-modal-section-insight { color: var(--lavender); }
+.campfire-modal-section-count {
+  font-size: 10px; font-weight: 700;
+  padding: 1px 6px; border-radius: 8px;
+  background: var(--bg-card-alt); color: var(--text-muted);
+}
+
+.campfire-modal-items { display: flex; flex-direction: column; gap: 6px; }
+
+.campfire-reply {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-card-alt);
+  border: 1px solid var(--border-subtle);
+  transition: opacity 0.15s, background 0.15s;
+}
+.campfire-reply-text {
+  flex: 1; font-size: 12px; line-height: 1.5; color: var(--text);
+}
+.campfire-reply-actions {
+  display: flex; gap: 4px; flex-shrink: 0;
+}
+.campfire-reply-drop {
+  opacity: 0.55; background: var(--bg);
+}
+.campfire-reply-drop .campfire-reply-text {
+  text-decoration: line-through; color: var(--text-muted);
+}
+
+.campfire-modal-empty {
+  padding: 20px; text-align: center;
+  font-size: 12px; color: var(--text-muted); font-style: italic;
+}
+
+.campfire-modal-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+.campfire-modal-hint {
+  font-size: 10px; color: var(--text-muted); flex: 1;
+}
+
+/* btn-xs: compact buttons for per-reply Keep/Drop */
+.btn.btn-xs {
+  padding: 2px 6px; font-size: 10px; gap: 3px;
+}
+
 /* Library (the collapsed Playbook at the bottom) */
 .campfire-library {
   border-top: 1px solid var(--border-subtle);

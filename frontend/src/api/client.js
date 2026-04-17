@@ -184,6 +184,11 @@ export const api = {
     request("/pack-insights/finalize", { method: "POST", body: JSON.stringify({ decisions }) }),
   getPackInsightsGatheringReplies: () => request("/pack-insights/gathering-replies"),
   resetPackInsights: () => request("/pack-insights/reset", { method: "POST" }),
+  wrapUpPackInsights: (droppedMessageIds) =>
+    request("/pack-insights/wrap-up", {
+      method: "POST",
+      body: JSON.stringify({ dropped_message_ids: droppedMessageIds || [] }),
+    }),
 
   // Agents
   getAgents: () => request("/agents"),
