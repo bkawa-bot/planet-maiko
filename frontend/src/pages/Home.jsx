@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import SetupWizard from "../components/SetupWizard";
+import TodayCard from "../components/TodayCard";
 import { renderMarkdown } from "../utils/markdown";
 import { formatTime, formatClock, relativeTime } from "../utils/dates";
 import {
@@ -286,6 +287,9 @@ export default function Home() {
           >
             <Sunrise size={12} /> {briefLoading ? "Brewing... ☕" : morningBrief ? "View Morning Brief" : "Start Morning Brief"}
           </button>
+
+          {/* Today — end-of-day digest. Self-hides on a quiet day. */}
+          <TodayCard />
 
           {/* Autopilot — only renders when there's activity, so it can
               drop in quietly on a busy day and vanish on a quiet one. */}
