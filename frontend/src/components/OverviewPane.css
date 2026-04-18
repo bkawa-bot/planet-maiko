@@ -1,0 +1,205 @@
+/* The main Home surface — frosted pane containing the LLM-generated
+   daily overview. Designed to feel like a considerate note left for
+   the user, not a dashboard. */
+
+.overview-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px 28px;
+  background: rgba(45, 54, 60, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="light"] .overview-pane    { background: rgba(242, 248, 242, 0.78); }
+[data-theme="morning"] .overview-pane  { background: rgba(250, 246, 238, 0.80); }
+[data-theme="afternoon"] .overview-pane { background: rgba(248, 232, 208, 0.80); }
+[data-theme="sunset"] .overview-pane   { background: rgba(58, 34, 72, 0.68); }
+
+/* Loading + error states */
+.overview-loading,
+.overview-error {
+  padding: 40px 28px;
+  text-align: center;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+}
+.overview-error p { margin: 0; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 1s linear infinite; }
+
+/* Header: greeting + refresh */
+.overview-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.overview-greeting {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+  flex: 1;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.overview-refresh {
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 6px 8px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color 0.15s, border-color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.overview-refresh:hover { color: var(--pink); border-color: var(--pink); }
+
+/* Summary prose */
+.overview-summary {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* Sections (Focus, Needs) */
+.overview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.overview-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.overview-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.overview-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--pink);
+  transition: background 0.15s;
+}
+.overview-card:hover { background: var(--bg-card); }
+
+.overview-focus-card { border-left-color: var(--lavender); }
+
+.overview-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.overview-card-title {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.overview-card-why {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.overview-card-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-dismiss {
+  flex-shrink: 0;
+  padding: 4px;
+  opacity: 0.35;
+  color: var(--text-muted);
+  transition: opacity 0.15s;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.overview-card:hover .overview-dismiss { opacity: 0.7; }
+.overview-dismiss:hover { opacity: 1; }
+
+/* Show more / less toggle for needs */
+.overview-more-toggle {
+  align-self: stretch;
+  padding: 7px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: none;
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  text-align: center;
+}
+.overview-more-toggle:hover { color: var(--pink); border-color: var(--pink); }
+
+/* Alive — narrative status line */
+.overview-alive {
+  font-size: 13px;
+  color: var(--text-dim);
+  font-style: italic;
+  padding: 10px 14px;
+  background: var(--bg-card-alt);
+  border-radius: var(--radius-sm);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Custom add-on section */
+.overview-custom {
+  padding: 14px 16px;
+  background: var(--bg-card-alt);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--mint);
+}
+.overview-custom .brief-content {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.55;
+}
+.overview-custom .brief-content p:first-child { margin-top: 0; }
+.overview-custom .brief-content p:last-child { margin-bottom: 0; }
+
+/* Footer */
+.overview-footer {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  text-align: right;
+  margin-top: -4px;
+}

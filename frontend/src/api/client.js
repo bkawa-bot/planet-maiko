@@ -287,6 +287,10 @@ export const api = {
   deleteTheme: (id) => request(`/themes/${id}`, { method: "DELETE" }),
   generateTheme: (query) => request("/themes/generate", { method: "POST", body: JSON.stringify({ query }) }),
 
+  // Home overview — the rolling LLM-generated pane
+  getHomeOverview: () => request("/home/overview"),
+  refreshHomeOverview: () => request("/home/overview/refresh", { method: "POST" }),
+
   // System
   shutdown: () => request("/system/shutdown", { method: "POST" }),
   getSystemHealth: () => request("/system/health"),

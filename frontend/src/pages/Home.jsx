@@ -1,115 +1,21 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
-import { showToast } from "../components/Toast";
 import SetupWizard from "../components/SetupWizard";
-import TodayCard from "../components/TodayCard";
-import { renderMarkdown } from "../utils/markdown";
-import { formatTime, formatClock, relativeTime } from "../utils/dates";
-import {
-  CheckSquare, Inbox as InboxIcon, Brain, Calendar,
-  AlertCircle, Palette, Video, Sunrise, Clock,
-  ExternalLink, ChevronRight, ChevronDown, Play, Pin, FileText,
-  Sparkles, X, Zap, Loader,
-} from "lucide-react";
+import OverviewPane from "../components/OverviewPane";
+import { formatTime, formatClock } from "../utils/dates";
+import { Brain, Calendar, Palette, Video } from "lucide-react";
 import "./Home.css";
-import "./Tasks.css";
-import "./cards.css";
 
-// Home polls a lot (scene, pupdates, tasks×2, projects, focus, brain,
-// schedule, config) — was 15s, which meant ~9 backend hits every 15s
-// just from this page. None of the data changes that fast in a
-// wellbeing-companion app; bump to 60s.
-const HOME_POLL_INTERVAL_MS = 60000;
-
-const STATUS_COLORS = {
-  new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
-  review: "#a78bfa", done: "#4ade80", cancelled: "#6b7280",
-};
-
-const STATUS_ICONS = {
-  new: Play, in_progress: CheckSquare, waiting: Clock,
-  review: Calendar, done: CheckSquare, cancelled: InboxIcon,
-};
+// Home polls sidebar data (scene, brain status, calendar, task stats).
+// The OverviewPane fetches its own data from /api/home/overview, so
+// this page stays cheap — no more monstrous fan-out on every poll.
+const HOME_POLL_INTERVAL_MS = 60_000;
 
 const MOON_EMOJI = {
   new: "🌑", waxing_crescent: "🌒", first_quarter: "🌓",
   waxing_gibbous: "🌔", full: "🌕", waning_gibbous: "🌖",
   last_quarter: "🌗", waning_crescent: "🌘",
 };
-
-// Mirror of frontend/src/components/AssignAgentModal.jsx AVATAR_EMOJI +
-// src/planet_maiko/agents/signature.py — keep all three in sync.
-const AVATAR_EMOJI = {
-  shiba: "🐕", corgi: "🐶", husky: "🐺", poodle: "🐩", golden: "🦮",
-  beagle: "🐕‍🦺", dalmatian: "🐾", samoyed: "☁️", akita: "🐕", pomeranian: "🧸",
-  calico_cat: "🐱", tabby_cat: "🐈", black_cat: "🐈‍⬛",
-  bunny: "🐰", hamster: "🐹", fox: "🦊",
-};
-
-// Pupdate types that block Brigitte on a decision or action.
-// "agent_pr_opened" / "pr_approved" / "pr_merged" are FYIs — excluded.
-const WAITING_TYPES = new Set([
-  "agent_plan_for_approval",
-  "agent_ready_for_review",
-  "agent_stuck",
-  "agent_proposal",
-  "pr_review_requested",
-  "pr_changes_requested",
-  "pr_review_complete",
-  "investigation_complete",
-]);
-
-const PRIORITY_RANK = { urgent: 0, high: 1, normal: 2, low: 3 };
-
-function waitingCta(p) {
-  const taskId = p.metadata?.task_id;
-  if (p.type === "agent_plan_for_approval" && taskId) {
-    return { label: "Review plan", to: `/tasks/${taskId}/plan` };
-  }
-  // Review / investigation results are markdown artifacts, not diffs —
-  // open an inline modal rather than sending the user to the empty
-  // /tasks/<id>/review page (read-only agents don't produce diffs).
-  const tags = p.tags || [];
-  const isReviewLike =
-    p.type === "pr_review_complete" ||
-    p.type === "investigation_complete" ||
-    (p.type === "agent_ready_for_review" &&
-      (tags.includes("review") || tags.includes("investigation") || tags.includes("cartographer")));
-  if (isReviewLike) {
-    return {
-      label: p.type === "investigation_complete" ? "Read report" : "Read review",
-      artifact: true,
-    };
-  }
-  if (p.type === "agent_ready_for_review" && taskId) {
-    return { label: "Review diff", to: `/tasks/${taskId}/review` };
-  }
-  if (p.type === "agent_stuck" && taskId) {
-    return { label: "Help out", to: `/tasks/${taskId}` };
-  }
-  if (p.type === "agent_proposal") {
-    return { label: "Decide", to: "/" };
-  }
-  if (p.type === "pr_review_requested" || p.type === "pr_changes_requested") {
-    return p.url
-      ? { label: p.type === "pr_review_requested" ? "Review PR" : "Revise", href: p.url }
-      : { label: "Open", to: "/" };
-  }
-  return { label: "Open", to: "/" };
-}
-
-function waitingSummary(p) {
-  if (p.type === "agent_plan_for_approval") return "has a plan ready for you";
-  if (p.type === "agent_ready_for_review") return "finished a round — diff ready";
-  if (p.type === "agent_stuck") return "is stuck and needs a paw";
-  if (p.type === "agent_proposal") return "proposed something for you";
-  if (p.type === "pr_review_requested") return "is asking for a PR review";
-  if (p.type === "pr_changes_requested") return "requested changes on your PR";
-  if (p.type === "pr_review_complete") return "finished a PR review for you";
-  if (p.type === "investigation_complete") return "finished an investigation";
-  return p.title;
-}
 
 function weatherEmoji(w) {
   if (w === "clear") return "☀️";
@@ -129,178 +35,48 @@ function seasonPoem(season) {
 }
 
 export default function Home() {
-  const navigate = useNavigate();
   const [scene, setScene] = useState(null);
-  const [stats, setStats] = useState({ pupdates: 0, unread: 0, tasks_new: 0, tasks_ip: 0, projects: 0 });
-  const [focus, setFocus] = useState(null);
+  const [stats, setStats] = useState({ tasks_new: 0, tasks_ip: 0, projects: 0 });
   const [brainStatus, setBrainStatus] = useState(null);
-  const [waitingItems, setWaitingItems] = useState([]);
-  const [profilesById, setProfilesById] = useState({});
-  const [schedule, setSchedule] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
-  const [morningBrief, setMorningBrief] = useState(null);
-  const [autoInvestigations, setAutoInvestigations] = useState([]);
-  const [briefLoading, setBriefLoading] = useState(false);
-  const [showBrief, setShowBrief] = useState(false);
   const [homeConfig, setHomeConfig] = useState(null);
-  const [expandedFocusTask, setExpandedFocusTask] = useState(null);
-  const [artifactModal, setArtifactModal] = useState(null);
-  const [showAllWaiting, setShowAllWaiting] = useState(false);
-  const [regenOpen, setRegenOpen] = useState(false);
-  const [regenInput, setRegenInput] = useState("");
-  const [regenLoading, setRegenLoading] = useState(false);
 
-  const fetchAll = async () => {
+  const fetchSidebar = async () => {
     try {
-      const [sc, pupdates, tasksNew, tasksIp, projects, foc, brain, sched, cfg, profiles] = await Promise.all([
+      const [sc, tasksNew, tasksIp, projects, brain, cfg, pupdates] = await Promise.all([
         api.getScene(),
-        api.getPupdates(),
         api.getTasks({ status: "new" }),
         api.getTasks({ status: "in_progress" }),
         api.getProjects({ status: "active" }),
-        api.getFocus().catch(() => null),
         api.getBrainStatus().catch(() => null),
-        api.getSchedule().catch(() => null),
         api.getConfig().catch(() => null),
-        api.getProfiles().catch(() => []),
+        api.getPupdates(),
       ]);
-      setProfilesById(Object.fromEntries((profiles || []).map((pr) => [pr.id, pr])));
-      setHomeConfig(cfg);
       setScene(sc);
+      setHomeConfig(cfg);
       setStats({
-        pupdates: pupdates.length,
-        unread: pupdates.filter((p) => !p.read).length,
         tasks_new: tasksNew.length,
         tasks_ip: tasksIp.length,
         projects: projects.length,
       });
-      setFocus(foc);
       setBrainStatus(brain);
-      const waiting = pupdates
-        .filter((p) => (p.category === "action" || WAITING_TYPES.has(p.type)) && !p.dismissed)
-        .sort((a, b) => {
-          const pa = PRIORITY_RANK[a.priority] ?? 2;
-          const pb = PRIORITY_RANK[b.priority] ?? 2;
-          if (pa !== pb) return pa - pb;
-          return (a.timestamp || "").localeCompare(b.timestamp || "");
-        });
-      setWaitingItems(waiting);
-      setSchedule(sched);
       setCalendarEvents(
         pupdates
           .filter((p) => p.source === "calendar")
-          .sort((a, b) => (a.metadata?.start || "").localeCompare(b.metadata?.start || ""))
+          .sort((a, b) => (a.metadata?.start || "").localeCompare(b.metadata?.start || "")),
       );
-
-      // Autopilot surface — investigations Maiko spun up on her own so
-      // the user can audit what happened overnight. Active tasks only;
-      // done ones roll off and can be found in the Tasks page.
-      const autos = [...tasksNew, ...tasksIp]
-        .filter((t) => (t.extra?.auto_spawned || t.metadata?.auto_spawned))
-        .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""))
-        .slice(0, 5);
-      setAutoInvestigations(autos);
-
-      // Show the most recent morning brief if it's still fresh. "Fresh"
-      // means same local calendar day OR less than 12 hours old — the
-      // latter catches briefs run the night before and opened over
-      // morning coffee, which a strict same-day check would hide.
-      // Timestamps now come through with explicit UTC offsets
-      // (database.py:iso_utc), so new Date() parses them correctly.
-      if (!morningBrief) {
-        api.getSkillResults("morning-brief").then((results) => {
-          if (results.length > 0 && results[0].created_at) {
-            const created = new Date(results[0].created_at);
-            const now = new Date();
-            const sameLocalDay = created.toDateString() === now.toDateString();
-            const hoursOld = (now - created) / 3_600_000;
-            if (sameLocalDay || hoursOld < 12) {
-              setMorningBrief(results[0].content);
-            }
-          }
-        }).catch(() => {});
-      }
     } catch (err) {
-      console.error("Failed to load home:", err);
+      console.error("Home sidebar fetch failed", err);
     }
   };
 
   useEffect(() => {
-    fetchAll();
-    const interval = setInterval(fetchAll, HOME_POLL_INTERVAL_MS);
+    fetchSidebar();
+    const interval = setInterval(fetchSidebar, HOME_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
 
-  const regenerateFocus = async () => {
-    const hint = regenInput.trim();
-    if (!hint) return;
-    setRegenLoading(true);
-    showToast("Reordering your focus... 🐾", "normal");
-    try {
-      const result = await api.regenerateSchedule(hint);
-      if (result?.blocks) {
-        setSchedule(result);
-        setRegenOpen(false);
-        setRegenInput("");
-        showToast("There you go 🐾", "normal");
-      } else {
-        showToast(result?.error || "Couldn't reorder", "high");
-      }
-    } catch (err) {
-      showToast("Something went wrong: " + err.message, "high");
-    }
-    setRegenLoading(false);
-  };
-
-  const clearFocusOverride = async () => {
-    try {
-      const result = await api.clearScheduleOverride();
-      if (result?.blocks !== undefined) setSchedule(result);
-    } catch (err) {
-      showToast("Couldn't clear hint: " + err.message, "high");
-    }
-  };
-
-  const handleDismissWaiting = async (e, id) => {
-    e.stopPropagation();
-    try {
-      await api.dismissPupdate(id);
-      setWaitingItems((prev) => prev.filter((p) => p.id !== id));
-    } catch (err) {
-      showToast("Couldn't dismiss", "high");
-    }
-  };
-
-  const runMorningBrief = async () => {
-    setBriefLoading(true);
-    showToast("Morning brief is brewing... ☕", "normal");
-    try {
-      // Run the quick scanner first so stuck-PR / stale-task suggestions
-      // show up in the brief context. Best-effort — never block on it.
-      await api.runScan().catch(() => {});
-      const [p, t] = await Promise.all([api.getPupdates(), api.getTasks()]);
-      const result = await api.runSkill("morning-brief", {
-        context: {
-          pupdates: JSON.stringify(p.slice(0, 20)),
-          tasks: JSON.stringify(t.slice(0, 20)),
-          calendar: JSON.stringify(calendarEvents),
-        },
-      });
-      if (result.success) {
-        setMorningBrief(result.output);
-        setShowBrief(true);
-        showToast("Your morning brief is ready! 🌅", "normal");
-      } else {
-        showToast(result.error || "Couldn't fetch the brief right now", "high");
-      }
-    } catch (err) {
-      showToast("Something went wrong: " + err.message, "high");
-    }
-    setBriefLoading(false);
-  };
-
   const isFirstRun = homeConfig && !homeConfig.setup_complete;
-
   if (isFirstRun) {
     return <SetupWizard onComplete={() => window.location.reload()} />;
   }
@@ -308,240 +84,13 @@ export default function Home() {
   return (
     <div className="home">
       <div className="home-grid">
-        {/* Main content */}
+        {/* Main column: the overview pane IS the home experience. */}
         <div className="home-main">
-          {/* Morning Brief button */}
-          <button
-            className={`btn ${morningBrief ? "" : "btn-primary"} morning-brief-btn`}
-            onClick={morningBrief ? () => setShowBrief(true) : runMorningBrief}
-            disabled={briefLoading}
-          >
-            <Sunrise size={12} /> {briefLoading ? "Brewing... ☕" : morningBrief ? "Read today's brief" : "Start the morning brief"}
-          </button>
-
-          {/* Today — end-of-day digest. Self-hides on a quiet day. */}
-          <TodayCard />
-
-          {/* Autopilot — only renders when there's activity, so it can
-              drop in quietly on a busy day and vanish on a quiet one. */}
-          {autoInvestigations.length > 0 && (
-            <div className="home-card home-autopilot-card">
-              <div className="home-card-header">
-                <Zap size={14} /> Autopilot
-                <span className="autopilot-count">{autoInvestigations.length}</span>
-              </div>
-              <div className="autopilot-list">
-                {autoInvestigations.map((t) => {
-                  const pattern = (t.extra?.pattern || t.metadata?.pattern || []).join(" + ");
-                  const repo = t.extra?.repo || t.metadata?.repo;
-                  const running = t.status === "in_progress";
-                  return (
-                    <div
-                      key={t.id}
-                      className="autopilot-item"
-                      onClick={() => navigate("/tasks")}
-                      role="button"
-                    >
-                      <div className="autopilot-item-title">
-                        {running ? <Loader size={10} className="spin" /> : <Zap size={10} />}
-                        <span>{t.title}</span>
-                      </div>
-                      <div className="autopilot-item-meta">
-                        {repo && <span className="tag">{repo}</span>}
-                        {pattern && <span className="autopilot-pattern">{pattern}</span>}
-                        {t.updated_at && (
-                          <span className="autopilot-time">{relativeTime(t.updated_at)}</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* What needs you — the primary action feed.
-              Surfaces pupdates that genuinely block you on a decision
-              (plan to review, diff to look at, proposal to decide,
-              PR review request). Non-actionable pupdates stay out of
-              user-facing views — they live in agent timelines if the
-              user wants to dig in. Sits above Focus so the first thing
-              the user sees is what the pack needs from them. */}
-          <div className="home-card home-card-primary">
-            <div className="home-card-header">
-              <AlertCircle size={14} /> What needs you
-            </div>
-            {waitingItems.length > 0 ? (
-              <div className="waiting-list">
-                {(showAllWaiting ? waitingItems : waitingItems.slice(0, 3)).map((p) => {
-                  const cta = waitingCta(p);
-                  const profile = p.metadata?.agent_id ? profilesById[p.metadata.agent_id] : null;
-                  const emoji = profile ? (AVATAR_EMOJI[profile.avatar] || "🐾") : "🐾";
-                  const name = profile?.display_name || p.source || "Agent";
-                  const go = (e) => {
-                    e.stopPropagation();
-                    if (cta.artifact) { setArtifactModal(p); return; }
-                    if (cta.href) window.open(cta.href, "_blank", "noreferrer");
-                    else navigate(cta.to);
-                  };
-                  return (
-                    <div key={p.id} className={`waiting-item ${p.priority}`} onClick={go}>
-                      <span className="waiting-avatar">{emoji}</span>
-                      <div className="waiting-text">
-                        <div className="waiting-line">
-                          <span className="waiting-name">{name}</span>
-                          <span className="waiting-summary">{waitingSummary(p)}</span>
-                        </div>
-                        <div className="waiting-sub">
-                          <span className="waiting-title">{p.title}</span>
-                          <span className="waiting-time">{relativeTime(p.timestamp)}</span>
-                        </div>
-                      </div>
-                      <button className="btn btn-sm btn-primary waiting-cta" onClick={go}>
-                        {cta.label}
-                      </button>
-                      <button
-                        className="btn-ghost waiting-dismiss"
-                        onClick={(e) => handleDismissWaiting(e, p.id)}
-                        title="Dismiss"
-                        aria-label="Dismiss"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  );
-                })}
-                {waitingItems.length > 3 && (
-                  <button
-                    className="waiting-more-toggle"
-                    onClick={() => setShowAllWaiting((v) => !v)}
-                  >
-                    {showAllWaiting
-                      ? "Show less"
-                      : `+ ${waitingItems.length - 3} more`}
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="focus-empty">Nothing waiting — the pack is self-sufficient today 🌱</div>
-            )}
-          </div>
-
-          {/* Focus Card */}
-          <div className="home-card home-focus-card">
-            <div className="home-card-header">
-              <CheckSquare size={14} /> Focus
-              <button
-                className="btn btn-sm focus-regen-toggle"
-                style={{ marginLeft: "auto" }}
-                onClick={() => setRegenOpen((v) => !v)}
-                title="Regenerate with a hint"
-              >
-                <Sparkles size={11} /> Regenerate
-              </button>
-            </div>
-            {schedule?.override?.instructions && (
-              <div className="focus-override-chip">
-                <Sparkles size={10} />
-                <span className="focus-override-text">Hint: {schedule.override.instructions}</span>
-                <button className="btn-ghost" onClick={clearFocusOverride} title="Clear hint">
-                  <X size={12} />
-                </button>
-              </div>
-            )}
-            {regenOpen && (
-              <div className="focus-regen-row">
-                <input
-                  type="text"
-                  value={regenInput}
-                  onChange={(e) => setRegenInput(e.target.value)}
-                  placeholder='e.g. "prioritize reliability work"'
-                  autoFocus
-                  disabled={regenLoading}
-                  onKeyDown={(e) => { if (e.key === "Enter") regenerateFocus(); }}
-                />
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={regenerateFocus}
-                  disabled={regenLoading || !regenInput.trim()}
-                >
-                  {regenLoading ? "Thinking..." : "Apply"}
-                </button>
-              </div>
-            )}
-            {schedule && schedule.blocks?.length > 0 ? (
-              <div className="focus-tasks">
-                {schedule.blocks[0].tasks.slice(0, 3).map((t) => {
-                  const statusColor = STATUS_COLORS[t.status] || "var(--text-muted)";
-                  const FocusIcon = STATUS_ICONS[t.status] || CheckSquare;
-                  const isExpanded = expandedFocusTask === t.id;
-                  const isPinned = t.extra?.pinned || t.metadata?.pinned;
-                  return (
-                    <div
-                      key={t.id}
-                      className={`card pupdate-card ${t.priority || "normal"} ${isExpanded ? "expanded" : ""}`}
-                      onClick={() => setExpandedFocusTask(isExpanded ? null : t.id)}
-                      style={{ cursor: "pointer" }}
-                    >
-                      <div className="card-left-bar" style={{ background: statusColor }} />
-                      <div
-                        className="card-source-icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (t.status === "new") { api.startTask(t.id); showToast("Let's go 🌱", "normal"); }
-                          else if (t.status === "in_progress") { api.completeTask(t.id); showToast("Nicely done 🌿", "normal"); }
-                        }}
-                        style={{ cursor: t.status === "new" || t.status === "in_progress" ? "pointer" : "default" }}
-                      >
-                        <FocusIcon size={14} />
-                      </div>
-                      <div className="card-content">
-                        <div className="card-top">
-                          <span className="card-source" style={{ color: statusColor }}>{t.status.replace("_", " ")}</span>
-                          <span className="card-title">{t.title}</span>
-                          {isPinned && <Pin size={10} style={{ color: "var(--pink)", flexShrink: 0 }} />}
-                        </div>
-                        <div className="card-meta">
-                          {t.type && <span className="card-type">{t.type}</span>}
-                          {t.due_date && <span className="card-time"><Clock size={9} /> {t.due_date}</span>}
-                        </div>
-                        {isExpanded && (
-                          <div className="focus-task-expanded" onClick={(e) => e.stopPropagation()}>
-                            {t.url && (
-                              <a href={t.url} target="_blank" rel="noreferrer" className="focus-task-link">
-                                <ExternalLink size={10} /> {t.url.replace(/^https?:\/\//, "").slice(0, 50)}
-                              </a>
-                            )}
-                            <div className="focus-task-actions">
-                              <button className="btn btn-sm" onClick={() => navigate("/tasks")}>
-                                Open in Tasks
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      {isExpanded
-                        ? <ChevronDown size={14} className="task-chevron open" />
-                        : <ChevronRight size={14} className="task-chevron" />}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="home-card-empty">
-                <span style={{ fontSize: 32 }}>🐾</span>
-                <div className="empty-title" style={{ fontSize: 14 }}>Quiet morning</div>
-                <button className="btn btn-primary" onClick={runMorningBrief} disabled={briefLoading}>
-                  {briefLoading ? "Brewing... ☕" : "Start the morning brief"}
-                </button>
-              </div>
-            )}
-          </div>
+          <OverviewPane />
         </div>
 
-        {/* Sidebar widgets */}
+        {/* Sidebar widgets: ambient context, not primary surface. */}
         <div className="home-sidebar">
-          {/* Calendar widget */}
           <div className="home-widget">
             <div className="widget-header">
               <Calendar size={12} /> Today
@@ -570,7 +119,6 @@ export default function Home() {
             )}
           </div>
 
-          {/* Scene widget */}
           <div className="home-widget scene-widget">
             <div className="widget-header"><Palette size={12} /> Scene</div>
             <div className="scene-info">
@@ -582,7 +130,7 @@ export default function Home() {
                   </div>
                 )
               ) : (
-                <div className="scene-weather-fallback" onClick={() => navigate('/settings')} style={{ cursor: "pointer" }}>
+                <div className="scene-weather-fallback" style={{ cursor: "default" }}>
                   <span className="weather-fallback-text">Set your location for live weather</span>
                 </div>
               )}
@@ -608,7 +156,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Task stats */}
           <div className="home-widget">
             <div className="widget-header">Tasks</div>
             <div className="widget-stat-grid">
@@ -624,14 +171,9 @@ export default function Home() {
                 <div className="widget-stat-value" style={{ color: "var(--green)" }}>{stats.projects}</div>
                 <div className="widget-stat-label">Projects</div>
               </div>
-              <div className="widget-stat">
-                <div className="widget-stat-value" style={{ color: "var(--lemon)" }}>{stats.pupdates}</div>
-                <div className="widget-stat-label">Pupdates</div>
-              </div>
             </div>
           </div>
 
-          {/* Brain widget */}
           <div className="home-widget">
             <div className="widget-header"><Brain size={12} /> Brain</div>
             <div className="widget-detail">
@@ -641,46 +183,6 @@ export default function Home() {
           </div>
         </div>
       </div>
-
-      {/* Artifact modal — renders the body of review / investigation /
-          report pupdates so the user can read the agent's output inline
-          without leaving Home. Reuses the morning-brief modal chrome. */}
-      {artifactModal && (
-        <div className="modal-overlay" onClick={() => setArtifactModal(null)}>
-          <div className="brief-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="brief-modal-header">
-              <FileText size={18} />
-              <span>{artifactModal.title || "Result"}</span>
-              <button className="btn btn-sm" onClick={() => setArtifactModal(null)} style={{ marginLeft: "auto" }}>Close</button>
-            </div>
-            <div className="brief-modal-body">
-              {artifactModal.body ? (
-                <div className="brief-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(artifactModal.body) }} />
-              ) : (
-                <div className="focus-empty">
-                  Nothing attached yet — {profilesById[artifactModal.metadata?.agent_id]?.display_name || "the agent"} hasn't written up a result.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Morning Brief Modal */}
-      {showBrief && morningBrief && (
-        <div className="modal-overlay" onClick={() => setShowBrief(false)}>
-          <div className="brief-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="brief-modal-header">
-              <Sunrise size={18} />
-              <span>Good morning! 🐕</span>
-              <button className="btn btn-sm" onClick={() => setShowBrief(false)} style={{ marginLeft: "auto" }}>Close</button>
-            </div>
-            <div className="brief-modal-body">
-              <div className="brief-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(morningBrief) }} />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
