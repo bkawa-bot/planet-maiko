@@ -221,7 +221,7 @@ export default function Home() {
         setSchedule(result);
         setRegenOpen(false);
         setRegenInput("");
-        showToast("Focus reordered!", "normal");
+        showToast("There you go 🐾", "normal");
       } else {
         showToast(result?.error || "Couldn't reorder", "high");
       }
@@ -285,7 +285,7 @@ export default function Home() {
             onClick={morningBrief ? () => setShowBrief(true) : runMorningBrief}
             disabled={briefLoading}
           >
-            <Sunrise size={12} /> {briefLoading ? "Brewing... ☕" : morningBrief ? "View Morning Brief" : "Start Morning Brief"}
+            <Sunrise size={12} /> {briefLoading ? "Brewing... ☕" : morningBrief ? "Read today's brief" : "Start the morning brief"}
           </button>
 
           {/* Today — end-of-day digest. Self-hides on a quiet day. */}
@@ -390,8 +390,8 @@ export default function Home() {
                         className="card-source-icon"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (t.status === "new") { api.startTask(t.id); showToast("Started", "normal"); }
-                          else if (t.status === "in_progress") { api.completeTask(t.id); showToast("Done!", "normal"); }
+                          if (t.status === "new") { api.startTask(t.id); showToast("Let's go 🌱", "normal"); }
+                          else if (t.status === "in_progress") { api.completeTask(t.id); showToast("Nicely done 🌿", "normal"); }
                         }}
                         style={{ cursor: t.status === "new" || t.status === "in_progress" ? "pointer" : "default" }}
                       >
@@ -432,9 +432,9 @@ export default function Home() {
             ) : (
               <div className="home-card-empty">
                 <span style={{ fontSize: 32 }}>🐾</span>
-                <div className="empty-title" style={{ fontSize: 14 }}>No tasks yet</div>
+                <div className="empty-title" style={{ fontSize: 14 }}>Quiet morning</div>
                 <button className="btn btn-primary" onClick={runMorningBrief} disabled={briefLoading}>
-                  {briefLoading ? "Fetching brief..." : "Start Morning Brief"}
+                  {briefLoading ? "Brewing... ☕" : "Start the morning brief"}
                 </button>
               </div>
             )}
@@ -443,7 +443,7 @@ export default function Home() {
           {/* Also Waiting */}
           <div className="home-card">
             <div className="home-card-header">
-              <AlertCircle size={14} /> Also Waiting
+              <AlertCircle size={14} /> A few more things
             </div>
             {waitingItems.length > 0 ? (
               <div className="waiting-list">
