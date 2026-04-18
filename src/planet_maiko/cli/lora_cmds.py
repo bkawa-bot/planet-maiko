@@ -246,6 +246,7 @@ def cmd_eval_prs(args):
     import os as _os
     from planet_maiko.paths import data_dir
     from planet_maiko.eval import holdout
+    from planet_maiko.app import create_app
 
     fixture_path = args.fixture
     if not _os.path.isfile(fixture_path):
@@ -273,22 +274,44 @@ def cmd_eval_prs(args):
             base = f"flagged {ev['flagged_with']}/{ev['human_files']} human-flagged files"
             if ev.get("flagged_without") is not None:
                 base += f" (baseline: {ev['flagged_without']})"
+            if ev.get("semantic_hits_with") is not None:
+                base += f" — {ev['semantic_hits_with']} judge-confirmed"
             if ev.get("errors"):
                 base += f" — {ev['errors']} inference errors"
             print(f"  [done   ] {ev['pr']}: {base}", flush=True)
+        elif ev["event"] == "judge_call":
+            mark = "MATCH" if ev["match"] else "miss"
+            print(f"    judge [{mark}] {ev['file']}", flush=True)
 
     print(f"Fixture: {fixture_path}")
     print(f"Adapter: {adapter_path}")
+    print(f"Match mode: {args.match_mode}")
     if args.compare_baseline:
         print("Mode: with-adapter + baseline (will run each PR twice)")
+    if args.refresh_ground_truth:
+        print("Refreshing ground-truth cache from GitHub.")
     print()
 
-    result = holdout.run(
-        fixture_path=fixture_path,
-        adapter_path=adapter_path,
-        compare_baseline=args.compare_baseline,
-        progress=_progress,
-    )
+    # Judge mode needs the Flask app context for runtime lookup.
+    if args.match_mode == "judge":
+        app = create_app(start_scheduler=False)
+        ctx = app.app_context()
+        ctx.push()
+    else:
+        ctx = None
+
+    try:
+        result = holdout.run(
+            fixture_path=fixture_path,
+            adapter_path=adapter_path,
+            compare_baseline=args.compare_baseline,
+            progress=_progress,
+            match_mode=args.match_mode,
+            refresh_ground_truth=args.refresh_ground_truth,
+        )
+    finally:
+        if ctx is not None:
+            ctx.pop()
 
     report = holdout.format_report(result)
 
@@ -650,6 +673,16 @@ def register(subparsers):
     p.add_argument(
         "--compare-baseline", action="store_true",
         help="Also run each PR without the adapter, report recall delta",
+    )
+    p.add_argument(
+        "--match-mode", choices=("file", "judge"), default="file",
+        help="file: count flagged-same-file as hit. judge: ask Haiku whether the model's output "
+             "actually addresses the human concern (stricter, slower, costs a few cents per run).",
+    )
+    p.add_argument(
+        "--refresh-ground-truth", action="store_true",
+        help="Re-fetch PR comments from GitHub (default uses the cached snapshot "
+             "alongside the fixture for reproducibility).",
     )
     p.add_argument("--output", help="Markdown report output path (default: data/eval-reports/holdout-<ts>.md)")
     p.set_defaults(func=cmd_eval_prs)
