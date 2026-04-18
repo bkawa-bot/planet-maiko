@@ -282,6 +282,19 @@
 }
 .waiting-item:hover .waiting-dismiss { opacity: 0.7; }
 .waiting-dismiss:hover { opacity: 1; }
+.waiting-more-toggle {
+  align-self: stretch;
+  padding: 7px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: none;
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  text-align: center;
+}
+.waiting-more-toggle:hover { color: var(--pink); border-color: var(--pink); }
 
 /* === Widgets === */
 .home-widget {

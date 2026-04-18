@@ -145,6 +145,7 @@ export default function Home() {
   const [homeConfig, setHomeConfig] = useState(null);
   const [expandedFocusTask, setExpandedFocusTask] = useState(null);
   const [artifactModal, setArtifactModal] = useState(null);
+  const [showAllWaiting, setShowAllWaiting] = useState(false);
   const [regenOpen, setRegenOpen] = useState(false);
   const [regenInput, setRegenInput] = useState("");
   const [regenLoading, setRegenLoading] = useState(false);
@@ -372,7 +373,7 @@ export default function Home() {
             </div>
             {waitingItems.length > 0 ? (
               <div className="waiting-list">
-                {waitingItems.map((p) => {
+                {(showAllWaiting ? waitingItems : waitingItems.slice(0, 3)).map((p) => {
                   const cta = waitingCta(p);
                   const profile = p.metadata?.agent_id ? profilesById[p.metadata.agent_id] : null;
                   const emoji = profile ? (AVATAR_EMOJI[profile.avatar] || "🐾") : "🐾";
@@ -410,6 +411,16 @@ export default function Home() {
                     </div>
                   );
                 })}
+                {waitingItems.length > 3 && (
+                  <button
+                    className="waiting-more-toggle"
+                    onClick={() => setShowAllWaiting((v) => !v)}
+                  >
+                    {showAllWaiting
+                      ? "Show less"
+                      : `+ ${waitingItems.length - 3} more`}
+                  </button>
+                )}
               </div>
             ) : (
               <div className="focus-empty">Nothing waiting — the pack is self-sufficient today 🌱</div>

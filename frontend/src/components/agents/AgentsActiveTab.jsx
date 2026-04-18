@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
-  AlertTriangle, Bot, Bone, CheckSquare, Clock, ExternalLink, GitBranch,
-  GitPullRequest, HeartPulse, Link2, Loader, MessageCircle, Moon, Play, Sparkles, X,
+  Bot, Bone, CheckSquare, Clock, ExternalLink, GitBranch,
+  GitPullRequest, HeartPulse, Link2, MessageCircle, Moon, Play, Sparkles, X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
@@ -134,33 +134,6 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
 
   return (
     <div className="agents-active-main">
-      {/* Pack Awareness — conflict warnings */}
-        {conflicts.length > 0 && (
-          <div className="pack-awareness card">
-            <div className="pack-awareness-header">
-              <AlertTriangle size={14} /> Pack Awareness
-              <span className="badge high">{conflicts.length} warning(s)</span>
-            </div>
-            <div className="pack-awareness-list">
-              {conflicts.map((c) => {
-                const isResolved = c.message_type === "conflict_resolved";
-                const isDuplicate = c.message_type === "conflict_directive";
-                return (
-                  <div key={c.id} className={`conflict-item ${isResolved ? "resolved" : ""}`}>
-                    {isResolved
-                      ? <span className="conflict-status-icon">✅</span>
-                      : isDuplicate
-                        ? <span className="conflict-status-icon">⚠️</span>
-                        : <AlertTriangle size={12} className="conflict-icon" />}
-                    <span className="conflict-task">{c.task_id}</span>
-                    <span className="conflict-content">{c.content}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {/* External sessions: registered by external orchestrators via
             the maiko-brain MCP. These are LLM coding sessions running
             outside Maiko's own worktrees — their work participates in
@@ -198,49 +171,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
           </div>
         )}
 
-        {/* Queued: tasks routed to an agent but not yet started.
-            Without this section, when the brain cycle has assigned
-            an agent but the next cycle hasn't prepared the worktree
-            yet (e.g. cycle just ran assignment, hasn't yet hit the
-            execute phase), the user sees an empty Active tab and
-            thinks nothing is happening. */}
-        {queued.length > 0 && (
-          <div className="queued-section card">
-            <div className="queued-header">
-              <Clock size={14} /> Queued
-              <span className="badge">{queued.length}</span>
-              <button
-                className="btn btn-sm queued-cycle-btn"
-                onClick={triggerCycle}
-                disabled={triggeringCycle}
-                title="Run a brain cycle now to start these tasks"
-              >
-                {triggeringCycle
-                  ? <><Loader size={10} className="spin" /> Running…</>
-                  : <><Sparkles size={10} /> Run cycle now</>}
-              </button>
-            </div>
-            <div className="queued-list">
-              {queued.map((q) => (
-                <div key={q.task_id} className="queued-item">
-                  <span className="queued-type">{q.type}</span>
-                  <span className="queued-title" title={q.title}>{q.title}</span>
-                  <span className="queued-agent"><Bot size={10} /> {q.agent_name}</span>
-                  <span className="queued-time">
-                    {q.queued_for_minutes < 1 ? "just now" : `${q.queued_for_minutes}m queued`}
-                  </span>
-                  {q.url && (
-                    <a href={q.url} target="_blank" rel="noreferrer" className="queued-link">
-                      <ExternalLink size={10} />
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {dormantAgents.length === 0 && activity.length === 0 && queued.length === 0 ? (
+        {dormantAgents.length === 0 && activity.length === 0 ? (
           <div className="empty-state">
             <span style={{ fontSize: 48 }}>🐾</span>
             <div className="empty-title">No active agents</div>
