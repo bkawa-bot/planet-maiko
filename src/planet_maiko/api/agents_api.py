@@ -937,6 +937,27 @@ def agent_sends_message(task_id):
             if candidate and "github.com" in candidate:
                 pr_url = candidate
 
+        # Carry forward the original ask + when it was asked so the
+        # user can reload context in one glance — "you asked 3 hours
+        # ago: 'look at the auth bug'". The single biggest cost of
+        # parallel agents is the reload-tax when one returns 3h after
+        # you kicked it off and you've since swapped context five
+        # times. Store on pupdate.extra so the frontend can render
+        # without an extra task fetch.
+        original_ask = ""
+        asked_at_iso = None
+        if task is not None:
+            t_extra = task.extra or {}
+            original_ask = (
+                t_extra.get("user_request")
+                or t_extra.get("description")
+                or t_extra.get("body")
+                or task.title
+                or ""
+            ).strip()
+            if task.created_at:
+                asked_at_iso = task.created_at.isoformat() if hasattr(task.created_at, "isoformat") else str(task.created_at)
+
         from planet_maiko.models.pupdate import Pupdate
         pupdate = Pupdate(
             id=f"agent-msg-{task_id}-{uuid.uuid4().hex[:8]}",
@@ -955,6 +976,8 @@ def agent_sends_message(task_id):
                 "agent_id": task.assigned_agent_id if task else None,
                 "message_type": message_type,
                 "pr_url": pr_url,
+                "original_ask": original_ask[:500],
+                "asked_at": asked_at_iso,
             },
             # These pupdates already link back to the task — LLM triage
             # would otherwise spawn a duplicate task for every

@@ -133,6 +133,19 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Context refresher — "you asked N hours ago: '...'" line that
+   carries original intent forward so the user can reload context
+   when an agent returns long after they kicked it off. */
+.overview-card-refresher {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .overview-dismiss {
   flex-shrink: 0;
   padding: 4px;

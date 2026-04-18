@@ -223,10 +223,17 @@ export default function OverviewPane() {
                 if (action.href) window.open(action.href, "_blank", "noreferrer");
                 else navigate(action.to);
               };
+              const originalAsk = pup.metadata?.original_ask;
+              const askedAt = pup.metadata?.asked_at;
               return (
                 <div key={n.pupdate_id} className="overview-card">
                   <div className="overview-card-body" onClick={go} style={{ cursor: "pointer" }}>
                     <div className="overview-card-title">{n.summary}</div>
+                    {originalAsk && (
+                      <div className="overview-card-refresher">
+                        you asked{askedAt ? ` ${relativeTime(askedAt)}` : ""}: "{originalAsk.length > 120 ? originalAsk.slice(0, 117) + "…" : originalAsk}"
+                      </div>
+                    )}
                     {pup.timestamp && (
                       <div className="overview-card-meta">
                         {relativeTime(pup.timestamp)}
