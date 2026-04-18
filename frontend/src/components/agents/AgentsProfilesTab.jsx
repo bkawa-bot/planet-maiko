@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import {
-  Bot, Brain, CheckSquare, Plus, Target, TrendingUp, X, Pencil, Save, Code2, Eye, Search, Map, Loader,
+  Bot, Brain, CheckSquare, Clock, Plus, Target, TrendingUp, X, Pencil, Save, Code2, Eye, Search, Map, Loader,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
+import AgentTimelineModal from "./AgentTimelineModal";
 
 const ROLE_META = {
   coding: { icon: Code2, label: "Coder", color: "var(--pink)" },
@@ -107,6 +108,7 @@ export default function AgentsProfilesTab({
 }) {
   const [showArchived, setShowArchived] = useState(false);
   const [contextSetModal, setContextSetModal] = useState(null);
+  const [timelineFor, setTimelineFor] = useState(null);
   const [editing, setEditing] = useState(null);     // profile being edited
   const [editForm, setEditForm] = useState({ role: "coding", scope_repo: "", instructions: "", flavor_text: "" });
   const [editSaving, setEditSaving] = useState(false);
@@ -272,6 +274,13 @@ export default function AgentsProfilesTab({
                     )}
 
                     <div className="strategy-card-actions">
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => setTimelineFor({ agentId: p.id, agentName: p.display_name })}
+                        title={`See ${p.display_name}'s activity across all tasks`}
+                      >
+                        <Clock size={10} /> Timeline
+                      </button>
                       <button className="btn btn-sm" onClick={() => openEdit(p)}>
                         <Pencil size={10} /> Edit
                       </button>
@@ -358,6 +367,14 @@ export default function AgentsProfilesTab({
             </div>
           </div>
         </div>
+      )}
+
+      {timelineFor && (
+        <AgentTimelineModal
+          agentId={timelineFor.agentId}
+          agentName={timelineFor.agentName}
+          onClose={() => setTimelineFor(null)}
+        />
       )}
 
       {contextSetModal && (
