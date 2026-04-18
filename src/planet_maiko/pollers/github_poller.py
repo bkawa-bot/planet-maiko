@@ -7,18 +7,6 @@ from planet_maiko.pollers.base import BasePoller
 logger = logging.getLogger(__name__)
 
 
-def _detect_language(file_path):
-    """Detect language from file extension."""
-    if not file_path:
-        return None
-    ext = file_path.rsplit(".", 1)[-1].lower() if "." in file_path else ""
-    return {
-        "py": "python", "java": "java", "js": "javascript", "ts": "typescript",
-        "jsx": "javascript", "tsx": "typescript", "rb": "ruby", "go": "go",
-        "rs": "rust", "kt": "kotlin", "swift": "swift",
-    }.get(ext)
-
-
 class GitHubPoller(BasePoller):
     """Polls GitHub for PR activity using the gh CLI.
 
@@ -206,8 +194,11 @@ class GitHubPoller(BasePoller):
         repos = config.get("repos", [])
         merged_prs = self._get_merged_prs_for_repos(repos)
 
-        # For each of the user's PRs, check review and CI status + comments
-        review_comments = []
+        # For each of the user's PRs, check review and CI status + comments.
+        # Open-PR comments feed the pr_review_commented pupdate (via
+        # _comment_count / _latest_comment_at stashed on the pr dict);
+        # they do NOT flow into Signals anymore — training data comes
+        # from merged PRs only via _after_sync().
         for pr in my_prs:
             repo = pr.get("repository", {}).get("nameWithOwner", "")
             number = pr.get("number")
@@ -227,21 +218,11 @@ class GitHubPoller(BasePoller):
                         latest = ts
                 pr["_latest_comment_at"] = latest
                 pr["_comment_count"] = len(comments)
-                for c in comments:
-                    review_comments.append({
-                        "type": c.get("_type", "issue_comment"),
-                        "repo": repo,
-                        "pr_number": number,
-                        "author": c.get("author", {}).get("login", "unknown"),
-                        "body": c.get("body", ""),
-                        "file_path": c.get("path", ""),
-                    })
 
         return {
             "review_requests": review_requests,
             "my_prs": my_prs,
             "merged_prs": merged_prs,
-            "review_comments": review_comments,
         }
 
     def to_pupdates(self, raw_data):
@@ -450,23 +431,21 @@ class GitHubPoller(BasePoller):
         return pupdates
 
     def to_signals(self, raw_data):
-        """Extract review comments as learning signals."""
-        signals = []
-        for item in raw_data.get("review_comments", []):
-            comment = item.get("body", "").strip()
-            if not comment or len(comment) < 20:
-                continue
-            signals.append({
-                "category": "pattern",  # Placeholder — real category set by synthesizer
-                "text": comment[:500],
-                "source_type": "pr_comment",
-                "reviewer": item.get("author", ""),
-                "severity": "suggestion",
-                "repo": item.get("repo", ""),
-                "file_path": item.get("file_path", ""),
-                "language": _detect_language(item.get("file_path", "")),
-            })
-        return signals
+        """Intentionally no-op — training signals come from merged PRs.
+
+        The earlier implementation emitted a fresh Signal for every
+        review comment on every OPEN PR, every poll, with no dedup.
+        Since the same comments appeared in raw_data every 5-minute
+        tick for as long as a PR was open, the Signal table filled
+        with exact duplicates indefinitely.
+
+        Training data should come from feedback the team actually
+        acted on — i.e. comments that survived to merge. `_after_sync()`
+        handles that: it scrapes inline comments from merged PRs and
+        dedupes them by (text, file_path, diff_hunk) against existing
+        Signal rows for the repo.
+        """
+        return []
 
     def _after_sync(self, raw_data, db_session):
         """For each merged PR in this poll, fetch inline review comments
