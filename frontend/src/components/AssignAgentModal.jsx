@@ -38,6 +38,13 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
   const [planFirst, setPlanFirst] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
   const [branchName, setBranchName] = useState("");
+  // One-sentence ritual: capture the user's intent explicitly before
+  // the agent gets the task. Prefilled from task.extra.description or
+  // body if present; the user can amend. Saved onto task.extra on
+  // assign so build_task_prompt renders it in TASK.md.
+  const initialIntent = (task.metadata?.description || task.metadata?.body || task.extra?.description || task.extra?.body || "").trim();
+  const [intent, setIntent] = useState(initialIntent);
+  const [nonGoals, setNonGoals] = useState((task.metadata?.non_goals || task.extra?.non_goals || "").trim());
 
   const repo = task.metadata?.repo || task.extra?.repo || "";
   const expectedRole = TYPE_TO_ROLE[task.type] || "coding";
@@ -111,8 +118,26 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
       showToast("Enter a repo path", "high");
       return;
     }
+    if (!intent.trim()) {
+      showToast("Tell the agent what you're trying to achieve (one sentence is enough)", "high");
+      return;
+    }
     setAssigning(true);
     try {
+      // Persist the captured intent + boundaries onto task.extra so
+      // build_task_prompt picks them up for every future run of this
+      // task (retry via cycle, resume, reassign).
+      const intentTrimmed = intent.trim();
+      const nonGoalsTrimmed = nonGoals.trim();
+      const nextMeta = {
+        ...(task.metadata || task.extra || {}),
+        description: intentTrimmed,
+      };
+      if (nonGoalsTrimmed) nextMeta.non_goals = nonGoalsTrimmed;
+      else delete nextMeta.non_goals;
+      if (intentTrimmed !== initialIntent || nonGoalsTrimmed !== (task.metadata?.non_goals || task.extra?.non_goals || "")) {
+        await api.updateTask(task.id, { metadata: nextMeta });
+      }
       await api.assignAgent({
         task_id: task.id,
         profile_id: selectedId,
@@ -186,6 +211,40 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
                 <Plus size={10} /> Create a new {ROLE_META[expectedRole]?.label.toLowerCase() || "agent"}
               </button>
 
+              {!isReassign && (
+                <>
+                  <div className="assign-section-label" style={{ marginTop: 16 }}>
+                    What are you trying to achieve?
+                  </div>
+                  <textarea
+                    style={{
+                      width: "100%", minHeight: 52, padding: "8px 10px", fontSize: 12,
+                      border: "1px solid var(--border)", borderRadius: "var(--radius-xs)",
+                      background: "var(--bg)", color: "var(--text)", fontFamily: "var(--font)",
+                      resize: "vertical",
+                    }}
+                    value={intent}
+                    onChange={(e) => setIntent(e.target.value)}
+                    placeholder="One sentence is enough. What does done look like?"
+                    autoFocus={!initialIntent}
+                  />
+                  <div className="assign-section-label" style={{ marginTop: 12 }}>
+                    Anything the agent must not do? <span style={{ fontWeight: 400, opacity: 0.7 }}>(optional)</span>
+                  </div>
+                  <textarea
+                    style={{
+                      width: "100%", minHeight: 40, padding: "8px 10px", fontSize: 12,
+                      border: "1px solid var(--border)", borderRadius: "var(--radius-xs)",
+                      background: "var(--bg)", color: "var(--text)", fontFamily: "var(--font)",
+                      resize: "vertical",
+                    }}
+                    value={nonGoals}
+                    onChange={(e) => setNonGoals(e.target.value)}
+                    placeholder="e.g. don't touch billing code, no new dependencies"
+                  />
+                </>
+              )}
+
               {isCoding && !isReassign && (
                 <>
                   <div className="assign-section-label" style={{ marginTop: 16 }}>Repository Path</div>
@@ -255,7 +314,7 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
           <button
             className="btn btn-primary"
             onClick={handleAssign}
-            disabled={assigning || !selectedId || (isCoding && !isReassign && !repoPath) || selectedId === task.assigned_agent_id}
+            disabled={assigning || !selectedId || (isCoding && !isReassign && !repoPath) || selectedId === task.assigned_agent_id || (!isReassign && !intent.trim())}
           >
             <Rocket size={12} /> {assigning ? (isReassign ? "Reassigning..." : "Preparing...") : (isReassign ? "Reassign" : "Assign")}
           </button>
