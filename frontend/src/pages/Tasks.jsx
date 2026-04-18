@@ -781,7 +781,7 @@ export default function Tasks() {
                     setMaikoRunning(false);
                   }}
                 >
-                  <Brain size={12} /> {maikoRunning ? "Maiko will get back to you in your inbox!" : "Ask Maiko"}
+                  <Brain size={12} /> {maikoRunning ? "Maiko is thinking…" : "Ask Maiko"}
                 </button>
               </div>
               {maikoResult && (
