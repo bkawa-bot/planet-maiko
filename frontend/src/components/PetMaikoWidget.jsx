@@ -82,7 +82,12 @@ export default function PetMaikoWidget() {
     setTimeout(() => setPetting(false), 700);
   };
 
-  const today = count?.today ?? 0;
+  // Prefer the cross-deployment number when the aggregator is
+  // configured — that's the real "Maiko got N pets from the pack"
+  // story. Falls back to the deployment-local count when unset.
+  const hasGlobal = count && typeof count.global_today === "number";
+  const today = hasGlobal ? count.global_today : (count?.today ?? 0);
+  const fromThePack = hasGlobal;
 
   return (
     <div className="home-widget pet-widget">
@@ -116,7 +121,8 @@ export default function PetMaikoWidget() {
 
       <div className="pet-copy">
         <div className="pet-count">
-          Maiko got <strong>{today}</strong> {today === 1 ? "pet" : "pets"} today
+          Maiko got <strong>{today}</strong> {today === 1 ? "pet" : "pets"}
+          {fromThePack ? " from the pack" : ""} today
         </div>
         {remaining != null && (
           <div className="pet-remaining">

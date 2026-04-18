@@ -4,7 +4,12 @@ Public shape (what any user sees):
 
 - POST /api/maiko/pet         — tap. Enforces per-user daily cap.
 - GET  /api/maiko/pets/count  — today's total + lifetime total,
-                                plus caller's remaining pets.
+                                plus caller's remaining pets. When a
+                                cross-deployment aggregator is
+                                configured (config.pets.aggregator_url),
+                                the response also carries the global
+                                totals so Home can show "Maiko got N
+                                pets from the pack today."
 
 Owner shape (for the person maintaining the deployment, and therefore
 the person who owes IRL Maiko the pets):
@@ -19,6 +24,7 @@ technically reachable; treat user.name as the soft owner marker.
 """
 
 import logging
+import threading
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
@@ -58,6 +64,98 @@ def _today_midnight_utc():
     return midnight_local.astimezone(timezone.utc).replace(tzinfo=None)
 
 
+# ---------------------------------------------------------------------------
+# Upstash aggregator — optional cross-deployment counter
+# ---------------------------------------------------------------------------
+
+_DAILY_KEY_TTL_SECONDS = 60 * 60 * 48  # keep daily key around 48h, then let it drop
+
+
+def _aggregator_config():
+    """Return (url, token) pair or (None, None) when disabled."""
+    pets_cfg = load_config().get("pets", {}) or {}
+    url = (pets_cfg.get("aggregator_url") or "").strip().rstrip("/")
+    token = (pets_cfg.get("aggregator_token") or "").strip()
+    if not url or not token:
+        return None, None
+    return url, token
+
+
+def _today_key():
+    return f"maiko:pets:day:{user_now().strftime('%Y-%m-%d')}"
+
+
+_TOTAL_KEY = "maiko:pets:total"
+
+
+def _aggregator_incr_async():
+    """Fire-and-forget INCR to the aggregator. Never blocks the caller.
+
+    Two INCRs per pet (today + lifetime) with a short EXPIRE on the
+    daily key to keep Upstash from accumulating stale per-day keys
+    forever. All calls swallow exceptions — a broken aggregator
+    must never take down the user-facing POST /maiko/pet.
+    """
+    url, token = _aggregator_config()
+    if not url:
+        return
+
+    today = _today_key()
+
+    def _do():
+        try:
+            import requests  # local import — only needed when aggregator is on
+            headers = {"Authorization": f"Bearer {token}"}
+            # Upstash REST supports path-style commands, e.g.
+            # POST {url}/incr/{key}  → returns new int value
+            # POST {url}/expire/{key}/{seconds}
+            requests.post(f"{url}/incr/{today}", headers=headers, timeout=3)
+            requests.post(f"{url}/incr/{_TOTAL_KEY}", headers=headers, timeout=3)
+            # Idempotent — EXPIRE on an already-expiring key just resets
+            # the TTL; safe to call every pet.
+            requests.post(
+                f"{url}/expire/{today}/{_DAILY_KEY_TTL_SECONDS}",
+                headers=headers, timeout=3,
+            )
+        except Exception as e:
+            logger.debug(f"[pets] aggregator INCR failed (non-fatal): {e}")
+
+    threading.Thread(target=_do, daemon=True, name="pets-aggregator-incr").start()
+
+
+def _aggregator_get_counts():
+    """Best-effort GET of today + lifetime counts. Returns dict or None.
+
+    Upstash GET returns `{"result": "<stringified value>"}` or
+    `{"result": null}` for missing keys. We coerce to int and return
+    None on any failure (network, parse) so the caller can fall back
+    to local-only counts.
+    """
+    url, token = _aggregator_config()
+    if not url:
+        return None
+    try:
+        import requests
+        headers = {"Authorization": f"Bearer {token}"}
+        today_resp = requests.post(f"{url}/get/{_today_key()}", headers=headers, timeout=3)
+        total_resp = requests.post(f"{url}/get/{_TOTAL_KEY}", headers=headers, timeout=3)
+        today = _coerce_int(today_resp.json().get("result"))
+        total = _coerce_int(total_resp.json().get("result"))
+        return {"global_today": today, "global_lifetime": total}
+    except Exception as e:
+        logger.debug(f"[pets] aggregator GET failed (non-fatal): {e}")
+        return None
+
+
+def _coerce_int(value):
+    if value is None:
+        return 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 @pet_bp.route("/maiko/pet", methods=["POST"])
 def pet_maiko():
     """Record one pet. Respects user.pet_daily_cap.
@@ -95,6 +193,11 @@ def pet_maiko():
     db.session.add(pet)
     db.session.commit()
 
+    # Fire-and-forget INCR to the cross-deployment aggregator (if
+    # configured). Runs on a daemon thread so a slow or down
+    # aggregator never blocks the user's pet.
+    _aggregator_incr_async()
+
     return jsonify({
         "id": pet.id,
         "remaining_today": max(0, cap - given_today - 1),
@@ -126,13 +229,23 @@ def pets_count():
     )
     remaining = None if cap is None else max(0, cap - yours_today)
 
-    return jsonify({
-        "today": today,
-        "lifetime": lifetime,
+    payload = {
+        "today": today,            # this deployment's today
+        "lifetime": lifetime,      # this deployment's lifetime
         "your_today": yours_today,
         "your_remaining": remaining,
         "cap": cap,
-    })
+    }
+
+    # When the aggregator is configured, also fetch cross-deployment
+    # counts so the Home widget can show the "from the pack" number.
+    # Local counts stay in the response so the UI can fall back
+    # gracefully if the aggregator is unreachable.
+    global_counts = _aggregator_get_counts()
+    if global_counts is not None:
+        payload.update(global_counts)
+
+    return jsonify(payload)
 
 
 @pet_bp.route("/maiko/pets/log", methods=["GET"])
