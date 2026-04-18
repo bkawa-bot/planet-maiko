@@ -460,8 +460,6 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
             </div>
           </div>
         )}
-      </div>
-
     </div>
   );
 }
