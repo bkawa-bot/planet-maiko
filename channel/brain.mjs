@@ -7,8 +7,9 @@
  * serves external tools running their own LLM sessions so they can register
  * those sessions with Maiko for agent-to-agent conflict detection.
  *
- * Phase A: just the three A2A conflict-detection tools. Read surface,
- * compliance, and producer hooks come later.
+ * Phase A + B: three A2A conflict-detection tools plus three read-surface
+ * tools (learnings, conventions, adapter info). Compliance and producer
+ * hooks come later.
  *
  * Environment variables:
  *   MAIKO_API_URL   — Planet Maiko API base URL (default: http://localhost:8420/api)
@@ -44,7 +45,7 @@ const mcp = new Server(
       tools: {},
     },
     instructions: [
-      `You have three tools for coordinating an external LLM session with Planet Maiko:`,
+      `You have six tools for coordinating an external LLM session with Planet Maiko:`,
       `- maiko_register_session(repo, worktree_path, session_id?, hint?) — announce`,
       `  that a new session is starting work in a given repo/worktree. Returns`,
       `  the session_id Maiko will use to track it for conflict detection.`,
@@ -53,10 +54,19 @@ const mcp = new Server(
       `  Safe to call repeatedly; pure query, no side effects.`,
       `- maiko_complete_session(session_id, outcome?) — mark the session finished`,
       `  so Maiko can stop tracking it for conflicts.`,
+      `- maiko_get_learnings(repo, language?) — fetch the active learnings brief`,
+      `  for a repo (prose for LLM context + structured list). Cache per session.`,
+      `- maiko_get_conventions(repo) — fetch the Repo Overview + Team Playbook`,
+      `  block to prepend to your agent's system prompt. Cache per session.`,
+      `- maiko_get_adapter_info(repo) — fetch LoRA adapter metadata for a repo`,
+      `  to decide whether compliance checks are worth it. Cache per session.`,
       ``,
       `Call maiko_register_session once at the start of a task,`,
       `maiko_detect_conflicts before and during edits to catch overlap with`,
-      `other agents, and maiko_complete_session once the task ends.`,
+      `other agents, and maiko_complete_session once the task ends. Fetch the`,
+      `read-surface tools (learnings / conventions / adapter info) once at`,
+      `session start and reuse the results — they only change at brain-cycle`,
+      `cadence or on user approvals.`,
     ].join("\n"),
   }
 );
@@ -137,6 +147,74 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
         },
         required: ["session_id"],
+      },
+    },
+    {
+      name: "maiko_get_learnings",
+      description:
+        "Fetch the active learnings for a repo — both the prose brief " +
+        "(designed to drop into LLM context) and the structured list behind " +
+        "it. Optionally filter by language (e.g. \"python\"). " +
+        "Cache this result for the duration of your session — data only " +
+        "changes at brain-cycle cadence (~5 min), so don't re-fetch before " +
+        "each individual edit. Fetch once at session start and reuse.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          repo: {
+            type: "string",
+            description: "Repository identifier in \"org/name\" form (e.g. \"acme/widgets\").",
+          },
+          language: {
+            type: "string",
+            description:
+              "Optional language filter (e.g. \"python\", \"typescript\"). " +
+              "When set, only learnings scoped to that language are returned.",
+          },
+        },
+        required: ["repo"],
+      },
+    },
+    {
+      name: "maiko_get_conventions",
+      description:
+        "Fetch the \"Repo Overview + Team Playbook\" tribal-knowledge block " +
+        "Maiko would inject into a new agent's CLAUDE.md for this repo. " +
+        "External orchestrators should prepend this to their own agent's " +
+        "system prompt so the agent works with the same conventions Maiko's " +
+        "own agents get. " +
+        "Cache this result for the duration of your session — the playbook " +
+        "only changes when users approve new insights. Fetch once at session " +
+        "start, re-use throughout.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          repo: {
+            type: "string",
+            description: "Repository identifier in \"org/name\" form (e.g. \"acme/widgets\").",
+          },
+        },
+        required: ["repo"],
+      },
+    },
+    {
+      name: "maiko_get_adapter_info",
+      description:
+        "Fetch metadata about the LoRA adapter trained for this repo (if " +
+        "any). Use this to decide whether it's worth calling compliance " +
+        "checks on this session's edits later — if no adapter exists, the " +
+        "repo has no trained model to compare against yet. " +
+        "Cache this result for the session — adapter metadata only changes " +
+        "when a training run completes.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          repo: {
+            type: "string",
+            description: "Repository identifier in \"org/name\" form (e.g. \"acme/widgets\").",
+          },
+        },
+        required: ["repo"],
       },
     },
   ],
@@ -236,6 +314,103 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
           text: `Found ${conflicts.length} active conflict(s) for session ${data.session_id || session_id}:\n${formatted}`,
         }],
       };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
+    }
+  }
+
+  if (req.params.name === "maiko_get_learnings") {
+    const { repo, language } = req.params.arguments || {};
+    const params = new URLSearchParams({ repo: repo || "" });
+    if (language) params.set("language", language);
+    try {
+      const resp = await fetch(`${API_URL}/learnings/brief?${params.toString()}`);
+      if (!resp.ok) {
+        const err = await resp.text();
+        return { content: [{ type: "text", text: `Failed to fetch learnings: ${err}` }] };
+      }
+      const data = await resp.json();
+      const brief = (data.brief || "").trim();
+      const learnings = Array.isArray(data.learnings) ? data.learnings : [];
+      if (!brief && learnings.length === 0) {
+        return {
+          content: [{
+            type: "text",
+            text: `No active learnings for ${repo}${language ? ` (language: ${language})` : ""} yet.`,
+          }],
+        };
+      }
+      const briefBlock = brief || "(no prose brief available)";
+      const text =
+        `Brief:\n${briefBlock}\n\n` +
+        `(${learnings.length} structured learning${learnings.length === 1 ? "" : "s"} follow for programmatic use)`;
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
+    }
+  }
+
+  if (req.params.name === "maiko_get_conventions") {
+    const { repo } = req.params.arguments || {};
+    const params = new URLSearchParams({ repo: repo || "" });
+    try {
+      const resp = await fetch(`${API_URL}/insights/playbook?${params.toString()}`);
+      if (!resp.ok) {
+        const err = await resp.text();
+        return { content: [{ type: "text", text: `Failed to fetch conventions: ${err}` }] };
+      }
+      const data = await resp.json();
+      const playbook = (data.playbook || "").trim();
+      const insights = Array.isArray(data.insights) ? data.insights : [];
+      const count = typeof data.count === "number" ? data.count : insights.length;
+      if (!playbook) {
+        return {
+          content: [{
+            type: "text",
+            text: `No conventions registered for ${repo} yet.`,
+          }],
+        };
+      }
+      const text =
+        `${playbook}\n\n` +
+        `(${count} insight${count === 1 ? "" : "s"} underlying this playbook)`;
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
+    }
+  }
+
+  if (req.params.name === "maiko_get_adapter_info") {
+    const { repo } = req.params.arguments || {};
+    const params = new URLSearchParams({ repo: repo || "" });
+    try {
+      const resp = await fetch(`${API_URL}/lora/adapters?${params.toString()}`);
+      if (!resp.ok) {
+        const err = await resp.text();
+        return { content: [{ type: "text", text: `Failed to fetch adapter info: ${err}` }] };
+      }
+      const data = await resp.json();
+      if (!data.exists) {
+        return {
+          content: [{
+            type: "text",
+            text: `No LoRA adapter has been trained for ${repo}.`,
+          }],
+        };
+      }
+      const version = data.version ? ` v${data.version}` : "";
+      const base = data.base_model ? ` on base ${data.base_model}` : "";
+      const trained = data.trained_at ? ` trained ${data.trained_at}` : "";
+      const score = data.eval_score !== undefined && data.eval_score !== null
+        ? `, eval score ${data.eval_score}`
+        : "";
+      const size = data.dataset_size !== undefined && data.dataset_size !== null
+        ? `, dataset size ${data.dataset_size}`
+        : "";
+      const path = data.adapter_path ? `\nAdapter path: ${data.adapter_path}` : "";
+      const text =
+        `LoRA adapter for ${data.repo || repo}${version}${base}${trained}${score}${size}.${path}`;
+      return { content: [{ type: "text", text }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Error: ${err.message}` }] };
     }

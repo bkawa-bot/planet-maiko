@@ -364,10 +364,25 @@ def cluster_learnings_endpoint():
 def learning_brief():
     """Compile active learnings into a brief for agents.
 
-    Optional query params: repo, language (to scope the brief)
+    Returns the rendered markdown prose plus the structured Learning
+    list the prose was built from, so external orchestrators can
+    either drop the prose into their own CLAUDE.md or format the
+    rules themselves.
+
+    Optional query params: repo, language (to scope the brief).
+
+    Response 200:
+        {
+          "brief": "<markdown>",
+          "learnings": [ ... Learning.to_dict() ... ]
+        }
     """
-    from planet_maiko.brain.learning.processor import compile_brief
+    from planet_maiko.brain.learning.processor import compile_brief, select_brief_learnings
     repo = request.args.get("repo")
     language = request.args.get("language")
     brief = compile_brief(repo=repo, language=language)
-    return jsonify({"brief": brief})
+    selected = select_brief_learnings(repo=repo, language=language)
+    return jsonify({
+        "brief": brief,
+        "learnings": [l.to_dict() for l in selected],
+    })

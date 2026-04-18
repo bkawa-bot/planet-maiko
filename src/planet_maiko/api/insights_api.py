@@ -7,6 +7,7 @@ injected verbatim into every new agent's CLAUDE.md.
 
 Endpoints:
     GET    /api/insights                — list (filter by repo, status)
+    GET    /api/insights/playbook       — rendered playbook markdown + insights for a repo
     POST   /api/insights                — create (manual or agent-reported)
     PATCH  /api/insights/<id>           — update text / tags / expires_at
     POST   /api/insights/<id>/approve   — pending -> active
@@ -34,6 +35,39 @@ def _parse_expires(raw):
         return dt
     except Exception:
         return None
+
+
+@insights_bp.route("/insights/playbook", methods=["GET"])
+def playbook_for_repo():
+    """Render the Repo Overview + Team Playbook for a repo.
+
+    Read surface so external orchestrators (MCP clients, other coding
+    sessions) can consume the exact same markdown + structured insight
+    list that Maiko's own agent-prep path injects into CLAUDE.md.
+
+    Query params:
+        repo: "org/name" or bare repo name. Required. Insights are
+              matched on the last path segment, so either form works.
+
+    Response 200:
+        {
+          "repo": "org/name",
+          "playbook": "<markdown block>",
+          "insights": [ ... Insight.to_dict() ... ]
+        }
+    Response 400: when repo is missing.
+    """
+    repo = (request.args.get("repo") or "").strip()
+    if not repo:
+        return jsonify({"error": "repo is required"}), 400
+
+    from planet_maiko.brain.learning.playbook import build_playbook
+    result = build_playbook(repo)
+    return jsonify({
+        "repo": repo,
+        "playbook": result["playbook_md"],
+        "insights": result["insights"],
+    })
 
 
 @insights_bp.route("/insights", methods=["GET"])

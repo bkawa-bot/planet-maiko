@@ -170,6 +170,37 @@ def export_coding_guidelines(output_path=None):
     logger.info(f"[learning] Exported {len(learnings)} guidelines to {output_path}")
 
 
+def select_brief_learnings(repo=None, language=None, max_learnings=15):
+    """Return the active Learnings a brief would include, in render order.
+
+    Same confidence-ranked selection compile_brief runs, exposed so the
+    HTTP read surface can ship the structured list alongside the
+    prose. No side effects (no ContextSelection record — that's the
+    agent-prep path's concern, not the external reader's).
+
+    Args:
+        repo: scope to learnings for this repo (plus globals)
+        language: scope to learnings for this language (plus globals)
+        max_learnings: maximum learnings to include
+
+    Returns:
+        list[Learning]: selected rows, highest-confidence first and
+        then truncated to max_learnings. Empty list when none match.
+    """
+    learnings = Learning.query.filter_by(status="active").order_by(
+        Learning.confidence.desc()
+    ).all()
+
+    scoped = []
+    for l in learnings:
+        repo_match = l.is_global or l.scope_repo is None or l.scope_repo == repo
+        lang_match = l.scope_language is None or l.scope_language == language
+        if repo_match and lang_match:
+            scoped.append(l)
+
+    return scoped[:max_learnings]
+
+
 def compile_brief(repo=None, language=None, max_learnings=15, task_id=None,
                   agent_profile_id=None, **_kwargs):
     """Compile active learnings into a markdown brief.
@@ -190,22 +221,12 @@ def compile_brief(repo=None, language=None, max_learnings=15, task_id=None,
     Returns:
         str: markdown brief
     """
-    learnings = Learning.query.filter_by(status="active").order_by(
-        Learning.confidence.desc()
-    ).all()
+    selected = select_brief_learnings(
+        repo=repo, language=language, max_learnings=max_learnings,
+    )
 
-    # Filter by scope
-    scoped = []
-    for l in learnings:
-        repo_match = l.is_global or l.scope_repo is None or l.scope_repo == repo
-        lang_match = l.scope_language is None or l.scope_language == language
-        if repo_match and lang_match:
-            scoped.append(l)
-
-    if not scoped:
+    if not selected:
         return "No active learnings yet."
-
-    selected = scoped[:max_learnings]
 
     # Record the selection so the outcome (success/failure) can later
     # be attributed back to this specific context. Skipped if task_id

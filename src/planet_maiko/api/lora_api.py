@@ -6,6 +6,11 @@ Three endpoints back the three MCP tools agents call:
 - POST /lora/false_positive — record that a flagged line is actually fine
 - POST /lora/false_negative — record that the model missed a real issue
 
+Plus the Phase B read surface so external orchestrators can discover
+what adapter (if any) Maiko holds for a repo:
+
+- GET  /lora/adapters    — adapter metadata for a given repo
+
 Repo → LoRA resolution lives in config.lora.models_by_repo. Agents
 don't pick the model; their repo scope decides. If no model is
 configured for a repo, /lora/check returns empty violations + a
@@ -13,6 +18,7 @@ no_model_for_repo flag so the agent can skip gracefully instead of
 blocking on a model that doesn't exist.
 """
 
+import json
 import logging
 import os
 import re
@@ -188,6 +194,120 @@ def lora_check():
         "scope": scope,
         "raw_output": result.get("output", ""),
         "ran_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+
+# ---------------------------------------------------------------------------
+# /lora/adapters — read surface for external orchestrators
+# ---------------------------------------------------------------------------
+
+def _read_adapter_metadata(adapter_path):
+    """Read whatever adapter metadata we can find on disk.
+
+    Returns a dict with trained_at / base_model / dataset_size /
+    eval_score populated when the corresponding artifacts exist, or
+    None for any field we can't pin down. No eval-result persistence
+    exists today — eval_score always comes back None until we add one.
+    """
+    meta = {
+        "trained_at": None,
+        "base_model": None,
+        "dataset_size": None,
+        "eval_score": None,
+    }
+
+    # trained_at: prefer adapters.safetensors mtime (the real "done"
+    # moment), fall back to the adapter directory's own mtime.
+    weights_path = os.path.join(adapter_path, "adapters.safetensors")
+    try:
+        if os.path.exists(weights_path):
+            ts = os.path.getmtime(weights_path)
+        else:
+            ts = os.path.getmtime(adapter_path)
+        meta["trained_at"] = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+    except OSError:
+        pass
+
+    # base_model: MLX writes adapter_config.json with the base model
+    # it was fine-tuned on. If it's missing, leave None — we don't
+    # want to guess from DEFAULT_TRAINING_CONFIG because a given
+    # adapter may have been trained with a different base.
+    cfg_path = os.path.join(adapter_path, "adapter_config.json")
+    if os.path.exists(cfg_path):
+        try:
+            with open(cfg_path, encoding="utf-8") as f:
+                cfg = json.load(f)
+            meta["base_model"] = cfg.get("base_model") or cfg.get("model") or None
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    # dataset_size: training writes train.jsonl into the adapter dir.
+    train_path = os.path.join(adapter_path, "train.jsonl")
+    if os.path.exists(train_path):
+        try:
+            with open(train_path, encoding="utf-8") as f:
+                meta["dataset_size"] = sum(1 for line in f if line.strip())
+        except OSError:
+            pass
+
+    return meta
+
+
+@lora_bp.route("/lora/adapters", methods=["GET"])
+def adapter_for_repo():
+    """Return adapter metadata for a repo.
+
+    Read surface so external orchestrators (MCP clients, other coding
+    sessions) can discover whether Maiko holds a trained LoRA for a
+    given repo and where it lives on disk. Repo → adapter resolution
+    is the same config.lora.models_by_repo path /lora/check uses, so
+    what this endpoint reports is what the agent would load.
+
+    Query params:
+        repo: "org/name". Required.
+
+    Response 200:
+        {
+          "repo": "org/name",
+          "exists": bool,
+          "version": string | null,       // adapter directory name
+          "trained_at": iso8601 | null,
+          "base_model": string | null,
+          "eval_score": float | null,     // null until eval persistence lands
+          "dataset_size": int | null,
+          "adapter_path": string | null   // absolute path (localhost use)
+        }
+    Response 400: when repo is missing.
+    """
+    repo = (request.args.get("repo") or "").strip()
+    if not repo:
+        return jsonify({"error": "repo is required"}), 400
+
+    from planet_maiko.brain.learning.lora_eval import resolve_lora_for_repo
+    adapter_path = resolve_lora_for_repo(repo)
+
+    if not adapter_path or not os.path.isdir(adapter_path):
+        return jsonify({
+            "repo": repo,
+            "exists": False,
+            "version": None,
+            "trained_at": None,
+            "base_model": None,
+            "eval_score": None,
+            "dataset_size": None,
+            "adapter_path": None,
+        })
+
+    meta = _read_adapter_metadata(adapter_path)
+    return jsonify({
+        "repo": repo,
+        "exists": True,
+        "version": os.path.basename(adapter_path.rstrip(os.sep)),
+        "trained_at": meta["trained_at"],
+        "base_model": meta["base_model"],
+        "eval_score": meta["eval_score"],
+        "dataset_size": meta["dataset_size"],
+        "adapter_path": adapter_path,
     })
 
 
