@@ -44,6 +44,11 @@ ALLOWED_COLOR_KEYS = {
     "lemon_soft", "lemon_faint",
     "green_soft", "green_faint",
     "lavender_soft", "lavender_faint",
+    # Surface backgrounds — drive the .topbar gradient and the
+    # .overview-pane / .home-widget frosted background. `topbar_gradient`
+    # takes a full CSS linear-gradient() string; `pane_bg` takes an
+    # rgba() value so the frosted blur keeps its transparency.
+    "topbar_gradient", "pane_bg",
 }
 
 # Hill SVGs the user can pick for the body background. "none" means a
@@ -51,12 +56,19 @@ ALLOWED_COLOR_KEYS = {
 ALLOWED_WORLD_BACKGROUNDS = {"none", "night", "day", "morning", "afternoon", "sunset"}
 
 # A tolerant but bounded color regex: hex (3/4/6/8 digits), rgb/rgba/hsl/hsla
-# function notation, or a few named colors that commonly show up in palettes.
+# function notation, a bounded linear-gradient() for the topbar, or a few
+# named colors that commonly show up in palettes.
+#
+# The linear-gradient branch excludes `;{}()` inside the parens to prevent
+# CSS injection via nested rules or function calls, and caps the body at
+# 400 chars to prevent runaway. Color stops must be hex (no rgba inside
+# the gradient) because allowing nested parens would defeat the guard.
 _COLOR_RE = re.compile(
     r"^("
     r"#[0-9a-fA-F]{3,8}"
     r"|rgba?\(\s*\d+\s*(,\s*\d+\s*){2}(,\s*[0-9.]+\s*)?\)"
     r"|hsla?\(\s*\d+(\s*,\s*[0-9.]+%?){2,3}(\s*,\s*[0-9.]+)?\s*\)"
+    r"|linear-gradient\([^;{}()]{1,400}\)"
     r"|transparent|currentColor|inherit"
     r")$"
 )

@@ -37,7 +37,9 @@ Return ONLY valid JSON matching this shape. No markdown fencing, no commentary.
     "low": "#hex",
     "green": "#hex",
     "border": "#hex",
-    "border_subtle": "#hex"
+    "border_subtle": "#hex",
+    "topbar_gradient": "linear-gradient(135deg, #hex 0%, #hex 50%, #hex 100%)",
+    "pane_bg": "rgba(r, g, b, a)"
   }
 }
 ```
@@ -61,11 +63,15 @@ Return ONLY valid JSON matching this shape. No markdown fencing, no commentary.
 **Borders.**
 - `border` is visible but not loud (~10-15% value shift from `bg_card`). `border_subtle` is barely-there.
 
+**Surface backgrounds.**
+- `topbar_gradient` paints the top nav bar. Compose a 135deg CSS `linear-gradient()` across 2–4 hex color stops that capture the theme's time of day — e.g. deep blues at midnight, warm peach-to-cream at morning, dusky purples to magenta at sunset. The gradient should feel continuous with the hill backdrop above it: if the `world_background` is "night", the gradient resolves to a night sky; if "morning", to dawn pastels.
+- `pane_bg` paints the frosted Home overview pane and sidebar widgets. Use `rgba(r, g, b, a)` tinted to match `bg_card` with alpha around 0.75–0.80, so the hill scene shows through softly. Dark themes → go slightly darker than `bg_card`; light themes → slightly lighter. The frosted look only works if there's some transparency — don't use 1.0 alpha.
+
 **Hills backdrop.**
 - Pick a `world_background` that matches the theme's light. For dark/moody themes → "night". Warm yellow-golden palettes → "afternoon". Cool pinks/purples → "morning" or "sunset". Use "none" if the theme is minimalist.
 
 **Color format.**
-- Every color must be a valid 6- or 8-digit hex (`#rrggbb` or `#rrggbbaa`). No color names, no rgb() — this is enforced by the validator and anything else will be rejected.
+- Most values must be a valid 6- or 8-digit hex (`#rrggbb` or `#rrggbbaa`). `topbar_gradient` is the exception — it takes a CSS `linear-gradient(...)` string with hex color stops only (no `rgba()` stops inside the gradient). `pane_bg` is an `rgba(r, g, b, a)` string so the frosted blur keeps its transparency. No color names, no `hsl()` elsewhere — the validator rejects anything outside this set.
 
 **Stay coherent.**
 - A theme should feel like it's in one place at one time of day. If the user says "ocean at dusk", don't also make the accents tropical. Colors should harmonize, not compete.
