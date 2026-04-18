@@ -327,6 +327,17 @@ export const api = {
   detectChecks: (repo_path) => request(`/checks?repo_path=${encodeURIComponent(repo_path)}`),
   runChecks: (data) => request("/checks/run", { method: "POST", body: JSON.stringify(data) }),
 
+  // Pet Maiko — community counter + owner log
+  petMaiko: (note) =>
+    request("/maiko/pet", { method: "POST", body: JSON.stringify({ note: note || "" }) }),
+  getPetCount: () => request("/maiko/pets/count"),
+  getPetLog: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/maiko/pets/log${q ? `?${q}` : ""}`);
+  },
+  markPetIrl: (id) => request(`/maiko/pets/${id}/mark_irl`, { method: "POST" }),
+  markAllPetsIrl: () => request("/maiko/pets/mark_all_irl", { method: "POST" }),
+
   // Ask the Pack — natural-language dispatcher that picks an agent and launches them
   dispatchPack: (request_text, context, non_goals) =>
     request("/pack/dispatch", {

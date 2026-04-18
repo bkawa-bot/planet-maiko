@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import SetupWizard from "../components/SetupWizard";
 import OverviewPane from "../components/OverviewPane";
+import PetMaikoWidget from "../components/PetMaikoWidget";
 import { formatTime, formatClock } from "../utils/dates";
 import { Brain, Calendar, Palette, Video } from "lucide-react";
 import "./Home.css";
@@ -91,6 +92,8 @@ export default function Home() {
 
         {/* Sidebar widgets: ambient context, not primary surface. */}
         <div className="home-sidebar">
+          <PetMaikoWidget />
+
           <div className="home-widget">
             <div className="widget-header">
               <Calendar size={12} /> Today
