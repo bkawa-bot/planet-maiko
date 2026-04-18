@@ -6,7 +6,6 @@ import {
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
-import LeaderboardWidget from "../LeaderboardWidget";
 import { formatTime } from "../../utils/dates";
 
 /**
@@ -123,9 +122,8 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
   };
 
   return (
-    <div className="agents-active-layout">
-      <div className="agents-active-main">
-        {/* Pack Awareness — conflict warnings */}
+    <div className="agents-active-main">
+      {/* Pack Awareness — conflict warnings */}
         {conflicts.length > 0 && (
           <div className="pack-awareness card">
             <div className="pack-awareness-header">
@@ -464,9 +462,6 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
         )}
       </div>
 
-      <div className="agents-active-sidebar">
-        <LeaderboardWidget />
-      </div>
     </div>
   );
 }

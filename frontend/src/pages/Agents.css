@@ -430,39 +430,8 @@
 }
 .thread-input input:focus { border-color: var(--pink); outline: none; }
 
-/* === Active tab layout === */
-.agents-active-layout {
-  display: grid; grid-template-columns: 1fr 260px; gap: 12px;
-}
+/* === Active tab === */
 .agents-active-main { min-width: 0; }
-@media (max-width: 800px) {
-  .agents-active-layout { grid-template-columns: 1fr; }
-  .agents-active-sidebar { display: none; }
-}
-
-/* === Leaderboard widget === */
-.lb-widget-list { display: flex; flex-direction: column; gap: 2px; }
-.lb-widget-row {
-  display: grid; grid-template-columns: 24px 14px 1fr 32px 28px 32px;
-  align-items: center; gap: 4px;
-  padding: 5px 4px; border-radius: var(--radius-xs);
-  font-size: 11px; transition: background 0.15s;
-}
-.lb-widget-row:hover { background: var(--bg-hover); }
-.lb-widget-row.is-leader { background: rgba(255, 215, 0, 0.05); }
-.lb-widget-rank { font-weight: 800; font-family: var(--font-mono); text-align: center; color: var(--text-muted); display: flex; align-items: center; justify-content: center; }
-.lb-widget-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-weight: 600; }
-.lb-widget-tasks { color: var(--text-dim); font-family: var(--font-mono); display: flex; align-items: center; gap: 2px; justify-content: flex-end; }
-.lb-widget-prs { color: var(--text-muted); font-family: var(--font-mono); display: flex; align-items: center; gap: 2px; justify-content: flex-end; }
-.lb-widget-rate { font-weight: 700; font-family: var(--font-mono); text-align: right; }
-.lb-widget-link {
-  display: block; width: 100%; margin-top: 8px; padding: 4px;
-  text-align: center; font-size: 10px; color: var(--text-muted);
-  background: none; border: 1px dashed var(--border-subtle);
-  border-radius: var(--radius-xs); cursor: pointer;
-  transition: all 0.15s;
-}
-.lb-widget-link:hover { color: var(--pink); border-color: var(--pink); }
 
 /* Shared */
 .empty-state { text-align: center; padding: 48px 20px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius); }
