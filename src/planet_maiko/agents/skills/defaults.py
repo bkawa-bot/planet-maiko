@@ -7,6 +7,14 @@ MCPs the user has configured.
 
 DEFAULT_SKILLS = [
     {
+        "id": "home-overview",
+        "name": "Home Overview",
+        "description": "The rolling Home-page pane: warm greeting, focus picks, what needs the user, and a live system/pack status line",
+        "icon": "sunrise",
+        "mcps": ["slack", "linear", "github"],
+        "prompt": "Home overview — the authoritative prompt lives in prompts/home-overview.md. This field is edit-from-Skills-page fallback text.",
+    },
+    {
         "id": "morning-brief",
         "name": "Morning Brief",
         "description": "Generate a morning summary of overnight activity, today's meetings, and suggested priorities",

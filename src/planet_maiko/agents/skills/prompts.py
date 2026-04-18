@@ -13,6 +13,7 @@ _PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent / "prompts"
 
 # Skill IDs that have prompt files
 _SKILL_IDS = [
+    "home-overview",
     "morning-brief",
     "brainstorm",
     "investigate",

@@ -13,6 +13,7 @@ DEFAULT_ROUTING = {
     "chat": "sonnet",
     "skill": "sonnet",
     "skill:morning-brief": "sonnet",
+    "skill:home-overview": "opus",
     "skill:brainstorm": "sonnet",
     "skill:investigate": "sonnet",
     "skill:pr-review": "sonnet",
