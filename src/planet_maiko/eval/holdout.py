@@ -534,6 +534,128 @@ def _pct(x):
     return "—" if x is None else f"{x:.0%}"
 
 
+# ---------------------------------------------------------------------------
+# Per-category breakdown
+# ---------------------------------------------------------------------------
+
+_CATEGORY_RE = re.compile(
+    r"VIOLATION\s*:?\s*\[\s*([a-z_]+)\s*\]",
+    re.IGNORECASE,
+)
+
+
+def _categories_in_output(raw):
+    """Pull every `[category]` tag out of a model output. Returns a
+    set so one file doesn't double-count the same category even if
+    the model emitted two VIOLATION lines under the same tag."""
+    return {m.group(1).lower() for m in _CATEGORY_RE.finditer(raw or "")}
+
+
+def category_breakdown(scores, use_adapter=True):
+    """For each category the model emitted, count:
+      - total_flags: files where the model used that category
+      - file_hits: flags that landed on human-flagged files
+      - semantic_hits: flags the judge confirmed (if run in judge mode)
+
+    We can't compute *recall* by category — human comments don't carry
+    explicit categories, so there's no denominator for "how many
+    null_safety issues did the human raise". Precision is honest,
+    though: "when the model says null_safety, how often is it right?"
+    """
+    buckets = {}
+    for s in scores:
+        outputs = s.model_outputs_with if use_adapter else s.model_outputs_without
+        flagged = s.model_flagged_with if use_adapter else s.model_flagged_without
+        sem_hits = s.semantic_hits_with if use_adapter else s.semantic_hits_without
+        for fp in flagged:
+            cats = _categories_in_output(outputs.get(fp, ""))
+            if not cats:
+                cats = {"(uncategorized)"}
+            for c in cats:
+                b = buckets.setdefault(c, {"total_flags": 0, "file_hits": 0, "semantic_hits": 0})
+                b["total_flags"] += 1
+                if fp in s.human_files:
+                    b["file_hits"] += 1
+                if fp in sem_hits:
+                    b["semantic_hits"] += 1
+    return buckets
+
+
+# ---------------------------------------------------------------------------
+# Delta vs a previous JSON run
+# ---------------------------------------------------------------------------
+
+def diff_against(current, prev_json_path):
+    """Compare current run to a previously-saved JSON result.
+
+    Returns a dict shaped:
+
+        {
+          "prev_adapter": "...",
+          "prev_generated_at": "...",
+          "deltas": {
+            "recall_loose_with": +0.12,
+            "recall_strict_with": +0.05,
+            ...
+          },
+          "regressions": ["https://...#42 (strict recall 80% -> 40%)"],
+          "improvements": ["https://...#17 (strict recall 0% -> 60%)"],
+        }
+
+    regression / improvement are PR-level — tells you which specific
+    PRs got better or worse between runs. Useful for "did the latest
+    training round fix what I was trying to fix, or did it regress
+    something else?"
+    """
+    with open(prev_json_path, encoding="utf-8") as f:
+        prev = json.load(f)
+
+    cur_agg = to_json(current)["aggregate"]
+    prev_agg = prev.get("aggregate") or {}
+
+    deltas = {}
+    for k in ("recall_loose_with", "recall_strict_with", "precision_with",
+              "recall_loose_without", "recall_strict_without", "precision_without"):
+        a = cur_agg.get(k)
+        b = prev_agg.get(k)
+        if a is None or b is None:
+            continue
+        deltas[k] = a - b
+
+    prev_by_url = {p["pr"]["url"]: p for p in prev.get("pr_scores") or []}
+    regressions = []
+    improvements = []
+    scores = current.get("scores") or []
+    for s in scores:
+        p = prev_by_url.get(s.pr.url)
+        if not p:
+            continue
+        # Prefer strict recall where available, fall back to loose.
+        cur_strict = s.recall(with_adapter=True, strict=True)
+        prev_strict = p.get("recall_strict_with")
+        if cur_strict is not None and prev_strict is not None:
+            if cur_strict < prev_strict - 0.0001:
+                regressions.append(f"{s.pr.repo}#{s.pr.number}: strict recall {prev_strict:.0%} -> {cur_strict:.0%}")
+            elif cur_strict > prev_strict + 0.0001:
+                improvements.append(f"{s.pr.repo}#{s.pr.number}: strict recall {prev_strict:.0%} -> {cur_strict:.0%}")
+            continue
+        cur_loose = s.recall(with_adapter=True, strict=False)
+        prev_loose = p.get("recall_loose_with")
+        if cur_loose is not None and prev_loose is not None:
+            if cur_loose < prev_loose - 0.0001:
+                regressions.append(f"{s.pr.repo}#{s.pr.number}: loose recall {prev_loose:.0%} -> {cur_loose:.0%}")
+            elif cur_loose > prev_loose + 0.0001:
+                improvements.append(f"{s.pr.repo}#{s.pr.number}: loose recall {prev_loose:.0%} -> {cur_loose:.0%}")
+
+    return {
+        "prev_adapter": prev.get("adapter_path"),
+        "prev_generated_at": prev.get("generated_at"),
+        "deltas": deltas,
+        "regressions": regressions,
+        "improvements": improvements,
+    }
+
+
 def to_json(result):
     """Machine-readable dump of a run() result.
 
@@ -603,8 +725,13 @@ def to_json(result):
     }
 
 
-def format_report(result):
-    """Turn a run() result into a markdown report."""
+def format_report(result, against=None):
+    """Turn a run() result into a markdown report.
+
+    `against` is an optional diff_against() dict — when provided, a
+    'Vs previous run' section is appended with aggregate deltas and
+    per-PR regressions/improvements.
+    """
     if "error" in result:
         return f"# Holdout eval failed\n\n{result['error']}\n"
 
@@ -748,5 +875,52 @@ def format_report(result):
                         why = m.get("why", "")
                         lines.append(f"- {mark} `{fp}` — {why}")
         lines.append("")
+
+    # Per-category breakdown — tells you which rule types the training
+    # covers well and which are weak. Precision only (no recall
+    # denominator available — humans don't tag their comments).
+    cats = category_breakdown(scores, use_adapter=True)
+    if cats:
+        lines.append("## Category precision (with adapter)")
+        lines.append("")
+        lines.append("| Category | Flags | File-level hits | Judge hits | File precision | Strict precision |")
+        lines.append("|---|---|---|---|---|---|")
+        for cat in sorted(cats.keys()):
+            b = cats[cat]
+            flags = b["total_flags"]
+            fp_ = (b["file_hits"] / flags) if flags else None
+            sp_ = (b["semantic_hits"] / flags) if flags and judge_mode else None
+            lines.append(f"| `{cat}` | {flags} | {b['file_hits']} | {b['semantic_hits']} | {_pct(fp_)} | {_pct(sp_)} |")
+        lines.append("")
+
+    if against:
+        lines.append("## Vs previous run")
+        lines.append("")
+        if against.get("prev_adapter"):
+            lines.append(f"Previous adapter: `{against['prev_adapter']}`  ")
+        if against.get("prev_generated_at"):
+            lines.append(f"Previous run: {against['prev_generated_at']}")
+        lines.append("")
+        deltas = against.get("deltas") or {}
+        if deltas:
+            lines.append("| Metric | Delta |")
+            lines.append("|---|---|")
+            for k, v in deltas.items():
+                sign = "+" if v >= 0 else ""
+                lines.append(f"| {k} | {sign}{v:.0%} |")
+            lines.append("")
+        if against.get("improvements"):
+            lines.append("**Improvements:**")
+            for e in against["improvements"]:
+                lines.append(f"- {e}")
+            lines.append("")
+        if against.get("regressions"):
+            lines.append("**Regressions:**")
+            for e in against["regressions"]:
+                lines.append(f"- {e}")
+            lines.append("")
+        if not against.get("improvements") and not against.get("regressions"):
+            lines.append("_No per-PR recall changes from the previous run._")
+            lines.append("")
 
     return "\n".join(lines)

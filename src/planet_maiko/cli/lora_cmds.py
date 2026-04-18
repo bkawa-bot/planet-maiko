@@ -313,7 +313,14 @@ def cmd_eval_prs(args):
         if ctx is not None:
             ctx.pop()
 
-    report = holdout.format_report(result)
+    against = None
+    if args.against:
+        if not _os.path.isfile(args.against):
+            print(f"Against-file not found: {args.against}", file=sys.stderr)
+        else:
+            against = holdout.diff_against(result, args.against)
+
+    report = holdout.format_report(result, against=against)
 
     # Write the report to data_dir so it survives. Also write a JSON
     # sibling so metric-tracking scripts can diff runs without parsing
@@ -689,6 +696,10 @@ def register(subparsers):
         "--refresh-ground-truth", action="store_true",
         help="Re-fetch PR comments from GitHub (default uses the cached snapshot "
              "alongside the fixture for reproducibility).",
+    )
+    p.add_argument(
+        "--against",
+        help="Path to a previous eval-prs JSON report; emits a delta table and per-PR regressions.",
     )
     p.add_argument("--output", help="Markdown report output path (default: data/eval-reports/holdout-<ts>.md)")
     p.set_defaults(func=cmd_eval_prs)
