@@ -63,9 +63,9 @@ export default function Tasks() {
     else if (action === "launch") {
       try {
         await api.launchTask(id);
-        showToast("Agent launched", "normal");
+        showToast("On the way 🐾", "normal");
       } catch (err) {
-        showToast("Launch failed: " + err.message, "high");
+        showToast("Couldn't launch: " + err.message, "high");
       }
     }
     fetchData();
@@ -124,10 +124,10 @@ export default function Tasks() {
             showToast("Importing from Linear...", "normal");
             try {
               const result = await api.importLinear();
-              showToast(`Imported ${result.tasks_created} task(s), ${result.projects_created} project(s)`, "normal");
+              showToast(`${result.tasks_created} task(s) and ${result.projects_created} project(s) came in from Linear`, "normal");
               fetchData();
             } catch (err) {
-              showToast(err.message || "Import failed", "high");
+              showToast(err.message || "Couldn't import from Linear", "high");
             }
           }}>
             <Download size={12} /> Import from Linear
@@ -233,8 +233,8 @@ export default function Tasks() {
       {activeTasks.length === 0 && !showTaskForm && !showProjectForm ? (
         <div className="empty-state">
           <CheckSquare size={36} className="empty-icon" />
-          <div className="empty-title">No active tasks</div>
-          <div className="empty-sub">Tasks are created from pupdates, suggestions, and projects</div>
+          <div className="empty-title">Nothing on your plate</div>
+          <div className="empty-sub">Tasks come in from your pupdates, your agents, and projects you kick off. All quiet for now 🌱</div>
         </div>
       ) : (
         <>
@@ -580,9 +580,9 @@ export default function Tasks() {
                       );
                       setGeneratedTasks({ project_id: res.project_id, tasks: res.tasks });
                       setReviseFeedback("");
-                      showToast("Plan revised", "normal");
+                      showToast("Plan updated", "normal");
                     } catch (err) {
-                      showToast("Revise failed: " + err.message, "high");
+                      showToast("Couldn't revise: " + err.message, "high");
                     } finally {
                       setRevising(false);
                     }
@@ -614,7 +614,7 @@ export default function Tasks() {
                     setGeneratedTasks(null);
                     fetchData();
                   } catch (err) {
-                    showToast("Approve failed: " + err.message, "high");
+                    showToast("Couldn't approve: " + err.message, "high");
                   }
                 }}>
                   <CheckSquare size={12} /> Approve Plan
@@ -641,7 +641,7 @@ export default function Tasks() {
               const existingMeta = editingTask.extra || editingTask.metadata || {};
               payload.metadata = { ...existingMeta, description: description || "" };
               await api.updateTask(editingTask.id, payload);
-              showToast("Task updated", "normal");
+              showToast("Saved 🌱", "normal");
               setEditingTask(null);
               fetchData();
             }}>
