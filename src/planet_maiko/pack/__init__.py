@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -28,6 +29,21 @@ from datetime import datetime, timezone
 from planet_maiko.database import db
 
 logger = logging.getLogger(__name__)
+
+# Pull the first http(s) URL out of a free-text blob so review / PR
+# tasks carry it as task.url — that's what the rest of the pipeline
+# (skill prompts, UI deep-links, merged-PR detection) keys off.
+_URL_RE = re.compile(r"https?://[^\s)\]>,]+")
+
+
+def _extract_url(*texts):
+    for t in texts:
+        if not t:
+            continue
+        m = _URL_RE.search(t)
+        if m:
+            return m.group(0).rstrip(".,;")
+    return None
 
 
 _VALID_ROLES = {"coding", "review", "investigation", "cartographer"}
@@ -246,6 +262,7 @@ def _create_dispatched_task(*, title, description, task_type, priority, scope_re
         status="new",
         priority=priority,
         assigned_agent_id=profile.id,
+        url=_extract_url(user_request, context, description),
         tags=["pack"],
         extra=extra,
     )
