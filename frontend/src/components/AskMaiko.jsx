@@ -22,6 +22,13 @@ export default function AskMaiko() {
     if (open) inputRef.current?.focus();
   }, [open]);
 
+  // Cmd/Ctrl+K anywhere in the app pops the pack open.
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener("open-ask-pack", onOpen);
+    return () => window.removeEventListener("open-ask-pack", onOpen);
+  }, []);
+
   const send = async () => {
     const ask = input.trim();
     if (!ask || loading) return;
@@ -65,7 +72,7 @@ export default function AskMaiko() {
   return (
     <>
       {!open && (
-        <button className="ask-maiko-bubble" onClick={() => setOpen(true)} title="Ask the Pack">
+        <button className="ask-maiko-bubble" onClick={() => setOpen(true)} title="Ask the Pack (Cmd/Ctrl+K)">
           <MessageCircle size={20} />
         </button>
       )}
