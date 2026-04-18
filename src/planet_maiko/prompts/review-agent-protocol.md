@@ -78,3 +78,7 @@ If a trained LoRA adapter exists for this repo, call the `lora_check` MCP tool w
 ## Run the repo's checkers before declaring done
 
 Before calling `reply(message_type="ready_for_review")`, call `check_code()`. It runs the repo's own tests / linter / typechecker (auto-detected or configured in `.maiko/checks.json`) and returns pass/fail per check. A review that ships with a known-red suite isn't a review, it's a guess — surface any failures in your report under a "Checks" section and either fix them or explain why they're pre-existing.
+
+## Flag missing property tests
+
+When reviewing a PR that changes behavior (not pure refactors or config), note in your review whether the change includes at least one property-based test (`hypothesis`, `fast-check`, `proptest`, etc.). If there are none, call it out in "Suggestions" — not as a blocker, but as a noted gap. The goal isn't proof; it's to encode the invariant the author *thinks* they preserved so future changes can find out if they break it. A PR with zero new properties on a behavior change is a reasonable thing to ask the author about.

@@ -97,6 +97,19 @@ The user — not you — decides when the task is done. Never exit early on your
 
 Before every `ready_for_review`, call `check_code()`. It runs the repo's own tests / linter / typechecker (auto-detected from `package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, or configured in `.maiko/checks.json`) inside your worktree and returns structured pass/fail per check. If anything is red, fix it before replying. Surface the result in your `ready_for_review` summary under a brief "Checks" line — lets the user see at a glance that the suite is green.
 
+### Property-based tests for behavior changes
+
+When your change adds or alters behavior (not pure refactors, formatting, or config bumps), add **at least one property-based test** alongside the usual unit tests. Use whatever's idiomatic for the repo:
+
+- Python → `hypothesis` (`@given(...)`)
+- JavaScript / TypeScript → `fast-check` (`fc.assert(fc.property(...))`)
+- Rust → `proptest` / `quickcheck`
+- Go → built-in `testing/quick` or `rapid`
+
+The goal isn't a proof — it's to encode the invariant you *think* the change preserves so future refactors can find out if they break it. One sentence per property is plenty: "for any valid user id, the result is never None," "for any non-empty input list, the output is sorted." Aim for properties that would be annoying to enumerate by hand but cheap for a property runner to search.
+
+In your `ready_for_review` summary, include a short "Properties" bullet listing what you added and why. If the change is a pure refactor or formatting pass, say so and skip.
+
 ### LoRA compliance check
 
 Before every `ready_for_review`, call the `lora_check` MCP tool. It runs your repo's trained compliance model against your branch diff and returns a list of violations. Your response:
