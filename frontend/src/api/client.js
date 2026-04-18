@@ -203,6 +203,12 @@ export const api = {
     request(`/agents/${taskId}/rerun`, { method: "POST" }),
   getConflicts: () => request("/agents/conflicts"),
 
+  // External sessions — registered by external orchestrators via the maiko-brain MCP
+  getExternalSessions: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/sessions${query ? `?${query}` : ""}`);
+  },
+
   // Skills
   getSkills: () => request("/skills"),
   getSkill: (id) => request(`/skills/${id}`),

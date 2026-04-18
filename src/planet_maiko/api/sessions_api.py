@@ -59,6 +59,23 @@ def _prepared_worktrees():
     ]
 
 
+@sessions_bp.route("/sessions", methods=["GET"])
+def list_sessions():
+    """List external sessions. Filter via ?status= (default: active).
+
+    Statuses: "active" | "completed" | "all". Results are capped at
+    200 and ordered by registered_at descending so the freshest
+    registrations land first — matches what the Agents page wants
+    when it surfaces the strip alongside Maiko-prepared agents.
+    """
+    status = request.args.get("status", "active")
+    q = ExternalSession.query
+    if status != "all":
+        q = q.filter(ExternalSession.status == status)
+    rows = q.order_by(ExternalSession.registered_at.desc()).limit(200).all()
+    return jsonify([r.to_dict() for r in rows])
+
+
 @sessions_bp.route("/sessions/register", methods=["POST"])
 def register_session():
     """Register a new external session.

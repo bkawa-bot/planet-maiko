@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   AlertTriangle, Bot, Bone, CheckSquare, Clock, ExternalLink, GitBranch,
-  GitPullRequest, HeartPulse, Loader, MessageCircle, Moon, Play, Sparkles, X,
+  GitPullRequest, HeartPulse, Link2, Loader, MessageCircle, Moon, Play, Sparkles, X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
@@ -22,7 +22,7 @@ import { formatTime } from "../../utils/dates";
  *   profiles   — for resolving display names
  *   onRefresh  — () => void; refetch agents/activity/queued after actions
  */
-export default function AgentsActiveTab({ agents, activity, queued = [], conflicts, profiles, onRefresh }) {
+export default function AgentsActiveTab({ agents, activity, queued = [], conflicts, profiles, externalSessions = [], onRefresh }) {
   const [triggeringCycle, setTriggeringCycle] = useState(false);
 
   const triggerCycle = async () => {
@@ -145,6 +145,43 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                         : <AlertTriangle size={12} className="conflict-icon" />}
                     <span className="conflict-task">{c.task_id}</span>
                     <span className="conflict-content">{c.content}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* External sessions: registered by external orchestrators via
+            the maiko-brain MCP. These are LLM coding sessions running
+            outside Maiko's own worktrees — their work participates in
+            the A2A conflict detector but Maiko didn't spawn them. */}
+        {externalSessions.length > 0 && (
+          <div className="external-sessions-section card">
+            <div className="external-sessions-header">
+              <Link2 size={14} /> External sessions
+              <span className="badge">{externalSessions.length}</span>
+            </div>
+            <div className="external-sessions-list">
+              {externalSessions.map((s) => {
+                const regMs = s.registered_at ? Date.parse(s.registered_at) : null;
+                const ageMin = regMs ? Math.max(0, Math.round((Date.now() - regMs) / 60000)) : 0;
+                return (
+                  <div
+                    key={s.session_id}
+                    className="external-session-item"
+                    title={s.worktree_path || ""}
+                  >
+                    {s.consumer && (
+                      <span className="external-session-consumer">{s.consumer}</span>
+                    )}
+                    <span className="external-session-repo">{s.repo}</span>
+                    {s.hint && (
+                      <span className="external-session-hint">— {s.hint}</span>
+                    )}
+                    <span className="external-session-age">
+                      {ageMin < 1 ? "just now" : `${ageMin}m ago`}
+                    </span>
                   </div>
                 );
               })}
