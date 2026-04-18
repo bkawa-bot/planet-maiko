@@ -290,10 +290,6 @@ export default function Inbox() {
               <span className="sidebar-stat-val" style={{ color: "var(--blue)" }}>{inProgressCount}</span>
               <span className="sidebar-stat-label">In Progress</span>
             </div>
-            <div className="sidebar-stat">
-              <span className="sidebar-stat-val" style={{ color: "var(--urgent)" }}>{pupdates.filter(p => p.priority === "urgent" || p.priority === "high").length}</span>
-              <span className="sidebar-stat-label">Urgent</span>
-            </div>
           </div>
         </div>
         <div className="home-widget">

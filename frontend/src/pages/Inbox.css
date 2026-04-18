@@ -176,9 +176,7 @@
 .card-left-bar {
   width: 3px; flex-shrink: 0;
 }
-.pupdate-card.urgent .card-left-bar { background: var(--urgent); }
-.pupdate-card.high .card-left-bar { background: var(--high); }
-.pupdate-card.normal .card-left-bar { background: var(--pink); }
+.pupdate-card .card-left-bar { background: var(--pink); }
 .pupdate-card.low .card-left-bar { background: var(--low); }
 
 /* Source icon */
@@ -188,9 +186,7 @@
   background: var(--bg-card-alt); border-radius: 8px;
   color: var(--text-muted); margin: 10px 0 10px 10px;
 }
-.pupdate-card.urgent .card-source-icon { color: var(--urgent); background: var(--urgent-faint); }
-.pupdate-card.high .card-source-icon { color: var(--high); background: var(--high-faint); }
-.pupdate-card.normal .card-source-icon { color: var(--pink); background: var(--pink-glow); }
+.pupdate-card .card-source-icon { color: var(--pink); background: var(--pink-glow); }
 .pupdate-card.low .card-source-icon { color: var(--blue); background: var(--blue-soft); }
 
 .card-content { flex: 1; padding: 10px 12px; min-width: 0; }

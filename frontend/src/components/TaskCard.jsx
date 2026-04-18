@@ -377,7 +377,6 @@ export default function TaskCard({
         >
           {isPinned ? <PinOff size={12} /> : <Pin size={12} />}
         </button>
-        <span className={`card-priority badge ${priorityClass}`}>{t.priority}</span>
         <ChevronRight size={14} className={`card-chevron ${isExpanded ? "open" : ""}`} />
       </div>
     </div>

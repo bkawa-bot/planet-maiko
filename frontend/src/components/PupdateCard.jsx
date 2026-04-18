@@ -168,7 +168,6 @@ export default function PupdateCard({
             <X size={12} />
           </button>
         )}
-        <span className={`card-priority badge ${p.priority}`}>{p.priority}</span>
         <ChevronRight size={14} className={`card-chevron ${isExpanded ? "open" : ""}`} />
       </div>
     </div>

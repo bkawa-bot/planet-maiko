@@ -309,8 +309,6 @@ a:hover { text-decoration: underline; }
   text-transform: uppercase; letter-spacing: 0.03em;
   line-height: 1.4;
 }
-.badge.urgent { background: var(--urgent-soft); color: var(--urgent); }
-.badge.high { background: var(--high-soft); color: var(--high); }
 .badge.normal { background: var(--pink-soft); color: var(--pink); }
 .badge.low { background: rgba(95, 114, 128, 0.15); color: var(--low); }
 .badge.new { background: var(--blue-soft); color: var(--blue); }

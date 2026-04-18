@@ -231,10 +231,7 @@
   font-size: 10px; color: var(--pink); white-space: nowrap;
 }
 
-.priority-dot-sm { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.priority-dot-sm.urgent { background: var(--urgent); }
-.priority-dot-sm.high { background: var(--high); }
-.priority-dot-sm.normal { background: var(--pink); }
+.priority-dot-sm { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: var(--pink); }
 .priority-dot-sm.low { background: var(--low); }
 
 .recent-source {
@@ -255,8 +252,6 @@
   transition: background 0.15s, transform 0.15s;
 }
 .waiting-item:hover { background: var(--bg-card); transform: translateX(1px); }
-.waiting-item.urgent { border-left-color: var(--urgent); }
-.waiting-item.high { border-left-color: var(--high); }
 .waiting-item.low { border-left-color: var(--low); }
 
 .waiting-avatar {
