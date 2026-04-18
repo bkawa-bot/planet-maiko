@@ -7,7 +7,6 @@ import AskMaiko from "./components/AskMaiko";
 // them in the main bundle avoids a suspense flicker on the critical
 // path.
 import Home from "./pages/Home";
-import Inbox from "./pages/Inbox";
 import Tasks from "./pages/Tasks";
 import Agents from "./pages/Agents";
 // Lazy: the heavier / less-frequently-visited surfaces. Settings,
@@ -43,7 +42,7 @@ function AppRoutes() {
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Home />} />
-        <Route path="/inbox" element={<Inbox />} />
+        <Route path="/inbox" element={<Navigate to="/" replace />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/agents" element={<Agents />} />
         <Route path="/knowledge" element={<Suspense fallback={<RouteFallback />}><BrainView /></Suspense>} />
@@ -59,9 +58,9 @@ function AppRoutes() {
         <Route path="/learn" element={<Navigate to="/knowledge" replace />} />
         <Route path="/projects" element={<Navigate to="/tasks" replace />} />
         <Route path="/team" element={<Navigate to="/knowledge" replace />} />
-        <Route path="/ideas" element={<Navigate to="/inbox" replace />} />
-        <Route path="/brainstorm" element={<Navigate to="/inbox" replace />} />
-        <Route path="/suggestions" element={<Navigate to="/inbox" replace />} />
+        <Route path="/ideas" element={<Navigate to="/" replace />} />
+        <Route path="/brainstorm" element={<Navigate to="/" replace />} />
+        <Route path="/suggestions" element={<Navigate to="/" replace />} />
         <Route path="/gathering" element={<Navigate to="/agents" replace />} />
         <Route path="/tournaments" element={<Navigate to="/agents" replace />} />
       </Route>

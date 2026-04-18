@@ -3,11 +3,10 @@ import { useNavigate } from "react-router-dom";
 
 const VIEW_KEYS = {
   "1": "/",
-  "2": "/inbox",
-  "3": "/tasks",
-  "4": "/agents",
-  "5": "/knowledge",
-  "6": "/settings",
+  "2": "/tasks",
+  "3": "/agents",
+  "4": "/knowledge",
+  "5": "/settings",
 };
 
 export default function useKeyboardShortcuts() {

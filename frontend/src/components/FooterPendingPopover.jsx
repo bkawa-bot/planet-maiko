@@ -43,16 +43,16 @@ export default function FooterPendingPopover({ pending, onClose }) {
         </button>
       </div>
 
-      <button className="footer-pending-row" onClick={() => go("/inbox")}>
+      <div className="footer-pending-row">
         <span className="footer-pending-count">{pupdates}</span>
         <div className="footer-pending-text">
           <div className="footer-pending-label">Unprocessed pupdates</div>
           <div className="footer-pending-hint">
-            Waiting for brain-cycle triage (rules + LLM). Usually drains in under
-            a cycle; click to view the Inbox.
+            Waiting for brain-cycle triage (rules + LLM). Usually drains in
+            under a cycle — nothing for you to do.
           </div>
         </div>
-      </button>
+      </div>
 
       <button className="footer-pending-row" onClick={() => go("/knowledge")}>
         <span className="footer-pending-count">{signals}</span>

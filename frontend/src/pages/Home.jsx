@@ -72,14 +72,14 @@ function waitingCta(p) {
     return { label: "Help out", to: `/tasks/${taskId}` };
   }
   if (p.type === "agent_proposal") {
-    return { label: "Decide", to: "/inbox" };
+    return { label: "Decide", to: "/" };
   }
   if (p.type === "pr_review_requested" || p.type === "pr_changes_requested") {
     return p.url
       ? { label: p.type === "pr_review_requested" ? "Review PR" : "Revise", href: p.url }
-      : { label: "Open", to: "/inbox" };
+      : { label: "Open", to: "/" };
   }
-  return { label: "Open", to: "/inbox" };
+  return { label: "Open", to: "/" };
 }
 
 function waitingSummary(p) {

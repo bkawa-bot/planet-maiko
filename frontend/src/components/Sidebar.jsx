@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Home, Inbox, CheckSquare, Bot, Brain, Wand2, Zap, GraduationCap, Settings, Shield, HelpCircle, X, Palette, Power } from "lucide-react";
+import { Home, CheckSquare, Bot, Brain, Wand2, Zap, GraduationCap, Settings, Shield, HelpCircle, X, Palette, Power } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api/client";
 import { applyCustomTheme, clearCustomTheme, hydrateCachedCustomTheme } from "../utils/themes";
@@ -9,7 +9,6 @@ import "./ShutdownModal.css";
 
 const NAV_ITEMS = [
   { to: "/", icon: Home, label: "Home", end: true },
-  { to: "/inbox", icon: Inbox, label: "Inbox", badgeKey: "pupdates" },
   { to: "/tasks", icon: CheckSquare, label: "Tasks" },
   { to: "/agents", icon: Bot, label: "Agents" },
   { to: "/knowledge", icon: Brain, label: "Knowledge" },
