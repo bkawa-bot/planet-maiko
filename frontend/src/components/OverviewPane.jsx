@@ -276,6 +276,28 @@ export default function OverviewPane() {
         <section className="overview-closing">
           <div className="overview-closing-label">Enough for today</div>
           <p className="overview-closing-body">{overview.closing}</p>
+          {overview.overnight?.length > 0 && (
+            <div className="overview-overnight">
+              <div className="overview-overnight-label">Continuing overnight</div>
+              <ul className="overview-overnight-list">
+                {overview.overnight.map((t) => (
+                  <li key={t.task_id} className="overview-overnight-item">
+                    <span className="overview-overnight-title">{t.title}</span>
+                    {t.agent_name && (
+                      <span className="overview-overnight-agent">— {t.agent_name}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <a
+                className="overview-overnight-link"
+                onClick={(e) => { e.preventDefault(); navigate("/tasks"); }}
+                href="/tasks"
+              >
+                open Tasks to amend
+              </a>
+            </div>
+          )}
         </section>
       )}
 

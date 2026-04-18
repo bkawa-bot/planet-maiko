@@ -448,6 +448,52 @@ def _closing_window_info(now, user_cfg):
     return False, ""
 
 
+def _overnight_tasks_context(context):
+    """Tasks the pack is continuing on past the user's workday end.
+
+    Only populated when the closing window is active — outside that
+    window the overnight section is empty, because "what's queued
+    overnight" isn't a useful frame at 11am.
+
+    Shape per item:
+        {
+          "task_id": str,
+          "title": str,
+          "agent_name": str | None,
+          "agent_avatar": str | None,
+        }
+    """
+    if context.get("closing_window") != "true":
+        return []
+
+    from planet_maiko.models.task import Task
+    from planet_maiko.models.agent_profile import AgentProfile
+
+    active = (
+        Task.query
+        .filter(Task.status == "in_progress")
+        .filter(Task.assigned_agent_id.isnot(None))
+        .order_by(Task.updated_at.desc())
+        .limit(10)
+        .all()
+    )
+    if not active:
+        return []
+
+    agent_ids = {t.assigned_agent_id for t in active if t.assigned_agent_id}
+    agents = {a.id: a for a in AgentProfile.query.filter(AgentProfile.id.in_(agent_ids)).all()}
+    out = []
+    for t in active:
+        agent = agents.get(t.assigned_agent_id)
+        out.append({
+            "task_id": t.id,
+            "title": t.title,
+            "agent_name": agent.display_name if agent else None,
+            "agent_avatar": agent.avatar if agent else None,
+        })
+    return out
+
+
 def _shipped_today_context():
     """Tasks that moved to done / cancelled today (user-local day).
 
@@ -615,6 +661,13 @@ def generate_overview():
     parsed.setdefault("alive", "")
     parsed.setdefault("custom_section", "")
     parsed.setdefault("closing", "")
+
+    # Evening wrap: during the closing window, inject a structured list
+    # of tasks the pack will continue on overnight. Deterministic (not
+    # LLM-generated) so the frontend can reliably render task-linked
+    # rows with agent names. Empty list outside the window or when
+    # nothing is queued.
+    parsed["overnight"] = _overnight_tasks_context(context)
 
     now_local = user_now()
     sr = SkillResult(
