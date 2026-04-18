@@ -176,6 +176,34 @@
   line-height: 1.5;
 }
 
+/* Enough for today — the closing-condition card. Warmer than the
+   surrounding cards on purpose; this is Maiko giving you permission
+   to stop. Shows up near end-of-workday; hidden otherwise. */
+.overview-closing {
+  margin: 0;
+  padding: 16px 18px;
+  background: linear-gradient(135deg, var(--peach, #ffd9b8) 0%, var(--lavender, #d8c6ff) 100%);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--lavender);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.overview-closing-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  opacity: 0.7;
+}
+.overview-closing-body {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.55;
+  margin: 0;
+}
+
 /* Custom add-on section */
 .overview-custom {
   padding: 14px 16px;

@@ -265,6 +265,13 @@ export default function OverviewPane() {
         <p className="overview-alive">{overview.alive}</p>
       )}
 
+      {overview.closing && (
+        <section className="overview-closing">
+          <div className="overview-closing-label">Enough for today</div>
+          <p className="overview-closing-body">{overview.closing}</p>
+        </section>
+      )}
+
       {overview.custom_section && (
         <section className="overview-custom">
           <div

@@ -269,6 +269,36 @@ export default function Settings() {
               Overview regenerates roughly every 4 hours, or you can click Refresh
               on the pane itself. Changes here take effect on the next generation.
             </div>
+
+            <label style={{ display: "block", marginTop: 16 }}>
+              <div style={{ marginBottom: 6, fontSize: 12, color: "var(--text-muted)" }}>
+                Workday ends around — for the "enough for today" card
+              </div>
+              <select
+                value={config.user?.workday_end_hour ?? 17}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  updateField("user", "workday_end_hour", v === "off" ? null : parseInt(v, 10));
+                }}
+                style={{
+                  padding: 6, fontFamily: "inherit", fontSize: 13,
+                  background: "var(--bg-card)", color: "var(--text)",
+                  border: "1px solid var(--border)", borderRadius: "var(--radius-xs)",
+                }}
+              >
+                <option value="off">Off — don't show the closing card</option>
+                {Array.from({ length: 24 }, (_, h) => (
+                  <option key={h} value={h}>
+                    {h.toString().padStart(2, "0")}:00 local
+                  </option>
+                ))}
+              </select>
+              <div className="setup-hint" style={{ marginTop: 6 }}>
+                Maiko shows a warm "that's enough for today" card in the overview
+                around this hour — 30 minutes before and for 2 hours after. Meant
+                as permission to stop, not a cheer.
+              </div>
+            </label>
           </div>
         )}
       </section>
