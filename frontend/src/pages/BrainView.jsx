@@ -4,7 +4,7 @@ import { showToast } from "../components/Toast";
 import {
   BookOpen, Brain, Clock, Layers, Check, X, Edit3,
   ChevronDown, ChevronRight, Plus, Shield, Download, Loader, Sparkles,
-  Flame, RefreshCw,
+  Flame, RefreshCw, ShieldCheck,
 } from "lucide-react";
 import InfoButton from "../components/InfoButton";
 import ConfirmModal from "../components/ConfirmModal";
@@ -37,6 +37,10 @@ export default function BrainView() {
   const [configuredRepos, setConfiguredRepos] = useState([]);
   const [tab, setTab] = useState("pool");
   const [synthesizing, setSynthesizing] = useState(false);
+  const [promoting, setPromoting] = useState(null);  // active Learning being promoted to a check
+  const [promoteForm, setPromoteForm] = useState({ repo_path: "", name: "", command: "" });
+  const [promoteBusy, setPromoteBusy] = useState(false);
+  const [repoRoots, setRepoRoots] = useState([]);
 
   const fetchLearnings = async () => {
     setKLoading(true);
@@ -57,6 +61,7 @@ export default function BrainView() {
     fetchLearnings();
     api.getConfig().then((c) => {
       setConfiguredRepos(c?.github?.repos || []);
+      setRepoRoots(c?.github?.repo_roots || []);
     }).catch(() => {});
     // Resume showing progress if a backfill is already running (page reload)
     api.getBackfillStatus().then((s) => {
@@ -151,6 +156,50 @@ export default function BrainView() {
 
   const handleApprove = async (id) => { await api.approveLearning(id); fetchLearnings(); };
   const handleDismiss = async (id) => { await api.dismissLearning(id); fetchLearnings(); };
+
+  const openPromote = (learning) => {
+    const shortTitle = (learning.rule || "").slice(0, 60);
+    // Seed the repo_path from the first known repo_root + the scope_repo's
+    // last segment when both are available. Still fully editable.
+    let defaultRepoPath = "";
+    if (repoRoots.length === 1 && learning.scope_repo) {
+      const repoName = learning.scope_repo.includes("/")
+        ? learning.scope_repo.split("/").pop()
+        : learning.scope_repo;
+      defaultRepoPath = `${repoRoots[0]}/${repoName}`;
+    } else if (repoRoots.length === 1) {
+      defaultRepoPath = repoRoots[0];
+    }
+    setPromoting(learning);
+    setPromoteForm({
+      repo_path: defaultRepoPath,
+      name: `[${learning.category}] ${shortTitle}${shortTitle.length < (learning.rule || "").length ? "…" : ""}`,
+      command: "",
+    });
+  };
+
+  const closePromote = () => {
+    setPromoting(null);
+    setPromoteForm({ repo_path: "", name: "", command: "" });
+  };
+
+  const handlePromote = async () => {
+    if (!promoting || promoteBusy) return;
+    const { repo_path, name, command } = promoteForm;
+    if (!repo_path.trim() || !name.trim() || !command.trim()) {
+      showToast("Repo path, name, and command are all required", "high");
+      return;
+    }
+    setPromoteBusy(true);
+    try {
+      await api.promoteLearningToCheck(promoting.id, repo_path.trim(), name.trim(), command.trim());
+      showToast("Check promoted — it'll run on the next check_code()", "normal");
+      closePromote();
+    } catch (err) {
+      showToast(err.message || "Could not promote", "high");
+    }
+    setPromoteBusy(false);
+  };
   const handleApproveAll = async () => {
     const count = pending.length;
     for (const l of pending) {
@@ -341,6 +390,15 @@ export default function BrainView() {
                                 <Check size={10} /> Approve
                               </button>
                             )}
+                            {l.status === "active" && (
+                              <button
+                                className="btn btn-sm"
+                                onClick={() => openPromote(l)}
+                                title="Promote this rule to an enforced check in a repo's .maiko/checks.json"
+                              >
+                                <ShieldCheck size={10} /> Make a check
+                              </button>
+                            )}
                             {l.status === "active" || l.status === "pending" ? (
                               <button className="btn btn-sm btn-danger" onClick={() => handleDismiss(l.id)}>
                                 <X size={10} />
@@ -372,6 +430,78 @@ export default function BrainView() {
           </div>
         </div>
       </div>
+
+      {/* Promote-to-check modal */}
+      {promoting && (
+        <div className="modal-overlay" onClick={closePromote}>
+          <div className="generated-tasks-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <ShieldCheck size={14} />
+              <span>Promote to a check</span>
+              <button className="btn btn-sm" onClick={closePromote} style={{ marginLeft: "auto" }}><X size={10} /></button>
+            </div>
+            <div className="modal-body">
+              <div style={{ padding: "8px 10px", background: "var(--bg-hover)", borderRadius: "var(--radius-xs)", fontSize: 12, color: "var(--text)", marginBottom: 12, lineHeight: 1.5 }}>
+                <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", marginBottom: 4 }}>
+                  [{promoting.category}]
+                </div>
+                {promoting.rule}
+              </div>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.5 }}>
+                This writes a new entry to <code>.maiko/checks.json</code> at the repo path you pick.
+                Agents running <code>check_code()</code> in that repo will then run your command and fail
+                if it exits non-zero. Negate greps with <code>!</code> so "found the anti-pattern" means "check failed":
+                <br />
+                <code style={{ fontSize: 11 }}>! grep -rn "anti_pattern_here" --include="*.py" .</code>
+              </p>
+              <div className="form-row">
+                <label>
+                  Repo path
+                  <input
+                    type="text"
+                    value={promoteForm.repo_path}
+                    onChange={(e) => setPromoteForm({ ...promoteForm, repo_path: e.target.value })}
+                    placeholder={repoRoots[0] ? `${repoRoots[0]}/your-repo` : "/absolute/path/to/repo"}
+                  />
+                </label>
+              </div>
+              <div className="form-row">
+                <label>
+                  Check name
+                  <input
+                    type="text"
+                    value={promoteForm.name}
+                    onChange={(e) => setPromoteForm({ ...promoteForm, name: e.target.value })}
+                    placeholder="null-check-on-user-input"
+                  />
+                </label>
+              </div>
+              <div className="form-row">
+                <label>
+                  Shell command
+                  <textarea
+                    rows={3}
+                    value={promoteForm.command}
+                    onChange={(e) => setPromoteForm({ ...promoteForm, command: e.target.value })}
+                    placeholder='! grep -rn "def get_user(id):" --include="*.py" .'
+                    style={{ fontFamily: "monospace", fontSize: 12 }}
+                  />
+                </label>
+              </div>
+              <div className="form-actions">
+                <button className="btn" onClick={closePromote} disabled={promoteBusy}>Cancel</button>
+                <button
+                  className="btn btn-primary"
+                  onClick={handlePromote}
+                  disabled={promoteBusy || !promoteForm.repo_path.trim() || !promoteForm.name.trim() || !promoteForm.command.trim()}
+                >
+                  {promoteBusy ? "Writing…" : "Write to checks.json"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Backfill modal */}
       {showBackfillModal && (

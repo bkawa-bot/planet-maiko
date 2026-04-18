@@ -323,6 +323,15 @@ export const api = {
   // Chat
   chat: (message) => request("/chat", { method: "POST", body: JSON.stringify({ message }) }),
 
+  // Repo checkers — auto-detect, run, promote Learning-to-check
+  detectChecks: (repo_path) => request(`/checks?repo_path=${encodeURIComponent(repo_path)}`),
+  runChecks: (data) => request("/checks/run", { method: "POST", body: JSON.stringify(data) }),
+  promoteLearningToCheck: (learning_id, repo_path, name, command) =>
+    request("/checks/promote-learning", {
+      method: "POST",
+      body: JSON.stringify({ learning_id, repo_path, name, command }),
+    }),
+
   // Ask the Pack — natural-language dispatcher that picks an agent and launches them
   dispatchPack: (request_text, context, non_goals) =>
     request("/pack/dispatch", {
