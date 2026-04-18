@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import "./PetMaikoWidget.css";
@@ -131,6 +132,9 @@ export default function PetMaikoWidget() {
               : `you've got ${remaining} left today`}
           </div>
         )}
+        <Link to="/pet-log" className="pet-log-link" title="Pet log — for the deployment owner">
+          pet log →
+        </Link>
       </div>
     </div>
   );

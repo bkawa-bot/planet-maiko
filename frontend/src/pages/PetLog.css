@@ -1,0 +1,150 @@
+.pet-log {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 24px 28px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pet-log-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pet-log-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.pet-log-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+}
+
+.pet-log-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  text-align: center;
+}
+
+.pet-log-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--pink);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.pet-log-stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pet-log-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pet-log-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.pet-log-note {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.55;
+  font-style: italic;
+  padding: 10px 14px;
+  background: var(--bg-card-alt);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--pink);
+}
+
+.pet-log-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.pet-log-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pet-log-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s;
+}
+
+.pet-log-item:hover {
+  border-color: var(--border);
+}
+
+.pet-log-item.acked {
+  opacity: 0.55;
+}
+
+.pet-log-item-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pet-log-item-who {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.pet-log-item-when {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.pet-log-item-acked-at {
+  color: var(--green);
+}
+
+.pet-log-item-note {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
+  margin-top: 2px;
+}

@@ -114,6 +114,19 @@
   font-style: italic;
 }
 
+.pet-log-link {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  text-decoration: none;
+  margin-top: 4px;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+.pet-log-link:hover {
+  opacity: 1;
+  color: var(--pink);
+}
+
 /* Keyframes */
 
 @keyframes pet-idle-breathe {
