@@ -329,6 +329,54 @@ export default function Home() {
             </div>
           )}
 
+          {/* What needs you — the primary action feed.
+              Surfaces pupdates that genuinely block you on a decision
+              (plan to review, diff to look at, proposal to decide,
+              PR review request). Non-actionable pupdates stay out of
+              user-facing views — they live in agent timelines if the
+              user wants to dig in. Sits above Focus so the first thing
+              the user sees is what the pack needs from them. */}
+          <div className="home-card home-card-primary">
+            <div className="home-card-header">
+              <AlertCircle size={14} /> What needs you
+            </div>
+            {waitingItems.length > 0 ? (
+              <div className="waiting-list">
+                {waitingItems.map((p) => {
+                  const cta = waitingCta(p);
+                  const profile = p.metadata?.agent_id ? profilesById[p.metadata.agent_id] : null;
+                  const emoji = profile ? (AVATAR_EMOJI[profile.avatar] || "🐾") : "🐾";
+                  const name = profile?.display_name || p.source || "Agent";
+                  const go = (e) => {
+                    e.stopPropagation();
+                    if (cta.href) window.open(cta.href, "_blank", "noreferrer");
+                    else navigate(cta.to);
+                  };
+                  return (
+                    <div key={p.id} className={`waiting-item ${p.priority}`} onClick={go}>
+                      <span className="waiting-avatar">{emoji}</span>
+                      <div className="waiting-text">
+                        <div className="waiting-line">
+                          <span className="waiting-name">{name}</span>
+                          <span className="waiting-summary">{waitingSummary(p)}</span>
+                        </div>
+                        <div className="waiting-sub">
+                          <span className="waiting-title">{p.title}</span>
+                          <span className="waiting-time">{relativeTime(p.timestamp)}</span>
+                        </div>
+                      </div>
+                      <button className="btn btn-sm btn-primary waiting-cta" onClick={go}>
+                        {cta.label}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="focus-empty">Nothing waiting — the pack is self-sufficient today 🌱</div>
+            )}
+          </div>
+
           {/* Focus Card */}
           <div className="home-card home-focus-card">
             <div className="home-card-header">
@@ -437,48 +485,6 @@ export default function Home() {
                   {briefLoading ? "Brewing... ☕" : "Start the morning brief"}
                 </button>
               </div>
-            )}
-          </div>
-
-          {/* Also Waiting */}
-          <div className="home-card">
-            <div className="home-card-header">
-              <AlertCircle size={14} /> A few more things
-            </div>
-            {waitingItems.length > 0 ? (
-              <div className="waiting-list">
-                {waitingItems.map((p) => {
-                  const cta = waitingCta(p);
-                  const profile = p.metadata?.agent_id ? profilesById[p.metadata.agent_id] : null;
-                  const emoji = profile ? (AVATAR_EMOJI[profile.avatar] || "🐾") : "🐾";
-                  const name = profile?.display_name || p.source || "Agent";
-                  const go = (e) => {
-                    e.stopPropagation();
-                    if (cta.href) window.open(cta.href, "_blank", "noreferrer");
-                    else navigate(cta.to);
-                  };
-                  return (
-                    <div key={p.id} className={`waiting-item ${p.priority}`} onClick={go}>
-                      <span className="waiting-avatar">{emoji}</span>
-                      <div className="waiting-text">
-                        <div className="waiting-line">
-                          <span className="waiting-name">{name}</span>
-                          <span className="waiting-summary">{waitingSummary(p)}</span>
-                        </div>
-                        <div className="waiting-sub">
-                          <span className="waiting-title">{p.title}</span>
-                          <span className="waiting-time">{relativeTime(p.timestamp)}</span>
-                        </div>
-                      </div>
-                      <button className="btn btn-sm btn-primary waiting-cta" onClick={go}>
-                        {cta.label}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="focus-empty">Nothing waiting — the pack is self-sufficient today 🌱</div>
             )}
           </div>
         </div>
