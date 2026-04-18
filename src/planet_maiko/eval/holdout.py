@@ -67,14 +67,7 @@ class HoldoutPR:
     notes: str = ""
 
 
-def _parse_pr_url(url):
-    m = re.match(r"https?://[^/]+/([^/]+/[^/]+)/pull/(\d+)", url)
-    if m:
-        return m.group(1), int(m.group(2))
-    m = re.match(r"([^/]+/[^/]+)#(\d+)", url)
-    if m:
-        return m.group(1), int(m.group(2))
-    return None, None
+from planet_maiko.utils import parse_pr_url as _parse_pr_url  # noqa: E402
 
 
 def load_fixture(fixture_path):

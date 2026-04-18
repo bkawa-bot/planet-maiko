@@ -1,6 +1,28 @@
 """Utility functions for Planet Maiko."""
 
+import re
 from datetime import datetime, timezone, timedelta
+
+
+def parse_pr_url(url):
+    """Extract `(org/repo, pr_number)` from a GitHub PR reference.
+
+    Accepts the canonical URL form (any GitHub host), and the short
+    `org/repo#123` form. Returns `(None, None)` if neither matches.
+
+    Shared by the eval harness, CLI `maiko review --pr`, and the
+    training-data exclusion filter — these all used to keep their own
+    copy of the same regex pair.
+    """
+    if not url:
+        return None, None
+    m = re.match(r"https?://[^/]+/([^/]+/[^/]+)/pull/(\d+)", url)
+    if m:
+        return m.group(1), int(m.group(2))
+    m = re.match(r"([^/]+/[^/]+)#(\d+)", url)
+    if m:
+        return m.group(1), int(m.group(2))
+    return None, None
 
 
 def time_ago(dt):

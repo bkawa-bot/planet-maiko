@@ -244,7 +244,7 @@ export default function SetupWizard({ onComplete }) {
               <li><strong>Train it</strong> — Go to Training, pick a merged PR, and run a session</li>
             </ul>
             <button className="btn btn-primary" onClick={finishSetup} style={{ marginTop: 16 }}>
-              <Rocket size={14} /> Go to Dashboard
+              <Rocket size={14} /> Let's go
             </button>
           </div>
         )}

@@ -11,8 +11,7 @@ import AgentTimelineModal from "./AgentTimelineModal";
 
 /**
  * Active tab — pack awareness, queued tasks, ready-to-launch agents, live
- * activity, and the channel-log thread modal. Right sidebar shows the
- * leaderboard.
+ * activity, and the channel-log thread modal.
  *
  * Props:
  *   agents     — Agent[] from /api/agents (prepared/ready)

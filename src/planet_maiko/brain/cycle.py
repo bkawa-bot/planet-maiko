@@ -86,7 +86,7 @@ def _phase_auto_complete_reviews():
             db.session.commit()
         return {"completed": completed_count}
     except Exception as e:
-        logger.debug(f"[cycle] Review auto-complete skipped: {e}")
+        logger.warning(f"[cycle] Review auto-complete skipped: {e}")
         return {"completed": 0}
 
 
@@ -133,7 +133,7 @@ def _phase_awareness():
         resolution = resolve_conflicts(conflicts)
         return {"conflicts": len(conflicts), **resolution}
     except Exception as e:
-        logger.debug(f"[cycle] Awareness check skipped: {e}")
+        logger.warning(f"[cycle] Awareness check skipped: {e}")
         return {"conflicts": 0, "warnings_sent": 0}
 
 
@@ -145,7 +145,7 @@ def _phase_calendar_focus():
         recent = Pupdate.query.filter(Pupdate.brain_processed == False).all()  # noqa: E712
         return {"changed": check_calendar_focus(recent)}
     except Exception as e:
-        logger.debug(f"[cycle] Calendar focus check skipped: {e}")
+        logger.warning(f"[cycle] Calendar focus check skipped: {e}")
         return {"changed": False}
 
 
@@ -395,7 +395,7 @@ def _phase_unblock_tasks():
             logger.info(f"[cycle] Unblocked {unblocked} task(s)")
         return {"unblocked": unblocked}
     except Exception as e:
-        logger.debug(f"[cycle] Unblock phase skipped: {e}")
+        logger.warning(f"[cycle] Unblock phase skipped: {e}")
         return {"unblocked": 0}
 
 
@@ -478,7 +478,7 @@ def _phase_stuck_escalation():
             db.session.commit()
         return {"escalated": escalated, "auto_dismissed": dismissed}
     except Exception as e:
-        logger.debug(f"[cycle] Stuck escalation skipped: {e}")
+        logger.warning(f"[cycle] Stuck escalation skipped: {e}")
         return {"escalated": 0, "auto_dismissed": 0}
 
 

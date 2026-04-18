@@ -530,25 +530,7 @@ def cmd_review(args):
         print(f"Error: {result.get('error')}")
 
 
-def _parse_pr_url(url):
-    """Extract owner/repo and PR number from a GitHub PR URL.
-
-    Accepts:
-        https://github.com/Org/Repo/pull/123
-        https://github.example.com/Org/Repo/pull/123
-        Org/Repo#123
-    """
-    # Full URL form
-    m = re.match(r"https?://[^/]+/([^/]+/[^/]+)/pull/(\d+)", url)
-    if m:
-        return m.group(1), int(m.group(2))
-
-    # Short form: Org/Repo#123
-    m = re.match(r"([^/]+/[^/]+)#(\d+)", url)
-    if m:
-        return m.group(1), int(m.group(2))
-
-    return None, None
+from planet_maiko.utils import parse_pr_url as _parse_pr_url  # noqa: E402
 
 
 def _review_pr(args):
