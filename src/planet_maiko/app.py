@@ -138,6 +138,7 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.home_api import home_bp
     from planet_maiko.api.pack_api import pack_bp
     from planet_maiko.api.checks_api import checks_bp
+    from planet_maiko.api.pet_api import pet_bp
     app.register_blueprint(pupdates_bp, url_prefix="/api")
     app.register_blueprint(tasks_bp, url_prefix="/api")
     app.register_blueprint(projects_bp, url_prefix="/api")
@@ -162,6 +163,7 @@ def create_app(start_scheduler=False):
     app.register_blueprint(home_bp, url_prefix="/api")
     app.register_blueprint(pack_bp, url_prefix="/api")
     app.register_blueprint(checks_bp, url_prefix="/api")
+    app.register_blueprint(pet_bp, url_prefix="/api")
 
     # Load plugins (entry_points + ~/.maiko/plugins/)
     from planet_maiko.plugins.loader import load_plugins
@@ -182,6 +184,7 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.diff_comment import DiffComment  # noqa: F401
         from planet_maiko.models.insight import Insight  # noqa: F401
         from planet_maiko.models.external_session import ExternalSession  # noqa: F401
+        from planet_maiko.models.pet import Pet  # noqa: F401
         db.create_all()
 
         # Schema migrations for existing DBs (SQLite ALTER TABLE is safe)
