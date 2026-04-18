@@ -96,6 +96,14 @@ DEFAULT_CONFIG = {
             "dry_run": False,
             "daily_budget": 5,
         },
+        # Propagates ENABLE_PROMPT_CACHING_1H=1 to Claude Code subprocesses.
+        # Anthropic shipped the 1-hour cache TTL on Apr 14 2026 — default
+        # cache is 5m. Agent sessions here typically span 5-60 minutes and
+        # re-read the same preamble (role protocol + TASK.md + skill
+        # prompt), so 1h caching usually wins on cost after the second
+        # read. Leave False if you're on a metered plan and want to
+        # measure before committing.
+        "prompt_cache_1h": False,
     },
     "scene": {
         "latitude": None,   # e.g. 37.77 for San Francisco

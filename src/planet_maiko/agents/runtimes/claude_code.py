@@ -10,6 +10,7 @@ For coding agents, we use full interactive sessions in git worktrees.
 
 import json
 import logging
+import os as _os
 import shutil
 import subprocess
 
@@ -110,6 +111,28 @@ class ClaudeCodeRuntime(AgentRuntime):
         except Exception:
             return "medium"
 
+    def _build_subprocess_env(self):
+        """Env for the claude subprocess. Inherits the parent's env and
+        adds ENABLE_PROMPT_CACHING_1H=1 when brain.prompt_cache_1h is on
+        — Anthropic's Apr 14 2026 change lets you opt long-running
+        sessions into a 1-hour cache TTL instead of the default 5m,
+        which usually wins on cost for multi-turn agent sessions.
+
+        Returns None when there's nothing to override (subprocess.run
+        treats None as "inherit"), so the happy path does not construct
+        a dict per call.
+        """
+        try:
+            from planet_maiko.config import load_config
+            brain = load_config().get("brain", {})
+        except Exception:
+            return None
+        if not brain.get("prompt_cache_1h"):
+            return None
+        env = dict(_os.environ)
+        env["ENABLE_PROMPT_CACHING_1H"] = "1"
+        return env
+
     def send(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None, session_id=None, skip_permissions=False, permission_mode=None):
         """Send a prompt to claude CLI in print mode.
 
@@ -192,6 +215,7 @@ class ClaudeCodeRuntime(AgentRuntime):
                 errors="replace",
                 timeout=timeout,
                 cwd=working_dir,
+                env=self._build_subprocess_env(),
             )
 
             if result.returncode != 0:
