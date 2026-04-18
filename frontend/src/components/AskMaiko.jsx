@@ -4,15 +4,39 @@ import { api } from "../api/client";
 import { MessageCircle, Send, X, Loader, ChevronDown, ChevronUp, ArrowRight } from "lucide-react";
 import "./AskMaiko.css";
 
+// Persist dispatch history for the tab's lifetime — closing the panel
+// or nav'ing between pages shouldn't erase "what did the pack say 20
+// seconds ago". sessionStorage (not localStorage) so a new tab starts
+// fresh.
+const TURNS_KEY = "ask-pack-turns:v1";
+
+function loadTurns() {
+  try {
+    const raw = sessionStorage.getItem(TURNS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function AskMaiko() {
   const [open, setOpen] = useState(false);
-  const [turns, setTurns] = useState([]);
+  const [turns, setTurns] = useState(loadTurns);
   const [input, setInput] = useState("");
   const [context, setContext] = useState("");
   const [showContext, setShowContext] = useState(false);
   const [loading, setLoading] = useState(false);
   const messagesEnd = useRef(null);
   const inputRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(TURNS_KEY, JSON.stringify(turns.slice(-20)));
+    } catch {
+      /* quota exceeded or private mode — drop silently, the ephemeral
+         state in memory is still correct. */
+    }
+  }, [turns]);
 
   useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
