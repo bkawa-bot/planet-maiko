@@ -196,10 +196,19 @@ def _harvest_pr_comments(repo, pr_number):
     exactly what the LoRA trains on. Skips comments without a
     diff_hunk (issue-level conversation comments) since those don't
     map to a specific code location cleanly.
+
+    Dedup: every comment that's already been harvested for this
+    (repo, text, file_path) tuple is skipped. Without this guard,
+    every new comment on an open PR would re-harvest ALL prior
+    comments as fresh signals — the pupdate's source_id changes
+    whenever any comment lands, so each fresh pupdate triggers a
+    full re-scrape of the PR. That was the "same signals over and
+    over" bug users hit.
     """
     import subprocess
     import json as _json
     from planet_maiko.brain.learning.feedback import add_corrective_violation
+    from planet_maiko.models.signal import Signal
 
     result = subprocess.run(
         ["gh", "api", f"repos/{repo}/pulls/{pr_number}/comments"],
@@ -212,11 +221,29 @@ def _harvest_pr_comments(repo, pr_number):
         comments = _json.loads(result.stdout)
     except Exception:
         return
+
+    # Pull the set of (text, file_path) tuples we've already seen for
+    # this repo from signals sourced by the LoRA-correction pipeline.
+    # This is the same path add_corrective_violation writes into, so
+    # matching here catches any previously-harvested comment. Cheap:
+    # the index on repo + source_type keeps the scan tight.
+    existing = {
+        ((s.text or "").strip(), (s.file_path or ""))
+        for s in Signal.query
+        .filter_by(repo=repo, source_type="lora_correction")
+        .all()
+    }
+
     for c in comments:
         body = (c.get("body") or "").strip()
         diff_hunk = c.get("diff_hunk")
         if not body or not diff_hunk:
             continue
+
+        key = (body, c.get("path") or "")
+        if key in existing:
+            continue
+
         try:
             add_corrective_violation(
                 code=diff_hunk,
@@ -225,6 +252,9 @@ def _harvest_pr_comments(repo, pr_number):
                 file_path=c.get("path"),
                 repo=repo,
             )
+            # Add to the local set so later comments in the same batch
+            # that happen to be identical don't double up either.
+            existing.add(key)
         except Exception as e:
             logger.debug(f"[harvest] Failed recording PR comment {c.get('id')}: {e}")
 

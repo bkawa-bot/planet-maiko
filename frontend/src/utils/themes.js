@@ -12,6 +12,27 @@ const WORLD_SVG = {
   sunset: "/world-sunset.svg",
 };
 
+// When a custom theme doesn't set `topbar_gradient` / `pane_bg` (common for
+// themes saved before those keys were added to the schema), fall back to
+// the gradient/alpha matching the theme's declared world_background
+// instead of inheriting from :root — which is the dark/night default and
+// made every custom theme look like a night theme regardless of its vibe.
+// Kept in sync by hand with the built-in theme definitions in index.css.
+const WORLD_TOPBAR_GRADIENT = {
+  night:     "linear-gradient(135deg, #0a1628 0%, #162244 50%, #1a3a48 100%)",
+  day:       "linear-gradient(135deg, #87CEEB 0%, #B0D8E8 50%, #B8D8B8 100%)",
+  morning:   "linear-gradient(135deg, #F5C6AA 0%, #F0D8C0 50%, #F8E8D0 100%)",
+  afternoon: "linear-gradient(135deg, #E8C8A0 0%, #E0A880 50%, #D08870 100%)",
+  sunset:    "linear-gradient(135deg, #1A1A2E 0%, #2D2040 35%, #6A3058 70%, #A04070 100%)",
+};
+const WORLD_PANE_BG = {
+  night:     "rgba(45, 54, 60, 0.55)",
+  day:       "rgba(242, 248, 242, 0.78)",
+  morning:   "rgba(250, 246, 238, 0.80)",
+  afternoon: "rgba(248, 232, 208, 0.80)",
+  sunset:    "rgba(58, 34, 72, 0.68)",
+};
+
 // snake_case key -> kebab CSS var name
 const cssVarName = (key) => `--${key.replace(/_/g, "-")}`;
 
@@ -25,10 +46,25 @@ function escapeSelector(id) {
 
 export function themeToCss(theme) {
   const selector = `[data-theme="custom:${escapeSelector(theme.id)}"]`;
-  const varLines = Object.entries(theme.colors || {})
+  const colors = theme.colors || {};
+  const world = theme.world_background;
+
+  // Back-compat: themes saved before topbar_gradient / pane_bg were
+  // part of the schema inherit the world-appropriate defaults instead
+  // of :root's night values (which made every theme look like a dark
+  // theme regardless of its declared vibe).
+  const effectiveColors = { ...colors };
+  if (!effectiveColors.topbar_gradient && WORLD_TOPBAR_GRADIENT[world]) {
+    effectiveColors.topbar_gradient = WORLD_TOPBAR_GRADIENT[world];
+  }
+  if (!effectiveColors.pane_bg && WORLD_PANE_BG[world]) {
+    effectiveColors.pane_bg = WORLD_PANE_BG[world];
+  }
+
+  const varLines = Object.entries(effectiveColors)
     .map(([k, v]) => `  ${cssVarName(k)}: ${v};`)
     .join("\n");
-  const world = theme.world_background;
+
   let worldRule = "";
   if (world === "none") {
     worldRule = `html${selector} body { background-image: none; }`;
