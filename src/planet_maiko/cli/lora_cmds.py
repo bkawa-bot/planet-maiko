@@ -315,20 +315,26 @@ def cmd_eval_prs(args):
 
     report = holdout.format_report(result)
 
-    # Write the report to data_dir so it survives. Also print to stdout
-    # so it's immediately visible.
+    # Write the report to data_dir so it survives. Also write a JSON
+    # sibling so metric-tracking scripts can diff runs without parsing
+    # markdown. Print to stdout so it's immediately visible.
+    import json as _json
     reports_dir = _os.path.join(data_dir(), "eval-reports")
     _os.makedirs(reports_dir, exist_ok=True)
     from datetime import datetime as _dt
     ts = _dt.now().strftime("%Y%m%d-%H%M%S")
     out_path = args.output or _os.path.join(reports_dir, f"holdout-{ts}.md")
+    json_path = _os.path.splitext(out_path)[0] + ".json"
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(report)
+    with open(json_path, "w", encoding="utf-8") as f:
+        _json.dump(holdout.to_json(result), f, indent=2, ensure_ascii=False)
 
     print()
     print(report)
     print()
     print(f"Report saved: {out_path}")
+    print(f"JSON saved:   {json_path}")
 
 
 def cmd_eval(args):

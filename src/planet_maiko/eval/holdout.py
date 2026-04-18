@@ -267,6 +267,12 @@ class PRScore:
     semantic_hits_without: set = field(default_factory=set)
     file_count: int = 0
     errors: int = 0
+    # Per-file raw model output so the report can tell you WHY a
+    # file counts as a miss — was it PASS? A flag on the wrong
+    # thing? Same stuff the judge already sees, but kept on the
+    # score so it ends up in the JSON artifact too.
+    model_outputs_with: dict = field(default_factory=dict)
+    model_outputs_without: dict = field(default_factory=dict)
 
     def hits_with(self):
         return self.human_files & self.model_flagged_with
@@ -401,13 +407,16 @@ def score_pr(pr, ground_truth, with_results, without_results=None,
     for file_path, result in with_results.items():
         if result["verdict"] == "ERROR":
             s.errors += 1
+            s.model_outputs_with[file_path] = f"ERROR: {result.get('raw', '')[:200]}"
             continue
         s.file_count += 1
+        s.model_outputs_with[file_path] = result.get("raw", "")
         if result["verdict"] == "FLAG":
             s.model_flagged_with.add(file_path)
 
     if without_results is not None:
         for file_path, result in without_results.items():
+            s.model_outputs_without[file_path] = result.get("raw", "")
             if result["verdict"] == "FLAG":
                 s.model_flagged_without.add(file_path)
 
@@ -523,6 +532,75 @@ def run(fixture_path, adapter_path, compare_baseline=False, progress=None,
 
 def _pct(x):
     return "—" if x is None else f"{x:.0%}"
+
+
+def to_json(result):
+    """Machine-readable dump of a run() result.
+
+    Written alongside the markdown so future runs can diff against
+    prior ones without re-parsing markdown. Sets become sorted lists,
+    PRScore dataclasses get flattened into dicts.
+    """
+    scores = []
+    for s in result.get("scores") or []:
+        scores.append({
+            "pr": {
+                "url": s.pr.url,
+                "repo": s.pr.repo,
+                "number": s.pr.number,
+                "notes": s.pr.notes,
+            },
+            "human_files": sorted(s.human_files),
+            "model_flagged_with": sorted(s.model_flagged_with),
+            "model_flagged_without": sorted(s.model_flagged_without),
+            "semantic_hits_with": sorted(s.semantic_hits_with),
+            "semantic_hits_without": sorted(s.semantic_hits_without),
+            "file_count": s.file_count,
+            "errors": s.errors,
+            "model_outputs_with": s.model_outputs_with,
+            "model_outputs_without": s.model_outputs_without,
+            "recall_loose_with": s.recall(with_adapter=True, strict=False),
+            "recall_loose_without": s.recall(with_adapter=False, strict=False),
+            "recall_strict_with": s.recall(with_adapter=True, strict=True),
+            "recall_strict_without": s.recall(with_adapter=False, strict=True),
+            "precision_with": s.precision(True),
+            "precision_without": s.precision(False),
+        })
+    # Micro-averaged aggregates — same as what the markdown shows but
+    # spelled out here so comparison scripts don't have to recompute.
+    tot_h = sum(len(s.human_files) for s in result.get("scores") or [])
+    tot_hits_w = sum(len(s.hits_with()) for s in result.get("scores") or [])
+    tot_sem_w = sum(len(s.semantic_hits_with) for s in result.get("scores") or [])
+    tot_flagged_w = sum(len(s.model_flagged_with) for s in result.get("scores") or [])
+    agg = {
+        "recall_loose_with": (tot_hits_w / tot_h) if tot_h else None,
+        "recall_strict_with": (tot_sem_w / tot_h) if tot_h else None,
+        "precision_with": (tot_hits_w / tot_flagged_w) if tot_flagged_w else None,
+        "human_files_total": tot_h,
+        "model_flagged_total": tot_flagged_w,
+    }
+    if result.get("compare_baseline"):
+        tot_hits_wo = sum(len(s.hits_without()) for s in result.get("scores") or [])
+        tot_sem_wo = sum(len(s.semantic_hits_without) for s in result.get("scores") or [])
+        tot_flagged_wo = sum(len(s.model_flagged_without) for s in result.get("scores") or [])
+        agg.update({
+            "recall_loose_without": (tot_hits_wo / tot_h) if tot_h else None,
+            "recall_strict_without": (tot_sem_wo / tot_h) if tot_h else None,
+            "precision_without": (tot_hits_wo / tot_flagged_wo) if tot_flagged_wo else None,
+            "model_flagged_baseline_total": tot_flagged_wo,
+        })
+    return {
+        "fixture_name": result.get("fixture_name"),
+        "fixture_description": result.get("fixture_description"),
+        "adapter_path": result.get("adapter_path"),
+        "compare_baseline": result.get("compare_baseline"),
+        "match_mode": result.get("match_mode"),
+        "ground_truth_cached_at": result.get("ground_truth_cached_at"),
+        "generated_at": result.get("generated_at"),
+        "aggregate": agg,
+        "pr_scores": scores,
+        "judge_detail": result.get("judge_detail") or {},
+    }
 
 
 def format_report(result):
@@ -651,7 +729,11 @@ def format_report(result):
         if hits:
             lines.append(f"- Hits: `{', '.join(hits)}`")
         if misses:
-            lines.append(f"- Missed: `{', '.join(misses)}`")
+            lines.append("- Missed:")
+            for mpath in misses:
+                raw = (s.model_outputs_with.get(mpath) or "").replace("\n", " ")
+                short = raw[:140] + ("…" if len(raw) > 140 else "") if raw else "(not reviewed — no diff for this file)"
+                lines.append(f"    - `{mpath}` → model said: _{short}_")
         if extras:
             lines.append(f"- Extras: `{', '.join(extras)}`")
 
