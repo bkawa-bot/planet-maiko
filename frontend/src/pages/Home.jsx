@@ -9,7 +9,7 @@ import { formatTime, formatClock, relativeTime } from "../utils/dates";
 import {
   CheckSquare, Inbox as InboxIcon, Brain, Calendar,
   AlertCircle, Palette, Video, Sunrise, Clock,
-  ExternalLink, ChevronRight, ChevronDown, Play, Pin,
+  ExternalLink, ChevronRight, ChevronDown, Play, Pin, FileText,
   Sparkles, X, Zap, Loader,
 } from "lucide-react";
 import "./Home.css";
@@ -56,6 +56,8 @@ const WAITING_TYPES = new Set([
   "agent_proposal",
   "pr_review_requested",
   "pr_changes_requested",
+  "pr_review_complete",
+  "investigation_complete",
 ]);
 
 const PRIORITY_RANK = { urgent: 0, high: 1, normal: 2, low: 3 };
@@ -64,6 +66,21 @@ function waitingCta(p) {
   const taskId = p.metadata?.task_id;
   if (p.type === "agent_plan_for_approval" && taskId) {
     return { label: "Review plan", to: `/tasks/${taskId}/plan` };
+  }
+  // Review / investigation results are markdown artifacts, not diffs —
+  // open an inline modal rather than sending the user to the empty
+  // /tasks/<id>/review page (read-only agents don't produce diffs).
+  const tags = p.tags || [];
+  const isReviewLike =
+    p.type === "pr_review_complete" ||
+    p.type === "investigation_complete" ||
+    (p.type === "agent_ready_for_review" &&
+      (tags.includes("review") || tags.includes("investigation") || tags.includes("cartographer")));
+  if (isReviewLike) {
+    return {
+      label: p.type === "investigation_complete" ? "Read report" : "Read review",
+      artifact: true,
+    };
   }
   if (p.type === "agent_ready_for_review" && taskId) {
     return { label: "Review diff", to: `/tasks/${taskId}/review` };
@@ -89,6 +106,8 @@ function waitingSummary(p) {
   if (p.type === "agent_proposal") return "proposed something for you";
   if (p.type === "pr_review_requested") return "is asking for a PR review";
   if (p.type === "pr_changes_requested") return "requested changes on your PR";
+  if (p.type === "pr_review_complete") return "finished a PR review for you";
+  if (p.type === "investigation_complete") return "finished an investigation";
   return p.title;
 }
 
@@ -125,6 +144,7 @@ export default function Home() {
   const [showBrief, setShowBrief] = useState(false);
   const [homeConfig, setHomeConfig] = useState(null);
   const [expandedFocusTask, setExpandedFocusTask] = useState(null);
+  const [artifactModal, setArtifactModal] = useState(null);
   const [regenOpen, setRegenOpen] = useState(false);
   const [regenInput, setRegenInput] = useState("");
   const [regenLoading, setRegenLoading] = useState(false);
@@ -240,6 +260,16 @@ export default function Home() {
     }
   };
 
+  const handleDismissWaiting = async (e, id) => {
+    e.stopPropagation();
+    try {
+      await api.dismissPupdate(id);
+      setWaitingItems((prev) => prev.filter((p) => p.id !== id));
+    } catch (err) {
+      showToast("Couldn't dismiss", "high");
+    }
+  };
+
   const runMorningBrief = async () => {
     setBriefLoading(true);
     showToast("Morning brief is brewing... ☕", "normal");
@@ -349,6 +379,7 @@ export default function Home() {
                   const name = profile?.display_name || p.source || "Agent";
                   const go = (e) => {
                     e.stopPropagation();
+                    if (cta.artifact) { setArtifactModal(p); return; }
                     if (cta.href) window.open(cta.href, "_blank", "noreferrer");
                     else navigate(cta.to);
                   };
@@ -367,6 +398,14 @@ export default function Home() {
                       </div>
                       <button className="btn btn-sm btn-primary waiting-cta" onClick={go}>
                         {cta.label}
+                      </button>
+                      <button
+                        className="btn-ghost waiting-dismiss"
+                        onClick={(e) => handleDismissWaiting(e, p.id)}
+                        title="Dismiss"
+                        aria-label="Dismiss"
+                      >
+                        <X size={12} />
                       </button>
                     </div>
                   );
@@ -591,6 +630,30 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Artifact modal — renders the body of review / investigation /
+          report pupdates so the user can read the agent's output inline
+          without leaving Home. Reuses the morning-brief modal chrome. */}
+      {artifactModal && (
+        <div className="modal-overlay" onClick={() => setArtifactModal(null)}>
+          <div className="brief-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="brief-modal-header">
+              <FileText size={18} />
+              <span>{artifactModal.title || "Result"}</span>
+              <button className="btn btn-sm" onClick={() => setArtifactModal(null)} style={{ marginLeft: "auto" }}>Close</button>
+            </div>
+            <div className="brief-modal-body">
+              {artifactModal.body ? (
+                <div className="brief-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(artifactModal.body) }} />
+              ) : (
+                <div className="focus-empty">
+                  Nothing attached yet — {profilesById[artifactModal.metadata?.agent_id]?.display_name || "the agent"} hasn't written up a result.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Morning Brief Modal */}
       {showBrief && morningBrief && (
