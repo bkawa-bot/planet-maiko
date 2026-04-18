@@ -193,7 +193,7 @@ export default function Inbox() {
               fetchPupdates();
             }}
           >
-            Dismiss All
+            Dismiss all
           </button>
         )}
       </div>
@@ -204,7 +204,7 @@ export default function Inbox() {
             <div className="empty-state">
               <InboxIcon size={36} className="empty-icon" />
               <div className="empty-title">Nothing from Maiko yet</div>
-              <div className="empty-sub">Maiko posts brainstorms, approvals, and investigations here as they come up.</div>
+              <div className="empty-sub">Maiko chimes in here with brainstorms, approvals, and investigations as they come up.</div>
             </div>
           ) : (
             <div className="card-list card-list-container">
@@ -234,8 +234,8 @@ export default function Inbox() {
       ) : filtered.length === 0 ? (
         <div className="empty-state">
           <InboxIcon size={36} className="empty-icon" />
-          <div className="empty-title">Nothing here</div>
-          <div className="empty-sub">All clear in this category!</div>
+          <div className="empty-title">All clear</div>
+          <div className="empty-sub">Nothing in this view right now 🌱</div>
         </div>
       ) : (
         <div className="card-list card-list-container">
