@@ -1,8 +1,15 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
-import { MessageCircle, Send, X, Loader, ChevronDown, ChevronUp, ArrowRight } from "lucide-react";
+import { MessageCircle, Send, X, Loader, ChevronDown, ChevronUp, ArrowRight, Leaf } from "lucide-react";
 import "./AskMaiko.css";
+
+// Soft cap on how many agents should already be running before we
+// ask the user "sure about another?" before dispatching. Not a hard
+// block — friction, not prevention. Higher than the typical single-
+// thread workflow (~2 running at once) so the pause only appears
+// when there's real parallel load.
+const PAUSE_FIRST_THRESHOLD = 3;
 
 // Persist dispatch history for the tab's lifetime — closing the panel
 // or nav'ing between pages shouldn't erase "what did the pack say 20
@@ -27,6 +34,10 @@ export default function AskMaiko() {
   const [nonGoals, setNonGoals] = useState("");
   const [showDetails, setShowDetails] = useState(false);
   const [loading, setLoading] = useState(false);
+  // Pause-first state: when a send would push past the active-agent
+  // threshold, we stash the intended payload here and render a
+  // confirmation step instead of dispatching immediately.
+  const [pendingSend, setPendingSend] = useState(null);
   const messagesEnd = useRef(null);
   const inputRef = useRef(null);
 
@@ -54,12 +65,7 @@ export default function AskMaiko() {
     return () => window.removeEventListener("open-ask-pack", onOpen);
   }, []);
 
-  const send = async () => {
-    const ask = input.trim();
-    if (!ask || loading) return;
-
-    const ctx = context.trim();
-    const ng = nonGoals.trim();
+  const dispatchNow = async (ask, ctx, ng) => {
     setTurns((prev) => [...prev, { kind: "user", text: ask, context: ctx, nonGoals: ng }]);
     setInput("");
     setContext("");
@@ -87,6 +93,42 @@ export default function AskMaiko() {
       setTurns((prev) => [...prev, { kind: "error", text: err.message }]);
     }
     setLoading(false);
+  };
+
+  const send = async () => {
+    const ask = input.trim();
+    if (!ask || loading || pendingSend) return;
+
+    const ctx = context.trim();
+    const ng = nonGoals.trim();
+
+    // Pause-first: if enough agents are already running, don't
+    // dispatch blindly — show a nudge and let the user confirm.
+    // Errors here fall through to dispatching (the count check is
+    // best-effort; never block a send on a lookup failure).
+    try {
+      const tasks = await api.getTasks({ status: "in_progress" });
+      const active = (tasks || []).filter((t) => t.assigned_agent_id).length;
+      if (active >= PAUSE_FIRST_THRESHOLD) {
+        setPendingSend({ ask, ctx, ng, active });
+        return;
+      }
+    } catch {
+      // No-op; fall through to dispatch.
+    }
+
+    dispatchNow(ask, ctx, ng);
+  };
+
+  const confirmPending = () => {
+    if (!pendingSend) return;
+    const { ask, ctx, ng } = pendingSend;
+    setPendingSend(null);
+    dispatchNow(ask, ctx, ng);
+  };
+
+  const cancelPending = () => {
+    setPendingSend(null);
   };
 
   const handleKeyDown = (e) => {
@@ -132,6 +174,23 @@ export default function AskMaiko() {
                 </div>
               </div>
             )}
+
+            {pendingSend && (
+              <div className="ask-pack-pause">
+                <div className="ask-pack-pause-head">
+                  <Leaf size={12} />
+                  <span>{pendingSend.active} agents already working</span>
+                </div>
+                <div className="ask-pack-pause-body">
+                  A lot's already in motion. Want to hold this one until your next check-in, or send it now?
+                </div>
+                <div className="ask-pack-pause-actions">
+                  <button className="ask-pack-pause-secondary" onClick={cancelPending}>Hold it</button>
+                  <button className="ask-pack-pause-primary" onClick={confirmPending}>Send anyway</button>
+                </div>
+              </div>
+            )}
+
             <div ref={messagesEnd} />
           </div>
 

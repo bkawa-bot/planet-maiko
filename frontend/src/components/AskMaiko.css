@@ -333,3 +333,59 @@
 .ask-pack-open-link:hover {
   color: var(--pink);
 }
+
+/* Pause-first nudge — when N+ agents are already running, we show
+   this card in the message stream instead of dispatching immediately.
+   Friction aligned with wellbeing, not a hard block. Soft lavender so
+   it doesn't read as an error. */
+.ask-pack-pause {
+  align-self: stretch;
+  background: var(--lavender_faint, var(--bg-hover));
+  border: 1px solid var(--lavender, var(--border-subtle));
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ask-pack-pause-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--lavender, var(--text-muted));
+}
+.ask-pack-pause-body {
+  font-size: 12.5px;
+  color: var(--text);
+  line-height: 1.45;
+}
+.ask-pack-pause-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.ask-pack-pause-primary,
+.ask-pack-pause-secondary {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.ask-pack-pause-secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.ask-pack-pause-secondary:hover { color: var(--text); border-color: var(--border); }
+.ask-pack-pause-primary {
+  background: var(--pink);
+  color: var(--bg);
+  border: 1px solid var(--pink);
+}
+.ask-pack-pause-primary:hover { opacity: 0.85; }
