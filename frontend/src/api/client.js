@@ -323,6 +323,13 @@ export const api = {
   // Chat
   chat: (message) => request("/chat", { method: "POST", body: JSON.stringify({ message }) }),
 
+  // Ask the Pack — natural-language dispatcher that picks an agent and launches them
+  dispatchPack: (request_text, context) =>
+    request("/pack/dispatch", {
+      method: "POST",
+      body: JSON.stringify({ request: request_text, context: context || "" }),
+    }),
+
   // Agent profiles
   getProfiles: (params = {}) => {
     const query = new URLSearchParams(params).toString();
