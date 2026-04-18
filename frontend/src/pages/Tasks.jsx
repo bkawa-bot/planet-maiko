@@ -9,7 +9,7 @@ import {
   Play, X, Download, Sparkles, Trash2, Pencil, Brain,
 } from "lucide-react";
 import "./Tasks.css";
-import "./Inbox.css";
+import "./cards.css";
 
 export default function Tasks() {
   const [tasks, setTasks] = useState([]);

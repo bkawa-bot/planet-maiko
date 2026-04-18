@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import "./Home.css";
 import "./Tasks.css";
-import "./Inbox.css";
+import "./cards.css";
 
 // Home polls a lot (scene, pupdates, tasks×2, projects, focus, brain,
 // schedule, config) — was 15s, which meant ~9 backend hits every 15s
