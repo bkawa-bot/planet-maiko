@@ -1,0 +1,419 @@
+"""PR-level holdout evaluation for trained LoRA adapters.
+
+Answers "does the trained model flag the same things a human reviewer
+did?" on a locked set of real PRs.
+
+The per-PR flow:
+
+  1. Pull the PR's diff via `gh pr diff` and split it per-file.
+  2. Pull the human review comments (inline + review-body) and group
+     them by file. These are the ground truth.
+  3. Run each file's diff through `review_code(adapter_path=...)`. The
+     model emits "PASS" or "VIOLATION: ..." — we collect the files it
+     flagged.
+  4. Score at the file level: a PR file is a "hit" if humans commented
+     on it AND the model flagged it; a "miss" if humans commented but
+     the model said PASS; an "extra" if the model flagged a file with
+     no human comments.
+
+Recall (hits / human-flagged files) is the headline — "of the issues
+humans cared about, how many did the model surface?". Precision is
+reported too but takes a back seat: the model flagging something
+humans didn't isn't necessarily wrong (they might have missed it),
+and punishing the model for being conservative would push training in
+the wrong direction.
+
+Baseline mode runs the same PRs without the adapter (base model only)
+so the report can say "adapter adds +12% recall, -3% precision" —
+answers "is training actually helping?" rather than just "how does
+the trained model score?".
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import re
+import subprocess
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Optional
+
+from planet_maiko.brain.learning.training_data import (
+    _get_review_comments,
+    _get_review_bodies,
+    _split_diff_by_file,
+    _is_approval_comment,
+)
+
+logger = logging.getLogger(__name__)
+
+_SKIP_EXTENSIONS = {
+    ".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".lock",
+    ".css", ".svg", ".png", ".jpg", ".gif", ".xml",
+}
+
+
+# ---------------------------------------------------------------------------
+# Fixture loading
+# ---------------------------------------------------------------------------
+
+@dataclass
+class HoldoutPR:
+    url: str
+    repo: str
+    number: int
+    notes: str = ""
+
+
+def _parse_pr_url(url):
+    m = re.match(r"https?://[^/]+/([^/]+/[^/]+)/pull/(\d+)", url)
+    if m:
+        return m.group(1), int(m.group(2))
+    m = re.match(r"([^/]+/[^/]+)#(\d+)", url)
+    if m:
+        return m.group(1), int(m.group(2))
+    return None, None
+
+
+def load_fixture(fixture_path):
+    """Parse a fixture file into HoldoutPR records.
+
+    Fixture shape:
+
+        {
+          "name": "pr-review-v1",
+          "description": "...",
+          "prs": [
+            {"url": "https://...", "notes": "..."},
+            ...
+          ]
+        }
+    """
+    with open(fixture_path, encoding="utf-8") as f:
+        data = json.load(f)
+    prs = []
+    for entry in data.get("prs") or []:
+        url = (entry.get("url") or "").strip()
+        if not url:
+            continue
+        repo, number = _parse_pr_url(url)
+        if not repo or not number:
+            logger.warning(f"[eval] Skipping unparseable PR: {url!r}")
+            continue
+        prs.append(HoldoutPR(url=url, repo=repo, number=number, notes=entry.get("notes", "")))
+    return {
+        "name": data.get("name") or os.path.basename(fixture_path),
+        "description": data.get("description", ""),
+        "prs": prs,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Ground truth
+# ---------------------------------------------------------------------------
+
+def fetch_ground_truth(pr: HoldoutPR):
+    """Fetch human review comments for a PR, grouped by file path.
+
+    Returns `{file_path: [comment_text, ...]}`. Review bodies (the
+    overall review comment with approve/request changes) are attached
+    to every file in the PR's diff — there's no path info on a review
+    body, but humans write them when they have concerns about the PR
+    as a whole, so counting them per-file is the honest default.
+    """
+    inline = _get_review_comments(pr.repo, pr.number) or []
+    by_file = {}
+    for c in inline:
+        body = (c.get("body") or "").strip()
+        path = c.get("path") or ""
+        if not path or not body or _is_approval_comment(body) or len(body) < 15:
+            continue
+        by_file.setdefault(path, []).append(body)
+
+    # Review-level bodies don't carry file paths, so record them under
+    # a sentinel key. The scorer counts them as "PR-level concerns"
+    # that match any file flag.
+    review_bodies = _get_review_bodies(pr.repo, pr.number) or []
+    if review_bodies:
+        by_file.setdefault("__review_body__", []).extend(review_bodies)
+
+    return by_file
+
+
+def fetch_pr_files(pr: HoldoutPR):
+    """Fetch per-file diffs for a PR. Returns `[(file_path, diff), ...]`
+    filtered to files the model might reasonably review (no .md, .json,
+    binaries)."""
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "diff", str(pr.number), "--repo", pr.repo],
+            capture_output=True, text=True, timeout=60,
+            encoding="utf-8", errors="replace",
+        )
+    except Exception as e:
+        logger.warning(f"[eval] gh pr diff failed for {pr.url}: {e}")
+        return []
+    if result.returncode != 0:
+        logger.warning(f"[eval] gh pr diff non-zero for {pr.url}: {result.stderr.strip()}")
+        return []
+
+    files = []
+    for file_path, hunk in _split_diff_by_file(result.stdout):
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext in _SKIP_EXTENSIONS:
+            continue
+        if len(hunk) < 30:
+            continue
+        files.append((file_path, hunk))
+    return files
+
+
+# ---------------------------------------------------------------------------
+# Inference
+# ---------------------------------------------------------------------------
+
+def _clean_mlx_output(raw):
+    """Strip mlx_lm's chatter lines so we see only the model verdict.
+
+    The MLX inference wrapper prints boilerplate like "Peak memory:"
+    and "==========" around the real output; they trip up the scorer
+    if left in. Same cleanup `cmd_review` in lora_cmds.py does.
+    """
+    out_lines = []
+    for line in (raw or "").split("\n"):
+        s = line.strip()
+        if not s:
+            continue
+        if s.startswith(("Calling `python", "Prompt:", "Generation:", "Peak memory:")):
+            continue
+        if s == "==========":
+            continue
+        out_lines.append(s)
+    return "\n".join(out_lines)
+
+
+def review_pr_files(files, adapter_path):
+    """Run every file diff through the model. Returns a dict:
+
+        {file_path: {"verdict": "PASS"|"FLAG", "raw": "<model output>"}}
+
+    adapter_path=None runs the base model for baseline comparison.
+    """
+    from planet_maiko.brain.learning.trainer import review_code
+
+    out = {}
+    for file_path, hunk in files:
+        r = review_code(code=hunk, adapter_path=adapter_path, file_path=file_path)
+        if not r.get("success"):
+            out[file_path] = {"verdict": "ERROR", "raw": r.get("error", "")}
+            continue
+        cleaned = _clean_mlx_output(r.get("output", ""))
+        verdict = "PASS" if cleaned.upper().startswith("PASS") else "FLAG"
+        out[file_path] = {"verdict": verdict, "raw": cleaned}
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Scoring
+# ---------------------------------------------------------------------------
+
+@dataclass
+class PRScore:
+    pr: HoldoutPR
+    human_files: set = field(default_factory=set)
+    model_flagged_with: set = field(default_factory=set)
+    model_flagged_without: set = field(default_factory=set)
+    file_count: int = 0
+    errors: int = 0
+
+    def hits_with(self):
+        return self.human_files & self.model_flagged_with
+
+    def hits_without(self):
+        return self.human_files & self.model_flagged_without
+
+    def recall(self, with_adapter=True):
+        flagged = self.model_flagged_with if with_adapter else self.model_flagged_without
+        if not self.human_files:
+            return None
+        return len(self.human_files & flagged) / len(self.human_files)
+
+    def precision(self, with_adapter=True):
+        flagged = self.model_flagged_with if with_adapter else self.model_flagged_without
+        if not flagged:
+            return None
+        return len(self.human_files & flagged) / len(flagged)
+
+
+def score_pr(pr, ground_truth, with_results, without_results=None):
+    """Bundle per-file verdicts + human comments into a PRScore."""
+    s = PRScore(pr=pr)
+    # Drop the sentinel review-body key — it's not a real file, it's a
+    # signal that the reviewer had PR-level concerns. We don't score on
+    # it because neither the model nor the file-level ground truth can
+    # match a "whole-PR" note to a specific diff.
+    s.human_files = {f for f in ground_truth.keys() if f != "__review_body__"}
+
+    for file_path, result in with_results.items():
+        if result["verdict"] == "ERROR":
+            s.errors += 1
+            continue
+        s.file_count += 1
+        if result["verdict"] == "FLAG":
+            s.model_flagged_with.add(file_path)
+
+    if without_results is not None:
+        for file_path, result in without_results.items():
+            if result["verdict"] == "FLAG":
+                s.model_flagged_without.add(file_path)
+
+    return s
+
+
+# ---------------------------------------------------------------------------
+# Runner
+# ---------------------------------------------------------------------------
+
+def run(fixture_path, adapter_path, compare_baseline=False, progress=None):
+    """Run the full holdout harness. `progress` is an optional
+    callable(event_dict) so the CLI can stream per-PR updates."""
+    fixture = load_fixture(fixture_path)
+    prs = fixture["prs"]
+    if not prs:
+        return {"error": "fixture has no PRs", "fixture_name": fixture["name"]}
+
+    scores = []
+    for pr in prs:
+        if progress:
+            progress({"event": "pr_start", "pr": pr.url})
+        files = fetch_pr_files(pr)
+        gt = fetch_ground_truth(pr)
+        if not files:
+            logger.warning(f"[eval] {pr.url}: no reviewable files")
+            continue
+        with_results = review_pr_files(files, adapter_path)
+        without_results = review_pr_files(files, None) if compare_baseline else None
+        s = score_pr(pr, gt, with_results, without_results)
+        scores.append(s)
+        if progress:
+            progress({
+                "event": "pr_done",
+                "pr": pr.url,
+                "human_files": len(s.human_files),
+                "flagged_with": len(s.model_flagged_with),
+                "flagged_without": len(s.model_flagged_without) if compare_baseline else None,
+                "errors": s.errors,
+            })
+
+    return {
+        "fixture_name": fixture["name"],
+        "fixture_description": fixture.get("description", ""),
+        "adapter_path": adapter_path,
+        "compare_baseline": compare_baseline,
+        "scores": scores,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Reporting
+# ---------------------------------------------------------------------------
+
+def _pct(x):
+    return "—" if x is None else f"{x:.0%}"
+
+
+def format_report(result):
+    """Turn a run() result into a markdown report."""
+    if "error" in result:
+        return f"# Holdout eval failed\n\n{result['error']}\n"
+
+    scores = result["scores"]
+    if not scores:
+        return "# Holdout eval\n\nNo PRs produced scoreable output.\n"
+
+    compare = result["compare_baseline"]
+
+    # Aggregates (micro-averaged over files, not over PRs — one PR with
+    # 20 commented files shouldn't get the same weight as a PR with 1).
+    tot_human = sum(len(s.human_files) for s in scores)
+    tot_hits_with = sum(len(s.hits_with()) for s in scores)
+    tot_flagged_with = sum(len(s.model_flagged_with) for s in scores)
+    recall_with = (tot_hits_with / tot_human) if tot_human else None
+    prec_with = (tot_hits_with / tot_flagged_with) if tot_flagged_with else None
+
+    if compare:
+        tot_hits_wo = sum(len(s.hits_without()) for s in scores)
+        tot_flagged_wo = sum(len(s.model_flagged_without) for s in scores)
+        recall_wo = (tot_hits_wo / tot_human) if tot_human else None
+        prec_wo = (tot_hits_wo / tot_flagged_wo) if tot_flagged_wo else None
+
+    lines = [
+        f"# Holdout eval — {result['fixture_name']}",
+        "",
+    ]
+    if result.get("fixture_description"):
+        lines.append(result["fixture_description"])
+        lines.append("")
+    lines.append(f"Adapter: `{result['adapter_path'] or '(base model — no adapter)'}`  ")
+    lines.append(f"Generated: {result['generated_at']}  ")
+    lines.append(f"PRs scored: {len(scores)}")
+    lines.append("")
+
+    lines.append("## Aggregate")
+    lines.append("")
+    if compare:
+        lines.append("| Mode | Recall | Precision | Flagged files | Hits |")
+        lines.append("|---|---|---|---|---|")
+        lines.append(
+            f"| With adapter | {_pct(recall_with)} | {_pct(prec_with)} | "
+            f"{tot_flagged_with} | {tot_hits_with} |"
+        )
+        lines.append(
+            f"| Baseline (no adapter) | {_pct(recall_wo)} | {_pct(prec_wo)} | "
+            f"{tot_flagged_wo} | {tot_hits_wo} |"
+        )
+        if recall_with is not None and recall_wo is not None:
+            delta = recall_with - recall_wo
+            sign = "+" if delta >= 0 else ""
+            lines.append("")
+            lines.append(f"**Recall delta from training: {sign}{delta:.0%}** (higher is better)")
+    else:
+        lines.append(f"- Recall: {_pct(recall_with)}")
+        lines.append(f"- Precision: {_pct(prec_with)}")
+        lines.append(f"- Human-flagged files across fixture: {tot_human}")
+        lines.append(f"- Model-flagged files: {tot_flagged_with}")
+
+    lines.append("")
+    lines.append("## Per PR")
+    lines.append("")
+    for s in scores:
+        lines.append(f"### {s.pr.repo}#{s.pr.number}")
+        lines.append("")
+        lines.append(f"- URL: {s.pr.url}")
+        if s.pr.notes:
+            lines.append(f"- Notes: {s.pr.notes}")
+        lines.append(f"- Human-flagged files: {len(s.human_files)}")
+        lines.append(f"- Model flagged: {len(s.model_flagged_with)} / {s.file_count} reviewed")
+        if compare:
+            lines.append(f"- Baseline flagged: {len(s.model_flagged_without)} / {s.file_count}")
+        lines.append(f"- Recall: {_pct(s.recall(with_adapter=True))}")
+        if compare:
+            lines.append(f"- Baseline recall: {_pct(s.recall(with_adapter=False))}")
+        if s.errors:
+            lines.append(f"- Inference errors: {s.errors}")
+
+        hits = sorted(s.hits_with())
+        misses = sorted(s.human_files - s.model_flagged_with)
+        extras = sorted(s.model_flagged_with - s.human_files)
+        if hits:
+            lines.append(f"- Hits: `{', '.join(hits)}`")
+        if misses:
+            lines.append(f"- Missed: `{', '.join(misses)}`")
+        if extras:
+            lines.append(f"- Extras: `{', '.join(extras)}`")
+        lines.append("")
+
+    return "\n".join(lines)

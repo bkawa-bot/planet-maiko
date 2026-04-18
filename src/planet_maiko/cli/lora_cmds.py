@@ -71,8 +71,24 @@ def cmd_extract_training_data(args):
         print("No repos configured. Set them in Settings > GitHub.")
         return
 
+    exclude_urls = []
+    if args.exclude_from:
+        import json as _json
+        with open(args.exclude_from, encoding="utf-8") as f:
+            fixture = _json.load(f)
+        for entry in fixture.get("prs") or []:
+            url = (entry.get("url") or "").strip()
+            if url:
+                exclude_urls.append(url)
+        if exclude_urls:
+            print(f"Excluding {len(exclude_urls)} holdout PRs from training data.")
+
     print(f"Extracting from {len(repos)} repos (limit {args.limit} PRs each)...")
-    result = extract_training_data(repos=repos, limit_per_repo=args.limit)
+    result = extract_training_data(
+        repos=repos,
+        limit_per_repo=args.limit,
+        exclude_pr_urls=exclude_urls or None,
+    )
     print(f"Extracted {result['pairs']} training pairs:")
     print(f"  Violations: {result['violations']}")
     print(f"  Passes: {result['passes']}")
@@ -223,6 +239,73 @@ def cmd_retrain(args):
             print(f"  Failed: {result.get('error')}")
             if result.get("install_hint"):
                 print(f"  Install: {result['install_hint']}")
+
+
+def cmd_eval_prs(args):
+    """PR-level holdout eval: run trained model on real PRs + compare to human reviews."""
+    import os as _os
+    from planet_maiko.paths import data_dir
+    from planet_maiko.eval import holdout
+
+    fixture_path = args.fixture
+    if not _os.path.isfile(fixture_path):
+        print(f"Fixture not found: {fixture_path}", file=sys.stderr)
+        print("Tip: copy src/planet_maiko/eval/fixtures/pr-review-v1.example.json "
+              "to pr-review-v1.json and fill in real PR URLs.", file=sys.stderr)
+        sys.exit(1)
+
+    adapter_path = args.adapter
+    if not adapter_path:
+        # Same fallback review_code uses — most recent adapter dir.
+        models_dir = _os.path.join(data_dir(), "models")
+        if _os.path.isdir(models_dir):
+            candidates = sorted(_os.listdir(models_dir), reverse=True)
+            if candidates:
+                adapter_path = _os.path.join(models_dir, candidates[0])
+    if not adapter_path:
+        print("No adapter path given and no adapters found in data/models/.", file=sys.stderr)
+        sys.exit(1)
+
+    def _progress(ev):
+        if ev["event"] == "pr_start":
+            print(f"  [running] {ev['pr']}", flush=True)
+        elif ev["event"] == "pr_done":
+            base = f"flagged {ev['flagged_with']}/{ev['human_files']} human-flagged files"
+            if ev.get("flagged_without") is not None:
+                base += f" (baseline: {ev['flagged_without']})"
+            if ev.get("errors"):
+                base += f" — {ev['errors']} inference errors"
+            print(f"  [done   ] {ev['pr']}: {base}", flush=True)
+
+    print(f"Fixture: {fixture_path}")
+    print(f"Adapter: {adapter_path}")
+    if args.compare_baseline:
+        print("Mode: with-adapter + baseline (will run each PR twice)")
+    print()
+
+    result = holdout.run(
+        fixture_path=fixture_path,
+        adapter_path=adapter_path,
+        compare_baseline=args.compare_baseline,
+        progress=_progress,
+    )
+
+    report = holdout.format_report(result)
+
+    # Write the report to data_dir so it survives. Also print to stdout
+    # so it's immediately visible.
+    reports_dir = _os.path.join(data_dir(), "eval-reports")
+    _os.makedirs(reports_dir, exist_ok=True)
+    from datetime import datetime as _dt
+    ts = _dt.now().strftime("%Y%m%d-%H%M%S")
+    out_path = args.output or _os.path.join(reports_dir, f"holdout-{ts}.md")
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(report)
+
+    print()
+    print(report)
+    print()
+    print(f"Report saved: {out_path}")
 
 
 def cmd_eval(args):
@@ -521,6 +604,7 @@ def register(subparsers):
     # maiko extract-training-data
     p = subparsers.add_parser("extract-training-data", help="Extract training data from PR history")
     p.add_argument("--limit", type=int, default=200, help="Max PRs per repo")
+    p.add_argument("--exclude-from", help="Path to a holdout fixture JSON; PRs listed there are skipped.")
     p.set_defaults(func=cmd_extract_training_data)
 
     # maiko generate-rules
@@ -544,13 +628,31 @@ def register(subparsers):
     p.add_argument("--examples", type=int, default=50, help="Examples per rule (default 50)")
     p.set_defaults(func=cmd_retrain)
 
-    # maiko eval
-    p = subparsers.add_parser("eval", help="Evaluate a LoRA adapter")
+    # maiko eval (pair-level, on training-data holdout split)
+    p = subparsers.add_parser("eval", help="Evaluate a LoRA adapter (pair-level precision/recall)")
     p.add_argument("--adapter", help="Adapter path (uses most recent if omitted)")
     p.add_argument("--repo", help="Filter test data to this repo")
     p.add_argument("--holdout", type=float, default=0.2, help="Fraction of data to hold out for testing (default 0.2)")
     p.add_argument("--per-category", action="store_true", help="Show per-category breakdown")
     p.set_defaults(func=cmd_eval)
+
+    # maiko eval-prs (PR-level, against a fixture of real PRs)
+    p = subparsers.add_parser(
+        "eval-prs",
+        help="PR-level holdout eval: run adapter on real PRs + score against human reviews",
+    )
+    p.add_argument(
+        "--fixture",
+        default="src/planet_maiko/eval/fixtures/pr-review-v1.json",
+        help="Fixture JSON listing PR URLs (default: src/planet_maiko/eval/fixtures/pr-review-v1.json)",
+    )
+    p.add_argument("--adapter", help="Adapter path (uses most recent if omitted)")
+    p.add_argument(
+        "--compare-baseline", action="store_true",
+        help="Also run each PR without the adapter, report recall delta",
+    )
+    p.add_argument("--output", help="Markdown report output path (default: data/eval-reports/holdout-<ts>.md)")
+    p.set_defaults(func=cmd_eval_prs)
 
     # maiko review
     p = subparsers.add_parser("review", help="Review code using a trained LoRA adapter")

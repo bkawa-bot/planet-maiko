@@ -1,0 +1,10 @@
+{
+  "name": "pr-review-v1.example",
+  "description": "Example fixture — copy to pr-review-v1.json and fill in real PR URLs you'd like to evaluate the trained model against. 5-10 PRs is a reasonable size. Pick PRs that (a) were merged (so the human review is settled), (b) are in repos your adapter was trained on, and (c) had substantive review comments (boring PRs teach the harness nothing). Once the fixture is real, pass those URLs to `maiko extract-training-data --exclude-from <fixture>` so the model never trains on them.",
+  "prs": [
+    {
+      "url": "https://github.com/org/repo/pull/123",
+      "notes": "Example entry — replace with a real PR URL."
+    }
+  ]
+}

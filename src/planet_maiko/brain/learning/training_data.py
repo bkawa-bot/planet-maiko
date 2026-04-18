@@ -18,13 +18,16 @@ from datetime import datetime, timezone
 logger = logging.getLogger(__name__)
 
 
-def extract_training_data(repos, limit_per_repo=200, output_dir=None):
+def extract_training_data(repos, limit_per_repo=200, output_dir=None, exclude_pr_urls=None):
     """Extract training data from PR review comments across repos.
 
     Args:
         repos: list of "org/repo" strings
         limit_per_repo: max PRs to scan per repo
         output_dir: where to save JSONL (defaults to data/training-data/)
+        exclude_pr_urls: list of PR URLs (or "org/repo#N" shorthand) to
+            skip during extraction. Used by the holdout-eval harness to
+            keep the model from ever seeing the PRs we'll test it on.
 
     Returns:
         dict with stats: {pairs, violations, passes, file_path}
@@ -35,12 +38,14 @@ def extract_training_data(repos, limit_per_repo=200, output_dir=None):
         output_dir = os.path.join(data_dir(), "training-data")
     os.makedirs(output_dir, exist_ok=True)
 
+    excluded = _parse_excluded_prs(exclude_pr_urls or [])
+
     all_pairs = []
     pairs_by_repo = {}
 
     for repo in repos:
         logger.info(f"[training-data] Scanning {repo}...")
-        repo_pairs = _extract_from_repo(repo, limit_per_repo)
+        repo_pairs = _extract_from_repo(repo, limit_per_repo, excluded_numbers=excluded.get(repo, set()))
         all_pairs.extend(repo_pairs)
         pairs_by_repo[repo] = repo_pairs
         logger.info(f"[training-data] {repo}: {len(repo_pairs)} training pairs")
@@ -101,9 +106,10 @@ def extract_training_data(repos, limit_per_repo=200, output_dir=None):
     }
 
 
-def _extract_from_repo(repo, limit):
+def _extract_from_repo(repo, limit, excluded_numbers=None):
     """Extract training pairs from a single repo's merged PRs."""
     pairs = []
+    excluded_numbers = excluded_numbers or set()
 
     # Get merged PRs
     prs = _get_merged_prs(repo, limit)
@@ -111,6 +117,9 @@ def _extract_from_repo(repo, limit):
 
     for pr in prs:
         number = pr.get("number")
+        if number in excluded_numbers:
+            logger.info(f"[training-data] {repo}#{number}: excluded (holdout)")
+            continue
         title = pr.get("title", "")
         has_feedback = False
 
@@ -282,6 +291,31 @@ def _mark_signals_incorporated(signal_ids):
         db.session.commit()
     except Exception as e:
         logger.warning(f"[training-data] Could not mark signals incorporated: {e}")
+
+
+def _parse_excluded_prs(urls):
+    """Turn a list of PR URLs into {repo: set(numbers)} for fast lookup.
+
+    Accepts both the full URL form (https://github.com/org/repo/pull/123)
+    and the short form (org/repo#123). Unparseable entries are dropped
+    with a warning — the caller's intent is to *exclude* so we fail loud
+    but don't block extraction.
+    """
+    import re as _re
+    out = {}
+    for raw in urls:
+        s = (raw or "").strip()
+        if not s:
+            continue
+        m = _re.match(r"https?://[^/]+/([^/]+/[^/]+)/pull/(\d+)", s)
+        if not m:
+            m = _re.match(r"([^/]+/[^/]+)#(\d+)", s)
+        if not m:
+            logger.warning(f"[training-data] Could not parse exclude URL: {raw!r}")
+            continue
+        repo, number = m.group(1), int(m.group(2))
+        out.setdefault(repo, set()).add(number)
+    return out
 
 
 def _split_diff_by_file(diff_text):
