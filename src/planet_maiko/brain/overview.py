@@ -363,6 +363,7 @@ def _build_context():
     user_name = (user_cfg.get("name") or "").strip() or "there"
 
     closing_window, closing_reason = _closing_window_info(now, user_cfg)
+    weekend_mode = bool(user_cfg.get("weekend_mode"))
 
     return {
         "user_name": user_name,
@@ -381,6 +382,9 @@ def _build_context():
         "closing_window": "true" if closing_window else "false",
         "closing_reason": closing_reason,
         "shipped_today": json.dumps(_shipped_today_context(), indent=2, default=str),
+        # Weekend mode — durable state. Overview voice leans toward
+        # "what can wait until Monday" instead of "what needs you now."
+        "weekend_mode": "true" if weekend_mode else "false",
     }
 
 

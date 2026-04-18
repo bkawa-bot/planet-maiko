@@ -45,6 +45,24 @@ def build_task_prompt(task, role, custom_prompt=""):
 
     parts = [task.title]
 
+    # Weekend mode — durable state the user flips on Friday. Agents see
+    # this before their task description and adjust scope: finish the
+    # specific thing, don't escalate out, don't spawn follow-ups, don't
+    # ping for minor clarifications. Not a hard block — a scope-shaper.
+    try:
+        from planet_maiko.config import load_config
+        if (load_config().get("user", {}) or {}).get("weekend_mode"):
+            parts.append(
+                "\n> **Off-duty notice.** The user is in weekend mode. Finish this "
+                "specific task if you can, but do not escalate — no follow-up "
+                "proposals, no spawning sibling work, no non-blocking "
+                "clarifications. If the task needs user input you don't have, "
+                "reply `message_type=\"stuck\"` and wait until Monday rather "
+                "than guessing. Keep it contained."
+            )
+    except Exception:
+        pass
+
     # The task description — where the UI task form writes what the
     # user typed, where the plan generator writes its description
     # field, and where Linear writes the issue body. The earlier

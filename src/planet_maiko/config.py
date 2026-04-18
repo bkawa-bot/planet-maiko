@@ -28,6 +28,12 @@ DEFAULT_CONFIG = {
         # product is engineered to keep you pulling the lever; Maiko
         # has an explicit closing condition. Set to null to disable.
         "workday_end_hour": 17,
+        # Weekend mode — when true, Maiko assumes you're off-duty and
+        # agents defer anything non-critical to the next workday. Not a
+        # notification-muter: a durable, visible state that agents read
+        # from their TASK.md preamble and the Home overview reflects in
+        # its voice. Flip it on Friday, flip it off Monday.
+        "weekend_mode": False,
         # IANA timezone name (e.g. "America/Los_Angeles"). Leave blank to
         # use the system's local timezone. Controls what "today" means for
         # the morning brief, skill-injected current_date, scene time-of-day,

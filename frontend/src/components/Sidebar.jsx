@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Home, CheckSquare, Bot, Brain, Wand2, Zap, GraduationCap, Settings, Shield, HelpCircle, X, Palette, Power } from "lucide-react";
+import { Home, CheckSquare, Bot, Brain, Wand2, Zap, GraduationCap, Settings, Shield, HelpCircle, X, Palette, Power, Leaf } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api/client";
 import { applyCustomTheme, clearCustomTheme, hydrateCachedCustomTheme } from "../utils/themes";
@@ -48,8 +48,37 @@ export default function Sidebar({ onOpenShutdown }) {
   const [focusState, setFocusState] = useState("available");
   const [showFocusMenu, setShowFocusMenu] = useState(false);
   const [showFocusInfo, setShowFocusInfo] = useState(false);
+  const [weekendMode, setWeekendMode] = useState(false);
+  const [weekendBusy, setWeekendBusy] = useState(false);
   const themeRef = useRef(null);
   const focusRef = useRef(null);
+
+  // Hydrate weekend-mode from config so the topbar pill reflects
+  // the persisted state rather than defaulting to off on every reload.
+  useEffect(() => {
+    let cancelled = false;
+    api.getConfig().then((cfg) => {
+      if (!cancelled) setWeekendMode(Boolean(cfg?.user?.weekend_mode));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const toggleWeekendMode = async () => {
+    if (weekendBusy) return;
+    setWeekendBusy(true);
+    const next = !weekendMode;
+    setWeekendMode(next);  // optimistic — revert on failure
+    try {
+      const cfg = await api.getConfig();
+      await api.updateConfig({
+        ...cfg,
+        user: { ...(cfg.user || {}), weekend_mode: next },
+      });
+    } catch {
+      setWeekendMode(!next);  // revert
+    }
+    setWeekendBusy(false);
+  };
 
   useEffect(() => {
     if (theme.startsWith("custom:")) {
@@ -161,6 +190,15 @@ export default function Sidebar({ onOpenShutdown }) {
         </div>
 
         <div className="topbar-right">
+          <button
+            className={`weekend-pill-topbar ${weekendMode ? "on" : ""}`}
+            onClick={toggleWeekendMode}
+            disabled={weekendBusy}
+            title={weekendMode ? "Weekend mode on — click to resume" : "Weekend mode off — click to go off-duty"}
+          >
+            <Leaf size={10} /> {weekendMode ? "weekend on" : "weekend"}
+          </button>
+
           <div className="focus-wrapper" ref={focusRef}>
             <button
               className={`focus-pill-topbar ${focusState}`}
