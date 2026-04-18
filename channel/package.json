@@ -1,11 +1,12 @@
 {
   "name": "maiko-channel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP channel for Planet Maiko agent communication",
   "type": "module",
   "main": "index.mjs",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "brain": "node brain.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0"

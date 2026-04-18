@@ -37,6 +37,28 @@ def _ensure_columns():
         # can undo them cleanly.
         "ALTER TABLE signals ADD COLUMN source_message_id INTEGER",
         "ALTER TABLE insights ADD COLUMN source_message_id INTEGER",
+        # Phase A of the external-orchestrator surface — A2A awareness
+        # for sessions Maiko didn't spawn. db.create_all() already makes
+        # this from the model on fresh installs; the explicit CREATE
+        # covers existing DBs that predate the model import.
+        (
+            "CREATE TABLE IF NOT EXISTS external_sessions ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "session_id VARCHAR(128) NOT NULL UNIQUE, "
+            "consumer VARCHAR(64), "
+            "repo VARCHAR(256) NOT NULL, "
+            "worktree_path VARCHAR(1024) NOT NULL, "
+            "hint TEXT, "
+            "registered_at DATETIME NOT NULL, "
+            "completed_at DATETIME, "
+            "status VARCHAR(32) NOT NULL DEFAULT 'active', "
+            "extra JSON DEFAULT '{}'"
+            ")"
+        ),
+        (
+            "CREATE INDEX IF NOT EXISTS ix_external_sessions_session_id "
+            "ON external_sessions(session_id)"
+        ),
         # Tournament system removed — drop legacy tables if present
         "DROP TABLE IF EXISTS tournament_entries",
         "DROP TABLE IF EXISTS tournaments",
@@ -112,6 +134,7 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.diff_api import diff_bp
     from planet_maiko.api.lora_api import lora_bp
     from planet_maiko.api.shutdown_api import shutdown_bp
+    from planet_maiko.api.sessions_api import sessions_bp
     app.register_blueprint(pupdates_bp, url_prefix="/api")
     app.register_blueprint(tasks_bp, url_prefix="/api")
     app.register_blueprint(projects_bp, url_prefix="/api")
@@ -132,6 +155,7 @@ def create_app(start_scheduler=False):
     app.register_blueprint(diff_bp, url_prefix="/api")
     app.register_blueprint(lora_bp, url_prefix="/api")
     app.register_blueprint(shutdown_bp, url_prefix="/api")
+    app.register_blueprint(sessions_bp, url_prefix="/api")
 
     # Load plugins (entry_points + ~/.maiko/plugins/)
     from planet_maiko.plugins.loader import load_plugins
@@ -151,6 +175,7 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.custom_skill import CustomSkill  # noqa: F401
         from planet_maiko.models.diff_comment import DiffComment  # noqa: F401
         from planet_maiko.models.insight import Insight  # noqa: F401
+        from planet_maiko.models.external_session import ExternalSession  # noqa: F401
         db.create_all()
 
         # Schema migrations for existing DBs (SQLite ALTER TABLE is safe)

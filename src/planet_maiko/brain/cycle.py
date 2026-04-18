@@ -91,16 +91,38 @@ def _phase_auto_complete_reviews():
 
 
 def _phase_awareness():
-    """Phase 2: Check for conflicts between active agents + attempt A2A resolution."""
+    """Phase 2: Check for conflicts between active agents + attempt A2A resolution.
+
+    Population is the union of Maiko-prepared worktrees (from
+    list_prepared()) and active external sessions registered via
+    /api/sessions/register. External sessions use session_id as the
+    task_id in the worktree dict — that shows up as the agent label in
+    conflict messages, which is fine for Phase A (consumers pass short
+    IDs or we generate uuid4 hex).
+    """
     try:
         from planet_maiko.brain.awareness.conflicts import detect_conflicts, resolve_conflicts
         from planet_maiko.agents.coding_agent import list_prepared
+        from planet_maiko.models.external_session import ExternalSession
 
         prepared = list_prepared()
         worktrees = [
             {"task_id": a.get("task_id", ""), "worktree_path": a.get("working_path", "")}
             for a in prepared if a.get("working_path")
         ]
+
+        external = ExternalSession.query.filter(
+            ExternalSession.status == "active",
+            ExternalSession.completed_at.is_(None),
+        ).all()
+        for s in external:
+            if not s.worktree_path:
+                continue
+            worktrees.append({
+                "task_id": s.session_id,
+                "worktree_path": s.worktree_path,
+            })
+
         if len(worktrees) < 2:
             return {"conflicts": 0, "resolved": 0, "escalated": 0}
 
