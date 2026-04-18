@@ -8,11 +8,21 @@ pupdates_bp = Blueprint("pupdates", __name__)
 
 @pupdates_bp.route("/pupdates", methods=["GET"])
 def list_pupdates():
-    """List active pupdates, with optional filtering and pagination."""
+    """List active pupdates, with optional filtering and pagination.
+
+    Honors focus mode: when the user is in soft/deep focus, pupdates
+    held by the focus gate (extra.held == True) are hidden from the
+    default response so the overview / needs list actually quiets down.
+    They remain reachable via the /focus/held + /focus/digest
+    endpoints, and are released back into normal flow when the user
+    exits focus. Pass `?include_held=true` for tools that want the
+    full picture (audit views, admin).
+    """
     source = request.args.get("source")
     priority = request.args.get("priority")
     category = request.args.get("category")  # "action" | "activity"
     show_dismissed = request.args.get("dismissed", "false").lower() == "true"
+    include_held = request.args.get("include_held", "false").lower() == "true"
     limit = min(int(request.args.get("limit", 200)), 500)
     offset = int(request.args.get("offset", 0))
 
@@ -27,6 +37,14 @@ def list_pupdates():
         query = query.filter_by(category=category)
 
     pupdates = query.order_by(Pupdate.timestamp.desc()).limit(limit).offset(offset).all()
+
+    if not include_held:
+        # Filter at the Python level — extra is a JSON column and
+        # pushing `extra @> '{"held": true}'` through SQLAlchemy varies
+        # by backend. The volume here is capped at `limit` so this is
+        # cheap.
+        pupdates = [p for p in pupdates if not (p.extra or {}).get("held")]
+
     return jsonify([p.to_dict() for p in pupdates])
 
 

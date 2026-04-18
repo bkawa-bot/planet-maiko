@@ -102,15 +102,22 @@ export default function AskMaiko() {
     const ctx = context.trim();
     const ng = nonGoals.trim();
 
-    // Pause-first: if enough agents are already running, don't
-    // dispatch blindly — show a nudge and let the user confirm.
-    // Errors here fall through to dispatching (the count check is
-    // best-effort; never block a send on a lookup failure).
+    // Pause-first: deep-focus or too-many-active nudges. Both roll
+    // up to the same confirmation card; reason shapes the copy. All
+    // lookups are best-effort — a failed GET must never block a send.
     try {
-      const tasks = await api.getTasks({ status: "in_progress" });
+      const [focus, tasks] = await Promise.all([
+        api.getFocus().catch(() => null),
+        api.getTasks({ status: "in_progress" }).catch(() => []),
+      ]);
       const active = (tasks || []).filter((t) => t.assigned_agent_id).length;
+      const focusState = focus?.current_state || focus?.state;
+      if (focusState === "deep_focus" || focusState === "away") {
+        setPendingSend({ ask, ctx, ng, active, reason: "focus", focusState });
+        return;
+      }
       if (active >= PAUSE_FIRST_THRESHOLD) {
-        setPendingSend({ ask, ctx, ng, active });
+        setPendingSend({ ask, ctx, ng, active, reason: "load" });
         return;
       }
     } catch {
@@ -179,10 +186,16 @@ export default function AskMaiko() {
               <div className="ask-pack-pause">
                 <div className="ask-pack-pause-head">
                   <Leaf size={12} />
-                  <span>{pendingSend.active} agents already working</span>
+                  <span>
+                    {pendingSend.reason === "focus"
+                      ? `You're in ${(pendingSend.focusState || "focus").replace("_", " ")}`
+                      : `${pendingSend.active} agents already working`}
+                  </span>
                 </div>
                 <div className="ask-pack-pause-body">
-                  A lot's already in motion. Want to hold this one until your next check-in, or send it now?
+                  {pendingSend.reason === "focus"
+                    ? "Heads-down right now. Want to hold this until focus ends, or send it through anyway?"
+                    : "A lot's already in motion. Want to hold this one until your next check-in, or send it now?"}
                 </div>
                 <div className="ask-pack-pause-actions">
                   <button className="ask-pack-pause-secondary" onClick={cancelPending}>Hold it</button>
