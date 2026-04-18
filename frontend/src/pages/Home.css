@@ -1,8 +1,7 @@
 .home { display: flex; flex-direction: column; gap: 12px; }
 
-.morning-brief-btn { margin-bottom: 4px; }
-
-/* === Morning Brief Modal === */
+/* === Brief / artifact modal (morning-brief button retired; chrome
+       now reused by OverviewPane for its artifact viewer) === */
 .brief-modal {
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: 16px; max-width: 600px; width: 100%;
@@ -108,105 +107,12 @@
   padding: 32px; color: var(--text-muted); font-size: 13px; text-align: center;
 }
 
-.home-focus-card { border-color: var(--pink-soft); }
-
-/* Autopilot card — renders only when Maiko has auto-spawned
-   investigations the user should glance at. Lavender accent keeps
-   it visually distinct from the pink Focus card. */
-.home-autopilot-card { border-color: var(--lavender-soft); }
-.autopilot-count {
-  margin-left: auto;
-  font-size: 10px; font-weight: 700;
-  background: var(--lavender); color: #fff;
-  padding: 1px 7px; border-radius: 10px; min-width: 18px; text-align: center;
-}
-.autopilot-list { display: flex; flex-direction: column; gap: 6px; }
-.autopilot-item {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 6px 10px; border-radius: var(--radius-xs);
-  background: var(--bg-card); cursor: pointer;
-  border: 1px solid var(--border-subtle);
-  transition: border-color 0.15s;
-}
-.autopilot-item:hover { border-color: var(--lavender); }
-.autopilot-item-title {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 12px; color: var(--text);
-}
-.autopilot-item-meta {
-  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
-  font-size: 10px; color: var(--text-muted);
-}
-.autopilot-pattern { font-family: var(--font-mono); font-size: 10px; color: var(--lavender); }
-.autopilot-time { margin-left: auto; }
-
-.focus-regen-toggle {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 11px; padding: 3px 8px; line-height: 1;
-}
-
-.focus-regen-row {
-  display: flex; gap: 6px; align-items: center;
-  margin-bottom: 10px;
-}
-.focus-regen-row input {
-  flex: 1; padding: 6px 10px;
-  border: 1px solid var(--border); border-radius: var(--radius-xs);
-  background: var(--bg); color: var(--text); font-size: 12px; font-family: inherit;
-}
-.focus-regen-row input:focus { border-color: var(--pink); outline: none; }
-
-.focus-override-chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 4px 8px 4px 10px; margin-bottom: 8px;
-  background: var(--pink-soft); border-radius: 999px;
-  font-size: 11px; color: var(--pink);
-  max-width: 100%;
-}
-.focus-override-text {
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  max-width: 260px;
-}
-.focus-override-chip .btn-ghost {
-  display: inline-flex; align-items: center; justify-content: center;
-  background: none; border: none; padding: 2px; cursor: pointer;
-  color: var(--pink); opacity: 0.7;
-}
-.focus-override-chip .btn-ghost:hover { opacity: 1; }
-
-/* === Focus tasks === */
-.focus-tasks { display: flex; flex-direction: column; gap: 6px; }
-
-.focus-task {
-  padding: 6px 10px; background: var(--bg-hover);
-  border-radius: var(--radius-xs); cursor: pointer;
-  transition: all 0.15s;
-  border: 1px solid var(--border-subtle);
-}
-.focus-task:hover { background: var(--bg-selected); }
-.focus-task.expanded { background: var(--bg-selected); }
-.focus-task-row {
-  display: flex; align-items: center; gap: 8px;
-}
-.focus-task-title { flex: 1; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.focus-task-meta {
-  display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;
-}
+/* .focus-empty stays — still referenced by OverviewPane's artifact
+   modal empty state. Everything else in this section (home-focus-card,
+   autopilot-*, focus-regen-*, focus-override-*, focus-tasks,
+   focus-task-*) was scoped to the old Home card stack that the
+   overview pane replaced. */
 .focus-empty { color: var(--text-muted); font-size: 12px; text-align: center; padding: 12px; }
-
-.focus-task-expanded {
-  margin-top: 8px; padding-top: 8px;
-  border-top: 1px solid var(--border-subtle);
-  display: flex; flex-direction: column; gap: 8px;
-}
-.focus-task-link {
-  font-size: 11px; color: var(--blue); display: flex; align-items: center; gap: 4px;
-  text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.focus-task-link:hover { text-decoration: underline; }
-.focus-task-actions {
-  display: flex; gap: 6px; flex-wrap: wrap;
-}
 
 /* === Recent pupdates === */
 .recent-list { display: flex; flex-direction: column; gap: 4px; }
@@ -239,62 +145,6 @@
   color: var(--blue); min-width: 45px; letter-spacing: 0.03em;
 }
 .recent-title { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* === Also Waiting — action-required pupdates === */
-.waiting-list { display: flex; flex-direction: column; gap: 6px; }
-
-.waiting-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; border-radius: var(--radius-sm);
-  background: var(--bg-hover);
-  border-left: 3px solid var(--pink);
-  cursor: pointer;
-  transition: background 0.15s, transform 0.15s;
-}
-.waiting-item:hover { background: var(--bg-card); transform: translateX(1px); }
-.waiting-item.low { border-left-color: var(--low); }
-
-.waiting-avatar {
-  font-size: 20px; line-height: 1; flex-shrink: 0;
-  width: 28px; text-align: center;
-}
-.waiting-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.waiting-line {
-  display: flex; align-items: baseline; gap: 6px;
-  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-}
-.waiting-name { font-weight: 600; font-size: 12px; color: var(--text); }
-.waiting-summary { font-size: 12px; color: var(--text-dim); }
-.waiting-sub {
-  display: flex; gap: 8px; align-items: baseline;
-  font-size: 11px; color: var(--text-muted);
-  overflow: hidden;
-}
-.waiting-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-.waiting-time { white-space: nowrap; }
-.waiting-cta { flex-shrink: 0; font-size: 11px; padding: 4px 10px; }
-.waiting-dismiss {
-  flex-shrink: 0;
-  padding: 4px;
-  opacity: 0.35;
-  color: var(--text-muted);
-  transition: opacity 0.15s;
-}
-.waiting-item:hover .waiting-dismiss { opacity: 0.7; }
-.waiting-dismiss:hover { opacity: 1; }
-.waiting-more-toggle {
-  align-self: stretch;
-  padding: 7px 10px;
-  font-size: 11px;
-  color: var(--text-muted);
-  background: none;
-  border: 1px dashed var(--border-subtle);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
-  text-align: center;
-}
-.waiting-more-toggle:hover { color: var(--pink); border-color: var(--pink); }
 
 /* === Widgets === */
 .home-widget {
