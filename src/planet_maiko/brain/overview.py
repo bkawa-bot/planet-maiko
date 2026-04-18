@@ -364,6 +364,9 @@ def _build_context():
 
     closing_window, closing_reason = _closing_window_info(now, user_cfg)
     weekend_mode = bool(user_cfg.get("weekend_mode"))
+    interruptions_today = _interruptions_today()
+    budget = user_cfg.get("interruption_budget")
+    over_budget = bool(isinstance(budget, int) and budget > 0 and interruptions_today > budget)
 
     return {
         "user_name": user_name,
@@ -385,7 +388,41 @@ def _build_context():
         # Weekend mode — durable state. Overview voice leans toward
         # "what can wait until Monday" instead of "what needs you now."
         "weekend_mode": "true" if weekend_mode else "false",
+        # Interruption budget — visible-only soft cap. Overview voice
+        # shifts toward batching when over budget. Null budget disables.
+        "interruptions_today": str(interruptions_today),
+        "interruption_budget": "none" if budget is None else str(budget),
+        "interruption_over_budget": "true" if over_budget else "false",
     }
+
+
+def _interruptions_today():
+    """Count today's high/urgent, non-dismissed pupdates (user-local day).
+
+    An "interruption" is any event loud enough to pull a focused user
+    out of what they're doing. Approximated here as priority in
+    {urgent, high} with dismissed=False, created since local midnight.
+    Read-only — this is purely a surface signal for the overview
+    prompt. Nothing is blocked or altered based on it.
+    """
+    try:
+        from datetime import timezone as _tz
+        from planet_maiko.config import user_now
+        from planet_maiko.models.pupdate import Pupdate
+
+        now_local = user_now()
+        midnight_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        midnight_utc = midnight_local.astimezone(_tz.utc).replace(tzinfo=None)
+        return (
+            Pupdate.query
+            .filter(Pupdate.priority.in_(("urgent", "high")))
+            .filter(Pupdate.dismissed == False)  # noqa: E712
+            .filter(Pupdate.timestamp >= midnight_utc)
+            .count()
+        )
+    except Exception as e:
+        logger.debug(f"[overview] interruption count failed: {e}")
+        return 0
 
 
 def _closing_window_info(now, user_cfg):

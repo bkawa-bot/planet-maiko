@@ -67,6 +67,20 @@ Use the actual day of week in your greeting — don't guess.
 ### Tasks shipped today (status moved to done/cancelled)
 {shipped_today}
 
+### Interruption count vs budget
+
+- **Loud pupdates today (priority high/urgent, not dismissed):** {interruptions_today}
+- **Daily budget:** {interruption_budget}
+- **Over budget:** {interruption_over_budget}
+
+When `interruption_over_budget` is `true`, the summary and needs copy
+should acknowledge that a lot has piled up today and frame the
+remaining items as a batch to handle together, not a fresh set of
+fires. Don't omit them — just change the framing from "one more thing
+for you" to "a lot has accumulated, want to knock these out in one
+sitting?" When under budget or the budget is "none", ignore this
+field entirely.
+
 ### Weekend mode
 
 - **Active:** {weekend_mode}

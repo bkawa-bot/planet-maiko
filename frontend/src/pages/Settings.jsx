@@ -299,6 +299,34 @@ export default function Settings() {
                 as permission to stop, not a cheer.
               </div>
             </label>
+
+            <label style={{ display: "block", marginTop: 16 }}>
+              <div style={{ marginBottom: 6, fontSize: 12, color: "var(--text-muted)" }}>
+                Interruption budget — loud pupdates per day before Maiko softens the voice
+              </div>
+              <select
+                value={config.user?.interruption_budget ?? 3}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  updateField("user", "interruption_budget", v === "off" ? null : parseInt(v, 10));
+                }}
+                style={{
+                  padding: 6, fontFamily: "inherit", fontSize: 13,
+                  background: "var(--bg-card)", color: "var(--text)",
+                  border: "1px solid var(--border)", borderRadius: "var(--radius-xs)",
+                }}
+              >
+                <option value="off">Off — don't track interruptions</option>
+                {[1, 2, 3, 4, 5, 7, 10].map((n) => (
+                  <option key={n} value={n}>{n} per day</option>
+                ))}
+              </select>
+              <div className="setup-hint" style={{ marginTop: 6 }}>
+                Once the count exceeds this budget, the overview leans toward
+                "a lot piled up today — knock these out in one sitting" instead
+                of surfacing each one as a fresh fire. Soft cap, not enforcement.
+              </div>
+            </label>
           </div>
         )}
       </section>
