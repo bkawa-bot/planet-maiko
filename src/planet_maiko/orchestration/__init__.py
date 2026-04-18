@@ -56,6 +56,21 @@ def build_task_prompt(task, role, custom_prompt=""):
     if description:
         parts.append(f"\n## Description\n\n{description}")
 
+    # Dual-intent: the user also spelled out what MUST NOT happen. Put
+    # this near the top so the agent sees the boundaries before any
+    # supporting context — negative constraints matter more than
+    # positive ones for safe delegation. Matches the spec-first pattern
+    # from the verification community (Tao's "write the spec, delegate
+    # the proof").
+    non_goals = extra.get("non_goals")
+    if non_goals:
+        if isinstance(non_goals, list):
+            bullet_lines = "\n".join(f"- {g}" for g in non_goals if str(g).strip())
+            if bullet_lines:
+                parts.append(f"\n## Must not\n\n{bullet_lines}")
+        elif isinstance(non_goals, str) and non_goals.strip():
+            parts.append(f"\n## Must not\n\n{non_goals.strip()}")
+
     if task.source_pupdate_id:
         source = db.session.get(Pupdate, task.source_pupdate_id)
         if source and source.body:

@@ -24,7 +24,8 @@ export default function AskMaiko() {
   const [turns, setTurns] = useState(loadTurns);
   const [input, setInput] = useState("");
   const [context, setContext] = useState("");
-  const [showContext, setShowContext] = useState(false);
+  const [nonGoals, setNonGoals] = useState("");
+  const [showDetails, setShowDetails] = useState(false);
   const [loading, setLoading] = useState(false);
   const messagesEnd = useRef(null);
   const inputRef = useRef(null);
@@ -58,14 +59,16 @@ export default function AskMaiko() {
     if (!ask || loading) return;
 
     const ctx = context.trim();
-    setTurns((prev) => [...prev, { kind: "user", text: ask, context: ctx }]);
+    const ng = nonGoals.trim();
+    setTurns((prev) => [...prev, { kind: "user", text: ask, context: ctx, nonGoals: ng }]);
     setInput("");
     setContext("");
-    setShowContext(false);
+    setNonGoals("");
+    setShowDetails(false);
     setLoading(true);
 
     try {
-      const res = await api.dispatchPack(ask, ctx);
+      const res = await api.dispatchPack(ask, ctx, ng);
       if (res.status === "clarify") {
         setTurns((prev) => [...prev, { kind: "clarify", text: res.clarify }]);
       } else if (res.status === "dispatched") {
@@ -133,14 +136,23 @@ export default function AskMaiko() {
           </div>
 
           <div className="ask-pack-input-wrap">
-            {showContext && (
-              <textarea
-                className="ask-pack-context"
-                value={context}
-                onChange={(e) => setContext(e.target.value)}
-                placeholder="Optional context — URL, file path, deadline, anything that helps…"
-                rows={2}
-              />
+            {showDetails && (
+              <>
+                <textarea
+                  className="ask-pack-context"
+                  value={context}
+                  onChange={(e) => setContext(e.target.value)}
+                  placeholder="Context — URL, file path, deadline, anything that helps…"
+                  rows={2}
+                />
+                <textarea
+                  className="ask-pack-context ask-pack-must-not"
+                  value={nonGoals}
+                  onChange={(e) => setNonGoals(e.target.value)}
+                  placeholder="Must not — boundaries for the agent (e.g. 'don't touch the billing code', 'no new deps')"
+                  rows={2}
+                />
+              </>
             )}
 
             <div className="ask-maiko-input-row">
@@ -165,11 +177,11 @@ export default function AskMaiko() {
 
             <button
               className="ask-pack-context-toggle"
-              onClick={() => setShowContext((s) => !s)}
+              onClick={() => setShowDetails((s) => !s)}
               type="button"
             >
-              {showContext ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-              {showContext ? "Hide context" : "Add context"}
+              {showDetails ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+              {showDetails ? "Hide details" : "Add context / boundaries"}
             </button>
           </div>
         </div>
@@ -186,6 +198,7 @@ function PackTurn({ turn, onClose }) {
         <div className="ask-maiko-msg-text">
           {turn.text}
           {turn.context && <div className="ask-pack-user-ctx">— {turn.context}</div>}
+          {turn.nonGoals && <div className="ask-pack-user-ctx ask-pack-user-nogoals">Must not: {turn.nonGoals}</div>}
         </div>
       </div>
     );

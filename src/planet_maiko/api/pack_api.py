@@ -27,12 +27,13 @@ def dispatch_route():
     data = request.get_json(silent=True) or {}
     user_request = (data.get("request") or "").strip()
     context = (data.get("context") or "").strip()
+    non_goals = (data.get("non_goals") or "").strip()
 
     if not user_request:
         return jsonify({"status": "error", "error": "request is required"}), 400
 
     try:
-        result = dispatch(user_request, context=context)
+        result = dispatch(user_request, context=context, non_goals=non_goals)
     except Exception as e:
         logger.exception("[pack] dispatch crashed: %s", e)
         return jsonify({"status": "error", "error": str(e)}), 500

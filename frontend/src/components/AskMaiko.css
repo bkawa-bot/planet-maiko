@@ -234,6 +234,15 @@
   font-style: italic;
 }
 
+.ask-pack-user-nogoals {
+  color: var(--urgent);
+  font-style: normal;
+}
+
+.ask-pack-must-not {
+  border-top: 1px dashed var(--border-subtle);
+}
+
 .ask-pack-error {
   color: var(--urgent);
 }

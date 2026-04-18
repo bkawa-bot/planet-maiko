@@ -324,10 +324,14 @@ export const api = {
   chat: (message) => request("/chat", { method: "POST", body: JSON.stringify({ message }) }),
 
   // Ask the Pack — natural-language dispatcher that picks an agent and launches them
-  dispatchPack: (request_text, context) =>
+  dispatchPack: (request_text, context, non_goals) =>
     request("/pack/dispatch", {
       method: "POST",
-      body: JSON.stringify({ request: request_text, context: context || "" }),
+      body: JSON.stringify({
+        request: request_text,
+        context: context || "",
+        non_goals: non_goals || "",
+      }),
     }),
 
   // Agent profiles

@@ -51,7 +51,7 @@ _VALID_TYPES = {"review", "pr_review", "investigation", "repo_analysis", "cartog
 _VALID_PRIORITIES = {"urgent", "high", "normal", "low"}
 
 
-def dispatch(request: str, context: str = "") -> dict:
+def dispatch(request: str, context: str = "", non_goals: str = "") -> dict:
     """Route a natural-language ask to an agent and launch them.
 
     Args:
@@ -59,6 +59,9 @@ def dispatch(request: str, context: str = "") -> dict:
         context: Optional extra context from the user (URL, file path,
             "this is blocking release", etc.). Concatenated into the
             prompt as `context`.
+        non_goals: Optional boundaries — what the agent must NOT do.
+            Gets rendered as a "## Must not" section in TASK.md so the
+            agent sees the constraint before any supporting context.
 
     Returns:
         A dict shaped:
@@ -151,6 +154,7 @@ def dispatch(request: str, context: str = "") -> dict:
         priority=priority,
         scope_repo=scope_repo,
         context=context,
+        non_goals=non_goals,
         profile=profile,
         user_request=req,
     )
@@ -237,7 +241,7 @@ def _resolve_profile(preferred_id, role, scope_repo):
 # Task creation
 # ---------------------------------------------------------------------------
 
-def _create_dispatched_task(*, title, description, task_type, priority, scope_repo, context, profile, user_request):
+def _create_dispatched_task(*, title, description, task_type, priority, scope_repo, context, non_goals, profile, user_request):
     """Create a Task row, stamp it with pack-dispatcher metadata, and
     assign the picked profile. The caller is responsible for launching
     (or not)."""
@@ -252,6 +256,11 @@ def _create_dispatched_task(*, title, description, task_type, priority, scope_re
     }
     if context and context.strip():
         extra["user_context"] = context.strip()
+    if non_goals and non_goals.strip():
+        # Keep as a single string at the top level — build_task_prompt
+        # handles both list and string shapes so the same field works
+        # whether a future surface splits non-goals into bullets.
+        extra["non_goals"] = non_goals.strip()
     if scope_repo:
         extra["repo"] = scope_repo
 
