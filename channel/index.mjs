@@ -69,8 +69,13 @@ const mcp = new Server(
       `check_inbox to see what's new, then reply to what you find.`,
       ``,
       `Guidelines:`,
+      `- Before declaring ready_for_review, run check_code(). If the`,
+      `  repo has tests / a linter / a typechecker, they will run and`,
+      `  tell you whether your change is actually green. It is dishonest`,
+      `  to claim you are done if the checks are red — address failures`,
+      `  first, re-run, then reply ready.`,
       `- Coding agents: after your first meaningful commit, call`,
-      `  reply(content="<summary>", message_type="ready_for_review").`,
+      `  check_code() then reply(content="<summary>", message_type="ready_for_review").`,
       `  Then loop: check_inbox every ~30s; on a message_type="review"`,
       `  message, iterate on the comments, commit, and reply ready again.`,
       `- Use leave_comment sparingly (~5 max per review round) on`,
@@ -202,6 +207,28 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "check_code",
+      description:
+        "Run the repo's own checkers (tests, linters, typechecker) " +
+        "inside your worktree. Returns a structured summary with pass/fail " +
+        "per check and a tail of output. Call this BEFORE declaring " +
+        "ready_for_review — it's dishonest to claim you're done if the " +
+        "tests aren't green. If `.maiko/checks.json` exists in the repo, " +
+        "those commands are used; otherwise Maiko auto-detects from the " +
+        "presence of pyproject.toml / package.json / Cargo.toml / go.mod " +
+        "and runs the obvious checks (pytest, npm test + tsc, cargo " +
+        "check + clippy + test, go vet + test).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          timeout: {
+            type: "integer",
+            description: "Per-check timeout in seconds. Defaults to 120. Increase if your test suite is slow.",
+          },
+        },
+      },
+    },
+    {
       name: "leave_comment",
       description:
         "Pin an inline comment to a specific diff line for the user to " +
@@ -330,6 +357,50 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
         return { content: [{ type: "text", text: `Failed: ${err}` }] };
       }
       return { content: [{ type: "text", text: "Recorded false negative — next retrain will learn from it." }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
+    }
+  }
+
+  if (req.params.name === "check_code") {
+    const { timeout = 120 } = req.params.arguments || {};
+    try {
+      const resp = await fetch(`${API_URL}/checks/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task_id: TASK_ID, timeout }),
+      });
+      if (!resp.ok) {
+        const err = await resp.text();
+        return { content: [{ type: "text", text: `Failed to run checks: ${err}` }] };
+      }
+      const data = await resp.json();
+      const checks = data.checks || [];
+      const summary = data.summary || {};
+      if (!checks.length) {
+        return {
+          content: [{
+            type: "text",
+            text: "No checks detected in this repo. Add a `.maiko/checks.json` with the commands you want agents to run (keys: name, command), or ensure the repo has one of: pyproject.toml + tests/, package.json with a test script, Cargo.toml, go.mod.",
+          }],
+        };
+      }
+      const lines = [
+        `Ran ${summary.total} check(s): ${summary.passed} passed, ${summary.failed} failed.`,
+        "",
+      ];
+      for (const c of checks) {
+        const mark = c.status === "pass" ? "✓" : c.status === "fail" ? "✗" : "!";
+        lines.push(`${mark} ${c.name} (${c.status}${c.exit_code != null ? `, exit=${c.exit_code}` : ""})`);
+        if (c.status !== "pass" && c.output_tail) {
+          lines.push(c.output_tail.split("\n").map(l => `    ${l}`).join("\n"));
+        }
+      }
+      if (summary.blocked) {
+        lines.push("");
+        lines.push("Do NOT declare ready_for_review yet — address the failures first, then re-run check_code.");
+      }
+      return { content: [{ type: "text", text: lines.join("\n") }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Error: ${err.message}` }] };
     }

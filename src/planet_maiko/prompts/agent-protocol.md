@@ -76,7 +76,9 @@ Bad: "agent_status: build complete for task-123"
 1. Read TASK.md → report "Reading the plan..."
 2. Explore the codebase → report "Checking existing patterns in X..."
 3. Implement the change → commit locally
-4. Run tests → fix until green
+4. Run `check_code()` — runs the repo's own tests / linter /
+   typechecker (auto-detected, or via .maiko/checks.json). Fix until
+   green. It is dishonest to skip this and claim ready.
 5. Run `lora_check` to see if your repo's compliance model flags
    anything (see LoRA section below)
 6. (Optional) Use leave_comment to flag uncertain spots in your diff
@@ -85,11 +87,15 @@ Bad: "agent_status: build complete for task-123"
 9. When a message_type="review" arrives, parse its @@ file:line headers
    (for local comments) OR run gh to fetch PR-side comments (see
    "Post-PR feedback" below), iterate on each comment, commit,
-   go back to step 5
+   go back to step 4
 10. Exit ONLY when you receive message_type="approved" or "cancelled"
 ```
 
 The user — not you — decides when the task is done. Never exit early on your own `message_type="done"`; that flow is retired in favor of review cycles.
+
+### Repo checkers — `check_code`
+
+Before every `ready_for_review`, call `check_code()`. It runs the repo's own tests / linter / typechecker (auto-detected from `package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, or configured in `.maiko/checks.json`) inside your worktree and returns structured pass/fail per check. If anything is red, fix it before replying. Surface the result in your `ready_for_review` summary under a brief "Checks" line — lets the user see at a glance that the suite is green.
 
 ### LoRA compliance check
 

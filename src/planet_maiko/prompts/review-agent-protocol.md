@@ -74,3 +74,7 @@ Don't wrap them in code fences. Don't include them only in a code-fenced output 
 ## LoRA compliance check
 
 If a trained LoRA adapter exists for this repo, call the `lora_check` MCP tool while writing your review. It returns a list of machine-detected violations on the branch diff. Surface those in your review (a "Compliance model flagged" section) so the user sees both the model's opinion and yours. If you disagree with a flagged line, call `lora_false_positive` to record a corrective PASS for the next retrain. If you spot a real issue the model missed, call `lora_false_negative`.
+
+## Run the repo's checkers before declaring done
+
+Before calling `reply(message_type="ready_for_review")`, call `check_code()`. It runs the repo's own tests / linter / typechecker (auto-detected or configured in `.maiko/checks.json`) and returns pass/fail per check. A review that ships with a known-red suite isn't a review, it's a guess — surface any failures in your report under a "Checks" section and either fix them or explain why they're pre-existing.
