@@ -13,7 +13,7 @@ export default function Settings() {
   const [pollerStatus, setPollerStatus] = useState({});
   const [message, setMessage] = useState("");
 
-  const [openSections, setOpenSections] = useState({ briefings: true, integrations: false, agents: false, routing: false, scene: false, plugins: false });
+  const [openSections, setOpenSections] = useState({ overview: false, briefings: true, integrations: false, agents: false, routing: false, scene: false, plugins: false });
   const toggleSection = (key) => setOpenSections(s => ({ ...s, [key]: !s[key] }));
 
   const [showConcepts, setShowConcepts] = useState(false);
@@ -232,6 +232,45 @@ export default function Settings() {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* Home Overview — user-configurable add-on for the rolling LLM-generated overview pane */}
+      <section className="settings-collapsible">
+        <div className="collapsible-header" onClick={() => toggleSection("overview")}>
+          {openSections.overview ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <span>Home Overview</span>
+        </div>
+        {openSections.overview && (
+          <div className="collapsible-body">
+            <div className="setup-hint">
+              Maiko generates a warm daily overview for your Home page. You can give
+              her an optional add-on instruction — anything you want her to also do
+              when writing it. She has full tool access (Bash, WebFetch, your
+              configured MCP servers), so she can actually go do these things.
+            </div>
+            <label style={{ display: "block", marginTop: 12 }}>
+              <div style={{ marginBottom: 6, fontSize: 12, color: "var(--text-muted)" }}>
+                Custom add-on instruction (optional)
+              </div>
+              <textarea
+                style={{
+                  width: "100%", minHeight: 100, padding: 8,
+                  fontFamily: "inherit", fontSize: 13,
+                  background: "var(--bg-card)", color: "var(--text)",
+                  border: "1px solid var(--border)", borderRadius: "var(--radius-xs)",
+                  resize: "vertical",
+                }}
+                value={config.overview?.custom_prompt || ""}
+                onChange={(e) => updateField("overview", "custom_prompt", e.target.value)}
+                placeholder={`e.g. "please also search my Slack for overnight mentions in #core-team" or "remind me which PRs have been sitting for more than 48 hours"`}
+              />
+            </label>
+            <div className="setup-hint" style={{ marginTop: 8 }}>
+              Overview regenerates roughly every 4 hours, or you can click Refresh
+              on the pane itself. Changes here take effect on the next generation.
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Scheduled Briefings (morning brief, pack insights, etc.) */}

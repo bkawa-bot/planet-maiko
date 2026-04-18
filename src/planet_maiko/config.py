@@ -106,6 +106,16 @@ DEFAULT_CONFIG = {
         "show_weather_overlay": True,
         "show_hill_background": True,
     },
+    "overview": {
+        # Optional user-provided add-on instruction appended to the
+        # home-overview skill prompt. The LLM tries to honor this when
+        # generating the rolling daily overview. Examples:
+        #   "please also search my Slack for overnight mentions"
+        #   "remind me which PRs have been sitting for more than 48 hours"
+        # The skill runs as a full Claude Code agent with tool access,
+        # so it can actually go do whatever the prompt asks.
+        "custom_prompt": "",
+    },
     "routing": {
         "enabled": True,
         "default_model": "sonnet",
