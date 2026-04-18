@@ -224,6 +224,7 @@ export default function OverviewPane() {
                 else navigate(action.to);
               };
               const originalAsk = pup.metadata?.original_ask;
+              const originalNonGoals = pup.metadata?.original_non_goals;
               const askedAt = pup.metadata?.asked_at;
               return (
                 <div key={n.pupdate_id} className="overview-card">
@@ -232,6 +233,11 @@ export default function OverviewPane() {
                     {originalAsk && (
                       <div className="overview-card-refresher">
                         you asked{askedAt ? ` ${relativeTime(askedAt)}` : ""}: "{originalAsk.length > 120 ? originalAsk.slice(0, 117) + "…" : originalAsk}"
+                      </div>
+                    )}
+                    {originalNonGoals && (
+                      <div className="overview-card-refresher overview-card-refresher-ng">
+                        must not: {originalNonGoals.length > 120 ? originalNonGoals.slice(0, 117) + "…" : originalNonGoals}
                       </div>
                     )}
                     {pup.timestamp && (

@@ -146,6 +146,15 @@
   white-space: nowrap;
 }
 
+/* "must not" boundary the user set at launch — rendered below the
+   ask so the user can check at a glance whether the agent's claim
+   respected the boundary. Subtle urgent tint but still non-shouty. */
+.overview-card-refresher-ng {
+  color: var(--urgent);
+  font-style: normal;
+  opacity: 0.75;
+}
+
 .overview-dismiss {
   flex-shrink: 0;
   padding: 4px;

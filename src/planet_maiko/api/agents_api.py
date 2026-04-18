@@ -937,14 +937,15 @@ def agent_sends_message(task_id):
             if candidate and "github.com" in candidate:
                 pr_url = candidate
 
-        # Carry forward the original ask + when it was asked so the
-        # user can reload context in one glance — "you asked 3 hours
-        # ago: 'look at the auth bug'". The single biggest cost of
-        # parallel agents is the reload-tax when one returns 3h after
-        # you kicked it off and you've since swapped context five
-        # times. Store on pupdate.extra so the frontend can render
-        # without an extra task fetch.
+        # Carry forward the original ask + boundary + when it was asked
+        # so the user can reload context in one glance — "you asked 3
+        # hours ago: 'look at the auth bug' (must not: touch billing)".
+        # The single biggest cost of parallel agents is the reload-tax
+        # when one returns 3h after you kicked it off and you've since
+        # swapped context five times. Store on pupdate.extra so the
+        # frontend can render without an extra task fetch.
         original_ask = ""
+        original_non_goals = ""
         asked_at_iso = None
         if task is not None:
             t_extra = task.extra or {}
@@ -955,6 +956,11 @@ def agent_sends_message(task_id):
                 or task.title
                 or ""
             ).strip()
+            raw_ng = t_extra.get("non_goals") or ""
+            if isinstance(raw_ng, list):
+                original_non_goals = "; ".join(str(g).strip() for g in raw_ng if str(g).strip())
+            else:
+                original_non_goals = str(raw_ng).strip()
             if task.created_at:
                 asked_at_iso = task.created_at.isoformat() if hasattr(task.created_at, "isoformat") else str(task.created_at)
 
@@ -977,6 +983,7 @@ def agent_sends_message(task_id):
                 "message_type": message_type,
                 "pr_url": pr_url,
                 "original_ask": original_ask[:500],
+                "original_non_goals": original_non_goals[:500] if original_non_goals else "",
                 "asked_at": asked_at_iso,
             },
             # These pupdates already link back to the task — LLM triage

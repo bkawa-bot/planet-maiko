@@ -70,7 +70,17 @@ The `maiko` CLI still works for legacy reporting (`maiko report`, `maiko task st
 Good: "Tests passing, committing now."
 Bad: "agent_status: build complete for task-123"
 
-## 3. Workflow — the review loop
+## 3. Ready-for-review contract
+
+When you call `reply(message_type="ready_for_review", content=...)`, structure the content so the user can review your *claim*, not re-derive it from the diff. Every ready_for_review should include at least these three sections in the markdown body (keep it tight — three lines each is plenty):
+
+- **Invariants preserved** — 2–3 bullets stating what the change keeps true. "Users can still sign in with OAuth." "The migration is idempotent." "Calling `process_batch` with an empty list is still a no-op."
+- **Assumptions** — anything the change rests on that isn't obvious from the diff. "Assumes the feature flag gate in `config.py` is on in prod." "Assumes `json.loads` on the incoming body can't raise." Called out honestly; reviewers decide if the assumption is load-bearing.
+- **Checks run** — one line each for `check_code` (green / red counts), `lora_check` when applicable, and any property tests added. "pytest: 147/147; ruff: pass; 2 new Hypothesis properties on the parser."
+
+Skip the "Summary" paragraph if the invariants already say what changed. Don't bullet-list every file touched — the diff says that. The goal is to make *the claim the agent is making* cheap for the user to review.
+
+## 4. Workflow — the review loop
 
 ```
 1. Read TASK.md → report "Reading the plan..."
@@ -163,7 +173,7 @@ git diff -- src/path/to/file.java | maiko lora-miss -v "Missing null check on re
 
 Valid categories: `security`, `error_handling`, `testing`, `performance`, `api_design`, `architecture`, `null_safety`, `style`, `naming`, `pattern`, `domain_knowledge`, `gotcha`, `team`.
 
-## 4. Rules
+## 5. Rules
 
 - Stay focused on the task in TASK.md
 - Commit frequently with clear messages
