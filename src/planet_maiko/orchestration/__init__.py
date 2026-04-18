@@ -21,6 +21,79 @@ from planet_maiko.models.task import Task
 
 logger = logging.getLogger(__name__)
 
+
+def build_task_prompt(task, role, custom_prompt=""):
+    """Compose the TASK.md body for a task about to be handed to an agent.
+
+    Lives here (not in `api/agents_api.py`) because three different
+    code paths hand-build TASK.md today: the assign API, the pack
+    dispatcher, and the brain cycle's safety-net one-shot executor.
+    When the logic was only in agents_api.py the cycle's inline copy
+    had drifted — it was missing the Description and Source Context
+    sections, so tasks executed via the cycle's retry path arrived
+    with less context than the same task executed via the API.
+
+    Base context for every role: title + description + source
+    pupdate + project + URL + tags. For review / investigation we
+    additionally embed the skill prompt so the agent has the full
+    recipe in TASK.md and can use the unified _kickoff_agent_headless
+    path without a separate skill-runner.
+    """
+    from planet_maiko.agents.brain_session import ONE_SHOT_ROLE_FOR_TYPE
+    from planet_maiko.models.pupdate import Pupdate
+    from planet_maiko.models.project import Project as _Project
+
+    parts = [task.title]
+
+    # The task description — where the UI task form writes what the
+    # user typed, where the plan generator writes its description
+    # field, and where Linear writes the issue body. The earlier
+    # version of this helper never read it, so manually-created
+    # tasks arrived at the agent with just a title and the agent
+    # confabulated everything else.
+    extra = task.extra or {}
+    description = extra.get("description") or extra.get("body")
+    if description:
+        parts.append(f"\n## Description\n\n{description}")
+
+    if task.source_pupdate_id:
+        source = db.session.get(Pupdate, task.source_pupdate_id)
+        if source and source.body:
+            parts.append(f"\n## Source Context\n\n{source.body}")
+        if source and source.url:
+            parts.append(f"\nSource URL: {source.url}")
+
+    if task.project_id:
+        project = db.session.get(_Project, task.project_id)
+        if project and project.description:
+            parts.append(f"\n## Project: {project.title}\n\n{project.description}")
+
+    if task.url:
+        parts.append(f"\nTask URL: {task.url}")
+    if task.tags:
+        parts.append(f"\nTags: {', '.join(task.tags)}")
+
+    if role in ("review", "investigation"):
+        try:
+            from planet_maiko.agents.skills import get_skill_prompt
+            skill_name = ONE_SHOT_ROLE_FOR_TYPE.get(task.type, (None, None))[1]
+            if skill_name:
+                context = {
+                    "query": task.title,
+                    "context": f"URL: {task.url or ''}\nRepo: {(task.extra or {}).get('repo', '')}",
+                    "pupdates": "[]", "tasks": "[]", "calendar": "[]",
+                }
+                skill_prompt = get_skill_prompt(skill_name, context) or ""
+                if skill_prompt.strip():
+                    parts.append(f"\n## Skill: {skill_name}\n\n{skill_prompt}")
+        except Exception as e:
+            logger.warning(f"[orchestration] Could not embed skill prompt for task {task.id}: {e}")
+
+    if custom_prompt:
+        parts.append(f"\n## Additional Instructions\n\n{custom_prompt}")
+
+    return "\n".join(parts)
+
 # Task.type → required agent role. Anything not in this map defaults to
 # "coding" — the historical behavior.
 TYPE_TO_ROLE = {

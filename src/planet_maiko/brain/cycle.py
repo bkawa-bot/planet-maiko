@@ -603,24 +603,15 @@ def _phase_execute_agent_tasks():
                     )
                     continue
                 try:
-                    # Mirror _build_task_prompt: include skill prompt
-                    # so TASK.md is self-sufficient and the unified
-                    # _kickoff_agent_headless path works.
-                    full_prompt = task.title
-                    if task.url:
-                        full_prompt += f"\n\nURL: {task.url}"
-                    try:
-                        from planet_maiko.agents.skills import get_skill_prompt
-                        skill_name = ONE_SHOT_ROLE_FOR_TYPE[task.type][1]
-                        skill_prompt = get_skill_prompt(skill_name, {
-                            "query": task.title,
-                            "context": f"URL: {task.url or ''}\nRepo: {repo or ''}",
-                            "pupdates": "[]", "tasks": "[]", "calendar": "[]",
-                        }) or ""
-                        if skill_prompt.strip():
-                            full_prompt += f"\n\n## Skill: {skill_name}\n\n{skill_prompt}"
-                    except Exception as e:
-                        logger.warning(f"[cycle] skill embed failed for {task.id}: {e}")
+                    from planet_maiko.orchestration import build_task_prompt
+                    # Same composer the assign API and pack dispatcher use,
+                    # so a task entering via the cycle's safety net gets the
+                    # full description + source context + project + skill
+                    # prompt the other entry points include. The earlier
+                    # inline version was missing several of these, so a
+                    # task retried via the cycle arrived with less context
+                    # than the same task via the API.
+                    full_prompt = build_task_prompt(task, role)
                     prep = prepare(
                         task_id=task.id,
                         task_title=task.title,

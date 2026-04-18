@@ -155,12 +155,10 @@ def assign_agent():
     task_id = data.get("task_id")
     profile_id = data.get("profile_id")
     repo_path = data.get("repo_path", "")
-    # Worktree is always on — every agent role works on an isolated copy
-    # of the repo, no exceptions. Keeps the assign flow uniform across
-    # coding / review / investigation and avoids the "I forgot to check
-    # the box and now my main branch is dirty" footgun.
-    use_worktree = True
-    auto_kickoff = data.get("auto_kickoff", False)
+    # Worktree is always on + kickoff is always deferred until after
+    # prepare() returns, so the old use_worktree / auto_kickoff body
+    # params don't do anything. Kept ignoring them here for back-compat
+    # with any UI client still sending them.
     plan_first = bool(data.get("plan_first", False))
     branch_name = data.get("branch_name")
 
@@ -199,12 +197,11 @@ def assign_agent():
         if not os.path.isdir(os.path.join(repo_path, ".git")):
             return jsonify({"error": f"Not a git repository: {repo_path}"}), 400
 
-    # Build the prompt that lands in TASK.md. Coding gets task title +
-    # source body + project + tags + custom instructions. Review and
-    # investigation additionally embed the skill prompt so the agent
-    # has the full execution recipe in TASK.md and we can use the
-    # same _kickoff_agent_headless path that coding uses.
-    full_prompt = _build_task_prompt(task, role, data.get("custom_prompt", ""))
+    # Build the prompt that lands in TASK.md. Shared with the pack
+    # dispatcher and the brain cycle's safety-net executor so every
+    # entry point composes the same context.
+    from planet_maiko.orchestration import build_task_prompt
+    full_prompt = build_task_prompt(task, role, data.get("custom_prompt", ""))
 
     try:
         result = prepare(
@@ -256,68 +253,8 @@ def assign_agent():
     }), 201
 
 
-def _build_task_prompt(task, role, custom_prompt=""):
-    """Compose the TASK.md body for a freshly-assigned task. Same
-    base context for every role (title + description + source
-    pupdate + project + URL + tags). For review/investigation we
-    additionally embed the skill prompt so the agent has the full
-    recipe in TASK.md and can just follow it — no separate
-    skill-runner code path needed."""
-    from planet_maiko.models.pupdate import Pupdate
-    from planet_maiko.models.project import Project as _Project
-
-    parts = [task.title]
-
-    # The task description — where the UI task form writes what the
-    # user typed, where the plan generator writes its description
-    # field, and where Linear writes the issue body. The earlier
-    # version of this helper never read it, so manually-created
-    # tasks arrived at the agent with just a title and the agent
-    # confabulated everything else. Pull it in before the other
-    # context so it's the first thing the agent reads after the
-    # title.
-    extra = task.extra or {}
-    description = extra.get("description") or extra.get("body")
-    if description:
-        parts.append(f"\n## Description\n\n{description}")
-
-    if task.source_pupdate_id:
-        source = db.session.get(Pupdate, task.source_pupdate_id)
-        if source and source.body:
-            parts.append(f"\n## Source Context\n\n{source.body}")
-        if source and source.url:
-            parts.append(f"\nSource URL: {source.url}")
-
-    if task.project_id:
-        project = db.session.get(_Project, task.project_id)
-        if project and project.description:
-            parts.append(f"\n## Project: {project.title}\n\n{project.description}")
-
-    if task.url:
-        parts.append(f"\nTask URL: {task.url}")
-    if task.tags:
-        parts.append(f"\nTags: {', '.join(task.tags)}")
-
-    if role in ("review", "investigation"):
-        try:
-            from planet_maiko.agents.skills import get_skill_prompt
-            skill_name = ONE_SHOT_ROLE_FOR_TYPE.get(task.type, (None, None))[1]
-            if skill_name:
-                context = {
-                    "query": task.title,
-                    "context": f"URL: {task.url or ''}\nRepo: {(task.extra or {}).get('repo', '')}",
-                    "pupdates": "[]", "tasks": "[]", "calendar": "[]",
-                }
-                skill_prompt = get_skill_prompt(skill_name, context) or ""
-                if skill_prompt.strip():
-                    parts.append(f"\n## Skill: {skill_name}\n\n{skill_prompt}")
-        except Exception as e:
-            logger.warning(f"[assign] Could not embed skill prompt: {e}")
-
-    if custom_prompt:
-        parts.append(f"\n## Additional Instructions\n\n{custom_prompt}")
-
-    return "\n".join(parts)
+# _build_task_prompt moved to planet_maiko.orchestration.build_task_prompt
+# so the pack dispatcher + brain cycle can use the same composer.
 
 
 def _launch_terminal(cmd):

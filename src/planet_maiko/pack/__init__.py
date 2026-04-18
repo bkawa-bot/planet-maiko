@@ -307,11 +307,11 @@ def _launch_one_shot(task_id, role):
         with app.app_context():
             try:
                 from planet_maiko.agents.coding_agent import prepare, _kickoff_agent_headless
-                from planet_maiko.api.agents_api import _build_task_prompt
+                from planet_maiko.orchestration import build_task_prompt
                 t = db.session.get(Task, task_id)
                 if not t:
                     return
-                full_prompt = _build_task_prompt(t, role)
+                full_prompt = build_task_prompt(t, role)
                 result = prepare(
                     task_id=t.id,
                     task_title=t.title,

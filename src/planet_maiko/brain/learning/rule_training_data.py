@@ -106,7 +106,7 @@ def get_covered_rule_ids(output_dir=None, repo=None):
     return covered
 
 
-def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None, rule_ids=None, repo=None):
+def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None, rule_ids=None, repo=None, progress_cb=None):
     """Generate training data from active learnings.
 
     Args:
@@ -115,6 +115,9 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None, 
         rule_ids: specific learning IDs to process (None = all active)
         repo: if provided, filter to learnings scoped to this repo (or global)
               and prefix the output filename with the repo name
+        progress_cb: optional callable for the async rule-gen endpoint to
+            stream per-rule progress. Kwargs: total_rules, rules_processed,
+            current_rule, pairs, errors.
 
     Returns:
         dict with {success, pairs, rules_processed, file_path}

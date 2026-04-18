@@ -177,8 +177,7 @@ def cartograph_repo():
     from planet_maiko.agents.coding_agent import (
         prepare, _kickoff_agent_headless,
     )
-    from planet_maiko.api.agents_api import _build_task_prompt
-    from planet_maiko.orchestration import resolve_repo_path
+    from planet_maiko.orchestration import build_task_prompt, resolve_repo_path
 
     data = request.get_json() or {}
     repo = (data.get("repo") or "").strip()
@@ -219,7 +218,7 @@ def cartograph_repo():
     db.session.add(task)
     db.session.commit()
 
-    full_prompt = _build_task_prompt(task, "cartographer", "")
+    full_prompt = build_task_prompt(task, "cartographer", "")
     try:
         result = prepare(
             task_id=task.id,

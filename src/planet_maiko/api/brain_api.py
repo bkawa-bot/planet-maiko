@@ -5,6 +5,7 @@ from planet_maiko.brain.tasks.scheduler import (
     compute_schedule, set_override, clear_override, get_override,
 )
 from planet_maiko.brain.guardrails import get_permission_level
+from planet_maiko.database import db
 from planet_maiko.models.task import Task
 
 brain_bp = Blueprint("brain", __name__)
