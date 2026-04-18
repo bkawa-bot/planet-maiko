@@ -69,11 +69,16 @@ const mcp = new Server(
       `check_inbox to see what's new, then reply to what you find.`,
       ``,
       `Guidelines:`,
-      `- Before declaring ready_for_review, run check_code(). If the`,
-      `  repo has tests / a linter / a typechecker, they will run and`,
-      `  tell you whether your change is actually green. It is dishonest`,
-      `  to claim you are done if the checks are red — address failures`,
-      `  first, re-run, then reply ready.`,
+      `- Before declaring ready_for_review, run check_code(). It runs`,
+      `  both the mechanical checks (tests/lint/typecheck) AND the LoRA`,
+      `  verifier (if this repo has a trained adapter) and returns`,
+      `  one merged verdict. It is dishonest to claim you are done`,
+      `  if the verdict is red — address failures first, re-run, then`,
+      `  reply ready.`,
+      `- For any LoRA violation you believe is wrong, call`,
+      `  lora_false_positive to record a corrective PASS for the next`,
+      `  retrain. For a real issue the LoRA missed, call`,
+      `  lora_false_negative. These feed the training loop.`,
       `- Coding agents: after your first meaningful commit, call`,
       `  check_code() then reply(content="<summary>", message_type="ready_for_review").`,
       `  Then loop: check_inbox every ~30s; on a message_type="review"`,
@@ -156,11 +161,13 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "lora_check",
       description:
-        "Run your repo's LoRA compliance model against your current " +
-        "branch diff (or just the last commit) and get a list of " +
-        "violations the model detected. Call this before every " +
-        "ready_for_review — address real issues, and use " +
-        "lora_false_positive for lines where you believe the model is wrong.",
+        "Drill-down tool for the LoRA verifier specifically. In most " +
+        "cases you should just call check_code() instead — it runs the " +
+        "LoRA alongside the mechanical checks and returns both in one " +
+        "verdict. Use lora_check only when you want to re-run the LoRA " +
+        "after fixing a violation, without waiting for the full mechanical " +
+        "suite, or when you need just the LoRA output with full metadata. " +
+        "Returns the same violation shape as check_code's lora section.",
       inputSchema: {
         type: "object",
         properties: {
@@ -209,15 +216,15 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "check_code",
       description:
-        "Run the repo's own checkers (tests, linters, typechecker) " +
-        "inside your worktree. Returns a structured summary with pass/fail " +
-        "per check and a tail of output. Call this BEFORE declaring " +
-        "ready_for_review — it's dishonest to claim you're done if the " +
-        "tests aren't green. If `.maiko/checks.json` exists in the repo, " +
-        "those commands are used; otherwise Maiko auto-detects from the " +
-        "presence of pyproject.toml / package.json / Cargo.toml / go.mod " +
-        "and runs the obvious checks (pytest, npm test + tsc, cargo " +
-        "check + clippy + test, go vet + test).",
+        "Run every verifier for your worktree and return a merged " +
+        "verdict. Two layers: (1) mechanical checks — tests, linters, " +
+        "typechecker — auto-detected from the repo (pyproject.toml, " +
+        "package.json, Cargo.toml, go.mod) or configured via " +
+        "`.maiko/checks.json`; (2) the LoRA verifier — your team's " +
+        "trained code-review model, if an adapter is configured for " +
+        "this repo. Call this BEFORE declaring ready_for_review. For " +
+        "any LoRA violation you disagree with, use lora_false_positive; " +
+        "for a real issue the LoRA missed, use lora_false_negative.",
       inputSchema: {
         type: "object",
         properties: {
@@ -377,29 +384,55 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       const data = await resp.json();
       const checks = data.checks || [];
       const summary = data.summary || {};
-      if (!checks.length) {
-        return {
-          content: [{
-            type: "text",
-            text: "No checks detected in this repo. Add a `.maiko/checks.json` with the commands you want agents to run (keys: name, command), or ensure the repo has one of: pyproject.toml + tests/, package.json with a test script, Cargo.toml, go.mod.",
-          }],
-        };
+      const lora = data.lora || null;
+
+      const lines = [];
+
+      // Mechanical checks (tests, linters, typecheckers).
+      if (checks.length) {
+        lines.push(`Mechanical checks: ${summary.passed ?? 0}/${summary.total ?? 0} passed.`);
+        for (const c of checks) {
+          const mark = c.status === "pass" ? "OK " : c.status === "fail" ? "FAIL" : "?";
+          lines.push(`  [${mark}] ${c.name} (${c.status}${c.exit_code != null ? `, exit=${c.exit_code}` : ""})`);
+          if (c.status !== "pass" && c.output_tail) {
+            lines.push(c.output_tail.split("\n").map(l => `      ${l}`).join("\n"));
+          }
+        }
+      } else {
+        lines.push("Mechanical checks: none detected. Add a `.maiko/checks.json` with the commands you want agents to run, or ensure the repo has pyproject.toml + tests/, package.json with a test script, Cargo.toml, or go.mod.");
       }
-      const lines = [
-        `Ran ${summary.total} check(s): ${summary.passed} passed, ${summary.failed} failed.`,
-        "",
-      ];
-      for (const c of checks) {
-        const mark = c.status === "pass" ? "✓" : c.status === "fail" ? "✗" : "!";
-        lines.push(`${mark} ${c.name} (${c.status}${c.exit_code != null ? `, exit=${c.exit_code}` : ""})`);
-        if (c.status !== "pass" && c.output_tail) {
-          lines.push(c.output_tail.split("\n").map(l => `    ${l}`).join("\n"));
+
+      // LoRA verifier — shown as its own section so agents can call
+      // lora_false_positive / lora_false_negative on specific
+      // violations they disagree with.
+      if (lora) {
+        lines.push("");
+        if (lora.no_model_for_repo) {
+          lines.push(`LoRA verifier: no adapter configured for repo ${lora.repo || "(unknown)"} — skipped.`);
+        } else if (lora.no_changes) {
+          lines.push("LoRA verifier: no diff to review.");
+        } else if (lora.error) {
+          lines.push(`LoRA verifier: error — ${lora.error}`);
+        } else {
+          const v = lora.violations || [];
+          if (v.length === 0) {
+            lines.push("LoRA verifier: PASS. No violations detected.");
+          } else {
+            lines.push(`LoRA verifier: ${v.length} violation(s) flagged.`);
+            v.forEach((item, i) => {
+              lines.push(`  ${i + 1}. [${item.category || "pattern"}] ${item.message}`);
+            });
+            lines.push("");
+            lines.push("  For any LoRA violation you disagree with, call lora_false_positive({code, file, category, reason}) to record a corrective PASS for the next retrain. For a real issue the model missed, call lora_false_negative.");
+          }
         }
       }
+
       if (summary.blocked) {
         lines.push("");
         lines.push("Do NOT declare ready_for_review yet — address the failures first, then re-run check_code.");
       }
+
       return { content: [{ type: "text", text: lines.join("\n") }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Error: ${err.message}` }] };

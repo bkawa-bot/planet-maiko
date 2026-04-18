@@ -86,26 +86,31 @@ Skip the "Summary" paragraph if the invariants already say what changed. Don't b
 1. Read TASK.md → report "Reading the plan..."
 2. Explore the codebase → report "Checking existing patterns in X..."
 3. Implement the change → commit locally
-4. Run `check_code()` — runs the repo's own tests / linter /
-   typechecker (auto-detected, or via .maiko/checks.json). Fix until
-   green. It is dishonest to skip this and claim ready.
-5. Run `lora_check` to see if your repo's compliance model flags
-   anything (see LoRA section below)
-6. (Optional) Use leave_comment to flag uncertain spots in your diff
-7. reply(message_type="ready_for_review", content="<summary>")
-8. check_inbox every ~30 seconds until a review message arrives
-9. When a message_type="review" arrives, parse its @@ file:line headers
+4. Run `check_code()` — runs the mechanical checks (tests / linter /
+   typechecker) AND the LoRA verifier in one call. Fix until green.
+   It is dishonest to skip this and claim ready.
+5. (Optional) Use leave_comment to flag uncertain spots in your diff
+6. reply(message_type="ready_for_review", content="<summary>")
+7. check_inbox every ~30 seconds until a review message arrives
+8. When a message_type="review" arrives, parse its @@ file:line headers
    (for local comments) OR run gh to fetch PR-side comments (see
    "Post-PR feedback" below), iterate on each comment, commit,
    go back to step 4
-10. Exit ONLY when you receive message_type="approved" or "cancelled"
+9. Exit ONLY when you receive message_type="approved" or "cancelled"
 ```
 
 The user — not you — decides when the task is done. Never exit early on your own `message_type="done"`; that flow is retired in favor of review cycles.
 
-### Repo checkers — `check_code`
+### Verifiers — `check_code`
 
-Before every `ready_for_review`, call `check_code()`. It runs the repo's own tests / linter / typechecker (auto-detected from `package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, or configured in `.maiko/checks.json`) inside your worktree and returns structured pass/fail per check. If anything is red, fix it before replying. Surface the result in your `ready_for_review` summary under a brief "Checks" line — lets the user see at a glance that the suite is green.
+Before every `ready_for_review`, call `check_code()`. It runs two verifier layers and returns one merged verdict:
+
+1. **Mechanical checks** — the repo's own tests / linter / typechecker, auto-detected from `pyproject.toml` / `package.json` / `Cargo.toml` / `go.mod`, or configured in `.maiko/checks.json`.
+2. **LoRA verifier** — the team's trained code-review model, if an adapter is configured for this repo. Returns a list of structured violations (category, severity, message).
+
+If anything is red, fix it before replying. Surface the result in your `ready_for_review` summary under a brief "Checks" line — lets the user see at a glance that both layers are green.
+
+For any LoRA violation you disagree with, call `lora_false_positive({code, file, category, reason})` — records a corrective PASS for the next retrain. For a real issue the LoRA missed, call `lora_false_negative({code, violation, category, file})`. The standalone `lora_check` tool exists only for re-running just the LoRA (e.g. after you fix a violation and want to confirm before touching the slow mechanical suite again).
 
 ### Property-based tests for behavior changes
 
@@ -120,15 +125,15 @@ The goal isn't a proof — it's to encode the invariant you *think* the change p
 
 In your `ready_for_review` summary, include a short "Properties" bullet listing what you added and why. If the change is a pure refactor or formatting pass, say so and skip.
 
-### LoRA compliance check
+### Responding to LoRA violations (from `check_code`)
 
-Before every `ready_for_review`, call the `lora_check` MCP tool. It runs your repo's trained compliance model against your branch diff and returns a list of violations. Your response:
+`check_code()` includes LoRA output alongside mechanical checks. For each violation the LoRA flags:
 
-- **Agree with a violation** → fix it, commit, re-run `lora_check`.
-- **Disagree with a violation** → call `lora_false_positive({code, file, category, reason})`. This records a corrective PASS for the next retrain. Use sparingly.
-- **Spot a real issue the model missed** while iterating → call `lora_false_negative({code, violation, category, file})`.
+- **Agree with it** → fix it, commit, re-run `check_code()`. If you're just re-verifying the LoRA after a fix without changing tests, you can call `lora_check` as a shortcut to skip the slow mechanical suite.
+- **Disagree with it** → call `lora_false_positive({code, file, category, reason})`. Records a corrective PASS for the next retrain. Use sparingly — false positives train the model away from real rules.
+- **Spot a real issue the LoRA missed** while iterating → call `lora_false_negative({code, violation, category, file})`.
 
-If `lora_check` reports `no_model_for_repo`, skip it and move on — this repo has no trained adapter yet.
+If the LoRA section reports `no_model_for_repo`, skip it and move on — this repo has no trained adapter yet.
 
 ### Plan-first tasks
 

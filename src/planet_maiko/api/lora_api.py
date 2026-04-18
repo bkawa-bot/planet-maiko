@@ -101,57 +101,47 @@ def _default_branch(worktree_path):
 # /lora/check
 # ---------------------------------------------------------------------------
 
-@lora_bp.route("/lora/check", methods=["POST"])
-def lora_check():
-    """Run the task's LoRA against its worktree diff.
+def run_lora_for_task(task_id, scope="branch"):
+    """Shared core for LoRA verification against a task's worktree diff.
 
-    Body:
-      {
-        "task_id": "task-123",          // required
-        "scope":  "branch" | "last_commit"  // optional, default "branch"
-      }
+    Returns a plain dict (never raises on normal business failures) so
+    both the `/lora/check` route and the unified `check_code()` flow
+    can call it. Shape of the return mirrors what the MCP tool expects:
 
-    Response:
-      {
-        "violations": [{file, line, category, severity, message}],
-        "model_path": "/path/to/adapter",
-        "scope": "branch" | "last_commit",
-        "no_model_for_repo": bool   // true → agent skips without error
-      }
+        {"violations": [...], "model_path": str|None,
+         "scope": str, "no_model_for_repo"? : bool,
+         "no_changes"? : bool, "error"?: str, "raw_output"?: str}
+
+    HTTP callers wrap this; programmatic callers (check_code) inspect
+    the fields directly.
     """
-    data = request.get_json(silent=True) or {}
-    task_id = data.get("task_id")
-    scope = data.get("scope") or "branch"
-
     if not task_id:
-        return jsonify({"error": "task_id is required"}), 400
+        return {"error": "task_id is required"}
     task = db.session.get(Task, task_id)
     if not task:
-        return jsonify({"error": f"Task {task_id} not found"}), 404
+        return {"error": f"Task {task_id} not found"}
 
     extra = task.extra or {}
     worktree = extra.get("working_path")
     if not worktree or not os.path.isdir(worktree):
-        return jsonify({"error": "Task has no worktree"}), 400
+        return {"error": "Task has no worktree"}
 
     repo = extra.get("repo") or extra.get("repository")
     if not repo:
-        # Fall back to parsing task.url
         from planet_maiko.orchestration import scope_for_task
         repo = scope_for_task(task)
 
     from planet_maiko.brain.learning.lora_eval import resolve_lora_for_repo
     adapter_path = resolve_lora_for_repo(repo)
     if not adapter_path:
-        return jsonify({
+        return {
             "violations": [],
             "model_path": None,
             "scope": scope,
             "no_model_for_repo": True,
             "repo": repo,
-        })
+        }
 
-    # Compute the diff the agent wants to review.
     if scope == "last_commit":
         base_ref = "HEAD~1"
     else:
@@ -170,31 +160,52 @@ def lora_check():
         cwd=worktree, timeout=60,
     )
     if rc != 0:
-        return jsonify({"error": f"git diff failed: {derr.strip()[:200]}"}), 500
+        return {"error": f"git diff failed: {derr.strip()[:200]}"}
     if not diff.strip():
-        return jsonify({
+        return {
             "violations": [],
             "model_path": adapter_path,
             "scope": scope,
             "no_changes": True,
-        })
+        }
 
     from planet_maiko.brain.learning.trainer import review_code
     result = review_code(code=diff, adapter_path=adapter_path)
     if not result.get("success"):
-        return jsonify({
+        return {
             "error": result.get("error") or "LoRA inference failed",
             "model_path": adapter_path,
-        }), 500
+        }
 
-    violations = _parse_violations(result.get("output", ""))
-    return jsonify({
-        "violations": violations,
+    return {
+        "violations": _parse_violations(result.get("output", "")),
         "model_path": adapter_path,
         "scope": scope,
         "raw_output": result.get("output", ""),
         "ran_at": datetime.now(timezone.utc).isoformat(),
-    })
+    }
+
+
+@lora_bp.route("/lora/check", methods=["POST"])
+def lora_check():
+    """Run the task's LoRA against its worktree diff.
+
+    Thin HTTP wrapper around `run_lora_for_task`. Kept as its own
+    endpoint so the MCP tool `lora_check` can still call it directly
+    when the agent wants to drill into LoRA output after fixing
+    violations (re-check without re-running shell tests).
+
+    Body: {"task_id": str, "scope": "branch" | "last_commit"}
+    """
+    data = request.get_json(silent=True) or {}
+    result = run_lora_for_task(
+        task_id=data.get("task_id"),
+        scope=data.get("scope") or "branch",
+    )
+    if "error" in result and "no_model_for_repo" not in result:
+        status = 404 if "not found" in result["error"] else 400 if "required" in result["error"] else 500
+        return jsonify(result), status
+    return jsonify(result)
 
 
 # ---------------------------------------------------------------------------
