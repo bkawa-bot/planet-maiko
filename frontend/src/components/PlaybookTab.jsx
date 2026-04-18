@@ -150,9 +150,9 @@ export default function PlaybookTab({ onCountsChange }) {
         <p className="page-empty">Loading…</p>
       ) : Object.keys(byRepo).length === 0 ? (
         <div className="empty-state">
-          <div className="empty-title">No insights yet</div>
+          <div className="empty-title">Playbook's waiting for notes</div>
           <div className="empty-sub">
-            Agents add these via `reply(message_type="insight")`, or you can add one below.
+            Agents jot down tribal knowledge here — "this service expects a trailing slash," "legal wants session tokens hashed," that kind of thing. Anything added gets injected into future agent sessions. Add one yourself below if you already have something worth remembering.
           </div>
         </div>
       ) : (

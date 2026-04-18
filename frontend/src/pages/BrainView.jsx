@@ -293,9 +293,9 @@ export default function BrainView() {
         ) : Object.keys(byCategory).length === 0 ? (
           <div className="empty-state">
             <Brain size={36} className="empty-icon" />
-            <div className="empty-title">No learnings yet</div>
+            <div className="empty-title">The brain's still fresh</div>
             <div className="empty-sub">
-              Learnings are discovered from PR comments, agent feedback, and manual input
+              Learnings show up here as your agents review PRs, notice patterns, and get feedback. Give it a few cycles, or add one by hand.
             </div>
           </div>
         ) : (

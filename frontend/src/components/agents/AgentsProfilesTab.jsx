@@ -176,10 +176,10 @@ export default function AgentsProfilesTab({
         </div>
         <div className="empty-state">
           <Target size={36} className="empty-icon" />
-          <div className="empty-title">No agent profiles yet</div>
-          <div className="empty-sub">Create an agent to start building specialized context sets.</div>
+          <div className="empty-title">The pack is quiet</div>
+          <div className="empty-sub">Agents live here — each one specializes in a repo or a kind of work. Welcome the first specialist and they'll get to know your code.</div>
           <button className="btn btn-primary" onClick={onCreateAgent} style={{ marginTop: 12 }}>
-            <Plus size={12} /> Create First Agent
+            <Plus size={12} /> Welcome an agent
           </button>
         </div>
       </div>
