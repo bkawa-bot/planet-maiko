@@ -315,7 +315,11 @@
   top: 58px; left: 0; right: 0; bottom: 28px;
   pointer-events: none;
   overflow: hidden;
-  z-index: 50;
+  /* -1 keeps weather effects above the body background but BEHIND all
+     content — same pattern .sky-overlay uses. Without this, clouds /
+     rain / snow / stars render on top of cards which is both visually
+     confusing and actively in-the-way. */
+  z-index: -1;
 }
 
 /* Pixel art cloud images — many clouds, high opacity, very slow drift */
