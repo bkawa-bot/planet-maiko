@@ -198,6 +198,78 @@ def lora_check():
 
 
 # ---------------------------------------------------------------------------
+# /lora/check-diff — repo-scoped variant for external orchestrators
+# ---------------------------------------------------------------------------
+
+@lora_bp.route("/lora/check-diff", methods=["POST"])
+def lora_check_diff():
+    """Run a repo's LoRA against a diff the caller provides.
+
+    Sibling to /lora/check. The task-scoped version computes the diff
+    from a Maiko Task's worktree; this version lets external callers
+    (external orchestrators, other coding sessions) pass the diff
+    directly so they don't need a Maiko task.
+
+    Body:
+      {
+        "diff":  "<git diff text>",       // required
+        "repo":  "org/name",               // required
+        "scope": "branch" | "last_commit"  // optional, informational only
+      }
+
+    Response:
+      {
+        "violations": [{category, severity, message}],
+        "model_path": "/path/to/adapter" | null,
+        "scope": "branch" | "last_commit",
+        "no_model_for_repo": bool   // true → caller can skip gracefully
+      }
+    """
+    data = request.get_json(silent=True) or {}
+    diff = data.get("diff") or ""
+    repo = (data.get("repo") or "").strip()
+    scope = data.get("scope") or "branch"
+
+    if not repo:
+        return jsonify({"error": "repo is required"}), 400
+    if not diff.strip():
+        return jsonify({
+            "violations": [],
+            "model_path": None,
+            "scope": scope,
+            "no_changes": True,
+        })
+
+    from planet_maiko.brain.learning.lora_eval import resolve_lora_for_repo
+    adapter_path = resolve_lora_for_repo(repo)
+    if not adapter_path:
+        return jsonify({
+            "violations": [],
+            "model_path": None,
+            "scope": scope,
+            "no_model_for_repo": True,
+            "repo": repo,
+        })
+
+    from planet_maiko.brain.learning.trainer import review_code
+    result = review_code(code=diff, adapter_path=adapter_path)
+    if not result.get("success"):
+        return jsonify({
+            "error": result.get("error") or "LoRA inference failed",
+            "model_path": adapter_path,
+        }), 500
+
+    violations = _parse_violations(result.get("output", ""))
+    return jsonify({
+        "violations": violations,
+        "model_path": adapter_path,
+        "scope": scope,
+        "raw_output": result.get("output", ""),
+        "ran_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+
+# ---------------------------------------------------------------------------
 # /lora/adapters — read surface for external orchestrators
 # ---------------------------------------------------------------------------
 

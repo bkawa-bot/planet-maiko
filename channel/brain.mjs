@@ -7,9 +7,10 @@
  * serves external tools running their own LLM sessions so they can register
  * those sessions with Maiko for agent-to-agent conflict detection.
  *
- * Phase A + B: three A2A conflict-detection tools plus three read-surface
- * tools (learnings, conventions, adapter info). Compliance and producer
- * hooks come later.
+ * Phase A + B + C: A2A conflict-detection tools (register / complete /
+ * detect), read-surface tools (learnings, conventions, adapter info), and
+ * a compliance check against the repo's LoRA. Producer hooks (feedback,
+ * insights) come later.
  *
  * Environment variables:
  *   MAIKO_API_URL   — Planet Maiko API base URL (default: http://localhost:8420/api)
@@ -45,7 +46,7 @@ const mcp = new Server(
       tools: {},
     },
     instructions: [
-      `You have six tools for coordinating an external LLM session with Planet Maiko:`,
+      `You have seven tools for coordinating an external LLM session with Planet Maiko:`,
       `- maiko_register_session(repo, worktree_path, session_id?, hint?) — announce`,
       `  that a new session is starting work in a given repo/worktree. Returns`,
       `  the session_id Maiko will use to track it for conflict detection.`,
@@ -60,13 +61,18 @@ const mcp = new Server(
       `  block to prepend to your agent's system prompt. Cache per session.`,
       `- maiko_get_adapter_info(repo) — fetch LoRA adapter metadata for a repo`,
       `  to decide whether compliance checks are worth it. Cache per session.`,
+      `- maiko_check_compliance(diff, repo, scope?) — run the repo's LoRA against`,
+      `  a diff you provide; returns violations. Slow (runs inference server-side);`,
+      `  call as a pre-commit gate, not per edit.`,
       ``,
       `Call maiko_register_session once at the start of a task,`,
       `maiko_detect_conflicts before and during edits to catch overlap with`,
       `other agents, and maiko_complete_session once the task ends. Fetch the`,
       `read-surface tools (learnings / conventions / adapter info) once at`,
       `session start and reuse the results — they only change at brain-cycle`,
-      `cadence or on user approvals.`,
+      `cadence or on user approvals. Call maiko_check_compliance as a`,
+      `pre-commit gate when a LoRA is configured for the repo (check with`,
+      `maiko_get_adapter_info first).`,
     ].join("\n"),
   }
 );
@@ -215,6 +221,39 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
         },
         required: ["repo"],
+      },
+    },
+    {
+      name: "maiko_check_compliance",
+      description:
+        "Run the repo's LoRA compliance check against a diff you provide. " +
+        "Returns violations the model flagged (category, severity, message). " +
+        "Triggers LoRA inference server-side and can take a few seconds — " +
+        "call as a pre-commit gate, not per edit. If no adapter is trained " +
+        "for the repo, returns an empty list with no_model_for_repo=true " +
+        "so the caller can skip gracefully (check maiko_get_adapter_info " +
+        "first to avoid the round-trip).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          diff: {
+            type: "string",
+            description:
+              "Git diff text (output of `git diff <base>..HEAD` or similar).",
+          },
+          repo: {
+            type: "string",
+            description: "Repository identifier in \"org/name\" form.",
+          },
+          scope: {
+            type: "string",
+            enum: ["branch", "last_commit"],
+            description:
+              "Informational only — recorded with the check for audit. " +
+              "Doesn't change processing (the caller provides the diff).",
+          },
+        },
+        required: ["diff", "repo"],
       },
     },
   ],
@@ -411,6 +450,54 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       const text =
         `LoRA adapter for ${data.repo || repo}${version}${base}${trained}${score}${size}.${path}`;
       return { content: [{ type: "text", text }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
+    }
+  }
+
+  if (req.params.name === "maiko_check_compliance") {
+    const { diff, repo, scope } = req.params.arguments || {};
+    const body = { diff, repo };
+    if (scope) body.scope = scope;
+    try {
+      const resp = await fetch(`${API_URL}/lora/check-diff`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!resp.ok) {
+        const err = await resp.text();
+        return { content: [{ type: "text", text: `Failed to run LoRA: ${err}` }] };
+      }
+      const data = await resp.json();
+      if (data.no_model_for_repo) {
+        return {
+          content: [{
+            type: "text",
+            text: `No LoRA configured for ${data.repo || repo} — skip.`,
+          }],
+        };
+      }
+      if (data.no_changes) {
+        return {
+          content: [{ type: "text", text: "No changes in diff — nothing to review." }],
+        };
+      }
+      const violations = data.violations || [];
+      if (violations.length === 0) {
+        return {
+          content: [{ type: "text", text: "LoRA check: PASS. No violations detected." }],
+        };
+      }
+      const formatted = violations
+        .map((v, i) => `${i + 1}. [${v.category}] ${v.message}`)
+        .join("\n");
+      return {
+        content: [{
+          type: "text",
+          text: `LoRA check found ${violations.length} violation(s):\n${formatted}\n\nAddress each one you agree with.`,
+        }],
+      };
     } catch (err) {
       return { content: [{ type: "text", text: `Error: ${err.message}` }] };
     }
