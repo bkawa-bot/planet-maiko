@@ -7,10 +7,12 @@
  * serves external tools running their own LLM sessions so they can register
  * those sessions with Maiko for agent-to-agent conflict detection.
  *
- * Phase A + B + C: A2A conflict-detection tools (register / complete /
- * detect), read-surface tools (learnings, conventions, adapter info), and
- * a compliance check against the repo's LoRA. Producer hooks (feedback,
- * insights) come later.
+ * Phases A–D — the full v0 consumer surface:
+ *   - A2A conflict detection: register / complete / detect
+ *   - Read surface: learnings, conventions (Pack Insights), adapter info
+ *   - Compliance: run the repo's LoRA against a diff
+ *   - Producer hooks: submit feedback (signals / LoRA corrections) and
+ *     submit insights (tribal knowledge for future agents)
  *
  * Environment variables:
  *   MAIKO_API_URL   — Planet Maiko API base URL (default: http://localhost:8420/api)
@@ -46,7 +48,7 @@ const mcp = new Server(
       tools: {},
     },
     instructions: [
-      `You have seven tools for coordinating an external LLM session with Planet Maiko:`,
+      `You have nine tools for coordinating an external LLM session with Planet Maiko:`,
       `- maiko_register_session(repo, worktree_path, session_id?, hint?) — announce`,
       `  that a new session is starting work in a given repo/worktree. Returns`,
       `  the session_id Maiko will use to track it for conflict detection.`,
@@ -64,6 +66,11 @@ const mcp = new Server(
       `- maiko_check_compliance(diff, repo, scope?) — run the repo's LoRA against`,
       `  a diff you provide; returns violations. Slow (runs inference server-side);`,
       `  call as a pre-commit gate, not per edit.`,
+      `- maiko_submit_feedback(type, content, context?) — feed corrective signal`,
+      `  back to Maiko's learning pipeline. type is "signal", "false_positive",`,
+      `  or "false_negative".`,
+      `- maiko_submit_insight(repo, text, tags?, session_id?) — submit a tribal-`,
+      `  knowledge insight about the repo. Lands as "pending" for user approval.`,
       ``,
       `Call maiko_register_session once at the start of a task,`,
       `maiko_detect_conflicts before and during edits to catch overlap with`,
@@ -71,8 +78,10 @@ const mcp = new Server(
       `read-surface tools (learnings / conventions / adapter info) once at`,
       `session start and reuse the results — they only change at brain-cycle`,
       `cadence or on user approvals. Call maiko_check_compliance as a`,
-      `pre-commit gate when a LoRA is configured for the repo (check with`,
-      `maiko_get_adapter_info first).`,
+      `pre-commit gate when a LoRA is configured for the repo. Use the`,
+      `submit_* tools sparingly — when you've observed something worth`,
+      `feeding back (a correction, a team convention, a gotcha a future`,
+      `agent should know).`,
     ].join("\n"),
   }
 );
@@ -254,6 +263,89 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
         },
         required: ["diff", "repo"],
+      },
+    },
+    {
+      name: "maiko_submit_feedback",
+      description:
+        "Contribute corrective feedback back to Maiko's learning pipeline. " +
+        "Three flavors via `type`: \"signal\" for a generic observation " +
+        "(team convention, noticed pattern), \"false_positive\" when " +
+        "Maiko's LoRA flagged something that's actually fine, and " +
+        "\"false_negative\" when the LoRA missed a real issue. Submissions " +
+        "feed the next retraining cycle. Use sparingly — one per clear " +
+        "observation, not per edit.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          type: {
+            type: "string",
+            enum: ["signal", "false_positive", "false_negative"],
+            description:
+              "\"signal\" for a generic observation feeding the learning " +
+              "pipeline. \"false_positive\" when the LoRA flagged code " +
+              "that's actually correct. \"false_negative\" when the LoRA " +
+              "missed a real issue.",
+          },
+          content: {
+            type: "string",
+            description:
+              "The primary payload. For \"signal\", the text of the " +
+              "observation. For \"false_positive\" / \"false_negative\", " +
+              "the code snippet the LoRA judged incorrectly.",
+          },
+          context: {
+            type: "object",
+            description:
+              "Extra fields. \"signal\" requires { category }. " +
+              "\"false_negative\" requires { violation }. All types " +
+              "accept optional { repo, file, code, category, reason, " +
+              "session_id, language, severity }.",
+          },
+        },
+        required: ["type", "content"],
+      },
+    },
+    {
+      name: "maiko_submit_insight",
+      description:
+        "Submit a tribal-knowledge insight about the repo (tooling quirks, " +
+        "migration state, team conventions, gotchas). Insights get reviewed " +
+        "by the user and, if approved, injected into every future Maiko " +
+        "agent's CLAUDE.md for the same repo. Submitted as \"pending\" by " +
+        "default — the user approves via the Playbook UI. Use sparingly: " +
+        "one fact per call, only for durable knowledge a future agent " +
+        "working in this repo would benefit from.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          repo: {
+            type: "string",
+            description: "Repository identifier in \"org/name\" form.",
+          },
+          text: {
+            type: "string",
+            description:
+              "The insight — one fact, one or two sentences (e.g. " +
+              "\"this repo uses IntelliJ for tests; the CLI runner is broken\").",
+          },
+          tags: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "Optional tags (e.g. [\"tooling\"], [\"migration\"]). The " +
+              "\"overview\" tag is reserved for Cartographer-authored " +
+              "repo maps and shouldn't be used by external submissions.",
+          },
+          session_id: {
+            type: "string",
+            description:
+              "Optional — the session_id returned by maiko_register_session. " +
+              "When provided, the insight is attributed to this external " +
+              "session in the Playbook UI.",
+          },
+        },
+        required: ["repo", "text"],
       },
     },
   ],
@@ -496,6 +588,135 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
         content: [{
           type: "text",
           text: `LoRA check found ${violations.length} violation(s):\n${formatted}\n\nAddress each one you agree with.`,
+        }],
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
+    }
+  }
+
+  if (req.params.name === "maiko_submit_feedback") {
+    const { type, content, context = {} } = req.params.arguments || {};
+    if (!type || !content) {
+      return {
+        content: [{ type: "text", text: "Error: type and content are required." }],
+      };
+    }
+
+    let url;
+    let body;
+
+    if (type === "signal") {
+      if (!context.category) {
+        return {
+          content: [{
+            type: "text",
+            text: "Error: context.category is required for type=signal.",
+          }],
+        };
+      }
+      url = `${API_URL}/signals`;
+      body = {
+        category: context.category,
+        text: content,
+        source_type: context.source_type || "external_mcp",
+        severity: context.severity || "suggestion",
+        repo: context.repo,
+        language: context.language,
+        file_path: context.file,
+        code_context: context.code,
+      };
+    } else if (type === "false_positive") {
+      url = `${API_URL}/lora/false_positive`;
+      body = {
+        code: content,
+        file: context.file,
+        category: context.category,
+        repo: context.repo,
+        reason: context.reason,
+      };
+    } else if (type === "false_negative") {
+      if (!context.violation) {
+        return {
+          content: [{
+            type: "text",
+            text: "Error: context.violation is required for type=false_negative.",
+          }],
+        };
+      }
+      url = `${API_URL}/lora/false_negative`;
+      body = {
+        code: content,
+        violation: context.violation,
+        category: context.category,
+        file: context.file,
+        repo: context.repo,
+      };
+    } else {
+      return {
+        content: [{
+          type: "text",
+          text: `Error: unknown type "${type}". Use "signal", "false_positive", or "false_negative".`,
+        }],
+      };
+    }
+
+    try {
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!resp.ok) {
+        const err = await resp.text();
+        return { content: [{ type: "text", text: `Failed to submit feedback: ${err}` }] };
+      }
+      const data = await resp.json();
+      const id = data.id !== undefined ? ` #${data.id}` : "";
+      return {
+        content: [{
+          type: "text",
+          text: `Submitted ${type}${id} — feeds the next training cycle.`,
+        }],
+      };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
+    }
+  }
+
+  if (req.params.name === "maiko_submit_insight") {
+    const { repo, text, tags, session_id } = req.params.arguments || {};
+    if (!repo || !text) {
+      return {
+        content: [{ type: "text", text: "Error: repo and text are required." }],
+      };
+    }
+
+    const body = {
+      text,
+      repo_scope: repo,
+      tags: Array.isArray(tags) ? tags : [],
+      status: "pending",
+    };
+    if (session_id) body.author_agent_id = session_id;
+
+    try {
+      const resp = await fetch(`${API_URL}/insights`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!resp.ok) {
+        const err = await resp.text();
+        return { content: [{ type: "text", text: `Failed to submit insight: ${err}` }] };
+      }
+      const data = await resp.json();
+      const id = data.id !== undefined ? ` #${data.id}` : "";
+      const status = data.status || "pending";
+      return {
+        content: [{
+          type: "text",
+          text: `Submitted insight${id} (status: ${status}) — awaits user approval.`,
         }],
       };
     } catch (err) {
