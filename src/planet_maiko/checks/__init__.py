@@ -117,6 +117,16 @@ def _auto_detect(repo_path: str) -> list[dict]:
         checks.append({"name": "go vet", "command": "go vet ./..."})
         checks.append({"name": "go test", "command": "go test ./..."})
 
+    # Lean 4 — `lake build` runs the Lean kernel over every target in
+    # the project and exits non-zero on proof failures, type errors,
+    # or build errors. For a verification-oriented repo this is the
+    # real gate: an agent claiming `ready_for_review` on Lean code
+    # that doesn't compile is claiming it proved something it didn't.
+    # `--log-level=error` keeps Mathlib's info spam out of the tail.
+    lean_project = has("lakefile.lean") or has("lakefile.toml") or has("lean-toolchain")
+    if lean_project and shutil.which("lake"):
+        checks.append({"name": "lake build", "command": "lake build --log-level=error"})
+
     return checks
 
 
