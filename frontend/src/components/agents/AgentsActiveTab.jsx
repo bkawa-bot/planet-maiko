@@ -28,10 +28,10 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
   const triggerCycle = async () => {
     if (triggeringCycle) return;
     setTriggeringCycle(true);
-    showToast("Running brain cycle...", "normal");
+    showToast("Brain's thinking...", "normal");
     try {
       await api.runBrainCycle();
-      showToast("Cycle done — refreshing", "normal");
+      showToast("All caught up — refreshing 🌱", "normal");
       onRefresh?.();
     } catch (err) {
       showToast(err.message || "Cycle failed", "high");
@@ -83,9 +83,9 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
     if (path) {
       try {
         await api.openTerminal(path, a.task_id, a.branch);
-        showToast("Launching agent...", "normal");
+        showToast("On the way...", "normal");
       } catch (err) {
-        showToast("Could not open terminal", "high");
+        showToast("Couldn't open the terminal", "high");
       }
     } else {
       showToast(`Checkout branch: git checkout ${a.branch} && claude`, "normal");
@@ -99,7 +99,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
       showToast("Re-running agent — first message should land in a moment", "normal");
       onRefresh?.();
     } catch (err) {
-      showToast(err.message || "Could not re-run agent", "high");
+      showToast(err.message || "Couldn't re-run", "high");
     }
   };
 
@@ -109,7 +109,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
       await api.nudgeAgent(taskId);
       showToast("Nudge sent — agent will report in", "normal");
     } catch (err) {
-      showToast(err.message || "Could not send nudge", "high");
+      showToast(err.message || "Couldn't nudge", "high");
     }
   };
 
@@ -124,10 +124,10 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
           await api.openTerminal(a.working_path, a.task_id, a.branch);
           showToast("Attaching to session...", "normal");
         } catch (e) {
-          showToast("Could not open session", "high");
+          showToast("Couldn't open the session", "high");
         }
       } else {
-        showToast("No session found — agent may not have started yet", "normal");
+        showToast("No session yet — agent's still getting ready", "normal");
       }
     }
   };
@@ -174,9 +174,9 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
         {dormantAgents.length === 0 && activity.length === 0 ? (
           <div className="empty-state">
             <span style={{ fontSize: 48 }}>🐾</span>
-            <div className="empty-title">No active agents</div>
+            <div className="empty-title">Quiet right now</div>
             <div className="empty-sub">
-              Create a new agent to get started, or
+              Nobody's on anything at the moment. Create a new agent, or
               {" "}
               <button
                 className="btn-link"
@@ -184,9 +184,9 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                 disabled={triggeringCycle}
                 style={{ background: "none", border: "none", padding: 0, color: "var(--pink)", cursor: "pointer", textDecoration: "underline" }}
               >
-                run a brain cycle now
+                give the brain a nudge
               </button>
-              {" "}to route any waiting tasks.
+              {" "}to see if there's waiting work.
             </div>
           </div>
         ) : (
@@ -209,8 +209,8 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
               <div key={a.task_id || a.agent_id} className="agent-card card">
                 <div className="speech-bubble">
                   {isStuck
-                    ? `Stuck — no pupdates for ${ageMin}m. Try Re-run${isOneShot ? "" : " or open a terminal"}.`
-                    : "Starting up — first message hasn't landed yet"}
+                    ? `Hasn't checked in for ${ageMin}m. Try Re-run${isOneShot ? "" : " or open a fresh terminal"}.`
+                    : "Just settling in — first message hasn't landed yet"}
                   <div className="speech-time">
                     {formatTime(a.prepared_at)}
                   </div>
@@ -308,7 +308,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
               // index-based key from churning on reorder.
               <div key={a.task_id} className="agent-card card">
                 <div className={`speech-bubble status-${a.status}`}>
-                  {a.last_message || "No recent messages"}
+                  {a.last_message || "Quiet for now — no messages yet"}
                   <div className="speech-time">
                     {formatTime(a.last_seen)}
                   </div>
