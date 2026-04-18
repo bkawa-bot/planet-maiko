@@ -148,17 +148,13 @@
 
 /* === Widgets === */
 .home-widget {
-  background: rgba(45, 54, 60, 0.55);
+  background: var(--pane-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border);
   border-radius: var(--radius); padding: 14px 16px;
   box-shadow: 0 2px 12px rgba(0,0,0,0.1);
 }
-[data-theme="light"] .home-widget { background: rgba(242, 248, 242, 0.75); }
-[data-theme="morning"] .home-widget { background: rgba(250, 246, 238, 0.75); }
-[data-theme="afternoon"] .home-widget { background: rgba(248, 232, 208, 0.78); }
-[data-theme="sunset"] .home-widget { background: rgba(58, 34, 72, 0.65); }
 
 .widget-header {
   display: flex; align-items: center; gap: 6px;

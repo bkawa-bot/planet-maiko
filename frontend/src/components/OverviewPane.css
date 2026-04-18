@@ -7,18 +7,13 @@
   flex-direction: column;
   gap: 20px;
   padding: 24px 28px;
-  background: rgba(45, 54, 60, 0.55);
+  background: var(--pane-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 2px 16px rgba(0, 0, 0, 0.12);
 }
-
-[data-theme="light"] .overview-pane    { background: rgba(242, 248, 242, 0.78); }
-[data-theme="morning"] .overview-pane  { background: rgba(250, 246, 238, 0.80); }
-[data-theme="afternoon"] .overview-pane { background: rgba(248, 232, 208, 0.80); }
-[data-theme="sunset"] .overview-pane   { background: rgba(58, 34, 72, 0.68); }
 
 /* Loading + error states */
 .overview-loading,
