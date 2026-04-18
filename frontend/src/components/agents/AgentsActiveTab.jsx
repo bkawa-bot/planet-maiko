@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
 import { formatTime } from "../../utils/dates";
+import AgentTimelineModal from "./AgentTimelineModal";
 
 /**
  * Active tab — pack awareness, queued tasks, ready-to-launch agents, live
@@ -50,6 +51,16 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
   const [selectedThread, setSelectedThread] = useState(null);
   const [messages, setMessages] = useState([]);
   const [msgInput, setMsgInput] = useState("");
+  const [timelineFor, setTimelineFor] = useState(null);
+
+  const openTimeline = (agentId) => {
+    if (!agentId) return;
+    const profile = profiles.find((p) => p.id === agentId);
+    setTimelineFor({
+      agentId,
+      agentName: profile?.display_name || agentId.replace(/^agent-/, ""),
+    });
+  };
 
   const loadThread = async (taskId) => {
     setSelectedThread(taskId);
@@ -329,6 +340,13 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                   <button className="btn btn-sm" onClick={() => loadThread(a.task_id)}>
                     <MessageCircle size={12} /> Channel Log
                   </button>
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => openTimeline(a.agent_id)}
+                    title={`See ${profiles.find((p) => p.id === a.agent_id)?.display_name || "this agent"}'s full activity across all tasks`}
+                  >
+                    <Clock size={12} /> Timeline
+                  </button>
                   {!isOneShot && (
                     <button
                       className="btn btn-sm"
@@ -411,6 +429,13 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                     <MessageCircle size={12} /> Channel Log
                   </button>
                   <button
+                    className="btn btn-sm"
+                    onClick={() => openTimeline(profileId)}
+                    title="See this agent's full activity across all tasks"
+                  >
+                    <Clock size={12} /> Timeline
+                  </button>
+                  <button
                     className="btn btn-sm btn-comms"
                     onClick={() => handleNudge(a.task_id)}
                     title="Ping the agent for a status update"
@@ -459,6 +484,14 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
               </div>
             </div>
           </div>
+        )}
+
+        {timelineFor && (
+          <AgentTimelineModal
+            agentId={timelineFor.agentId}
+            agentName={timelineFor.agentName}
+            onClose={() => setTimelineFor(null)}
+          />
         )}
     </div>
   );
