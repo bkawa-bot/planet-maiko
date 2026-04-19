@@ -6,7 +6,9 @@
 
 ![Planet Maiko home](docs/screenshots/home.png)
 
-I got tired of being a babysitter. So I built Planet Maiko.
+I got tired of being a babysitter.
+
+So I built Planet Maiko. I've been a software engineer for almost a decade; this is the tool I wanted to exist, with one goal: bring a little joy back to the work day. Fewer agents to babysit, more space to think. I use it every day. Sharing it freely with anyone who wants it.
 
 In Planet Maiko you lead a pack that teaches itself from your team's merged PRs, shares context between siblings, and coordinates automatically. You stop being a fleet manager and go back to being a lead engineer.
 
