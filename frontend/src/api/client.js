@@ -193,6 +193,7 @@ export const api = {
   // Agents
   getAgents: () => request("/agents"),
   getAgentActivity: () => request("/agents/activity"),
+  getPackRequests: () => request("/agents/requests"),
   getQueuedAgentTasks: () => request("/agents/queued"),
   getAgentMessages: (taskId) => request(`/agents/${taskId}/messages`),
   sendToAgent: (taskId, data) =>

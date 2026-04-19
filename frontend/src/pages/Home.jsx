@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import SetupWizard from "../components/SetupWizard";
 import OverviewPane from "../components/OverviewPane";
 import PetMaikoWidget from "../components/PetMaikoWidget";
+import PackRequestsWidget from "../components/PackRequestsWidget";
 import { formatTime, formatClock } from "../utils/dates";
 import { Brain, Calendar, Palette, Video } from "lucide-react";
 import "./Home.css";
@@ -92,6 +93,7 @@ export default function Home() {
 
         {/* Sidebar widgets: ambient context, not primary surface. */}
         <div className="home-sidebar">
+          <PackRequestsWidget />
           <PetMaikoWidget />
 
           <div className="home-widget">

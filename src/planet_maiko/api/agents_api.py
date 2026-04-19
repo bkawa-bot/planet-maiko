@@ -1223,6 +1223,64 @@ def get_session(task_id):
     return jsonify({"session_id": info.get("session_id") if isinstance(info, dict) else info})
 
 
+@agents_bp.route("/agents/requests", methods=["GET"])
+def pack_requests():
+    """Pupdates where the pack is actively waiting on the user.
+
+    Deliberately SQL-level and cheap — this is the "your pack needs
+    you" widget that sits on Home and polls every ~30s. The LLM-backed
+    overview pane updates on its own cadence (~4h, plus event
+    invalidation); that's the wrong shape for "an agent just asked for
+    a plan review, show me now."
+
+    Filters to agent-originated types only: plans waiting for approval,
+    diffs ready for review, stuck agents, proposals. External-PR
+    pupdates (pr_review_requested etc.) are intentionally excluded —
+    those aren't pack requests, they're GitHub events.
+
+    Held pupdates (from focus mode) are hidden here too, matching the
+    main /api/pupdates behavior.
+    """
+    from planet_maiko.models.pupdate import Pupdate
+    from planet_maiko.models.agent_profile import AgentProfile
+
+    AGENT_REQUEST_TYPES = (
+        "agent_plan_for_approval",
+        "agent_ready_for_review",
+        "agent_stuck",
+        "agent_proposal",
+    )
+
+    limit = min(int(request.args.get("limit") or 10), 30)
+    rows = (
+        Pupdate.query
+        .filter(Pupdate.type.in_(AGENT_REQUEST_TYPES))
+        .filter(Pupdate.dismissed == False)  # noqa: E712
+        .order_by(Pupdate.timestamp.desc())
+        .limit(limit * 2)  # overshoot; we may skip some that are held
+        .all()
+    )
+    rows = [p for p in rows if not (p.extra or {}).get("held")][:limit]
+
+    # Resolve agent display_name via extra.agent_id so the widget can
+    # render "Yoshi needs a plan review" instead of "agent needs a plan
+    # review". Batch lookup — one query for all unique agent_ids.
+    agent_ids = {(p.extra or {}).get("agent_id") for p in rows}
+    agent_ids.discard(None)
+    name_by_id = {}
+    if agent_ids:
+        for a in AgentProfile.query.filter(AgentProfile.id.in_(agent_ids)).all():
+            name_by_id[a.id] = a.display_name
+
+    out = []
+    for p in rows:
+        extra = p.extra or {}
+        d = p.to_dict()
+        d["agent_name"] = name_by_id.get(extra.get("agent_id"))
+        out.append(d)
+    return jsonify(out)
+
+
 @agents_bp.route("/agents/conflicts", methods=["GET"])
 def get_conflicts():
     """Get recent conflict warnings between agents."""
