@@ -32,14 +32,23 @@ function resolveAction(p) {
     return { label: "Review plan", to: `/tasks/${taskId}/plan` };
   }
   const tags = p.tags || [];
-  const isReviewLike =
+  // Review agents produce a diff + inline comments + verdict — route
+  // straight to the diff page so the user sees everything in context.
+  const isReviewAgent =
+    p.type === "agent_ready_for_review" && tags.includes("review");
+  if (isReviewAgent && taskId) {
+    return { label: "Open review", to: `/tasks/${taskId}/review` };
+  }
+  // Investigation / cartographer output is a markdown document, not
+  // a diff — keep the artifact-modal path for those.
+  const isReportLike =
     p.type === "pr_review_complete" ||
     p.type === "investigation_complete" ||
     (p.type === "agent_ready_for_review" &&
-      (tags.includes("review") || tags.includes("investigation") || tags.includes("cartographer")));
-  if (isReviewLike) {
+      (tags.includes("investigation") || tags.includes("cartographer")));
+  if (isReportLike) {
     return {
-      label: p.type === "investigation_complete" ? "Read report" : "Read review",
+      label: p.type === "investigation_complete" ? "Read report" : "Read report",
       artifact: true,
     };
   }

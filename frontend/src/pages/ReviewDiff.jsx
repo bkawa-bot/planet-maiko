@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, GitPullRequest, Loader, MessageSquare } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, GitPullRequest, Loader, MessageSquare, X } from "lucide-react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import DiffView from "../components/diff/DiffView";
 import CommentThread from "../components/diff/CommentThread";
 import "./ReviewDiff.css";
+
+const VERDICT_META = {
+  approve:                { label: "Approve",              tone: "ok",    text: "agent approves" },
+  approve_with_comments:  { label: "Approve w/ comments",  tone: "note",  text: "agent approves with comments" },
+  soft_block:             { label: "Soft block",           tone: "warn",  text: "agent suggests fixing before merge" },
+  hard_block:             { label: "Hard block",           tone: "stop",  text: "agent says do NOT merge as-is" },
+};
 
 /** Inline chip rendered on a diff line that has comments. Shows the
  *  count + a color reflecting who authored them. Clicking scrolls
@@ -211,6 +218,29 @@ export default function ReviewDiff() {
 
   const anchorKeys = Object.keys(threadsByAnchor);
 
+  // Review tasks vs coding tasks have different footer action shapes:
+  // - Review task = agent reviewed someone else's PR. User can't
+  //   "approve & open PR" from here — that's the GitHub workflow.
+  //   We just let them close the review when they're done reading.
+  // - Coding task = agent wrote code on their own branch. User
+  //   approves/requests changes, and an Approve pushes + opens a PR.
+  const isReviewTask = task && (task.type === "review" || task.type === "pr_review");
+  const verdict = task?.metadata?.review_verdict || task?.extra?.review_verdict;
+  const verdictMeta = verdict ? VERDICT_META[verdict] : null;
+  const summary = task?.metadata?.review_summary || task?.extra?.review_summary;
+  const prUrl = task?.url || task?.metadata?.pr_url || task?.extra?.pr_url;
+
+  const handleCloseReview = async () => {
+    if (!window.confirm("Close this review and clean up the worktree?")) return;
+    try {
+      await api.completeTask(taskId);
+      showToast("Review closed.", "normal");
+      navigate("/");
+    } catch (e) {
+      showToast(e.message || "Couldn't close the review", "high");
+    }
+  };
+
   return (
     <div className="review-diff-page">
       <div className="review-diff-header">
@@ -224,28 +254,61 @@ export default function ReviewDiff() {
               {diff.base_branch} ← {diff.head_sha?.slice(0, 7)}
             </span>
           )}
+          {prUrl && (
+            <a
+              href={prUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="review-diff-pr-link"
+              title="Open the PR on GitHub"
+            >
+              <ExternalLink size={10} /> open PR
+            </a>
+          )}
         </div>
         <div className="review-diff-actions">
-          <span className="review-diff-counter">
-            <MessageSquare size={10} /> {drafts.length} draft{drafts.length === 1 ? "" : "s"}
-          </span>
-          <button
-            className="btn btn-sm"
-            onClick={handleRequestChanges}
-            disabled={submitting || drafts.length === 0}
-            title={drafts.length === 0 ? "Leave draft comments first" : "Send comments to the agent"}
-          >
-            {submitting ? <><Loader size={10} className="spin" /> Sending…</> : "Request changes"}
-          </button>
-          <button
-            className="btn btn-sm btn-primary"
-            onClick={handleApprove}
-            disabled={approving}
-          >
-            {approving ? <><Loader size={10} className="spin" /> Opening PR…</> : <><GitPullRequest size={10} /> Approve &amp; open PR</>}
-          </button>
+          {isReviewTask ? (
+            <button
+              className="btn btn-sm"
+              onClick={handleCloseReview}
+              title="Mark this review finished and tear down the worktree"
+            >
+              <X size={10} /> Close review
+            </button>
+          ) : (
+            <>
+              <span className="review-diff-counter">
+                <MessageSquare size={10} /> {drafts.length} draft{drafts.length === 1 ? "" : "s"}
+              </span>
+              <button
+                className="btn btn-sm"
+                onClick={handleRequestChanges}
+                disabled={submitting || drafts.length === 0}
+                title={drafts.length === 0 ? "Leave draft comments first" : "Send comments to the agent"}
+              >
+                {submitting ? <><Loader size={10} className="spin" /> Sending…</> : "Request changes"}
+              </button>
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={handleApprove}
+                disabled={approving}
+              >
+                {approving ? <><Loader size={10} className="spin" /> Opening PR…</> : <><GitPullRequest size={10} /> Approve &amp; open PR</>}
+              </button>
+            </>
+          )}
         </div>
       </div>
+
+      {verdictMeta && (
+        <div className={`review-verdict-banner verdict-${verdictMeta.tone}`}>
+          <div className="review-verdict-chip">{verdictMeta.label}</div>
+          <div className="review-verdict-body">
+            <div className="review-verdict-label">{verdictMeta.text}</div>
+            {summary && <div className="review-verdict-summary">{summary}</div>}
+          </div>
+        </div>
+      )}
 
       <div className="review-diff-layout">
         <div className="review-diff-main">

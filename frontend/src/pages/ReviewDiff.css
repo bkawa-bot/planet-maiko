@@ -39,6 +39,83 @@
   font-weight: 400;
 }
 
+.review-diff-pr-link {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.review-diff-pr-link:hover {
+  color: var(--pink);
+  border-color: var(--pink);
+}
+
+/* Verdict banner — big warm card under the header when a review
+   agent supplied a verdict + summary. Four tones map to the four
+   verdict enum values. Non-blocking visually: takes roughly the
+   height of two lines of copy, fades the diff below it when hard
+   blocking so the user notices. */
+.review-verdict-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  margin-bottom: 16px;
+  background: var(--bg-card);
+}
+
+.review-verdict-chip {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.review-verdict-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.review-verdict-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.03em;
+}
+
+.review-verdict-summary {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* Tones — green / amber / orange / red, restrained (not candy). */
+.verdict-ok  .review-verdict-chip { background: var(--green); color: var(--bg); }
+.verdict-ok  { border-color: var(--green); }
+
+.verdict-note .review-verdict-chip { background: var(--lemon, #E8D88A); color: #4a3e1a; }
+.verdict-note { border-color: var(--lemon, #E8D88A); }
+
+.verdict-warn .review-verdict-chip { background: var(--high, #E8B06A); color: var(--bg); }
+.verdict-warn { border-color: var(--high, #E8B06A); }
+
+.verdict-stop .review-verdict-chip { background: var(--urgent); color: var(--bg); }
+.verdict-stop { border-color: var(--urgent); background: var(--urgent_faint, var(--bg-card)); }
+
 .review-diff-actions {
   display: flex;
   align-items: center;
