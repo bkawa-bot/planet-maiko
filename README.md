@@ -16,8 +16,10 @@ So I built Planet Maiko.
 
 ### The pack that raises itself
 
-- **Agents that learn your team's taste from every merged PR.** Reviewer feedback flows into per-repo LoRA adapters — no setup, no prompt engineering.
-- **Every agent starts with the team's full playbook in hand.** Approved insights inject into every new agent's `CLAUDE.md` automatically — no hand-written guidelines, no copy-paste between sessions.
+**No prompt engineering. No hand-written guidelines. No system prompts to maintain.** Your pack learns from what your team already does.
+
+- **Agents that learn your team's taste from every merged PR.** Reviewer feedback flows into per-repo LoRA adapters, automatically.
+- **Every agent starts with the team's full playbook in hand.** Approved insights inject into every new agent's `CLAUDE.md`, automatically.
 - **Siblings coordinate automatically — no more silent rewrites.** A2A conflict detection catches file and API overlap before two agents damage each other's work.
 - **The pack improves together, every day.** Agents share learnings at the campfire, you approve what sticks, tomorrow's pack wakes smarter.
 
