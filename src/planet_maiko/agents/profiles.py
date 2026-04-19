@@ -284,50 +284,6 @@ def record_task_outcome(task_id, outcome, initial_summary=None, final_summary=No
                             specs[spec_key] = max(0.0, current - 0.05)
                     profile.specializations = specs
 
-                # --- Lens updates: overrides, gaps, territory ---
-                if outcome in ("changes_requested", "failed") and sel.learning_ids:
-                    lens = dict(profile.lens or {})
-                    overrides = list(lens.get("overrides", []))
-
-                    # Check if any feedback signals contradict injected learnings
-                    from planet_maiko.models.signal import Signal
-                    recent_signals = Signal.query.filter(
-                        Signal.source_type == "session_feedback",
-                        Signal.created_at >= sel.created_at,
-                    ).all()
-                    feedback_categories = {s.category for s in recent_signals}
-
-                    from planet_maiko.models.learning import Learning as LensLearning
-                    injected = LensLearning.query.filter(LensLearning.id.in_(sel.learning_ids)).all()
-                    for l in injected:
-                        if l.category in feedback_categories and l.id not in overrides:
-                            overrides.append(l.id)
-
-                    lens["overrides"] = overrides
-
-                    # Gap detection: feedback categories with no matching injected learning
-                    if outcome == "failed":
-                        gaps = list(lens.get("gaps", []))
-                        injected_categories = {l.category for l in injected}
-                        for cat in feedback_categories:
-                            if cat not in injected_categories:
-                                gap_entry = {"category": cat, "repo": sel.repo or "", "reason": f"No learning for {cat} in task {task_id}"}
-                                if gap_entry not in gaps:
-                                    gaps.append(gap_entry)
-                        lens["gaps"] = gaps
-
-                    profile.lens = lens
-
-                # Territory tracking
-                if sel.repo:
-                    lens = dict(profile.lens or {})
-                    territory = dict(lens.get("territory", {}))
-                    repo_territory = dict(territory.get(sel.repo, {}))
-                    repo_territory["_total"] = repo_territory.get("_total", 0) + 1
-                    territory[sel.repo] = repo_territory
-                    lens["territory"] = territory
-                    profile.lens = lens
-
     if selections:
         db.session.commit()
         logger.info(f"[profiles] Recorded outcome '{outcome}' for task {task_id}")

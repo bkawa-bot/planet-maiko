@@ -9,9 +9,8 @@ Tests the complete flow:
 6. Simulate mid-session feedback
 7. Complete task and record outcome
 8. Verify specialization scores updated
-9. Verify lens (overrides, gaps, territory) updated
-10. Run brain cycle and verify all phases execute
-11. Test project driver auto-advancement
+9. Run brain cycle and verify all phases execute
+10. Test project driver auto-advancement
 """
 
 import json
@@ -207,13 +206,7 @@ class TestFullAgentLifecycle:
         profile = db.session.get(AgentProfile, "agent-e2e-1")
         assert profile.tasks_completed >= 1
 
-        # ---- 13. Verify lens territory updated ----
-        lens = profile.lens or {}
-        territory = lens.get("territory", {})
-        assert "org/repo" in territory
-        assert territory["org/repo"]["_total"] >= 1
-
-        # ---- 14. Verify ContextSelection outcome recorded ----
+        # ---- 13. Verify ContextSelection outcome recorded ----
         sel = ContextSelection.query.filter_by(task_id="task-e2e-1").first()
         assert sel.outcome == "success"
         assert sel.outcome_recorded_at is not None
@@ -668,137 +661,7 @@ class TestPackInsights:
 
 
 # ---------------------------------------------------------------------------
-# Test 8: Feedback to Lens Overrides
-# ---------------------------------------------------------------------------
-
-
-class TestFeedbackToLens:
-
-    def test_failed_task_with_feedback_adds_overrides(self, app, db):
-        """When a task fails and session feedback contradicts injected learnings,
-        those learnings are added to the agent's lens overrides."""
-        profile = AgentProfile(
-            id="agent-lens-1", display_name="Lens Bot", avatar="shiba",
-        )
-        db.session.add(profile)
-
-        learning = Learning(
-            rule="Always use Optional for nullable returns",
-            category="null_safety",
-            status="active",
-            confidence=0.5,
-            signal_count=5,
-        )
-        db.session.add(learning)
-        db.session.flush()
-
-        sel = ContextSelection(
-            task_id="task-lens-1",
-            agent_profile_id="agent-lens-1",
-            repo="org/repo",
-            learning_ids=[learning.id],
-            outcome=None,
-        )
-        db.session.add(sel)
-
-        # Create a session feedback signal that contradicts the injected learning
-        feedback = Signal(
-            category="null_safety",
-            text="Optional is too verbose here, use direct null check",
-            source_type="session_feedback",
-            severity="warning",
-        )
-        db.session.add(feedback)
-        db.session.commit()
-
-        from planet_maiko.agents.profiles import record_task_outcome
-        record_task_outcome("task-lens-1", "changes_requested")
-
-        profile = db.session.get(AgentProfile, "agent-lens-1")
-        lens = profile.lens or {}
-        overrides = lens.get("overrides", [])
-        assert learning.id in overrides
-
-    def test_failed_task_adds_gap_for_uncovered_category(self, app, db):
-        """When a task fails and feedback references a category NOT in the
-        injected learnings, that category is added as a gap."""
-        profile = AgentProfile(
-            id="agent-gap-1", display_name="Gap Bot", avatar="corgi",
-        )
-        db.session.add(profile)
-
-        # Injected learning is in "testing" category
-        learning = Learning(
-            rule="Always mock external deps", category="testing",
-            status="active", confidence=0.5, signal_count=5,
-        )
-        db.session.add(learning)
-        db.session.flush()
-
-        sel = ContextSelection(
-            task_id="task-gap-1",
-            agent_profile_id="agent-gap-1",
-            repo="org/repo",
-            learning_ids=[learning.id],
-            outcome=None,
-        )
-        db.session.add(sel)
-
-        # But feedback is about "performance" (a gap -- no learning for it)
-        feedback = Signal(
-            category="performance",
-            text="This query is way too slow, add an index",
-            source_type="session_feedback",
-            severity="blocking",
-        )
-        db.session.add(feedback)
-        db.session.commit()
-
-        from planet_maiko.agents.profiles import record_task_outcome
-        record_task_outcome("task-gap-1", "failed")
-
-        profile = db.session.get(AgentProfile, "agent-gap-1")
-        lens = profile.lens or {}
-        gaps = lens.get("gaps", [])
-        gap_categories = {g["category"] for g in gaps}
-        assert "performance" in gap_categories
-
-    def test_success_updates_territory_without_overrides(self, app, db):
-        """Successful tasks update territory but do not add overrides."""
-        profile = AgentProfile(
-            id="agent-terr-1", display_name="Terr Bot", avatar="husky",
-        )
-        db.session.add(profile)
-
-        learning = Learning(
-            rule="Use pytest fixtures", category="testing",
-            status="active", confidence=0.5, signal_count=5,
-        )
-        db.session.add(learning)
-        db.session.flush()
-
-        sel = ContextSelection(
-            task_id="task-terr-1",
-            agent_profile_id="agent-terr-1",
-            repo="my-repo",
-            learning_ids=[learning.id],
-            outcome=None,
-        )
-        db.session.add(sel)
-        db.session.commit()
-
-        from planet_maiko.agents.profiles import record_task_outcome
-        record_task_outcome("task-terr-1", "success")
-
-        profile = db.session.get(AgentProfile, "agent-terr-1")
-        lens = profile.lens or {}
-        assert lens.get("overrides", []) == []
-        territory = lens.get("territory", {})
-        assert "my-repo" in territory
-
-
-# ---------------------------------------------------------------------------
-# Test 9: API Smoke Tests
+# Test 8: API Smoke Tests
 # ---------------------------------------------------------------------------
 
 
