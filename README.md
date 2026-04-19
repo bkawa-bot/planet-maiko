@@ -6,11 +6,15 @@
 
 ---
 
-Watch any tech feed for a week and you'll see the same pitch in different logos: spin up 10 agents, 20 agents, a whole swarm. Ship 40 PRs in a day. 10x your output. The cost never makes the screenshot — you quietly become a fleet manager for junior devs that never sleep, re-explain your team's conventions to every new session, and rewrite the same file as three siblings who don't know the others exist. Burnout, just wearing a new hat.
+I got tired of being a babysitter.
+
+The current model of agent orchestration is unsustainable. *"Ship 40 PRs a day."* *"10x your output."* *"Run a swarm."* The cost never makes the screenshot — you end up working *for* your agents, not the other way around. Feeding context. Reviewing output. Resolving conflicts between siblings who don't know the others exist. A team of junior devs that never sleeps, never reads the room, and never learns what you taught them yesterday. Burnout, just wearing a new hat.
+
+So I built Planet Maiko.
 
 **You don't need more agents. You need smarter ones.**
 
-Planet Maiko's pack teaches itself from your team's merged PRs, shares context with each other, and coordinates automatically — so you stop being a fleet manager and start being a lead engineer again. That's the whole thesis. Everything else is implementation.
+In Planet Maiko you lead a pack that teaches itself from your team's merged PRs, shares context with each other, and coordinates automatically. You stop being a fleet manager and go back to being a lead engineer. That's the whole thesis — everything else is implementation.
 
 ### The pack that raises itself
 
