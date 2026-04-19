@@ -195,6 +195,15 @@ def create_app(start_scheduler=False):
         from planet_maiko.agents.skills import seed_defaults
         seed_defaults()
 
+        # Wake-registry cleanup: the previous run may have crashed with
+        # agents flagged "working" and with session-registry entries
+        # pointing at tasks that have since been cancelled or merged.
+        # Neither survives a crash, so clear them before we start
+        # accepting new triggers.
+        from planet_maiko.agents.wake import validate_registry, reset_stale_working
+        validate_registry()
+        reset_stale_working()
+
     # Serve pre-built frontend static files
     frontend_dir = static_dir()
 

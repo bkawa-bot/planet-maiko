@@ -199,3 +199,159 @@ def set_agent_state(app, task_id, state):
             db.session.commit()
     except Exception as e:
         logger.debug(f"[wake] state write skipped for {task_id}: {e}")
+
+
+# --- Cleanup --------------------------------------------------------------
+#
+# The session registry and Agent.state both accumulate stale entries:
+# a task marked done still has its session_id on file, an agent that
+# crashed mid-run still reads state="working". These helpers prune
+# them on task completion + app startup + periodic ticks.
+
+def prune_session(task_id):
+    """Drop a task's session_id from the registry. Called when the
+    task reaches a terminal status — further wakes on this task_id
+    should fail fast rather than silently succeed on a dead worktree.
+
+    The session JSONL on disk is kept (useful for LoRA harvest and
+    post-mortems); only the task_id → session_id pointer goes away.
+    """
+    from planet_maiko.api.agents_api import _get_sessions, _save_sessions
+    sessions = _get_sessions()
+    if task_id in sessions:
+        sessions.pop(task_id)
+        _save_sessions()
+        logger.info(f"[wake] pruned session for completed task {task_id}")
+
+
+def validate_registry():
+    """Walk the registry and drop entries whose task no longer exists
+    or whose worktree is gone. Run once at app startup — otherwise
+    the file grows forever.
+
+    Must run inside an app_context (caller's responsibility).
+    """
+    from planet_maiko.api.agents_api import _get_sessions, _save_sessions
+    from planet_maiko.models.task import Task
+
+    sessions = _get_sessions()
+    dropped = []
+    for task_id, info in list(sessions.items()):
+        task = db.session.get(Task, task_id)
+        wp = info.get("working_path") if isinstance(info, dict) else None
+        task_alive = task and task.status not in ("done", "cancelled")
+        worktree_ok = bool(wp) and os.path.isdir(wp)
+        if not task_alive or not worktree_ok:
+            sessions.pop(task_id)
+            dropped.append(task_id)
+    if dropped:
+        _save_sessions()
+        logger.info(f"[wake] registry cleanup — dropped {len(dropped)} stale entries")
+
+
+def reset_stale_working():
+    """Flip any Agent.state=='working' rows back to 'idle' on startup.
+    Previous run crashed / was killed; the in-memory lock is gone so
+    the working flag is meaningless until set_agent_state writes again.
+
+    Must run inside an app_context.
+    """
+    from planet_maiko.models.agent_profile import AgentProfile
+    profiles = AgentProfile.query.filter_by(state="working").all()
+    for p in profiles:
+        p.state = "idle"
+    if profiles:
+        db.session.commit()
+        logger.info(f"[wake] startup — reset {len(profiles)} stale working → idle")
+
+
+# Agents that look busy but haven't produced a pupdate in this long
+# are flagged stuck.
+_STUCK_AFTER_MINUTES = 15
+
+
+def check_stuck_agents(app):
+    """Find agents whose state is 'working' but whose last_active_at
+    timestamp is older than _STUCK_AFTER_MINUTES — the claude process
+    probably crashed silently. Flip them to 'stuck' and emit an
+    agent_stuck pupdate so the user can see it in Pack Requests.
+
+    Idempotent: once flipped to stuck, the next tick won't re-emit.
+    """
+    if app is None:
+        return 0
+    from datetime import timedelta
+    flagged = 0
+    try:
+        with app.app_context():
+            from planet_maiko.models.agent_profile import AgentProfile
+            from planet_maiko.models.task import Task
+            from planet_maiko.models.pupdate import Pupdate
+            import uuid as _uuid
+            threshold = datetime.now(timezone.utc) - timedelta(minutes=_STUCK_AFTER_MINUTES)
+            suspects = AgentProfile.query.filter(
+                AgentProfile.state == "working",
+                AgentProfile.last_active_at.isnot(None),
+                AgentProfile.last_active_at < threshold,
+            ).all()
+            for p in suspects:
+                # Double-check against the live lock: if the lock is
+                # held, the claude process really IS running and
+                # last_active_at just hasn't been bumped yet. Don't flag.
+                tasks = Task.query.filter(
+                    Task.assigned_agent_id == p.id,
+                    Task.status == "in_progress",
+                ).all()
+                if any(is_working(t.id) for t in tasks):
+                    continue
+                p.state = "stuck"
+                flagged += 1
+                # Emit a single stuck pupdate per (agent, task)
+                for t in tasks:
+                    existing = Pupdate.query.filter(
+                        Pupdate.type == "agent_stuck",
+                        Pupdate.source_id == f"stuck/{t.id}",
+                    ).first()
+                    if existing:
+                        continue
+                    db.session.add(Pupdate(
+                        id=f"stuck-{t.id}-{_uuid.uuid4().hex[:8]}",
+                        source="maiko",
+                        source_id=f"stuck/{t.id}",
+                        type="agent_stuck",
+                        priority="high",
+                        title=f"{p.display_name} looks stuck on {t.title}",
+                        body=(
+                            f"No activity for {_STUCK_AFTER_MINUTES}+ minutes "
+                            f"while state was 'working' — the claude process "
+                            f"probably exited without reporting. Nudging them "
+                            f"or clicking View Session should recover."
+                        ),
+                        tags=[p.id, t.id, "stuck"],
+                        extra={"task_id": t.id, "agent_id": p.id},
+                    ))
+            if flagged:
+                db.session.commit()
+    except Exception as e:
+        logger.warning(f"[wake] check_stuck_agents failed: {e}")
+    return flagged
+
+
+# Event listener — prune session when task status flips to terminal.
+# Imported at module load (which happens via agents_api during app boot),
+# so this fires for any Task.status mutation from then on.
+try:
+    from sqlalchemy import event
+    from planet_maiko.models.task import Task as _Task
+
+    @event.listens_for(_Task, "after_update")
+    def _on_task_update(mapper, connection, target):
+        if target.status in ("done", "cancelled"):
+            try:
+                prune_session(target.id)
+            except Exception as e:
+                logger.debug(f"[wake] prune_session skipped for {target.id}: {e}")
+except Exception:
+    # Import-order races shouldn't crash module load; the registry
+    # will still get cleaned up on startup via validate_registry.
+    pass

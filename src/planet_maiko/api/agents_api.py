@@ -735,7 +735,13 @@ def get_agent_inbox(task_id):
 
 @agents_bp.route("/agents/<task_id>/inbox", methods=["POST"])
 def send_to_agent(task_id):
-    """Send a message to an agent (from dashboard, brain, or user)."""
+    """Send a message to an agent (from dashboard, brain, or user).
+
+    When sender is "user", also auto-wake the agent so the message
+    actually gets read — otherwise it sits in the inbox until the
+    next external trigger. Other senders (system, brain) are wake-
+    free because they're usually paired with their own triggers.
+    """
     data = request.get_json()
     msg = AgentMessage(
         task_id=task_id,
@@ -746,7 +752,26 @@ def send_to_agent(task_id):
     )
     db.session.add(msg)
     db.session.commit()
-    return jsonify(msg.to_dict()), 201
+
+    woke_mode = "none"
+    if msg.sender == "user":
+        from planet_maiko.models.task import Task
+        task = db.session.get(Task, task_id)
+        working_path = (task.extra or {}).get("working_path") if task else None
+        if working_path:
+            from planet_maiko.agents.wake import wake_agent
+            chat_prompt = (
+                "The user sent you a message. Call check_inbox to read "
+                "it, respond with reply(message_type='status'), and "
+                "continue working."
+            )
+            _ok, woke_mode = wake_agent(
+                task_id, chat_prompt, source="chat", working_path=working_path,
+            )
+
+    out = msg.to_dict()
+    out["wake_mode"] = woke_mode
+    return jsonify(out), 201
 
 
 @agents_bp.route("/agents/<task_id>/rerun", methods=["POST"])

@@ -214,12 +214,31 @@ def get_stuck_agents():
 
 
 def check_heartbeats():
-    """Check for agents that haven't sent a pupdate recently. Send nudges."""
+    """Check for agents that haven't sent a pupdate recently.
+
+    Two actions per stale profile:
+      1. Emit an agent_nudge pupdate so the user sees "haven't heard
+         from Daisy in 30min".
+      2. Auto-wake the agent on any in-progress tasks they're assigned
+         to. The wake orchestrator drops source="heartbeat" calls when
+         the agent is already running, so this is safe to fire on every
+         cycle tick — it only actually wakes truly silent agents.
+    """
     from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.models.task import Task
+    from planet_maiko.agents.wake import wake_agent, check_stuck_agents
+
+    # Flag silently-crashed agents first (state=working but no progress) —
+    # this also clears the "working" flag so the auto-wake below can
+    # actually fire on them.
+    try:
+        from flask import current_app
+        check_stuck_agents(current_app._get_current_object())
+    except Exception:
+        pass
 
     threshold = datetime.now(timezone.utc) - timedelta(minutes=30)
 
-    # Find agents that are "working" but haven't sent a pupdate recently
     active_profiles = AgentProfile.query.filter(
         AgentProfile.last_active_at.isnot(None),
         AgentProfile.last_active_at < threshold,
@@ -227,8 +246,8 @@ def check_heartbeats():
     ).all()
 
     nudged = 0
+    woken = 0
     for profile in active_profiles:
-        # Check if we already sent a nudge recently
         recent_nudge = Pupdate.query.filter(
             Pupdate.type == "agent_nudge",
             Pupdate.source_id == f"nudge/{profile.id}",
@@ -249,6 +268,24 @@ def check_heartbeats():
             )
             db.session.add(nudge)
             nudged += 1
+
+        tasks = Task.query.filter(
+            Task.assigned_agent_id == profile.id,
+            Task.status == "in_progress",
+        ).all()
+        for t in tasks:
+            wp = (t.extra or {}).get("working_path")
+            if not wp:
+                continue
+            ok, _mode = wake_agent(
+                t.id,
+                "Heartbeat check — call check_inbox, post a quick status via "
+                "reply(message_type='status'), and continue if you still have work.",
+                source="heartbeat",
+                working_path=wp,
+            )
+            if ok:
+                woken += 1
 
     if nudged:
         db.session.commit()
