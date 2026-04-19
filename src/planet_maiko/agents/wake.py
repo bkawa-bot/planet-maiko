@@ -62,6 +62,17 @@ def is_working(task_id):
     return lock is not None and lock.locked()
 
 
+def claim_task(task_id):
+    """Try to acquire the task's wake lock for a foreign caller (e.g.
+    _kickoff_agent_headless). Returns the Lock object on success so
+    the caller can release() it when their subprocess finishes;
+    returns None if the lock is already held (a wake or prior kickoff
+    is in flight).
+    """
+    lock = _lock_for(task_id)
+    return lock if lock.acquire(blocking=False) else None
+
+
 def wake_agent(task_id, prompt, source, working_path=None, session_id=None, app=None, extra_args=None):
     """Resume the agent's claude session.
 

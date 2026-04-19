@@ -552,6 +552,15 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
     if _UNSAFE_PATH_CHARS.search(worktree_path):
         return {"success": False, "error": f"Unsafe worktree path: {worktree_path!r}"}
 
+    # Kickoff concurrency guard: if a wake or a prior kickoff is still
+    # running for this task, don't overwrite the session registry
+    # mid-flight — the orphaned claude process would write to an
+    # abandoned session_id and the user would lose its work.
+    from planet_maiko.agents.wake import claim_task
+    lock = claim_task(task_id)
+    if lock is None:
+        return {"success": False, "error": "Agent is already running for this task"}
+
     session_id = str(uuid.uuid4())
     from planet_maiko.api.agents_api import _set_session
     _set_session(task_id, session_id, worktree_path)
@@ -680,6 +689,7 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
             logger.warning(f"[agent] Headless run for {task_id} failed: {e}")
         finally:
             set_agent_state(_app, task_id, "idle")
+            lock.release()
 
     threading.Thread(target=_run, daemon=True, name=f"coding-{task_id}").start()
     logger.info(f"[agent] Headless coding agent launched for {agent_id} (session {session_id[:8]})")
