@@ -54,10 +54,12 @@
   color: var(--pink);
 }
 
-.pack-request-plan .pack-request-icon    { color: var(--lavender); }
-.pack-request-review .pack-request-icon  { color: var(--pink); }
-.pack-request-stuck .pack-request-icon   { color: var(--urgent); }
-.pack-request-idea .pack-request-icon    { color: var(--lemon, var(--peach)); }
+.pack-request-plan .pack-request-icon     { color: var(--lavender); }
+.pack-request-review .pack-request-icon   { color: var(--pink); }
+.pack-request-stuck .pack-request-icon    { color: var(--urgent); }
+.pack-request-idea .pack-request-icon     { color: var(--lemon, var(--peach)); }
+.pack-request-working .pack-request-icon  { color: var(--blue, var(--text-muted)); }
+.pack-request-external .pack-request-icon { color: var(--mint, var(--text-muted)); }
 
 .pack-request-body {
   flex: 1;

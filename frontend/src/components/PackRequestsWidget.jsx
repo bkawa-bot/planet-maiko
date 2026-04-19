@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { relativeTime } from "../utils/dates";
-import { Bell, ClipboardCheck, FileText, HelpCircle, Lightbulb, X } from "lucide-react";
+import { Bell, ClipboardCheck, FileText, GitPullRequest, HelpCircle, Lightbulb, Loader, X } from "lucide-react";
 import "./PackRequestsWidget.css";
 
 /**
@@ -41,6 +41,17 @@ const TYPE_META = {
     route: (p) => `/tasks/${p.metadata?.task_id}/review`,
     tone: "review",
   },
+  // Transient: the agent saw a reviewer's comments on their PR and
+  // started iterating. Clears automatically when the agent's next
+  // ready_for_review lands. Not clickable to a diff (there isn't a
+  // new one yet); just informational — tap opens the task page.
+  agent_working_on_feedback: {
+    icon: Loader,
+    label: "is working on review feedback",
+    route: (p) => p.metadata?.task_id ? `/tasks/${p.metadata.task_id}` : "/",
+    tone: "working",
+    spin: true,
+  },
   agent_stuck: {
     icon: HelpCircle,
     label: "is stuck",
@@ -52,6 +63,16 @@ const TYPE_META = {
     label: "has an idea",
     route: () => "/",
     tone: "idea",
+  },
+  // External — a GitHub teammate re-requested your review on their
+  // PR. Different shape from pack-internal events: no agent, the
+  // "who" is the PR author. Route opens the real PR on GitHub.
+  pr_review_requested: {
+    icon: GitPullRequest,
+    label: "wants your review",
+    route: (p) => p.url || "/",
+    external: true,
+    tone: "external",
   },
 };
 
@@ -105,12 +126,23 @@ export default function PackRequestsWidget() {
             const meta = TYPE_META[p.type] || null;
             if (!meta) return null;
             const Icon = meta.icon;
-            const who = p.agent_name || "An agent";
+            // For pack-internal events, the agent's name carries.
+            // For external PR-review requests, the "who" is the
+            // teammate who asked — pulled from the poller's
+            // metadata.author field. Fallback for both = "An agent"
+            // / "A teammate" so empty shells still read okay.
+            const who = meta.external
+              ? (p.metadata?.author ? `${p.metadata.author}` : "A teammate")
+              : (p.agent_name || "An agent");
             const where = meta.route(p);
+            const linkProps = meta.external
+              ? { href: where, target: "_blank", rel: "noreferrer" }
+              : { to: where };
+            const LinkComponent = meta.external ? "a" : Link;
             return (
               <li key={p.id} className={`pack-request pack-request-${meta.tone}`}>
-                <Link to={where} className="pack-request-link">
-                  <Icon size={11} className="pack-request-icon" />
+                <LinkComponent {...linkProps} className="pack-request-link">
+                  <Icon size={11} className={`pack-request-icon ${meta.spin ? "spin" : ""}`} />
                   <div className="pack-request-body">
                     <div className="pack-request-title">
                       <span className="pack-request-who">{who}</span>{" "}
@@ -120,7 +152,7 @@ export default function PackRequestsWidget() {
                       <div className="pack-request-time">{relativeTime(p.timestamp)}</div>
                     )}
                   </div>
-                </Link>
+                </LinkComponent>
                 <button
                   className="pack-request-dismiss"
                   onClick={(e) => dismiss(p.id, e)}

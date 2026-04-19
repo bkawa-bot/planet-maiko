@@ -127,20 +127,23 @@ def _complete_review_task(pr_url):
 def _resume_agent_for_pr_comments(pupdate):
     """Wake the coding agent so it can fetch + address new PR feedback.
 
-    Two side effects:
-      1. Each new PR inline comment is harvested server-side as a
-         corrective-VIOLATION training pair — the reviewer's comment
-         body is the violation description, the diff_hunk is the code
-         context. Feeds the next LoRA retrain whether or not the
-         agent explicitly calls lora_false_negative.
-      2. Posts a message into the agent's inbox pointing at the PR
-         and resumes the claude session so the agent can iterate.
+    Posts a message into the agent's inbox pointing at the PR and
+    resumes the claude session so the agent can iterate.
+
+    Also emits a visible signal — either an `agent_working_on_feedback`
+    pupdate (on successful wake) or an `agent_stuck` pupdate (when
+    the resume fails). Without this, the pr_review_commented event
+    is silent: the user gets no feedback that comments landed OR
+    that their agent couldn't be woken up.
+
+    Training-signal harvesting on open PRs was removed: the merged-
+    PR scrape in github_poller._after_sync() is authoritative for
+    LoRA training data, so doing both produced duplicates. Anything
+    a reviewer writes here gets captured on merge.
     """
     extra = pupdate.extra or {}
     task_id = extra.get("task_id")
     pr_url = extra.get("pr_url")
-    repo = extra.get("repo")
-    pr_number = extra.get("number")
     if not task_id:
         logger.warning(f"[pr-feedback] Pupdate {pupdate.id} has no task_id, skipping")
         return
@@ -152,16 +155,8 @@ def _resume_agent_for_pr_comments(pupdate):
     working_path = (task.extra or {}).get("working_path")
     if not working_path:
         logger.warning(f"[pr-feedback] Task {task_id} has no worktree, skipping")
+        _emit_agent_stuck_on_missing_worktree(task, pr_url, pupdate)
         return
-
-    # Harvest reviewer comments as training pairs before waking the
-    # agent. Best-effort — if gh isn't available, we still fire the
-    # resume; the agent can still read comments via its own gh.
-    if repo and pr_number:
-        try:
-            _harvest_pr_comments(repo, pr_number)
-        except Exception as e:
-            logger.warning(f"[pr-feedback] Harvest failed for {repo}#{pr_number}: {e}")
 
     from planet_maiko.models.agent_message import AgentMessage
     msg_body = (
@@ -182,81 +177,145 @@ def _resume_agent_for_pr_comments(pupdate):
     ))
     db.session.commit()
 
+    resumed = False
     try:
         from planet_maiko.api.diff_api import _resume_agent_with_review
-        _resume_agent_with_review(task_id, working_path)
+        resumed = bool(_resume_agent_with_review(task_id, working_path))
     except Exception as e:
         logger.warning(f"[pr-feedback] Resume failed for {task_id}: {e}")
 
+    if resumed:
+        _emit_agent_working_on_feedback(task, pr_url, pupdate)
+    else:
+        _emit_agent_stuck_on_missing_session(task, pr_url, pupdate)
 
-def _harvest_pr_comments(repo, pr_number):
-    """Pull inline PR review comments via gh + record as training pairs.
 
-    Uses the diff_hunk each comment carries as the code context —
-    exactly what the LoRA trains on. Skips comments without a
-    diff_hunk (issue-level conversation comments) since those don't
-    map to a specific code location cleanly.
-
-    Dedup: every comment that's already been harvested for this
-    (repo, text, file_path) tuple is skipped. Without this guard,
-    every new comment on an open PR would re-harvest ALL prior
-    comments as fresh signals — the pupdate's source_id changes
-    whenever any comment lands, so each fresh pupdate triggers a
-    full re-scrape of the PR. That was the "same signals over and
-    over" bug users hit.
+def _emit_agent_working_on_feedback(task, pr_url, source_pupdate):
+    """Transient pupdate so the user sees "agent is iterating on the
+    reviewer's comments" in the Pack Requests widget, instead of the
+    flow being silent for 10-20 minutes until the next ready_for_review.
+    Clears when the user dismisses or when the next ready_for_review
+    lands (the widget just shows whatever's currently non-dismissed).
     """
-    import subprocess
-    import json as _json
-    from planet_maiko.brain.learning.feedback import add_corrective_violation
-    from planet_maiko.models.signal import Signal
+    from planet_maiko.models.pupdate import Pupdate
+    from planet_maiko.models.agent_profile import AgentProfile
+    import uuid as _uuid
 
-    result = subprocess.run(
-        ["gh", "api", f"repos/{repo}/pulls/{pr_number}/comments"],
-        capture_output=True, text=True, timeout=30,
+    agent_name = "The agent"
+    if task.assigned_agent_id:
+        a = db.session.get(AgentProfile, task.assigned_agent_id)
+        if a:
+            agent_name = a.display_name
+
+    pupdate = Pupdate(
+        id=f"agent-working-{task.id}-{_uuid.uuid4().hex[:8]}",
+        source="maiko",
+        source_id=f"agent-working/{task.id}/{source_pupdate.id}",
+        type="agent_working_on_feedback",
+        priority="normal",
+        title=f"{agent_name} is addressing review feedback",
+        body=f"{agent_name} woke up on new comments from the PR ({pr_url}) and is iterating.",
+        url=pr_url,
+        actionable=False,
+        tags=[task.id, "agent"],
+        extra={
+            "task_id": task.id,
+            "agent_id": task.assigned_agent_id,
+            "pr_url": pr_url,
+        },
+        brain_processed=True,
     )
-    if result.returncode != 0:
-        logger.debug(f"[harvest] gh api failed: {result.stderr.strip()[:160]}")
-        return
-    try:
-        comments = _json.loads(result.stdout)
-    except Exception:
-        return
+    db.session.add(pupdate)
+    db.session.commit()
 
-    # Pull the set of (text, file_path) tuples we've already seen for
-    # this repo from signals sourced by the LoRA-correction pipeline.
-    # This is the same path add_corrective_violation writes into, so
-    # matching here catches any previously-harvested comment. Cheap:
-    # the index on repo + source_type keeps the scan tight.
-    existing = {
-        ((s.text or "").strip(), (s.file_path or ""))
-        for s in Signal.query
-        .filter_by(repo=repo, source_type="lora_correction")
-        .all()
-    }
 
-    for c in comments:
-        body = (c.get("body") or "").strip()
-        diff_hunk = c.get("diff_hunk")
-        if not body or not diff_hunk:
-            continue
+def _emit_agent_stuck_on_missing_session(task, pr_url, source_pupdate):
+    """The agent's claude session couldn't be resumed — most likely
+    the session_id was never registered or the worktree's cleaned up.
+    Fail loudly rather than silently mark brain_processed and move on,
+    because the alternative is the reviewer's comments land and the
+    agent never sees them, and the user has no idea why.
+    """
+    from planet_maiko.models.pupdate import Pupdate
+    from planet_maiko.models.agent_profile import AgentProfile
+    import uuid as _uuid
 
-        key = (body, c.get("path") or "")
-        if key in existing:
-            continue
+    agent_name = "an agent"
+    if task.assigned_agent_id:
+        a = db.session.get(AgentProfile, task.assigned_agent_id)
+        if a:
+            agent_name = a.display_name
 
-        try:
-            add_corrective_violation(
-                code=diff_hunk,
-                violation=body,
-                category=None,
-                file_path=c.get("path"),
-                repo=repo,
-            )
-            # Add to the local set so later comments in the same batch
-            # that happen to be identical don't double up either.
-            existing.add(key)
-        except Exception as e:
-            logger.debug(f"[harvest] Failed recording PR comment {c.get('id')}: {e}")
+    pupdate = Pupdate(
+        id=f"agent-stuck-wake-{task.id}-{_uuid.uuid4().hex[:8]}",
+        source="maiko",
+        source_id=f"agent-stuck-wake/{task.id}/{source_pupdate.id}",
+        type="agent_stuck",
+        priority="high",
+        title=f"Couldn't wake {agent_name} on new PR comments",
+        body=(
+            f"Reviewer comments landed on the PR ({pr_url}) but I couldn't "
+            f"resume the agent's session — probably the session id wasn't "
+            f"registered or the worktree has been cleaned up. You'll want "
+            f"to open the task and decide what to do next."
+        ),
+        url=pr_url,
+        actionable=True,
+        action_hint="Help the agent",
+        tags=[task.id, "agent", "stuck", "wake-failed"],
+        extra={
+            "task_id": task.id,
+            "agent_id": task.assigned_agent_id,
+            "pr_url": pr_url,
+            "reason": "session_resume_failed",
+        },
+        brain_processed=True,
+    )
+    db.session.add(pupdate)
+    db.session.commit()
+
+
+def _emit_agent_stuck_on_missing_worktree(task, pr_url, source_pupdate):
+    """Same shape as the session-miss case — just a different reason
+    string so the user can tell at a glance which part of the wake
+    broke."""
+    from planet_maiko.models.pupdate import Pupdate
+    from planet_maiko.models.agent_profile import AgentProfile
+    import uuid as _uuid
+
+    agent_name = "an agent"
+    if task.assigned_agent_id:
+        a = db.session.get(AgentProfile, task.assigned_agent_id)
+        if a:
+            agent_name = a.display_name
+
+    pupdate = Pupdate(
+        id=f"agent-stuck-wt-{task.id}-{_uuid.uuid4().hex[:8]}",
+        source="maiko",
+        source_id=f"agent-stuck-wt/{task.id}/{source_pupdate.id}",
+        type="agent_stuck",
+        priority="high",
+        title=f"Couldn't wake {agent_name} on new PR comments",
+        body=(
+            f"Reviewer comments landed on the PR ({pr_url}) but the task "
+            f"has no worktree on disk — it may have been cleaned up "
+            f"already. Reassign the task if you want the agent to "
+            f"respond to this round of feedback."
+        ),
+        url=pr_url,
+        actionable=True,
+        action_hint="Reassign or close the task",
+        tags=[task.id, "agent", "stuck", "worktree-missing"],
+        extra={
+            "task_id": task.id,
+            "agent_id": task.assigned_agent_id,
+            "pr_url": pr_url,
+            "reason": "worktree_missing",
+        },
+        brain_processed=True,
+    )
+    db.session.add(pupdate)
+    db.session.commit()
 
 
 def _extract_pr_number(pr_url):
