@@ -1234,9 +1234,12 @@ def pack_requests():
     a plan review, show me now."
 
     Filters to agent-originated types only: plans waiting for approval,
-    diffs ready for review, stuck agents, proposals. External-PR
-    pupdates (pr_review_requested etc.) are intentionally excluded —
-    those aren't pack requests, they're GitHub events.
+    diffs ready for review (from either the agent's MCP reply OR the
+    brain cycle's safety-net synthesizer), stuck agents, proposals.
+    Investigation reports go through the overview's artifact modal so
+    they're not here. External GitHub events (pr_review_requested,
+    pr_changes_requested) are intentionally excluded — those are
+    teammates asking for your attention, not your pack's output.
 
     Held pupdates (from focus mode) are hidden here too, matching the
     main /api/pupdates behavior.
@@ -1245,10 +1248,11 @@ def pack_requests():
     from planet_maiko.models.agent_profile import AgentProfile
 
     AGENT_REQUEST_TYPES = (
-        "agent_plan_for_approval",
-        "agent_ready_for_review",
-        "agent_stuck",
-        "agent_proposal",
+        "agent_plan_for_approval",   # coding agent's plan waiting for user approval
+        "agent_ready_for_review",    # review OR coding agent done, via MCP reply path
+        "pr_review_complete",        # review agent done, via brain-cycle fallback path
+        "agent_stuck",               # agent blocked, needs user help
+        "agent_proposal",            # "From Maiko" proposal in the approval queue
     )
 
     limit = min(int(request.args.get("limit") or 10), 30)

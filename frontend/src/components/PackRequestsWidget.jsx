@@ -32,6 +32,15 @@ const TYPE_META = {
     route: (p) => `/tasks/${p.metadata?.task_id}/review`,
     tone: "review",
   },
+  // Same event as agent_ready_for_review but emitted via the brain
+  // cycle's safety-net synthesizer (when the agent's MCP reply path
+  // didn't fire). Surface it the same way.
+  pr_review_complete: {
+    icon: FileText,
+    label: "finished the review",
+    route: (p) => `/tasks/${p.metadata?.task_id}/review`,
+    tone: "review",
+  },
   agent_stuck: {
     icon: HelpCircle,
     label: "is stuck",

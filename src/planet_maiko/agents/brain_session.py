@@ -387,6 +387,10 @@ def execute_one_shot_task(task, working_dir=None):
         actionable=True,
         action_hint=action_hint,
         tags=[role, "maiko", agent.id] + (["low_confidence"] if parsed["confidence"] == "low" else []),
+        # Carry task_id + agent_id forward so surfaces like the Pack
+        # Requests widget can route straight to the right diff /
+        # report page without an extra task-lookup round-trip.
+        extra={"task_id": task.id, "agent_id": agent.id},
     )
     db.session.add(result_pupdate)
 
