@@ -21,6 +21,7 @@ export default function SetupWizard({ onComplete }) {
   const [username, setUsername] = useState("");
   const [repos, setRepos] = useState([]);
   const [discovering, setDiscovering] = useState(false);
+  const [discoverError, setDiscoverError] = useState(null);
   const [location, setLocation] = useState("");
   const [locationResolved, setLocationResolved] = useState("");
   const [latLon, setLatLon] = useState(null);
@@ -36,6 +37,7 @@ export default function SetupWizard({ onComplete }) {
   };
 
   const handleDiscoverRepos = async () => {
+    setDiscoverError(null);
     setDiscovering(true);
     try {
       await api.updateConfig({ github: { username, enabled: true } });
@@ -43,9 +45,30 @@ export default function SetupWizard({ onComplete }) {
       if (result.repos?.length) {
         setRepos(result.repos);
         setTimeout(() => setStep(4), 800);
+      } else {
+        setDiscoverError({
+          message: "No repos found for that username.",
+          hint: "You can add them manually below, comma-separated.",
+        });
       }
     } catch (e) {
-      // Best effort — the user can type repos manually below
+      // Surface the structured error from the backend so the user
+      // sees a real next step (install gh / run gh auth login) rather
+      // than a silent failure that looks like Maiko is broken.
+      const msg = e?.message || String(e);
+      if (/gh CLI not found/i.test(msg)) {
+        setDiscoverError({
+          message: "GitHub CLI isn't installed.",
+          hint: "Install it from cli.github.com, then come back.",
+        });
+      } else if (/isn't authenticated|auth login/i.test(msg)) {
+        setDiscoverError({
+          message: "GitHub CLI isn't logged in.",
+          hint: "Open a terminal and run: gh auth login",
+        });
+      } else {
+        setDiscoverError({ message: msg, hint: "You can still type repos manually below." });
+      }
     }
     setDiscovering(false);
   };
@@ -138,6 +161,12 @@ export default function SetupWizard({ onComplete }) {
             />
             {repos.length > 0 && (
               <div className="setup-hint-good">Found {repos.length} repo(s)</div>
+            )}
+            {discoverError && (
+              <div className="setup-hint-warn">
+                <div>{discoverError.message}</div>
+                {discoverError.hint && <div className="setup-hint-warn-sub">{discoverError.hint}</div>}
+              </div>
             )}
             <div className="setup-actions">
               <button className="setup-skip" onClick={() => setStep(2)}>Back</button>

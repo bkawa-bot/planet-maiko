@@ -100,12 +100,41 @@ def discover_github_repos():
     """Discover recent repos the user has committed to via gh CLI."""
     import subprocess
     import json as _json
+    import shutil as _shutil
 
     config = load_config()
     username = config.get("github", {}).get("username", "")
 
     if not username:
         return jsonify({"error": "GitHub username not configured"}), 400
+
+    # Explicit preflight so the setup wizard can show a clean next step
+    # instead of a generic "discovery failed" when the real issue is a
+    # missing binary or a logged-out session.
+    if not _shutil.which("gh"):
+        return jsonify({
+            "error": "gh CLI not found",
+            "hint": "Install it from https://cli.github.com, then re-run",
+            "action": "install",
+        }), 400
+    try:
+        auth_check = subprocess.run(
+            ["gh", "auth", "status"], capture_output=True, text=True, timeout=5,
+        )
+        if auth_check.returncode != 0:
+            return jsonify({
+                "error": "gh CLI isn't authenticated",
+                "hint": "Run: gh auth login",
+                "action": "auth",
+            }), 400
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "gh auth status timed out"}), 500
+    except FileNotFoundError:
+        return jsonify({
+            "error": "gh CLI not found",
+            "hint": "Install it from https://cli.github.com",
+            "action": "install",
+        }), 400
 
     try:
         # Get repos the user recently pushed to (last 30 days)
