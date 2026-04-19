@@ -229,6 +229,14 @@ export default function AgentsProfilesTab({
 
                     {p.flavor_text && <div className="strategy-flavor">"{p.flavor_text}"</div>}
 
+                    {p.instructions && (
+                      <div className="strategy-bio" title={p.instructions}>
+                        {p.instructions.length > 260
+                          ? p.instructions.slice(0, 257).replace(/\s+\S*$/, "") + "…"
+                          : p.instructions}
+                      </div>
+                    )}
+
                     {strengths.length > 0 && (
                       <div className="strategy-section">
                         <div className="strategy-section-label"><TrendingUp size={10} /> Strengths</div>

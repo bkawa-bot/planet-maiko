@@ -377,6 +377,18 @@
 
 .strategy-flavor { padding: 0 16px 10px; font-size: 11px; color: var(--text-muted); font-style: italic; }
 
+/* Arrival bio — the agent's first-person "who I am" blurb, either
+   LLM-generated on profile creation or user-authored in the edit
+   modal. Renders below the flavor tagline; truncated past ~260
+   chars with the full text in a tooltip. */
+.strategy-bio {
+  padding: 0 16px 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 .strategy-stats-row {
   display: flex; gap: 12px; padding: 8px 16px; background: var(--bg-card-alt);
   border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle);
