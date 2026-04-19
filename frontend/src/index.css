@@ -468,6 +468,22 @@ a:hover { text-decoration: underline; }
 /* Keyboard navigation focus state */
 .keyboard-focus { outline: 2px solid var(--pink); outline-offset: -2px; }
 
+/* === Frosted pane utility ===
+   Primary-surface frosted container matching the Home overview pane.
+   Sits over the hill backdrop, blurs what's behind it, tinted to the
+   active theme via --pane-bg. Apply to ONE primary surface per page —
+   the main content area of Tasks, Agents, etc. Nested use turns into
+   visual noise; use the flat card/widget tokens for supporting UI. */
+.frost-pane {
+  background: var(--pane-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.12);
+  padding: 20px 24px;
+}
+
 /* === Card list backdrop — frosted glass container === */
 .card-list-container {
   background: rgba(45, 54, 60, 0.4);

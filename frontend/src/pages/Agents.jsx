@@ -84,7 +84,7 @@ export default function Agents() {
   if (loading) return <p className="page-empty">Loading...</p>;
 
   return (
-    <div className="agents-page">
+    <div className="agents-page frost-pane">
       {/* New Agent create form */}
       {showCreateForm && (
         <div className="modal-overlay" onClick={() => !creating && setShowCreateForm(false)}>

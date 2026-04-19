@@ -110,7 +110,7 @@ export default function Tasks() {
   if (loading) return <p className="page-empty">Loading...</p>;
 
   return (
-    <div className="tasks-page">
+    <div className="tasks-page frost-pane">
       {/* Create bar */}
       <div className="create-bar">
         <button className="btn" onClick={() => { setShowTaskForm(!showTaskForm); setShowProjectForm(false); }}>
