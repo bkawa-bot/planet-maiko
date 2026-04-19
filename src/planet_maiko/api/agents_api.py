@@ -449,10 +449,32 @@ def resume_session():
         )
         has_tmux = result.returncode == 0
 
+    # If the wake orchestrator is currently running claude for this
+    # task, spawning a second `claude --resume` on the same session_id
+    # would race on the JSONL file. Downgrade to a read-only tail so
+    # the user can watch what the agent is doing live, without
+    # corrupting the session.
+    from planet_maiko.agents.wake import is_working
+    agent_busy = is_working(task_id)
+
     mode = None
     if has_tmux:
         cmd = f"tmux attach -t {session_name}"
         mode = "tmux"
+    elif agent_busy:
+        session_file = _find_claude_session_file(working_path, session_id)
+        if session_file:
+            cmd = (
+                f"echo 'Agent is currently working — read-only view.' && "
+                f"echo 'Close anytime; the agent keeps running in the background.' && "
+                f"echo '' && tail -f {session_file}"
+            )
+            mode = "tail-busy"
+        else:
+            return jsonify({
+                "error": "Agent is working but session file isn't on disk yet.",
+                "busy": True,
+            }), 409
     elif working_path and shutil.which("claude"):
         # For autonomous review/investigation agents (and any coding
         # agent launched without tmux), `claude --resume <id>` opens
@@ -798,12 +820,18 @@ def nudge_agent(task_id):
     db.session.commit()
 
     resumed = False
+    mode = "none"
     working_path = (task.extra or {}).get("working_path")
     if working_path:
         try:
-            from planet_maiko.api.diff_api import _resume_agent_with_review
-            _resume_agent_with_review(task_id, working_path)
-            resumed = True
+            from planet_maiko.agents.wake import wake_agent
+            nudge_prompt = (
+                "The user nudged you. Call check_inbox for any new "
+                "messages and give a quick status via "
+                "reply(message_type='status')."
+            )
+            ok, mode = wake_agent(task_id, nudge_prompt, source="nudge", working_path=working_path)
+            resumed = ok
         except Exception as e:
             logger.warning(f"[nudge] Resume failed for {task_id}: {e}")
 
@@ -811,6 +839,7 @@ def nudge_agent(task_id):
         "status": "nudged",
         "agent": agent_name,
         "resumed": resumed,
+        "mode": mode,
     }), 201
 
 

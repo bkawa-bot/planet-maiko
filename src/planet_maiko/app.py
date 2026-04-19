@@ -31,6 +31,7 @@ def _ensure_columns():
         "ALTER TABLE agent_profiles ADD COLUMN role VARCHAR(32) DEFAULT 'coding'",
         "ALTER TABLE agent_profiles ADD COLUMN scope_repo VARCHAR(256)",
         "ALTER TABLE agent_profiles ADD COLUMN instructions TEXT",
+        "ALTER TABLE agent_profiles ADD COLUMN state VARCHAR(16) DEFAULT 'idle'",
         "ALTER TABLE pupdates ADD COLUMN category VARCHAR(16) DEFAULT 'activity'",
         # Pack Insights ritual: link signals / insights back to the
         # agent reply they came from so "drop this during review"

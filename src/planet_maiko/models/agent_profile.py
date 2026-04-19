@@ -48,6 +48,14 @@ class AgentProfile(db.Model):
     archived = db.Column(db.Boolean, default=False)
     archived_at = db.Column(db.DateTime, nullable=True)
 
+    # Live runtime state — distinct from task.status.
+    #   idle     — no claude process running for this agent's task
+    #   working  — wake_agent is currently running claude --resume
+    #   stuck    — was "working" but hasn't produced a pupdate in a while
+    # The wake orchestrator (agents/wake.py) flips working↔idle; the
+    # cleanup job promotes stale "working" to "stuck".
+    state = db.Column(db.String(16), default="idle", index=True)
+
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     last_active_at = db.Column(db.DateTime, nullable=True)
 
@@ -69,6 +77,7 @@ class AgentProfile(db.Model):
             "context_set": self.context_set or [],
             "extra": self.extra or {},
             "archived": self.archived or False,
+            "state": self.state or "idle",
             "created_at": iso_utc(self.created_at),
             "last_active_at": iso_utc(self.last_active_at),
         }

@@ -22,7 +22,6 @@ import logging
 import os
 import subprocess
 import threading
-import uuid as _uuid
 from datetime import datetime, timezone
 
 from flask import Blueprint, current_app, jsonify, request
@@ -270,51 +269,22 @@ def _format_review_message(comments):
 
 
 def _resume_agent_with_review(task_id, working_path):
-    """Fire a daemon thread that runs `claude --resume <session>
-    --print "Check your inbox for review feedback"`.
+    """Wake the agent so it can address the reviewer's comments.
 
-    The agent wakes up, calls check_inbox, processes the review
-    message the request-changes handler just stored, iterates, and
-    sends a new ready_for_review message. Same pattern the review /
-    investigation agents already use — sandboxed to the worktree,
-    no human needed.
+    Thin wrapper over wake_agent() — kept as a named helper so the
+    three historical callers (request_changes, PR-comment processor,
+    nudge endpoint) don't need to be rewritten everywhere. Returns
+    True when the wake was either spawned or queued behind a current
+    run; False on hard failure (no session, no worktree, no CLI).
     """
-    import shutil
-    claude_path = shutil.which("claude")
-    if not claude_path:
-        logger.warning("[diff] claude CLI not found; agent won't auto-resume")
-        return False
-    from planet_maiko.api.agents_api import _get_sessions
-    info = _get_sessions().get(task_id)
-    if not info or not info.get("session_id"):
-        logger.warning(f"[diff] No session registered for task {task_id}; can't resume")
-        return False
-    session_id = info["session_id"]
-
-    cmd = [
-        claude_path, "--print", "--output-format", "text",
-        "--resume", session_id,
-        "--dangerously-skip-permissions",
-    ]
-
-    def _run():
-        try:
-            log_path = os.path.join(working_path, "agent.log")
-            with open(log_path, "a", encoding="utf-8") as log:
-                log.write(f"\n\n# Resumed for review at {_uuid.uuid4().hex[:8]}\n\n")
-                log.flush()
-                subprocess.run(
-                    cmd,
-                    input="You have new review feedback. Call check_inbox to read it, address each comment, commit, and reply with message_type=\"ready_for_review\" when done.",
-                    stdout=log, stderr=subprocess.STDOUT,
-                    text=True, encoding="utf-8", errors="replace",
-                    cwd=working_path,
-                )
-        except Exception as e:
-            logger.warning(f"[diff] Resume for {task_id} failed: {e}")
-
-    threading.Thread(target=_run, daemon=True, name=f"review-{task_id}").start()
-    return True
+    from planet_maiko.agents.wake import wake_agent
+    prompt = (
+        "You have new review feedback. Call check_inbox to read it, "
+        "address each comment, commit, and reply with "
+        "message_type=\"ready_for_review\" when done."
+    )
+    ok, _mode = wake_agent(task_id, prompt, source="feedback", working_path=working_path)
+    return ok
 
 
 @diff_bp.route("/tasks/<task_id>/review/request-changes", methods=["POST"])

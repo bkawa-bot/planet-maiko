@@ -650,7 +650,18 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
 
     log_path = os.path.join(worktree_path, "agent.log")
 
+    # Grab the Flask app so the daemon thread can flip agent state
+    # (idle → working → idle) via wake.set_agent_state, which needs
+    # an app context to touch the DB.
+    try:
+        from flask import current_app
+        _app = current_app._get_current_object()
+    except RuntimeError:
+        _app = None
+
     def _run():
+        from planet_maiko.agents.wake import set_agent_state
+        set_agent_state(_app, task_id, "working")
         try:
             with open(log_path, "w", encoding="utf-8") as log:
                 log.write(f"# Headless coding agent run\n# session_id: {session_id}\n\n")
@@ -667,6 +678,8 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
                 )
         except Exception as e:
             logger.warning(f"[agent] Headless run for {task_id} failed: {e}")
+        finally:
+            set_agent_state(_app, task_id, "idle")
 
     threading.Thread(target=_run, daemon=True, name=f"coding-{task_id}").start()
     logger.info(f"[agent] Headless coding agent launched for {agent_id} (session {session_id[:8]})")
