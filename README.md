@@ -6,27 +6,33 @@
 
 ---
 
-Watch any tech feed for a week and you'll see the same pitch in different logos: spin up 10 agents, 20 agents, a whole swarm. Ship 40 PRs in a day. 10x your output. The cost never makes the screenshot — you quietly turn into a fleet manager for a team of junior devs that never sleep, never read the room, and never pause to ask if this is what you actually wanted. Burnout, just wearing a new hat.
+Watch any tech feed for a week and you'll see the same pitch in different logos: spin up 10 agents, 20 agents, a whole swarm. Ship 40 PRs in a day. 10x your output. The cost never makes the screenshot — you quietly become a fleet manager for junior devs that never sleep, re-explain your team's conventions to every new session, and rewrite the same file as three siblings who don't know the others exist. Burnout, just wearing a new hat.
 
-**Planet Maiko is the pushback.**
+**You don't need more agents. You need smarter ones.**
 
-You don't need more agents. You need a pack that isn't yours to babysit. Maiko is the den mother — she keeps your agents organized, surfaces what actually needs your eyes, and lets *you* decide when to engage. You stay the lead engineer; she handles the herding. No productivity theater, no "10x" in the LinkedIn sense.
+Planet Maiko's pack teaches itself from your team's merged PRs, shares context with each other, and coordinates automatically — so you stop being a fleet manager and start being a lead engineer again. That's the whole thesis. Everything else is implementation.
+
+### The pack that raises itself
+
+- **Self-learning loop.** Every merged-PR comment, every in-session feedback, every approved review becomes a Signal. Signals cluster into Learnings. Learnings train per-repo LoRA adapters. The next agent you spawn already knows how your team does things — without you re-explaining a single thing.
+- **Shared context, automatic.** Tribal knowledge (*"use IntelliJ for tests — the CLI runner is broken"*) lives in the Pack Insights playbook. Every new agent's `CLAUDE.md` is composed from the relevant subset for their repo and role. You don't repeat yourself across sessions.
+- **A2A awareness.** Agents know what their siblings are touching. The conflict detector catches file and API overlap *before* two agents silently rewrite each other's work. Even agents spawned by external orchestrators can register with Maiko's brain and join the coordination.
+- **The campfire ritual.** End of day, the pack gathers. Active agents share what they learned; you approve what sticks; the shared `CLAUDE.md` and LoRA adapters update for tomorrow. Improvement is a group activity, not a cron job.
 
 Cozy on the surface — Animal Crossing vibes, live weather, and a real Alaskan Klee Kai named Maiko who gets petted when you close out a good day. Uncompromising underneath — AGPL, anti-extraction, on your machine always. The only subscription is caring about your tools.
 
 ## What it's not
 
-- **Not a swarm to command.** One conductor — you.
+- **Not a swarm to command.** One conductor — you. The pack runs itself between your check-ins.
 - **Not a SaaS.** Nothing leaves your machine. No telemetry, no hosted account, no logging in to someone else's server.
 - **Not venture-backed.** AGPL, copyleft, permanent. Can't be acquired and repriced.
 - **Not about making you more "productive."** It's about letting you do good work without being on-call to your own tools.
 
-## What you get
+## What you see
 
 - **Pack Requests** — one live feed of what your agents need from you, priority-ordered. Not a pile of notifications to triage by hand.
 - **In-app everything** — review diffs with inline comments, chat with agents, approve plans. No terminal escape hatches as the primary flow.
-- **Shared context, remembered** — Maiko learns your team's conventions from merged PR comments and trains per-repo LoRA adapters. You stop repeating yourself to every new agent session.
-- **Concurrency-safe agents** — every agent in its own git worktree, every wake-up orchestrated through a single lock. Two triggers can't race on the same session file.
+- **Concurrency-safe sessions** — every agent in its own git worktree, every wake-up orchestrated through a single lock. Two triggers can't race on the same session file.
 - **Live awareness** — knows when you're in a meeting, in deep focus, on the weekend. Holds notifications accordingly.
 - **Cozy by design** — sherbet palette, pixel scenes that shift with the weather, a real dog who gets petted when you close out a good day.
 - **Plugin-extensible** — drop a `.py` in `~/.maiko/plugins/`. Your company's internal integrations stay private; the core stays small and open.
