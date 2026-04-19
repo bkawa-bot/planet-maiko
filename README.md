@@ -291,6 +291,12 @@ maiko bootstrap [--limit 20]               Seed learnings from past PRs
 
 ## License
 
-[GNU AGPL v3](LICENSE) — Planet Maiko is free software. Anyone who modifies and runs it must share their source code. Private/internal use and plugins are unrestricted.
+Planet Maiko is [AGPL v3](LICENSE). In plain English:
+
+- **Use it anywhere, solo or inside a company.** No strings.
+- **Modify it for your team's own use.** AGPL asks that you share your source with anyone who uses your instance — when "anyone" means your coworkers, pointing them at your internal branch is enough. You don't have to publish anything to the world.
+- **Build a paid product on top of it?** You must share your modifications under AGPL too. That's the anti-extraction intent — if someone commercializes Maiko, the community gets the improvements back.
+
+Not legal advice, just the intent. If you're using Maiko to help yourself or your team, you're free. If you're selling it, share back.
 
 Created by [Brigitte Kawaguchi](https://github.com/bkawa-bot) · Built with Claude
