@@ -72,7 +72,22 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
 
   const sendMsg = async () => {
     if (!msgInput.trim() || !selectedThread) return;
-    await api.sendToAgent(selectedThread, { content: msgInput, sender: "user" });
+    try {
+      const res = await api.sendToAgent(selectedThread, {
+        content: msgInput,
+        sender: "user",
+      });
+      // Backend auto-wakes when sender=user and returns wake_mode so we
+      // can tell the user whether the agent was woken, queued behind a
+      // current run, or has no session yet.
+      const mode = res?.wake_mode;
+      if (mode === "woke") showToast("Message sent — waking the agent ✨", "normal");
+      else if (mode === "queued") showToast("Agent's working — queued for the next turn", "normal");
+      else if (mode === "dropped") showToast("Sent", "normal");
+      else showToast("Message saved to inbox", "normal");
+    } catch (err) {
+      showToast(err.message || "Couldn't send", "high");
+    }
     setMsgInput("");
     setMessages(await api.getAgentMessages(selectedThread));
   };
@@ -114,10 +129,21 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
 
   const handleResume = async (a) => {
     try {
-      await api.resumeAgentSession(a.task_id);
-      showToast("Resuming session in terminal", "normal");
+      const res = await api.resumeAgentSession(a.task_id);
+      // Backend downgrades to tail-only when the agent is mid-run so
+      // View Session can't race the headless claude. Tell the user
+      // what they're looking at so "is it safe to close?" is obvious.
+      const mode = res?.mode;
+      if (mode === "tail-busy") {
+        showToast("Agent's working — opened a read-only log view. Close anytime 🐾", "normal");
+      } else if (mode === "resume") {
+        showToast("Chatting with the agent. Close the terminal anytime — the agent keeps running.", "normal");
+      } else if (mode === "tmux") {
+        showToast("Attached to live tmux session", "normal");
+      } else {
+        showToast("Opened in terminal", "normal");
+      }
     } catch (err) {
-      // No session yet — try opening terminal in worktree
       if (a.working_path) {
         try {
           await api.openTerminal(a.working_path, a.task_id, a.branch);
@@ -220,6 +246,10 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                   </div>
                   <div className="agent-info">
                     <div className="agent-name-row">
+                      <span
+                        className={`agent-state-dot state-${profiles.find((p) => p.id === a.agent_id)?.state || "idle"}`}
+                        title={`Agent state: ${profiles.find((p) => p.id === a.agent_id)?.state || "idle"}`}
+                      />
                       <span className="agent-name">
                         {profiles.find((p) => p.id === a.agent_id)?.display_name || a.agent_id?.replace("agent-", "")}
                       </span>
@@ -268,7 +298,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                     <ExternalLink size={12} /> View Session
                   </button>
                   <button className="btn btn-sm" onClick={() => loadThread(a.task_id)}>
-                    <MessageCircle size={12} /> Channel Log
+                    <MessageCircle size={12} /> Chat
                   </button>
                   <button
                     className="btn btn-sm"
@@ -316,6 +346,10 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                   <div className="agent-avatar-circle">🐕</div>
                   <div className="agent-info">
                     <div className="agent-name-row">
+                      <span
+                        className={`agent-state-dot state-${profile?.state || "idle"}`}
+                        title={`Agent state: ${profile?.state || "idle"}`}
+                      />
                       <span className="agent-name">{displayName}</span>
                       <span className={`badge ${a.status}`}>{a.status}</span>
                     </div>
@@ -356,7 +390,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                     <ExternalLink size={12} /> View Session
                   </button>
                   <button className="btn btn-sm" onClick={() => loadThread(a.task_id)}>
-                    <MessageCircle size={12} /> Channel Log
+                    <MessageCircle size={12} /> Chat
                   </button>
                   <button
                     className="btn btn-sm"

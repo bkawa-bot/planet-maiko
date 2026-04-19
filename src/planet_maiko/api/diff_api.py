@@ -21,7 +21,6 @@ POST /tasks/<id>/comments/agent.
 import logging
 import os
 import subprocess
-import threading
 from datetime import datetime, timezone
 
 from flask import Blueprint, current_app, jsonify, request
@@ -467,48 +466,20 @@ def get_plan(task_id):
 
 
 def _resume_for_plan(task_id, working_path, instruction, plan_mode):
-    """Fire a daemon thread that resumes the agent with the given
-    instruction. If plan_mode is True, re-applies --permission-mode
-    plan so a requested revision stays read-only until another
-    approval. Same pattern as _resume_agent_with_review.
+    """Resume the agent so it can act on a plan approval or revision.
+
+    Routes through the wake orchestrator so it acquires the same
+    per-task lock every other resume path uses. plan_mode=True
+    re-applies --permission-mode plan via extra_args so a requested
+    revision stays read-only until another approval.
     """
-    import shutil
-    import threading
-
-    claude_path = shutil.which("claude")
-    if not claude_path:
-        return False
-    from planet_maiko.api.agents_api import _get_sessions
-    info = _get_sessions().get(task_id)
-    if not info or not info.get("session_id"):
-        return False
-    session_id = info["session_id"]
-
-    cmd = [
-        claude_path, "--print", "--output-format", "text",
-        "--resume", session_id,
-        "--dangerously-skip-permissions",
-    ]
-    if plan_mode:
-        cmd.extend(["--permission-mode", "plan"])
-
-    def _run():
-        try:
-            log_path = os.path.join(working_path, "agent.log")
-            with open(log_path, "a", encoding="utf-8") as log:
-                log.write(f"\n\n# Plan resume ({'revise' if plan_mode else 'approved'}) @ {datetime.now(timezone.utc).isoformat()}\n\n")
-                log.flush()
-                subprocess.run(
-                    cmd, input=instruction,
-                    stdout=log, stderr=subprocess.STDOUT,
-                    text=True, encoding="utf-8", errors="replace",
-                    cwd=working_path,
-                )
-        except Exception as e:
-            logger.warning(f"[plan] Resume for {task_id} failed: {e}")
-
-    threading.Thread(target=_run, daemon=True, name=f"plan-{task_id}").start()
-    return True
+    from planet_maiko.agents.wake import wake_agent
+    extra_args = ["--permission-mode", "plan"] if plan_mode else None
+    ok, _mode = wake_agent(
+        task_id, instruction, source="plan",
+        working_path=working_path, extra_args=extra_args,
+    )
+    return ok
 
 
 @diff_bp.route("/tasks/<task_id>/plan/approve", methods=["POST"])

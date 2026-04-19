@@ -62,7 +62,7 @@ def is_working(task_id):
     return lock is not None and lock.locked()
 
 
-def wake_agent(task_id, prompt, source, working_path=None, session_id=None, app=None):
+def wake_agent(task_id, prompt, source, working_path=None, session_id=None, app=None, extra_args=None):
     """Resume the agent's claude session.
 
     Args:
@@ -77,6 +77,9 @@ def wake_agent(task_id, prompt, source, working_path=None, session_id=None, app=
         app: Flask app object. Captured via current_app if omitted.
             Required for the state writeback; if unavailable the
             run still proceeds but the Agent.state field won't update.
+        extra_args: extra CLI flags to append to the claude command.
+            Used e.g. by plan-revise to re-enable --permission-mode plan
+            for the resumed turn.
 
     Returns:
         (ok, mode) where mode is one of:
@@ -141,6 +144,8 @@ def wake_agent(task_id, prompt, source, working_path=None, session_id=None, app=
                 "--resume", session_id,
                 "--dangerously-skip-permissions",
             ]
+            if extra_args:
+                cmd.extend(extra_args)
             log_path = os.path.join(working_path, "agent.log")
             with open(log_path, "a", encoding="utf-8") as log:
                 log.write(

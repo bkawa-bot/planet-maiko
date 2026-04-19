@@ -161,6 +161,33 @@
 .agent-name-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 .agent-name { font-weight: 600; font-size: 14px; color: var(--text); }
 
+/* Live state dot — wired to AgentProfile.state from the wake
+   orchestrator. Sits next to the name so the user can scan
+   "who is actually working right now" at a glance. */
+.agent-state-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+  background: var(--text-muted);
+}
+.agent-state-dot.state-idle    { background: var(--text-muted); opacity: 0.45; }
+.agent-state-dot.state-working {
+  background: var(--mint, var(--blue));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mint, var(--blue)) 22%, transparent);
+  animation: agent-dot-pulse 1.6s ease-in-out infinite;
+}
+.agent-state-dot.state-stuck {
+  background: var(--urgent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--urgent) 22%, transparent);
+}
+
+@keyframes agent-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
 /* The task this agent-card is working on. Sits between the agent
    name and the chips so the user can scan "who is working on what"
    at a glance — same agent profile across multiple tasks now shows
