@@ -238,7 +238,6 @@ def compile_brief(repo=None, language=None, max_learnings=15, task_id=None,
             agent_profile_id=agent_profile_id,
             repo=repo,
             learning_ids=[l.id for l in selected],
-            learning_count=len(selected),
         )
         db.session.add(record)
         db.session.commit()

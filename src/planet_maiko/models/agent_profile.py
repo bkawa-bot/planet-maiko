@@ -39,7 +39,13 @@ class AgentProfile(db.Model):
     # The agent's proven set of learning IDs — built via training
     context_set = db.Column(db.JSON, default=list)
 
-    # Lens: per-agent overrides (legacy, mostly unused)
+    # Lens: per-agent feedback metadata from the self-specialization
+    # loop — {overrides: [learning_ids], gaps: [{category, repo, reason}],
+    # territory: {repo: {_total: count}}}. Written by record_task_outcome
+    # when an agent's task fails or gets changes_requested. Readers
+    # (gap-driven learning prioritization, territory-aware routing) are
+    # still TODO — the write path captures the data so the reader side
+    # can ship incrementally without a backfill.
     lens = db.Column(db.JSON, default=dict)
 
     # Flexible metadata (adapter_path, trained_on_examples, etc.)

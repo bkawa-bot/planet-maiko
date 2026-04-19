@@ -21,7 +21,6 @@ class ContextSelection(db.Model):
 
     # Which learnings were included in the brief
     learning_ids = db.Column(db.JSON, default=list)  # [1, 3, 7, 12]
-    learning_count = db.Column(db.Integer, default=0)
 
     # Outcome (recorded after task completes)
     outcome = db.Column(db.String(20), nullable=True)  # success, changes_requested, failed, cancelled
@@ -36,7 +35,7 @@ class ContextSelection(db.Model):
             "agent_profile_id": self.agent_profile_id,
             "repo": self.repo,
             "learning_ids": self.learning_ids,
-            "learning_count": self.learning_count,
+            "learning_count": len(self.learning_ids or []),
             "outcome": self.outcome,
             "outcome_recorded_at": iso_utc(self.outcome_recorded_at),
             "created_at": iso_utc(self.created_at),
