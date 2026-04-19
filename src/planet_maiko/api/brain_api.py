@@ -221,13 +221,31 @@ def today_summary():
 def system_health():
     """Lightweight health snapshot for the topbar indicator.
 
-    Returns per-poller status, last brain-cycle time, and the most
-    recent backup. The UI uses this to decide if the health dot is
-    green (everything fresh, no errors) / yellow (stale or recent
-    error) / red (scheduler not running).
+    Returns per-poller status, last brain-cycle time, the most
+    recent backup, and the availability of external tools Maiko
+    depends on (claude, gh, git). The UI uses this to decide if the
+    health dot is green/yellow/red, and to surface a first-run banner
+    when claude isn't installed — otherwise agents just silently
+    never start and the new user has no idea why.
     """
     from flask import current_app
     from planet_maiko.backups import latest_backup
+
+    # Tool availability. claude is load-bearing — no claude means no
+    # agents work. gh/git are used for repo discovery + worktrees.
+    # Reuse the claude_code runtime's fallback-path logic so this
+    # report matches what the rest of Maiko actually uses.
+    tools = {}
+    try:
+        from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
+        claude_path = ClaudeCodeRuntime()._find_claude()
+    except Exception:
+        claude_path = None
+    tools["claude"] = {"available": bool(claude_path), "path": claude_path}
+    import shutil as _shutil
+    for name in ("gh", "git"):
+        p = _shutil.which(name)
+        tools[name] = {"available": bool(p), "path": p}
 
     scheduler = current_app.config.get("SCHEDULER")
     if scheduler is None:
@@ -236,6 +254,7 @@ def system_health():
             "pollers": {},
             "last_brain_cycle": None,
             "latest_backup": None,
+            "tools": tools,
         })
 
     return jsonify({
@@ -243,6 +262,7 @@ def system_health():
         "pollers": dict(scheduler.poller_status),
         "last_brain_cycle": scheduler.last_brain_cycle,
         "latest_backup": latest_backup(),
+        "tools": tools,
     })
 
 

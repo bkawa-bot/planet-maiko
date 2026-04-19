@@ -4,6 +4,7 @@ import Sidebar from "./Sidebar";
 import Footer from "./Footer";
 import WeatherOverlay from "./WeatherOverlay";
 import ShutdownModal from "./ShutdownModal";
+import MissingToolBanner from "./MissingToolBanner";
 import { showToast } from "./Toast";
 import { api } from "../api/client";
 import "./Layout.css";
@@ -146,6 +147,7 @@ export default function Layout() {
       <WeatherOverlay scene={scene} enabled={weatherEnabled} />
       <Sidebar onOpenShutdown={() => setShowShutdown(true)} />
       <main className="main-content">
+        <MissingToolBanner />
         <Outlet />
       </main>
       <Footer />
