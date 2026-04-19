@@ -16,10 +16,10 @@ In Planet Maiko you lead a pack that teaches itself from your team's merged PRs,
 
 ### The pack that raises itself
 
-- **Self-learning loop.** Every merged-PR comment, every in-session feedback, every approved review becomes a Signal. Signals cluster into Learnings. Learnings train per-repo LoRA adapters. The next agent you spawn already knows how your team does things — without you re-explaining a single thing.
-- **Shared context, automatic.** Tribal knowledge (*"use IntelliJ for tests — the CLI runner is broken"*) lives in the Pack Insights playbook. Every new agent's `CLAUDE.md` is composed from the relevant subset for their repo and role. You don't repeat yourself across sessions.
-- **A2A awareness.** Agents know what their siblings are touching. The conflict detector catches file and API overlap *before* two agents silently rewrite each other's work. Even agents spawned by external orchestrators can register with Maiko's brain and join the coordination.
-- **The campfire ritual.** End of day, the pack gathers. Active agents share what they learned; you approve what sticks; the shared `CLAUDE.md` and LoRA adapters update for tomorrow. Improvement is a group activity, not a cron job.
+- **Agents that learn your team's taste from every merged PR.** Reviewer feedback flows into per-repo LoRA adapters — no setup, no prompt engineering.
+- **Every agent starts with the team's full playbook in hand.** Your approved insights inject into each new agent's `CLAUDE.md` automatically.
+- **Siblings coordinate automatically — no more silent rewrites.** A2A conflict detection catches file and API overlap before two agents damage each other's work.
+- **The pack improves together, every day.** Agents share learnings at the campfire, you approve what sticks, tomorrow's pack wakes smarter.
 
 ![The campfire — end-of-day pack insights](docs/screenshots/campfire.png)
 
