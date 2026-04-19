@@ -21,6 +21,10 @@ So I built Planet Maiko.
 - **Siblings coordinate automatically — no more silent rewrites.** A2A conflict detection catches file and API overlap before two agents damage each other's work.
 - **The pack improves together, every day.** Agents share learnings at the campfire, you approve what sticks, tomorrow's pack wakes smarter.
 
+### Plug in anything you use
+
+Maiko makes no assumptions about where your context lives. GitHub, Linear, and calendar come built in — and any internal tool, custom service, or private dashboard slots in via a `.py` file in `~/.maiko/plugins/`. Your stack, your pack, one view. ([Plugin guide →](docs/GUIDE.md#plugin-system))
+
 ![The campfire — end-of-day pack insights](docs/screenshots/campfire.png)
 
 Cozy on the surface — Animal Crossing vibes, live weather, and a real Alaskan Klee Kai named Maiko who gets petted when you close out a good day. Uncompromising underneath — AGPL, anti-extraction, on your machine always. The only subscription is caring about your tools.
