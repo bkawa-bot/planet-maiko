@@ -65,58 +65,43 @@ def _today_midnight_utc():
 
 
 # ---------------------------------------------------------------------------
-# Upstash aggregator — optional cross-deployment counter
+# Global counter aggregator — optional cross-deployment counter.
+#
+# Hits a Cloudflare Worker (deploy/cloudflare-worker/pet-counter.js) that
+# proxies Upstash Redis. The Worker holds the Upstash creds as secrets;
+# this client just calls two scoped endpoints (POST /incr, GET /counts)
+# and can't reach anything else in Redis. That keeps the AGPL repo
+# free of any deployable-auth-credential — shipping an Upstash token
+# publicly would let anyone FLUSHDB or spam arbitrary keys.
+#
+# When aggregator_url is null, Maiko runs local-only: pets still work,
+# the Home widget just omits the "from the pack" numbers.
 # ---------------------------------------------------------------------------
 
-_DAILY_KEY_TTL_SECONDS = 60 * 60 * 48  # keep daily key around 48h, then let it drop
 
-
-def _aggregator_config():
-    """Return (url, token) pair or (None, None) when disabled."""
+def _aggregator_url():
+    """Return the worker URL, or None when disabled."""
     pets_cfg = load_config().get("pets", {}) or {}
     url = (pets_cfg.get("aggregator_url") or "").strip().rstrip("/")
-    token = (pets_cfg.get("aggregator_token") or "").strip()
-    if not url or not token:
-        return None, None
-    return url, token
-
-
-def _today_key():
-    return f"maiko:pets:day:{user_now().strftime('%Y-%m-%d')}"
-
-
-_TOTAL_KEY = "maiko:pets:total"
+    return url or None
 
 
 def _aggregator_incr_async():
-    """Fire-and-forget INCR to the aggregator. Never blocks the caller.
+    """Fire-and-forget INCR to the worker. Never blocks the caller.
 
-    Two INCRs per pet (today + lifetime) with a short EXPIRE on the
-    daily key to keep Upstash from accumulating stale per-day keys
-    forever. All calls swallow exceptions — a broken aggregator
-    must never take down the user-facing POST /maiko/pet.
+    The Worker handles the Redis-side details (two INCRs + a TTL
+    refresh); this client just pings POST /incr. All calls swallow
+    exceptions — a broken aggregator must never take down the
+    user-facing POST /maiko/pet.
     """
-    url, token = _aggregator_config()
+    url = _aggregator_url()
     if not url:
         return
-
-    today = _today_key()
 
     def _do():
         try:
             import requests  # local import — only needed when aggregator is on
-            headers = {"Authorization": f"Bearer {token}"}
-            # Upstash REST supports path-style commands, e.g.
-            # POST {url}/incr/{key}  → returns new int value
-            # POST {url}/expire/{key}/{seconds}
-            requests.post(f"{url}/incr/{today}", headers=headers, timeout=3)
-            requests.post(f"{url}/incr/{_TOTAL_KEY}", headers=headers, timeout=3)
-            # Idempotent — EXPIRE on an already-expiring key just resets
-            # the TTL; safe to call every pet.
-            requests.post(
-                f"{url}/expire/{today}/{_DAILY_KEY_TTL_SECONDS}",
-                headers=headers, timeout=3,
-            )
+            requests.post(f"{url}/incr", timeout=3)
         except Exception as e:
             logger.debug(f"[pets] aggregator INCR failed (non-fatal): {e}")
 
@@ -126,22 +111,21 @@ def _aggregator_incr_async():
 def _aggregator_get_counts():
     """Best-effort GET of today + lifetime counts. Returns dict or None.
 
-    Upstash GET returns `{"result": "<stringified value>"}` or
-    `{"result": null}` for missing keys. We coerce to int and return
-    None on any failure (network, parse) so the caller can fall back
-    to local-only counts.
+    Worker response shape: { "global_today": int, "global_lifetime": int }.
+    Returns None on any failure (network, parse) so the caller can
+    fall back to local-only counts.
     """
-    url, token = _aggregator_config()
+    url = _aggregator_url()
     if not url:
         return None
     try:
         import requests
-        headers = {"Authorization": f"Bearer {token}"}
-        today_resp = requests.post(f"{url}/get/{_today_key()}", headers=headers, timeout=3)
-        total_resp = requests.post(f"{url}/get/{_TOTAL_KEY}", headers=headers, timeout=3)
-        today = _coerce_int(today_resp.json().get("result"))
-        total = _coerce_int(total_resp.json().get("result"))
-        return {"global_today": today, "global_lifetime": total}
+        resp = requests.get(f"{url}/counts", timeout=3)
+        data = resp.json()
+        return {
+            "global_today": _coerce_int(data.get("global_today")),
+            "global_lifetime": _coerce_int(data.get("global_lifetime")),
+        }
     except Exception as e:
         logger.debug(f"[pets] aggregator GET failed (non-fatal): {e}")
         return None

@@ -49,22 +49,23 @@ DEFAULT_CONFIG = {
         "pet_daily_cap": 5,
     },
     "pets": {
-        # Optional global counter aggregator. When set, every pet
-        # fires an INCR against this Upstash Redis (or compatible)
-        # REST endpoint, and the Home counter shows the cross-
+        # Optional global counter aggregator. When set to a Cloudflare
+        # Worker URL (see deploy/cloudflare-worker/), every pet fires an
+        # INCR against it, and the Home counter shows the cross-
         # deployment total instead of the local-only one. When null,
         # every Maiko instance just shows its own local counter.
         #
-        # Setup: sign up at upstash.io, create a free Redis database,
-        # copy the REST URL and token here. No code required. Free
-        # tier handles ~100K requests/day which is more than this
-        # feature will ever see.
+        # No token — the Worker holds the real Upstash creds as
+        # secrets on Cloudflare's side. This client only has access to
+        # two scoped endpoints (increment + read counters) and can't
+        # reach anything else in Redis, so shipping this URL publicly
+        # is safe. See deploy/cloudflare-worker/README.md for how to
+        # deploy your own Worker (one-time, ~10 min, $0).
         "aggregator_url": None,
-        "aggregator_token": None,
         # IANA timezone name (e.g. "America/Los_Angeles"). Leave blank to
         # use the system's local timezone. Controls what "today" means for
         # the morning brief, skill-injected current_date, scene time-of-day,
-        # and every other "when is it for Brigitte" check.
+        # and every other "when is it for the user" check.
         "timezone": "",
     },
     "github": {
