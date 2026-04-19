@@ -1,20 +1,16 @@
 # Planet Maiko
 
-**Stop babysitting. Start leading.**
+**The current model of agent orchestration is unsustainable.**
 
-*Your final teammate — not your tenth one.*
+*"Ship 40 PRs a day."* *"10x your output."* *"Run a swarm."* The cost never makes the screenshot — you end up working *for* your agents, not the other way around. Feeding context. Reviewing output. Resolving conflicts between siblings who don't know the others exist. A team of junior devs that never sleeps, never reads the room, and never learns what you taught them yesterday. Burnout, just wearing a new hat.
 
----
+![Planet Maiko home](docs/screenshots/home.png)
 
-I got tired of being a babysitter.
+I got tired of being a babysitter. So I built Planet Maiko.
 
-The current model of agent orchestration is unsustainable. *"Ship 40 PRs a day."* *"10x your output."* *"Run a swarm."* The cost never makes the screenshot — you end up working *for* your agents, not the other way around. Feeding context. Reviewing output. Resolving conflicts between siblings who don't know the others exist. A team of junior devs that never sleeps, never reads the room, and never learns what you taught them yesterday. Burnout, just wearing a new hat.
-
-So I built Planet Maiko.
+In Planet Maiko you lead a pack that teaches itself from your team's merged PRs, shares context between siblings, and coordinates automatically. You stop being a fleet manager and go back to being a lead engineer.
 
 **You don't need more agents. You need smarter ones.**
-
-In Planet Maiko you lead a pack that teaches itself from your team's merged PRs, shares context with each other, and coordinates automatically. You stop being a fleet manager and go back to being a lead engineer. That's the whole thesis — everything else is implementation.
 
 ### The pack that raises itself
 
@@ -23,7 +19,13 @@ In Planet Maiko you lead a pack that teaches itself from your team's merged PRs,
 - **A2A awareness.** Agents know what their siblings are touching. The conflict detector catches file and API overlap *before* two agents silently rewrite each other's work. Even agents spawned by external orchestrators can register with Maiko's brain and join the coordination.
 - **The campfire ritual.** End of day, the pack gathers. Active agents share what they learned; you approve what sticks; the shared `CLAUDE.md` and LoRA adapters update for tomorrow. Improvement is a group activity, not a cron job.
 
+![The campfire — end-of-day pack insights](docs/screenshots/campfire.png)
+
 Cozy on the surface — Animal Crossing vibes, live weather, and a real Alaskan Klee Kai named Maiko who gets petted when you close out a good day. Uncompromising underneath — AGPL, anti-extraction, on your machine always. The only subscription is caring about your tools.
+
+---
+
+![Reviewing an agent's diff, in-app](docs/screenshots/review.png)
 
 ## What it's not
 
@@ -32,14 +34,7 @@ Cozy on the surface — Animal Crossing vibes, live weather, and a real Alaskan 
 - **Not venture-backed.** AGPL, copyleft, permanent. Can't be acquired and repriced.
 - **Not about making you more "productive."** It's about letting you do good work without being on-call to your own tools.
 
-## What you see
-
-- **Pack Requests** — one live feed of what your agents need from you, priority-ordered. Not a pile of notifications to triage by hand.
-- **In-app everything** — review diffs with inline comments, chat with agents, approve plans. No terminal escape hatches as the primary flow.
-- **Concurrency-safe sessions** — every agent in its own git worktree, every wake-up orchestrated through a single lock. Two triggers can't race on the same session file.
-- **Live awareness** — knows when you're in a meeting, in deep focus, on the weekend. Holds notifications accordingly.
-- **Cozy by design** — sherbet palette, pixel scenes that shift with the weather, a real dog who gets petted when you close out a good day.
-- **Plugin-extensible** — drop a `.py` in `~/.maiko/plugins/`. Your company's internal integrations stay private; the core stays small and open.
+---
 
 ## Quick Start
 
@@ -85,160 +80,9 @@ cd frontend && npm run dev
 
 Open **http://localhost:5173** and walk through the setup wizard.
 
-### Configure
+---
 
-Open **Settings** (gear icon in the topbar) and wire up whatever you use:
-
-1. **Weather** — type your city, click Lookup. Live weather via [Open-Meteo](https://open-meteo.com/) (free, no key).
-2. **GitHub** — enable, enter username + repos. Requires `gh auth login` first.
-3. **Linear** — paste API key + team ID from Linear settings.
-4. **Calendar** — paste iCal/ICS URL (Google Calendar, Outlook, CalDAV).
-5. **Allowed Tools** — add agent tools like `Bash, Read, Edit, Write, WebFetch` so agents don't hit permission prompts mid-session.
-
-## Mental model
-
-Maiko shuffles data between a few core concepts. Knowing which is which makes every page legible:
-
-- **Pupdates** — *things to notice.* Notifications from your pollers (GitHub, Linear, Calendar) plus internal events. Surface on **Home**. The brain cycle triages them into the other concepts below.
-- **Tasks** — *things to finish.* Typed into Maiko, created automatically from actionable pupdates, or auto-spawned (e.g. an incident investigation). Live on **Tasks**. An agent can be assigned.
-- **Agents** — *your pack.* Personas with role (coding / review / investigation / cartographer), scope (a repo or "global"), and a LoRA adapter that shapes their competence. Each agent runs in its own git worktree. Live on **Agents**.
-- **Insights** — *tribal knowledge your agents inherit.* Short notes like *"use IntelliJ for tests, the CLI runner is broken"*. Written by agents during work or typed by you. Approved insights inject verbatim into every new agent's `CLAUDE.md`.
-- **Learnings** — *coding rules the LoRA trainer trains on.* Extracted from PR review comments, agent feedback, and Pack Insights rituals. Live on **Knowledge**. Aggregate into per-repo LoRA adapters via **Training**.
-- **Automations** — *prompt templates Maiko can run on a schedule.* Morning briefs, custom user-authored scripts. Live on **Automations**.
-
-The **Pack Insights** ritual is where the pack gathers around the campfire at end of day — active agents share feedback (→ Learnings → LoRA) and insights (→ CLAUDE.md). You approve per-agent what sticks. The pack learns together; nothing sneaks into the model weights without your nod.
-
-Glance surfaces on the topbar:
-
-- **Health dot** — green / yellow / red for pollers, brain cycle, last backup. Hover for details.
-- **Focus mode** — available / soft focus / deep focus / away. Gates what notifications reach you.
-- **Weekend mode** — toggle off-duty; ambient work pauses, nothing nudges you.
-- **Power button** — end-of-day shutdown ritual. Prunes old data, tucks agents in, stops the server.
-
-## Architecture
-
-Maiko's brain is modeled on a CPU — each cycle processes instructions through a pipeline:
-
-```
-Brain Cycle (every 5 min)
-  1. Agent Monitor     → Process agent updates, auto-complete tasks
-  2. Conflict Detector → A2A file/API overlap warnings across the pack
-  3. Correlator        → Group related events into incidents
-  4. Pupdate Processor → Match rules (free) → LLM triage (pennies)
-  5. Learning          → Aggregate signals into graduated rules
-  6. Heartbeats        → Auto-wake silent agents; flag stuck ones
-  7. Project Driver    → Auto-advance project phases
-```
-
-### How agents work
-
-When you assign an agent to a task, Maiko prepares a git worktree with `TASK.md`, `CLAUDE.md` (protocol + injected Learnings), and `.mcp.json` (wiring the maiko-channel MCP plus any per-repo MCPs you already use). Then a headless `claude --print` run kicks off in the worktree — no terminals, no `--dangerously-*` flags to remember.
-
-The agent works, commits to its branch, and calls `reply(message_type="ready_for_review")` via the channel MCP when it's done. You see the diff in-app, leave inline comments, and either approve (Maiko pushes + opens the PR) or request changes (the agent auto-wakes, reads your comments, iterates). The wake orchestrator guarantees two triggers can't race — every resume goes through a single lock.
-
-### Dashboard Pages
-
-| Page | What it does |
-|------|-------------|
-| **Home** | Pack Requests, rolling overview pane, scene + weather, pet Maiko |
-| **Tasks** | Projects + tasks, AI task generation, agent assignment |
-| **Agents** | Active pack (live state dots), profiles, message threads, Pack Insights |
-| **Knowledge** | Learnings with approve/dismiss, Insights playbook, backfill from PRs |
-| **Automations** | Create, edit, run, schedule custom skills |
-| **Training** | Train per-repo LoRA adapters on merged PRs, view training history |
-
-## Plugin System
-
-Extend Maiko without forking the core.
-
-### Local plugins
-
-Drop a `.py` file in `~/.maiko/plugins/`:
-
-```python
-from planet_maiko.plugins.base import MaikoPlugin
-
-class MyPlugin(MaikoPlugin):
-    name = "my-plugin"
-
-    def on_startup(self, app):
-        print("Plugin loaded!")
-
-    def on_brain_cycle(self, phase, results, app):
-        if phase == "learning":
-            print(f"Learnings processed: {results}")
-
-    def on_pupdate_created(self, pupdate):
-        print(f"New notification: {pupdate.title}")
-```
-
-### Pip packages
-
-```toml
-# In your plugin's pyproject.toml
-[project.entry-points."planet_maiko.plugins"]
-my-plugin = "maiko_my_plugin:MyPlugin"
-```
-
-Install with `pip install maiko-my-plugin` — auto-discovered on startup.
-
-### Hooks
-
-| Hook | When it fires |
-|------|--------------|
-| `on_startup(app)` | App creation — register blueprints, models |
-| `on_brain_cycle(phase, results, app)` | After each brain cycle phase |
-| `on_pupdate_created(pupdate)` | New notification created |
-| `on_task_created(task)` | New task created |
-| `register_commands(subparsers)` | CLI startup — add subcommands |
-
-## Extending
-
-### Add an integration
-
-Subclass `BasePoller` and register as an entry point:
-
-```python
-from planet_maiko.pollers.base import BasePoller
-
-class PagerDutyPoller(BasePoller):
-    name = "pagerduty"
-    def poll(self, config): ...
-    def to_pupdates(self, raw_data): ...
-```
-
-```toml
-[project.entry-points."planet_maiko.pollers"]
-pagerduty = "my_package:PagerDutyPoller"
-```
-
-### Swap the runtime
-
-Implement `AgentRuntime` for any agent engine (not just Claude Code):
-
-```python
-class AgentRuntime(ABC):
-    def send(self, prompt, working_dir=None, timeout=300): ...
-    def is_available(self): ...
-```
-
-```toml
-[project.entry-points."planet_maiko.runtimes"]
-my-runtime = "my_package.runtime:MyRuntime"
-```
-
-## CLI Reference
-
-```
-maiko serve [--host] [--port] [--debug]   Start the server
-maiko report "message"                     Send update from agent
-maiko task done|start|stuck [task-id]      Update task status
-maiko inbox [--all]                        Check messages from brain
-maiko reply "message"                      Reply to brain
-maiko feedback "msg" --category testing    Send in-session feedback
-maiko status                               Check brain/runtime status
-maiko bootstrap [--limit 20]               Seed learnings from past PRs
-```
+**Full guide** — mental model, architecture, plugin system, extending, CLI reference: see [`docs/GUIDE.md`](docs/GUIDE.md).
 
 ## License
 
