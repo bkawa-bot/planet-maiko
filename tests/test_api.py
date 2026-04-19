@@ -141,26 +141,6 @@ def test_get_profiles_with_role_filter(client):
     assert all(p["role"] == "review" for p in data)
 
 
-def test_post_feedback(client):
-    # Create profile + context selection so feedback has something to update
-    client.post("/api/profiles", json={"agent_id": "agent-fb-api"})
-
-    payload = {
-        "task_id": "task-fb-api",
-        "category": "style",
-        "severity": "suggestion",
-    }
-    resp = client.post("/api/profiles/feedback", json=payload)
-    assert resp.status_code == 200
-    data = resp.get_json()
-    assert "recorded" in data
-
-
-def test_post_feedback_missing_fields(client):
-    resp = client.post("/api/profiles/feedback", json={"task_id": "x"})
-    assert resp.status_code == 400
-
-
 # ---------------------------------------------------------------------------
 # Pack Insights API
 # ---------------------------------------------------------------------------

@@ -175,8 +175,7 @@ def select_brief_learnings(repo=None, language=None, max_learnings=15):
 
     Same confidence-ranked selection compile_brief runs, exposed so the
     HTTP read surface can ship the structured list alongside the
-    prose. No side effects (no ContextSelection record — that's the
-    agent-prep path's concern, not the external reader's).
+    prose. No side effects.
 
     Args:
         repo: scope to learnings for this repo (plus globals)
@@ -201,8 +200,7 @@ def select_brief_learnings(repo=None, language=None, max_learnings=15):
     return scoped[:max_learnings]
 
 
-def compile_brief(repo=None, language=None, max_learnings=15, task_id=None,
-                  agent_profile_id=None, **_kwargs):
+def compile_brief(repo=None, language=None, max_learnings=15, **_kwargs):
     """Compile active learnings into a markdown brief.
 
     Simple confidence-ranked selection scoped by repo/language.
@@ -213,10 +211,6 @@ def compile_brief(repo=None, language=None, max_learnings=15, task_id=None,
         repo: scope to learnings for this repo (plus globals)
         language: scope to learnings for this language (plus globals)
         max_learnings: maximum learnings to include
-        task_id: if provided, record a ContextSelection linking the
-                 selected learnings to this task so record_task_outcome
-                 can later attribute success/failure to the chosen context
-        agent_profile_id: which agent this brief is for (for outcome stats)
 
     Returns:
         str: markdown brief
@@ -227,20 +221,6 @@ def compile_brief(repo=None, language=None, max_learnings=15, task_id=None,
 
     if not selected:
         return "No active learnings yet."
-
-    # Record the selection so the outcome (success/failure) can later
-    # be attributed back to this specific context. Skipped if task_id
-    # not provided (e.g. previewing the brief in the UI).
-    if task_id:
-        from planet_maiko.models.context_selection import ContextSelection
-        record = ContextSelection(
-            task_id=task_id,
-            agent_profile_id=agent_profile_id,
-            repo=repo,
-            learning_ids=[l.id for l in selected],
-        )
-        db.session.add(record)
-        db.session.commit()
 
     by_category = {}
     for l in selected:

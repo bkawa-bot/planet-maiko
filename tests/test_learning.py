@@ -4,7 +4,6 @@ import pytest
 from planet_maiko.models.signal import Signal
 from planet_maiko.models.learning import Learning
 from planet_maiko.models.agent_profile import AgentProfile
-from planet_maiko.models.context_selection import ContextSelection
 from planet_maiko.brain.learning.processor import (
     process_signals,
     compile_brief,
@@ -165,39 +164,6 @@ def test_compile_brief_excludes_pending_learnings(app, db):
     brief = compile_brief()
     assert "Active rule" in brief
     assert "Pending rule should NOT appear" not in brief
-
-
-def test_compile_brief_records_context_selection_when_task_id_provided(app, db):
-    learning = Learning(
-        rule="Use fixtures for test data",
-        category="testing",
-        status="active",
-        confidence=0.5,
-        signal_count=5,
-    )
-    db.session.add(learning)
-    db.session.commit()
-
-    compile_brief(task_id="task-brief-1", agent_profile_id="agent-x")
-
-    sel = ContextSelection.query.filter_by(task_id="task-brief-1").first()
-    assert sel is not None
-    assert sel.agent_profile_id == "agent-x"
-    assert learning.id in sel.learning_ids
-
-
-def test_compile_brief_does_not_record_selection_without_task_id(app, db):
-    learning = Learning(
-        rule="A rule", category="testing",
-        status="active", confidence=0.5, signal_count=5,
-    )
-    db.session.add(learning)
-    db.session.commit()
-
-    compile_brief()
-
-    count = ContextSelection.query.count()
-    assert count == 0
 
 
 def test_compile_brief_includes_exploration_slots(app, db):

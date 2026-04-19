@@ -1182,10 +1182,6 @@ def agent_sends_message(task_id):
         )
         db.session.add(signal)
 
-        # Small immediate specialization penalty
-        from planet_maiko.agents.profiles import record_session_feedback
-        record_session_feedback(task_id, category, severity)
-
     db.session.commit()
     return jsonify(msg.to_dict()), 201
 

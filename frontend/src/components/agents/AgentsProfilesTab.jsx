@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  Bot, Brain, CheckSquare, Clock, Plus, Target, TrendingUp, X, Pencil, Save, Code2, Eye, Search, Map, Loader,
+  Bot, Brain, CheckSquare, Clock, Plus, Target, X, Pencil, Save, Code2, Eye, Search, Map, Loader,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
@@ -207,8 +207,6 @@ export default function AgentsProfilesTab({
             </div>
             <div className="strategies-grid">
               {byRole[role].map((p) => {
-                const specEntries = Object.entries(p.specializations || {}).sort((a, b) => b[1] - a[1]);
-                const strengths = specEntries.filter(([, s]) => s >= 0.7);
                 const hasContextSet = p.context_set?.length > 0;
                 const hasAdapter = !!p.extra?.adapter_path;
 
@@ -240,20 +238,6 @@ export default function AgentsProfilesTab({
                         {p.instructions.length > 260
                           ? p.instructions.slice(0, 257).replace(/\s+\S*$/, "") + "…"
                           : p.instructions}
-                      </div>
-                    )}
-
-                    {strengths.length > 0 && (
-                      <div className="strategy-section">
-                        <div className="strategy-section-label"><TrendingUp size={10} /> Strengths</div>
-                        <div className="strategy-chips">
-                          {strengths.slice(0, 4).map(([key, score]) => (
-                            <span key={key} className="strategy-chip strength">
-                              {key.split(":").pop()?.replace(/_/g, " ")}{" "}
-                              <span className="chip-score">{(score * 100).toFixed(0)}%</span>
-                            </span>
-                          ))}
-                        </div>
                       </div>
                     )}
 

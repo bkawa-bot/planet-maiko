@@ -63,6 +63,10 @@ def _ensure_columns():
         # Tournament system removed — drop legacy tables if present
         "DROP TABLE IF EXISTS tournament_entries",
         "DROP TABLE IF EXISTS tournaments",
+        # Self-specialization scoring removed in favor of LoRA-per-repo;
+        # ContextSelection was only ever read by the now-gone
+        # record_task_outcome / record_session_feedback functions.
+        "DROP TABLE IF EXISTS context_selections",
     ]
     for sql in migrations:
         try:
@@ -179,7 +183,6 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.signal import Signal  # noqa: F401
         from planet_maiko.models.learning import Learning  # noqa: F401
         from planet_maiko.models.agent_profile import AgentProfile  # noqa: F401
-        from planet_maiko.models.context_selection import ContextSelection  # noqa: F401
         from planet_maiko.models.skill_result import SkillResult  # noqa: F401
         from planet_maiko.models.custom_skill import CustomSkill  # noqa: F401
         from planet_maiko.models.diff_comment import DiffComment  # noqa: F401

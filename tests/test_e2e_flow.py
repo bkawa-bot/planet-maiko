@@ -7,10 +7,8 @@ Tests the complete flow:
 4. Verify TASK.md and CLAUDE.md were written correctly
 5. Simulate agent communication (report progress, check inbox)
 6. Simulate mid-session feedback
-7. Complete task and record outcome
-8. Verify specialization scores updated
-9. Run brain cycle and verify all phases execute
-10. Test project driver auto-advancement
+7. Run brain cycle and verify all phases execute
+8. Test project driver auto-advancement
 """
 
 import json
@@ -27,7 +25,6 @@ from planet_maiko.models.project import Project
 from planet_maiko.models.agent_profile import AgentProfile
 from planet_maiko.models.signal import Signal
 from planet_maiko.models.learning import Learning
-from planet_maiko.models.context_selection import ContextSelection
 from planet_maiko.models.agent_message import AgentMessage
 from planet_maiko.models.skill_result import SkillResult
 from planet_maiko.models.custom_skill import CustomSkill
@@ -138,14 +135,7 @@ class TestFullAgentLifecycle:
         # At least one of our seeded rules should appear
         assert any(l.rule in brief for l in learnings)
 
-        # ---- 7. Verify ContextSelection was created ----
-        selections = ContextSelection.query.filter_by(task_id="task-e2e-1").all()
-        assert len(selections) == 1
-        sel = selections[0]
-        assert sel.agent_profile_id == "agent-e2e-1"
-        assert len(sel.learning_ids) > 0
-
-        # ---- 8. Prepare agent work area (branch-only, no worktree for speed) ----
+        # ---- 7. Prepare agent work area (branch-only, no worktree for speed) ----
         repo_path = _make_temp_git_repo(tmp_path)
         from planet_maiko.agents.coding_agent import _write_task_file, _write_claude_md
         work_dir = str(tmp_path / "workdir")
@@ -168,7 +158,7 @@ class TestFullAgentLifecycle:
         assert "maiko feedback" in content
         assert "task-e2e-1" in content
 
-        # ---- 9. Simulate agent communication via inbox ----
+        # ---- 8. Simulate agent communication via inbox ----
         msg_to = AgentMessage(
             task_id="task-e2e-1",
             direction="to_agent",
@@ -191,25 +181,6 @@ class TestFullAgentLifecycle:
         all_msgs = AgentMessage.query.filter_by(task_id="task-e2e-1").all()
         assert len(all_msgs) == 2
         assert {m.direction for m in all_msgs} == {"to_agent", "from_agent"}
-
-        # ---- 10. Simulate mid-session feedback ----
-        from planet_maiko.agents.profiles import record_session_feedback
-        count = record_session_feedback("task-e2e-1", "testing", "warning")
-        assert count == 1
-
-        # ---- 11. Record task outcome ----
-        from planet_maiko.agents.profiles import record_task_outcome
-        recorded = record_task_outcome("task-e2e-1", "success")
-        assert recorded == 1
-
-        # ---- 12. Verify profile stats updated ----
-        profile = db.session.get(AgentProfile, "agent-e2e-1")
-        assert profile.tasks_completed >= 1
-
-        # ---- 13. Verify ContextSelection outcome recorded ----
-        sel = ContextSelection.query.filter_by(task_id="task-e2e-1").first()
-        assert sel.outcome == "success"
-        assert sel.outcome_recorded_at is not None
 
 
 # ---------------------------------------------------------------------------

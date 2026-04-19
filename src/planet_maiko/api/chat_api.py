@@ -61,9 +61,8 @@ def _gather_context():
     if profiles:
         lines = []
         for p in profiles:
-            specs = list((p.specializations or {}).keys())[:3]
-            spec_str = f" — specializes in: {', '.join(specs)}" if specs else ""
-            lines.append(f"- {p.display_name} ({p.role or 'coding'}){spec_str}")
+            scope = f" — {p.scope_repo}" if p.scope_repo else ""
+            lines.append(f"- {p.display_name} ({p.role or 'coding'}){scope}")
         sections.append("## Agents\n" + "\n".join(lines))
 
     # Learning stats

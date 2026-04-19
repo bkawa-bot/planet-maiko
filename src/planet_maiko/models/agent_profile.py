@@ -33,9 +33,6 @@ class AgentProfile(db.Model):
     prs_changes_requested = db.Column(db.Integer, default=0)
     learnings_contributed = db.Column(db.Integer, default=0)
 
-    # Specialization scores (JSON: {"api-service": 0.85, "search-service": 0.3})
-    specializations = db.Column(db.JSON, default=dict)
-
     # The agent's proven set of learning IDs — built via training
     context_set = db.Column(db.JSON, default=list)
 
@@ -70,7 +67,6 @@ class AgentProfile(db.Model):
             "prs_merged": self.prs_merged,
             "prs_changes_requested": self.prs_changes_requested,
             "learnings_contributed": self.learnings_contributed,
-            "specializations": self.specializations,
             "context_set": self.context_set or [],
             "extra": self.extra or {},
             "archived": self.archived or False,

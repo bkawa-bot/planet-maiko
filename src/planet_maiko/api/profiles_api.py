@@ -1,10 +1,7 @@
 from flask import Blueprint, jsonify, request
 from planet_maiko.database import db, iso_utc
 from planet_maiko.models.agent_profile import AgentProfile
-from planet_maiko.agents.profiles import (
-    create_profile, record_task_outcome, record_session_feedback,
-    get_learning_stats, AVATARS,
-)
+from planet_maiko.agents.profiles import create_profile, AVATARS
 
 profiles_bp = Blueprint("profiles", __name__)
 
@@ -149,41 +146,3 @@ def unarchive_profile(profile_id):
 def list_avatars():
     """List available avatars."""
     return jsonify(AVATARS)
-
-
-@profiles_bp.route("/profiles/outcome", methods=["POST"])
-def record_outcome():
-    """Record task outcome for context optimization.
-
-    Optionally accepts initial_summary and final_summary to enable
-    LLM-as-judge evaluation of the task outcome quality.
-    """
-    data = request.get_json()
-    count = record_task_outcome(
-        data["task_id"],
-        data["outcome"],
-        initial_summary=data.get("initial_summary"),
-        final_summary=data.get("final_summary"),
-    )
-    return jsonify({"recorded": count})
-
-
-@profiles_bp.route("/profiles/feedback", methods=["POST"])
-def submit_feedback():
-    """Record in-session feedback to adjust agent context."""
-    data = request.get_json()
-    if not data or "task_id" not in data or "category" not in data:
-        return jsonify({"error": "task_id and category required"}), 400
-
-    count = record_session_feedback(
-        data["task_id"],
-        data["category"],
-        data.get("severity", "suggestion")
-    )
-    return jsonify({"recorded": count, "category": data["category"]})
-
-
-@profiles_bp.route("/profiles/learning-stats", methods=["GET"])
-def learning_stats():
-    """Get success rate stats for learnings."""
-    return jsonify(get_learning_stats())
