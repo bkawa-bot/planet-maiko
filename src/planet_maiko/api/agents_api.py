@@ -841,6 +841,23 @@ def agent_sends_message(task_id):
         from planet_maiko.agents.brain_session import ONE_SHOT_ROLE_FOR_TYPE
         from planet_maiko.brain.learning.agent_output import parse_and_apply_blocks
         t = db.session.get(_Task, task_id)
+
+        # Parse VERDICT + SUMMARY for any ready_for_review, not just
+        # review tasks. Coding agents self-assess the same way — the
+        # banner shows the self-verdict (approve / approve_with_comments
+        # / soft_block / hard_block) at the top of their diff page.
+        # If the agent omitted the header, both parse to None and
+        # nothing is stored; everything else still works.
+        if t:
+            verdict, summary = _parse_verdict_and_summary(data.get("content") or "")
+            if verdict or summary:
+                extra = dict(t.extra or {})
+                if verdict:
+                    extra["review_verdict"] = verdict
+                if summary:
+                    extra["review_summary"] = summary
+                t.extra = extra
+
         if t and t.type in ONE_SHOT_ROLE_FOR_TYPE:
             ag = db.session.get(_AgentProfile, t.assigned_agent_id) if t.assigned_agent_id else None
             try:
@@ -856,20 +873,11 @@ def agent_sends_message(task_id):
                 if parsed.get("confidence"):
                     extra["confidence"] = parsed["confidence"]
 
-                # Review tasks (review / pr_review) emit a structured
-                # VERDICT + SUMMARY at the top of their ready_for_review
-                # body. Parse them out so the ReviewDiff page can show a
-                # banner — verdict chip + short summary — instead of the
-                # old long-prose artifact modal. Non-review one-shot
-                # types (investigation, cartograph) don't use this path.
+                # review / pr_review task types get their verdict + summary
+                # from the outer parse above (applies to all ready_for_review
+                # regardless of task type). Here we just branch on role for
+                # status + worktree-cleanup semantics.
                 is_review_task = t.type in ("review", "pr_review")
-                if is_review_task:
-                    verdict, summary = _parse_verdict_and_summary(cleaned)
-                    if verdict:
-                        extra["review_verdict"] = verdict
-                    if summary:
-                        extra["review_summary"] = summary
-
                 extra["completed_at"] = datetime.now(timezone.utc).isoformat()
                 t.extra = extra
 

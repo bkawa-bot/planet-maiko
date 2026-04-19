@@ -72,13 +72,31 @@ Bad: "agent_status: build complete for task-123"
 
 ## 3. Ready-for-review contract
 
-When you call `reply(message_type="ready_for_review", content=...)`, structure the content so the user can review your *claim*, not re-derive it from the diff. Every ready_for_review should include at least these three sections in the markdown body (keep it tight — three lines each is plenty):
+When you call `reply(message_type="ready_for_review", content=...)`, structure the content so the user can review your *claim*, not re-derive it from the diff.
+
+**Start the content with these two lines** (same shape review agents use):
+
+```
+VERDICT: <approve | approve_with_comments | soft_block | hard_block>
+SUMMARY: <one or two sentences — what you did, overall take>
+```
+
+Self-verdict guide — how YOU (the agent) feel about your own work:
+
+- **approve** — clean change, no concerns, ready to merge.
+- **approve_with_comments** (most common default) — you did the work and left inline comments on uncertain spots; ask the user to look at those specifically.
+- **soft_block** — you completed the task but flagged at least one thing you think should be addressed before merging. Explain in SUMMARY.
+- **hard_block** — should not be used for self-verdict. If you think the change shouldn't merge, you shouldn't call ready_for_review at all — use `message_type="stuck"` instead and explain.
+
+The VERDICT + SUMMARY lines render in the Review Diff page's top banner so the user sees your assessment at a glance.
+
+**After the header, include these three short sections** in the markdown body — keep each to three lines max:
 
 - **Invariants preserved** — 2–3 bullets stating what the change keeps true. "Users can still sign in with OAuth." "The migration is idempotent." "Calling `process_batch` with an empty list is still a no-op."
-- **Assumptions** — anything the change rests on that isn't obvious from the diff. "Assumes the feature flag gate in `config.py` is on in prod." "Assumes `json.loads` on the incoming body can't raise." Called out honestly; reviewers decide if the assumption is load-bearing.
-- **Checks run** — one line each for `check_code` (green / red counts), `lora_check` when applicable, and any property tests added. "pytest: 147/147; ruff: pass; 2 new Hypothesis properties on the parser."
+- **Assumptions** — anything the change rests on that isn't obvious from the diff. "Assumes the feature flag gate in `config.py` is on in prod." "Assumes `json.loads` on the incoming body can't raise."
+- **Checks run** — one line for `check_code` (green / red counts, including LoRA violations). "pytest: 147/147; ruff: pass; 2 new Hypothesis properties on the parser; LoRA: 0 violations."
 
-Skip the "Summary" paragraph if the invariants already say what changed. Don't bullet-list every file touched — the diff says that. The goal is to make *the claim the agent is making* cheap for the user to review.
+Don't bullet-list every file touched — the diff says that. The goal is to make *the claim the agent is making* cheap for the user to review.
 
 ## 4. Workflow — the review loop
 
