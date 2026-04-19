@@ -8,7 +8,7 @@
 
 I got tired of being a babysitter.
 
-So I built Planet Maiko. I've been a software engineer for almost a decade; this is the tool I wanted to exist, with one goal: bring a little joy back to the work day. Fewer agents to babysit, more space to think. I use it every day. Sharing it freely with anyone who wants it.
+So I built Planet Maiko.
 
 **Planet Maiko isn't another agent orchestrator — it's an environment where you and your pack learn from each other, work alongside each other, and wake up smarter every day.** It runs locally on your laptop and pulls everything you need — PRs, tickets, calendar, agent output — into one view automatically, so you stop switching between ten apps with ten different AI assistants yelling at you. You stop being a fleet manager and go back to being a lead engineer.
 
@@ -35,6 +35,12 @@ Cozy on the surface — Animal Crossing vibes, live weather, and a real Alaskan 
 - **Not a SaaS.** Nothing leaves your machine. No telemetry, no hosted account, no logging in to someone else's server.
 - **Not venture-backed.** AGPL, copyleft, permanent. Can't be acquired and repriced.
 - **Not about making you more "productive."** It's about letting you do good work without being on-call to your own tools.
+
+## About
+
+Planet Maiko is named lovingly after my real dog Maiko.
+
+I've been a software engineer for almost a decade. I built this as the tool I wanted to exist — with one goal: bring a little joy back to the work day. Fewer agents to babysit, more space to think. I use it every day. Sharing it freely with anyone who wants it.
 
 ---
 
