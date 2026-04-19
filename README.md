@@ -10,7 +10,7 @@ I got tired of being a babysitter.
 
 So I built Planet Maiko. I've been a software engineer for almost a decade; this is the tool I wanted to exist, with one goal: bring a little joy back to the work day. Fewer agents to babysit, more space to think. I use it every day. Sharing it freely with anyone who wants it.
 
-In Planet Maiko you lead a pack that teaches itself from your team's merged PRs, shares context between siblings, and coordinates automatically. You stop being a fleet manager and go back to being a lead engineer.
+**Planet Maiko isn't another agent orchestrator — it's an environment where you and your pack learn from each other, work alongside each other, and wake up smarter every day.** It runs locally on your laptop and pulls everything you need — PRs, tickets, calendar, agent output — into one view automatically, so you stop switching between ten apps with ten different AI assistants yelling at you. You stop being a fleet manager and go back to being a lead engineer.
 
 **You don't need more agents. You need smarter ones.**
 
