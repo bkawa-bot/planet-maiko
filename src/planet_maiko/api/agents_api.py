@@ -16,6 +16,55 @@ logger = logging.getLogger(__name__)
 agents_bp = Blueprint("agents", __name__)
 
 
+_VALID_REVIEW_VERDICTS = {"approve", "approve_with_comments", "soft_block", "hard_block"}
+
+
+def _parse_verdict_and_summary(content):
+    """Pull the required `VERDICT:` + `SUMMARY:` lines out of a review
+    agent's ready_for_review body.
+
+    Protocol says the first two non-blank lines of the content are:
+
+        VERDICT: approve | approve_with_comments | soft_block | hard_block
+        SUMMARY: <one or two sentences>
+
+    Case-insensitive on the label; tolerates extra whitespace. Returns
+    (verdict, summary) — either value can be None when the tag was
+    absent or malformed. An unknown verdict keyword is dropped too, so
+    the stored value is always one of the enum or None.
+
+    We don't fail the ready_for_review on missing verdict — old-shape
+    reviews that only produce a long prose body still succeed (the
+    artifact is preserved); the banner just won't have anything to
+    show until the agent produces a new one in the new shape.
+    """
+    import re as _re
+    verdict = None
+    summary = None
+    if not content:
+        return verdict, summary
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        m = _re.match(r"^verdict\s*:\s*(\S+)", stripped, _re.IGNORECASE)
+        if m and verdict is None:
+            candidate = m.group(1).strip().lower()
+            if candidate in _VALID_REVIEW_VERDICTS:
+                verdict = candidate
+            continue
+        m = _re.match(r"^summary\s*:\s*(.+)$", stripped, _re.IGNORECASE)
+        if m and summary is None:
+            summary = m.group(1).strip()[:500]
+            continue
+        # Stop once we've passed the header and hit a line that isn't
+        # a known tag — SUMMARY can be continued on the next line but
+        # anything else ends the search.
+        if verdict is not None and summary is not None:
+            break
+    return verdict, summary
+
+
 def _spawn_one_shot_thread(task_id, working_path):
     """Re-fire the autonomous run for a one-shot task on the unified
     headless flow (same as a fresh assign would do — claude --print
@@ -806,9 +855,35 @@ def agent_sends_message(task_id):
                 extra["proposals_emitted"] = parsed.get("proposals_emitted", 0)
                 if parsed.get("confidence"):
                     extra["confidence"] = parsed["confidence"]
+
+                # Review tasks (review / pr_review) emit a structured
+                # VERDICT + SUMMARY at the top of their ready_for_review
+                # body. Parse them out so the ReviewDiff page can show a
+                # banner — verdict chip + short summary — instead of the
+                # old long-prose artifact modal. Non-review one-shot
+                # types (investigation, cartograph) don't use this path.
+                is_review_task = t.type in ("review", "pr_review")
+                if is_review_task:
+                    verdict, summary = _parse_verdict_and_summary(cleaned)
+                    if verdict:
+                        extra["review_verdict"] = verdict
+                    if summary:
+                        extra["review_summary"] = summary
+
                 extra["completed_at"] = datetime.now(timezone.utc).isoformat()
                 t.extra = extra
-                t.status = "done"
+
+                # Reviews keep their worktree around so the user can
+                # load the diff + inline comments at /tasks/:id/review.
+                # The task also stays in an awaiting-user state rather
+                # than jumping straight to "done" — the user closes it
+                # explicitly via the diff page. Investigations and
+                # other one-shots clean up immediately as before.
+                if is_review_task:
+                    t.status = "review"
+                else:
+                    t.status = "done"
+
                 if ag:
                     ag.last_active_at = datetime.now(timezone.utc)
                 logger.info(
@@ -816,15 +891,16 @@ def agent_sends_message(task_id):
                     f"{parsed.get('patterns_emitted', 0)} patterns, "
                     f"{parsed.get('proposals_emitted', 0)} proposals"
                 )
-                # Tear down the worktree now that the artifact is
-                # saved. The user can still re-open the artifact via
-                # the task; the throwaway scratch dir isn't doing
-                # anything for them anymore.
-                try:
-                    from planet_maiko.agents.coding_agent import cleanup_task_worktree
-                    cleanup_task_worktree(t)
-                except Exception as e:
-                    logger.warning(f"[outbox] worktree cleanup failed for {task_id}: {e}")
+
+                if not is_review_task:
+                    # Non-review one-shots tear down immediately — the
+                    # artifact is saved, the scratch dir's not doing
+                    # anything for them anymore. Reviews keep it.
+                    try:
+                        from planet_maiko.agents.coding_agent import cleanup_task_worktree
+                        cleanup_task_worktree(t)
+                    except Exception as e:
+                        logger.warning(f"[outbox] worktree cleanup failed for {task_id}: {e}")
             except Exception as e:
                 logger.warning(f"[outbox] artifact save failed for {task_id}: {e}")
 

@@ -67,9 +67,30 @@ One PROPOSAL per distinct piece of follow-up work. If you find three, emit three
 
 ## Your main output
 
-Produce the structured PR review (Summary / Looks Good / Suggestions / Questions / Verdict — see the skill prompt embedded in TASK.md) as the primary content of your `reply(message_type="ready_for_review")` call. `PATTERN:` and `PROPOSAL:` blocks live alongside it inside the same `content` string — the server strips them out before displaying the review.
+Two artifacts — in this order.
 
-Don't wrap them in code fences. Don't include them only in a code-fenced output block. Put them after your review, each on its own, separated by blank lines.
+**First, while reviewing, leave inline comments on specific lines via `leave_comment(file_path, line_number, body, side?)`.** That's how you flag "this function needs a null guard" or "consider extracting this into a helper" — pinned to the line it's about, readable in the diff view. Aim for 1–8 inline comments on a typical PR. These comments are **local**: they render in Maiko's review UI, they don't push to GitHub.
+
+**Second, call `reply(content="<below>", message_type="ready_for_review")`** with a *short* body — the verdict, a one-paragraph summary, and the `PATTERN:` / `PROPOSAL:` blocks if any. Do NOT produce a long section-by-section markdown review; the inline comments ARE the detailed review.
+
+### Required shape for `ready_for_review` content
+
+Start the content with these two lines, exactly:
+
+```
+VERDICT: <one of: approve | approve_with_comments | soft_block | hard_block>
+SUMMARY: <one or two sentences — the overall take. No preamble. No bullet lists here.>
+```
+
+Then (optional) one or two paragraphs of higher-level context that wouldn't fit on a single line (architectural concern across the whole PR, context the reviewer needs but that isn't tied to one file, etc.). Keep it tight.
+
+Then (optional) any `PATTERN:` / `PROPOSAL:` blocks, each separated by a blank line, each on its own.
+
+Verdict tags:
+- **approve** — clean diff, no concerns worth raising.
+- **approve_with_comments** — the change is good to land but the inline comments are worth addressing in a follow-up or stitching in before merge. Non-blocking.
+- **soft_block** — the inline comments include at least one thing that should be fixed before this merges, but nothing catastrophic.
+- **hard_block** — something in this change is wrong enough that it SHOULD NOT MERGE as-is. Data loss, security, correctness, broken invariant. Reserve for serious concerns.
 
 ## Run the verifiers before declaring done
 
