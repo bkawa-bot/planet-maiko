@@ -217,7 +217,13 @@ export default function AgentsProfilesTab({
                     <div className="strategy-header">
                       <div className="strategy-avatar"><Bot size={20} /></div>
                       <div className="strategy-identity">
-                        <div className="strategy-name">{p.display_name}</div>
+                        <div className="strategy-name">
+                          <span
+                            className={`agent-state-dot state-${p.state || "idle"}`}
+                            title={`Agent state: ${p.state || "idle"}`}
+                          />
+                          {p.display_name}
+                        </div>
                         <div className="strategy-meta">
                           {p.scope_repo && <span className="strategy-tag scope-tag">{p.scope_repo}</span>}
                           {!p.scope_repo && <span className="strategy-tag scope-tag">global</span>}

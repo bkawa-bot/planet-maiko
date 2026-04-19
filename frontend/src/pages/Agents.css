@@ -387,7 +387,7 @@
   background: var(--pink-soft); border: 2px solid var(--pink); color: var(--pink);
 }
 .strategy-identity { flex: 1; min-width: 0; }
-.strategy-name { font-weight: 700; font-size: 15px; color: var(--text); }
+.strategy-name { font-weight: 700; font-size: 15px; color: var(--text); display: flex; align-items: center; gap: 6px; }
 .strategy-meta { display: flex; gap: 6px; align-items: center; margin-top: 3px; }
 .strategy-rank { font-size: 10px; color: var(--pink); font-weight: 600; }
 .strategy-tag { font-size: 9px; padding: 1px 6px; border-radius: 8px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
