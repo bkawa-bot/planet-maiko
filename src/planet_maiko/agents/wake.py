@@ -245,24 +245,35 @@ def validate_registry():
     or whose worktree is gone. Run once at app startup — otherwise
     the file grows forever.
 
-    Must run inside an app_context (caller's responsibility).
+    Must run inside an app_context (caller's responsibility). Rolls
+    back the implicit read tx on exit so the session is clean for the
+    next writer (reset_stale_working) — otherwise SQLAlchemy keeps the
+    read tx open, each db.session.get extends it, and reset_stale_working
+    piggybacks on a long-lived tx that triggers the slow-tx watcher
+    (and, under concurrent startups, a real lock error).
     """
     from planet_maiko.api.agents_api import _get_sessions, _save_sessions
     from planet_maiko.models.task import Task
 
     sessions = _get_sessions()
     dropped = []
-    for task_id, info in list(sessions.items()):
-        task = db.session.get(Task, task_id)
-        wp = info.get("working_path") if isinstance(info, dict) else None
-        task_alive = task and task.status not in ("done", "cancelled")
-        worktree_ok = bool(wp) and os.path.isdir(wp)
-        if not task_alive or not worktree_ok:
-            sessions.pop(task_id)
-            dropped.append(task_id)
-    if dropped:
-        _save_sessions()
-        logger.info(f"[wake] registry cleanup — dropped {len(dropped)} stale entries")
+    try:
+        for task_id, info in list(sessions.items()):
+            task = db.session.get(Task, task_id)
+            wp = info.get("working_path") if isinstance(info, dict) else None
+            task_alive = task and task.status not in ("done", "cancelled")
+            worktree_ok = bool(wp) and os.path.isdir(wp)
+            if not task_alive or not worktree_ok:
+                sessions.pop(task_id)
+                dropped.append(task_id)
+        if dropped:
+            _save_sessions()
+            logger.info(f"[wake] registry cleanup — dropped {len(dropped)} stale entries")
+    finally:
+        # Read-only from the DB's perspective (writes only touch the
+        # JSON file). Rollback closes the implicit tx that db.session.get
+        # opened so it doesn't linger into the next step.
+        db.session.rollback()
 
 
 def reset_stale_working():
@@ -270,15 +281,23 @@ def reset_stale_working():
     Previous run crashed / was killed; the in-memory lock is gone so
     the working flag is meaningless until set_agent_state writes again.
 
+    Bulk UPDATE rather than load-mutate-commit — holds the write lock
+    for a single SQL statement instead of one per matching row. Matters
+    on crowded startups where another process is still committing the
+    migration tx; the previous load+iterate approach could block long
+    enough to hit SQLite's busy_timeout.
+
     Must run inside an app_context.
     """
     from planet_maiko.models.agent_profile import AgentProfile
-    profiles = AgentProfile.query.filter_by(state="working").all()
-    for p in profiles:
-        p.state = "idle"
-    if profiles:
+    count = (
+        AgentProfile.query
+        .filter_by(state="working")
+        .update({"state": "idle"}, synchronize_session=False)
+    )
+    if count:
         db.session.commit()
-        logger.info(f"[wake] startup — reset {len(profiles)} stale working → idle")
+        logger.info(f"[wake] startup — reset {count} stale working → idle")
 
 
 # Agents that look busy but haven't produced a pupdate in this long
