@@ -5,6 +5,7 @@ import { api } from "../api/client";
 import { applyCustomTheme, clearCustomTheme, hydrateCachedCustomTheme } from "../utils/themes";
 import SystemHealth from "./SystemHealth";
 import FocusDigestModal from "./FocusDigestModal";
+import { showToast } from "./Toast";
 import "./Sidebar.css";
 import "./ShutdownModal.css";
 
@@ -47,6 +48,7 @@ export default function Sidebar({ onOpenShutdown }) {
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const [badges, setBadges] = useState({});
   const [focusState, setFocusState] = useState("available");
+  const [focusHeldCount, setFocusHeldCount] = useState(0);
   const [showFocusMenu, setShowFocusMenu] = useState(false);
   const [showFocusInfo, setShowFocusInfo] = useState(false);
   const [focusDigest, setFocusDigest] = useState(null);
@@ -132,7 +134,10 @@ export default function Sidebar({ onOpenShutdown }) {
           learnings: learnings.length,
         });
         const foc = await api.getFocus().catch(() => null);
-        if (foc) setFocusState(foc.current_state || "available");
+        if (foc) {
+          setFocusState(foc.current_state || "available");
+          setFocusHeldCount(foc.held_count || 0);
+        }
       } catch (err) { /* ignore */ }
     };
     fetchBadges();
@@ -211,9 +216,18 @@ export default function Sidebar({ onOpenShutdown }) {
             <button
               className={`focus-pill-topbar ${focusState}`}
               onClick={() => setShowFocusMenu(!showFocusMenu)}
-              title="Focus mode"
+              title={
+                focusState === "available"
+                  ? "Focus mode"
+                  : focusHeldCount > 0
+                  ? `Focus mode — ${focusHeldCount} held, digest shows on return`
+                  : "Focus mode — nothing held yet"
+              }
             >
               <Shield size={10} /> {focusState.replace("_", " ")}
+              {focusState !== "available" && focusHeldCount > 0 && (
+                <span className="focus-held-badge">{focusHeldCount}</span>
+              )}
             </button>
             {showFocusMenu && (
               <div className="topbar-dropdown">
@@ -243,6 +257,11 @@ export default function Sidebar({ onOpenShutdown }) {
                       setShowFocusMenu(false);
                       if (digest && digest.total_held > 0) {
                         setFocusDigest(digest);
+                      } else if (wasInFocus) {
+                        // Nothing was held, but still confirm the transition
+                        // so the user sees that focus → available actually
+                        // took effect. Prevents the silent-flip confusion.
+                        showToast("Back in available — nothing came in.", "normal");
                       }
                     }}
                   >
