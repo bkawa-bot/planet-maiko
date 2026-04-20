@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import {
   Bot, Brain, CheckSquare, ChevronDown, ChevronRight, Clock, Plus,
-  Target, X, Pencil, Save, Code2, Eye, Search, Map, Loader,
+  Target, X, Pencil, Save, Code2, Eye, Search, Map, Loader, Compass, Pause, Play,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
 import { formatRepo, useDefaultOrg } from "../../utils/repo";
+import { relativeTime } from "../../utils/dates";
 import AgentTimelineModal from "./AgentTimelineModal";
 
 const ROLE_META = {
@@ -127,17 +128,66 @@ function ProfileCard({ profile, onOpen }) {
 }
 
 
+// User-facing strings for goal metadata. Both functions are pure —
+// they only depend on the goal row, so they stay outside the component
+// to keep React from rebuilding them on every render.
+function formatGoalKind(kind) {
+  const map = {
+    keep_overview_current: "Keep overview current",
+  };
+  return map[kind] || kind.replace(/_/g, " ");
+}
+
+function goalTriggerDescription(goal) {
+  const cfg = goal.trigger_config || {};
+  if (goal.kind === "keep_overview_current") {
+    const days = cfg.stale_days || 30;
+    return `refreshes after ${days}d stale`;
+  }
+  if (goal.trigger_kind === "cadence" && cfg.cadence_hours) {
+    return `every ${cfg.cadence_hours}h`;
+  }
+  return goal.trigger_kind;
+}
+
+
 // Full profile modal — shown when a card is clicked.
 function ProfileDetailModal({
   profile, allLearnings, onClose, onEdit, onTimeline, onArchive, onUnarchive,
 }) {
   const [showContextSet, setShowContextSet] = useState(false);
+  const [goals, setGoals] = useState(null);
+  const [goalsLoading, setGoalsLoading] = useState(true);
   const defaultOrg = useDefaultOrg();
   const hasContextSet = profile.context_set?.length > 0;
   const hasAdapter = !!profile.extra?.adapter_path;
   const role = profile.role || "coding";
   const meta = ROLE_META[role] || ROLE_META.coding;
   const RoleIcon = meta.icon;
+
+  useEffect(() => {
+    let cancelled = false;
+    setGoalsLoading(true);
+    api.getAgentGoals(profile.id)
+      .then((rows) => { if (!cancelled) setGoals(rows || []); })
+      .catch(() => { if (!cancelled) setGoals([]); })
+      .finally(() => { if (!cancelled) setGoalsLoading(false); });
+    return () => { cancelled = true; };
+  }, [profile.id]);
+
+  const toggleGoal = async (goal) => {
+    const nextStatus = goal.status === "active" ? "paused" : "active";
+    // Optimistic update — revert on failure so the toggle feels instant
+    // but stays honest if the PATCH 500s.
+    setGoals((rows) => rows.map((g) => g.id === goal.id ? { ...g, status: nextStatus } : g));
+    try {
+      const updated = await api.updateGoal(goal.id, { status: nextStatus });
+      setGoals((rows) => rows.map((g) => g.id === goal.id ? updated : g));
+    } catch (err) {
+      setGoals((rows) => rows.map((g) => g.id === goal.id ? { ...g, status: goal.status } : g));
+      showToast("Couldn't update goal: " + (err.message || "unknown"), "high");
+    }
+  };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -228,6 +278,54 @@ function ProfileDetailModal({
               </ul>
             </div>
           )}
+
+          <div className="profile-modal-section">
+            <div className="profile-modal-section-label">
+              <Compass size={11} /> Standing goals
+              {goals && goals.length > 0 && (
+                <span className="profile-modal-goal-count">{goals.filter((g) => g.status === "active").length} active</span>
+              )}
+            </div>
+            {goalsLoading ? (
+              <div className="profile-modal-goals-empty">
+                <Loader size={10} className="spin" /> Loading…
+              </div>
+            ) : !goals || goals.length === 0 ? (
+              <div className="profile-modal-goals-empty">
+                No standing goals yet. {role === "cartographer" ? "Atlas picks up repo-overview goals automatically once repos are configured." : "More kinds are on the way."}
+              </div>
+            ) : (
+              <ul className="profile-modal-goal-list">
+                {goals.map((g) => (
+                  <li key={g.id} className={`profile-modal-goal status-${g.status}`}>
+                    <div className="profile-modal-goal-main">
+                      <span className="profile-modal-goal-kind">{formatGoalKind(g.kind)}</span>
+                      {g.scope_repo && (
+                        <span className="profile-modal-goal-repo" title={g.scope_repo}>
+                          {formatRepo(g.scope_repo, defaultOrg)}
+                        </span>
+                      )}
+                      <span className="profile-modal-goal-meta">
+                        {goalTriggerDescription(g)}
+                        {g.last_fired_at && (
+                          <> · fired {relativeTime(g.last_fired_at)}</>
+                        )}
+                      </span>
+                    </div>
+                    <button
+                      className="btn btn-sm profile-modal-goal-toggle"
+                      onClick={() => toggleGoal(g)}
+                      title={g.status === "active" ? "Pause this goal" : "Resume this goal"}
+                      disabled={g.status === "archived"}
+                    >
+                      {g.status === "active" ? <Pause size={10} /> : <Play size={10} />}
+                      {g.status === "active" ? " pause" : g.status === "paused" ? " resume" : " archived"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
 
         <div className="profile-modal-footer">

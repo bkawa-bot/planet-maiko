@@ -1,23 +1,23 @@
-"""Role-as-intent autonomy — self-triggered proposals from role-native agents.
+"""Role-as-intent autonomy — goal-driven proposals from role-native agents.
 
-Stage 0 (this module): cartographer-only. Atlas watches for repos whose
-Repo Overview insight is missing or stale, and emits an agent_proposal
-pupdate so the user can approve a refresh with one click. Approval
-runs through the same `agent_proposal` → `approve_proposal` → routed
-task flow that powers every other proposed task — no new execution
-path, no new permission surface.
+Stage 1: the hardcoded cartographer detector from Stage 0 has been
+generalized into a goal-driven evaluator backed by `AgentGoal` rows.
+Each goal row represents a durable intent ("keep planet-maiko's
+overview current") held by a role, and the evaluator dispatches on
+`goal.kind` to the matching detector function.
 
-The detector is intentionally conservative:
-  - Only fires for repos in `config.github.repos` (already user-sanctioned).
-  - Skips repos that already have a non-dismissed refresh proposal
-    queued.
-  - Skips repos whose prior refresh proposal was dismissed inside the
-    cooldown window (stops the "user said no, Atlas keeps asking" loop).
-  - Caps proposals per cycle so a fresh install with 10 repos doesn't
-    flood the inbox on the first tick.
+Flow per cycle:
+  1. ensure_seed_goals() — for every configured repo, make sure a
+     keep_overview_current goal exists. Idempotent.
+  2. evaluate() — iterate every active goal, run its detector, and
+     emit proposals as needed. Paused / archived goals are skipped.
 
-Later stages will generalize this module into a proper goals model;
-for now it's a single hardcoded detector that proves the pattern.
+Adding a new goal kind = adding a new detector function + wiring it
+into the dispatch table in `_DETECTORS`. No schema changes needed.
+
+Proposal → task → agent path is unchanged from Stage 0: proposals
+land in the inbox as `agent_proposal` pupdates and run through
+`approve_proposal` + `route` + `_phase_execute_agent_tasks`.
 """
 
 import logging
@@ -27,51 +27,86 @@ from datetime import datetime, timezone, timedelta
 from planet_maiko.database import db
 from planet_maiko.models.pupdate import Pupdate
 from planet_maiko.models.insight import Insight
+from planet_maiko.models.agent_goal import AgentGoal
 
 logger = logging.getLogger(__name__)
 
 
-# Each role_autonomy detector attaches a unique tag to the proposals
-# it emits so we can find them again for dedup / cooldown without
-# having to parse titles. Keep this stable — the dedup query above
-# depends on it.
 _TAG_PREFIX = "role_trigger"
 
 
-def _cartograph_tag(repo):
-    return f"{_TAG_PREFIX}:cartograph_refresh:{repo}"
+# --------------------------------------------------------------------------
+# Seeding
+# --------------------------------------------------------------------------
 
+def ensure_seed_goals():
+    """Ensure one AgentGoal row exists per configured repo, per seed kind.
 
-def _latest_overview_for_repo(repo):
-    """Most recent ACTIVE overview insight for the given repo, or None.
+    Idempotent. Safe to call every cycle — if the user adds a new repo
+    to config.github.repos, the next tick seeds a goal for it without
+    needing a restart or a separate migration step.
 
-    We look at active (approved) insights only — a pending or dismissed
-    overview doesn't count as "current coverage" even if it's the most
-    recent row. Tag shape matches what /insights/cartograph produces:
-    approved Insights are tagged ["overview", "cartographer"] and
-    scoped to the repo.
+    Only seeds with defaults from brain.role_autonomy config — so a
+    user-tuned stale_days picks up on the next reseed for any NEW
+    goals, while existing goals keep their current config.
     """
-    rows = (
-        Insight.query
-        .filter(Insight.repo_scope == repo)
-        .filter(Insight.status == "active")
-        .order_by(Insight.last_confirmed_at.desc())
-        .limit(20)
-        .all()
+    from planet_maiko.config import load_config
+
+    config = load_config()
+    repos = (config.get("github") or {}).get("repos") or []
+    if not repos:
+        return 0
+
+    cart_cfg = (
+        ((config.get("brain") or {}).get("role_autonomy") or {}).get("cartographer") or {}
     )
-    for ins in rows:
-        tags = ins.tags or []
-        if "overview" in tags or "cartographer" in tags:
-            return ins
-    return None
+    stale_days = int(cart_cfg.get("stale_days", 30))
+
+    created = 0
+    for repo in repos:
+        exists = (
+            AgentGoal.query
+            .filter(AgentGoal.role == "cartographer")
+            .filter(AgentGoal.kind == "keep_overview_current")
+            .filter(AgentGoal.scope_repo == repo)
+            .first()
+        )
+        if exists:
+            continue
+        goal = AgentGoal(
+            role="cartographer",
+            agent_profile_id=None,
+            kind="keep_overview_current",
+            scope_repo=repo,
+            trigger_kind="condition",
+            trigger_config={"stale_days": stale_days},
+            action_kind="propose",
+            action_config={},
+            status="active",
+            created_by="seed",
+            extra={
+                "description": f"Keep {repo}'s Repo Overview current so agents starting on this repo inherit an accurate map via CLAUDE.md.",
+            },
+        )
+        db.session.add(goal)
+        created += 1
+
+    if created:
+        db.session.commit()
+        logger.info(f"[autonomy] seeded {created} goal(s)")
+    return created
+
+
+# --------------------------------------------------------------------------
+# Dedup helpers (shared across detectors)
+# --------------------------------------------------------------------------
+
+def _tag_for(goal):
+    """Stable dedup tag for proposals emitted by this goal."""
+    return f"{_TAG_PREFIX}:{goal.kind}:{goal.scope_repo or 'global'}"
 
 
 def _pupdate_in_flight(tag):
-    """True if a non-dismissed proposal with this tag already exists.
-
-    We don't want to pile up three "refresh planet-maiko" proposals
-    just because the user hasn't gotten to the first one yet.
-    """
     return (
         Pupdate.query
         .filter(Pupdate.dismissed == False)  # noqa: E712
@@ -81,14 +116,6 @@ def _pupdate_in_flight(tag):
 
 
 def _cooldown_active(tag, cooldown_days):
-    """True if the most recent dismissed proposal with this tag was
-    dismissed within the cooldown window.
-
-    Purpose: when the user dismisses "refresh planet-maiko overview",
-    we should wait before asking again. Without this, the next brain
-    cycle would immediately re-propose the same thing, which is
-    exactly the kind of nagging that makes autonomy feel bad.
-    """
     if cooldown_days <= 0:
         return False
     cutoff = datetime.now(timezone.utc) - timedelta(days=cooldown_days)
@@ -108,16 +135,62 @@ def _cooldown_active(tag, cooldown_days):
     return dismissed_at and dismissed_at >= cutoff
 
 
-def _emit_cartograph_proposal(repo, *, reason, overview_age_days=None):
-    """Create an agent_proposal pupdate that approving turns into a
-    cartograph task. Shape matches what CartographLauncher produces —
-    same Task.type, same extra.repo — so approve_proposal + route +
-    _phase_execute_agent_tasks handle it without any new branching.
+# --------------------------------------------------------------------------
+# Detectors — one per goal.kind. Each returns a dict describing outcome.
+# --------------------------------------------------------------------------
 
-    The reasoning field is the user-facing "why Atlas is proposing this"
-    string; ProposalCard renders it in the card body.
+def _detect_keep_overview_current(goal):
+    """Fires when the repo's Repo Overview insight is missing or older
+    than trigger_config.stale_days. Emits an agent_proposal pupdate
+    shaped like CartographLauncher produces.
     """
-    tag = _cartograph_tag(repo)
+    repo = goal.scope_repo
+    if not repo:
+        return {"outcome": "skip", "reason": "no_scope_repo"}
+
+    stale_days = int((goal.trigger_config or {}).get("stale_days", 30))
+    now = datetime.now(timezone.utc)
+    stale_cutoff = now - timedelta(days=stale_days)
+
+    overview = _latest_overview_for_repo(repo)
+    if overview is None:
+        _emit_cartograph_proposal(goal, repo, reason="missing")
+        return {"outcome": "proposed", "reason": "missing"}
+
+    last_confirmed = overview.last_confirmed_at
+    if last_confirmed and last_confirmed.tzinfo is None:
+        last_confirmed = last_confirmed.replace(tzinfo=timezone.utc)
+    if last_confirmed is None or last_confirmed < stale_cutoff:
+        age_days = None
+        if last_confirmed is not None:
+            age_days = int((now - last_confirmed).total_seconds() // 86400)
+        _emit_cartograph_proposal(
+            goal, repo, reason="stale", overview_age_days=age_days,
+        )
+        return {"outcome": "proposed", "reason": "stale", "age_days": age_days}
+
+    return {"outcome": "skip", "reason": "fresh"}
+
+
+def _latest_overview_for_repo(repo):
+    """Most recent ACTIVE overview insight for the given repo, or None."""
+    rows = (
+        Insight.query
+        .filter(Insight.repo_scope == repo)
+        .filter(Insight.status == "active")
+        .order_by(Insight.last_confirmed_at.desc())
+        .limit(20)
+        .all()
+    )
+    for ins in rows:
+        tags = ins.tags or []
+        if "overview" in tags or "cartographer" in tags:
+            return ins
+    return None
+
+
+def _emit_cartograph_proposal(goal, repo, *, reason, overview_age_days=None):
+    tag = _tag_for(goal)
     pupdate_id = f"role-trigger-cartograph-{repo.replace('/', '_')}-{uuid.uuid4().hex[:6]}"
 
     if reason == "missing":
@@ -128,7 +201,7 @@ def _emit_cartograph_proposal(repo, *, reason, overview_age_days=None):
             f"Overviews inject into every agent's CLAUDE.md so new pups "
             f"start with the lay of the land."
         )
-    else:  # stale
+    else:
         age_str = f"{overview_age_days}d old" if overview_age_days is not None else "stale"
         title = f"Refresh {repo}'s overview? It's {age_str}."
         body = (
@@ -141,7 +214,7 @@ def _emit_cartograph_proposal(repo, *, reason, overview_age_days=None):
     pupdate = Pupdate(
         id=pupdate_id,
         source="maiko",
-        source_id=f"role-trigger/cartograph_refresh/{repo}",
+        source_id=f"role-trigger/{goal.kind}/{repo}",
         type="agent_proposal",
         priority="low",
         title=title,
@@ -150,7 +223,7 @@ def _emit_cartograph_proposal(repo, *, reason, overview_age_days=None):
         action_hint="Approve / dismiss",
         tags=["proposal", "from_maiko", tag],
         extra={
-            "from_agent_id": None,  # no specific author; this is Maiko herself
+            "from_agent_id": None,
             "draft": {
                 "title": f"Cartograph {repo}",
                 "type": "cartograph",
@@ -159,103 +232,145 @@ def _emit_cartograph_proposal(repo, *, reason, overview_age_days=None):
                 "description": body,
             },
             "role_trigger": {
-                "kind": "cartograph_refresh",
+                "goal_id": goal.id,
+                "kind": goal.kind,
                 "repo": repo,
                 "reason": reason,
                 "overview_age_days": overview_age_days,
             },
         },
-        # Proposals skip LLM triage — they're already a human-ask, not
-        # a noisy source signal. Setting brain_processed=True keeps the
-        # pupdate processor from re-interpreting them.
         brain_processed=True,
     )
     db.session.add(pupdate)
     return pupdate
 
 
-def evaluate():
-    """Run every role_autonomy detector and emit proposals.
+# Dispatch table — add new detectors here keyed by goal.kind.
+_DETECTORS = {
+    "keep_overview_current": _detect_keep_overview_current,
+}
 
-    Safe to call on every brain cycle — dedup + cooldown guard against
-    double-proposing, and the per-cycle cap bounds proposal rate.
+
+# --------------------------------------------------------------------------
+# Top-level evaluator
+# --------------------------------------------------------------------------
+
+def evaluate():
+    """Run every active goal through its detector and emit proposals.
+
+    Safe to call on every brain cycle:
+      - Ensures goals are seeded for the current repo list first.
+      - Skips paused/archived goals.
+      - Dedup + cooldown per goal prevent repeat proposals.
+      - Respects per-kind caps from brain.role_autonomy config so a
+        fresh install doesn't flood the inbox on the first tick.
 
     Returns:
-        dict with counts by outcome (proposed, skipped_in_flight,
-        skipped_cooldown, skipped_fresh) and a short `details` list
-        per-repo for log triage.
+        dict with per-kind counts + a details list for log triage.
     """
     from planet_maiko.config import load_config
 
     config = load_config()
-    cfg = ((config.get("brain") or {}).get("role_autonomy") or {}).get("cartographer") or {}
-    if not cfg.get("enabled", False):
-        return {"proposed": 0, "skipped": 0, "reason": "disabled"}
+    autonomy_cfg = (config.get("brain") or {}).get("role_autonomy") or {}
+    cartographer_cfg = autonomy_cfg.get("cartographer") or {}
 
-    stale_days = int(cfg.get("stale_days", 30))
-    cooldown_days = int(cfg.get("cooldown_days", 7))
-    max_per_cycle = int(cfg.get("max_proposals_per_cycle", 2))
+    # Master kill switch: the cartographer config's `enabled` flag also
+    # gates the whole phase, matching Stage 0's behavior. If any role
+    # is enabled we run; each goal still gets filtered by its own
+    # role-config below.
+    any_enabled = any(
+        (autonomy_cfg.get(role_key) or {}).get("enabled", False)
+        for role_key in autonomy_cfg.keys()
+    )
+    if not any_enabled:
+        return {"proposed": 0, "reason": "disabled"}
 
-    repos = (config.get("github") or {}).get("repos") or []
-    if not repos:
-        return {"proposed": 0, "skipped": 0, "reason": "no_repos"}
+    # Reseed before evaluating so new repos show up as goals the same
+    # cycle the user adds them in Settings.
+    try:
+        ensure_seed_goals()
+    except Exception as e:
+        logger.warning(f"[autonomy] seed failed: {e}")
 
-    now = datetime.now(timezone.utc)
-    stale_cutoff = now - timedelta(days=stale_days)
+    goals = (
+        AgentGoal.query
+        .filter(AgentGoal.status == "active")
+        .order_by(AgentGoal.id.asc())
+        .all()
+    )
+
+    # Per-role caps. Stage 0's cap was "cartographer emits at most N
+    # proposals per cycle"; preserve that shape so a user with 20 repos
+    # doesn't see 20 proposals land at once on a fresh install.
+    caps = {}
+    emitted_by_role = {}
+    for role_key, role_cfg in autonomy_cfg.items():
+        if not (role_cfg or {}).get("enabled", False):
+            caps[role_key] = 0
+        else:
+            caps[role_key] = int((role_cfg or {}).get("max_proposals_per_cycle", 2))
+        emitted_by_role[role_key] = 0
 
     proposed = 0
     skipped_in_flight = 0
     skipped_cooldown = 0
     skipped_fresh = 0
+    skipped_capped = 0
+    skipped_unknown_kind = 0
     details = []
 
-    for repo in repos:
-        if proposed >= max_per_cycle:
-            break
+    for goal in goals:
+        role_key = goal.role
+        # Check the role's master enable flag.
+        role_cfg = autonomy_cfg.get(role_key) or {}
+        if not role_cfg.get("enabled", False):
+            details.append({"goal_id": goal.id, "outcome": "role_disabled"})
+            continue
 
-        tag = _cartograph_tag(repo)
+        if emitted_by_role.get(role_key, 0) >= caps.get(role_key, 0):
+            skipped_capped += 1
+            details.append({"goal_id": goal.id, "outcome": "capped"})
+            continue
+
+        detector = _DETECTORS.get(goal.kind)
+        if detector is None:
+            skipped_unknown_kind += 1
+            details.append({"goal_id": goal.id, "outcome": "unknown_kind"})
+            continue
+
+        tag = _tag_for(goal)
         if _pupdate_in_flight(tag):
             skipped_in_flight += 1
-            details.append({"repo": repo, "outcome": "in_flight"})
+            details.append({"goal_id": goal.id, "outcome": "in_flight"})
             continue
+        cooldown_days = int(role_cfg.get("cooldown_days", 7))
         if _cooldown_active(tag, cooldown_days):
             skipped_cooldown += 1
-            details.append({"repo": repo, "outcome": "cooldown"})
+            details.append({"goal_id": goal.id, "outcome": "cooldown"})
             continue
 
-        overview = _latest_overview_for_repo(repo)
-        if overview is None:
-            _emit_cartograph_proposal(repo, reason="missing")
+        try:
+            result = detector(goal)
+        except Exception as e:
+            logger.warning(f"[autonomy] detector {goal.kind} failed for goal {goal.id}: {e}")
+            details.append({"goal_id": goal.id, "outcome": "error", "error": str(e)})
+            continue
+
+        outcome = (result or {}).get("outcome")
+        if outcome == "proposed":
             proposed += 1
-            details.append({"repo": repo, "outcome": "proposed_missing"})
-            continue
-
-        last_confirmed = overview.last_confirmed_at
-        if last_confirmed and last_confirmed.tzinfo is None:
-            last_confirmed = last_confirmed.replace(tzinfo=timezone.utc)
-        if last_confirmed is None or last_confirmed < stale_cutoff:
-            age_days = None
-            if last_confirmed is not None:
-                age_days = int((now - last_confirmed).total_seconds() // 86400)
-            _emit_cartograph_proposal(
-                repo, reason="stale", overview_age_days=age_days,
-            )
-            proposed += 1
-            details.append({
-                "repo": repo, "outcome": "proposed_stale",
-                "age_days": age_days,
-            })
-            continue
-
-        skipped_fresh += 1
-        details.append({"repo": repo, "outcome": "fresh"})
+            emitted_by_role[role_key] = emitted_by_role.get(role_key, 0) + 1
+            goal.last_fired_at = datetime.now(timezone.utc)
+            details.append({"goal_id": goal.id, "outcome": "proposed", "detector": result})
+        else:
+            skipped_fresh += 1
+            details.append({"goal_id": goal.id, "outcome": "fresh", "detector": result})
 
     if proposed:
         db.session.commit()
         logger.info(
-            f"[autonomy] cartographer: proposed {proposed} refresh(es) "
-            f"(in_flight={skipped_in_flight} cooldown={skipped_cooldown} "
-            f"fresh={skipped_fresh})"
+            f"[autonomy] proposed {proposed} (in_flight={skipped_in_flight} "
+            f"cooldown={skipped_cooldown} fresh={skipped_fresh} capped={skipped_capped})"
         )
 
     return {
@@ -263,5 +378,7 @@ def evaluate():
         "skipped_in_flight": skipped_in_flight,
         "skipped_cooldown": skipped_cooldown,
         "skipped_fresh": skipped_fresh,
+        "skipped_capped": skipped_capped,
+        "skipped_unknown_kind": skipped_unknown_kind,
         "details": details,
     }
