@@ -209,6 +209,66 @@ def approve_proposal(pupdate_id):
     return jsonify({"task": task.to_dict(), "proposal_id": pupdate.id}), 201
 
 
+@pupdates_bp.route("/proposals/<pupdate_id>/approve-as-goal", methods=["POST"])
+def approve_proposal_as_goal(pupdate_id):
+    """Adopt a gap proposal as a standing AgentGoal.
+
+    Gap-detector proposals carry a `proposed_goal` blob in extra with
+    the AgentGoal-shaped fields (role, kind, scope_repo, trigger_kind,
+    trigger_config, action_kind, action_config, extra). Approving
+    here installs that row and dismisses the pupdate.
+
+    Distinct from approve_proposal (which creates a one-shot Task) —
+    the UI routes to whichever endpoint matches the proposal shape.
+    """
+    from planet_maiko.models.agent_goal import AgentGoal
+
+    pupdate = db.get_or_404(Pupdate, pupdate_id)
+    if pupdate.type != "agent_proposal":
+        return jsonify({"error": "not a proposal"}), 400
+
+    spec = (pupdate.extra or {}).get("proposed_goal")
+    if not spec or not spec.get("kind") or not spec.get("role"):
+        return jsonify({"error": "proposal has no proposed_goal"}), 400
+
+    # Guard against duplicate goals — if the user already installed
+    # this (kind, scope_repo) pair from a prior cycle's proposal, we
+    # dismiss the pupdate rather than creating a duplicate row.
+    existing = (
+        AgentGoal.query
+        .filter(AgentGoal.kind == spec["kind"])
+        .filter(AgentGoal.scope_repo == spec.get("scope_repo"))
+        .filter(AgentGoal.status != "archived")
+        .first()
+    )
+    if existing is not None:
+        pupdate.dismissed = True
+        pupdate.dismissed_at = datetime.now(timezone.utc)
+        db.session.commit()
+        return jsonify({"goal": existing.to_dict(), "proposal_id": pupdate.id, "note": "already_installed"}), 200
+
+    goal = AgentGoal(
+        role=spec["role"],
+        agent_profile_id=spec.get("agent_profile_id"),
+        kind=spec["kind"],
+        scope_repo=spec.get("scope_repo"),
+        trigger_kind=spec.get("trigger_kind", "condition"),
+        trigger_config=spec.get("trigger_config") or {},
+        action_kind=spec.get("action_kind", "propose"),
+        action_config=spec.get("action_config") or {},
+        status="active",
+        created_by="proposal",
+        extra=spec.get("extra") or {},
+    )
+    db.session.add(goal)
+
+    pupdate.dismissed = True
+    pupdate.dismissed_at = datetime.now(timezone.utc)
+
+    db.session.commit()
+    return jsonify({"goal": goal.to_dict(), "proposal_id": pupdate.id}), 201
+
+
 @pupdates_bp.route("/proposals/<pupdate_id>/dismiss", methods=["POST"])
 def dismiss_proposal(pupdate_id):
     """Reject a proposal — dismisses the pupdate. Stored as feedback for

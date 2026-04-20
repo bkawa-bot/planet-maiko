@@ -1,16 +1,21 @@
 import { useState } from "react";
-import { Check, X, Pencil, Sparkles, Loader, ChevronDown, ChevronRight } from "lucide-react";
+import { Check, X, Pencil, Sparkles, Loader, ChevronDown, ChevronRight, Compass } from "lucide-react";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 
 /**
  * Proposal card — a specialized pupdate renderer for type=agent_proposal
- * pupdates. Shows the proposing agent, the draft task, and approve /
- * edit / dismiss buttons. Approval creates a real routed task.
+ * pupdates.
+ *
+ * Two flavors based on what's in extra:
+ *   - extra.draft set: TASK proposal — user approves to create a routed Task.
+ *   - extra.proposed_goal set: GOAL proposal — approving installs an AgentGoal
+ *     row so Maiko keeps watching the condition. No edit form; goals are
+ *     tuned from the profile detail modal after adoption.
  *
  * Props:
- *   proposal  — pupdate dict where extra.draft holds the task draft.
+ *   proposal  — pupdate dict.
  *   onAction  — () => void called after approve or dismiss so the parent
  *               list can refresh.
  */
@@ -19,7 +24,10 @@ export default function ProposalCard({ proposal, onAction }) {
   const [editing, setEditing] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
-  const initialDraft = (proposal.metadata || proposal.extra || {}).draft || {};
+  const extra = proposal.metadata || proposal.extra || {};
+  const proposedGoal = extra.proposed_goal;
+  const isGoalProposal = !!proposedGoal;
+  const initialDraft = extra.draft || {};
   const [draft, setDraft] = useState({
     title: initialDraft.title || "",
     type: initialDraft.type || "todo",
@@ -28,14 +36,20 @@ export default function ProposalCard({ proposal, onAction }) {
     category: initialDraft.category || "",
     description: initialDraft.description || "",
   });
-  const fromAgentId = (proposal.metadata || proposal.extra || {}).from_agent_id;
+  const fromAgentId = extra.from_agent_id;
 
   const approve = async () => {
     setBusy(true);
     try {
-      const payload = editing ? draft : initialDraft;
-      const res = await api.approveProposal(proposal.id, payload);
-      showToast(`Approved — task created${res.task?.assigned_agent_id ? ` (${res.task.assigned_agent_id})` : ""}`, "normal");
+      if (isGoalProposal) {
+        const res = await api.approveProposalAsGoal(proposal.id);
+        const note = res.note === "already_installed" ? " (already tracked)" : "";
+        showToast(`Goal adopted${note}`, "normal");
+      } else {
+        const payload = editing ? draft : initialDraft;
+        const res = await api.approveProposal(proposal.id, payload);
+        showToast(`Approved — task created${res.task?.assigned_agent_id ? ` (${res.task.assigned_agent_id})` : ""}`, "normal");
+      }
       onAction?.();
     } catch (err) {
       showToast(err.message || "Approve failed", "high");
@@ -56,22 +70,58 @@ export default function ProposalCard({ proposal, onAction }) {
   };
 
   return (
-    <div className="proposal-card card">
+    <div className={`proposal-card card${isGoalProposal ? " proposal-card-goal" : ""}`}>
       <div className="proposal-header">
-        <Sparkles size={12} className="proposal-icon" />
+        {isGoalProposal ? (
+          <Compass size={12} className="proposal-icon" />
+        ) : (
+          <Sparkles size={12} className="proposal-icon" />
+        )}
         <span className="proposal-title">{proposal.title}</span>
-        <button
-          className="btn-ghost proposal-expand"
-          onClick={() => setExpanded((v) => !v)}
-          title={expanded ? "Collapse" : "Expand"}
-        >
-          {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        </button>
+        {!isGoalProposal && (
+          <button
+            className="btn-ghost proposal-expand"
+            onClick={() => setExpanded((v) => !v)}
+            title={expanded ? "Collapse" : "Expand"}
+          >
+            {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          </button>
+        )}
       </div>
       {fromAgentId && <div className="proposal-from">Proposed by {fromAgentId}</div>}
+      {isGoalProposal && (
+        <div className="proposal-from">
+          This becomes a standing goal — Maiko keeps watching the condition.
+        </div>
+      )}
       {proposal.body && <div className="proposal-reasoning">{proposal.body}</div>}
 
-      {expanded && (
+      {isGoalProposal && (
+        <div className="proposal-goal-preview">
+          <div className="proposal-goal-row">
+            <span className="proposal-goal-label">Goal</span>
+            <span className="proposal-goal-value">{formatGoalKind(proposedGoal.kind)}</span>
+          </div>
+          {proposedGoal.scope_repo && (
+            <div className="proposal-goal-row">
+              <span className="proposal-goal-label">Repo</span>
+              <span className="proposal-goal-value" title={proposedGoal.scope_repo}>
+                {formatRepo(proposedGoal.scope_repo, defaultOrg)}
+              </span>
+            </div>
+          )}
+          <div className="proposal-goal-row">
+            <span className="proposal-goal-label">Role</span>
+            <span className="proposal-goal-value">{proposedGoal.role}</span>
+          </div>
+          <div className="proposal-goal-row">
+            <span className="proposal-goal-label">Trigger</span>
+            <span className="proposal-goal-value">{describeTrigger(proposedGoal)}</span>
+          </div>
+        </div>
+      )}
+
+      {expanded && !isGoalProposal && (
         <div className="proposal-draft">
           <div className="proposal-draft-header">Draft task</div>
           {editing ? (
@@ -120,16 +170,44 @@ export default function ProposalCard({ proposal, onAction }) {
       )}
 
       <div className="proposal-actions">
-        <button className="btn btn-sm" onClick={() => setEditing((v) => !v)} disabled={busy}>
-          <Pencil size={10} /> {editing ? "Done editing" : "Edit"}
-        </button>
+        {!isGoalProposal && (
+          <button className="btn btn-sm" onClick={() => setEditing((v) => !v)} disabled={busy}>
+            <Pencil size={10} /> {editing ? "Done editing" : "Edit"}
+          </button>
+        )}
         <button className="btn btn-sm btn-danger" onClick={dismiss} disabled={busy}>
           <X size={10} /> Dismiss
         </button>
         <button className="btn btn-sm btn-primary" onClick={approve} disabled={busy}>
-          {busy ? <Loader size={10} className="spin" /> : <Check size={10} />} Approve
+          {busy ? <Loader size={10} className="spin" /> : <Check size={10} />} {isGoalProposal ? "Adopt goal" : "Approve"}
         </button>
       </div>
     </div>
   );
+}
+
+
+// Shared goal-kind label, duplicated intentionally from AgentsProfilesTab
+// so ProposalCard doesn't force-import an agents-page component. Keep in
+// sync if new kinds are added.
+function formatGoalKind(kind) {
+  const map = {
+    keep_overview_current: "Keep overview current",
+    train_lora_when_ready: "Train LoRA when rules accumulate",
+  };
+  return map[kind] || kind.replace(/_/g, " ");
+}
+
+function describeTrigger(proposedGoal) {
+  const cfg = proposedGoal.trigger_config || {};
+  if (proposedGoal.kind === "keep_overview_current") {
+    return `refresh after ${cfg.stale_days || 30}d stale`;
+  }
+  if (proposedGoal.kind === "train_lora_when_ready") {
+    return `watch for ${cfg.min_learnings || 10}+ active learnings, no adapter yet`;
+  }
+  if (proposedGoal.trigger_kind === "cadence" && cfg.cadence_hours) {
+    return `every ${cfg.cadence_hours}h`;
+  }
+  return proposedGoal.trigger_kind;
 }

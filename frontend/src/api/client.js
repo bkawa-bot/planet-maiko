@@ -291,6 +291,7 @@ export const api = {
   // Agent proposals (From Maiko approval queue)
   createProposal: (data) => request("/proposals", { method: "POST", body: JSON.stringify(data) }),
   approveProposal: (id, draft) => request(`/proposals/${id}/approve`, { method: "POST", body: JSON.stringify(draft ? { draft } : {}) }),
+  approveProposalAsGoal: (id) => request(`/proposals/${id}/approve-as-goal`, { method: "POST" }),
   dismissProposal: (id) => request(`/proposals/${id}/dismiss`, { method: "POST" }),
 
   // Custom themes

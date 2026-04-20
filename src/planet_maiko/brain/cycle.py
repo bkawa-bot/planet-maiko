@@ -159,14 +159,25 @@ def _phase_role_autonomy():
     """Phase 3.2: Role-as-intent detectors — Atlas watches for stale
     overviews, etc., and emits proposals into the inbox.
 
+    Also runs gap detection: notices coverage gaps (e.g., enough rules
+    accumulated to be worth training a LoRA) and proposes *standing
+    goals* the user can adopt. Approved gap proposals install an
+    AgentGoal row.
+
     Runs before pupdate processing so any proposals it emits get
     indexed by the same processor pass (they're brain_processed=True
     so they skip triage, but downstream consumers like PackStatusPane
     still see them).
     """
     try:
-        from planet_maiko.brain.autonomy import evaluate
-        return evaluate()
+        from planet_maiko.brain.autonomy import evaluate, detect_gaps
+        goals_result = evaluate()
+        gaps_result = detect_gaps()
+        return {
+            "goals": goals_result,
+            "gaps": gaps_result,
+            "proposed": int(goals_result.get("proposed", 0)) + int(gaps_result.get("proposed", 0)),
+        }
     except Exception as e:
         logger.warning(f"[cycle] Role autonomy phase skipped: {e}")
         return {"proposed": 0, "error": str(e)}

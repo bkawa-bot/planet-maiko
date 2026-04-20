@@ -134,6 +134,7 @@ function ProfileCard({ profile, onOpen }) {
 function formatGoalKind(kind) {
   const map = {
     keep_overview_current: "Keep overview current",
+    train_lora_when_ready: "Train LoRA when rules accumulate",
   };
   return map[kind] || kind.replace(/_/g, " ");
 }
@@ -143,6 +144,10 @@ function goalTriggerDescription(goal) {
   if (goal.kind === "keep_overview_current") {
     const days = cfg.stale_days || 30;
     return `refreshes after ${days}d stale`;
+  }
+  if (goal.kind === "train_lora_when_ready") {
+    const min = cfg.min_learnings || 10;
+    return `nudges at ${min}+ rules, no adapter`;
   }
   if (goal.trigger_kind === "cadence" && cfg.cadence_hours) {
     return `every ${cfg.cadence_hours}h`;

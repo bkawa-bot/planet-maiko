@@ -10,6 +10,26 @@
   padding: 12px 14px;
   border-left: 3px solid var(--pink);
 }
+/* Gap-detector proposals visually distinct from agent task proposals —
+   lavender rail echoes the goals panel in the profile modal, signals
+   "this becomes a standing watch" rather than one-shot work. */
+.proposal-card-goal {
+  border-left-color: var(--lavender, #b59dd8);
+}
+.proposal-card-goal .proposal-icon {
+  color: var(--lavender, #b59dd8);
+}
+.proposal-goal-preview {
+  margin-top: 10px; padding: 10px; border-radius: var(--radius-xs);
+  background: var(--bg); border: 1px solid var(--border-subtle);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.proposal-goal-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.proposal-goal-label {
+  min-width: 50px; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; font-size: 9px;
+}
+.proposal-goal-value { color: var(--text); }
 .proposal-header { display: flex; align-items: center; gap: 6px; }
 .proposal-icon { color: var(--pink); flex-shrink: 0; }
 .proposal-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); }

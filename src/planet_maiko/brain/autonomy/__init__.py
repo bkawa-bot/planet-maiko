@@ -245,10 +245,288 @@ def _emit_cartograph_proposal(goal, repo, *, reason, overview_age_days=None):
     return pupdate
 
 
+def _detect_train_lora_when_ready(goal):
+    """Fires when a repo has accumulated enough active Learnings to be
+    worth training a LoRA on, and no profile for that repo yet has an
+    adapter path set.
+
+    Output: a low-priority `maiko_nudge` pupdate pointing at the Training
+    page. This isn't an agent_proposal because there's no Maiko-spawnable
+    task that runs LoRA training — training is an explicit user action
+    via /knowledge?tab=training. So the nudge is "conditions are right,
+    here's the page" rather than "approve this task".
+
+    The goal itself holds the threshold + scope_repo so the user can
+    tune it per repo from the UI later.
+    """
+    from planet_maiko.models.learning import Learning
+    from planet_maiko.models.agent_profile import AgentProfile
+
+    repo = goal.scope_repo
+    if not repo:
+        return {"outcome": "skip", "reason": "no_scope_repo"}
+
+    min_learnings = int((goal.trigger_config or {}).get("min_learnings", 10))
+
+    active_count = (
+        Learning.query
+        .filter(Learning.status == "active")
+        .filter(Learning.scope_repo == repo)
+        .count()
+    )
+    if active_count < min_learnings:
+        return {"outcome": "skip", "reason": "below_threshold", "count": active_count}
+
+    # Any profile for this repo already carry an adapter? If so, nothing
+    # to nudge about — training happened. The goal keeps watching so a
+    # later rule-growth uptick can re-nudge for a refreshed adapter.
+    has_adapter = False
+    for profile in AgentProfile.query.filter(AgentProfile.scope_repo == repo).all():
+        if (profile.extra or {}).get("adapter_path"):
+            has_adapter = True
+            break
+    if has_adapter:
+        return {"outcome": "skip", "reason": "adapter_exists"}
+
+    tag = _tag_for(goal)
+    pupdate_id = f"role-trigger-train-lora-{repo.replace('/', '_')}-{uuid.uuid4().hex[:6]}"
+    title = f"Ready to train a LoRA for {repo}?"
+    body = (
+        f"{repo} has {active_count} active learnings and no trained "
+        f"adapter yet. A LoRA trained on these rules reviews commits "
+        f"at check_code() time so violations surface before ready_for_review. "
+        f"Open the Training page to kick off a run."
+    )
+    pupdate = Pupdate(
+        id=pupdate_id,
+        source="maiko",
+        source_id=f"role-trigger/{goal.kind}/{repo}",
+        type="maiko_nudge",
+        priority="low",
+        title=title,
+        body=body,
+        url="/knowledge?tab=training",
+        actionable=True,
+        action_hint="Open Training",
+        tags=["nudge", "from_maiko", tag],
+        extra={
+            "role_trigger": {
+                "goal_id": goal.id,
+                "kind": goal.kind,
+                "repo": repo,
+                "active_learnings": active_count,
+            },
+        },
+        brain_processed=True,
+    )
+    db.session.add(pupdate)
+    return {"outcome": "proposed", "active_learnings": active_count}
+
+
 # Dispatch table — add new detectors here keyed by goal.kind.
 _DETECTORS = {
     "keep_overview_current": _detect_keep_overview_current,
+    "train_lora_when_ready": _detect_train_lora_when_ready,
 }
+
+
+# --------------------------------------------------------------------------
+# Gap detection — noticing coverage gaps and proposing *new goals*
+# --------------------------------------------------------------------------
+#
+# Stage 2 surface. Unlike goal evaluation (which fires proposals *from*
+# existing active goals), gap detection notices conditions that warrant
+# a new standing intent and emits an agent_proposal carrying an
+# extra.proposed_goal blob. Approving-as-goal installs the goal row;
+# dismissing cools it down so the user isn't nagged.
+#
+# Each gap detector returns a list of proposal specs (not pupdates —
+# the orchestrator decides dedup + cap). A spec is a dict:
+#   {
+#     "tag": "gap:<gap_kind>:<repo>",   # dedup
+#     "title": str, "body": str,
+#     "proposed_goal": { ...AgentGoal-shaped fields... },
+#   }
+
+def _gap_tag(gap_kind, repo):
+    return f"gap:{gap_kind}:{repo}"
+
+
+def _goal_already_exists(kind, scope_repo):
+    """True if a non-archived AgentGoal of the given (kind, scope_repo)
+    is already installed. Prevents re-proposing a gap that the user has
+    already adopted (or explicitly paused — paused goals are "I know
+    about this, quiet for now", not "please re-suggest").
+    """
+    exists = (
+        AgentGoal.query
+        .filter(AgentGoal.kind == kind)
+        .filter(AgentGoal.scope_repo == scope_repo)
+        .filter(AgentGoal.status != "archived")
+        .first()
+    )
+    return exists is not None
+
+
+def _detect_gap_lora_missing_for_busy_repo():
+    """For each configured repo, if there are enough active Learnings
+    to make a LoRA worth training AND no profile for the repo has an
+    adapter_path yet AND no existing train_lora_when_ready goal covers
+    this repo — emit a gap proposal.
+    """
+    from planet_maiko.config import load_config
+    from planet_maiko.models.learning import Learning
+    from planet_maiko.models.agent_profile import AgentProfile
+
+    config = load_config()
+    gap_cfg = (
+        ((config.get("brain") or {}).get("role_autonomy") or {}).get("gap_detection") or {}
+    )
+    detector_cfg = gap_cfg.get("lora_missing") or {}
+    min_learnings = int(detector_cfg.get("min_active_learnings", 10))
+
+    repos = (config.get("github") or {}).get("repos") or []
+    specs = []
+    for repo in repos:
+        if _goal_already_exists("train_lora_when_ready", repo):
+            continue
+
+        active_count = (
+            Learning.query
+            .filter(Learning.status == "active")
+            .filter(Learning.scope_repo == repo)
+            .count()
+        )
+        if active_count < min_learnings:
+            continue
+
+        has_adapter = False
+        for profile in AgentProfile.query.filter(AgentProfile.scope_repo == repo).all():
+            if (profile.extra or {}).get("adapter_path"):
+                has_adapter = True
+                break
+        if has_adapter:
+            continue
+
+        specs.append({
+            "tag": _gap_tag("lora_missing", repo),
+            "title": f"Watch {repo} for when a LoRA is worth training?",
+            "body": (
+                f"{repo} has {active_count} active learnings — more than "
+                f"the {min_learnings}-rule threshold — and no trained adapter "
+                f"yet. Approving installs a standing goal that nudges you "
+                f"when training is worth doing (you still kick it off from "
+                f"the Training page; Maiko just reminds you when the time's "
+                f"right)."
+            ),
+            "proposed_goal": {
+                "role": "coding",
+                "kind": "train_lora_when_ready",
+                "scope_repo": repo,
+                "trigger_kind": "condition",
+                "trigger_config": {"min_learnings": min_learnings},
+                "action_kind": "propose",
+                "action_config": {},
+                "extra": {
+                    "description": f"Nudge when {repo} has ≥{min_learnings} rules and no adapter.",
+                },
+            },
+        })
+    return specs
+
+
+# Gap detectors — each returns a list of proposal specs.
+_GAP_DETECTORS = [
+    _detect_gap_lora_missing_for_busy_repo,
+]
+
+
+def detect_gaps():
+    """Run every gap detector, dedup/cooldown/cap, and emit goal proposals.
+
+    Independent of evaluate() so operational issues in one path don't
+    poison the other (a detector that throws won't starve goal firing).
+
+    Proposals created here are agent_proposal pupdates with a
+    `proposed_goal` blob in extra — the frontend renders them with a
+    different CTA ("Adopt goal" instead of "Create task") and they hit
+    the approve-as-goal endpoint rather than approve-proposal.
+    """
+    from planet_maiko.config import load_config
+
+    config = load_config()
+    gap_cfg = (
+        ((config.get("brain") or {}).get("role_autonomy") or {}).get("gap_detection") or {}
+    )
+    if not gap_cfg.get("enabled", False):
+        return {"proposed": 0, "reason": "disabled"}
+
+    cooldown_days = int(gap_cfg.get("cooldown_days", 14))
+    max_per_cycle = int(gap_cfg.get("max_proposals_per_cycle", 2))
+
+    specs = []
+    for detector in _GAP_DETECTORS:
+        try:
+            specs.extend(detector() or [])
+        except Exception as e:
+            logger.warning(f"[autonomy] gap detector {detector.__name__} failed: {e}")
+
+    proposed = 0
+    skipped_in_flight = 0
+    skipped_cooldown = 0
+    skipped_capped = 0
+    details = []
+
+    for spec in specs:
+        if proposed >= max_per_cycle:
+            skipped_capped += 1
+            continue
+        tag = spec["tag"]
+        if _pupdate_in_flight(tag):
+            skipped_in_flight += 1
+            details.append({"tag": tag, "outcome": "in_flight"})
+            continue
+        if _cooldown_active(tag, cooldown_days):
+            skipped_cooldown += 1
+            details.append({"tag": tag, "outcome": "cooldown"})
+            continue
+
+        pupdate_id = f"gap-proposal-{uuid.uuid4().hex[:10]}"
+        pupdate = Pupdate(
+            id=pupdate_id,
+            source="maiko",
+            source_id=spec["tag"],
+            type="agent_proposal",
+            priority="low",
+            title=spec["title"],
+            body=spec["body"],
+            actionable=True,
+            action_hint="Adopt goal / dismiss",
+            tags=["proposal", "from_maiko", "goal_proposal", tag],
+            extra={
+                "from_agent_id": None,
+                "proposed_goal": spec["proposed_goal"],
+            },
+            brain_processed=True,
+        )
+        db.session.add(pupdate)
+        proposed += 1
+        details.append({"tag": tag, "outcome": "proposed"})
+
+    if proposed:
+        db.session.commit()
+        logger.info(
+            f"[autonomy] gap-proposed {proposed} (in_flight={skipped_in_flight} "
+            f"cooldown={skipped_cooldown} capped={skipped_capped})"
+        )
+
+    return {
+        "proposed": proposed,
+        "skipped_in_flight": skipped_in_flight,
+        "skipped_cooldown": skipped_cooldown,
+        "skipped_capped": skipped_capped,
+        "details": details,
+    }
 
 
 # --------------------------------------------------------------------------
