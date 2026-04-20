@@ -307,6 +307,20 @@ def request_changes(task_id):
 
     for c in drafts:
         c.status = "submitted"
+
+    # Same stale-pupdate cleanup as the approve path: the agent's old
+    # ready_for_review was already acted on, so PackStatusPane shouldn't
+    # keep advertising "ready for review" while the agent iterates.
+    from planet_maiko.models.pupdate import Pupdate
+    stale_reviews = (
+        Pupdate.query
+        .filter(Pupdate.type == "agent_ready_for_review")
+        .filter(Pupdate.dismissed == False)  # noqa: E712
+        .filter(Pupdate.tags.contains(task_id))
+        .all()
+    )
+    for p in stale_reviews:
+        p.dismissed = True
     db.session.commit()
 
     # Post a single review message into the agent's inbox so it shows
@@ -508,6 +522,20 @@ def approve_plan(task_id):
     extra = dict(task.extra or {})
     extra["plan_approved_at"] = datetime.now(timezone.utc).isoformat()
     task.extra = extra
+
+    # Same pattern as review/approve: dismiss the plan-approval
+    # pupdate so PackStatusPane stops rendering "plan ready for
+    # approval" after the user has already approved.
+    from planet_maiko.models.pupdate import Pupdate
+    stale_plans = (
+        Pupdate.query
+        .filter(Pupdate.type == "agent_plan_for_approval")
+        .filter(Pupdate.dismissed == False)  # noqa: E712
+        .filter(Pupdate.tags.contains(task_id))
+        .all()
+    )
+    for p in stale_plans:
+        p.dismissed = True
     db.session.commit()
 
     resumed = _resume_for_plan(
@@ -647,6 +675,22 @@ def approve(task_id):
     extra = dict(task.extra or {})
     extra["last_approved_at"] = datetime.now(timezone.utc).isoformat()
     task.extra = extra
+
+    # Dismiss the agent_ready_for_review pupdate(s) for this task so
+    # PackStatusPane stops showing "ready for review" after the user
+    # has already done the review. Without this the chip persists until
+    # the next agent pupdate (pr_opened) lands — which can be minutes
+    # away if the push is slow, or never if it fails.
+    from planet_maiko.models.pupdate import Pupdate
+    stale_reviews = (
+        Pupdate.query
+        .filter(Pupdate.type == "agent_ready_for_review")
+        .filter(Pupdate.dismissed == False)  # noqa: E712
+        .filter(Pupdate.tags.contains(task_id))
+        .all()
+    )
+    for p in stale_reviews:
+        p.dismissed = True
     db.session.commit()
 
     # Resume the agent so it sees the approved message immediately.
