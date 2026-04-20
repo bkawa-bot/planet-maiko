@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import { Brain, CloudSun, Bot, Bug, Sparkles } from "lucide-react";
 import { showToast } from "./Toast";
 import FooterPendingPopover from "./FooterPendingPopover";
+import PetMaikoFooter from "./PetMaikoFooter";
 import "./Footer.css";
 
 
@@ -106,6 +107,8 @@ export default function Footer() {
         <Bot size={10} />
         <span>{agentCount} agent{agentCount !== 1 ? "s" : ""}</span>
       </div>
+
+      <PetMaikoFooter />
 
       <a className="footer-section footer-bug" href="https://github.com/bkawa-bot/planet-maiko/issues/new" target="_blank" rel="noreferrer" title="Report a bug">
         <Bug size={10} />
