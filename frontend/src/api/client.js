@@ -246,6 +246,7 @@ export const api = {
   clusterLearnings: () => request("/learnings/cluster", { method: "POST" }),
   approveLearning: (id) => request(`/learnings/${id}/approve`, { method: "POST" }),
   dismissLearning: (id) => request(`/learnings/${id}/dismiss`, { method: "POST" }),
+  getLearning: (id) => request(`/learnings/${id}`),
   classifyLearnings: (batchSize = 50) => request("/learnings/classify", { method: "POST", body: JSON.stringify({ batch_size: batchSize }) }),
 
   // Insights (Team Playbook — tribal / operational notes injected into CLAUDE.md)

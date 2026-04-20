@@ -46,6 +46,59 @@
 .learning-rule.expanded { white-space: normal; overflow: visible; text-overflow: unset; }
 .learning-btns { display: flex; gap: 3px; flex-shrink: 0; }
 
+/* Provenance drill-down — shown below a learning row when expanded.
+   Lists the raw signals (PR comments, agent discoveries, manual notes)
+   that backed the rule, so the user can see *why* Maiko learned it. */
+.learning-provenance {
+  padding: 10px 14px 14px 30px;
+  background: var(--bg-faint, rgba(0, 0, 0, 0.02));
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.learning-provenance-empty { color: var(--text-muted); font-size: 11px; font-style: italic; }
+
+.provenance-signal {
+  padding: 8px 10px;
+  background: var(--surface, #fff);
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  font-size: 11.5px;
+}
+.provenance-header {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-bottom: 4px; font-size: 10px; color: var(--text-muted);
+}
+.provenance-source {
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 1px 6px;
+  background: var(--bg);
+  border-radius: 8px;
+}
+.provenance-reviewer { color: var(--blue, #6a93c8); }
+.provenance-repo { opacity: 0.8; }
+.provenance-severity { padding: 1px 6px; border-radius: 8px; font-weight: 600; }
+.provenance-severity.sev-blocking { background: var(--urgent-faint, #ffd4d4); color: var(--urgent, #a03838); }
+.provenance-severity.sev-warning { background: var(--lemon-faint, #fff4c8); color: #8a6d1f; }
+.provenance-link { margin-left: auto; text-decoration: none; color: var(--pink); font-weight: 600; }
+.provenance-text {
+  color: var(--text); line-height: 1.4;
+  white-space: pre-wrap; word-break: break-word;
+}
+.provenance-examples {
+  display: flex; flex-direction: column; gap: 2px;
+  margin-top: 6px; padding-top: 6px;
+  border-top: 1px dashed var(--border-subtle);
+  font-size: 10px; color: var(--text-muted);
+}
+.provenance-example { display: flex; gap: 8px; flex-wrap: wrap; }
+.provenance-path { font-family: var(--font-mono, monospace); color: var(--text); }
+.provenance-pr { opacity: 0.8; }
+.provenance-author { opacity: 0.7; }
+
 /* Add learning */
 .add-learning-section {
   margin-top: 16px; background: var(--bg-card); border: 1px solid var(--border-subtle);

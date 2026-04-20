@@ -33,6 +33,8 @@ export default function BrainView() {
   const [backfilling, setBackfilling] = useState(false);
   const [backfillProgress, setBackfillProgress] = useState(null);
   const [expandedLearning, setExpandedLearning] = useState(null);
+  const [provenanceCache, setProvenanceCache] = useState({});
+  const [provenanceLoading, setProvenanceLoading] = useState({});
   const [showBackfillModal, setShowBackfillModal] = useState(false);
   const [backfillLimit, setBackfillLimit] = useState("20");
   const [backfillRepo, setBackfillRepo] = useState("");
@@ -170,6 +172,27 @@ export default function BrainView() {
 
   const handleApprove = async (id) => { await api.approveLearning(id); fetchLearnings(); };
   const handleDismiss = async (id) => { await api.dismissLearning(id); fetchLearnings(); };
+
+  const toggleProvenance = async (id) => {
+    // Collapse if already expanded.
+    if (expandedLearning === id) {
+      setExpandedLearning(null);
+      return;
+    }
+    setExpandedLearning(id);
+    // Lazy-fetch signals the first time a learning is expanded.
+    if (provenanceCache[id] === undefined) {
+      setProvenanceLoading((s) => ({ ...s, [id]: true }));
+      try {
+        const data = await api.getLearning(id);
+        setProvenanceCache((s) => ({ ...s, [id]: data?.signals || [] }));
+      } catch {
+        setProvenanceCache((s) => ({ ...s, [id]: [] }));
+      } finally {
+        setProvenanceLoading((s) => ({ ...s, [id]: false }));
+      }
+    }
+  };
   const handleApproveAll = async () => {
     const count = pending.length;
     for (const l of pending) {
@@ -345,7 +368,8 @@ export default function BrainView() {
                   {isExpanded && (
                     <div className="category-items">
                       {catItems.map((l) => (
-                        <div key={l.id} className={`learning-row status-${l.status}`}>
+                        <div key={l.id}>
+                        <div className={`learning-row status-${l.status}`}>
                           <div className="learning-left">
                             {l.status === "pending" && <span className="badge paused">pending</span>}
                             {l.status === "unsynthesized" && <span className="badge" title="Raw PR-comment signal waiting for LLM synthesis">raw</span>}
@@ -359,7 +383,7 @@ export default function BrainView() {
                             <div className="confidence-bar" style={{ width: `${l.confidence * 100}%` }} />
                           </div>
                           <span className="signal-count">{l.signal_count} signal{l.signal_count === 1 ? "" : "s"}</span>
-                          <span className={`learning-rule ${expandedLearning === l.id ? "expanded" : ""}`} onClick={(e) => { e.stopPropagation(); setExpandedLearning(expandedLearning === l.id ? null : l.id); }}>
+                          <span className={`learning-rule ${expandedLearning === l.id ? "expanded" : ""}`} onClick={(e) => { e.stopPropagation(); toggleProvenance(l.id); }}>
                             {l.rule}
                           </span>
                           <div className="learning-btns">
@@ -374,6 +398,14 @@ export default function BrainView() {
                               </button>
                             ) : null}
                           </div>
+                        </div>
+                        {expandedLearning === l.id && (
+                          <LearningProvenance
+                            loading={provenanceLoading[l.id]}
+                            signals={provenanceCache[l.id]}
+                            defaultOrg={defaultOrg}
+                          />
+                        )}
                         </div>
                       ))}
                     </div>
@@ -490,6 +522,84 @@ export default function BrainView() {
           setStartingBackfill(false);
         }}
       />
+    </div>
+  );
+}
+
+
+/**
+ * Provenance drill-down for a learning. Shows the raw signals that
+ * produced it — which PR comment, which reviewer, which file. Fetched
+ * lazily the first time a learning is expanded.
+ *
+ * For PR-comment signals we reconstruct the inline-review permalink
+ * (`.../pull/<n>#discussion_r<comment_id>`) from examples[].pr_number
+ * plus signal.external_id. Non-PR signals (agent discovery, manual)
+ * just render their text and source tag.
+ */
+function LearningProvenance({ loading, signals, defaultOrg }) {
+  if (loading) {
+    return (
+      <div className="learning-provenance">
+        <Loader size={10} className="spin" /> Loading signals…
+      </div>
+    );
+  }
+  if (!signals || signals.length === 0) {
+    return (
+      <div className="learning-provenance learning-provenance-empty">
+        No signals linked to this learning yet.
+      </div>
+    );
+  }
+  return (
+    <div className="learning-provenance">
+      {signals.map((s) => {
+        const examples = Array.isArray(s.examples) ? s.examples : [];
+        const primary = examples[0] || {};
+        const permalink = (s.source_type === "pr_comment" && s.repo && primary.pr_number && s.external_id)
+          ? `https://github.com/${s.repo}/pull/${primary.pr_number}#discussion_r${s.external_id}`
+          : null;
+        return (
+          <div key={s.id} className="provenance-signal">
+            <div className="provenance-header">
+              <span className="provenance-source">{s.source_type}</span>
+              {s.reviewer && <span className="provenance-reviewer">@{s.reviewer}</span>}
+              {s.repo && (
+                <span className="provenance-repo" title={s.repo}>
+                  {formatRepo(s.repo, defaultOrg)}
+                </span>
+              )}
+              {s.severity && s.severity !== "suggestion" && (
+                <span className={`provenance-severity sev-${s.severity}`}>{s.severity}</span>
+              )}
+              {permalink && (
+                <a
+                  className="provenance-link"
+                  href={permalink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open on GitHub"
+                >
+                  ↗
+                </a>
+              )}
+            </div>
+            <div className="provenance-text">{s.text}</div>
+            {examples.length > 0 && (
+              <div className="provenance-examples">
+                {examples.map((ex, i) => (
+                  <div key={i} className="provenance-example">
+                    {ex.path && <span className="provenance-path">{ex.path}</span>}
+                    {ex.pr_number && <span className="provenance-pr">PR #{ex.pr_number}</span>}
+                    {ex.author && <span className="provenance-author">by @{ex.author}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
