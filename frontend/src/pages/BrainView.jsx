@@ -11,6 +11,7 @@ import InfoButton from "../components/InfoButton";
 import ConfirmModal from "../components/ConfirmModal";
 import BackfillProgress from "../components/BackfillProgress";
 import Training from "./Training";
+import { formatRepo, useDefaultOrg } from "../utils/repo";
 import "./Knowledge.css";
 
 const CATEGORY_ICONS = {
@@ -21,6 +22,7 @@ const CATEGORY_ICONS = {
 };
 
 export default function BrainView() {
+  const defaultOrg = useDefaultOrg();
   const [learnings, setLearnings] = useState([]);
   const [rawSignals, setRawSignals] = useState([]);
   const [rawSignalsTotal, setRawSignalsTotal] = useState(0);
@@ -103,8 +105,8 @@ export default function BrainView() {
             const errored = perRepo.filter((x) => x.error);
             const summary = perRepo
               .map((x) => x.error
-                ? `${x.repo}: error (${x.error.slice(0, 40)})`
-                : `${x.repo}: ${x.signals_created} signals from ${x.comments_scanned} comments`)
+                ? `${formatRepo(x.repo, defaultOrg)}: error (${x.error.slice(0, 40)})`
+                : `${formatRepo(x.repo, defaultOrg)}: ${x.signals_created} signals from ${x.comments_scanned} comments`)
               .join("\n");
             if (r.signals_created === 0 && errored.length === 0) {
               showToast("No new PR comments found.\n" + summary, "normal");
@@ -291,7 +293,7 @@ export default function BrainView() {
                 {backfillProgress?.phase === "synthesizing" ? "Synthesizing..."
                   : backfillProgress?.phase === "aggregating" ? "Aggregating..."
                   : backfillProgress?.repos_total
-                    ? `Scanning ${backfillProgress.current_repo || ""} (${backfillProgress.repos_done}/${backfillProgress.repos_total})`
+                    ? `Scanning ${formatRepo(backfillProgress.current_repo || "", defaultOrg)} (${backfillProgress.repos_done}/${backfillProgress.repos_total})`
                     : "Starting..."}
               </>
             ) : (
@@ -350,7 +352,7 @@ export default function BrainView() {
                             {l.source && <span className="tag">{l.source}</span>}
                             {l.is_global
                               ? <span className="tag tag-global" title="Seen in 3+ repos — feeds every LoRA">🌐 global</span>
-                              : l.scope_repo && <span className="tag">{l.scope_repo}</span>}
+                              : l.scope_repo && <span className="tag" title={l.scope_repo}>{formatRepo(l.scope_repo, defaultOrg)}</span>}
                             {l.scope_language && <span className="tag">{l.scope_language}</span>}
                           </div>
                           <div className="confidence-bar-wrapper">

@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, MapPin, Search, Loader, Plug, AlertTriangle,
 import ScheduledBriefings from "../components/ScheduledBriefings";
 import ConceptsModal from "../components/ConceptsModal";
 import IntegrationsSection from "../components/settings/IntegrationsSection";
+import { invalidateDefaultOrg } from "../utils/repo";
 import "./Settings.css";
 
 export default function Settings() {
@@ -48,6 +49,7 @@ export default function Settings() {
     setSaving(true);
     try {
       await api.updateConfig(config);
+      invalidateDefaultOrg();
       // Clear weather cache if location is set
       if (config?.scene?.latitude && config?.scene?.longitude) {
         await api.refreshScene().catch(() => {});
@@ -437,6 +439,15 @@ export default function Settings() {
                     value={config.github?.username || ""}
                     onChange={(e) => updateField("github", "username", e.target.value)}
                     placeholder="your-github-username"
+                  />
+                </label>
+                <label>
+                  Default org (hides this prefix in repo labels — leave blank to always show full org/repo)
+                  <input
+                    type="text"
+                    value={config.github?.default_org || ""}
+                    onChange={(e) => updateField("github", "default_org", e.target.value)}
+                    placeholder="your-org"
                   />
                 </label>
                 <div>

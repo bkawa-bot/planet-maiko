@@ -9,6 +9,7 @@ import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { formatDate } from "../utils/dates";
 import { renderMarkdown } from "../utils/markdown";
+import { formatRepo, useDefaultOrg } from "../utils/repo";
 
 const STATUS_COLORS = {
   new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
@@ -53,6 +54,7 @@ export default function TaskCard({
   projects,
   agentNames,
 }) {
+  const defaultOrg = useDefaultOrg();
   const statusColor = STATUS_COLORS[t.status] || "var(--text-muted)";
   const StatusIcon = STATUS_ICONS[t.status] || Circle;
   const priorityClass = t.priority || "normal";
@@ -171,7 +173,7 @@ export default function TaskCard({
           )}
           {t.project_id && <span className="tag tag-project">{t.project_id}</span>}
           {(t.metadata?.repo || t.extra?.repo) && (
-            <span className="tag"><GitBranch size={9} /> {t.metadata?.repo || t.extra?.repo}</span>
+            <span className="tag" title={t.metadata?.repo || t.extra?.repo}><GitBranch size={9} /> {formatRepo(t.metadata?.repo || t.extra?.repo, defaultOrg)}</span>
           )}
           {t.status === "blocked" && (t.depends_on || []).length > 0 && (
             <span className="tag" style={{ color: "var(--orange)", background: "var(--high-soft)" }}>

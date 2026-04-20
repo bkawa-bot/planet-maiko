@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
 import { formatTime } from "../../utils/dates";
+import { formatRepo, useDefaultOrg } from "../../utils/repo";
 import AgentTimelineModal from "./AgentTimelineModal";
 
 /**
@@ -23,6 +24,7 @@ import AgentTimelineModal from "./AgentTimelineModal";
  */
 export default function AgentsActiveTab({ agents, activity, queued = [], conflicts, profiles, externalSessions = [], onRefresh }) {
   const [triggeringCycle, setTriggeringCycle] = useState(false);
+  const defaultOrg = useDefaultOrg();
 
   const triggerCycle = async () => {
     if (triggeringCycle) return;
@@ -172,7 +174,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                     {s.consumer && (
                       <span className="external-session-consumer">{s.consumer}</span>
                     )}
-                    <span className="external-session-repo">{s.repo}</span>
+                    <span className="external-session-repo" title={s.repo}>{formatRepo(s.repo, defaultOrg)}</span>
                     {s.hint && (
                       <span className="external-session-hint">— {s.hint}</span>
                     )}

@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import AssignAgentModal from "../components/AssignAgentModal";
 import TaskCard from "../components/TaskCard";
+import { formatRepo, useDefaultOrg } from "../utils/repo";
 import {
   CheckSquare, Plus, FolderPlus, FolderOpen, ExternalLink,
   ChevronDown, ChevronRight, Folder, Loader,
@@ -12,6 +13,7 @@ import "./Tasks.css";
 import "./cards.css";
 
 export default function Tasks() {
+  const defaultOrg = useDefaultOrg();
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -531,7 +533,7 @@ export default function Tasks() {
                             >
                               {compatible.map((p) => (
                                 <option key={p.id} value={p.id}>
-                                  {p.display_name}{p.scope_repo ? ` · ${p.scope_repo}` : " · global"}
+                                  {p.display_name}{p.scope_repo ? ` · ${formatRepo(p.scope_repo, defaultOrg)}` : " · global"}
                                 </option>
                               ))}
                               <option value="__spawn__">

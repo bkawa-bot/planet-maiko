@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, X, Pencil, Sparkles, Loader, ChevronDown, ChevronRight } from "lucide-react";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
+import { formatRepo, useDefaultOrg } from "../utils/repo";
 
 /**
  * Proposal card — a specialized pupdate renderer for type=agent_proposal
@@ -14,6 +15,7 @@ import { showToast } from "./Toast";
  *               list can refresh.
  */
 export default function ProposalCard({ proposal, onAction }) {
+  const defaultOrg = useDefaultOrg();
   const [editing, setEditing] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -108,7 +110,7 @@ export default function ProposalCard({ proposal, onAction }) {
               <div className="proposal-draft-meta">
                 <span className={`badge ${draft.priority}`}>{draft.priority}</span>
                 <span className="tag">{draft.type}</span>
-                {draft.repo && <span className="tag">{draft.repo}</span>}
+                {draft.repo && <span className="tag" title={draft.repo}>{formatRepo(draft.repo, defaultOrg)}</span>}
                 {draft.category && <span className="tag">{draft.category}</span>}
               </div>
               {draft.description && <div className="proposal-draft-desc-view">{draft.description}</div>}

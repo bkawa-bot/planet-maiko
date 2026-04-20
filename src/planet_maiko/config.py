@@ -74,6 +74,10 @@ DEFAULT_CONFIG = {
         "repos": [],  # e.g. ["org/repo1", "org/repo2"]
         "repo_roots": [],  # e.g. ["~/src", "~/projects"] — where your repos live on disk
         "poll_interval_minutes": 5,
+        # When set, the UI strips this org prefix from repo labels so
+        # "bkawa-bot/planet-maiko" renders as "planet-maiko". Repos from
+        # other orgs still render in full so cross-org context is preserved.
+        "default_org": "",
     },
     "linear": {
         "enabled": False,

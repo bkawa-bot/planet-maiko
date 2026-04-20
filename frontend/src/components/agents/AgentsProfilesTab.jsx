@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
+import { formatRepo, useDefaultOrg } from "../../utils/repo";
 import AgentTimelineModal from "./AgentTimelineModal";
 
 const ROLE_META = {
@@ -30,6 +31,7 @@ function CartographLauncher() {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState("");
   const [spawning, setSpawning] = useState(false);
+  const defaultOrg = useDefaultOrg();
 
   useEffect(() => {
     api.getConfig().then((c) => {
@@ -71,7 +73,7 @@ function CartographLauncher() {
             disabled={spawning}
           >
             {repos.map((r) => (
-              <option key={r} value={r}>{r}</option>
+              <option key={r} value={r}>{formatRepo(r, defaultOrg)}</option>
             ))}
           </select>
           <button
@@ -92,6 +94,7 @@ function CartographLauncher() {
 // Compact card. Clicking anywhere opens the full profile modal.
 function ProfileCard({ profile, onOpen }) {
   const preview = (profile.instructions || profile.flavor_text || "").trim();
+  const defaultOrg = useDefaultOrg();
   return (
     <button
       type="button"
@@ -107,7 +110,7 @@ function ProfileCard({ profile, onOpen }) {
           />
           <span className="profile-card-name-text">{profile.display_name}</span>
           {profile.scope_repo && (
-            <span className="profile-card-chip">{profile.scope_repo}</span>
+            <span className="profile-card-chip" title={profile.scope_repo}>{formatRepo(profile.scope_repo, defaultOrg)}</span>
           )}
           {profile.extra?.adapter_path && (
             <span className="profile-card-chip profile-card-chip-lora">LoRA</span>
@@ -129,6 +132,7 @@ function ProfileDetailModal({
   profile, allLearnings, onClose, onEdit, onTimeline, onArchive, onUnarchive,
 }) {
   const [showContextSet, setShowContextSet] = useState(false);
+  const defaultOrg = useDefaultOrg();
   const hasContextSet = profile.context_set?.length > 0;
   const hasAdapter = !!profile.extra?.adapter_path;
   const role = profile.role || "coding";
@@ -149,7 +153,7 @@ function ProfileDetailModal({
               <span className="profile-modal-role" style={{ color: meta.color }}>
                 <RoleIcon size={10} /> {meta.label}
               </span>
-              <span className="profile-modal-chip">{profile.scope_repo || "global"}</span>
+              <span className="profile-modal-chip" title={profile.scope_repo || ""}>{profile.scope_repo ? formatRepo(profile.scope_repo, defaultOrg) : "global"}</span>
               {hasAdapter && <span className="profile-modal-chip profile-modal-chip-lora">LoRA</span>}
               {profile.archived && <span className="profile-modal-chip profile-modal-chip-archived">archived</span>}
             </div>

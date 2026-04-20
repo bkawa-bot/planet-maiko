@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { Bot, Plus, Rocket, Code2, Eye, Search } from "lucide-react";
+import { formatRepo, useDefaultOrg } from "../utils/repo";
 import "./AssignAgentModal.css";
 
 const AVATAR_EMOJI = {
@@ -29,6 +30,7 @@ const TYPE_TO_ROLE = {
 };
 
 export default function AssignAgentModal({ task, onClose, onAssigned }) {
+  const defaultOrg = useDefaultOrg();
   const [profiles, setProfiles] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [repoPath, setRepoPath] = useState("");
@@ -197,7 +199,7 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
                           <span className="assign-agent-role">
                             <RoleIcon size={10} /> {meta.label}
                           </span>
-                          {p.scope_repo && <span className="assign-agent-scope">{p.scope_repo}</span>}
+                          {p.scope_repo && <span className="assign-agent-scope" title={p.scope_repo}>{formatRepo(p.scope_repo, defaultOrg)}</span>}
                           {!p.scope_repo && <span className="assign-agent-scope">global</span>}
                         </div>
                         {p.flavor_text && <div className="assign-agent-reasons">{p.flavor_text}</div>}

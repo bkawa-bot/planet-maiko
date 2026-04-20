@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { api } from "../api/client";
 import { relativeTime } from "../utils/dates";
+import { formatRepo, useDefaultOrg } from "../utils/repo";
 import PackAskBox from "./PackAskBox";
 import "./PackStatusPane.css";
 
@@ -199,6 +200,7 @@ export default function PackStatusPane() {
 }
 
 function PackRow({ row }) {
+  const defaultOrg = useDefaultOrg();
   const profile = row.profile;
   const request = row.request;
   const state = profile?.state || "idle";
@@ -227,7 +229,7 @@ function PackRow({ row }) {
           </span>
           {profile?.role && <span className="pack-row-chip">{profile.role}</span>}
           {profile?.scope_repo && (
-            <span className="pack-row-chip">{profile.scope_repo}</span>
+            <span className="pack-row-chip" title={profile.scope_repo}>{formatRepo(profile.scope_repo, defaultOrg)}</span>
           )}
           {request && (
             <span className="pack-row-request-label">{meta.label}</span>

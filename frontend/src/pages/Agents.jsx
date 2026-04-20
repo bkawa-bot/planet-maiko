@@ -8,9 +8,11 @@ import InfoButton from "../components/InfoButton";
 import AgentsActiveTab from "../components/agents/AgentsActiveTab";
 import AgentsProfilesTab from "../components/agents/AgentsProfilesTab";
 import AgentsInsightsTab from "../components/agents/AgentsInsightsTab";
+import { formatRepo, useDefaultOrg } from "../utils/repo";
 import "./Agents.css";
 
 export default function Agents() {
+  const defaultOrg = useDefaultOrg();
   const [tab, setTab] = useState("active");
   const [profiles, setProfiles] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -153,7 +155,7 @@ export default function Agents() {
                 {(showArrival.role || "coding") === "coding" && <><Code2 size={10} /> Coder</>}
                 {showArrival.role === "review" && <><Eye size={10} /> Reviewer</>}
                 {showArrival.role === "investigation" && <><Search size={10} /> Investigator</>}
-                {showArrival.scope_repo && <span className="arrival-scope"> · {showArrival.scope_repo}</span>}
+                {showArrival.scope_repo && <span className="arrival-scope" title={showArrival.scope_repo}> · {formatRepo(showArrival.scope_repo, defaultOrg)}</span>}
                 {!showArrival.scope_repo && <span className="arrival-scope"> · global</span>}
               </div>
               <button className="btn btn-primary" onClick={() => setShowArrival(null)}>
