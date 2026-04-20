@@ -35,6 +35,8 @@ function getAutoTheme() {
 
 export default function Sidebar({ onOpenShutdown }) {
   const navigate = useNavigate();
+  const today = new Date().getDay();
+  const isActualWeekend = today === 0 || today === 6;  // Sat or Sun
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem("maiko-theme") || "dark";
     // Re-apply cached custom theme ASAP so the first paint uses the right
@@ -191,14 +193,20 @@ export default function Sidebar({ onOpenShutdown }) {
         </div>
 
         <div className="topbar-right">
-          <button
-            className={`weekend-pill-topbar ${weekendMode ? "on" : ""}`}
-            onClick={toggleWeekendMode}
-            disabled={weekendBusy}
-            title={weekendMode ? "Weekend mode on — click to resume" : "Weekend mode off — click to go off-duty"}
-          >
-            <Leaf size={10} /> {weekendMode ? "weekend on" : "weekend"}
-          </button>
+          {/* Weekend pill only shows on actual weekend days or when
+              weekend_mode is already on. Reduces topbar noise during
+              the week when the toggle is irrelevant, while still letting
+              the user flip it off on a Monday morning. */}
+          {(isActualWeekend || weekendMode) && (
+            <button
+              className={`weekend-pill-topbar ${weekendMode ? "on" : ""}`}
+              onClick={toggleWeekendMode}
+              disabled={weekendBusy}
+              title={weekendMode ? "Weekend mode on. Click to resume." : "Weekend mode off. Click to go off-duty."}
+            >
+              <Leaf size={10} /> {weekendMode ? "weekend on" : "weekend"}
+            </button>
+          )}
 
           <div className="focus-wrapper" ref={focusRef}>
             <button

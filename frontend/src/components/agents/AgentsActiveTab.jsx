@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Bot, Bone, CheckSquare, Clock, ExternalLink, GitBranch,
+  Bot, CheckSquare, Clock, ExternalLink, GitBranch,
   GitPullRequest, HeartPulse, Link2, MessageCircle, Moon, Play, Sparkles, X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -114,16 +114,6 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
       onRefresh?.();
     } catch (err) {
       showToast(err.message || "Couldn't re-run", "high");
-    }
-  };
-
-  const handleNudge = async (taskId) => {
-    if (!taskId) return;
-    try {
-      await api.nudgeAgent(taskId);
-      showToast("Nudge sent — agent will report in", "normal");
-    } catch (err) {
-      showToast(err.message || "Couldn't nudge", "high");
     }
   };
 
@@ -398,13 +388,6 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                     title="See this agent's full activity across all tasks"
                   >
                     <Clock size={12} /> Timeline
-                  </button>
-                  <button
-                    className="btn btn-sm btn-comms"
-                    onClick={() => handleNudge(a.task_id)}
-                    title="Ping the agent for a status update"
-                  >
-                    <Bone size={12} /> Nudge
                   </button>
                 </div>
               </div>

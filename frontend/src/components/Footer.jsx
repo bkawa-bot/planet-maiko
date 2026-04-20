@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
-import { Brain, Shield, CloudSun, Bot, Bug, Sparkles } from "lucide-react";
+import { Brain, CloudSun, Bot, Bug, Sparkles } from "lucide-react";
 import { showToast } from "./Toast";
 import FooterPendingPopover from "./FooterPendingPopover";
 import "./Footer.css";
@@ -19,7 +19,6 @@ function _formatCount(n) {
 
 export default function Footer() {
   const [brainStatus, setBrainStatus] = useState(null);
-  const [focusState, setFocusState] = useState("available");
   const [scene, setScene] = useState(null);
   const [agentCount, setAgentCount] = useState(0);
   const [cycling, setCycling] = useState(false);
@@ -28,14 +27,12 @@ export default function Footer() {
 
   const refresh = async () => {
     try {
-      const [brain, focus, sc, profiles] = await Promise.all([
+      const [brain, sc, profiles] = await Promise.all([
         api.getBrainStatus().catch(() => null),
-        api.getFocus().catch(() => null),
         api.getScene().catch(() => null),
         api.getProfiles().catch(() => []),
       ]);
       if (brain) setBrainStatus(brain);
-      if (focus) setFocusState(focus.current_state || "available");
       if (sc?.context?.weather) setScene(sc.context);
       setAgentCount(profiles.length);
     } catch (err) { /* ignore */ }
@@ -96,11 +93,6 @@ export default function Footer() {
         >
           <Sparkles size={9} className={cycling ? "spin" : ""} />
         </button>
-      </div>
-
-      <div className="footer-section">
-        <Shield size={10} />
-        <span className={`footer-focus ${focusState}`}>{focusState.replace("_", " ")}</span>
       </div>
 
       {scene?.temperature_f && (
