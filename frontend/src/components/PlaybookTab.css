@@ -68,6 +68,12 @@
   display: flex; flex-direction: column; gap: 6px;
   width: 100%;
 }
+/* Inline header row holds the expand-toggle and the Refresh button so
+   users can re-run Atlas without navigating up to the repo header's
+   Cartograph button. Flex keeps Refresh snug to the right. */
+.playbook-overview-header {
+  display: flex; align-items: stretch; gap: 6px;
+}
 .playbook-overview-toggle {
   display: flex; align-items: center; gap: 6px;
   padding: 6px 10px;
@@ -78,8 +84,12 @@
   font-size: 12px; font-weight: 600;
   cursor: pointer;
   text-align: left;
-  width: 100%;
+  flex: 1;
   transition: background 0.15s;
+}
+.playbook-overview-refresh {
+  flex-shrink: 0;
+  font-size: 10px;
 }
 .playbook-overview-toggle:hover {
   background: rgba(167, 139, 250, 0.22);

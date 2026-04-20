@@ -191,19 +191,34 @@ export default function PlaybookTab({ onCountsChange }) {
                         />
                       ) : (ins.tags || []).includes("overview") ? (
                         <div className="playbook-overview">
-                          <button
-                            className="playbook-overview-toggle"
-                            onClick={() => setExpandedOverviews((s) => ({ ...s, [ins.id]: !s[ins.id] }))}
-                          >
-                            {expandedOverviews[ins.id]
-                              ? <ChevronDown size={12} />
-                              : <ChevronRight size={12} />}
-                            <MapIcon size={12} />
-                            <span>Repo Overview</span>
-                            <span className="playbook-overview-preview">
-                              {ins.text.split("\n").find((l) => l.trim() && !l.startsWith("#")) || "—"}
-                            </span>
-                          </button>
+                          <div className="playbook-overview-header">
+                            <button
+                              className="playbook-overview-toggle"
+                              onClick={() => setExpandedOverviews((s) => ({ ...s, [ins.id]: !s[ins.id] }))}
+                            >
+                              {expandedOverviews[ins.id]
+                                ? <ChevronDown size={12} />
+                                : <ChevronRight size={12} />}
+                              <MapIcon size={12} />
+                              <span>Repo Overview</span>
+                              <span className="playbook-overview-preview">
+                                {ins.text.split("\n").find((l) => l.trim() && !l.startsWith("#")) || "—"}
+                              </span>
+                            </button>
+                            {repo !== "(global)" && (
+                              <button
+                                className="btn btn-sm playbook-overview-refresh"
+                                onClick={(e) => { e.stopPropagation(); handleCartograph(repo); }}
+                                disabled={cartographing === repo}
+                                title={`Re-run Atlas to produce a fresh overview for ${repo}`}
+                              >
+                                {cartographing === repo
+                                  ? <Loader size={10} className="spin" />
+                                  : <RefreshCw size={10} />}
+                                {cartographing === repo ? " …" : " Refresh"}
+                              </button>
+                            )}
+                          </div>
                           {expandedOverviews[ins.id] && (
                             <div
                               className="playbook-overview-body"

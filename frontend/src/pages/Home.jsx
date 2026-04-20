@@ -37,14 +37,14 @@ function seasonPoem(season) {
 
 export default function Home() {
   const [scene, setScene] = useState(null);
-  const [stats, setStats] = useState({ tasks_new: 0, tasks_ip: 0, projects: 0 });
+  const [stats, setStats] = useState({ tasks_new: 0, tasks_ip: 0, projects: 0, goals_active: 0 });
   const [brainStatus, setBrainStatus] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [homeConfig, setHomeConfig] = useState(null);
 
   const fetchSidebar = async () => {
     try {
-      const [sc, tasksNew, tasksIp, projects, brain, cfg, pupdates] = await Promise.all([
+      const [sc, tasksNew, tasksIp, projects, brain, cfg, pupdates, goals] = await Promise.all([
         api.getScene(),
         api.getTasks({ status: "new" }),
         api.getTasks({ status: "in_progress" }),
@@ -52,6 +52,7 @@ export default function Home() {
         api.getBrainStatus().catch(() => null),
         api.getConfig().catch(() => null),
         api.getPupdates(),
+        api.getGoals({ status: "active" }).catch(() => []),
       ]);
       setScene(sc);
       setHomeConfig(cfg);
@@ -59,6 +60,7 @@ export default function Home() {
         tasks_new: tasksNew.length,
         tasks_ip: tasksIp.length,
         projects: projects.length,
+        goals_active: (goals || []).length,
       });
       setBrainStatus(brain);
       setCalendarEvents(
@@ -173,6 +175,12 @@ export default function Home() {
                 <div className="widget-stat-value" style={{ color: "var(--green)" }}>{stats.projects}</div>
                 <div className="widget-stat-label">Projects</div>
               </div>
+              {stats.goals_active > 0 && (
+                <div className="widget-stat" title="Standing goals the pack is watching. Tune from an agent's profile.">
+                  <div className="widget-stat-value" style={{ color: "var(--lavender, #b59dd8)" }}>{stats.goals_active}</div>
+                  <div className="widget-stat-label">Goals</div>
+                </div>
+              )}
             </div>
           </div>
 

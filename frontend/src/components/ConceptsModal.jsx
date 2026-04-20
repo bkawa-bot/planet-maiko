@@ -1,4 +1,4 @@
-import { X, Inbox, CheckSquare, Bot, BookOpen, Brain, Zap } from "lucide-react";
+import { X, Inbox, CheckSquare, Bot, BookOpen, Brain, Zap, Compass } from "lucide-react";
 import "./ConceptsModal.css";
 
 /**
@@ -61,6 +61,21 @@ export default function ConceptsModal({ onClose }) {
           user-authored ones live on the <strong>Automations</strong> page;
           scheduled briefings (morning brief, evening wrap, etc.)
           live under <strong>Settings → Scheduled Briefings</strong>.
+        </Concept>
+
+        <Concept icon={<Compass size={14} />} title="Goals" subtitle="things the pack watches for you">
+          Standing intents an agent holds — <em>"keep this repo's
+          overview current"</em>, <em>"nudge me when these rules are
+          worth training"</em>. Fire as <em>proposals</em> when their
+          condition holds, so you approve what runs. Seeded from your
+          configured repos and proposed by gap detectors. Visible
+          on each profile's card; pause/resume per goal.
+          <br/><br/>
+          <strong>Goals vs Automations:</strong> automations run the
+          same template on demand or a cadence; goals watch a
+          condition and only nudge when it's met. An automation says
+          "run morning brief at 8am"; a goal says "tell me when
+          planet-maiko has &gt;10 rules and no LoRA."
         </Concept>
 
         <div className="concepts-divider" />
