@@ -39,6 +39,26 @@ export default function Training() {
     api.getProfiles().then(setProfiles).catch(() => {});
     api.getAdapters().then(setAdapters).catch(() => {});
     fetchDatasets();
+    // Resume progress displays if a job is already running when the
+    // page mounts (user navigated away and came back, or refreshed).
+    // Without this, `running`/`generating` default to false and the
+    // polling effects never kick in, so a live job is invisible.
+    api.getTrainingProgress()
+      .then((p) => {
+        if (p && p.status && p.status !== "done" && p.status !== "failed" && p.status !== "idle") {
+          setProgress(p);
+          setRunning(true);
+        }
+      })
+      .catch(() => {});
+    api.getRuleGenProgress()
+      .then((s) => {
+        if (s && s.status && s.status !== "done" && s.status !== "failed" && s.status !== "idle") {
+          setRuleGenState(s);
+          setGenerating(true);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => { fetchCoverage(filterRepo); }, [filterRepo]);
