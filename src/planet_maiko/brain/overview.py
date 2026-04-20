@@ -39,31 +39,12 @@ from planet_maiko.database import db, iso_utc
 
 logger = logging.getLogger(__name__)
 
-# Absolute cap on cache age — regenerate once we pass this, regardless
-# of whether anything interesting has happened. Event-aware invalidation
-# (below) can trigger regen earlier when actionable pupdates arrive.
+# Absolute cap on cache age — regenerate once we pass this. The Pack
+# Requests widget handles real-time actionable signals (agent plans,
+# reviews, stuck agents, PR re-requests) directly, so the overview
+# doesn't need event-aware invalidation — it can stay a rolling
+# narrative summary that refreshes at a leisurely cadence.
 DEFAULT_MAX_AGE_HOURS = 4
-
-# Floor for event-aware regeneration. When actionable pupdates arrive
-# AFTER a cached overview, we regenerate — but only if the cache is at
-# least this many minutes old. Stops a burst of pupdates from thrashing
-# the generator.
-EVENT_INVALIDATION_FLOOR_MINUTES = 30
-
-# Pupdate types that trigger event-aware regen when they arrive after
-# the current cache. Kept in sync by hand with the frontend's
-# WAITING_TYPES set — if new actionable types get added there, add
-# them here too so overview refreshes catch them.
-ACTIONABLE_PUPDATE_TYPES = frozenset({
-    "agent_plan_for_approval",
-    "agent_ready_for_review",
-    "agent_stuck",
-    "agent_proposal",
-    "pr_review_requested",
-    "pr_changes_requested",
-    "pr_review_complete",
-    "investigation_complete",
-})
 
 # Tool-using LLM runs take real wall time. Slack / Linear / WebFetch
 # each add a round-trip; the model reasons over the JSON aggregate;
@@ -712,33 +693,13 @@ def _is_stale(row, max_age_hours):
     return age > timedelta(hours=max_age_hours)
 
 
-def _has_new_actionable_pupdate(since_utc):
-    """True if any actionable pupdate was created after `since_utc`.
-
-    `since_utc` is a naive UTC datetime — matches how Pupdate.timestamp
-    is stored in the DB (see `_calendar_context` for the same pattern).
-    Only non-dismissed pupdates count, so an alert the user already
-    swept doesn't trigger a regen the next time Home refreshes.
-    """
-    from planet_maiko.models.pupdate import Pupdate
-
-    q = (
-        Pupdate.query
-        .filter(Pupdate.type.in_(ACTIONABLE_PUPDATE_TYPES))
-        .filter(Pupdate.dismissed == False)  # noqa: E712
-        .filter(Pupdate.timestamp > since_utc)
-    )
-    return db.session.query(q.exists()).scalar()
-
-
 def get_latest_overview(max_age_hours=DEFAULT_MAX_AGE_HOURS):
     """Return the most recent overview, regenerating if stale / missing.
 
-    Two staleness triggers, in order:
-      1. Absolute: cache older than ``max_age_hours`` (default 4).
-      2. Event-aware: cache older than
-         ``EVENT_INVALIDATION_FLOOR_MINUTES`` (default 30) AND at least
-         one actionable pupdate has arrived since the cache was written.
+    Single staleness trigger: cache older than ``max_age_hours``
+    (default 4). The Pack Requests widget handles real-time actionable
+    signals, so the overview doesn't regen early on incoming pupdates
+    — it's a rolling narrative, not an alert surface.
 
     Returns:
         dict with:
@@ -748,23 +709,6 @@ def get_latest_overview(max_age_hours=DEFAULT_MAX_AGE_HOURS):
     """
     row = _latest_skill_result()
     needs_regen = _is_stale(row, max_age_hours)
-
-    # Event-aware check: cache still looks fresh by the clock, but a
-    # new actionable pupdate has landed. If we're past the floor, let
-    # the user see a fresh overview that reflects it.
-    if not needs_regen and row is not None and row.created_at is not None:
-        created = row.created_at
-        if created.tzinfo is None:
-            created = created.replace(tzinfo=timezone.utc)
-        age = datetime.now(timezone.utc) - created
-        if age > timedelta(minutes=EVENT_INVALIDATION_FLOOR_MINUTES):
-            since_utc = created.astimezone(timezone.utc).replace(tzinfo=None)
-            if _has_new_actionable_pupdate(since_utc):
-                logger.info(
-                    "[overview] event-aware regen triggered (new actionable pupdate since %s)",
-                    iso_utc(row.created_at),
-                )
-                needs_regen = True
 
     if needs_regen:
         parsed = generate_overview()
