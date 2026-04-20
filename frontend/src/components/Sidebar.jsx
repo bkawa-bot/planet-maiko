@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { api } from "../api/client";
 import { applyCustomTheme, clearCustomTheme, hydrateCachedCustomTheme } from "../utils/themes";
 import SystemHealth from "./SystemHealth";
+import FocusDigestModal from "./FocusDigestModal";
 import "./Sidebar.css";
 import "./ShutdownModal.css";
 
@@ -48,6 +49,7 @@ export default function Sidebar({ onOpenShutdown }) {
   const [focusState, setFocusState] = useState("available");
   const [showFocusMenu, setShowFocusMenu] = useState(false);
   const [showFocusInfo, setShowFocusInfo] = useState(false);
+  const [focusDigest, setFocusDigest] = useState(null);
   const [weekendMode, setWeekendMode] = useState(false);
   const [weekendBusy, setWeekendBusy] = useState(false);
   const themeRef = useRef(null);
@@ -214,9 +216,28 @@ export default function Sidebar({ onOpenShutdown }) {
                     key={s}
                     className={`dropdown-item ${focusState === s ? "active" : ""}`}
                     onClick={async () => {
-                      await api.setFocus(s);
+                      // Going focus → available: capture the digest first.
+                      // set_state("available") releases held pupdates on
+                      // the server, so calling /focus/digest after would
+                      // return empty — we'd miss the "welcome back" moment.
+                      const wasInFocus = focusState !== "available" && s === "available";
+                      let digest = null;
+                      if (wasInFocus) {
+                        try { digest = await api.getFocusDigest(); } catch { /* best effort */ }
+                      }
+                      try {
+                        await api.setFocus(s);
+                      } catch {
+                        // If the set fails we don't want to show a digest
+                        // for a transition that didn't happen.
+                        setShowFocusMenu(false);
+                        return;
+                      }
                       setFocusState(s);
                       setShowFocusMenu(false);
+                      if (digest && digest.total_held > 0) {
+                        setFocusDigest(digest);
+                      }
                     }}
                   >
                     {s.replace("_", " ")}
@@ -284,6 +305,8 @@ export default function Sidebar({ onOpenShutdown }) {
           </button>
         </div>
       </div>
+
+      <FocusDigestModal digest={focusDigest} onClose={() => setFocusDigest(null)} />
 
       {showFocusInfo && (
         <div className="modal-overlay" onClick={() => setShowFocusInfo(false)}>
