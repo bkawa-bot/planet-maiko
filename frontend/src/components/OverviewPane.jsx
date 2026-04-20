@@ -25,8 +25,11 @@ import "./OverviewPane.css";
 // returns where the primary button should go. Mirrors the logic that
 // used to live in Home's waitingCta so action routing stays consistent
 // with what the old "What needs you" card did.
+// Map a pupdate to where its action button should go. Returns null
+// when there's no useful destination — caller hides the button in
+// that case instead of rendering "Open" that bounces back to Home.
 function resolveAction(p) {
-  if (!p) return { label: "Open", to: "/" };
+  if (!p) return null;
   const taskId = p.metadata?.task_id;
   if (p.type === "agent_plan_for_approval" && taskId) {
     return { label: "Review plan", to: `/tasks/${taskId}/plan` };
@@ -47,10 +50,7 @@ function resolveAction(p) {
     (p.type === "agent_ready_for_review" &&
       (tags.includes("investigation") || tags.includes("cartographer")));
   if (isReportLike) {
-    return {
-      label: p.type === "investigation_complete" ? "Read report" : "Read report",
-      artifact: true,
-    };
+    return { label: "Read report", artifact: true };
   }
   if (p.type === "agent_ready_for_review" && taskId) {
     return { label: "Review diff", to: `/tasks/${taskId}/review` };
@@ -61,9 +61,13 @@ function resolveAction(p) {
   if (p.type === "pr_review_requested" || p.type === "pr_changes_requested") {
     return p.url
       ? { label: p.type === "pr_review_requested" ? "Review PR" : "Revise", href: p.url }
-      : { label: "Open", to: "/" };
+      : null;
   }
-  return { label: "Open", to: "/" };
+  // Fall-through: unknown type, or known type missing the context it
+  // needs to route (agent_stuck without a task_id, etc). Return null
+  // so the caller renders a read-only card — better than an "Open"
+  // button that lands the user back on the page they came from.
+  return null;
 }
 
 export default function OverviewPane() {
@@ -226,18 +230,22 @@ export default function OverviewPane() {
               const pup = pupdateById[n.pupdate_id];
               if (!pup) return null;
               const action = resolveAction(pup);
-              const go = (e) => {
+              const go = action ? (e) => {
                 e.stopPropagation();
                 if (action.artifact) { setArtifactModal(pup); return; }
                 if (action.href) window.open(action.href, "_blank", "noreferrer");
                 else navigate(action.to);
-              };
+              } : null;
               const originalAsk = pup.metadata?.original_ask;
               const originalNonGoals = pup.metadata?.original_non_goals;
               const askedAt = pup.metadata?.asked_at;
               return (
                 <div key={n.pupdate_id} className="overview-card">
-                  <div className="overview-card-body" onClick={go} style={{ cursor: "pointer" }}>
+                  <div
+                    className="overview-card-body"
+                    onClick={go || undefined}
+                    style={{ cursor: go ? "pointer" : "default" }}
+                  >
                     <div className="overview-card-title">{n.summary}</div>
                     {originalAsk && (
                       <div className="overview-card-refresher">
@@ -255,9 +263,11 @@ export default function OverviewPane() {
                       </div>
                     )}
                   </div>
-                  <button className="btn btn-sm btn-primary" onClick={go}>
-                    {action.label}
-                  </button>
+                  {action && (
+                    <button className="btn btn-sm btn-primary" onClick={go}>
+                      {action.label}
+                    </button>
+                  )}
                   <button
                     className="btn-ghost overview-dismiss"
                     onClick={() => handleDismiss(pup.id)}
