@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import {
   BookOpen, Brain, Clock, Layers, Check, X, Edit3,
   ChevronDown, ChevronRight, Plus, Shield, Download, Loader, Sparkles,
-  Flame, RefreshCw,
+  Flame, RefreshCw, GraduationCap,
 } from "lucide-react";
 import InfoButton from "../components/InfoButton";
 import ConfirmModal from "../components/ConfirmModal";
 import BackfillProgress from "../components/BackfillProgress";
+import Training from "./Training";
 import "./Knowledge.css";
 
 const CATEGORY_ICONS = {
@@ -35,7 +37,22 @@ export default function BrainView() {
   const [confirmingBackfill, setConfirmingBackfill] = useState(false);
   const [startingBackfill, setStartingBackfill] = useState(false);
   const [configuredRepos, setConfiguredRepos] = useState([]);
-  const [tab, setTab] = useState("pool");
+  // Tab state persists through the URL — /knowledge?tab=training
+  // opens the Training tab directly (e.g. from the legacy /training
+  // redirect in App.jsx). Valid tabs: pool, pending, unsynthesized,
+  // training.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTabState] = useState(() => {
+    const urlTab = searchParams.get("tab");
+    return ["pool", "pending", "unsynthesized", "training"].includes(urlTab) ? urlTab : "pool";
+  });
+  const setTab = (next) => {
+    setTabState(next);
+    const params = new URLSearchParams(searchParams);
+    if (next === "pool") params.delete("tab");
+    else params.set("tab", next);
+    setSearchParams(params, { replace: true });
+  };
   const [synthesizing, setSynthesizing] = useState(false);
 
   const fetchLearnings = async () => {
@@ -214,7 +231,15 @@ export default function BrainView() {
           >
             Unsynthesized {rawSignalsTotal > 0 && <span className="tab-badge">{rawSignalsTotal}</span>}
           </button>
+          <button
+            className={`inbox-tab ${tab === "training" ? "active" : ""}`}
+            onClick={() => setTab("training")}
+          >
+            <GraduationCap size={11} /> Training
+          </button>
         </div>
+
+        {tab === "training" && <Training />}
 
         {tab === "unsynthesized" && unsynthesized.length > 0 && (
           <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 0", marginBottom: 8 }}>

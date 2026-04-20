@@ -16,7 +16,6 @@ import Agents from "./pages/Agents";
 const Settings = lazy(() => import("./pages/Settings"));
 const BrainView = lazy(() => import("./pages/BrainView"));
 const Automations = lazy(() => import("./pages/Automations"));
-const Training = lazy(() => import("./pages/Training"));
 const Themes = lazy(() => import("./pages/Themes"));
 const ReviewDiff = lazy(() => import("./pages/ReviewDiff"));
 const ReviewPlan = lazy(() => import("./pages/ReviewPlan"));
@@ -48,7 +47,9 @@ function AppRoutes() {
         <Route path="/agents" element={<Agents />} />
         <Route path="/knowledge" element={<Suspense fallback={<RouteFallback />}><BrainView /></Suspense>} />
         <Route path="/automations" element={<Suspense fallback={<RouteFallback />}><Automations /></Suspense>} />
-        <Route path="/training" element={<Suspense fallback={<RouteFallback />}><Training /></Suspense>} />
+        {/* Training is now a tab inside Knowledge — legacy bookmark
+            redirects land on that tab via ?tab=training. */}
+        <Route path="/training" element={<Navigate to="/knowledge?tab=training" replace />} />
         <Route path="/themes" element={<Suspense fallback={<RouteFallback />}><Themes /></Suspense>} />
         <Route path="/settings" element={<Suspense fallback={<RouteFallback />}><Settings /></Suspense>} />
         <Route path="/tasks/:taskId/review" element={<Suspense fallback={<RouteFallback />}><ReviewDiff /></Suspense>} />

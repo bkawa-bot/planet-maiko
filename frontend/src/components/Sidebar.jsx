@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Home, CheckSquare, Bot, Brain, Wand2, Zap, GraduationCap, Settings, Shield, HelpCircle, X, Palette, Power, Leaf } from "lucide-react";
+import { Home, CheckSquare, Bot, Brain, Wand2, Zap, Settings, Shield, HelpCircle, X, Palette, Power, Leaf } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api/client";
 import { applyCustomTheme, clearCustomTheme, hydrateCachedCustomTheme } from "../utils/themes";
@@ -14,7 +14,6 @@ const NAV_ITEMS = [
   { to: "/agents", icon: Bot, label: "Agents" },
   { to: "/knowledge", icon: Brain, label: "Knowledge" },
   { to: "/automations", icon: Zap, label: "Automations" },
-  { to: "/training", icon: GraduationCap, label: "Training" },
 ];
 
 const THEMES = [
