@@ -96,8 +96,12 @@ def maybe_auto_investigate(incident_pupdate):
         )
         return None
 
-    services = (incident_pupdate.extra or {}).get("services") or []
-    scope_repo = services[0] if services else None
+    # Prefer the explicit `repo` (always "org/repo" when set by the
+    # correlator) over `services[0]`, which can be a plain service name
+    # or tag that resolve_repo_path can't turn into a local clone.
+    extra = incident_pupdate.extra or {}
+    services = extra.get("services") or []
+    scope_repo = extra.get("repo") or (services[0] if services else None)
 
     # Without a resolvable repo there's nowhere to spin up a worktree,
     # so we can't kick an agent off. Still log it — a user seeing these

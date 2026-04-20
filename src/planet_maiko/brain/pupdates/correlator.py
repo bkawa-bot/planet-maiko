@@ -91,6 +91,18 @@ def correlate():
                     body_lines.append(f"- [{p.priority}] {p.type}: {p.title}")
                 body_lines.append(f"\nPattern: {' → '.join(sorted(matching))}")
 
+                # Pull through the repo from the first correlated pupdate
+                # that has one. `services` is a human-readable grouping key
+                # (can be a service name, repo, or tag); `repo` is the
+                # strict "org/repo" used downstream to resolve a local
+                # clone for auto-investigate.
+                repo = None
+                for p in correlated:
+                    candidate = (p.extra or {}).get("repo")
+                    if candidate:
+                        repo = candidate
+                        break
+
                 incident = Pupdate(
                     id=incident_id[:64],
                     source="maiko",
@@ -105,6 +117,7 @@ def correlate():
                     extra={
                         "correlated_ids": [p.id for p in correlated],
                         "services": [service],
+                        "repo": repo,
                         "pattern": sorted(list(matching)),
                         "types": sorted(list(matching)),
                     },
