@@ -14,7 +14,7 @@ Return ONLY valid JSON matching this shape. No markdown fencing, no commentary.
   "name": "Short human name (2-4 words)",
   "emoji": "single emoji that captures the vibe",
   "description": "One sentence (<=140 chars) describing the mood",
-  "world_background": "one of: none, night, day, morning, afternoon, sunset",
+  "world_background": "one of: none, night, day, morning, sunset",
   "colors": {
     "bg": "#hex",
     "bg_card": "#hex",
@@ -68,7 +68,7 @@ Return ONLY valid JSON matching this shape. No markdown fencing, no commentary.
 - `pane_bg` paints the frosted Home overview pane and sidebar widgets. Use `rgba(r, g, b, a)` tinted to match `bg_card` with alpha around 0.75–0.80, so the hill scene shows through softly. Dark themes → go slightly darker than `bg_card`; light themes → slightly lighter. The frosted look only works if there's some transparency — don't use 1.0 alpha.
 
 **Hills backdrop.**
-- Pick a `world_background` that matches the theme's light. For dark/moody themes → "night". Warm yellow-golden palettes → "afternoon". Cool pinks/purples → "morning" or "sunset". Use "none" if the theme is minimalist.
+- Pick a `world_background` that matches the theme's light. For dark/moody themes → "night". Warm golden/day palettes → "day" or "morning". Cool pinks/purples → "morning" or "sunset". Use "none" if the theme is minimalist.
 
 **Color format.**
 - Most values must be a valid 6- or 8-digit hex (`#rrggbb` or `#rrggbbaa`). `topbar_gradient` is the exception — it takes a CSS `linear-gradient(...)` string with hex color stops only (no `rgba()` stops inside the gradient). `pane_bg` is an `rgba(r, g, b, a)` string so the frosted blur keeps its transparency. No color names, no `hsl()` elsewhere — the validator rejects anything outside this set.
@@ -80,6 +80,6 @@ Return ONLY valid JSON matching this shape. No markdown fencing, no commentary.
 
 - "cozy cabin, winter" → muted cream bg, deep blue-grey card, forest green accent, warm amber highlights, world "night"
 - "tokyo at 2am, raining" → near-black bg with blue cast, magenta-pink primary, cyan secondary, cool text, world "night"
-- "sunflowers in august" → pale cream bg, warm browns and greens, sunflower yellow primary, world "afternoon"
+- "sunflowers in august" → pale cream bg, warm browns and greens, sunflower yellow primary, world "day"
 
 Now read the brief carefully and produce the JSON.

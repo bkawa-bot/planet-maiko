@@ -53,7 +53,7 @@ ALLOWED_COLOR_KEYS = {
 
 # Hill SVGs the user can pick for the body background. "none" means a
 # plain background color — matches the show_hill_background toggle.
-ALLOWED_WORLD_BACKGROUNDS = {"none", "night", "day", "morning", "afternoon", "sunset"}
+ALLOWED_WORLD_BACKGROUNDS = {"none", "night", "day", "morning", "sunset"}
 
 # A tolerant but bounded color regex: hex (3/4/6/8 digits), rgb/rgba/hsl/hsla
 # function notation, a bounded linear-gradient() for the topbar, or a few

@@ -60,7 +60,7 @@
      override via `topbar_gradient` and `pane_bg` in their colors
      dict; otherwise they inherit these defaults (night look). */
   --topbar-gradient: linear-gradient(135deg, #0a1628 0%, #162244 50%, #1a3a48 100%);
-  --pane-bg: rgba(45, 54, 60, 0.55);
+  --pane-bg: rgba(45, 54, 60, 0.40);
 }
 
 /* === Light theme === */
@@ -80,7 +80,7 @@
   --green-soft: rgba(139, 196, 160, 0.18); --green-faint: rgba(139, 196, 160, 0.10);
   --lavender-soft: rgba(138, 104, 184, 0.14); --lavender-faint: rgba(138, 104, 184, 0.07);
   --topbar-gradient: linear-gradient(135deg, #87CEEB 0%, #B0D8E8 50%, #B8D8B8 100%);
-  --pane-bg: rgba(242, 248, 242, 0.78);
+  --pane-bg: rgba(242, 248, 242, 0.60);
 }
 
 /* === Morning theme === */
@@ -100,27 +100,7 @@
   --green-soft: rgba(90, 184, 125, 0.16); --green-faint: rgba(90, 184, 125, 0.08);
   --lavender-soft: rgba(149, 120, 194, 0.14); --lavender-faint: rgba(149, 120, 194, 0.07);
   --topbar-gradient: linear-gradient(135deg, #F5C6AA 0%, #F0D8C0 50%, #F8E8D0 100%);
-  --pane-bg: rgba(250, 246, 238, 0.80);
-}
-
-/* === Afternoon theme === Golden hour: warm cream, peach sky, dusty purple shadows */
-[data-theme="afternoon"] {
-  --bg: #f0dcc0; --bg-plain: #F0D8B8; --bg-card: #f8e8d0; --bg-card-alt: #edd8b8;
-  --bg-hover: #e8d0a8; --bg-selected: #dcc498;
-  --text: #443f6e; --text-dim: #6a5a8a; --text-muted: #8c7ca8;
-  --pink: #bf4e64; --pink-soft: rgba(191, 78, 100, 0.15); --pink-glow: rgba(191, 78, 100, 0.08);
-  --blue: #4dc4d4; --blue-soft: rgba(77, 196, 212, 0.14);
-  --mint: #6abc88; --orange: #d87048; --lavender: #8068a8;
-  --peach: #d8946a; --creamsicle: #e8b890; --lemon: #d8b868;
-  --urgent: #bf4e64; --high: #d87048; --normal: #bf4e64; --low: #8c7ca8; --green: #6abc88;
-  --border: #d0b888; --border-subtle: #dcc8a0;
-  --urgent-soft: rgba(191, 78, 100, 0.16); --urgent-faint: rgba(191, 78, 100, 0.08);
-  --high-soft: rgba(216, 112, 72, 0.16); --high-faint: rgba(216, 112, 72, 0.08);
-  --lemon-soft: rgba(216, 184, 104, 0.20); --lemon-faint: rgba(216, 184, 104, 0.10);
-  --green-soft: rgba(106, 188, 136, 0.18); --green-faint: rgba(106, 188, 136, 0.10);
-  --lavender-soft: rgba(128, 104, 168, 0.14); --lavender-faint: rgba(128, 104, 168, 0.07);
-  --topbar-gradient: linear-gradient(135deg, #E8C8A0 0%, #E0A880 50%, #D08870 100%);
-  --pane-bg: rgba(248, 232, 208, 0.80);
+  --pane-bg: rgba(250, 246, 238, 0.62);
 }
 
 /* === Sunset theme === */
@@ -140,7 +120,7 @@
   --green-soft: rgba(125, 212, 160, 0.16); --green-faint: rgba(125, 212, 160, 0.08);
   --lavender-soft: rgba(160, 136, 208, 0.16); --lavender-faint: rgba(160, 136, 208, 0.08);
   --topbar-gradient: linear-gradient(135deg, #1A1A2E 0%, #2D2040 35%, #6A3058 70%, #A04070 100%);
-  --pane-bg: rgba(58, 34, 72, 0.68);
+  --pane-bg: rgba(58, 34, 72, 0.52);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -164,7 +144,6 @@ body {
 
 [data-theme="light"] body { background-image: url('/world-day.svg'); }
 [data-theme="morning"] body { background-image: url('/world-morning.svg'); }
-[data-theme="afternoon"] body { background-image: url('/world-afternoon.svg'); }
 [data-theme="sunset"] body { background-image: url('/world-sunset.svg'); }
 
 /* Toggle: let users fall back to a plain backdrop via Settings. Uses
@@ -499,9 +478,6 @@ a:hover { text-decoration: underline; }
 }
 [data-theme="morning"] .card-list-container {
   background: rgba(255, 253, 248, 0.5);
-}
-[data-theme="afternoon"] .card-list-container {
-  background: rgba(248, 232, 208, 0.55);
 }
 [data-theme="sunset"] .card-list-container {
   background: rgba(58, 34, 72, 0.5);

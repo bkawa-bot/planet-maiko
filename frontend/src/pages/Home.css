@@ -93,7 +93,6 @@
 }
 [data-theme="light"] .home-card { background: rgba(242, 248, 242, 0.75); }
 [data-theme="morning"] .home-card { background: rgba(250, 246, 238, 0.75); }
-[data-theme="afternoon"] .home-card { background: rgba(248, 232, 208, 0.78); }
 [data-theme="sunset"] .home-card { background: rgba(58, 34, 72, 0.65); }
 
 .home-card-header {

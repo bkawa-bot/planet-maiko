@@ -8,7 +8,6 @@ const WORLD_SVG = {
   night: "/world-night.svg",
   day: "/world-day.svg",
   morning: "/world-morning.svg",
-  afternoon: "/world-afternoon.svg",
   sunset: "/world-sunset.svg",
 };
 
@@ -22,15 +21,13 @@ const WORLD_TOPBAR_GRADIENT = {
   night:     "linear-gradient(135deg, #0a1628 0%, #162244 50%, #1a3a48 100%)",
   day:       "linear-gradient(135deg, #87CEEB 0%, #B0D8E8 50%, #B8D8B8 100%)",
   morning:   "linear-gradient(135deg, #F5C6AA 0%, #F0D8C0 50%, #F8E8D0 100%)",
-  afternoon: "linear-gradient(135deg, #E8C8A0 0%, #E0A880 50%, #D08870 100%)",
   sunset:    "linear-gradient(135deg, #1A1A2E 0%, #2D2040 35%, #6A3058 70%, #A04070 100%)",
 };
 const WORLD_PANE_BG = {
-  night:     "rgba(45, 54, 60, 0.55)",
-  day:       "rgba(242, 248, 242, 0.78)",
-  morning:   "rgba(250, 246, 238, 0.80)",
-  afternoon: "rgba(248, 232, 208, 0.80)",
-  sunset:    "rgba(58, 34, 72, 0.68)",
+  night:     "rgba(45, 54, 60, 0.40)",
+  day:       "rgba(242, 248, 242, 0.60)",
+  morning:   "rgba(250, 246, 238, 0.62)",
+  sunset:    "rgba(58, 34, 72, 0.52)",
 };
 
 // snake_case key -> kebab CSS var name

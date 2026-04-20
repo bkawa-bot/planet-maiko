@@ -40,7 +40,6 @@ const WORLD_OPTIONS = [
   { value: "night", label: "Night hills" },
   { value: "day", label: "Day hills" },
   { value: "morning", label: "Morning hills" },
-  { value: "afternoon", label: "Afternoon hills" },
   { value: "sunset", label: "Sunset hills" },
 ];
 
