@@ -90,6 +90,13 @@ export default function ShutdownModal({ onClose }) {
   const cancelled = useRef(false);
 
   useEffect(() => {
+    // Reset the "cancelled" flag on every setup. In StrictMode dev,
+    // React mounts, runs cleanup (which set cancelled=true), then
+    // re-mounts. Without this reset, by the time the user clicked
+    // "Tuck us in" the flag was already true and handleRun's first
+    // iteration broke out immediately, leaving the progress stage
+    // with an empty log and the server never actually stopped.
+    cancelled.current = false;
     api.getShutdownPreview()
       .then((p) => { setPreview(p); setStage("preview"); })
       .catch((err) => { setError(err.message); setStage("error"); });
