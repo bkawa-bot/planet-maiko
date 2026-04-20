@@ -28,10 +28,10 @@ export default function FocusDigestModal({ digest, onClose }) {
       <div className="focus-digest-modal" onClick={(e) => e.stopPropagation()}>
         <div className="focus-digest-header">
           <div>
-            <div className="focus-digest-welcome">Welcome back 🐾</div>
+            <div className="focus-digest-welcome">You're back 🐾</div>
             <div className="focus-digest-sub">
-              {total_held === 1 ? "1 thing" : `${total_held} things`} came in while you were away.
-              They're all in your inbox now.
+              {total_held === 1 ? "One thing" : `${total_held} things`} came in while you were heads-down.
+              I triaged. {needs_attention.length > 0 ? "A few are worth your time, rest can wait." : "Nothing urgent, all in the inbox."}
             </div>
           </div>
           <button className="focus-digest-close" onClick={onClose} aria-label="Close">
@@ -70,7 +70,7 @@ export default function FocusDigestModal({ digest, onClose }) {
               <span className="focus-digest-count">{can_wait.length}</span>
             </div>
             <div className="focus-digest-can-wait-note">
-              Low-priority items — they're in your inbox whenever you want them.
+              Low-priority stuff. In the inbox whenever you want it.
             </div>
           </div>
         )}

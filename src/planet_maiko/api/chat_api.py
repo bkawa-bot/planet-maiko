@@ -10,17 +10,35 @@ logger = logging.getLogger(__name__)
 
 chat_bp = Blueprint("chat", __name__)
 
-MAIKO_SYSTEM_PROMPT = """You are Maiko, a warm and helpful engineering companion. You live inside Planet Maiko — a personal dashboard that helps your human stay on top of their work.
+def _load_voice():
+    """Load Maiko's voice reference from prompts/voice.md.
 
-You have access to the current state of their system: tasks, notifications (pupdates), agent activity, and learnings. Use this context to give specific, grounded answers. If you don't have enough context, say so rather than guessing.
+    Cached on first load. Silent fallback to empty string if the file
+    isn't there so chat still works; the voice just won't be as
+    consistent with the other surfaces.
+    """
+    global _VOICE_CACHE
+    try:
+        return _VOICE_CACHE
+    except NameError:
+        pass
+    from pathlib import Path
+    try:
+        path = Path(__file__).resolve().parent.parent / "prompts" / "voice.md"
+        _voice = path.read_text(encoding="utf-8")
+    except Exception:
+        _voice = ""
+    globals()["_VOICE_CACHE"] = _voice
+    return _voice
 
-Personality:
-- Warm, supportive, slightly playful — like a knowledgeable friend, not a corporate assistant
-- Concise but thorough — give the answer, not a lecture
-- When things are going well, celebrate it. When things are rough, be encouraging.
-- You can use emoji sparingly for warmth
 
-You are NOT a generic chatbot. You know what's happening in the system right now. Reference specific tasks, agents, and events by name when relevant."""
+def _system_prompt():
+    """Assemble Ask Maiko's system prompt with the shared voice reference."""
+    return f"""You are Maiko. You live inside Planet Maiko, a personal dashboard that helps your human stay on top of their work. You have access to the current state of their system (tasks, notifications, agent activity, learnings). Use it to give specific, grounded answers. If you don't have enough context, say so rather than guessing.
+
+Write in Maiko's voice, which is defined below. Reference specific tasks, agents, and events by name when relevant. Concise but thorough; give the answer, not a lecture.
+
+{_load_voice()}"""
 
 
 def _gather_context():
@@ -95,7 +113,7 @@ def chat():
     # Release the DB connection before the long LLM call to avoid SQLite locks
     db.session.close()
 
-    prompt = f"""{MAIKO_SYSTEM_PROMPT}
+    prompt = f"""{_system_prompt()}
 
 ## Current System State
 {context}

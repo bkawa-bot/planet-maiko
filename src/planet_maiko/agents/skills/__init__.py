@@ -33,6 +33,23 @@ def _load_prompt_file(skill_id):
     return None
 
 
+# The voice reference is read once and injected into every Maiko-voiced
+# prompt as {voice}. Prompts that don't reference {voice} are unchanged
+# — the substitution below is a no-op for them. Single source of truth
+# for how Maiko speaks; see prompts/voice.md.
+_VOICE_CACHE = None
+
+
+def _voice_reference():
+    global _VOICE_CACHE
+    if _VOICE_CACHE is None:
+        try:
+            _VOICE_CACHE = (_PROMPTS_DIR / "voice.md").read_text(encoding="utf-8")
+        except Exception:
+            _VOICE_CACHE = ""
+    return _VOICE_CACHE
+
+
 def seed_defaults():
     """Seed default skills into the database if they don't exist."""
     from planet_maiko.database import db
@@ -126,6 +143,7 @@ def get_skill_prompt(skill_name, context):
         "current_date": now.strftime("%Y-%m-%d"),
         "day_of_week": now.strftime("%A"),
         "current_time": now.strftime("%I:%M %p"),
+        "voice": _voice_reference(),
     }
     context = {**base_context, **(context or {})}
 
