@@ -275,9 +275,16 @@ def _schedule_bio_generation(agent_id, can_rename=True):
                     scope=scope,
                     existing_names=_existing_agent_names(),
                 )
+                # Claude Code needs real wall time to cold-start the
+                # subprocess, parse the prompt, and emit the JSON.
+                # 30s was tight enough that fresh-install runs and
+                # slow-cache hits both timed out, dropping agents to
+                # the random-name fallback path. 4 minutes is
+                # generous without being ridiculous — the daemon
+                # thread doesn't block anything.
                 result = runtime.send(
                     prompt,
-                    timeout=30,
+                    timeout=240,
                     model=resolve_model("triage"),
                 )
                 success = bool(result and result.get("success"))
