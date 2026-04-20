@@ -175,6 +175,48 @@
   font-size: 11px; color: var(--text-dim);
 }
 
+/* Brain widget — folds the ex-footer controls (run cycle, pending
+   breakdown) into the ambient Home stats so the bottom bar can
+   stay quiet. */
+.home-brain-widget .widget-header {
+  display: flex; align-items: center; gap: 6px;
+  text-transform: uppercase;
+}
+.brain-widget-cycle-btn {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 9px; font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.brain-widget-cycle-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.brain-widget-cycle-btn:disabled { opacity: 0.6; cursor: default; }
+.brain-widget-pending-row {
+  position: relative;
+  margin-top: 6px;
+}
+.brain-widget-pending {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: none;
+  background: var(--pink-soft, rgba(255, 182, 193, 0.2));
+  color: var(--pink);
+  font-size: 10px; font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
 /* === Scene widget === */
 /* === Page-level weather overlays === */
 .page-weather-overlay {

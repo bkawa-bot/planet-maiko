@@ -4,7 +4,9 @@ import SetupWizard from "../components/SetupWizard";
 import OverviewPane from "../components/OverviewPane";
 import PackStatusPane from "../components/PackStatusPane";
 import { formatTime, formatClock } from "../utils/dates";
-import { Brain, Calendar, Palette, Video } from "lucide-react";
+import { Brain, Calendar, Palette, Video, Sparkles } from "lucide-react";
+import { showToast } from "../components/Toast";
+import FooterPendingPopover from "../components/FooterPendingPopover";
 import "./Home.css";
 
 // Home polls sidebar data (scene, brain status, calendar, task stats).
@@ -41,6 +43,8 @@ export default function Home() {
   const [brainStatus, setBrainStatus] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [homeConfig, setHomeConfig] = useState(null);
+  const [cycling, setCycling] = useState(false);
+  const [showPendingPopover, setShowPendingPopover] = useState(false);
 
   const fetchSidebar = async () => {
     try {
@@ -78,6 +82,22 @@ export default function Home() {
     const interval = setInterval(fetchSidebar, HOME_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
+
+  const triggerCycle = async (e) => {
+    e.stopPropagation();
+    if (cycling) return;
+    setCycling(true);
+    showToast("Brain cycle running...", "normal");
+    try {
+      await api.runBrainCycle();
+      showToast("Brain cycle done", "normal");
+      fetchSidebar();
+    } catch (err) {
+      showToast(err.message || "Cycle failed", "high");
+    } finally {
+      setCycling(false);
+    }
+  };
 
   const isFirstRun = homeConfig && !homeConfig.setup_complete;
   if (isFirstRun) {
@@ -199,12 +219,40 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="home-widget">
-            <div className="widget-header"><Brain size={12} /> Brain</div>
+          <div className="home-widget home-brain-widget">
+            <div className="widget-header">
+              <Brain size={12} /> Brain
+              <button
+                className="brain-widget-cycle-btn"
+                onClick={triggerCycle}
+                disabled={cycling}
+                title="Run a brain cycle now (route tasks, process pupdates, etc.)"
+              >
+                <Sparkles size={10} className={cycling ? "spin" : ""} />
+                {cycling ? " running…" : " cycle now"}
+              </button>
+            </div>
             <div className="widget-detail">
               <span>Cycles: {brainStatus?.cycle_count || 0}</span>
               <span>Last: {brainStatus?.last_cycle ? formatTime(brainStatus.last_cycle) : "Never"}</span>
             </div>
+            {brainStatus?.pending && Object.values(brainStatus.pending).some(v => v > 0) && (
+              <div className="brain-widget-pending-row">
+                <button
+                  className="brain-widget-pending"
+                  onClick={() => setShowPendingPopover((v) => !v)}
+                  title="Click for a breakdown"
+                >
+                  {Object.values(brainStatus.pending).reduce((a, b) => a + b, 0)} pending
+                </button>
+                {showPendingPopover && (
+                  <FooterPendingPopover
+                    pending={brainStatus.pending || {}}
+                    onClose={() => setShowPendingPopover(false)}
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
