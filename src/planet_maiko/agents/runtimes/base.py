@@ -4,8 +4,8 @@ A runtime is the engine that powers an agent - it accepts prompts,
 reasons about them, optionally uses tools, and returns results.
 
 Planet Maiko ships with a Claude Code runtime, but any agent that
-implements this interface can be plugged in (Aider, Cursor CLI,
-a custom OpenAI wrapper, a local Ollama agent, etc.).
+implements this interface can be plugged in (a custom OpenAI wrapper,
+a local Ollama agent, etc.).
 """
 
 from abc import ABC, abstractmethod

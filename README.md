@@ -6,6 +6,8 @@
 
 ![Planet Maiko home](docs/screenshots/home.png)
 
+> **⚠️ Beta.** Planet Maiko is in active beta testing. Expect breaking changes, schema migrations, rough edges, and the occasional bug. If you try it and something's broken, [file an issue](https://github.com/bkawa-bot/planet-maiko/issues/new) — feedback shapes what ships next.
+
 I got tired of being a babysitter.
 
 So I built Planet Maiko.

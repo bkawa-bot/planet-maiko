@@ -359,8 +359,8 @@ def _is_approval_comment(body):
         return True
     # Bot comments and boilerplate
     if any(p in lower for p in [
-        "<!-- sidekick", "<!-- model", "<sub>", "review complete. no comments",
-        "no actionable rule", "have feedback for sidekick", "react to this review",
+        "<!-- bot", "<!-- model", "<sub>", "review complete. no comments",
+        "no actionable rule", "react to this review",
     ]):
         return True
     return False

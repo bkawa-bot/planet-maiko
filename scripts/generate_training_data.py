@@ -85,8 +85,8 @@ def main():
             prompt = (
                 f"Generate training data for a code compliance model. "
                 f"For EACH rule below, generate 2 VIOLATION examples and 2 PASS examples. "
-                f"Each example: a realistic Java code snippet (10-30 lines) from a "
-                f"HubSpot marketplace service using Guice, Immutables, CHIRP, Caffeine cache.\n\n"
+                f"Each example: a realistic code snippet (10-30 lines) in a "
+                f"backend service style typical of the repo's language.\n\n"
                 f"{rules_text}\n\n"
                 f"Respond as JSON:\n"
                 f'{{"rules": [\n'

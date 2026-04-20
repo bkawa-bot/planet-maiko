@@ -8,8 +8,8 @@ surrounding orchestration:
     3. Monitor - watch for agent pupdates via the API
     4. Collect - when agent reports done, update task status
 
-The agent (Claude Code, Aider, whatever) communicates back by calling
-the Planet Maiko API, either directly or through the `maiko` CLI:
+The agent communicates back by calling the Planet Maiko API, either
+directly or through the `maiko` CLI:
 
     maiko report "Finished implementing OAuth"
     maiko task done
