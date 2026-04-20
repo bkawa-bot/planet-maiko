@@ -356,8 +356,8 @@
   min-width: 0;
 }
 .profile-card-name-text {
+  flex: 1; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  min-width: 0;
 }
 .profile-card-chip {
   font-size: 9px; padding: 1px 6px;

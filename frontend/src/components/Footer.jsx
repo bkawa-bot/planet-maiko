@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
-import { Brain, CloudSun, Bot, Bug, Sparkles } from "lucide-react";
+import { Brain, Bug, Sparkles } from "lucide-react";
 import { showToast } from "./Toast";
 import FooterPendingPopover from "./FooterPendingPopover";
 import PetMaikoFooter from "./PetMaikoFooter";
@@ -20,22 +20,14 @@ function _formatCount(n) {
 
 export default function Footer() {
   const [brainStatus, setBrainStatus] = useState(null);
-  const [scene, setScene] = useState(null);
-  const [agentCount, setAgentCount] = useState(0);
   const [cycling, setCycling] = useState(false);
   const [showPendingPopover, setShowPendingPopover] = useState(false);
   const navigate = useNavigate();
 
   const refresh = async () => {
     try {
-      const [brain, sc, profiles] = await Promise.all([
-        api.getBrainStatus().catch(() => null),
-        api.getScene().catch(() => null),
-        api.getProfiles().catch(() => []),
-      ]);
+      const brain = await api.getBrainStatus().catch(() => null);
       if (brain) setBrainStatus(brain);
-      if (sc?.context?.weather) setScene(sc.context);
-      setAgentCount(profiles.length);
     } catch (err) { /* ignore */ }
   };
 
@@ -94,18 +86,6 @@ export default function Footer() {
         >
           <Sparkles size={9} className={cycling ? "spin" : ""} />
         </button>
-      </div>
-
-      {scene?.temperature_f && (
-        <div className="footer-section" onClick={() => navigate("/settings")} title="Weather">
-          <CloudSun size={10} />
-          <span>{scene.temperature_f}°F {scene.weather || ""}</span>
-        </div>
-      )}
-
-      <div className="footer-section" onClick={() => navigate("/agents")} title="Agents">
-        <Bot size={10} />
-        <span>{agentCount} agent{agentCount !== 1 ? "s" : ""}</span>
       </div>
 
       <PetMaikoFooter />

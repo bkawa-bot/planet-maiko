@@ -6,7 +6,7 @@ import {
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
-import { formatTime } from "../../utils/dates";
+import { formatTime, relativeFromMinutes } from "../../utils/dates";
 import { formatRepo, useDefaultOrg } from "../../utils/repo";
 import AgentTimelineModal from "./AgentTimelineModal";
 
@@ -179,7 +179,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                       <span className="external-session-hint">— {s.hint}</span>
                     )}
                     <span className="external-session-age">
-                      {ageMin < 1 ? "just now" : `${ageMin}m ago`}
+                      {relativeFromMinutes(ageMin)}
                     </span>
                   </div>
                 );
@@ -351,7 +351,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                       </div>
                     )}
                     <div className="agent-chips">
-                      <span className="agent-chip"><HeartPulse size={10} /> {a.idle_minutes}m ago</span>
+                      <span className="agent-chip"><HeartPulse size={10} /> {relativeFromMinutes(a.idle_minutes)}</span>
                       <span className="agent-chip">{a.pupdate_count} updates</span>
                       {a.task_type && <span className="agent-chip">{a.task_type}</span>}
                     </div>

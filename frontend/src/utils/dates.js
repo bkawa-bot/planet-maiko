@@ -62,7 +62,17 @@ export function relativeTime(value) {
   if (!d) return "";
   const diff = Date.now() - d.getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
+  return relativeFromMinutes(mins);
+}
+
+/**
+ * Same grammar as relativeTime but takes an already-computed minute
+ * count. Used for backend fields that already arrive as minutes-since
+ * (e.g. agent activity idle_minutes, external session ageMin) — avoids
+ * a double conversion.
+ */
+export function relativeFromMinutes(mins) {
+  if (!Number.isFinite(mins) || mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;

@@ -104,19 +104,34 @@ export default function Home() {
             </div>
             {calendarEvents.length > 0 ? (
               <div className="calendar-list">
-                {calendarEvents.map((e) => (
-                  <div key={e.id} className="calendar-event">
-                    <span className="calendar-time">
-                      {formatClock(e.metadata?.start)}
-                    </span>
-                    <span className="calendar-title">{e.title}</span>
-                    {e.url && (
-                      <a href={e.url} target="_blank" rel="noreferrer" className="calendar-zoom">
-                        <Video size={10} />
-                      </a>
-                    )}
-                  </div>
-                ))}
+                {calendarEvents.map((e) => {
+                  const startIso = e.metadata?.start;
+                  const endIso = e.metadata?.end;
+                  // "Past" means the meeting's end time has passed, or
+                  // (if no end time) the start is already ≥30 min ago.
+                  // Using end (not start) keeps the currently-in-progress
+                  // meeting un-struck through until it's genuinely over.
+                  const now = Date.now();
+                  let isPast = false;
+                  if (endIso) {
+                    isPast = new Date(endIso).getTime() <= now;
+                  } else if (startIso) {
+                    isPast = new Date(startIso).getTime() + 30 * 60 * 1000 <= now;
+                  }
+                  return (
+                    <div key={e.id} className={`calendar-event${isPast ? " calendar-event-past" : ""}`}>
+                      <span className="calendar-time">
+                        {formatClock(startIso)}
+                      </span>
+                      <span className="calendar-title">{e.title}</span>
+                      {e.url && !isPast && (
+                        <a href={e.url} target="_blank" rel="noreferrer" className="calendar-zoom">
+                          <Video size={10} />
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="widget-empty">No meetings today</div>

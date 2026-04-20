@@ -371,6 +371,16 @@
 }
 .calendar-event:hover { background: var(--bg-hover); }
 
+/* Past meetings stay visible (helps orient "where am I in the day")
+   but lose visual weight and get struck through so the next meeting
+   is still the obvious focal point. */
+.calendar-event-past { opacity: 0.55; }
+.calendar-event-past .calendar-time,
+.calendar-event-past .calendar-title {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
 .calendar-time { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); min-width: 50px; }
 .calendar-title { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .calendar-zoom {
