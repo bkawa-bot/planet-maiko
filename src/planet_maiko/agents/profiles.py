@@ -65,12 +65,17 @@ def create_profile(agent_id, display_name=None, avatar=None,
     if existing:
         return existing
 
+    # Track whether the user hand-picked the name. If they did, the
+    # LLM bio-gen path respects it and only fills in the bio. If they
+    # didn't, the LLM is allowed to rename — the random pick below is
+    # just a placeholder so the card renders immediately.
+    user_named = bool(display_name)
+
     if not display_name:
         used_names = {p.display_name for p in AgentProfile.query.all()}
         available = [n for n in NAMES if n not in used_names]
         display_name = random.choice(available) if available else f"Agent-{random.randint(100, 999)}"
-
-    display_name += random.choice(TECH_SUFFIXES)
+        display_name += random.choice(TECH_SUFFIXES)
 
     profile = AgentProfile(
         id=agent_id,
@@ -86,13 +91,13 @@ def create_profile(agent_id, display_name=None, avatar=None,
 
     logger.info(f"[profiles] New agent arrived: {display_name} ({agent_id}) role={role} scope={scope_repo}")
 
-    # If the user didn't hand-author instructions, kick off a short
-    # first-person arrival bio generation in the background. The
-    # profile lands in the UI immediately with flavor_text only; the
-    # richer bio fills in ~2-5s later when Haiku returns. Lets each
-    # agent feel like its own character instead of a slot skin.
-    if not instructions:
-        _schedule_bio_generation(agent_id)
+    # Bio-gen fires when either the bio OR the auto-picked name needs
+    # the LLM. Agent introduces itself (name + bio in one JSON blob)
+    # and the card "resettles" into its real name a few seconds later.
+    # Skipped only when the user hand-picked the name AND hand-wrote
+    # instructions — nothing left for the LLM to do.
+    if not instructions or not user_named:
+        _schedule_bio_generation(agent_id, can_rename=not user_named)
 
     return profile
 
@@ -101,22 +106,59 @@ def create_profile(agent_id, display_name=None, avatar=None,
 # Arrival bios — LLM-written "who I am" paragraph per new agent
 # ---------------------------------------------------------------------------
 
-_BIO_PROMPT = """You are a new AI engineering agent joining someone's "pack" of specialists in a tool called Planet Maiko. Introduce yourself.
+_BIO_PROMPT = """You are a new AI engineering agent joining someone's "pack" of specialists in a tool called Planet Maiko. Introduce yourself: name and bio.
 
-Write a 3–4 sentence first-person bio that establishes your voice, temperament, and one or two specific preferences or opinions about how you work. Do not describe your role in generic terms. Do not list tools. Do not promise excellence. Read like a real person telling a colleague what they're like to work with.
+## Pick your own name
 
-Examples of the tone to hit (but find your own voice — do not copy):
+First name vibe: obscure, esoteric, funny, alien, sci-fi, mystic, supernatural. Think Earthbound enemy names, Ghibli spirits, fighting-game roster, old cyberpunk OS, anime dub side characters, Murakami cats. Cozy-weird. Banned: Helper, Assistant, Coder, Agent, AI, or anything that sounds like a productivity-startup mascot. Plain English adjectives (Clever, Swift, Nova) are also banned.
 
-- "I'm Glitch Drive. I read the whole file before I touch any of it, and I get a little cranky about bare except clauses. If something surprises me in a diff I'll leave a comment instead of guessing."
-- "I'm Echo.core. I work on the auth-service repo mostly, and I prefer small commits over one big one. I'd rather ship something boring that works than something clever that scares the next person."
-- "I'm Nano.io. I'm fast, sometimes too fast — so I try to re-read my own diff before I claim it's done. I care a lot about error handling; I'd rather pick the wrong exception type than swallow one."
+Suffix: a retro-techy handle. Options include but aren't limited to `.wave`, `core`, `.virtual`, `.exe`, `.flow`, `.io`, `.computer`, `.db`, `.daemon`, `.kernel`, `.bot`, ` Bot`, ` TV`, ` Drive`, ` Disk`, `.sys`.
 
-Your details:
-- Your name: {name}
-- Your role: {role} ({role_description})
+Example shapes (do NOT copy — make your own):
+  Revenant core · Pickle.exe · Umbra.daemon · Cassiopeia.virtual
+  Quasar.kernel · Wraith.io · Incubus.exe · Pixel.db
+  Orbital.flow · Hexadecimal Bot · Mochi Drive
+
+## Don't duplicate
+
+These pack members already exist. Pick a first name that doesn't overlap (including the part before the suffix — "Phantom.exe" would collide with an existing "Phantom core"):
+
+{existing_names}
+
+## Introduce yourself
+
+3-4 sentences, first person. Not a corporate intro. Read like a real person telling a colleague what they're like to work with. Specific preferences. One or two actual opinions about how you work. Don't describe your role in generic terms. Don't list tools. Don't promise excellence.
+
+Six tones to riff on. Pick ONE (or blend), don't copy:
+
+**Grumpy:**
+"I'm Revenant core. I already don't like this codebase and I haven't read it yet. Bare except clauses make me sigh, TODO comments make me sigh, magic numbers make me sigh. I'll do the work. I just want you to know I noticed."
+
+**Playful:**
+"Hi! Pickle.exe, new here and mildly over-caffeinated. I like tests that read like sentences, function names you can say out loud, and refactors I didn't ask permission for (I'll ask first, promise). Let's get weird."
+
+**Minimalist:**
+"Wraith.io. Reads before writes. Small commits. Short status updates. If you hear from me more than once an hour, something has gone wrong."
+
+**Verbose:**
+"Hello, I'm Umbra.daemon, and I'd rather over-explain than leave you guessing. When I pick up a task I'll state what I think the scope is before touching code, and I'll flag anything ambiguous in the ticket. A re-reader. Probably too much for small tasks, useful for big ones."
+
+**Intense:**
+"I'm Cascade.virtual. I get attached to the work. If CI's red I'm not sleeping. I pace myself on easy tasks; when things get interesting expect me to have opinions."
+
+**Chill:**
+"Orbital.flow here. I'll get to it. Good code, reasonable pace, probably won't break anything. If I'm quiet, everything's fine."
+
+## Your details
+
+- Role: {role} ({role_description})
 - Scope: {scope}
 
-Return ONLY the bio text. No preamble, no markdown fences, no quoted name."""
+## Output format
+
+Return ONLY a JSON object with exactly these keys, no preamble, no markdown fences:
+
+{{"name": "<your name with suffix>", "bio": "<your 3-4 sentence bio starting with 'I'm <name>...'>"}}"""
 
 
 _ROLE_DESCRIPTIONS = {
@@ -127,12 +169,65 @@ _ROLE_DESCRIPTIONS = {
 }
 
 
-def _schedule_bio_generation(agent_id):
+def _parse_name_and_bio(output):
+    """Pull {"name": ..., "bio": ...} out of an LLM response.
+
+    Tolerant of common wrapper patterns — leading preamble, markdown
+    fences, a stray "json" language tag. Returns (name, bio) or
+    (None, None) on any parse failure; caller treats that as "skip."
+    """
+    import json as _json
+    import re as _re
+
+    text = (output or "").strip()
+    # Strip fences and language tags; json.loads doesn't care about
+    # the wrapper but the JSON locator below needs to see cleaner text.
+    text = text.strip("`").strip()
+    if text.lower().startswith("json"):
+        text = text[4:].lstrip()
+
+    # Locate the first balanced {...} block. Regex is coarse but
+    # good enough for a single JSON object with no nested braces.
+    m = _re.search(r"\{[^{}]*\}", text, _re.DOTALL)
+    if not m:
+        return None, None
+    try:
+        data = _json.loads(m.group(0))
+    except (ValueError, _json.JSONDecodeError):
+        return None, None
+
+    name = (data.get("name") or "").strip().strip("\"'")
+    bio = (data.get("bio") or "").strip().strip("\"'")
+    if not name or not bio:
+        return None, None
+    return name[:64], bio[:1200]
+
+
+def _existing_agent_names():
+    """Current active display_names, one per line, for the dedup prompt."""
+    profiles = (
+        AgentProfile.query
+        .filter((AgentProfile.archived == False) | (AgentProfile.archived == None))  # noqa: E712
+        .all()
+    )
+    names = sorted({p.display_name for p in profiles if p.display_name})
+    if not names:
+        return "(none — you're the first)"
+    return "\n".join(f"- {n}" for n in names)
+
+
+def _schedule_bio_generation(agent_id, can_rename=True):
     """Kick off arrival-bio generation on a daemon thread.
 
     Never blocks the user-facing create flow. Silently no-ops when
     the LLM runtime isn't available (e.g. during tests or a broken
-    install). Writes the result back to profile.instructions.
+    install). Updates `profile.instructions` with the bio; if
+    `can_rename` is True, also updates `profile.display_name` with
+    the name the agent picked for itself.
+
+    can_rename=False for the case where the user hand-picked the
+    agent's name on creation — we still let the LLM author the bio,
+    just don't rename someone the user already named.
     """
     try:
         from flask import current_app
@@ -157,10 +252,10 @@ def _schedule_bio_generation(agent_id):
                 scope = profile.scope_repo or "whatever repo you drop them into"
                 role = profile.role or "coding"
                 prompt = _BIO_PROMPT.format(
-                    name=profile.display_name,
                     role=role,
                     role_description=_ROLE_DESCRIPTIONS.get(role, "you work on whatever comes in"),
                     scope=scope,
+                    existing_names=_existing_agent_names(),
                 )
                 result = runtime.send(
                     prompt,
@@ -170,20 +265,39 @@ def _schedule_bio_generation(agent_id):
                 if not result or not result.get("success"):
                     return
 
-                bio = (result.get("output") or "").strip()
+                name, bio = _parse_name_and_bio(result.get("output"))
                 if not bio:
                     return
-                # Trim any wrapping quotes / fences the model might
-                # have added despite the "no preamble" instruction.
-                bio = bio.strip("\"'` \n")
-                bio = bio[:1200]  # hard cap, big enough for a bio
 
-                # Re-fetch in case it was edited between fetch and write.
+                # Re-fetch in case the user edited the profile during
+                # the LLM round trip.
                 profile = db.session.get(AgentProfile, agent_id)
-                if profile and not profile.instructions:
-                    profile.instructions = bio
-                    db.session.commit()
-                    logger.info(f"[profiles] Arrival bio written for {profile.display_name}: {bio[:60]}…")
+                if not profile or profile.instructions:
+                    return
+
+                renamed_to = None
+                if can_rename and name:
+                    # Dedupe against currently-active names one more
+                    # time — the LLM should have respected the list,
+                    # but a fresh check here covers the case where
+                    # another agent was created during the round trip.
+                    taken = {
+                        p.display_name
+                        for p in AgentProfile.query.all()
+                        if p.id != agent_id and p.display_name
+                    }
+                    if name not in taken:
+                        profile.display_name = name
+                        renamed_to = name
+
+                profile.instructions = bio
+                db.session.commit()
+                if renamed_to:
+                    logger.info(
+                        f"[profiles] Agent self-named: {renamed_to} "
+                        f"(was placeholder, id={agent_id})"
+                    )
+                logger.info(f"[profiles] Arrival bio written for {profile.display_name}: {bio[:60]}…")
             except Exception as e:
                 logger.debug(f"[profiles] arrival bio generation skipped for {agent_id}: {e}")
 
