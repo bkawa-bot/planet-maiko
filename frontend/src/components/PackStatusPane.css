@@ -1,0 +1,211 @@
+/* Home's agent-centric pack status pane — sits under OverviewPane,
+   replaces the old sidebar Pack Requests widget. */
+
+.pack-status-pane {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+}
+
+.pack-status-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pack-status-external-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pack-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pack-row {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-xs);
+  text-decoration: none;
+  color: var(--text);
+  transition: background 0.15s;
+  align-items: flex-start;
+}
+
+.pack-row:hover {
+  background: var(--bg-hover);
+}
+
+/* Request tone accents — subtle left border + tint */
+.pack-row.has-request {
+  background: color-mix(in srgb, var(--pink) 6%, transparent);
+  border-left: 2px solid var(--pink);
+}
+.pack-row.has-request.tone-review {
+  background: color-mix(in srgb, var(--pink) 6%, transparent);
+  border-left-color: var(--pink);
+}
+.pack-row.has-request.tone-plan {
+  background: color-mix(in srgb, var(--lavender) 8%, transparent);
+  border-left-color: var(--lavender);
+}
+.pack-row.has-request.tone-stuck {
+  background: color-mix(in srgb, var(--urgent) 8%, transparent);
+  border-left-color: var(--urgent);
+}
+.pack-row.has-request.tone-idea {
+  background: color-mix(in srgb, var(--lemon, var(--peach)) 10%, transparent);
+  border-left-color: var(--lemon, var(--peach));
+}
+.pack-row.has-request.tone-working {
+  background: color-mix(in srgb, var(--blue, var(--mint)) 6%, transparent);
+  border-left-color: var(--blue, var(--mint));
+}
+
+/* External (teammate) rows get a distinct mint accent */
+.pack-row.tone-external {
+  background: color-mix(in srgb, var(--mint, var(--blue)) 6%, transparent);
+  border-left: 2px solid var(--mint, var(--blue));
+}
+
+.pack-row-avatar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+.pack-row.has-request .pack-row-avatar {
+  color: var(--pink);
+}
+.pack-row.has-request.tone-stuck .pack-row-avatar {
+  color: var(--urgent);
+}
+.pack-row.has-request.tone-plan .pack-row-avatar {
+  color: var(--lavender);
+}
+.pack-row.tone-external .pack-row-avatar {
+  color: var(--mint, var(--blue));
+}
+
+.pack-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pack-row-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.pack-row-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pack-row-chip {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.pack-row-request-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pink);
+  margin-left: auto;
+  padding-left: 8px;
+}
+.pack-row.has-request.tone-stuck .pack-row-request-label {
+  color: var(--urgent);
+}
+.pack-row.has-request.tone-plan .pack-row-request-label {
+  color: var(--lavender);
+}
+.pack-row.has-request.tone-working .pack-row-request-label {
+  color: var(--blue, var(--mint));
+}
+.pack-row.has-request.tone-idea .pack-row-request-label {
+  color: var(--peach);
+}
+.pack-row.tone-external .pack-row-request-label {
+  color: var(--mint, var(--blue));
+  margin-left: 4px;
+}
+
+.pack-row-task {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pack-row-task-prefix {
+  color: var(--text-dim);
+}
+
+.pack-row-update {
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: italic;
+}
+.pack-row-time {
+  font-variant-numeric: tabular-nums;
+  font-style: normal;
+  color: var(--text-muted);
+}
+
+/* State dot — local copy of the Agents.css treatment so the Home
+   pane doesn't depend on Agents.css being loaded. */
+.pack-state-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+  background: var(--text-muted);
+}
+.pack-state-dot.state-idle    { background: var(--text-muted); opacity: 0.45; }
+.pack-state-dot.state-working {
+  background: var(--mint, var(--blue));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mint, var(--blue)) 22%, transparent);
+  animation: pack-dot-pulse 1.6s ease-in-out infinite;
+}
+.pack-state-dot.state-stuck {
+  background: var(--urgent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--urgent) 22%, transparent);
+}
+
+@keyframes pack-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
