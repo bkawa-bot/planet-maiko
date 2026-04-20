@@ -207,6 +207,11 @@ def create_app(start_scheduler=False):
         validate_registry()
         reset_stale_working()
 
+        # Rescue any profiles still stuck on the Arriving placeholder
+        # from a previous-run LLM call that didn't complete.
+        from planet_maiko.agents.profiles import recover_stale_arrivals
+        recover_stale_arrivals()
+
     # Serve pre-built frontend static files
     frontend_dir = static_dir()
 

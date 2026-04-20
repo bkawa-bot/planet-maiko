@@ -33,6 +33,13 @@ TECH_SUFFIXES = [
     ".io", " TV", " Drive", " Disk", ".computer",
 ]
 
+# Sentinel used as the display_name between profile creation and the
+# LLM returning with a self-chosen name. Rendered literally so the
+# user can tell at a glance that an agent is still arriving vs
+# fully settled. Frontend can style this text specially if it wants.
+ARRIVING_PLACEHOLDER = "Arriving…"
+
+
 FLAVOR_TEXTS = [
     "Loves debugging. Afraid of CSS.",
     "Is not afraid to test in prod.",
@@ -65,17 +72,15 @@ def create_profile(agent_id, display_name=None, avatar=None,
     if existing:
         return existing
 
-    # Track whether the user hand-picked the name. If they did, the
-    # LLM bio-gen path respects it and only fills in the bio. If they
-    # didn't, the LLM is allowed to rename — the random pick below is
-    # just a placeholder so the card renders immediately.
+    # Track whether the user hand-picked the name. If they did, LLM
+    # bio-gen respects it and only writes the bio. If they didn't,
+    # card renders with a clear "Arriving…" placeholder so the user
+    # can see the agent is still settling in, and the LLM call will
+    # replace it with a self-chosen name when it returns.
     user_named = bool(display_name)
 
     if not display_name:
-        used_names = {p.display_name for p in AgentProfile.query.all()}
-        available = [n for n in NAMES if n not in used_names]
-        display_name = random.choice(available) if available else f"Agent-{random.randint(100, 999)}"
-        display_name += random.choice(TECH_SUFFIXES)
+        display_name = ARRIVING_PLACEHOLDER
 
     profile = AgentProfile(
         id=agent_id,
@@ -167,6 +172,19 @@ _ROLE_DESCRIPTIONS = {
     "investigation": "you trace through incidents, error spikes, or repo questions and produce a written report",
     "cartographer": "you map an unfamiliar repo into a navigable overview so future agents know where things live",
 }
+
+
+def _random_fallback_name():
+    """Pick a random name from the curated pool, avoiding duplicates.
+
+    Used when the LLM bio-gen path fails (no runtime, parse error,
+    timeout) — we still want a real name to show on the card instead
+    of leaving it as "Arriving…" forever.
+    """
+    used = {p.display_name for p in AgentProfile.query.all()}
+    available = [n for n in NAMES if n not in used]
+    base = random.choice(available) if available else f"Agent-{random.randint(100, 999)}"
+    return base + random.choice(TECH_SUFFIXES)
 
 
 def _parse_name_and_bio(output):
@@ -262,11 +280,29 @@ def _schedule_bio_generation(agent_id, can_rename=True):
                     timeout=30,
                     model=resolve_model("triage"),
                 )
-                if not result or not result.get("success"):
-                    return
+                success = bool(result and result.get("success"))
+                name, bio = (None, None)
+                if success:
+                    name, bio = _parse_name_and_bio(result.get("output"))
 
-                name, bio = _parse_name_and_bio(result.get("output"))
+                # Fallback: the LLM failed or returned garbage, but
+                # we still need a real name if the display_name is
+                # still the Arriving placeholder. Pick from the pool
+                # so the card doesn't stay stuck.
                 if not bio:
+                    profile = db.session.get(AgentProfile, agent_id)
+                    if (
+                        profile
+                        and can_rename
+                        and profile.display_name == ARRIVING_PLACEHOLDER
+                    ):
+                        fallback = _random_fallback_name()
+                        profile.display_name = fallback
+                        db.session.commit()
+                        logger.info(
+                            f"[profiles] LLM bio-gen failed, fell back to "
+                            f"random name {fallback} (id={agent_id})"
+                        )
                     return
 
                 # Re-fetch in case the user edited the profile during
@@ -302,3 +338,34 @@ def _schedule_bio_generation(agent_id, can_rename=True):
                 logger.debug(f"[profiles] arrival bio generation skipped for {agent_id}: {e}")
 
     threading.Thread(target=_run, daemon=True, name=f"arrival-bio-{agent_id}").start()
+
+
+def recover_stale_arrivals():
+    """On app startup, rescue any profiles stuck on the Arriving
+    placeholder because the previous run crashed mid-LLM-call.
+
+    Older than 5 minutes is considered stuck — LLM calls time out at
+    30s, and creating an agent isn't a long-running operation; a
+    profile still on "Arriving…" well after that is a previous-run
+    casualty. Replaces with a random pool name so the card doesn't
+    stay permanently unreadable.
+
+    Must run inside an app_context.
+    """
+    from datetime import datetime, timezone, timedelta
+
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+    stuck = (
+        AgentProfile.query
+        .filter(AgentProfile.display_name == ARRIVING_PLACEHOLDER)
+        .filter(AgentProfile.created_at < cutoff)
+        .all()
+    )
+    for profile in stuck:
+        profile.display_name = _random_fallback_name()
+    if stuck:
+        db.session.commit()
+        logger.info(
+            f"[profiles] Rescued {len(stuck)} stuck arrival(s) from "
+            f"previous-run LLM failure"
+        )
