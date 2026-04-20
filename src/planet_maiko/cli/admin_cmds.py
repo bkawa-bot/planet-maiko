@@ -143,10 +143,14 @@ def cmd_desktop(args):
 def cmd_seed(args):
     """Populate the database with realistic test data."""
     from planet_maiko.app import create_app
-    from planet_maiko.seed import seed_data
+    from planet_maiko.seed import seed_data, seed_screenshot_demo
     app = create_app(start_scheduler=False)
-    seed_data(app)
-    print("Seed data loaded.")
+    if getattr(args, "demo_only", False):
+        seed_screenshot_demo(app)
+        print("Screenshot demo data loaded.")
+    else:
+        seed_data(app)
+        print("Seed data loaded.")
 
 
 def cmd_bootstrap(args):
@@ -238,6 +242,11 @@ def register(subparsers):
 
     # maiko seed
     p = subparsers.add_parser("seed", help="Populate database with test data")
+    p.add_argument(
+        "--demo-only",
+        action="store_true",
+        help="Only add screenshot-ready demo data (pack requests, diff comments, insights, pre-baked overview). Idempotent — safe on an existing DB.",
+    )
     p.set_defaults(func=cmd_seed)
 
     # maiko bootstrap
