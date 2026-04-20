@@ -1,0 +1,52 @@
+.pack-ask-box {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 10px;
+  padding: 6px 6px 6px 10px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  transition: border-color 0.15s;
+}
+.pack-ask-box:focus-within {
+  border-color: var(--pink);
+}
+
+.pack-ask-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  padding: 4px 0;
+}
+.pack-ask-input::placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.pack-ask-send {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: var(--pink);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.pack-ask-send:disabled {
+  background: var(--bg-card);
+  color: var(--text-muted);
+  cursor: default;
+}
+.pack-ask-send:not(:disabled):hover {
+  transform: scale(1.06);
+}

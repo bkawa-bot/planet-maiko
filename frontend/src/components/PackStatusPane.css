@@ -19,6 +19,13 @@
   letter-spacing: 0.5px;
 }
 
+.pack-status-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 4px 2px 2px 2px;
+}
+
 .pack-status-external-list {
   display: flex;
   flex-direction: column;

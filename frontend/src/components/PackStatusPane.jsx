@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { api } from "../api/client";
 import { relativeTime } from "../utils/dates";
+import PackAskBox from "./PackAskBox";
 import "./PackStatusPane.css";
 
 /**
@@ -136,13 +137,23 @@ export default function PackStatusPane() {
   }, []);
 
   if (loading) return null;
-  if (rows.length === 0 && externalRequests.length === 0) return null;
+  // Still render the pane when the pack is idle — the ask-box belongs
+  // on Home even before there are rows to show. Only skip render when
+  // the whole pane would be truly empty (no rows, no externals, and
+  // the ask box always renders).
+  const hasAnything = rows.length > 0 || externalRequests.length > 0;
 
   return (
     <div className="pack-status-pane frost-pane">
       <div className="pack-status-header">
         <Users size={12} /> Your pack
       </div>
+      <PackAskBox />
+      {!hasAnything && (
+        <div className="pack-status-empty">
+          Pack's quiet. Ask something up there and I'll pick someone.
+        </div>
+      )}
 
       {externalRequests.length > 0 && (
         <div className="pack-status-external-list">

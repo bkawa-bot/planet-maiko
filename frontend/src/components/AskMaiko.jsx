@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
-import { MessageCircle, Send, X, Loader, ChevronDown, ChevronUp, ArrowRight, Leaf } from "lucide-react";
+import { Send, X, Loader, ChevronDown, ChevronUp, ArrowRight, Leaf } from "lucide-react";
 import "./AskMaiko.css";
 
 // Soft cap on how many agents should already be running before we
@@ -58,9 +58,20 @@ export default function AskMaiko() {
     if (open) inputRef.current?.focus();
   }, [open]);
 
-  // Cmd/Ctrl+K anywhere in the app pops the pack open.
+  // Cmd/Ctrl+K anywhere in the app pops the pack open. Embedded
+  // callers (PackStatusPane's inline ask input on Home) can hand off
+  // a prefilled query via event.detail.text — lets the inline box
+  // feel contextual without duplicating all the panel logic here.
   useEffect(() => {
-    const onOpen = () => setOpen(true);
+    const onOpen = (e) => {
+      setOpen(true);
+      const detail = e && e.detail;
+      if (detail && detail.text) {
+        setInput(detail.text);
+        if (detail.context) setContext(detail.context);
+        if (detail.nonGoals) setNonGoals(detail.nonGoals);
+      }
+    };
     window.addEventListener("open-ask-pack", onOpen);
     return () => window.removeEventListener("open-ask-pack", onOpen);
   }, []);
@@ -145,14 +156,11 @@ export default function AskMaiko() {
     }
   };
 
+  // The floating bubble is gone — the inline "Ask the pack" input
+  // on Home (PackStatusPane) is the primary entry point. Cmd/Ctrl+K
+  // opens this panel from anywhere without a prefilled query.
   return (
     <>
-      {!open && (
-        <button className="ask-maiko-bubble" onClick={() => setOpen(true)} title="Ask the Pack (Cmd/Ctrl+K)">
-          <MessageCircle size={20} />
-        </button>
-      )}
-
       {open && (
         <div className="ask-maiko-panel">
           <div className="ask-maiko-header">
