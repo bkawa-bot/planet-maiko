@@ -221,6 +221,36 @@
 .plugin-toggle input:checked + .toggle-slider { background: var(--green); }
 .plugin-toggle input:checked + .toggle-slider::before { transform: translateX(14px); }
 
+/* Per-plugin config form (appears when the plugin declares a
+   config_schema). Inherits Settings' standard label/input styling but
+   tightens spacing since plugin cards are already compact. */
+.plugin-config-form {
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px dashed var(--border-subtle);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.plugin-config-field {
+  display: flex; flex-direction: column; gap: 3px;
+  font-size: 11px; color: var(--text-dim);
+}
+.plugin-config-field input[type="text"],
+.plugin-config-field input[type="password"],
+.plugin-config-field input[type="number"] {
+  padding: 4px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+}
+.plugin-config-bool {
+  flex-direction: row; align-items: center; gap: 6px;
+}
+.plugin-config-help {
+  color: var(--text-muted); font-weight: 400; font-size: 10px;
+}
+
 /* Scheduled Briefings */
 .briefings-list { display: flex; flex-direction: column; gap: 10px; }
 .briefing-row {

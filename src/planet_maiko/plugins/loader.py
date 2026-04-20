@@ -184,6 +184,31 @@ def load_plugins(app):
     if config_changed:
         save_config(config)
 
+    # Capture per-plugin config schemas so /api/plugins can surface them
+    # to Settings. Schema method is optional; plugins that skip it still
+    # appear with just the on/off toggle (legacy behavior).
+    for plugin in _plugins:
+        try:
+            schema = plugin.get_config_schema() or {}
+        except Exception as e:
+            logger.warning(f"[plugins] Config schema failed for '{plugin.name}': {e}")
+            schema = {}
+        for d in _discovered:
+            if d["name"] == plugin.name:
+                d["config_schema"] = schema
+                # Store which top-level config key the plugin's values
+                # live under. Convention: plugins declare defaults via
+                # get_config_defaults() with a single top-level key
+                # (their plugin name or similar); surface that here so
+                # the frontend knows where to write user edits.
+                defaults = {}
+                try:
+                    defaults = plugin.get_config_defaults() or {}
+                except Exception:
+                    pass
+                d["config_key"] = next(iter(defaults.keys())) if defaults else plugin.name
+                break
+
     # Call on_startup
     for plugin in _plugins:
         try:

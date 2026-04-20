@@ -75,3 +75,29 @@ class MaikoPlugin:
             e.g. {"my_plugin": {"api_url": "https://..."}}
         """
         return {}
+
+    def get_config_schema(self):
+        """Describe configurable fields so Settings can render a form for them.
+
+        When set, Settings → Integrations renders one input per field
+        and writes the user-entered values into the same `config.<name>.<field>`
+        slot that `get_config_defaults()` populated. Returning an empty
+        dict keeps the existing behavior (plugin appears in Settings
+        with just an on/off toggle).
+
+        Supported field shapes (any unspecified keys are ignored):
+          {
+            "<field_name>": {
+              "type": "string" | "bool" | "number" | "list",
+              "label": "Human-facing label",       # optional, defaults to field_name
+              "help":  "One-sentence explanation", # optional
+              "secret": True,                      # optional, masks the input
+              "placeholder": "org/repo",           # optional hint for string fields
+            },
+            ...
+          }
+
+        Returns:
+            dict keyed by field name as above. Default: empty (no form shown).
+        """
+        return {}

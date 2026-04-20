@@ -985,6 +985,18 @@ export default function Settings() {
                         <AlertTriangle size={10} /> {p.error.split("\n").pop() || p.error}
                       </div>
                     )}
+                    {p.config_schema && Object.keys(p.config_schema).length > 0 && (
+                      <PluginConfigForm
+                        plugin={p}
+                        config={config}
+                        onChange={(field, value) => {
+                          const key = p.config_key || p.name;
+                          const section = { ...(config[key] || {}) };
+                          section[field] = value;
+                          setConfig({ ...config, [key]: section });
+                        }}
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -996,6 +1008,74 @@ export default function Settings() {
       <button className="btn-save" onClick={handleSave} disabled={saving}>
         {saving ? "Saving..." : "Save Settings"}
       </button>
+    </div>
+  );
+}
+
+
+/**
+ * Renders a plugin's declared config_schema as editable fields. Reads
+ * the current values from config[plugin.config_key] and writes through
+ * onChange(field, value). Supports string, bool, number, and list (CSV).
+ * Intentionally thin — more complex shapes (nested, dependent fields)
+ * can be added as plugins request them.
+ */
+function PluginConfigForm({ plugin, config, onChange }) {
+  const key = plugin.config_key || plugin.name;
+  const section = config?.[key] || {};
+  const schema = plugin.config_schema || {};
+  return (
+    <div className="plugin-config-form">
+      {Object.entries(schema).map(([field, meta]) => {
+        const value = section[field];
+        const type = meta.type || "string";
+        const label = meta.label || field;
+        if (type === "bool") {
+          return (
+            <label key={field} className="plugin-config-field plugin-config-bool">
+              <input
+                type="checkbox"
+                checked={!!value}
+                onChange={(e) => onChange(field, e.target.checked)}
+              />
+              <span>{label}</span>
+              {meta.help && <span className="plugin-config-help">— {meta.help}</span>}
+            </label>
+          );
+        }
+        if (type === "list") {
+          const csv = Array.isArray(value) ? value.join(", ") : (value || "");
+          return (
+            <label key={field} className="plugin-config-field">
+              <span>{label}{meta.help && <span className="plugin-config-help"> — {meta.help}</span>}</span>
+              <input
+                type="text"
+                value={csv}
+                placeholder={meta.placeholder || "comma, separated"}
+                onChange={(e) => onChange(
+                  field,
+                  e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                )}
+              />
+            </label>
+          );
+        }
+        // string / number fallthrough
+        return (
+          <label key={field} className="plugin-config-field">
+            <span>{label}{meta.help && <span className="plugin-config-help"> — {meta.help}</span>}</span>
+            <input
+              type={meta.secret ? "password" : (type === "number" ? "number" : "text")}
+              value={value ?? ""}
+              placeholder={meta.placeholder || ""}
+              onChange={(e) => {
+                const raw = e.target.value;
+                onChange(field, type === "number" && raw !== "" ? Number(raw) : raw);
+              }}
+            />
+          </label>
+        );
+      })}
     </div>
   );
 }
