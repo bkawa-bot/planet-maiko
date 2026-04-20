@@ -214,12 +214,18 @@ class BasePoller(ABC):
         # to the raw_data AND the live db session. Used by github_poller
         # to scrape inline review comments from newly merged PRs into
         # unsynthesized Signals without duplicating poll scaffolding.
+        # Track whether the hook added anything so we commit if it did
+        # even when no new pupdates + no to_signals() entries landed
+        # this pass — otherwise the hook's additions get rolled back on
+        # the next poll and we re-scan the same comments forever.
+        pre_hook_new = len(list(db_session.new))
         try:
             self._after_sync(raw_data, db_session)
         except Exception as e:
             logger.warning(f"[{self.name}] _after_sync hook failed: {e}")
+        hook_added = len(list(db_session.new)) > pre_hook_new
 
-        if created or signal_dicts:
+        if created or signal_dicts or hook_added:
             db_session.commit()
             if created:
                 logger.info(f"[{self.name}] Created {created} new pupdate(s)")
