@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
-  Bot, Brain, CheckSquare, Clock, Plus, Target, X, Pencil, Save, Code2, Eye, Search, Map, Loader,
+  Bot, Brain, CheckSquare, ChevronDown, ChevronRight, Clock, Plus,
+  Target, X, Pencil, Save, Code2, Eye, Search, Map, Loader,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
@@ -16,12 +17,14 @@ const ROLE_META = {
 // Section order for the role-grouped view.
 const ROLE_ORDER = ["coding", "review", "investigation", "cartographer"];
 
+// Auto-collapse a role section when it has more than this many agents.
+// Keeps the pack-grows-large case scannable without forcing users with
+// 3 agents to click every header.
+const AUTO_COLLAPSE_THRESHOLD = 6;
 
-// Small inline control: picks a configured repo and fires Atlas to
-// cartograph it. Lives in the Profiles toolbar so there's a durable
-// entry point even before any Atlas profile or any insight exists —
-// the Playbook's per-repo Cartograph buttons only appear once insights
-// exist, which is the chicken-and-egg case a first-time user hits.
+const COLLAPSE_STORAGE_KEY = "maiko-profiles-collapsed";
+
+
 function CartographLauncher() {
   const [repos, setRepos] = useState([]);
   const [open, setOpen] = useState(false);
@@ -49,9 +52,7 @@ function CartographLauncher() {
     setSpawning(false);
   };
 
-  if (repos.length === 0) {
-    return null;
-  }
+  if (repos.length === 0) return null;
 
   return (
     <div className="cartograph-launcher">
@@ -87,17 +88,169 @@ function CartographLauncher() {
   );
 }
 
+
+// Compact card. Clicking anywhere opens the full profile modal.
+function ProfileCard({ profile, onOpen }) {
+  const preview = (profile.instructions || profile.flavor_text || "").trim();
+  return (
+    <button
+      type="button"
+      className={`profile-card-mini ${profile.archived ? "archived" : ""}`}
+      onClick={onOpen}
+    >
+      <div className="profile-card-avatar"><Bot size={16} /></div>
+      <div className="profile-card-body">
+        <div className="profile-card-name">
+          <span
+            className={`agent-state-dot state-${profile.state || "idle"}`}
+            title={`Agent state: ${profile.state || "idle"}`}
+          />
+          <span className="profile-card-name-text">{profile.display_name}</span>
+          {profile.scope_repo && (
+            <span className="profile-card-chip">{profile.scope_repo}</span>
+          )}
+          {profile.extra?.adapter_path && (
+            <span className="profile-card-chip profile-card-chip-lora">LoRA</span>
+          )}
+        </div>
+        {preview && (
+          <div className="profile-card-preview">
+            {preview.length > 110 ? preview.slice(0, 108).replace(/\s+\S*$/, "") + "…" : preview}
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+
+// Full profile modal — shown when a card is clicked.
+function ProfileDetailModal({
+  profile, allLearnings, onClose, onEdit, onTimeline, onArchive, onUnarchive,
+}) {
+  const [showContextSet, setShowContextSet] = useState(false);
+  const hasContextSet = profile.context_set?.length > 0;
+  const hasAdapter = !!profile.extra?.adapter_path;
+  const role = profile.role || "coding";
+  const meta = ROLE_META[role] || ROLE_META.coding;
+  const RoleIcon = meta.icon;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="profile-detail-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="profile-modal-avatar"><Bot size={22} /></div>
+          <div className="profile-modal-title">
+            <div className="profile-modal-name">
+              <span className={`agent-state-dot state-${profile.state || "idle"}`} />
+              {profile.display_name}
+            </div>
+            <div className="profile-modal-meta">
+              <span className="profile-modal-role" style={{ color: meta.color }}>
+                <RoleIcon size={10} /> {meta.label}
+              </span>
+              <span className="profile-modal-chip">{profile.scope_repo || "global"}</span>
+              {hasAdapter && <span className="profile-modal-chip profile-modal-chip-lora">LoRA</span>}
+              {profile.archived && <span className="profile-modal-chip profile-modal-chip-archived">archived</span>}
+            </div>
+          </div>
+          <button className="btn btn-sm modal-close-btn" onClick={onClose}>
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="modal-body profile-modal-body">
+          {profile.flavor_text && (
+            <div className="profile-modal-flavor">"{profile.flavor_text}"</div>
+          )}
+
+          {profile.instructions && (
+            <div className="profile-modal-bio">
+              {profile.instructions}
+            </div>
+          )}
+
+          <div className="profile-modal-stats">
+            <div className="profile-modal-stat">
+              <div className="profile-modal-stat-value">{profile.tasks_completed}</div>
+              <div className="profile-modal-stat-label">done</div>
+            </div>
+            <div className="profile-modal-stat">
+              <div className="profile-modal-stat-value">{profile.tasks_failed}</div>
+              <div className="profile-modal-stat-label">failed</div>
+            </div>
+            <button
+              type="button"
+              className={`profile-modal-stat ${hasContextSet ? "clickable" : ""}`}
+              onClick={() => hasContextSet && setShowContextSet((v) => !v)}
+              disabled={!hasContextSet}
+            >
+              <div className="profile-modal-stat-value">{profile.context_set?.length || 0}</div>
+              <div className="profile-modal-stat-label">learnings</div>
+            </button>
+          </div>
+
+          {showContextSet && hasContextSet && (
+            <div className="profile-modal-section">
+              <div className="profile-modal-section-label">
+                <Brain size={11} /> Context set
+              </div>
+              <div className="context-set-list">
+                {(profile.context_set || []).map((lid) => {
+                  const l = allLearnings[lid];
+                  return (
+                    <div key={lid} className="context-set-item">
+                      <span className="context-set-cat">{l?.category?.replace(/_/g, " ") || "unknown"}</span>
+                      <span className="context-set-rule">{l?.rule || `Learning #${lid}`}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {profile.recent_tasks && profile.recent_tasks.length > 0 && (
+            <div className="profile-modal-section">
+              <div className="profile-modal-section-label">
+                <CheckSquare size={11} /> Recent tasks
+              </div>
+              <ul className="profile-modal-task-list">
+                {profile.recent_tasks.map((rt) => (
+                  <li key={rt.id} className="profile-modal-task" title={rt.title}>
+                    {rt.has_artifact && <span className="profile-modal-task-dot">•</span>}
+                    {rt.title}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        <div className="profile-modal-footer">
+          <button className="btn btn-sm" onClick={() => onTimeline(profile)}>
+            <Clock size={10} /> Timeline
+          </button>
+          <button className="btn btn-sm" onClick={() => onEdit(profile)}>
+            <Pencil size={10} /> Edit
+          </button>
+          <span style={{ flex: 1 }} />
+          {profile.archived ? (
+            <button className="btn btn-sm" onClick={() => onUnarchive(profile)}>Unarchive</button>
+          ) : (
+            <button className="btn btn-sm btn-danger" onClick={() => onArchive(profile)}>
+              <X size={10} /> Archive
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 /**
- * Profiles tab — agent context-set strategy view.
- *
- * Props:
- *   profiles            — AgentProfile[] from /api/profiles
- *   allLearnings        — { [id]: Learning } map for context set lookups
- *   onCreateAgent       — () => void, opens the create-agent flow in parent
- *   onProfilesChanged   — () => void, called after archive/unarchive so
- *                         the parent can refetch
- *   onShowArchived      — (showArchived: bool) => Promise<Profile[]>, parent
- *                         refetches with the right filter and updates state
+ * Profiles tab — agent roster with collapsible role sections and
+ * minimal cards. Click a card to open the full profile modal.
  */
 export default function AgentsProfilesTab({
   profiles,
@@ -107,11 +260,34 @@ export default function AgentsProfilesTab({
   onShowArchived,
 }) {
   const [showArchived, setShowArchived] = useState(false);
-  const [contextSetModal, setContextSetModal] = useState(null);
   const [timelineFor, setTimelineFor] = useState(null);
-  const [editing, setEditing] = useState(null);     // profile being edited
+  const [profileModal, setProfileModal] = useState(null);
+  const [editing, setEditing] = useState(null);
   const [editForm, setEditForm] = useState({ role: "coding", scope_repo: "", instructions: "", flavor_text: "" });
   const [editSaving, setEditSaving] = useState(false);
+
+  // Collapsed role-section state — persisted to localStorage so the
+  // layout sticks across visits. When nothing's persisted, sections
+  // auto-collapse above a threshold so a 30+ agent pack opens scannable.
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      const stored = localStorage.getItem(COLLAPSE_STORAGE_KEY);
+      if (stored) return new Set(JSON.parse(stored));
+    } catch { /* non-fatal */ }
+    return null;  // null = compute default from profile count
+  });
+
+  const toggleCollapsed = (role) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev || []);
+      if (next.has(role)) next.delete(role);
+      else next.add(role);
+      try {
+        localStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify([...next]));
+      } catch { /* quota / private mode */ }
+      return next;
+    });
+  };
 
   const openEdit = (p) => {
     setEditing(p);
@@ -156,13 +332,17 @@ export default function AgentsProfilesTab({
 
   const visibleProfiles = showArchived ? profiles : profiles.filter((p) => !p.archived);
 
-  // Group by role for the section view. Profiles without a known role
-  // fall into coding (historical default).
   const byRole = {};
   for (const p of visibleProfiles) {
     const r = ROLE_META[p.role] ? p.role : "coding";
     (byRole[r] = byRole[r] || []).push(p);
   }
+
+  const isCollapsed = (role) => {
+    if (collapsed !== null) return collapsed.has(role);
+    // No persisted state yet — auto-collapse large groups.
+    return (byRole[role] || []).length > AUTO_COLLAPSE_THRESHOLD;
+  };
 
   if (visibleProfiles.length === 0) {
     return (
@@ -177,7 +357,7 @@ export default function AgentsProfilesTab({
         <div className="empty-state">
           <Target size={36} className="empty-icon" />
           <div className="empty-title">The pack is quiet</div>
-          <div className="empty-sub">Agents live here — each one specializes in a repo or a kind of work. Welcome the first specialist and they'll get to know your code.</div>
+          <div className="empty-sub">Agents live here. Each specializes in a repo or a kind of work. Welcome the first one and they'll get to know your code.</div>
           <button className="btn btn-primary" onClick={onCreateAgent} style={{ marginTop: 12 }}>
             <Plus size={12} /> Welcome an agent
           </button>
@@ -199,104 +379,46 @@ export default function AgentsProfilesTab({
       {ROLE_ORDER.filter((r) => (byRole[r] || []).length > 0).map((role) => {
         const meta = ROLE_META[role];
         const RoleIcon = meta.icon;
+        const collapsedNow = isCollapsed(role);
+        const ToggleIcon = collapsedNow ? ChevronRight : ChevronDown;
         return (
-          <div key={role} className="agents-role-section">
-            <div className="agents-role-header" style={{ color: meta.color }}>
+          <div key={role} className={`agents-role-section ${collapsedNow ? "collapsed" : ""}`}>
+            <button
+              type="button"
+              className="agents-role-header"
+              style={{ color: meta.color }}
+              onClick={() => toggleCollapsed(role)}
+            >
+              <ToggleIcon size={12} className="agents-role-chevron" />
               <RoleIcon size={14} /> {meta.label}s
               <span className="agents-role-count">{byRole[role].length}</span>
-            </div>
-            <div className="strategies-grid">
-              {byRole[role].map((p) => {
-                const hasContextSet = p.context_set?.length > 0;
-                const hasAdapter = !!p.extra?.adapter_path;
-
-                return (
-                  <div key={p.id} className={`strategy-card card ${p.archived ? "archived" : ""}`}>
-                    <div className="strategy-header">
-                      <div className="strategy-avatar"><Bot size={20} /></div>
-                      <div className="strategy-identity">
-                        <div className="strategy-name">
-                          <span
-                            className={`agent-state-dot state-${p.state || "idle"}`}
-                            title={`Agent state: ${p.state || "idle"}`}
-                          />
-                          {p.display_name}
-                        </div>
-                        <div className="strategy-meta">
-                          {p.scope_repo && <span className="strategy-tag scope-tag">{p.scope_repo}</span>}
-                          {!p.scope_repo && <span className="strategy-tag scope-tag">global</span>}
-                          {hasAdapter && <span className="strategy-tag adapter-tag" title="has LoRA adapter">LoRA</span>}
-                          {p.archived && <span className="strategy-tag archived-tag">archived</span>}
-                        </div>
-                      </div>
-                    </div>
-
-                    {p.flavor_text && <div className="strategy-flavor">"{p.flavor_text}"</div>}
-
-                    {p.instructions && (
-                      <div className="strategy-bio" title={p.instructions}>
-                        {p.instructions.length > 260
-                          ? p.instructions.slice(0, 257).replace(/\s+\S*$/, "") + "…"
-                          : p.instructions}
-                      </div>
-                    )}
-
-                    <div className="strategy-stats-row">
-                      <span className="strategy-stat"><CheckSquare size={10} /> {p.tasks_completed} done</span>
-                      <span className="strategy-stat"><X size={10} /> {p.tasks_failed} failed</span>
-                      <span
-                        className={`strategy-stat ${hasContextSet ? "clickable" : ""}`}
-                        onClick={(e) => {
-                          if (hasContextSet) {
-                            e.stopPropagation();
-                            setContextSetModal(p);
-                          }
-                        }}
-                      >
-                        <Brain size={10} /> {p.context_set?.length || 0} learnings
-                      </span>
-                    </div>
-
-                    {p.recent_tasks && p.recent_tasks.length > 0 && (
-                      <div className="strategy-recent">
-                        <div className="strategy-section-label"><CheckSquare size={10} /> Recent</div>
-                        <ul className="strategy-recent-list">
-                          {p.recent_tasks.map((rt) => (
-                            <li key={rt.id} className="strategy-recent-item" title={rt.title}>
-                              {rt.has_artifact && <span className="strategy-recent-dot">•</span>}
-                              <span className="strategy-recent-title">{rt.title}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    <div className="strategy-card-actions">
-                      <button
-                        className="btn btn-sm"
-                        onClick={() => setTimelineFor({ agentId: p.id, agentName: p.display_name })}
-                        title={`See ${p.display_name}'s activity across all tasks`}
-                      >
-                        <Clock size={10} /> Timeline
-                      </button>
-                      <button className="btn btn-sm" onClick={() => openEdit(p)}>
-                        <Pencil size={10} /> Edit
-                      </button>
-                      {p.archived ? (
-                        <button className="btn btn-sm" onClick={() => handleUnarchive(p)}>Unarchive</button>
-                      ) : (
-                        <button className="btn btn-sm btn-danger" onClick={() => handleArchive(p)}>
-                          <X size={10} /> Archive
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            </button>
+            {!collapsedNow && (
+              <div className="profiles-mini-grid">
+                {byRole[role].map((p) => (
+                  <ProfileCard
+                    key={p.id}
+                    profile={p}
+                    onOpen={() => setProfileModal(p)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         );
       })}
+
+      {profileModal && (
+        <ProfileDetailModal
+          profile={profileModal}
+          allLearnings={allLearnings}
+          onClose={() => setProfileModal(null)}
+          onEdit={(p) => { setProfileModal(null); openEdit(p); }}
+          onTimeline={(p) => { setProfileModal(null); setTimelineFor({ agentId: p.id, agentName: p.display_name }); }}
+          onArchive={(p) => { handleArchive(p); setProfileModal(null); }}
+          onUnarchive={(p) => { handleUnarchive(p); setProfileModal(null); }}
+        />
+      )}
 
       {editing && (
         <div className="modal-overlay" onClick={() => !editSaving && setEditing(null)}>
@@ -346,14 +468,7 @@ export default function AgentsProfilesTab({
                   rows={10}
                   value={editForm.instructions}
                   onChange={(e) => setEditForm({ ...editForm, instructions: e.target.value })}
-                  placeholder={`## Your style
-- Write tests first
-- Prefer standard library over dependencies
-- Keep functions under 50 lines
-
-## Patterns to watch for in this repo
-- Always use the existing logger, not print()
-- ...`}
+                  placeholder={`## Your style\n- Write tests first\n- Prefer standard library over dependencies\n- Keep functions under 50 lines`}
                 />
               </label>
             </div>
@@ -373,33 +488,6 @@ export default function AgentsProfilesTab({
           agentName={timelineFor.agentName}
           onClose={() => setTimelineFor(null)}
         />
-      )}
-
-      {contextSetModal && (
-        <div className="modal-overlay" onClick={() => setContextSetModal(null)}>
-          <div className="info-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <Brain size={16} /> {contextSetModal.display_name}'s Context Set
-              <span style={{ flex: 1 }} />
-              <button className="btn btn-sm modal-close-btn" onClick={() => setContextSetModal(null)}>
-                <X size={14} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="context-set-list">
-                {(contextSetModal.context_set || []).map((lid) => {
-                  const l = allLearnings[lid];
-                  return (
-                    <div key={lid} className="context-set-item">
-                      <span className="context-set-cat">{l?.category?.replace(/_/g, " ") || "unknown"}</span>
-                      <span className="context-set-rule">{l?.rule || `Learning #${lid}`}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

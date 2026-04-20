@@ -288,18 +288,224 @@
 
 /* Role-grouped profiles view */
 .agents-role-section { margin-bottom: 20px; }
+.agents-role-section.collapsed { margin-bottom: 12px; }
 .agents-role-header {
   display: flex; align-items: center; gap: 6px;
+  width: 100%; background: none; border: none;
   font-size: 12px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.06em;
-  margin-bottom: 8px; padding-bottom: 6px;
+  margin-bottom: 8px; padding: 0 0 6px 0;
   border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
 }
+.agents-role-header:hover { opacity: 0.85; }
+.agents-role-chevron { opacity: 0.6; flex-shrink: 0; }
 .agents-role-count {
   font-size: 10px; color: var(--text-muted);
   background: var(--bg-hover); padding: 1px 6px;
   border-radius: 999px; margin-left: 4px;
   text-transform: none; letter-spacing: 0;
+}
+
+/* Minimal profile card — the default roster view. Click opens the
+   full profile modal. */
+.profiles-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 6px;
+}
+.profile-card-mini {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: var(--text);
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+  min-width: 0;
+}
+.profile-card-mini:hover {
+  background: var(--bg-hover);
+  border-color: var(--pink);
+}
+.profile-card-mini.archived {
+  opacity: 0.5;
+}
+.profile-card-avatar {
+  width: 28px; height: 28px; flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--pink-soft);
+  color: var(--pink);
+  display: flex; align-items: center; justify-content: center;
+}
+.profile-card-body {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column;
+  gap: 2px;
+}
+.profile-card-name {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600;
+  min-width: 0;
+}
+.profile-card-name-text {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0;
+}
+.profile-card-chip {
+  font-size: 9px; padding: 1px 6px;
+  border-radius: 8px; font-weight: 500;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.profile-card-chip-lora {
+  background: var(--pink-soft);
+  color: var(--pink);
+}
+.profile-card-preview {
+  font-size: 11px; color: var(--text-dim);
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* Full profile modal — opens when a mini card is clicked. */
+.profile-detail-modal {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  max-width: 540px; width: calc(100% - 40px); max-height: 90vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.25);
+}
+.profile-detail-modal .modal-header {
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px 14px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.profile-modal-avatar {
+  width: 44px; height: 44px; flex-shrink: 0;
+  border-radius: 12px;
+  background: var(--pink-soft);
+  color: var(--pink);
+  border: 2px solid var(--pink);
+  display: flex; align-items: center; justify-content: center;
+}
+.profile-modal-title {
+  flex: 1; min-width: 0;
+}
+.profile-modal-name {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 17px; font-weight: 700;
+  color: var(--text);
+}
+.profile-modal-meta {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 4px; flex-wrap: wrap;
+}
+.profile-modal-role {
+  font-size: 10px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 3px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.profile-modal-chip {
+  font-size: 10px; padding: 1px 6px;
+  border-radius: 8px; font-weight: 500;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+}
+.profile-modal-chip-lora { background: var(--pink-soft); color: var(--pink); }
+.profile-modal-chip-archived { background: var(--bg); color: var(--text-muted); }
+
+.profile-modal-body {
+  overflow-y: auto; padding: 16px 20px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.profile-modal-flavor {
+  font-style: italic;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.profile-modal-bio {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.profile-modal-stats {
+  display: flex; gap: 8px;
+}
+.profile-modal-stat {
+  flex: 1;
+  padding: 10px;
+  background: var(--bg-hover);
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  text-align: center;
+  cursor: default;
+  font-family: inherit;
+  color: var(--text);
+}
+.profile-modal-stat.clickable { cursor: pointer; }
+.profile-modal-stat.clickable:hover {
+  border-color: var(--pink);
+  background: var(--pink-soft);
+}
+.profile-modal-stat:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.profile-modal-stat-value {
+  font-size: 20px; font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.profile-modal-stat-label {
+  font-size: 10px; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  margin-top: 2px;
+}
+
+.profile-modal-section {
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+.profile-modal-section-label {
+  font-size: 10px; font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  display: flex; align-items: center; gap: 4px;
+  margin-bottom: 8px;
+}
+.profile-modal-task-list {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.profile-modal-task {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 12px; color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.profile-modal-task-dot { color: var(--pink); flex-shrink: 0; }
+
+.profile-modal-footer {
+  display: flex; gap: 6px; align-items: center;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-subtle);
 }
 .scope-tag { background: var(--blue-soft); color: var(--blue); font-size: 9px; padding: 1px 6px; border-radius: 8px; }
 
