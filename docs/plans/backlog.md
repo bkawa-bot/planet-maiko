@@ -2,10 +2,6 @@
 
 Brain-dump of small fixes and design questions. Nothing here blocks anything shipping today. Pick one at a time when you have energy.
 
-## Bugs to confirm
-
-- **Shutdown flow might not actually stop the service.** Blank progress bar says *"Maiko is shutting down"* but the process seems to keep running. Check `/api/system/shutdown` SIGTERM path and whether the frontend correctly detects completion.
-
 ## Design questions (not quick fixes)
 
 - **Do investigation agents auto-run on high-priority poller alerts?** If the GitHub poller fires an error-spike or stale-deploy signal, what happens today? Gut: it becomes a pupdate, maybe surfaces in Pack Requests, but no auto-investigation — which means you could miss real fires while away. Worth designing: which alert types trigger an auto-investigation, what the agent does, how the user approves or dismisses.
@@ -26,5 +22,6 @@ Brain-dump of small fixes and design questions. Nothing here blocks anything shi
 - ~~"Ask Maiko" → "Ask the pack" inline on Home~~ (removed floating bubble) (`02d2a25`)
 - ~~Training folded into Knowledge as a 4th tab~~ (`ea63aef`)
 - ~~"Open" button on overview "needs" — hidden when it would bounce back to Home~~ (`93267ea`)
+- ~~Shutdown ritual no-op bug — StrictMode false-cancellation~~ (`5f2e4c7`)
 
 *Add more as you notice them; resolve them in whatever order feels good.*
