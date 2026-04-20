@@ -55,6 +55,12 @@ class Signal(db.Model):
     # agent's contribution during review — no fuzzy text+time matching.
     source_message_id = db.Column(db.Integer, nullable=True, index=True)
 
+    # Stable id from the source system (GitHub comment id for PR-comment
+    # signals, agent message id for agent feedback, etc). Used for
+    # dedup on re-scrape — signal.text gets mutated by synthesis, so
+    # text-based dedup silently fails once a signal has been synthesized.
+    external_id = db.Column(db.String(64), nullable=True, index=True)
+
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     learning = db.relationship("Learning", backref="signals")
@@ -75,6 +81,7 @@ class Signal(db.Model):
             "learning_id": self.learning_id,
             "aggregated": self.aggregated,
             "synthesized": bool(self.synthesized),
+            "external_id": self.external_id,
             "incorporated_at": iso_utc(self.incorporated_at),
             "created_at": iso_utc(self.created_at),
         }

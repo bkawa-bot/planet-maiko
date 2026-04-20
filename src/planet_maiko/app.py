@@ -25,6 +25,10 @@ def _ensure_columns():
         "ALTER TABLE signals ADD COLUMN incorporated_at DATETIME",
         "ALTER TABLE signals ADD COLUMN examples JSON DEFAULT '[]'",
         "ALTER TABLE signals ADD COLUMN synthesized BOOLEAN DEFAULT 0",
+        # Stable source-system id for dedup. Synthesis mutates signal.text,
+        # so the older text-based dedup silently failed on re-scrape.
+        "ALTER TABLE signals ADD COLUMN external_id VARCHAR(64)",
+        "CREATE INDEX IF NOT EXISTS ix_signals_external_id ON signals(external_id)",
         "ALTER TABLE learnings ADD COLUMN is_global BOOLEAN DEFAULT 0",
         "ALTER TABLE custom_skills ADD COLUMN user_edited BOOLEAN DEFAULT 0",
         "ALTER TABLE agent_profiles ADD COLUMN extra JSON DEFAULT '{}'",

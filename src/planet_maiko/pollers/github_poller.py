@@ -473,12 +473,21 @@ class GitHubPoller(BasePoller):
 
         created = 0
         for repo, prs in by_repo.items():
-            existing_keys = {
-                (s.text, s.file_path or "", s.code_context or "")
-                for s in Signal.query.filter_by(
-                    repo=repo, source_type="pr_comment"
-                ).all()
-            }
+            # Dedup on external_id (GitHub's stable comment id) — text
+            # was the old key but synthesis mutates signal.text so the
+            # raw body no longer matches after a signal has been
+            # synthesized once. For pre-existing signals that predate
+            # external_id, fall back to (file_path, diff_hunk) which
+            # synthesis leaves alone.
+            existing_ids = set()
+            existing_legacy_paths = set()
+            for s in Signal.query.filter_by(
+                repo=repo, source_type="pr_comment"
+            ).all():
+                if s.external_id:
+                    existing_ids.add(s.external_id)
+                elif s.file_path and s.code_context:
+                    existing_legacy_paths.add((s.file_path, s.code_context))
 
             for pr in prs:
                 number = pr.get("number")
@@ -486,12 +495,25 @@ class GitHubPoller(BasePoller):
                     continue
                 comments = fetch_comments_for_pr(repo, number)
                 for entry in comments:
+                    external_id = entry.get("id") or None
                     body = entry["body"][:500]
                     file_path = entry.get("path") or None
                     diff_hunk = entry.get("diff_hunk") or None
-                    key = (body, file_path or "", diff_hunk or "")
-                    if key in existing_keys:
+
+                    # Primary dedup: stable GitHub comment id.
+                    if external_id and external_id in existing_ids:
                         continue
+                    # Fallback dedup for legacy signals without external_id
+                    # (created before this column existed). Uses the
+                    # immutable (path, diff_hunk) pair.
+                    if (
+                        not external_id
+                        and file_path
+                        and diff_hunk
+                        and (file_path, diff_hunk) in existing_legacy_paths
+                    ):
+                        continue
+
                     sig = Signal(
                         category="pattern",  # placeholder — synthesis sets the real one
                         text=body,
@@ -501,6 +523,7 @@ class GitHubPoller(BasePoller):
                         repo=repo,
                         file_path=file_path,
                         code_context=diff_hunk,
+                        external_id=external_id,
                         examples=[{
                             "path": file_path,
                             "diff_hunk": diff_hunk,
@@ -510,7 +533,10 @@ class GitHubPoller(BasePoller):
                         synthesized=False,  # will be synthesized next cycle
                     )
                     db_session.add(sig)
-                    existing_keys.add(key)
+                    if external_id:
+                        existing_ids.add(external_id)
+                    elif file_path and diff_hunk:
+                        existing_legacy_paths.add((file_path, diff_hunk))
                     created += 1
 
         if created:

@@ -69,7 +69,11 @@ def fetch_comments_for_pr(repo, pr_number, timeout=60):
         body = (c.get("body") or "").strip()
         if not body:
             continue
+        cid = c.get("id")
         out.append({
+            # Stringified so the DB column (VARCHAR) matches whatever
+            # GitHub emits (integer today, historically).
+            "id": str(cid) if cid is not None else None,
             "body": body,
             "author": (c.get("user") or {}).get("login", ""),
             "path": c.get("path"),
@@ -147,7 +151,9 @@ def _fetch_inline_review_comments(repo, timeout=120):
             pr_number = int(pr_url.rsplit("/", 1)[-1]) if pr_url else None
         except (ValueError, AttributeError):
             pr_number = None
+        cid = c.get("id")
         out.append({
+            "id": str(cid) if cid is not None else None,
             "body": body,
             "author": (c.get("user") or {}).get("login", ""),
             "path": c.get("path"),
