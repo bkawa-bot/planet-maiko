@@ -134,6 +134,7 @@ TYPE_TO_ROLE = {
     "pr_review": "review",
     "investigation": "investigation",
     "repo_analysis": "investigation",
+    "cartograph": "cartographer",
 }
 
 

@@ -149,6 +149,26 @@ DEFAULT_CONFIG = {
         # read. Leave False if you're on a metered plan and want to
         # measure before committing.
         "prompt_cache_1h": False,
+        # Role-as-intent autonomy. Each role-native agent watches for
+        # specific conditions (stale repo overview, missing CLAUDE.md,
+        # etc.) and proposes work into the inbox instead of waiting for
+        # the user to click a button. Proposals go through the usual
+        # agent_proposal / approve_proposal loop — nothing fires without
+        # the user's click. Stage 0: cartographer only.
+        "role_autonomy": {
+            "cartographer": {
+                # Turn the detector off entirely if proposals feel noisy.
+                "enabled": True,
+                # Overviews older than this propose a refresh.
+                "stale_days": 30,
+                # After a user dismisses a refresh proposal, wait this
+                # long before proposing the same repo again.
+                "cooldown_days": 7,
+                # Per-cycle cap, to avoid flooding the inbox the first
+                # time this runs against a large repo list.
+                "max_proposals_per_cycle": 2,
+            },
+        },
     },
     "scene": {
         "latitude": None,   # e.g. 37.77 for San Francisco

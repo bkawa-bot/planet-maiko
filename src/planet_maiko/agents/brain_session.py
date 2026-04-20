@@ -261,6 +261,14 @@ ONE_SHOT_ROLE_FOR_TYPE = {
     "repo_analysis": ("investigation", "repo-analysis"),
     "review": ("review", "pr-review"),
     "pr_review": ("review", "pr-review"),
+    # Cartograph tasks were previously kicked off only by the manual
+    # /insights/cartograph endpoint. Registering the type here lets the
+    # cycle's execute phase pick up cartograph tasks that enter via the
+    # proposal path (role_autonomy → agent_proposal → approve_proposal),
+    # using the same prepare + headless kickoff machinery as the manual
+    # route. The skill name "cartograph" is unused by the execute phase
+    # (which passes role, not skill), but kept here for symmetry.
+    "cartograph": ("cartographer", "cartograph"),
 }
 
 

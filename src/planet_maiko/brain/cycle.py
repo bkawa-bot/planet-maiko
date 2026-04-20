@@ -155,6 +155,23 @@ def _phase_correlator():
     return correlate()
 
 
+def _phase_role_autonomy():
+    """Phase 3.2: Role-as-intent detectors — Atlas watches for stale
+    overviews, etc., and emits proposals into the inbox.
+
+    Runs before pupdate processing so any proposals it emits get
+    indexed by the same processor pass (they're brain_processed=True
+    so they skip triage, but downstream consumers like PackStatusPane
+    still see them).
+    """
+    try:
+        from planet_maiko.brain.autonomy import evaluate
+        return evaluate()
+    except Exception as e:
+        logger.warning(f"[cycle] Role autonomy phase skipped: {e}")
+        return {"proposed": 0, "error": str(e)}
+
+
 def _phase_pupdates():
     """Phase 3.5: Process remaining pupdates through rules + triage."""
     from planet_maiko.brain.pupdates.processor import process as process_pupdates
@@ -667,6 +684,7 @@ _PHASES = [
     ("awareness", _phase_awareness),
     ("calendar_focus", _phase_calendar_focus),
     ("correlator", _phase_correlator),
+    ("role_autonomy", _phase_role_autonomy),
     ("pupdates", _phase_pupdates),
     ("llm_triage", _phase_llm_triage),
     ("synthesis", _phase_synthesis),
