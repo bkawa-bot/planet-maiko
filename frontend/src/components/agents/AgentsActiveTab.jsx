@@ -119,6 +119,22 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
     }
   };
 
+  const handleStop = async (taskId, taskTitle) => {
+    if (!taskId) return;
+    const confirmed = window.confirm(
+      `Stop the agent for "${taskTitle || taskId}"? This kills the Claude Code process, removes the worktree, and deletes the task.`
+    );
+    if (!confirmed) return;
+    try {
+      const res = await api.cancelTask(taskId);
+      const note = res?.agent_stopped ? " (process terminated)" : " (no active process)";
+      showToast(`Stopped${note}`, "normal");
+      onRefresh?.();
+    } catch (err) {
+      showToast(err.message || "Couldn't stop", "high");
+    }
+  };
+
   const handleResume = async (a) => {
     try {
       const res = await api.resumeAgentSession(a.task_id);
@@ -308,6 +324,13 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                       <Play size={12} /> Relaunch
                     </button>
                   )}
+                  <button
+                    className="btn btn-sm btn-danger"
+                    onClick={() => handleStop(a.task_id, a.task_title)}
+                    title="Stop the agent, clean up the worktree, and delete this task"
+                  >
+                    <X size={12} /> Stop
+                  </button>
                 </div>
               </div>
               );
@@ -390,6 +413,13 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                     title="See this agent's full activity across all tasks"
                   >
                     <Clock size={12} /> Timeline
+                  </button>
+                  <button
+                    className="btn btn-sm btn-danger"
+                    onClick={() => handleStop(a.task_id, a.task_title)}
+                    title="Stop the agent, clean up the worktree, and delete this task"
+                  >
+                    <X size={12} /> Stop
                   </button>
                 </div>
               </div>

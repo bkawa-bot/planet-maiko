@@ -105,14 +105,21 @@ def complete_task(task_id):
 
 @tasks_bp.route("/tasks/<task_id>/cancel", methods=["POST"])
 def cancel_task(task_id):
-    """Cancel a task — deletes it from the active list and removes
-    any agent worktree backing it."""
-    from planet_maiko.agents.coding_agent import cleanup_task_worktree
+    """Cancel a task — terminate any in-flight agent subprocess, remove
+    the worktree, and delete the task row.
+
+    Order matters: we stop the subprocess FIRST so it can't race-write
+    new commits or MCP replies into a worktree we're about to delete.
+    Worktree removal and task delete are idempotent; the subprocess
+    stop is best-effort (no-op if nothing is running).
+    """
+    from planet_maiko.agents.coding_agent import cleanup_task_worktree, stop_agent_session
     task = db.get_or_404(Task, task_id)
+    stopped = stop_agent_session(task_id)
     cleanup_task_worktree(task)
     db.session.delete(task)
     db.session.commit()
-    return jsonify({"status": "deleted", "id": task_id})
+    return jsonify({"status": "deleted", "id": task_id, "agent_stopped": stopped})
 
 
 @tasks_bp.route("/tasks/<task_id>/launch", methods=["POST"])
