@@ -50,8 +50,12 @@
   --lavender-soft: rgba(195, 166, 232, 0.15);
   --lavender-faint: rgba(195, 166, 232, 0.08);
 
+  /* Inter (loaded in index.html) for body; Inconsolata for anything
+     that wants "terminal label" character — agent names, in-page
+     tabs, top-nav pills. Warmer/rounder mono than JetBrains or SF
+     Mono so the labels feel inviting rather than industrial. */
   --font: 'Inter', -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font-mono: 'Inconsolata', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
   --radius: 12px;
   --radius-sm: 8px;
   --radius-xs: 6px;
@@ -124,6 +128,27 @@
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* Label-y surfaces read as "callsigns" or "tab headers" — run them
+   in --font-mono (Inconsolata) instead of Inter so the character
+   shows up where it's welcome without stretching prose. Agent names
+   across every surface, in-page tabs (Knowledge, Pack, etc.), and
+   the top-nav pills. */
+.agent-name,
+.profile-card-name,
+.profile-card-name-text,
+.pack-row-name,
+.assign-agent-name,
+.campfire-agent-name,
+.thread-msg-sender,
+.inbox-tab,
+.knowledge-tabs button,
+.agents-tabs button,
+.nav-pill,
+.nav-pill-label {
+  font-family: var(--font-mono);
+  letter-spacing: 0.005em;
+}
 
 body {
   background-color: var(--bg);
