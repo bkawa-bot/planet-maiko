@@ -3,6 +3,95 @@
 }
 .skills-header h2 { margin: 0; font-size: 18px; }
 
+/* Automations (when/then) + Skills (prompt templates) share this page;
+   each section gets its own header with a subtitle so the separation
+   of concerns reads right from the first glance. */
+.skills-section-header {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 24px 0 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+.skills-section-header h3 {
+  margin: 0; font-size: 14px; font-weight: 600;
+}
+.skills-section-sub {
+  margin: 0; flex: 1 1 100%;
+  font-size: 11px; color: var(--text-muted); line-height: 1.4;
+}
+
+.automations-section { margin-bottom: 8px; }
+.automations-section .skills-section-header {
+  margin-top: 0; padding-top: 0; border-top: none;
+}
+.automations-empty {
+  font-size: 11.5px; color: var(--text-muted); font-style: italic;
+  padding: 14px 4px;
+  display: flex; align-items: center; gap: 6px;
+}
+.automations-list {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 10px;
+}
+.automation-card {
+  display: flex; gap: 12px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--lavender, #b59dd8);
+}
+.automation-card.status-paused { opacity: 0.6; }
+.automation-card.status-archived { opacity: 0.4; }
+.automation-card-main {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.automation-card-name-row {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.automation-card-name {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.automation-card-repo {
+  font-size: 10px; color: var(--text-dim);
+  font-family: var(--font-mono, monospace);
+}
+.automation-card-status {
+  font-size: 9px; font-weight: 600; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 8px;
+  background: var(--bg-hover); color: var(--text-muted);
+}
+.automation-card-status.status-active {
+  background: var(--green-soft, rgba(0, 200, 120, 0.15));
+  color: var(--green);
+}
+.automation-card-status.status-paused {
+  background: var(--lemon-soft, rgba(240, 200, 70, 0.2));
+  color: var(--lemon);
+}
+.automation-card-desc {
+  font-size: 11.5px; color: var(--text-dim); line-height: 1.4;
+  margin-bottom: 2px;
+}
+.automation-card-row {
+  display: flex; gap: 6px; align-items: baseline;
+  font-size: 11px; color: var(--text);
+}
+.automation-card-label {
+  font-size: 9px; font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  min-width: 38px;
+}
+.automation-card-footer {
+  font-size: 10px; color: var(--text-muted);
+  margin-top: 2px;
+}
+.automation-card-actions {
+  flex-shrink: 0;
+  display: flex; align-items: flex-start;
+}
+
 .skills-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;
 }

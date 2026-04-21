@@ -249,16 +249,14 @@ export const api = {
   getLearning: (id) => request(`/learnings/${id}`),
   classifyLearnings: (batchSize = 50) => request("/learnings/classify", { method: "POST", body: JSON.stringify({ batch_size: batchSize }) }),
 
-  // Standing goals (role-as-intent autonomy)
-  getGoals: (params = {}) => {
+  // Automations (unified when/then model; replaced goals)
+  getAutomations: (params = {}) => {
     const query = new URLSearchParams(params).toString();
-    return request(`/goals${query ? `?${query}` : ""}`);
+    return request(`/automations${query ? `?${query}` : ""}`);
   },
-  getAgentGoals: (agentId, params = {}) => {
-    const query = new URLSearchParams(params).toString();
-    return request(`/agents/${agentId}/goals${query ? `?${query}` : ""}`);
-  },
-  updateGoal: (id, data) => request(`/goals/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  createAutomation: (data) => request("/automations", { method: "POST", body: JSON.stringify(data) }),
+  updateAutomation: (id, data) => request(`/automations/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteAutomation: (id) => request(`/automations/${id}`, { method: "DELETE" }),
 
   // Insights (Team Playbook — tribal / operational notes injected into CLAUDE.md)
   getInsights: (params = {}) => {

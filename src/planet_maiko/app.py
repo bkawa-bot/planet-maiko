@@ -148,7 +148,7 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.pack_api import pack_bp
     from planet_maiko.api.checks_api import checks_bp
     from planet_maiko.api.pet_api import pet_bp
-    from planet_maiko.api.goals_api import goals_bp
+    from planet_maiko.api.automations_api import automations_bp
     app.register_blueprint(pupdates_bp, url_prefix="/api")
     app.register_blueprint(tasks_bp, url_prefix="/api")
     app.register_blueprint(projects_bp, url_prefix="/api")
@@ -174,7 +174,7 @@ def create_app(start_scheduler=False):
     app.register_blueprint(pack_bp, url_prefix="/api")
     app.register_blueprint(checks_bp, url_prefix="/api")
     app.register_blueprint(pet_bp, url_prefix="/api")
-    app.register_blueprint(goals_bp, url_prefix="/api")
+    app.register_blueprint(automations_bp, url_prefix="/api")
 
     # Load plugins (entry_points + ~/.maiko/plugins/)
     from planet_maiko.plugins.loader import load_plugins
@@ -195,7 +195,15 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.insight import Insight  # noqa: F401
         from planet_maiko.models.external_session import ExternalSession  # noqa: F401
         from planet_maiko.models.pet import Pet  # noqa: F401
-        from planet_maiko.models.agent_goal import AgentGoal  # noqa: F401
+        from planet_maiko.models.automation import Automation  # noqa: F401
+        # Legacy AgentGoal kept imported only so the one-time migration
+        # below can see its rows on first boot after this upgrade.
+        # Remove the import and the table once the migration has run on
+        # every install that cares. Harmless while present.
+        try:
+            from planet_maiko.models.agent_goal import AgentGoal  # noqa: F401
+        except Exception:
+            pass
         db.create_all()
 
         # Schema migrations for existing DBs (SQLite ALTER TABLE is safe)
@@ -204,6 +212,22 @@ def create_app(start_scheduler=False):
         # Seed default skills on first run
         from planet_maiko.agents.skills import seed_defaults
         seed_defaults()
+
+        # Unify the autonomy surface: migrate legacy AgentGoal rows
+        # into Automations (one-time, idempotent no-op after first
+        # successful run), then make sure every configured repo has a
+        # seeded 'keep overview current' watch.
+        from planet_maiko.brain.automations import (
+            migrate_agent_goals, ensure_seed_automations,
+        )
+        try:
+            migrate_agent_goals()
+        except Exception as e:
+            logger.warning(f"[startup] AgentGoal migration skipped: {e}")
+        try:
+            ensure_seed_automations()
+        except Exception as e:
+            logger.warning(f"[startup] Automation seeding skipped: {e}")
 
         # Wake-registry cleanup: the previous run may have crashed with
         # agents flagged "working" and with session-registry entries

@@ -7,7 +7,7 @@ import { formatTime, formatClock } from "../utils/dates";
 import { Brain, Calendar, Palette, Video, Sparkles } from "lucide-react";
 import { showToast } from "../components/Toast";
 import FooterPendingPopover from "../components/FooterPendingPopover";
-import GoalsListModal from "../components/GoalsListModal";
+import { useNavigate } from "react-router-dom";
 import "./Home.css";
 
 // Home polls sidebar data (scene, brain status, calendar, task stats).
@@ -46,7 +46,7 @@ export default function Home() {
   const [homeConfig, setHomeConfig] = useState(null);
   const [cycling, setCycling] = useState(false);
   const [showPendingPopover, setShowPendingPopover] = useState(false);
-  const [showGoalsModal, setShowGoalsModal] = useState(false);
+  const navigate = useNavigate();
 
   const fetchSidebar = async () => {
     try {
@@ -58,7 +58,7 @@ export default function Home() {
         api.getBrainStatus().catch(() => null),
         api.getConfig().catch(() => null),
         api.getPupdates(),
-        api.getGoals({ status: "active" }).catch(() => []),
+        api.getAutomations({ status: "active" }).catch(() => []),
       ]);
       setScene(sc);
       setHomeConfig(cfg);
@@ -66,7 +66,7 @@ export default function Home() {
         tasks_new: tasksNew.length,
         tasks_ip: tasksIp.length,
         projects: projects.length,
-        goals_active: (goals || []).length,
+        goals_active: (goals || []).length,  // field name kept for the chip binding; counts automations now
       });
       setBrainStatus(brain);
       // Today's events only. Calendar pupdates use a YYYY-MM-DD date in
@@ -229,11 +229,11 @@ export default function Home() {
                 <button
                   type="button"
                   className="widget-stat widget-stat-clickable"
-                  onClick={() => setShowGoalsModal(true)}
-                  title="See what each agent is watching for. Click to review and pause."
+                  onClick={() => navigate("/automations")}
+                  title="Open the Automations dashboard to see what each agent is watching and control the autonomy."
                 >
                   <div className="widget-stat-value" style={{ color: "var(--lavender, #b59dd8)" }}>{stats.goals_active}</div>
-                  <div className="widget-stat-label">Goals</div>
+                  <div className="widget-stat-label">Automations</div>
                 </button>
               )}
             </div>
@@ -276,7 +276,6 @@ export default function Home() {
           </div>
         </div>
       </div>
-      {showGoalsModal && <GoalsListModal onClose={() => setShowGoalsModal(false)} />}
     </div>
   );
 }

@@ -4,7 +4,10 @@ import { showToast } from "../components/Toast";
 import {
   Zap, Wand2, Sunrise, Brain, Coffee, Search, GitFork,
   Rocket, Clipboard, X, Loader, Plus, Save, Eye, Pencil, Trash2, Clock,
+  Compass, Pause, Play,
 } from "lucide-react";
+import { formatRepo, useDefaultOrg } from "../utils/repo";
+import { relativeTime } from "../utils/dates";
 import "./Automations.css";
 
 const ICON_MAP = {
@@ -155,8 +158,15 @@ export default function Automations() {
       <div className="skills-header">
         <Zap size={18} />
         <h2>Automations</h2>
+      </div>
+
+      <AutomationsList />
+
+      <div className="skills-section-header">
+        <h3>Skills</h3>
+        <p className="skills-section-sub">Prompt templates that Automations can invoke. Also runnable on-demand or on a cadence of their own.</p>
         <button className="btn btn-primary" onClick={openCreate} style={{ marginLeft: "auto" }}>
-          <Plus size={12} /> New Automation
+          <Plus size={12} /> New Skill
         </button>
       </div>
 
@@ -320,4 +330,142 @@ export default function Automations() {
       )}
     </div>
   );
+}
+
+
+// --------------------------------------------------------------------------
+// AutomationsList — the new when/then dashboard. Sits above the Skills
+// section. Each card is a single automation with trigger + action
+// descriptions, status pill, pause/resume, and last-fired time.
+// --------------------------------------------------------------------------
+
+function AutomationsList() {
+  const defaultOrg = useDefaultOrg();
+  const [automations, setAutomations] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchAll = () => {
+    setLoading(true);
+    api.getAutomations()
+      .then((rows) => setAutomations(rows || []))
+      .catch(() => setAutomations([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchAll(); }, []);
+
+  const toggle = async (a) => {
+    const nextStatus = a.status === "active" ? "paused" : "active";
+    setAutomations((rows) => rows.map((r) => r.id === a.id ? { ...r, status: nextStatus } : r));
+    try {
+      const updated = await api.updateAutomation(a.id, { status: nextStatus });
+      setAutomations((rows) => rows.map((r) => r.id === a.id ? updated : r));
+    } catch (err) {
+      setAutomations((rows) => rows.map((r) => r.id === a.id ? { ...r, status: a.status } : r));
+      showToast("Couldn't update automation: " + (err.message || "unknown"), "high");
+    }
+  };
+
+  return (
+    <div className="automations-section">
+      <div className="skills-section-header">
+        <h3><Compass size={14} style={{ verticalAlign: "middle" }} /> Watches</h3>
+        <p className="skills-section-sub">
+          When a condition holds, Maiko runs the matching action. Pause to silence without deleting. These are the building blocks — each one sees a condition, fires a skill or posts a proposal.
+        </p>
+      </div>
+      {loading ? (
+        <div className="automations-empty"><Loader size={12} className="spin" /> Loading…</div>
+      ) : !automations || automations.length === 0 ? (
+        <div className="automations-empty">
+          No automations yet. Goals from earlier versions migrate here on first boot; new ones appear when you approve a gap proposal.
+        </div>
+      ) : (
+        <div className="automations-list">
+          {automations.map((a) => (
+            <div key={a.id} className={`automation-card card status-${a.status}`}>
+              <div className="automation-card-main">
+                <div className="automation-card-name-row">
+                  <span className="automation-card-name">{a.name}</span>
+                  {a.scope_repo && (
+                    <span className="automation-card-repo" title={a.scope_repo}>
+                      {formatRepo(a.scope_repo, defaultOrg)}
+                    </span>
+                  )}
+                  <span className={`automation-card-status status-${a.status}`}>{a.status}</span>
+                </div>
+                {a.description && <div className="automation-card-desc">{a.description}</div>}
+                <div className="automation-card-row">
+                  <span className="automation-card-label">WHEN</span>
+                  <span>{describeAutomationTrigger(a)}</span>
+                </div>
+                <div className="automation-card-row">
+                  <span className="automation-card-label">THEN</span>
+                  <span>{(a.then || []).map(describeAction).join(" → ") || "(no action)"}</span>
+                </div>
+                <div className="automation-card-footer">
+                  {a.last_fired_at ? (
+                    <>fired {relativeTime(a.last_fired_at)} · {a.fire_count || 0}× total</>
+                  ) : (
+                    <>never fired yet</>
+                  )}
+                  {a.cooldown_days > 0 && <> · {a.cooldown_days}d cooldown</>}
+                </div>
+              </div>
+              <div className="automation-card-actions">
+                <button
+                  className="btn btn-sm"
+                  onClick={() => toggle(a)}
+                  disabled={a.status === "archived"}
+                  title={a.status === "active" ? "Pause this automation" : "Resume this automation"}
+                >
+                  {a.status === "active" ? <Pause size={10} /> : <Play size={10} />}
+                  {a.status === "active" ? " pause" : a.status === "paused" ? " resume" : " archived"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function describeCondition(trigger) {
+  const cfg = trigger?.config || {};
+  switch (trigger?.kind) {
+    case "cadence":
+      return `every ${cfg.interval_hours || 24}h`;
+    case "overview_stale":
+      return `overview >${cfg.stale_days || 30}d stale`;
+    case "lora_missing":
+      return `${cfg.min_learnings || 10}+ rules, no adapter`;
+    default:
+      return trigger?.kind || "unknown";
+  }
+}
+
+function describeAction(action) {
+  const cfg = action?.config || {};
+  switch (action?.kind) {
+    case "propose":
+      return `propose "${cfg.draft?.title || "(untitled)"}"`;
+    case "nudge":
+      return `nudge "${cfg.title || "(untitled)"}"`;
+    case "create_task":
+      return `create task "${cfg.title || "(untitled)"}"`;
+    case "run_skill":
+      return `run skill "${cfg.skill_name || "(none)"}"`;
+    default:
+      return action?.kind || "unknown";
+  }
+}
+
+function describeAutomationTrigger(automation) {
+  const when = automation.when || [];
+  if (when.length === 0) return "no trigger";
+  if (when.length === 1) return describeCondition(when[0]);
+  const logic = automation.when_logic === "any" ? " OR " : " AND ";
+  return when.map(describeCondition).join(logic);
 }

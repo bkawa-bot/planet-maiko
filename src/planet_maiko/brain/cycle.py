@@ -155,32 +155,21 @@ def _phase_correlator():
     return correlate()
 
 
-def _phase_role_autonomy():
-    """Phase 3.2: Role-as-intent detectors — Atlas watches for stale
-    overviews, etc., and emits proposals into the inbox.
+def _phase_automations():
+    """Phase 3.2: Unified Automation engine — evaluates every active
+    when/then row and fires actions.
 
-    Also runs gap detection: notices coverage gaps (e.g., enough rules
-    accumulated to be worth training a LoRA) and proposes *standing
-    goals* the user can adopt. Approved gap proposals install an
-    AgentGoal row.
-
-    Runs before pupdate processing so any proposals it emits get
-    indexed by the same processor pass (they're brain_processed=True
-    so they skip triage, but downstream consumers like PackStatusPane
-    still see them).
+    Replaced the old role_autonomy phase (AgentGoal-based). The engine
+    reads from the Automation table; seeded + user-created watches all
+    run through here. Runs before pupdate processing so emitted
+    proposals get indexed the same cycle.
     """
     try:
-        from planet_maiko.brain.autonomy import evaluate, detect_gaps
-        goals_result = evaluate()
-        gaps_result = detect_gaps()
-        return {
-            "goals": goals_result,
-            "gaps": gaps_result,
-            "proposed": int(goals_result.get("proposed", 0)) + int(gaps_result.get("proposed", 0)),
-        }
+        from planet_maiko.brain.automations import evaluate
+        return evaluate()
     except Exception as e:
-        logger.warning(f"[cycle] Role autonomy phase skipped: {e}")
-        return {"proposed": 0, "error": str(e)}
+        logger.warning(f"[cycle] Automations phase skipped: {e}")
+        return {"fired": 0, "error": str(e)}
 
 
 def _phase_pupdates():
@@ -695,7 +684,7 @@ _PHASES = [
     ("awareness", _phase_awareness),
     ("calendar_focus", _phase_calendar_focus),
     ("correlator", _phase_correlator),
-    ("role_autonomy", _phase_role_autonomy),
+    ("automations", _phase_automations),
     ("pupdates", _phase_pupdates),
     ("llm_triage", _phase_llm_triage),
     ("synthesis", _phase_synthesis),

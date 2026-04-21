@@ -211,62 +211,116 @@ def approve_proposal(pupdate_id):
 
 @pupdates_bp.route("/proposals/<pupdate_id>/approve-as-goal", methods=["POST"])
 def approve_proposal_as_goal(pupdate_id):
-    """Adopt a gap proposal as a standing AgentGoal.
+    """Adopt a proposal as a standing Automation row.
 
     Gap-detector proposals carry a `proposed_goal` blob in extra with
-    the AgentGoal-shaped fields (role, kind, scope_repo, trigger_kind,
-    trigger_config, action_kind, action_config, extra). Approving
-    here installs that row and dismisses the pupdate.
+    the legacy (kind, scope_repo, trigger_kind, trigger_config,
+    action_kind, action_config) shape. We translate those known kinds
+    into the new when[] + then[] schema and install an Automation.
 
-    Distinct from approve_proposal (which creates a one-shot Task) —
-    the UI routes to whichever endpoint matches the proposal shape.
+    Endpoint name kept as approve-as-goal for backward compat with the
+    ProposalCard frontend; the underlying object is an Automation now.
     """
-    from planet_maiko.models.agent_goal import AgentGoal
+    from planet_maiko.models.automation import Automation
 
     pupdate = db.get_or_404(Pupdate, pupdate_id)
     if pupdate.type != "agent_proposal":
         return jsonify({"error": "not a proposal"}), 400
 
     spec = (pupdate.extra or {}).get("proposed_goal")
-    if not spec or not spec.get("kind") or not spec.get("role"):
+    if not spec or not spec.get("kind"):
         return jsonify({"error": "proposal has no proposed_goal"}), 400
 
-    # Guard against duplicate goals — if the user already installed
-    # this (kind, scope_repo) pair from a prior cycle's proposal, we
-    # dismiss the pupdate rather than creating a duplicate row.
-    existing = (
-        AgentGoal.query
-        .filter(AgentGoal.kind == spec["kind"])
-        .filter(AgentGoal.scope_repo == spec.get("scope_repo"))
-        .filter(AgentGoal.status != "archived")
-        .first()
-    )
-    if existing is not None:
-        pupdate.dismissed = True
-        pupdate.dismissed_at = datetime.now(timezone.utc)
-        db.session.commit()
-        return jsonify({"goal": existing.to_dict(), "proposal_id": pupdate.id, "note": "already_installed"}), 200
+    # Translate the legacy (kind, trigger_config) shape into a when[]
+    # entry. Only known kinds are supported; unknown kinds get an empty
+    # `when` so they never fire, which is a soft-fail rather than a hard
+    # refusal.
+    kind = spec["kind"]
+    scope_repo = spec.get("scope_repo")
+    trigger_config = spec.get("trigger_config") or {}
+    when = []
+    then = []
+    name = spec.get("name") or f"Imported proposal: {kind}"
+    description = (spec.get("extra") or {}).get("description") or ""
 
-    goal = AgentGoal(
-        role=spec["role"],
-        agent_profile_id=spec.get("agent_profile_id"),
-        kind=spec["kind"],
-        scope_repo=spec.get("scope_repo"),
-        trigger_kind=spec.get("trigger_kind", "condition"),
-        trigger_config=spec.get("trigger_config") or {},
-        action_kind=spec.get("action_kind", "propose"),
-        action_config=spec.get("action_config") or {},
+    if kind == "keep_overview_current":
+        when = [{
+            "kind": "overview_stale",
+            "config": {
+                "repo": scope_repo,
+                "stale_days": int(trigger_config.get("stale_days", 30)),
+            },
+        }]
+        then = [{
+            "kind": "propose",
+            "config": {
+                "draft": {
+                    "title": f"Cartograph {scope_repo}",
+                    "type": "cartograph",
+                    "priority": "normal",
+                    "repo": scope_repo,
+                    "description": f"Refresh Atlas's overview of {scope_repo}.",
+                },
+            },
+        }]
+        name = f"Keep {scope_repo}'s overview current"
+    elif kind == "train_lora_when_ready":
+        when = [{
+            "kind": "lora_missing",
+            "config": {
+                "repo": scope_repo,
+                "min_learnings": int(trigger_config.get("min_learnings", 10)),
+            },
+        }]
+        then = [{
+            "kind": "nudge",
+            "config": {
+                "title": f"Ready to train a LoRA for {scope_repo}?",
+                "body": (
+                    f"{scope_repo} has enough active rules and no adapter yet."
+                ),
+                "url": "/knowledge?tab=training",
+                "action_hint": "Open Training",
+            },
+        }]
+        name = f"Nudge when {scope_repo} is ready to train"
+
+    # Dedup: if an active Automation already watches this (scope_repo +
+    # first-condition-kind) pair, dismiss the proposal and return it.
+    cond_kind = when[0]["kind"] if when else None
+    if cond_kind:
+        dupe = None
+        for row in Automation.query.filter(
+            Automation.scope_repo == scope_repo,
+            Automation.status != "archived",
+        ).all():
+            if any(t.get("kind") == cond_kind for t in (row.when or [])):
+                dupe = row
+                break
+        if dupe is not None:
+            pupdate.dismissed = True
+            pupdate.dismissed_at = datetime.now(timezone.utc)
+            db.session.commit()
+            return jsonify({"automation": dupe.to_dict(), "proposal_id": pupdate.id, "note": "already_installed"}), 200
+
+    automation = Automation(
+        name=name,
+        description=description,
+        when=when,
+        when_logic="all",
+        then=then,
         status="active",
         created_by="proposal",
-        extra=spec.get("extra") or {},
+        scope_repo=scope_repo,
+        cooldown_days=7,
     )
-    db.session.add(goal)
+    db.session.add(automation)
 
     pupdate.dismissed = True
     pupdate.dismissed_at = datetime.now(timezone.utc)
 
     db.session.commit()
-    return jsonify({"goal": goal.to_dict(), "proposal_id": pupdate.id}), 201
+    return jsonify({"automation": automation.to_dict(), "proposal_id": pupdate.id}), 201
 
 
 @pupdates_bp.route("/proposals/<pupdate_id>/dismiss", methods=["POST"])
