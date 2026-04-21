@@ -81,6 +81,10 @@ export default function OverviewPane() {
   const [pendingLearnings, setPendingLearnings] = useState([]);
   const [showAllNeeds, setShowAllNeeds] = useState(false);
   const [artifactModal, setArtifactModal] = useState(null);
+  // Easter egg: 1-in-50 chance Maiko delivers the overview in Papyrus.
+  // Rolled fresh on every fetch + manual refresh, so it's rare, not
+  // sticky, and refreshing lets you escape (98% chance).
+  const [papyrusMode, setPapyrusMode] = useState(false);
   const navigate = useNavigate();
 
   const pupdateById = useMemo(() => {
@@ -98,6 +102,7 @@ export default function OverviewPane() {
   const fetchAll = async () => {
     setLoading(true);
     setError(null);
+    setPapyrusMode(Math.random() < 0.02);
     try {
       const [overviewRes, pupRes, taskRes, pendingRes] = await Promise.all([
         api.getHomeOverview(),
@@ -118,6 +123,7 @@ export default function OverviewPane() {
 
   const refresh = async () => {
     setRefreshing(true);
+    setPapyrusMode(Math.random() < 0.02);
     try {
       const data = await api.refreshHomeOverview();
       setOverview(data.overview);
@@ -181,7 +187,7 @@ export default function OverviewPane() {
   const hasMoreNeeds = allNeeds.length > 3;
 
   return (
-    <div className="overview-pane">
+    <div className={`overview-pane ${papyrusMode ? "papyrus-mode" : ""}`}>
       <header className="overview-header">
         <h1 className="overview-greeting">{overview.greeting || "Hi 🐾"}</h1>
         <button
