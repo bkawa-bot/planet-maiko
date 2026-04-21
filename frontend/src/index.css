@@ -53,9 +53,14 @@
   /* Inter (loaded in index.html) for body; Inconsolata for anything
      that wants "terminal label" character — agent names, in-page
      tabs, top-nav pills. Warmer/rounder mono than JetBrains or SF
-     Mono so the labels feel inviting rather than industrial. */
+     Mono so the labels feel inviting rather than industrial.
+     Bitcount is the pixel display font used only on section titles
+     ("TODAY'S FOCUS", "WAITING ON YOU", widget headers) so the
+     Home page has one loud typographic beat without the whole
+     surface going chunky. */
   --font: 'Inter', -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'Inconsolata', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font-display: 'Bitcount Prop Single', 'Inconsolata', monospace;
   --radius: 12px;
   --radius-sm: 8px;
   --radius-xs: 6px;
@@ -148,6 +153,22 @@
 .nav-pill-label {
   font-family: var(--font-mono);
   letter-spacing: 0.005em;
+}
+
+/* Section-title display type — the small-caps beats on Home like
+   "TODAY'S FOCUS", "WAITING ON YOU", and the sidebar widget headers
+   ("TODAY", "WEATHER", etc). Bitcount is a pixel font, so the
+   standard sub-pixel smoothing you want for prose is actively wrong
+   here; kill it so the grid renders crisp instead of blurry. Bump
+   weight to 700 because the pixel grid gets spindly under ~14px. */
+.overview-section-title,
+.review-queue-header,
+.home-widget .widget-header {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
