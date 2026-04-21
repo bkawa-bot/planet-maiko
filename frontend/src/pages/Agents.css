@@ -359,6 +359,13 @@
   flex: 1; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* Chips sit on their own row below the name so no matter how long the
+   repo slug is, it can't push the name into an ellipsis. Name row stays
+   single-line + truncatable; chip row wraps if there are multiple. */
+.profile-card-chips {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin-top: 3px;
+}
 .profile-card-chip {
   font-size: 9px; padding: 1px 6px;
   border-radius: 8px; font-weight: 500;
@@ -367,6 +374,10 @@
   flex-shrink: 0;
   text-transform: none;
   letter-spacing: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .profile-card-chip-lora {
   background: var(--pink-soft);

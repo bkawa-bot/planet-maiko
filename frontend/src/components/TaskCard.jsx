@@ -131,6 +131,7 @@ export default function TaskCard({
       project_id: t.project_id || "",
       url: t.url || "",
       due_date: t.due_date || "",
+      repo: t.extra?.repo || t.metadata?.repo || "",
     });
   };
 

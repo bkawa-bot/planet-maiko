@@ -31,7 +31,7 @@ export default function Tasks() {
   const [taskForm, setTaskForm] = useState({ title: "", description: "", type: "coding", priority: "normal", url: "", project_id: "", due_date: "" });
   const [projectForm, setProjectForm] = useState({ title: "", description: "", priority: "normal" });
   const [editingTask, setEditingTask] = useState(null);
-  const [editForm, setEditForm] = useState({ title: "", description: "", type: "coding", priority: "normal", status: "new", project_id: "", url: "", due_date: "" });
+  const [editForm, setEditForm] = useState({ title: "", description: "", type: "coding", priority: "normal", status: "new", project_id: "", url: "", due_date: "", repo: "" });
   const [askingMaiko, setAskingMaiko] = useState(null);
   const [maikoQuery, setMaikoQuery] = useState("");
   const [maikoResult, setMaikoResult] = useState(null);
@@ -638,10 +638,23 @@ export default function Tasks() {
             </div>
             <form className="modal-body" onSubmit={async (e) => {
               e.preventDefault();
-              const { description, ...rest } = editForm;
+              const { description, repo, ...rest } = editForm;
               const payload = { ...rest };
               const existingMeta = editingTask.extra || editingTask.metadata || {};
-              payload.metadata = { ...existingMeta, description: description || "" };
+              const trimmedRepo = (repo || "").trim();
+              payload.metadata = {
+                ...existingMeta,
+                description: description || "",
+                // `repo` drives agent routing + worktree resolution (see
+                // orchestration.scope_for_task / resolve_repo_path), so
+                // editing it here is the canonical way to attach/detach
+                // a repo from a task. Empty string clears the key rather
+                // than keeping a stale value in extra.
+                ...(trimmedRepo ? { repo: trimmedRepo } : {}),
+              };
+              if (!trimmedRepo && existingMeta.repo) {
+                delete payload.metadata.repo;
+              }
               await api.updateTask(editingTask.id, payload);
               showToast("Saved 🌱", "normal");
               setEditingTask(null);
@@ -703,6 +716,15 @@ export default function Tasks() {
               </div>
               <div className="form-row">
                 <div className="form-row form-row-inline">
+                  <label>
+                    Repo
+                    <input
+                      type="text"
+                      value={editForm.repo}
+                      onChange={(e) => setEditForm((f) => ({ ...f, repo: e.target.value }))}
+                      placeholder="org/repo (drives agent routing)"
+                    />
+                  </label>
                   <label>URL <input type="text" value={editForm.url} onChange={(e) => setEditForm((f) => ({ ...f, url: e.target.value }))} placeholder="https://..." /></label>
                   <label>Due Date <input type="date" value={editForm.due_date} onChange={(e) => setEditForm((f) => ({ ...f, due_date: e.target.value }))} /></label>
                 </div>

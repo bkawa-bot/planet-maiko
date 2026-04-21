@@ -110,13 +110,17 @@ function ProfileCard({ profile, onOpen }) {
             title={`Agent state: ${profile.state || "idle"}`}
           />
           <span className="profile-card-name-text">{profile.display_name}</span>
-          {profile.scope_repo && (
-            <span className="profile-card-chip" title={profile.scope_repo}>{formatRepo(profile.scope_repo, defaultOrg)}</span>
-          )}
-          {profile.extra?.adapter_path && (
-            <span className="profile-card-chip profile-card-chip-lora">LoRA</span>
-          )}
         </div>
+        {(profile.scope_repo || profile.extra?.adapter_path) && (
+          <div className="profile-card-chips">
+            {profile.scope_repo && (
+              <span className="profile-card-chip" title={profile.scope_repo}>{formatRepo(profile.scope_repo, defaultOrg)}</span>
+            )}
+            {profile.extra?.adapter_path && (
+              <span className="profile-card-chip profile-card-chip-lora">LoRA</span>
+            )}
+          </div>
+        )}
         {preview && (
           <div className="profile-card-preview">
             {preview.length > 110 ? preview.slice(0, 108).replace(/\s+\S*$/, "") + "…" : preview}
