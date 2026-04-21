@@ -188,12 +188,16 @@ def assign_agent():
     Coding agents: prepares a worktree + CLAUDE.md as before. Requires
     repo_path.
 
-    Review / investigation agents: also prepares a worktree (so the
-    user can "dig deeper" later by attaching to it), then fires a
+    Investigation / cartographer agents: also prepares a worktree (so
+    the user can "dig deeper" later by attaching to it), then fires a
     background thread that runs the one-shot skill immediately. No
     repo_path needed — resolved from config.github.repo_roots using
     the task's repo. Returns 201 right away; the thread writes the
     result pupdate when it completes.
+
+    Review / pr_review agents (Stage D): the Task gets assigned and a
+    linked AgentJob is spawned + kicked off. Replies route through the
+    AgentJob reply handler; the job holds the worktree + artifact.
     """
     from planet_maiko.models.task import Task
     from planet_maiko.models.agent_profile import AgentProfile
@@ -218,10 +222,16 @@ def assign_agent():
     profile = db.get_or_404(AgentProfile, profile_id)
     role = profile.role or "coding"
 
+    # Stage D: review / pr_review go through AgentJob. The job owns the
+    # worktree + session + artifact; the Task stays as the user-owed
+    # "please review this PR" entry.
+    if role == "review":
+        return _assign_review_via_agent_job(task, profile, data)
+
     # Resolve repo_path. For coding the user picks one in the modal;
-    # for review/investigation/cartographer the task's scope plus
-    # repo_roots determines it (no UI input needed).
-    if role in ("review", "investigation", "cartographer"):
+    # for investigation/cartographer the task's scope plus repo_roots
+    # determines it (no UI input needed).
+    if role in ("investigation", "cartographer"):
         from planet_maiko.orchestration import resolve_repo_path, scope_for_task
         repo = scope_for_task(task)
         local_path = resolve_repo_path(repo)
@@ -232,7 +242,6 @@ def assign_agent():
         # picks this up if the kickoff thread dies and we need a retry.
         if task.type not in ONE_SHOT_ROLE_FOR_TYPE:
             task.type = {
-                "review": "review",
                 "investigation": "investigation",
                 "cartographer": "cartograph",
             }[role]
@@ -299,6 +308,114 @@ def assign_agent():
         "agent": profile.to_dict(),
         "mode": role,
         "worktree": result,
+    }), 201
+
+
+def _assign_review_via_agent_job(task, profile, data):
+    """Review/pr_review assignment path. Spawns a linked AgentJob,
+    prepares the worktree under the job id, and kicks off headless.
+
+    The agent reports with task_id == job.id so outbox replies land
+    in _handle_agent_job_reply. On ready_for_review the job stores
+    the artifact and the linked Task moves to status=review.
+    """
+    from planet_maiko.models.agent_job import AgentJob
+    from planet_maiko.agents.coding_agent import prepare, _kickoff_agent_headless
+    from planet_maiko.orchestration import resolve_repo_path, scope_for_task, build_task_prompt
+    import uuid as _uuid
+
+    repo = scope_for_task(task)
+    local_path = resolve_repo_path(repo)
+    if not local_path:
+        return jsonify({"error": f"No local clone found for {repo or 'this task'}"}), 400
+
+    if task.type not in ("review", "pr_review"):
+        task.type = "review"
+    task.assigned_agent_id = profile.id
+
+    # Skip if a job already exists — could happen if the user clicks
+    # Assign twice, or the spawn phase already created one between
+    # the UI fetch and this call. Reuse it.
+    existing = AgentJob.query.filter_by(source_task_id=task.id).first()
+    if existing and existing.status in ("queued", "pending_approval"):
+        job = existing
+        job.agent_profile_id = profile.id
+    else:
+        job_id = f"job-{_uuid.uuid4().hex[:10]}"
+        job = AgentJob(
+            id=job_id,
+            kind=task.type,
+            title=task.title,
+            description=(task.extra or {}).get("description") or (task.extra or {}).get("body"),
+            scope_repo=repo,
+            priority=task.priority or "normal",
+            created_by="user",
+            source_task_id=task.id,
+            agent_profile_id=profile.id,
+            requires_approval=False,
+            approved_at=datetime.now(timezone.utc),
+            approved_by="user",
+            status="queued",
+            extra={},
+        )
+        db.session.add(job)
+    db.session.flush()
+
+    full_prompt = build_task_prompt(task, "review", data.get("custom_prompt", ""))
+    branch_name = data.get("branch_name")
+    try:
+        result = prepare(
+            task_id=job.id,  # agent reports with this id → AgentJob reply path
+            task_title=task.title,
+            prompt=full_prompt,
+            repo_path=local_path,
+            branch_prefix=branch_name or "maiko",
+            auto_kickoff=False,
+            use_worktree=True,
+            agent_profile_id=profile.id,
+            role="review",
+        )
+    except Exception as e:
+        return jsonify({"error": f"Agent preparation failed: {str(e)}"}), 500
+    if not result:
+        return jsonify({"error": "Failed to prepare agent"}), 500
+
+    job.worktree_path = result.get("working_path")
+    job.branch = result.get("branch")
+
+    kickoff = _kickoff_agent_headless(
+        profile.id, job.worktree_path, job.id,
+        branch_name=None, plan_first=False, role="review",
+    )
+    result["kickoff_result"] = kickoff
+
+    if kickoff.get("success"):
+        job.status = "running"
+        job.started_at = datetime.now(timezone.utc)
+        job.session_id = kickoff.get("session_id")
+        task.status = "in_progress"
+    else:
+        job.status = "failed"
+        job.error = kickoff.get("error") or "kickoff failed"
+        job.finished_at = datetime.now(timezone.utc)
+
+    # Mirror worktree onto task.extra so the existing diff / relaunch
+    # UI (which still reads task.extra.working_path) keeps working.
+    task_extra = dict(task.extra or {})
+    if job.worktree_path:
+        task_extra["working_path"] = job.worktree_path
+    if job.branch:
+        task_extra["branch"] = job.branch
+    task_extra["agent_job_id"] = job.id
+    task.extra = task_extra
+    db.session.commit()
+
+    return jsonify({
+        "task": task.to_dict(),
+        "agent": profile.to_dict(),
+        "mode": "review",
+        "worktree": result,
+        "agent_job_id": job.id,
     }), 201
 
 
