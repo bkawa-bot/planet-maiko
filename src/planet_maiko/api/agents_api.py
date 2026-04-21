@@ -868,9 +868,128 @@ def nudge_agent(task_id):
     }), 201
 
 
+def _handle_agent_job_reply(job, msg, data, message_type):
+    """Reply-handling for AgentJob runs. Mirrors the Task-shaped
+    branches below but operates on AgentJob fields.
+
+    Sync rule: if the job has a source_task_id, the linked Task's
+    status moves in step (running → in_progress, done → done for
+    non-review kinds, review for review kinds so the user sees the
+    artifact first).
+    """
+    from planet_maiko.models.agent_job import AgentJob as _AgentJob  # noqa: F401
+    from planet_maiko.models.task import Task as _Task
+    from planet_maiko.models.agent_profile import AgentProfile as _AP
+    from planet_maiko.brain.learning.agent_output import parse_and_apply_blocks
+
+    content = data.get("content") or ""
+
+    if message_type == "ready_for_review":
+        verdict, summary = _parse_verdict_and_summary(content)
+        extra = dict(job.extra or {})
+        if verdict:
+            extra["review_verdict"] = verdict
+        if summary:
+            extra["review_summary"] = summary
+
+        ag = db.session.get(_AP, job.agent_profile_id) if job.agent_profile_id else None
+        try:
+            parsed = parse_and_apply_blocks(
+                content, agent=ag, task=None, repo=job.scope_repo,
+            )
+            cleaned = parsed.get("cleaned_output", content)
+            job.artifact = cleaned[:16000]
+            extra["patterns_emitted"] = parsed.get("patterns_emitted", 0)
+            extra["proposals_emitted"] = parsed.get("proposals_emitted", 0)
+            if parsed.get("confidence"):
+                extra["confidence"] = parsed["confidence"]
+        except Exception as e:
+            logger.warning(f"[outbox/job] artifact save failed for {job.id}: {e}")
+            job.artifact = content[:16000]
+
+        is_review = job.kind in ("review", "pr_review")
+        # Reviews keep their worktree so the user can still load the
+        # diff+comments; job status moves to done either way.
+        job.status = "done"
+        job.finished_at = datetime.now(timezone.utc)
+        job.extra = extra
+        if ag:
+            ag.last_active_at = datetime.now(timezone.utc)
+
+        # Sync the linked Task (Stage D: review tasks have a linked job).
+        if job.source_task_id:
+            t = db.session.get(_Task, job.source_task_id)
+            if t:
+                task_extra = dict(t.extra or {})
+                if verdict:
+                    task_extra["review_verdict"] = verdict
+                if summary:
+                    task_extra["review_summary"] = summary
+                task_extra["artifact"] = job.artifact
+                task_extra["completed_at"] = datetime.now(timezone.utc).isoformat()
+                t.extra = task_extra
+                t.status = "review" if is_review else "done"
+
+        if not is_review and job.worktree_path and job.branch:
+            try:
+                from planet_maiko.agents.coding_agent import cleanup
+                cleanup(job.worktree_path, job.branch)
+            except Exception as e:
+                logger.debug(f"[outbox/job] worktree cleanup skipped for {job.id}: {e}")
+
+        logger.info(f"[outbox/job] {job.kind} job {job.id} done")
+        return
+
+    if message_type == "insight":
+        try:
+            from planet_maiko.models.insight import Insight
+            ag = db.session.get(_AP, job.agent_profile_id) if job.agent_profile_id else None
+            author_role = ag.role if ag else None
+            is_cartographer = author_role == "cartographer" or job.kind == "cartograph"
+            tags = list(data.get("tags") or [])
+            if is_cartographer:
+                for t_ in ("overview", "cartographer"):
+                    if t_ not in tags:
+                        tags.append(t_)
+            max_len = 8000 if is_cartographer else 2000
+            ins = Insight(
+                text=content.strip()[:max_len],
+                repo_scope=job.scope_repo,
+                tags=tags,
+                author_agent_id=job.agent_profile_id,
+                status="pending",
+                source_message_id=msg.id,
+            )
+            db.session.add(ins)
+            logger.info(
+                f"[outbox/job] insight from {job.id} "
+                f"(repo={job.scope_repo or 'global'}, tags={tags})"
+            )
+        except Exception as e:
+            logger.warning(f"[outbox/job] insight save failed for {job.id}: {e}")
+        return
+
+    if message_type == "stuck":
+        # Same log-only treatment as the Task path — the AgentMessage
+        # row is enough to surface the stuck status in the UI.
+        logger.info(f"[outbox/job] {job.id} stuck: {content[:100]}")
+        return
+
+    # Anything else (status / feedback / summary / message) — just
+    # records the AgentMessage row we already added, nothing further.
+
+
 @agents_bp.route("/agents/<task_id>/outbox", methods=["POST"])
 def agent_sends_message(task_id):
-    """Agent sends a message back (alternative to pupdate-based reporting)."""
+    """Agent sends a message back (alternative to pupdate-based reporting).
+
+    `task_id` is historical — post Stage D the incoming id may be an
+    AgentJob id (for cartograph / investigation / review runs) rather
+    than a Task id. We check AgentJob first, and if it resolves,
+    route through the job-aware handler. Otherwise fall through to
+    the legacy Task path (coding tasks + anything else still Task-
+    driven).
+    """
     data = request.get_json()
     msg = AgentMessage(
         task_id=task_id,
@@ -880,15 +999,18 @@ def agent_sends_message(task_id):
         message_type=data.get("message_type", "message"),
     )
     db.session.add(msg)
-
-    # For one-shot tasks (review / investigation / repo_analysis), the
-    # ready_for_review reply IS the report. Parse PATTERN: /
-    # PROPOSAL: / CONFIDENCE: blocks out, save the cleaned content as
-    # task.extra.artifact, and mark the task done. Coding tasks use
-    # ready_for_review to mean "go look at the diff" and stay in
-    # in_progress until the user explicitly approves — different
-    # semantics, gated by task.type below.
     message_type = data.get("message_type", "message")
+
+    # AgentJob path — claim the reply if this id belongs to a job.
+    try:
+        from planet_maiko.models.agent_job import AgentJob as _AgentJob
+        job = db.session.get(_AgentJob, task_id)
+    except Exception:
+        job = None
+    if job is not None:
+        _handle_agent_job_reply(job, msg, data, message_type)
+        db.session.commit()
+        return jsonify({"ok": True, "message_id": msg.id, "target": "agent_job"})
     if message_type == "ready_for_review":
         from planet_maiko.models.task import Task as _Task
         from planet_maiko.models.agent_profile import AgentProfile as _AgentProfile
