@@ -173,15 +173,21 @@ def _merge_cluster(canonical_text, member_ids):
         # Move the loser's signals onto the keeper so their code examples
         # contribute to training under the canonical rule.
         loser_signals = Signal.query.filter_by(learning_id=loser.id).all()
+        moved = 0
         for sig in loser_signals:
             sig.learning_id = keeper.id
+            moved += 1
             merged_signals += 1
 
-        # Track the merge on the keeper's signal_count so graduation
-        # math stays consistent.
-        keeper.signal_count = (keeper.signal_count or 0) + (loser.signal_count or 0)
-        keeper.confidence = min(1.0, (keeper.confidence or 0) + 0.05 * (loser.signal_count or 1))
+        # Use the actual number of rows moved, not loser.signal_count.
+        # The cached count can drift (older clustering bugs inflated
+        # it) — if we trust the cache here, the drift propagates onto
+        # the keeper and the Knowledge UI ends up saying "N signals"
+        # with fewer rows behind it.
+        keeper.signal_count = (keeper.signal_count or 0) + moved
+        keeper.confidence = min(1.0, (keeper.confidence or 0) + 0.05 * max(moved, 1))
 
+        loser.signal_count = 0
         loser.status = "dismissed"
         loser.updated_at = datetime.now(timezone.utc)
 

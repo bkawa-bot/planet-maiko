@@ -323,6 +323,13 @@ def finalize(decisions=None):
                 last_signal_at=datetime.now(timezone.utc),
             )
             db.session.add(learning)
+            # Link the signal to the learning we just made so the
+            # provenance pane can show the evidence. Flush first to
+            # get the autoincrement id; without this the Learning's
+            # advertised signal_count=1 has no row behind it.
+            db.session.flush()
+            signal.learning_id = learning.id
+            signal.aggregated = True
             stats["rules_created"] += 1
 
         stats["kept"] += 1
