@@ -95,6 +95,30 @@ def create_signal():
 
 # --- Learnings ---
 
+def _actual_signal_counts(learning_ids):
+    """Return {learning_id: actual linked-signal count} for the given
+    ids. Used to override the cached Learning.signal_count at read
+    time — the column is indexed + fast to write, but sundry code
+    paths (pack_insights, clustering merges, old signal prunes) have
+    drifted it out of sync with reality enough times that trusting
+    the cache here leads to the classic "card says 2 signals, click
+    shows zero" UX bug. Computing from the Signal table costs one
+    extra query on the list endpoint and is a no-op on singletons.
+    """
+    from planet_maiko.models.signal import Signal
+    from sqlalchemy import func
+    if not learning_ids:
+        return {}
+    rows = (
+        Signal.query
+        .with_entities(Signal.learning_id, func.count(Signal.id))
+        .filter(Signal.learning_id.in_(learning_ids))
+        .group_by(Signal.learning_id)
+        .all()
+    )
+    return dict(rows)
+
+
 @learning_bp.route("/learnings", methods=["GET"])
 def list_learnings():
     """List learnings, optionally filtered by status or category, with pagination."""
@@ -110,15 +134,34 @@ def list_learnings():
         query = query.filter_by(category=category)
 
     learnings = query.order_by(Learning.confidence.desc()).limit(limit).offset(offset).all()
-    return jsonify([l.to_dict() for l in learnings])
+    counts = _actual_signal_counts([l.id for l in learnings])
+    out = []
+    for l in learnings:
+        d = l.to_dict()
+        d["signal_count"] = counts.get(l.id, 0)
+        out.append(d)
+    return jsonify(out)
 
 
 @learning_bp.route("/learnings/<int:learning_id>", methods=["GET"])
 def get_learning(learning_id):
-    """Get a learning with its signals."""
+    """Get a learning with its signals. The returned signal_count is
+    computed from actual linked rows, not the cached column — so the
+    number in the row always matches the length of the signals list
+    below, no matter what drift exists in the cache."""
     learning = db.get_or_404(Learning, learning_id)
+    signals = list(learning.signals)
     data = learning.to_dict()
-    data["signals"] = [s.to_dict() for s in learning.signals]
+    data["signal_count"] = len(signals)
+    data["signals"] = [s.to_dict() for s in signals]
+    # Best-effort write-back to heal the cache in the background —
+    # keeps indexed queries (list filters, stats) honest.
+    if learning.signal_count != len(signals):
+        learning.signal_count = len(signals)
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
     return jsonify(data)
 
 
