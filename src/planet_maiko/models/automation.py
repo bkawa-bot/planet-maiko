@@ -72,6 +72,17 @@ class Automation(db.Model):
     # without decoding JSON).
     scope_repo = db.Column(db.String(256), nullable=True, index=True)
 
+    # Evaluation model:
+    # - "cycle": evaluate once per brain cycle; cooldown_days gates
+    #   re-firing. Used by stale-overview watches, incident chains,
+    #   cadence-driven skill runs.
+    # - "pupdate": iterate over each unprocessed pupdate; evaluate
+    #   conditions against that specific pupdate. Actions operate on
+    #   the matched pupdate (dismiss_pupdate / create_task_from_pupdate /
+    #   complete_linked_task). First-match semantics — order by id.
+    #   Used by the rule-style matchers that used to live in rules.py.
+    execution_scope = db.Column(db.String(20), nullable=False, default="cycle", index=True)
+
     # After a fire, wait this long before firing again even if the
     # condition still holds. Prevents re-nagging after a proposal
     # gets dismissed or the user takes action.
@@ -103,6 +114,7 @@ class Automation(db.Model):
             "created_by": self.created_by,
             "agent_profile_id": self.agent_profile_id,
             "scope_repo": self.scope_repo,
+            "execution_scope": self.execution_scope,
             "cooldown_days": self.cooldown_days,
             "created_at": iso_utc(self.created_at),
             "updated_at": iso_utc(self.updated_at),

@@ -32,6 +32,14 @@ def _ensure_columns():
         "ALTER TABLE learnings ADD COLUMN is_global BOOLEAN DEFAULT 0",
         "ALTER TABLE custom_skills ADD COLUMN user_edited BOOLEAN DEFAULT 0",
         "ALTER TABLE agent_profiles ADD COLUMN extra JSON DEFAULT '{}'",
+        # Stage-5 unification: rules folded into Automations. New
+        # column distinguishes cycle-level watches from per-pupdate
+        # rules.
+        "ALTER TABLE automations ADD COLUMN execution_scope VARCHAR(20) DEFAULT 'cycle'",
+        # Pupdate.read retired — no inbox, no mark-as-read concept.
+        # SQLite supports DROP COLUMN since 3.35 (2021). Wrap in try/
+        # except upstream in case the runtime is older.
+        "ALTER TABLE pupdates DROP COLUMN read",
         "ALTER TABLE agent_profiles ADD COLUMN role VARCHAR(32) DEFAULT 'coding'",
         "ALTER TABLE agent_profiles ADD COLUMN scope_repo VARCHAR(256)",
         "ALTER TABLE agent_profiles ADD COLUMN instructions TEXT",
@@ -220,6 +228,7 @@ def create_app(start_scheduler=False):
         from planet_maiko.brain.automations import (
             migrate_agent_goals, ensure_seed_automations,
             ensure_seed_chain_automations, migrate_scheduled_skills,
+            ensure_seed_rule_automations,
         )
         try:
             migrate_agent_goals()
@@ -237,6 +246,10 @@ def create_app(start_scheduler=False):
             ensure_seed_chain_automations()
         except Exception as e:
             logger.warning(f"[startup] Chain automation seeding skipped: {e}")
+        try:
+            ensure_seed_rule_automations()
+        except Exception as e:
+            logger.warning(f"[startup] Rule automation seeding skipped: {e}")
 
         # Wake-registry cleanup: the previous run may have crashed with
         # agents flagged "working" and with session-registry entries

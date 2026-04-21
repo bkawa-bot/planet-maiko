@@ -1,6 +1,5 @@
 from flask import Blueprint, jsonify, request
 from planet_maiko.brain.cycle import run, get_status
-from planet_maiko.brain.pupdates.rules import load_rules
 from planet_maiko.brain.tasks.scheduler import (
     compute_schedule, set_override, clear_override, get_override,
 )
@@ -15,13 +14,6 @@ brain_bp = Blueprint("brain", __name__)
 def brain_status():
     """Get brain cycle status."""
     return jsonify(get_status())
-
-
-@brain_bp.route("/brain/rules", methods=["GET"])
-def brain_rules():
-    """Get the current rules."""
-    rules = load_rules()
-    return jsonify(rules)
 
 
 @brain_bp.route("/brain/cycle", methods=["POST"])

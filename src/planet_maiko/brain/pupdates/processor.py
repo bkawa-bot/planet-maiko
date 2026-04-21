@@ -1,16 +1,17 @@
-"""Pupdate processor - fetches unprocessed pupdates and runs them
-through the rules pipeline.
+"""Pupdate processor — handles the two responsibilities that didn't
+fold into the Automation engine:
 
-Fetch → decode → execute for pupdates:
-    1. Fetch: query all pupdates where brain_processed=False
-    2. Decode: evaluate each pupdate against the rules
-    3. Execute: perform the matched action (dismiss / create_task /
-       complete_task), or mark the pupdate processed-without-action
-       when no rule matches.
+    1. Focus-mode gating: mark held pupdates during soft/deep focus
+       so they don't surface until the user is back on available.
+    2. pr_review_commented → agent wake: resume the Maiko-owned coding
+       agent whose PR just got new comments. Complex state logic
+       (session registry, inbox messaging) that doesn't fit the
+       declarative when/then dispatch.
 
-No LLM in the loop. If a pupdate's type isn't covered by any rule,
-it just sits — unmatched pupdates are the signal that the user should
-add a rule (or the plugin that emitted the type should ship one).
+Everything else — dismiss, create_task, complete_task — moved to the
+Automation engine as pupdate-scope automations. The engine runs
+before this phase and marks matching pupdates brain_processed, so
+by the time we get here we're only seeing what it didn't handle.
 """
 
 import logging
@@ -20,84 +21,8 @@ from datetime import datetime, timezone, timedelta
 from planet_maiko.database import db
 from planet_maiko.models.pupdate import Pupdate
 from planet_maiko.models.task import Task
-from planet_maiko.brain.pupdates.rules import (
-    evaluate, ACTION_DISMISS, ACTION_CREATE_TASK, ACTION_COMPLETE_TASK, ACTION_SKIP,
-)
 
 logger = logging.getLogger(__name__)
-
-
-def _slugify(text, max_len=60):
-    """Turn a title into a URL-safe task ID slug."""
-    slug = text.lower()
-    slug = "".join(c if c.isalnum() or c == " " else "" for c in slug)
-    slug = "-".join(slug.split())
-    return slug[:max_len]
-
-
-def _execute_dismiss(pupdate):
-    """Dismiss a pupdate (archive it)."""
-    pupdate.dismissed = True
-    pupdate.dismissed_at = datetime.now(timezone.utc)
-    logger.info(f"  -> dismissed: {pupdate.title}")
-
-
-def _execute_complete_task(pupdate):
-    """Close the review/coding task tied to this PR (pr_approved /
-    pr_merged). Not really a pupdate-shaped action — it's task
-    cleanup. The old code coupled this with 'mark as read'; keeping
-    the cleanup, dropping the read-flag side effect.
-    """
-    if pupdate.url:
-        _complete_review_task(pupdate.url)
-    logger.info(f"  -> completed tasks linked to: {pupdate.title}")
-
-
-def _complete_review_task(pr_url):
-    """Close any task whose linked PR just merged / got approved.
-
-    Two match paths:
-      1. Review-request tasks: task.type in (review, pr_review) AND
-         task.url == pr_url — the user was asked to review someone
-         else's PR and that PR's now merged, so the ask is done.
-      2. Coding-agent tasks that opened a PR: any task where
-         task.url == pr_url OR task.extra.pr_url == pr_url, in
-         status new / in_progress / in_review. These are Maiko's own
-         autonomous-coding outputs; they stay open through the review
-         cycle and only close when the PR actually merges.
-    """
-    review_tasks = Task.query.filter(
-        Task.url == pr_url,
-        Task.type.in_(["review", "pr_review"]),
-        Task.status.in_(["new", "in_progress"]),
-    ).all()
-    for task in review_tasks:
-        task.status = "done"
-        task.updated_at = datetime.now(timezone.utc)
-        logger.info(f"  -> auto-completed review task: {task.id}")
-
-    # Coding tasks whose PR matches — match either field so url set
-    # via approve() or pre-existing task.url both work.
-    coding_tasks = Task.query.filter(
-        Task.status.in_(["new", "in_progress", "in_review"]),
-    ).all()
-    for task in coding_tasks:
-        if task.url == pr_url or (task.extra or {}).get("pr_url") == pr_url:
-            if task.status == "done":
-                continue
-            task.status = "done"
-            task.updated_at = datetime.now(timezone.utc)
-            # Now that the PR has landed, cleanup the worktree.
-            branch = (task.extra or {}).get("branch")
-            wp = (task.extra or {}).get("working_path")
-            if branch and wp and ".maiko-worktrees" in wp:
-                try:
-                    from planet_maiko.agents.coding_agent import cleanup
-                    repo_path = os.path.dirname(os.path.dirname(wp))
-                    cleanup(repo_path, branch)
-                except Exception as e:
-                    logger.info(f"  -> worktree cleanup skipped for {task.id}: {e}")
-            logger.info(f"  -> auto-completed coding task (PR merged): {task.id}")
 
 
 def _resume_agent_for_pr_comments(pupdate):
@@ -304,57 +229,6 @@ def _extract_pr_number(pr_url):
         return ""
 
 
-_PUPDATE_TYPE_TO_TASK_TYPE = {
-    "pr_review_requested": "review",
-    "pr_changes_requested": "bug",
-    "pr_ci_failed": "bug",
-    "linear_assigned": "coding",
-    "linear_mention": "coding",
-    "github_mention": "coding",
-}
-
-
-def _infer_task_type(pupdate, triage_result=None):
-    """Pick a task type for an LLM-triaged create_task action.
-
-    Order:
-      1. Whatever the LLM explicitly returned (if it learned to set task_type).
-      2. A static map keyed on pupdate.type for the well-known categories.
-      3. "coding" as the catch-all default — better than "todo" because
-         it tells the agent router this needs a coding agent.
-    """
-    if triage_result and triage_result.get("task_type"):
-        return triage_result["task_type"]
-    if pupdate.type in _PUPDATE_TYPE_TO_TASK_TYPE:
-        return _PUPDATE_TYPE_TO_TASK_TYPE[pupdate.type]
-    return "coding"
-
-
-def _execute_create_task(pupdate, rule):
-    """Create a task from a pupdate."""
-    task_id = f"task-{_slugify(pupdate.title)}-{pupdate.id[:6]}"
-
-    # Check if a task already exists for this pupdate
-    existing = Task.query.filter_by(source_pupdate_id=pupdate.id).first()
-    if existing:
-        logger.info(f"  -> task already exists: {existing.id}")
-        return
-
-    task = Task(
-        id=task_id,
-        title=pupdate.title,
-        type=rule.get("task_type", "todo"),
-        status="new",
-        priority=rule.get("task_priority", pupdate.priority),
-        source_pupdate_id=pupdate.id,
-        url=pupdate.url,
-        tags=pupdate.tags or [],
-        extra=pupdate.extra or {},
-    )
-    db.session.add(task)
-    logger.info(f"  -> created task: {task_id}")
-
-
 def process():
     """Run one processing cycle on all unprocessed pupdates.
 
@@ -379,67 +253,38 @@ def process():
 
     logger.info(f"Processing {len(pupdate_ids)} pupdate(s)...")
 
-    counts = {
-        "processed": 0, "dismissed": 0, "tasks_created": 0, "tasks_completed": 0,
-        "skipped": 0, "unmatched": 0, "held": 0,
-    }
+    counts = {"processed": 0, "held": 0, "pr_comments_woke": 0, "unmatched": 0}
 
     from planet_maiko.brain.focus.manager import should_surface, hold_pupdate
 
     for pid in pupdate_ids:
         pupdate = db.session.get(Pupdate, pid)
         if pupdate is None or pupdate.brain_processed or pupdate.dismissed:
-            # Got consumed by another worker or a rule that already
-            # committed — skip.
+            # Claimed by the Automation engine or another worker.
             continue
 
-        # Focus mode gating: hold pupdates that shouldn't surface right now
+        # Focus mode gating: mark held without processing (lets a later
+        # focus-exit release them in the digest).
         if not should_surface(pupdate):
             hold_pupdate(pupdate)
             counts["held"] += 1
-            # Still process through rules (actions happen, just not surfaced)
 
-        # PR-comment events on a Maiko-owned coding task → wake the
-        # agent autonomously. Bypass the generic rule path because the
-        # action here is more involved than the simple dispatch table.
+        # PR-comment events wake the coding agent. State-heavy, so
+        # handled here rather than as an automation action.
         if pupdate.type == "pr_review_commented":
             _resume_agent_for_pr_comments(pupdate)
             pupdate.brain_processed = True
+            counts["pr_comments_woke"] += 1
             counts["processed"] += 1
             db.session.commit()
             continue
 
-        rule = evaluate(pupdate)
-
-        if rule is None:
-            # No rule handled this one — mark it processed so we don't
-            # keep reconsidering it every cycle, but leave it visible
-            # (not dismissed). An unmatched pupdate is a signal that
-            # the user should add a rule (or the plugin that emits the
-            # type should ship one). No LLM guessing step.
-            pupdate.brain_processed = True
-            counts["unmatched"] += 1
-            counts["processed"] += 1
-            continue
-
-        action = rule.get("action")
-
-        if action == ACTION_DISMISS:
-            _execute_dismiss(pupdate)
-            counts["dismissed"] += 1
-        elif action == ACTION_CREATE_TASK:
-            _execute_create_task(pupdate, rule)
-            counts["tasks_created"] += 1
-        elif action == ACTION_COMPLETE_TASK:
-            _execute_complete_task(pupdate)
-            counts["tasks_completed"] += 1
-        elif action == ACTION_SKIP:
-            counts["skipped"] += 1
-        else:
-            logger.warning(f"  Unknown action '{action}' in rule '{rule.get('name')}'")
-            counts["unmatched"] += 1
-
+        # Anything else that reached this phase wasn't matched by an
+        # Automation. Mark it processed so we don't keep reconsidering
+        # it every cycle; it stays visible (not dismissed). The signal
+        # is: add an Automation if this type should auto-handle.
         pupdate.brain_processed = True
+        counts["unmatched"] += 1
         counts["processed"] += 1
 
     db.session.commit()

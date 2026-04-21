@@ -50,7 +50,6 @@ class Pupdate(db.Model):
     actionable = db.Column(db.Boolean, default=False)
     action_hint = db.Column(db.String(256), nullable=True)  # e.g. "Review PR", "Create task"
     tags = db.Column(db.JSON, default=list)
-    read = db.Column(db.Boolean, default=False)
     dismissed = db.Column(db.Boolean, default=False)
     dismissed_at = db.Column(db.DateTime, nullable=True)
     expires_at = db.Column(db.DateTime, nullable=True)
@@ -72,7 +71,6 @@ class Pupdate(db.Model):
             "actionable": self.actionable,
             "action_hint": self.action_hint,
             "tags": self.tags,
-            "read": self.read,
             "dismissed": self.dismissed,
             "dismissed_at": iso_utc(self.dismissed_at),
             "expires_at": iso_utc(self.expires_at),

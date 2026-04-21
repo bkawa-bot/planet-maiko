@@ -82,7 +82,7 @@ def _safe_format(template, context):
 # raise for "no match", they should return False.
 # ---------------------------------------------------------------------------
 
-def _cond_cadence(automation, config):
+def _cond_cadence(automation, config, pupdate=None):
     # Native unit is minutes so scheduled skill migrations (which come
     # in at minute precision — 15, 30, 60, etc.) stay lossless.
     # interval_hours is accepted as a convenience alias.
@@ -98,7 +98,7 @@ def _cond_cadence(automation, config):
     return (datetime.now(timezone.utc) - last) >= timedelta(minutes=minutes)
 
 
-def _cond_overview_stale(automation, config):
+def _cond_overview_stale(automation, config, pupdate=None):
     from planet_maiko.models.insight import Insight
     repo = config.get("repo") or automation.scope_repo
     if not repo:
@@ -127,7 +127,7 @@ def _cond_overview_stale(automation, config):
     return last_confirmed < (datetime.now(timezone.utc) - timedelta(days=stale_days))
 
 
-def _cond_lora_missing(automation, config):
+def _cond_lora_missing(automation, config, pupdate=None):
     from planet_maiko.models.learning import Learning
     from planet_maiko.models.agent_profile import AgentProfile
 
@@ -150,52 +150,93 @@ def _cond_lora_missing(automation, config):
     return True
 
 
-def _cond_pupdate_match(automation, config):
-    """Fires when any non-dismissed pupdate of the given type(s) has
-    arrived within the last `within_minutes` window.
+def _pupdate_matches_criteria(pupdate, config):
+    """Evaluate rule-style criteria against a single pupdate. Reused
+    by both the cycle-scope variant (scans recent) and the
+    pupdate-scope variant (tests one-at-a-time)."""
+    if "source" in config and pupdate.source != config["source"]:
+        return False
+    if "type" in config and pupdate.type != config["type"]:
+        return False
+    if "types" in config and pupdate.type not in config["types"]:
+        return False
+    if "type_prefix" in config and not pupdate.type.startswith(config["type_prefix"]):
+        return False
+    if "priority" in config and pupdate.priority != config["priority"]:
+        return False
+    if "priority_in" in config and pupdate.priority not in config["priority_in"]:
+        return False
+    if "actionable" in config and bool(pupdate.actionable) != bool(config["actionable"]):
+        return False
+    if "has_tag" in config and config["has_tag"] not in (pupdate.tags or []):
+        return False
+    if "title_contains" in config:
+        needle = (config["title_contains"] or "").lower()
+        if needle and needle not in (pupdate.title or "").lower():
+            return False
+    return True
 
-    Config:
-      types: list[str]        — pupdate type names (required)
-      within_minutes: int     — lookback window, default 60
-      require_actionable: bool — only match if pupdate.actionable
 
-    Returns match + context {service, pupdate_ids, types, pupdate_id}
-    where `service` is the matched pupdate's repo (first tag if no
-    extra.repo) so actions can templatize "{service}".
+def _cond_pupdate_match(automation, config, pupdate=None):
+    """Dual-mode pupdate matcher.
+
+    - Cycle scope (no pupdate arg): scans recent non-dismissed pupdates
+      within `within_minutes` (default 60) and matches if any fit the
+      criteria. Context includes the first match's fields so actions
+      can templatize "{service}" etc.
+    - Pupdate scope (pupdate arg supplied by the engine's per-pupdate
+      loop): evaluates criteria against that specific pupdate only.
+      Context carries pupdate metadata through to the action.
+
+    Config supports the full rule-shape criteria set:
+    source / type / types / type_prefix / priority / priority_in /
+    actionable / has_tag / title_contains (+ within_minutes in cycle mode).
     """
-    types = config.get("types") or []
-    if not types:
-        return {"match": False}
+    if pupdate is not None:
+        if not _pupdate_matches_criteria(pupdate, config):
+            return {"match": False}
+        repo = (pupdate.extra or {}).get("repo")
+        if not repo and (pupdate.tags or []):
+            repo = (pupdate.tags or [None])[0]
+        return {
+            "match": True,
+            "context": {
+                "service": repo or "",
+                "pupdate_id": pupdate.id,
+                "pupdate_type": pupdate.type,
+                "title": pupdate.title or "",
+            },
+        }
+
+    # Cycle-scope path
     within = int(config.get("within_minutes", 60))
-    require_actionable = bool(config.get("require_actionable", False))
-
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=within)
-    q = Pupdate.query.filter(
-        Pupdate.timestamp >= cutoff,
-        Pupdate.dismissed == False,  # noqa: E712
-        Pupdate.type.in_(types),
+    candidates = (
+        Pupdate.query
+        .filter(Pupdate.timestamp >= cutoff, Pupdate.dismissed == False)  # noqa: E712
+        .order_by(Pupdate.timestamp.desc())
+        .limit(100)
+        .all()
     )
-    if require_actionable:
-        q = q.filter(Pupdate.actionable == True)  # noqa: E712
-    match = q.order_by(Pupdate.timestamp.desc()).first()
-    if match is None:
-        return {"match": False}
-    repo = (match.extra or {}).get("repo")
-    if not repo and (match.tags or []):
-        repo = (match.tags or [None])[0]
-    return {
-        "match": True,
-        "context": {
-            "service": repo or "",
-            "types": [match.type],
-            "pupdate_id": match.id,
-            "pupdate_ids": [match.id],
-            "title": match.title or "",
-        },
-    }
+    for p in candidates:
+        if _pupdate_matches_criteria(p, config):
+            repo = (p.extra or {}).get("repo")
+            if not repo and (p.tags or []):
+                repo = (p.tags or [None])[0]
+            return {
+                "match": True,
+                "context": {
+                    "service": repo or "",
+                    "pupdate_id": p.id,
+                    "pupdate_type": p.type,
+                    "title": p.title or "",
+                    "pupdate_ids": [p.id],
+                },
+            }
+    return {"match": False}
 
 
-def _cond_pupdate_chain(automation, config):
+def _cond_pupdate_chain(automation, config, pupdate=None):
     """Fires when ALL of `types` appear within `within_minutes`, grouped
     by the same key (service/repo). Replaces the correlator's
     CAUSE_CHAINS matching.
@@ -266,7 +307,7 @@ CONDITIONS = {
 # Action dispatchers — each returns a short result dict for logging.
 # ---------------------------------------------------------------------------
 
-def _act_propose(automation, config):
+def _act_propose(automation, config, pupdate=None):
     draft = config.get("draft") or {}
     if not draft.get("title"):
         return {"skipped": "proposal draft missing title"}
@@ -302,7 +343,7 @@ def _act_propose(automation, config):
     return {"pupdate_id": pupdate_id, "kind": "propose"}
 
 
-def _act_nudge(automation, config):
+def _act_nudge(automation, config, pupdate=None):
     pupdate_id = f"automation-nudge-{automation.id}-{uuid.uuid4().hex[:8]}"
     tag = f"automation:{automation.id}"
     pupdate = Pupdate(
@@ -324,7 +365,7 @@ def _act_nudge(automation, config):
     return {"pupdate_id": pupdate_id, "kind": "nudge"}
 
 
-def _act_create_task(automation, config):
+def _act_create_task(automation, config, pupdate=None):
     from planet_maiko.models.task import Task
     from planet_maiko.orchestration import route, is_ready
 
@@ -350,7 +391,7 @@ def _act_create_task(automation, config):
     return {"task_id": task_id, "kind": "create_task"}
 
 
-def _act_run_skill(automation, config):
+def _act_run_skill(automation, config, pupdate=None):
     # Shortcut over create_task: builds a task of the right `type` so
     # the cycle's execute-agent-tasks phase runs it as a one-shot skill.
     # `skill_name` maps to task.type (the execute phase picks role from
@@ -382,11 +423,114 @@ def _act_run_skill(automation, config):
     return {"task_id": task_id, "kind": "run_skill", "skill": skill_name}
 
 
+def _act_dismiss_pupdate(automation, config, pupdate=None):
+    if pupdate is None:
+        return {"skipped": "dismiss_pupdate requires pupdate context"}
+    pupdate.dismissed = True
+    pupdate.dismissed_at = datetime.now(timezone.utc)
+    return {"kind": "dismiss_pupdate", "pupdate_id": pupdate.id}
+
+
+def _act_create_task_from_pupdate(automation, config, pupdate=None):
+    """Rule-style create-a-task: use the pupdate's title/priority as the
+    task seed, letting config override task_type and task_priority.
+    Mirrors _execute_create_task in the old processor."""
+    if pupdate is None:
+        return {"skipped": "create_task_from_pupdate requires pupdate context"}
+    from planet_maiko.models.task import Task
+    from planet_maiko.orchestration import route, is_ready
+    import uuid as _uuid
+
+    task_type = config.get("task_type") or pupdate.type
+    task_priority = config.get("task_priority") or pupdate.priority or "normal"
+    task_id = f"task-{_uuid.uuid4().hex[:10]}"
+    repo = (pupdate.extra or {}).get("repo") or ""
+    task = Task(
+        id=task_id,
+        title=pupdate.title,
+        type=task_type,
+        priority=task_priority,
+        status="new",
+        source_pupdate_id=pupdate.id,
+        url=pupdate.url,
+        tags=list(pupdate.tags or []),
+        extra={
+            "description": pupdate.body or "",
+            "repo": repo,
+            "from_automation": automation.id,
+        },
+    )
+    db.session.add(task)
+    db.session.flush()
+    route(task)
+    if not is_ready(task):
+        task.status = "blocked"
+    return {"kind": "create_task_from_pupdate", "task_id": task_id, "pupdate_id": pupdate.id}
+
+
+def _act_complete_linked_task(automation, config, pupdate=None):
+    """Close review / coding tasks whose url matches this pupdate's url.
+    Replaces the old ACTION_COMPLETE_TASK in rules.py — same cleanup
+    semantics, now living inside the Automation engine."""
+    if pupdate is None or not pupdate.url:
+        return {"skipped": "no url"}
+    from planet_maiko.models.task import Task
+
+    closed_review = 0
+    closed_coding = 0
+    review_tasks = Task.query.filter(
+        Task.url == pupdate.url,
+        Task.type.in_(["review", "pr_review"]),
+        Task.status.in_(["new", "in_progress"]),
+    ).all()
+    for t in review_tasks:
+        t.status = "done"
+        t.updated_at = datetime.now(timezone.utc)
+        closed_review += 1
+
+    coding_tasks = Task.query.filter(
+        Task.status.in_(["new", "in_progress", "in_review"]),
+    ).all()
+    for t in coding_tasks:
+        if t.url == pupdate.url or (t.extra or {}).get("pr_url") == pupdate.url:
+            t.status = "done"
+            t.updated_at = datetime.now(timezone.utc)
+            closed_coding += 1
+            # Worktree cleanup for Maiko-owned coding agents
+            branch = (t.extra or {}).get("branch")
+            wp = (t.extra or {}).get("working_path")
+            if branch and wp and ".maiko-worktrees" in wp:
+                try:
+                    from planet_maiko.agents.coding_agent import cleanup
+                    cleanup(wp, branch)
+                except Exception as e:
+                    logger.debug(f"[automation {automation.id}] worktree cleanup failed: {e}")
+
+    return {
+        "kind": "complete_linked_task",
+        "review_tasks_closed": closed_review,
+        "coding_tasks_closed": closed_coding,
+    }
+
+
+def _act_skip(automation, config, pupdate=None):
+    """Explicit no-op — useful for 'mark this pattern as handled,
+    don't dispatch anything.' Pairs with pupdate-scope automations
+    where you want the first-match behavior to claim the pupdate but
+    not produce any side effects."""
+    return {"kind": "skip"}
+
+
 ACTIONS = {
     "propose": _act_propose,
     "nudge": _act_nudge,
     "create_task": _act_create_task,
     "run_skill": _act_run_skill,
+    # Pupdate-scope actions (require context.pupdate to operate).
+    "dismiss_pupdate": _act_dismiss_pupdate,
+    "create_task_from_pupdate": _act_create_task_from_pupdate,
+    "complete_linked_task": _act_complete_linked_task,
+    "skip": _act_skip,
 }
 
 
@@ -412,12 +556,17 @@ def _normalize_cond_result(result):
     return bool(result), {}
 
 
-def _evaluate_conditions(automation):
+def _evaluate_conditions(automation, pupdate=None):
     """Run all when[] entries. Returns (bool, merged_context).
 
-    With when_logic == "all" every condition must match; for "any" one
-    is enough. Context from matched conditions is merged (later wins)
-    so actions can templatize over values the conditions extracted.
+    When `pupdate` is supplied (pupdate-scope evaluation), each
+    condition handler gets it — handlers that don't care ignore the
+    kwarg; pupdate_match uses it to evaluate against that specific
+    pupdate instead of scanning recent ones.
+
+    with_logic == "all" = every condition must match; "any" = one is
+    enough. Context from matched conditions is merged (later wins)
+    so actions can templatize over the extracted values.
     """
     when = automation.when or []
     if not when:
@@ -436,7 +585,7 @@ def _evaluate_conditions(automation):
             continue
         try:
             matched, ctx = _normalize_cond_result(
-                handler(automation, trigger.get("config") or {})
+                handler(automation, trigger.get("config") or {}, pupdate=pupdate)
             )
         except Exception as e:
             logger.warning(
@@ -469,7 +618,7 @@ def _apply_context_to_config(config, context):
     return config
 
 
-def _run_actions(automation, context=None):
+def _run_actions(automation, context=None, pupdate=None):
     results = []
     for action in (automation.then or []):
         kind = action.get("kind")
@@ -482,7 +631,7 @@ def _run_actions(automation, context=None):
             continue
         try:
             config = _apply_context_to_config(action.get("config") or {}, context)
-            results.append(handler(automation, config))
+            results.append(handler(automation, config, pupdate=pupdate))
         except Exception as e:
             logger.warning(
                 f"[automation {automation.id}] action {kind} error: {e}"
@@ -502,9 +651,11 @@ def evaluate():
         dict with per-outcome counts + a details list suitable for
         cycle logging.
     """
-    automations = (
+    # Cycle-scope: evaluate once per tick
+    cycle_automations = (
         Automation.query
         .filter(Automation.status == "active")
+        .filter(Automation.execution_scope == "cycle")
         .order_by(Automation.id.asc())
         .all()
     )
@@ -514,7 +665,7 @@ def evaluate():
     unmet = 0
     details = []
 
-    for a in automations:
+    for a in cycle_automations:
         if _cooldown_active(a):
             cooldown += 1
             details.append({"id": a.id, "outcome": "cooldown"})
@@ -541,11 +692,69 @@ def evaluate():
             "context": context,
         })
 
-    if fired:
-        db.session.commit()
-        logger.info(f"[automations] fired {fired} (cooldown={cooldown} unmet={unmet})")
+    # Pupdate-scope: iterate each unprocessed pupdate, first matching
+    # automation (ordered by id) claims it. Mirrors the old rules.py
+    # evaluate() semantic: one rule fires per pupdate, and the pupdate
+    # is marked brain_processed regardless (matched or not — the
+    # processor's focus gating + pr_review_commented path still runs
+    # in its own phase, but the rule dispatch happens here).
+    pupdate_automations = (
+        Automation.query
+        .filter(Automation.status == "active")
+        .filter(Automation.execution_scope == "pupdate")
+        .order_by(Automation.id.asc())
+        .all()
+    )
+    pupdate_fired = 0
+    pupdate_unmatched = 0
+    if pupdate_automations:
+        unprocessed = (
+            Pupdate.query
+            .filter(Pupdate.brain_processed == False)  # noqa: E712
+            .filter(Pupdate.dismissed == False)  # noqa: E712
+            .order_by(Pupdate.timestamp.asc())
+            .limit(200)
+            .all()
+        )
+        for p in unprocessed:
+            # pr_review_commented stays in the processor — it requires
+            # agent-wake logic that doesn't fit an action dispatch.
+            if p.type == "pr_review_commented":
+                continue
+            fired_for_this = False
+            for a in pupdate_automations:
+                try:
+                    matched, context = _evaluate_conditions(a, pupdate=p)
+                except Exception as e:
+                    logger.warning(f"[automation {a.id}] pupdate-scope eval error: {e}")
+                    continue
+                if not matched:
+                    continue
+                _run_actions(a, context=context, pupdate=p)
+                a.last_fired_at = datetime.now(timezone.utc)
+                a.fire_count = (a.fire_count or 0) + 1
+                pupdate_fired += 1
+                fired_for_this = True
+                break  # first-match wins
+            if not fired_for_this:
+                pupdate_unmatched += 1
+            p.brain_processed = True
 
-    return {"fired": fired, "cooldown": cooldown, "unmet": unmet, "details": details}
+    if fired or pupdate_fired:
+        db.session.commit()
+        logger.info(
+            f"[automations] cycle={fired} pupdate={pupdate_fired} "
+            f"(cooldown={cooldown} unmet={unmet} unmatched={pupdate_unmatched})"
+        )
+
+    return {
+        "fired": fired,
+        "cooldown": cooldown,
+        "unmet": unmet,
+        "pupdate_fired": pupdate_fired,
+        "pupdate_unmatched": pupdate_unmatched,
+        "details": details,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -612,6 +821,99 @@ _CHAIN_SEEDS = [
         ),
     },
 ]
+
+
+_RULE_SEEDS = [
+    {
+        "name": "Auto-dismiss CI passing",
+        "description": "CI-passed notifications are pure noise — don't need to see them.",
+        "match": {"type": "pr_ci_passed"},
+        "action": "dismiss_pupdate",
+        "action_config": {},
+    },
+    {
+        "name": "Auto-dismiss bot PRs",
+        "description": "Dependabot / renovate PRs don't need human attention.",
+        "match": {"type_prefix": "pr_", "title_contains": "dependabot"},
+        "action": "dismiss_pupdate",
+        "action_config": {},
+    },
+    {
+        "name": "Create task on PR review request",
+        "description": "When a teammate requests your review, create a high-priority review task.",
+        "match": {"type": "pr_review_requested"},
+        "action": "create_task_from_pupdate",
+        "action_config": {"task_type": "review", "task_priority": "high"},
+    },
+    {
+        "name": "Create task on Linear assignment",
+        "description": "A Linear issue assigned to you becomes a todo task.",
+        "match": {"type": "linear_assigned"},
+        "action": "create_task_from_pupdate",
+        "action_config": {"task_type": "todo"},
+    },
+    {
+        "name": "Create task on PR changes requested",
+        "description": "Reviewer wants changes — create a high-priority bug task to address them.",
+        "match": {"type": "pr_changes_requested"},
+        "action": "create_task_from_pupdate",
+        "action_config": {"task_type": "bug", "task_priority": "high"},
+    },
+    {
+        "name": "Create task on CI failure",
+        "description": "CI red on your PR — create a high-priority bug task so it doesn't get forgotten.",
+        "match": {"type": "pr_ci_failed"},
+        "action": "create_task_from_pupdate",
+        "action_config": {"task_type": "bug", "task_priority": "high"},
+    },
+    {
+        "name": "Close linked task on PR approved",
+        "description": "An approval means the review's done — close any review/coding task pointing at this PR.",
+        "match": {"type": "pr_approved"},
+        "action": "complete_linked_task",
+        "action_config": {},
+    },
+    {
+        "name": "Close linked task on PR merged",
+        "description": "PR merged — close linked tasks and clean up any worktree backing them.",
+        "match": {"type": "pr_merged"},
+        "action": "complete_linked_task",
+        "action_config": {},
+    },
+]
+
+
+def ensure_seed_rule_automations():
+    """Seed pupdate-scope Automations for the eight canonical matchers
+    that used to live in rules.py. Idempotent on (name, execution_scope).
+    """
+    created = 0
+    for seed in _RULE_SEEDS:
+        existing = (
+            Automation.query
+            .filter(Automation.name == seed["name"])
+            .filter(Automation.execution_scope == "pupdate")
+            .first()
+        )
+        if existing is not None:
+            continue
+        a = Automation(
+            name=seed["name"],
+            description=seed["description"],
+            when=[{"kind": "pupdate_match", "config": seed["match"]}],
+            when_logic="all",
+            then=[{"kind": seed["action"], "config": seed["action_config"]}],
+            status="active",
+            created_by="seed",
+            execution_scope="pupdate",
+            cooldown_days=0,
+        )
+        db.session.add(a)
+        created += 1
+    if created:
+        db.session.commit()
+        logger.info(f"[automations] seeded {created} pupdate rule automation(s)")
+    return created
 
 
 def ensure_seed_chain_automations():
