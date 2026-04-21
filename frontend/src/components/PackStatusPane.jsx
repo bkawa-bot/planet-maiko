@@ -98,15 +98,18 @@ function compareRows(a, b) {
 export default function PackStatusPane() {
   const [rows, setRows] = useState([]);
   const [externalRequests, setExternalRequests] = useState([]);
+  const [pendingJobs, setPendingJobs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const fetchAll = async () => {
     try {
-      const [activity, requests, profiles] = await Promise.all([
+      const [activity, requests, profiles, jobs] = await Promise.all([
         api.getAgentActivity(),
         api.getPackRequests(),
         api.getProfiles(),
+        api.getAgentJobs({ status: "pending_approval" }).catch(() => []),
       ]);
+      setPendingJobs(jobs || []);
       const profileById = Object.fromEntries((profiles || []).map((p) => [p.id, p]));
       const requestByTask = {};
       const external = [];
@@ -140,9 +143,27 @@ export default function PackStatusPane() {
   if (loading) return null;
   // Still render the pane when the pack is idle — the ask-box belongs
   // on Home even before there are rows to show. Only skip render when
-  // the whole pane would be truly empty (no rows, no externals, and
-  // the ask box always renders).
-  const hasAnything = rows.length > 0 || externalRequests.length > 0;
+  // the whole pane would be truly empty.
+  const hasAnything = rows.length > 0 || externalRequests.length > 0 || pendingJobs.length > 0;
+
+  const handleApproveJob = async (job) => {
+    try {
+      await api.approveAgentJob(job.id);
+      setPendingJobs((js) => js.filter((j) => j.id !== job.id));
+    } catch (err) {
+      // eslint-disable-next-line no-alert
+      alert("Couldn't approve: " + (err.message || "unknown"));
+    }
+  };
+  const handleDismissJob = async (job) => {
+    try {
+      await api.cancelAgentJob(job.id);
+      setPendingJobs((js) => js.filter((j) => j.id !== job.id));
+    } catch (err) {
+      // eslint-disable-next-line no-alert
+      alert("Couldn't dismiss: " + (err.message || "unknown"));
+    }
+  };
 
   return (
     <div className="pack-status-pane frost-pane">
@@ -150,6 +171,27 @@ export default function PackStatusPane() {
         <Users size={12} /> Your pack
       </div>
       <PackAskBox />
+      {pendingJobs.length > 0 && (
+        <div className="pack-status-pending-jobs">
+          <div className="pack-status-pending-label">Waiting on your approval</div>
+          {pendingJobs.map((j) => (
+            <div key={j.id} className="pack-status-pending-job">
+              <div className="pack-status-pending-main">
+                <div className="pack-status-pending-title">{j.title}</div>
+                <div className="pack-status-pending-meta">
+                  <span className="tag">{j.kind}</span>
+                  {j.scope_repo && <span className="tag">{j.scope_repo}</span>}
+                  {j.description && <span className="pack-status-pending-desc">{j.description}</span>}
+                </div>
+              </div>
+              <div className="pack-status-pending-actions">
+                <button className="btn btn-sm btn-primary" onClick={() => handleApproveJob(j)}>Approve</button>
+                <button className="btn btn-sm" onClick={() => handleDismissJob(j)}>Dismiss</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {!hasAnything && (
         <div className="pack-status-empty">
           Pack's quiet. Ask something up there and I'll pick someone.

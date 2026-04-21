@@ -257,6 +257,15 @@ export const api = {
   updateAutomation: (id, data) => request(`/automations/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteAutomation: (id) => request(`/automations/${id}`, { method: "DELETE" }),
 
+  // Agent jobs (pack-owned one-shot runs)
+  getAgentJobs: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/agent-jobs${query ? `?${query}` : ""}`);
+  },
+  approveAgentJob: (id) => request(`/agent-jobs/${id}/approve`, { method: "POST" }),
+  cancelAgentJob: (id) => request(`/agent-jobs/${id}/cancel`, { method: "POST" }),
+  deleteAgentJob: (id) => request(`/agent-jobs/${id}`, { method: "DELETE" }),
+
   // Insights (Team Playbook — tribal / operational notes injected into CLAUDE.md)
   getInsights: (params = {}) => {
     const query = new URLSearchParams(params).toString();

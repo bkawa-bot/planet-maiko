@@ -307,78 +307,78 @@ CONDITIONS = {
 # Action dispatchers — each returns a short result dict for logging.
 # ---------------------------------------------------------------------------
 
-def _act_create_task(automation, config, pupdate=None):
-    """Unified task creation — supersedes the old propose / create_task /
-    run_skill split. When ask_first is True, emits an agent_proposal
-    pupdate that the user approves to spawn the task. When False,
-    creates the Task directly.
+def _act_run_agent_job(automation, config, pupdate=None):
+    """Spawn an AgentJob — the pack-owned "run this skill / role" primitive.
 
     Config:
-      ask_first: bool     — default False. True = propose for approval.
-      type: str           — task type (e.g. "todo", "cartograph",
-                            "investigation", "brainstorm"). Also maps to
-                            skill name for one-shot skill runs — the
-                            cycle's execute phase picks the role by
-                            task.type via ONE_SHOT_ROLE_FOR_TYPE.
-      title: str          — defaults to automation.name when unset.
-      priority: str       — low | normal | high | urgent. Defaults
-                            "normal" for direct creation, "low" for
-                            proposals (avoids interrupt noise).
-      repo: str           — task.extra.repo; drives agent routing.
-      description: str    — task.extra.description; usually the skill's
-                            input / freeform detail for the agent.
+      kind: str           — job kind (cartograph, investigation,
+                            repo_analysis, or a skill name). Maps to
+                            task.type in the execute phase — determines
+                            which role spawns.
+      title: str          — defaults to automation.name.
+      description: str    — skill input / body / instructions for the agent.
+      scope_repo: str     — org/repo; drives worktree resolution.
+      priority: str       — low | normal | high | urgent. Default normal.
+      ask_first: bool     — true → status=pending_approval (user approves
+                            from the AgentJobs dashboard). false → direct
+                            queue for the next execute-phase tick.
     """
+    from planet_maiko.models.agent_job import AgentJob
+
     ask_first = bool(config.get("ask_first", False))
+    kind = config.get("kind") or "todo"
     title = config.get("title") or automation.name
-    task_type = config.get("type") or "todo"
-    priority = config.get("priority") or ("low" if ask_first else "normal")
-    repo = config.get("repo") or automation.scope_repo or ""
+    repo = config.get("scope_repo") or automation.scope_repo or None
     description = config.get("description") or automation.description or ""
+    priority = config.get("priority") or "normal"
 
-    if ask_first:
-        pupdate_id = f"automation-{automation.id}-{uuid.uuid4().hex[:8]}"
-        tag = f"automation:{automation.id}"
-        p = Pupdate(
-            id=pupdate_id,
-            source="maiko",
-            source_id=f"automation/{automation.id}",
-            type="agent_proposal",
-            priority=priority,
-            title=title,
-            body=description,
-            actionable=True,
-            action_hint="Approve / dismiss",
-            tags=["proposal", "from_maiko", tag],
-            extra={
-                "from_agent_id": None,
-                "draft": {
-                    "title": title,
-                    "type": task_type,
-                    "priority": priority,
-                    "repo": repo,
-                    "description": description,
-                },
-                "automation_id": automation.id,
-            },
-            brain_processed=True,
-        )
-        db.session.add(p)
-        return {"pupdate_id": pupdate_id, "kind": "create_task", "ask_first": True}
+    job_id = f"job-{uuid.uuid4().hex[:10]}"
+    job = AgentJob(
+        id=job_id,
+        kind=kind,
+        title=title,
+        description=description,
+        scope_repo=repo,
+        priority=priority,
+        created_by="automation",
+        automation_id=automation.id,
+        requires_approval=ask_first,
+        status="pending_approval" if ask_first else "queued",
+        approved_by=None if ask_first else "auto",
+        approved_at=None if ask_first else datetime.now(timezone.utc),
+        extra={"from_automation": automation.id},
+    )
+    db.session.add(job)
+    return {"job_id": job_id, "kind": "run_agent_job", "status": job.status}
 
-    # Direct creation — no approval step.
+
+def _act_create_task(automation, config, pupdate=None):
+    """Create a user-owed Task.
+
+    Use this when the automation surfaces work the *user* needs to do
+    (a todo, a bug, something they personally own). For pack-owned one-
+    shot runs (cartograph, investigate, skills), use `run_agent_job`.
+
+    Config:
+      type: str           — todo | bug | feature | coding etc.
+      title: str
+      description: str
+      priority: str
+      repo: str
+    """
     from planet_maiko.models.task import Task
     from planet_maiko.orchestration import route, is_ready
 
     task_id = f"task-{uuid.uuid4().hex[:10]}"
     task = Task(
         id=task_id,
-        title=title,
-        type=task_type,
-        priority=priority,
+        title=config.get("title") or automation.name,
+        type=config.get("type") or "todo",
+        priority=config.get("priority") or "normal",
         status="new",
         extra={
-            "description": description,
-            "repo": repo,
+            "description": config.get("description") or automation.description or "",
+            "repo": config.get("repo") or automation.scope_repo or "",
             "from_automation": automation.id,
         },
         tags=["from_automation"],
@@ -388,33 +388,47 @@ def _act_create_task(automation, config, pupdate=None):
     route(task)
     if not is_ready(task):
         task.status = "blocked"
-    return {"task_id": task_id, "kind": "create_task", "ask_first": False}
+    return {"task_id": task_id, "kind": "create_task"}
 
 
-def _act_nudge(automation, config, pupdate=None):
-    """Drop a note in the inbox with a link — used when the user
-    should go somewhere (Training page, a URL) rather than have a task
-    spawned. Low-priority informational pupdate.
+def _act_spawn_agent_job_from_pupdate(automation, config, pupdate=None):
+    """Pupdate-scope sibling of run_agent_job — spawns an AgentJob
+    using the matched pupdate for context (repo, title).
+
+    Config:
+      kind, ask_first, description override, priority.
     """
-    pupdate_id = f"automation-nudge-{automation.id}-{uuid.uuid4().hex[:8]}"
-    tag = f"automation:{automation.id}"
-    p = Pupdate(
-        id=pupdate_id,
-        source="maiko",
-        source_id=f"automation/{automation.id}",
-        type="maiko_nudge",
-        priority=config.get("priority", "low"),
-        title=config.get("title") or automation.name,
-        body=config.get("body") or automation.description or "",
-        url=config.get("url"),
-        actionable=True,
-        action_hint=config.get("action_hint", "Open"),
-        tags=["nudge", "from_maiko", tag],
-        extra={"automation_id": automation.id},
-        brain_processed=True,
+    if pupdate is None:
+        return {"skipped": "spawn_agent_job_from_pupdate requires pupdate context"}
+    from planet_maiko.models.agent_job import AgentJob
+
+    ask_first = bool(config.get("ask_first", False))
+    kind = config.get("kind") or "investigation"
+    repo = (pupdate.extra or {}).get("repo") or automation.scope_repo or None
+    title = config.get("title") or f"{kind} triggered by {pupdate.type}"
+    description = config.get("description") or pupdate.body or pupdate.title or ""
+
+    job_id = f"job-{uuid.uuid4().hex[:10]}"
+    job = AgentJob(
+        id=job_id,
+        kind=kind,
+        title=title,
+        description=description,
+        scope_repo=repo,
+        priority=config.get("priority") or pupdate.priority or "normal",
+        created_by="automation",
+        automation_id=automation.id,
+        requires_approval=ask_first,
+        status="pending_approval" if ask_first else "queued",
+        approved_by=None if ask_first else "auto",
+        approved_at=None if ask_first else datetime.now(timezone.utc),
+        extra={
+            "from_automation": automation.id,
+            "triggered_by_pupdate": pupdate.id,
+        },
     )
-    db.session.add(p)
-    return {"pupdate_id": pupdate_id, "kind": "nudge"}
+    db.session.add(job)
+    return {"job_id": job_id, "kind": "spawn_agent_job_from_pupdate", "status": job.status}
 
 
 def _act_dismiss_pupdate(automation, config, pupdate=None):
@@ -516,9 +530,11 @@ def _act_skip(automation, config, pupdate=None):
 
 
 ACTIONS = {
+    # Cycle-scope
+    "run_agent_job": _act_run_agent_job,
     "create_task": _act_create_task,
-    "nudge": _act_nudge,
-    # Pupdate-scope actions (require context.pupdate to operate).
+    # Pupdate-scope (require context.pupdate to operate).
+    "spawn_agent_job_from_pupdate": _act_spawn_agent_job_from_pupdate,
     "dismiss_pupdate": _act_dismiss_pupdate,
     "create_task_from_pupdate": _act_create_task_from_pupdate,
     "complete_linked_task": _act_complete_linked_task,
@@ -942,13 +958,13 @@ def ensure_seed_chain_automations():
             when_logic="all",
             within_minutes=30,
             then=[{
-                "kind": "create_task",
+                "kind": "run_agent_job",
                 "config": {
                     "ask_first": True,
+                    "kind": "investigation",
                     "title": "Investigate incident on {service}",
-                    "type": "investigation",
                     "priority": "high",
-                    "repo": "{service}",
+                    "scope_repo": "{service}",
                     "description": (
                         "Correlated signals on {service}: {types}. "
                         "Approving spawns an investigator that walks the "
@@ -1020,13 +1036,13 @@ def ensure_seed_automations():
             }],
             when_logic="all",
             then=[{
-                "kind": "create_task",
+                "kind": "run_agent_job",
                 "config": {
                     "ask_first": True,
+                    "kind": "cartograph",
                     "title": f"Cartograph {repo}",
-                    "type": "cartograph",
                     "priority": "normal",
-                    "repo": repo,
+                    "scope_repo": repo,
                     "description": (
                         f"{repo} hasn't been cartographed in a while. "
                         f"Approving spawns Atlas to walk the tree and "
@@ -1085,10 +1101,10 @@ def migrate_scheduled_skills():
             }],
             when_logic="all",
             then=[{
-                "kind": "create_task",
+                "kind": "run_agent_job",
                 "config": {
                     "ask_first": False,
-                    "type": s.id,  # skill name = task type for one-shot
+                    "kind": s.id,  # skill name = job kind
                     "title": s.name,
                 },
             }],
@@ -1108,11 +1124,26 @@ def migrate_scheduled_skills():
     return migrated
 
 
+PACK_OWNED_KINDS = {
+    # Pack-owned one-shot runs. Any automation whose create_task points
+    # at one of these types really means "spawn an AgentJob" — migration
+    # rewrites accordingly. Add new skills here as they're registered.
+    "cartograph", "investigation", "repo_analysis",
+    "brainstorm", "morning-brief", "evening-wrap", "checkin",
+    "plan", "team", "verify", "home-overview", "theme-designer", "pr-review",
+    "investigate",
+}
+
+
 def migrate_legacy_action_kinds():
-    """One-time rewrite of existing Automations that still use the old
-    `propose` and `run_skill` action kinds. Rewrites them into the
-    unified `create_task` action with ask_first set appropriately.
-    Idempotent: subsequent boots find no more legacy rows and return 0.
+    """Rewrite legacy action kinds into the current set. Idempotent.
+
+    Today's transitions:
+      - `propose` → `create_task(ask_first=true)` (Stage 5 change)
+      - `run_skill` → `create_task(ask_first=false)` (Stage 5 change)
+      - `create_task(type in PACK_OWNED_KINDS)` → `run_agent_job` (this stage)
+      - `nudge` → dropped (action gone; existing rows get an empty then[]
+        which the engine treats as a no-op match — user can delete)
     """
     rewrote = 0
     rows = (
@@ -1128,31 +1159,68 @@ def migrate_legacy_action_kinds():
             cfg = action.get("config") or {}
             if kind == "propose":
                 draft = cfg.get("draft") or {}
-                new_then.append({
-                    "kind": "create_task",
-                    "config": {
-                        "ask_first": True,
-                        "title": draft.get("title") or "",
-                        "type": draft.get("type") or "todo",
-                        "priority": draft.get("priority") or "normal",
-                        "repo": draft.get("repo") or "",
-                        "description": draft.get("description") or "",
-                    },
-                })
+                draft_type = draft.get("type") or "todo"
+                if draft_type in PACK_OWNED_KINDS:
+                    new_then.append({
+                        "kind": "run_agent_job",
+                        "config": {
+                            "ask_first": True,
+                            "kind": draft_type,
+                            "title": draft.get("title") or "",
+                            "priority": draft.get("priority") or "normal",
+                            "scope_repo": draft.get("repo") or "",
+                            "description": draft.get("description") or "",
+                        },
+                    })
+                else:
+                    new_then.append({
+                        "kind": "create_task",
+                        "config": {
+                            "type": draft_type,
+                            "title": draft.get("title") or "",
+                            "priority": draft.get("priority") or "normal",
+                            "repo": draft.get("repo") or "",
+                            "description": draft.get("description") or "",
+                        },
+                    })
                 changed = True
             elif kind == "run_skill":
                 new_then.append({
-                    "kind": "create_task",
+                    "kind": "run_agent_job",
                     "config": {
                         "ask_first": False,
+                        "kind": cfg.get("skill_name") or "todo",
                         "title": cfg.get("title") or "",
-                        "type": cfg.get("skill_name") or "todo",
                         "priority": cfg.get("priority") or "normal",
-                        "repo": cfg.get("scope_repo") or "",
+                        "scope_repo": cfg.get("scope_repo") or "",
                         "description": cfg.get("input") or "",
                     },
                 })
                 changed = True
+            elif kind == "create_task":
+                # Post-Stage-5 shape. Split further: create_task stays
+                # for user-owed types; pack-owned types become run_agent_job.
+                task_type = cfg.get("type") or "todo"
+                if task_type in PACK_OWNED_KINDS:
+                    new_then.append({
+                        "kind": "run_agent_job",
+                        "config": {
+                            "ask_first": bool(cfg.get("ask_first", False)),
+                            "kind": task_type,
+                            "title": cfg.get("title") or "",
+                            "priority": cfg.get("priority") or "normal",
+                            "scope_repo": cfg.get("repo") or "",
+                            "description": cfg.get("description") or "",
+                        },
+                    })
+                    changed = True
+                else:
+                    new_then.append(action)
+            elif kind == "nudge":
+                # Nudge retired — drop the action. If the user wanted
+                # a reminder, they can replace it with a create_task.
+                changed = True
+                continue
             else:
                 new_then.append(action)
         if changed:
@@ -1160,8 +1228,110 @@ def migrate_legacy_action_kinds():
             rewrote += 1
     if rewrote:
         db.session.commit()
-        logger.info(f"[automations] rewrote {rewrote} legacy action kind(s) to create_task")
+        logger.info(f"[automations] rewrote {rewrote} legacy action kind(s)")
     return rewrote
+
+
+def migrate_tasks_to_agent_jobs():
+    """One-time migration: Task rows with pack-owned types become
+    AgentJob rows. Also migrates agent_proposal pupdates that were
+    emitted by automations (had automation_id in extra) into
+    pending-approval AgentJobs.
+
+    Idempotent — subsequent boots find no more matching Tasks / pupdates.
+    """
+    from planet_maiko.models.task import Task
+    from planet_maiko.models.agent_job import AgentJob
+
+    migrated_tasks = 0
+    candidates = (
+        Task.query
+        .filter(Task.type.in_(list(PACK_OWNED_KINDS)))
+        .all()
+    )
+    for t in candidates:
+        extra = t.extra or {}
+        automation_id = extra.get("from_automation")
+        status_map = {
+            "new": "queued",
+            "blocked": "queued",
+            "in_progress": "running",
+            "in_review": "running",
+            "done": "done",
+            "cancelled": "cancelled",
+        }
+        job_status = status_map.get(t.status, "queued")
+        job = AgentJob(
+            id=t.id if t.id.startswith("job-") else f"job-{uuid.uuid4().hex[:10]}",
+            kind=t.type,
+            title=t.title,
+            description=extra.get("description") or "",
+            scope_repo=extra.get("repo") or extra.get("repository"),
+            priority=t.priority or "normal",
+            created_by="automation" if automation_id else "user",
+            automation_id=automation_id,
+            status=job_status,
+            agent_profile_id=t.assigned_agent_id,
+            worktree_path=extra.get("working_path"),
+            branch=extra.get("branch"),
+            requires_approval=False,
+            approved_at=datetime.now(timezone.utc),
+            approved_by="auto",
+            artifact=extra.get("artifact"),
+            extra={k: v for k, v in extra.items() if k not in (
+                "description", "repo", "repository", "working_path",
+                "branch", "from_automation", "artifact",
+            )},
+        )
+        # Preserve the original task ID if it was already job-shaped,
+        # otherwise mint a new one and delete the stale task row.
+        db.session.add(job)
+        db.session.delete(t)
+        migrated_tasks += 1
+
+    # Pending agent_proposal pupdates with automation_id become
+    # pending-approval AgentJobs.
+    migrated_proposals = 0
+    proposals = (
+        Pupdate.query
+        .filter(Pupdate.type == "agent_proposal")
+        .filter(Pupdate.dismissed == False)  # noqa: E712
+        .all()
+    )
+    for p in proposals:
+        extra = p.extra or {}
+        automation_id = extra.get("automation_id")
+        if not automation_id:
+            continue  # agent-authored proposals: keep as pupdates
+        draft = extra.get("draft") or {}
+        draft_type = draft.get("type") or "todo"
+        if draft_type not in PACK_OWNED_KINDS:
+            continue  # user-owed proposal, keep as pupdate
+        job_id = f"job-{uuid.uuid4().hex[:10]}"
+        job = AgentJob(
+            id=job_id,
+            kind=draft_type,
+            title=draft.get("title") or p.title,
+            description=draft.get("description") or p.body or "",
+            scope_repo=draft.get("repo"),
+            priority=draft.get("priority") or p.priority or "normal",
+            created_by="automation",
+            automation_id=automation_id,
+            requires_approval=True,
+            status="pending_approval",
+        )
+        db.session.add(job)
+        p.dismissed = True
+        p.dismissed_at = datetime.now(timezone.utc)
+        migrated_proposals += 1
+
+    if migrated_tasks or migrated_proposals:
+        db.session.commit()
+        logger.info(
+            f"[agent_jobs] migrated {migrated_tasks} Task(s) + "
+            f"{migrated_proposals} pending proposal(s) to AgentJob"
+        )
+    return migrated_tasks + migrated_proposals
 
 
 def migrate_agent_goals():

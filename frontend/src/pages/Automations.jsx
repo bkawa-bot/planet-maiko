@@ -551,31 +551,37 @@ function describeCondition(trigger) {
 function describeAction(action) {
   const cfg = action?.config || {};
   switch (action?.kind) {
-    case "create_task": {
+    case "run_agent_job": {
       const askNote = cfg.ask_first ? " (asks first)" : "";
-      const type = cfg.type ? ` [${cfg.type}]` : "";
-      return `create task "${cfg.title || "(untitled)"}"${type}${askNote}`;
+      const kind = cfg.kind ? ` [${cfg.kind}]` : "";
+      return `run agent job "${cfg.title || "(untitled)"}"${kind}${askNote}`;
     }
-    case "nudge":
-      return `reminder "${cfg.title || "(untitled)"}"`;
-    case "dismiss_pupdate":
-      return "dismiss the matched pupdate";
+    case "create_task": {
+      const type = cfg.type ? ` [${cfg.type}]` : "";
+      return `create task "${cfg.title || "(untitled)"}"${type}`;
+    }
+    case "spawn_agent_job_from_pupdate": {
+      const askNote = cfg.ask_first ? " (asks first)" : "";
+      return `spawn ${cfg.kind || "agent job"} from pupdate${askNote}`;
+    }
     case "create_task_from_pupdate": {
       const bits = [];
       if (cfg.task_type) bits.push(`type=${cfg.task_type}`);
-      if (cfg.task_priority) bits.push(`priority=${cfg.task_priority}`);
       return `create task from pupdate${bits.length ? ` (${bits.join(", ")})` : ""}`;
     }
+    case "dismiss_pupdate":
+      return "dismiss the matched pupdate";
     case "complete_linked_task":
       return "close tasks linked to the matched PR";
     case "skip":
       return "skip (leave for manual)";
-    // Legacy kinds — still show readable text if a row hasn't been
-    // migrated yet.
+    // Legacy — keep readable until migration runs.
     case "propose":
       return `propose "${cfg.draft?.title || "(untitled)"}"`;
     case "run_skill":
       return `run skill "${cfg.skill_name || "(none)"}"`;
+    case "nudge":
+      return `reminder "${cfg.title || "(untitled)"}" (legacy)`;
     default:
       return action?.kind || "unknown";
   }

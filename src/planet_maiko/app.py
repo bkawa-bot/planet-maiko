@@ -157,6 +157,7 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.checks_api import checks_bp
     from planet_maiko.api.pet_api import pet_bp
     from planet_maiko.api.automations_api import automations_bp
+    from planet_maiko.api.agent_jobs_api import agent_jobs_bp
     app.register_blueprint(pupdates_bp, url_prefix="/api")
     app.register_blueprint(tasks_bp, url_prefix="/api")
     app.register_blueprint(projects_bp, url_prefix="/api")
@@ -183,6 +184,7 @@ def create_app(start_scheduler=False):
     app.register_blueprint(checks_bp, url_prefix="/api")
     app.register_blueprint(pet_bp, url_prefix="/api")
     app.register_blueprint(automations_bp, url_prefix="/api")
+    app.register_blueprint(agent_jobs_bp, url_prefix="/api")
 
     # Load plugins (entry_points + ~/.maiko/plugins/)
     from planet_maiko.plugins.loader import load_plugins
@@ -204,6 +206,7 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.external_session import ExternalSession  # noqa: F401
         from planet_maiko.models.pet import Pet  # noqa: F401
         from planet_maiko.models.automation import Automation  # noqa: F401
+        from planet_maiko.models.agent_job import AgentJob  # noqa: F401
         # Legacy AgentGoal kept imported only so the one-time migration
         # below can see its rows on first boot after this upgrade.
         # Remove the import and the table once the migration has run on
@@ -229,6 +232,7 @@ def create_app(start_scheduler=False):
             migrate_agent_goals, ensure_seed_automations,
             ensure_seed_chain_automations, migrate_scheduled_skills,
             ensure_seed_rule_automations, migrate_legacy_action_kinds,
+            migrate_tasks_to_agent_jobs,
         )
         try:
             migrate_agent_goals()
@@ -254,6 +258,10 @@ def create_app(start_scheduler=False):
             migrate_legacy_action_kinds()
         except Exception as e:
             logger.warning(f"[startup] Legacy action-kind migration skipped: {e}")
+        try:
+            migrate_tasks_to_agent_jobs()
+        except Exception as e:
+            logger.warning(f"[startup] Task→AgentJob migration skipped: {e}")
 
         # Wake-registry cleanup: the previous run may have crashed with
         # agents flagged "working" and with session-registry entries

@@ -487,6 +487,142 @@ def _emit_missing_clone_pupdate(task, repo):
     db.session.flush()
 
 
+def _phase_execute_agent_jobs():
+    """Phase 8b: run queued AgentJobs. Sibling of _phase_execute_agent_tasks
+    — same prepare+headless-kickoff machinery, reading from the AgentJob
+    table instead of Task.
+
+    Skips pending_approval (user hasn't approved yet) and running / done /
+    failed / cancelled. Capped at 2 per cycle to bound token spend.
+    """
+    from planet_maiko.models.agent_job import AgentJob
+    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.database import db
+    from planet_maiko.agents.brain_session import ONE_SHOT_ROLE_FOR_TYPE
+    from planet_maiko.agents.coding_agent import prepare, _kickoff_agent_headless
+    from planet_maiko.orchestration import resolve_repo_path, maybe_spawn
+
+    try:
+        candidates = (
+            AgentJob.query
+            .filter(AgentJob.status == "queued")
+            .order_by(AgentJob.created_at.asc())
+            .limit(2)
+            .all()
+        )
+        if not candidates:
+            return {"executed": 0}
+
+        executed = 0
+        for job in candidates:
+            role = (ONE_SHOT_ROLE_FOR_TYPE.get(job.kind) or (None, None))[0]
+            if role is None:
+                role = {
+                    "cartograph": "cartographer",
+                }.get(job.kind, "investigation")
+
+            local_path = resolve_repo_path(job.scope_repo) if job.scope_repo else None
+            if job.scope_repo and not local_path:
+                logger.warning(
+                    f"[cycle] agent_job {job.id}: no local clone for "
+                    f"{job.scope_repo}, marking failed"
+                )
+                job.status = "failed"
+                job.error = f"No local clone found for {job.scope_repo}"
+                job.finished_at = datetime.now(timezone.utc)
+                db.session.commit()
+                continue
+
+            # Find or spawn an agent profile for this role+scope.
+            if job.agent_profile_id:
+                profile = db.session.get(AgentProfile, job.agent_profile_id)
+            else:
+                profile = maybe_spawn(role, job.scope_repo)
+                job.agent_profile_id = profile.id
+
+            # Build a lightweight TASK.md prompt from the job fields.
+            # Not using build_task_prompt because AgentJob doesn't have
+            # project_id / source_pupdate_id / url / tags — simpler to
+            # assemble the handful of fields that apply.
+            prompt_parts = [job.title]
+            if job.description:
+                prompt_parts.append(f"\n## Description\n\n{job.description}")
+            # Embed the skill prompt for review/investigation jobs so
+            # the agent gets the full recipe in TASK.md.
+            if role in ("review", "investigation"):
+                try:
+                    from planet_maiko.agents.skills import get_skill_prompt
+                    skill_name = (ONE_SHOT_ROLE_FOR_TYPE.get(job.kind) or (None, None))[1]
+                    if skill_name:
+                        skill_prompt = get_skill_prompt(skill_name, {
+                            "query": job.title,
+                            "context": f"Repo: {job.scope_repo or ''}",
+                            "pupdates": "[]", "tasks": "[]", "calendar": "[]",
+                        }) or ""
+                        if skill_prompt.strip():
+                            prompt_parts.append(f"\n## Skill: {skill_name}\n\n{skill_prompt}")
+                except Exception as e:
+                    logger.debug(f"[cycle] skill prompt embed skipped: {e}")
+            full_prompt = "\n".join(prompt_parts)
+
+            if not job.worktree_path:
+                if not local_path:
+                    # Cartograph + some skill runs can work without a
+                    # repo clone (read-only on current working dir), but
+                    # agent runs without a real repo are unusual. Mark
+                    # failed if we can't resolve a path.
+                    logger.warning(f"[cycle] agent_job {job.id}: no repo path, skipping")
+                    continue
+                try:
+                    prep = prepare(
+                        task_id=job.id,
+                        task_title=job.title,
+                        prompt=full_prompt,
+                        repo_path=local_path,
+                        branch_prefix="cartographer" if role == "cartographer" else "maiko",
+                        auto_kickoff=False,
+                        use_worktree=True,
+                        agent_profile_id=job.agent_profile_id,
+                        role=role,
+                    )
+                except Exception as e:
+                    logger.warning(f"[cycle] prepare failed for agent_job {job.id}: {e}")
+                    job.status = "failed"
+                    job.error = str(e)[:500]
+                    job.finished_at = datetime.now(timezone.utc)
+                    db.session.commit()
+                    continue
+                if not prep:
+                    continue
+                job.worktree_path = prep["working_path"]
+                job.branch = prep.get("branch")
+                db.session.commit()
+
+            kickoff = _kickoff_agent_headless(
+                job.agent_profile_id, job.worktree_path, job.id,
+                branch_name=None, plan_first=False, role=role,
+            )
+            if kickoff.get("success"):
+                job.status = "running"
+                job.started_at = datetime.now(timezone.utc)
+                job.session_id = kickoff.get("session_id")
+                executed += 1
+            else:
+                job.status = "failed"
+                job.error = kickoff.get("error") or "kickoff failed"
+                job.finished_at = datetime.now(timezone.utc)
+                logger.warning(
+                    f"[cycle] kickoff failed for agent_job {job.id}: {kickoff.get('error')}"
+                )
+
+        if executed:
+            db.session.commit()
+        return {"executed": executed}
+    except Exception as e:
+        logger.warning(f"[cycle] execute agent jobs skipped: {e}")
+        return {"executed": 0, "error": str(e)}
+
+
 def _phase_execute_agent_tasks():
     """Phase 8c: Safety net for one-shot tasks that have been assigned
     but haven't started yet.
@@ -619,6 +755,7 @@ _PHASES = [
     ("projects", _phase_projects),
     ("orchestrate", _phase_orchestrate),
     ("unblock", _phase_unblock_tasks),
+    ("execute_agent_jobs", _phase_execute_agent_jobs),
     ("execute_agent_tasks", _phase_execute_agent_tasks),
     ("stuck_escalation", _phase_stuck_escalation),
 ]

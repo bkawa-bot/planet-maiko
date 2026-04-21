@@ -548,19 +548,21 @@ const PRIORITY_OPTIONS = [
   { value: "urgent", label: "urgent" },
 ];
 
-// Task types + skill names. Skills become task.type directly for
-// one-shot runs (the cycle's execute phase dispatches them via
-// ONE_SHOT_ROLE_FOR_TYPE). Grouped so users can see which picks
-// spawn an agent vs. just create a todo-shaped task.
+// Task types the USER owns (Tasks page). Separate from agent-job kinds.
 const TASK_TYPE_OPTIONS = [
   { value: "todo", label: "todo (generic)" },
   { value: "bug", label: "bug" },
   { value: "feature", label: "feature" },
-  { value: "coding", label: "coding (spawns a coding agent)" },
-  { value: "review", label: "review (spawns a reviewer)" },
-  { value: "investigation", label: "investigation (spawns an investigator)" },
-  { value: "repo_analysis", label: "repo_analysis (investigator + read-only)" },
+  { value: "coding", label: "coding (you'll assign an agent later)" },
+  { value: "review", label: "review (you owe someone a review)" },
+];
+
+// AgentJob kinds — what the pack runs. Maps 1:1 to task types the
+// cycle execute phase dispatches to a role.
+const AGENT_JOB_KIND_OPTIONS = [
   { value: "cartograph", label: "cartograph (Atlas walks the repo)" },
+  { value: "investigation", label: "investigation (spawns an investigator)" },
+  { value: "repo_analysis", label: "repo_analysis (read-only investigation)" },
   { value: "brainstorm", label: "brainstorm (skill)" },
   { value: "morning-brief", label: "morning-brief (skill)" },
   { value: "evening-wrap", label: "evening-wrap (skill)" },
@@ -632,47 +634,61 @@ const CONDITION_SCHEMAS = {
 };
 
 const ACTION_SCHEMAS = {
-  create_task: {
-    label: "Create a task (optionally ask first)",
+  run_agent_job: {
+    label: "Run an agent job (pack-owned)",
     group: "Do work",
     scopes: ["cycle"],
-    help: "Creates a task. Pick a skill-like type (cartograph, investigate, brainstorm) to spawn the matching agent as a one-shot, or a generic type (todo, bug) for manual work. Check 'ask first' to route through the inbox for approval.",
+    help: "Spawn an agent to do a one-shot task — cartograph a repo, investigate an incident, run a scheduled skill. Pack-owned: lands on the Agents page, not the Tasks list.",
     fields: [
+      { name: "kind", type: "select", label: "Kind", default: "cartograph", options: AGENT_JOB_KIND_OPTIONS },
+      { name: "ask_first", type: "bool", label: "Ask me before running", help: "when on, the job waits for your approval; off runs it directly." },
       { name: "title", type: "string", label: "Title", placeholder: "Can template {service} etc." },
-      { name: "type", type: "select", label: "Task type / skill", default: "todo", options: TASK_TYPE_OPTIONS },
-      { name: "ask_first", type: "bool", label: "Ask me before running", help: "when on, this proposes in the inbox instead of creating the task directly" },
-      { name: "description", type: "textarea", label: "Description / skill input", rows: 2, help: "populates task.description — skill prompt input or task detail" },
-      { name: "repo", type: "string", label: "Repo", placeholder: "org/repo or {service}", advanced: true },
+      { name: "description", type: "textarea", label: "Description / input", rows: 2, help: "skill input / what the agent should focus on" },
+      { name: "scope_repo", type: "string", label: "Repo", placeholder: "org/repo or {service}", advanced: true },
       { name: "priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS, advanced: true },
     ],
   },
-  nudge: {
-    label: "Drop a reminder in the inbox",
+  create_task: {
+    label: "Create a task (user-owed)",
     group: "Do work",
     scopes: ["cycle"],
-    help: "Posts a low-priority inbox item with a link. Clicking the inbox card opens the URL. Use when you want to poke yourself toward a page without spawning a task.",
+    help: "Create a task you own — a todo / bug / feature that lives on the Tasks page. Use this when the work surfaces to you, not the pack.",
     fields: [
-      { name: "title", type: "string", label: "Reminder title" },
-      { name: "url", type: "string", label: "Where to send me", placeholder: "/knowledge?tab=training or https://…" },
-      { name: "body", type: "textarea", label: "Body", rows: 2, advanced: true },
-      { name: "action_hint", type: "string", label: "Button label", placeholder: "Open Training", advanced: true },
+      { name: "title", type: "string", label: "Title" },
+      { name: "type", type: "select", label: "Task type", default: "todo", options: TASK_TYPE_OPTIONS },
+      { name: "description", type: "textarea", label: "Description", rows: 2 },
+      { name: "repo", type: "string", label: "Repo", placeholder: "org/repo", advanced: true },
+      { name: "priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS, advanced: true },
     ],
   },
   dismiss_pupdate: {
-    label: "Dismiss it (hide from inbox)",
+    label: "Dismiss it (archive)",
     group: "Handle the pupdate",
     scopes: ["pupdate"],
     help: "Archives the pupdate. Pure noise-reduction.",
     fields: [],
   },
   create_task_from_pupdate: {
-    label: "Create a task from it",
+    label: "Create a task from it (user-owed)",
     group: "Handle the pupdate",
     scopes: ["pupdate"],
-    help: "Uses the pupdate's title/priority as the task seed. Override type and priority here.",
+    help: "Uses the pupdate's title/priority as the task seed. Lands on the Tasks page as work you own.",
     fields: [
       { name: "task_type", type: "select", label: "Task type", default: "todo", options: TASK_TYPE_OPTIONS },
       { name: "task_priority", type: "select", label: "Task priority", options: PRIORITY_OPTIONS, advanced: true },
+    ],
+  },
+  spawn_agent_job_from_pupdate: {
+    label: "Spawn an agent job from it (pack-owned)",
+    group: "Handle the pupdate",
+    scopes: ["pupdate"],
+    help: "Pack handles this pupdate — e.g. incident → investigate. Job uses the pupdate's repo and title as context.",
+    fields: [
+      { name: "kind", type: "select", label: "Job kind", default: "investigation", options: AGENT_JOB_KIND_OPTIONS },
+      { name: "ask_first", type: "bool", label: "Ask me before running" },
+      { name: "title", type: "string", label: "Title override (optional)", advanced: true },
+      { name: "description", type: "textarea", label: "Description override (optional)", rows: 2, advanced: true },
+      { name: "priority", type: "select", label: "Priority", options: PRIORITY_OPTIONS, advanced: true },
     ],
   },
   complete_linked_task: {
