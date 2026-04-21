@@ -155,7 +155,7 @@ export default function Automations() {
   };
 
   return (
-    <div className="skills-page">
+    <div className="skills-page frost-pane">
       <div className="skills-header">
         <Zap size={18} />
         <h2>Automations</h2>
