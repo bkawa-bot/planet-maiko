@@ -50,7 +50,14 @@
   --lavender-soft: rgba(195, 166, 232, 0.15);
   --lavender-faint: rgba(195, 166, 232, 0.08);
 
-  --font: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+  /* Font stack is now self-consistent: DM Sans is imported in
+     index.html, so Mac and Windows finally render the same body type
+     instead of falling through to SF vs. Segoe UI. Fraunces is the
+     display companion — used for headings, page titles, and the
+     greeting. Both fall back gracefully if the Google Fonts CDN is
+     slow or unreachable. */
+  --font: 'DM Sans', -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
   --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
   --radius: 12px;
   --radius-sm: 8px;
@@ -124,6 +131,30 @@
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* Display type — applied anywhere we want the page to feel
+   "character over chrome": headings, the planet-maiko wordmark, the
+   home greeting, section titles. Body copy stays on --font (DM Sans).
+   Opsz 9..144 lets the variable-font pick a cut tuned to the size. */
+h1, h2, h3,
+.topbar-planet, .topbar-maiko,
+.overview-greeting,
+.overview-section-title,
+.review-queue-header,
+.home-widget .widget-header {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.005em;
+}
+/* Fraunces renders a touch heavy compared to DM Sans at the same
+   weight; nudge small display uses down a step so section titles
+   don't over-assert. */
+.overview-section-title,
+.review-queue-header,
+.home-widget .widget-header {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
 
 body {
   background-color: var(--bg);
