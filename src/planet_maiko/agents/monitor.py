@@ -50,6 +50,15 @@ def get_agent_activity():
     now = datetime.now(timezone.utc)
     stale_cutoff = now - timedelta(days=STALE_AGENT_DAYS)
 
+    # `agent_update` is the type the post-tool-use hook emits on every
+    # git commit / bash / file-write. They're the right signal for
+    # "how active is this agent?" (pupdate_count) but terrible for
+    # "what did the agent say?" — the speech bubble ends up parroting
+    # "Agent git commit" almost always. Skip them when picking the
+    # displayed last_message; they still contribute to last_seen
+    # (activity freshness) and the count.
+    NOISE_TYPES = {"agent_update"}
+
     for p in agent_pupdates:
         agent_key = (p.tags or [None])[0] or p.id
 
@@ -63,8 +72,12 @@ def get_agent_activity():
 
             agents[agent_key] = {
                 "task_id": agent_key,
-                "last_message": p.title,
-                "last_message_body": p.body,
+                # Seed the display fields from the most recent pupdate
+                # regardless of type; if a meaningful (non-noise) one
+                # exists further back, the loop below overwrites.
+                "last_message": None,
+                "last_message_body": None,
+                "last_meaningful_seen": None,
                 "last_seen": p.timestamp.isoformat(),
                 "type": p.type,
                 "pupdate_count": 0,
@@ -72,8 +85,36 @@ def get_agent_activity():
                 "idle_minutes": round(idle_minutes),
             }
 
-        if agent_key in agents:
-            agents[agent_key]["pupdate_count"] += 1
+        a = agents[agent_key]
+        a["pupdate_count"] += 1
+
+        # First non-noise pupdate we see for this agent wins as the
+        # displayed message. Because we're iterating timestamp-desc,
+        # that's the most recent meaningful thing the agent said.
+        if a["last_message"] is None and p.type not in NOISE_TYPES:
+            a["last_message"] = p.title
+            a["last_message_body"] = p.body
+            a["last_meaningful_seen"] = p.timestamp.isoformat()
+            a["type"] = p.type
+
+    # Fall back to the hook-noise title only if the agent has literally
+    # never said anything meaningful. Better "Agent git commit" than
+    # blank when that's all we've got.
+    for a in agents.values():
+        if a["last_message"] is None:
+            # Re-query would be wasteful; we already walked the pupdates
+            # but didn't stash a noise fallback. Do a tiny filter now.
+            fallback = (
+                Pupdate.query
+                .filter_by(source="agent")
+                .filter(Pupdate.tags.contains(a["task_id"]))
+                .order_by(Pupdate.timestamp.desc())
+                .first()
+            )
+            if fallback:
+                a["last_message"] = fallback.title
+                a["last_message_body"] = fallback.body
+        a.pop("last_meaningful_seen", None)
 
     # Drop tasks that are finished or no longer exist, and enrich
     # the rest with agent profile info + the task's title (the UI

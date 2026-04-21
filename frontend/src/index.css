@@ -155,20 +155,27 @@
   letter-spacing: 0.005em;
 }
 
-/* Section-title display type — the small-caps beats on Home like
-   "TODAY'S FOCUS", "WAITING ON YOU", and the sidebar widget headers
-   ("TODAY", "WEATHER", etc). Bitcount is a pixel font, so the
-   standard sub-pixel smoothing you want for prose is actively wrong
-   here; kill it so the grid renders crisp instead of blurry. Bump
-   weight to 700 because the pixel grid gets spindly under ~14px. */
+/* Display type — the section-title beats on Home ("TODAY'S FOCUS",
+   "WAITING ON YOU", widget headers) plus the overview greeting so
+   the biggest line on the page carries character instead of reading
+   like a body sentence. Bitcount is a pixel font, so the standard
+   sub-pixel smoothing you want for prose is actively wrong here;
+   kill it so the grid renders crisp instead of blurry. */
+.overview-greeting,
 .overview-section-title,
 .review-queue-header,
 .home-widget .widget-header {
   font-family: var(--font-display);
-  font-weight: 700;
   letter-spacing: 0.02em;
   -webkit-font-smoothing: none;
   -moz-osx-font-smoothing: grayscale;
+}
+/* Section-scale is smaller and gets spindly under ~14px unless we
+   bump the weight. Greeting is big enough to carry default weight. */
+.overview-section-title,
+.review-queue-header,
+.home-widget .widget-header {
+  font-weight: 700;
 }
 
 body {

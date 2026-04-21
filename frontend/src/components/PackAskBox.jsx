@@ -1,25 +1,99 @@
 import { useState } from "react";
-import { Send } from "lucide-react";
+import { Send, Loader, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { api } from "../api/client";
+import PackTurn from "./PackTurn";
 import "./PackAskBox.css";
 
 /**
- * Inline "Ask the pack" input. Lives at the top of PackStatusPane
- * on Home. Doesn't do the dispatch itself — hands the typed text
- * off to AskMaiko via the open-ask-pack event so the full panel
- * opens with the query pre-filled. Keeps dispatch state in one
- * place (the panel) and lets this input stay tiny and contextual.
+ * Inline "Ask the pack" widget. Lives at the top of PackStatusPane
+ * on Home. Dispatches directly to the pack and renders the answer
+ * right here — no corner popup, no context-switch. Shares styling
+ * with the AskMaiko floating panel (which handles Cmd/Ctrl+K from
+ * other pages) via the ask-maiko-* / ask-pack-* classes and the
+ * PackTurn component.
+ *
+ * Pause-first gating (deep_focus / too-many-active) mirrors what
+ * AskMaiko does — not a hard block, just a "sure?" step.
  */
+
+const PAUSE_FIRST_THRESHOLD = 3;
+
+
 export default function PackAskBox() {
   const [text, setText] = useState("");
+  const [context, setContext] = useState("");
+  const [nonGoals, setNonGoals] = useState("");
+  const [showDetails, setShowDetails] = useState(false);
+  const [turns, setTurns] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [pendingSend, setPendingSend] = useState(null);
 
-  const submit = () => {
-    const t = text.trim();
-    if (!t) return;
-    window.dispatchEvent(
-      new CustomEvent("open-ask-pack", { detail: { text: t } })
-    );
+  const dispatchNow = async (ask, ctx, ng) => {
+    setTurns((prev) => [...prev, { kind: "user", text: ask, context: ctx, nonGoals: ng }]);
     setText("");
+    setContext("");
+    setNonGoals("");
+    setShowDetails(false);
+    setLoading(true);
+    try {
+      const res = await api.dispatchPack(ask, ctx, ng);
+      if (res.status === "clarify") {
+        setTurns((prev) => [...prev, { kind: "clarify", text: res.clarify }]);
+      } else if (res.status === "dispatched") {
+        setTurns((prev) => [...prev, {
+          kind: "dispatched",
+          agent: res.agent,
+          task: res.task,
+          message: res.message,
+          reasoning: res.reasoning,
+          launchStatus: res.launch_status,
+        }]);
+      } else {
+        setTurns((prev) => [...prev, { kind: "error", text: res.error || "Something went wrong." }]);
+      }
+    } catch (err) {
+      setTurns((prev) => [...prev, { kind: "error", text: err.message }]);
+    }
+    setLoading(false);
   };
+
+  const submit = async () => {
+    const ask = text.trim();
+    if (!ask || loading || pendingSend) return;
+    const ctx = context.trim();
+    const ng = nonGoals.trim();
+
+    // Pause-first: surface deep-focus / too-many-active as a
+    // confirmation step instead of dispatching silently. Mirrors
+    // the AskMaiko panel so both flows behave the same.
+    try {
+      const [focus, tasks] = await Promise.all([
+        api.getFocus().catch(() => null),
+        api.getTasks({ status: "in_progress" }).catch(() => []),
+      ]);
+      const active = (tasks || []).filter((t) => t.assigned_agent_id).length;
+      const focusState = focus?.current_state || focus?.state;
+      if (focusState === "deep_focus" || focusState === "away") {
+        setPendingSend({ ask, ctx, ng, active, reason: "focus", focusState });
+        return;
+      }
+      if (active >= PAUSE_FIRST_THRESHOLD) {
+        setPendingSend({ ask, ctx, ng, active, reason: "load" });
+        return;
+      }
+    } catch {
+      /* lookups are best-effort — never block dispatch on a GET fail. */
+    }
+    dispatchNow(ask, ctx, ng);
+  };
+
+  const confirmPending = () => {
+    if (!pendingSend) return;
+    const { ask, ctx, ng } = pendingSend;
+    setPendingSend(null);
+    dispatchNow(ask, ctx, ng);
+  };
+  const cancelPending = () => setPendingSend(null);
 
   const onKey = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -28,25 +102,105 @@ export default function PackAskBox() {
     }
   };
 
+  const clearThread = () => {
+    setTurns([]);
+    setPendingSend(null);
+  };
+
   return (
-    <div className="pack-ask-box">
-      <input
-        type="text"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={onKey}
-        placeholder="Ask the pack…"
-        className="pack-ask-input"
-      />
+    <div className="pack-ask-wrap">
+      <div className="pack-ask-box">
+        <input
+          type="text"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={onKey}
+          placeholder="Ask the pack…"
+          className="pack-ask-input"
+          disabled={loading}
+        />
+        <button
+          type="button"
+          className="pack-ask-send"
+          onClick={submit}
+          disabled={!text.trim() || loading || pendingSend}
+          title="Hand off to an agent"
+        >
+          {loading ? <Loader size={12} className="spin" /> : <Send size={12} />}
+        </button>
+      </div>
+
       <button
+        className="pack-ask-details-toggle"
+        onClick={() => setShowDetails((s) => !s)}
         type="button"
-        className="pack-ask-send"
-        onClick={submit}
-        disabled={!text.trim()}
-        title="Hand off to an agent"
       >
-        <Send size={12} />
+        {showDetails ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+        {showDetails ? "Hide details" : "Add context / boundaries"}
       </button>
+
+      {showDetails && (
+        <div className="pack-ask-details">
+          <textarea
+            className="ask-pack-context"
+            value={context}
+            onChange={(e) => setContext(e.target.value)}
+            placeholder="Context — URL, file path, deadline, anything that helps…"
+            rows={2}
+          />
+          <textarea
+            className="ask-pack-context ask-pack-must-not"
+            value={nonGoals}
+            onChange={(e) => setNonGoals(e.target.value)}
+            placeholder="Must not — boundaries for the agent (e.g. 'don't touch billing', 'no new deps')"
+            rows={2}
+          />
+        </div>
+      )}
+
+      {(turns.length > 0 || loading || pendingSend) && (
+        <div className="pack-ask-thread">
+          {turns.map((turn, i) => (
+            <PackTurn key={i} turn={turn} />
+          ))}
+
+          {loading && (
+            <div className="ask-maiko-msg maiko">
+              <span className="ask-maiko-avatar">M</span>
+              <div className="ask-maiko-msg-text ask-maiko-typing">
+                <Loader size={12} className="spin" /> Finding the right agent…
+              </div>
+            </div>
+          )}
+
+          {pendingSend && (
+            <div className="ask-pack-pause">
+              <div className="ask-pack-pause-head">
+                <span>
+                  {pendingSend.reason === "focus"
+                    ? `You're in ${(pendingSend.focusState || "focus").replace("_", " ")}`
+                    : `${pendingSend.active} agents already working`}
+                </span>
+              </div>
+              <div className="ask-pack-pause-body">
+                {pendingSend.reason === "focus"
+                  ? "Heads-down right now. Want to hold this until focus ends, or send it through anyway?"
+                  : "A lot's already in motion. Want to hold this one until your next check-in, or send it now?"}
+              </div>
+              <div className="ask-pack-pause-actions">
+                <button className="ask-pack-pause-secondary" onClick={cancelPending}>Hold it</button>
+                <button className="ask-pack-pause-primary" onClick={confirmPending}>Send anyway</button>
+              </div>
+            </div>
+          )}
+
+          {turns.length > 0 && !loading && (
+            <button className="pack-ask-clear" onClick={clearThread}>
+              <Trash2 size={10} /> Clear thread
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
