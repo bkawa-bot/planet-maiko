@@ -57,10 +57,10 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
 
   const conditionOptions = Object.entries(CONDITION_SCHEMAS)
     .filter(([, s]) => s.scopes.includes(scope))
-    .map(([kind, s]) => ({ value: kind, label: s.label }));
+    .map(([kind, s]) => ({ value: kind, label: s.label, group: s.group || "Other" }));
   const actionOptions = Object.entries(ACTION_SCHEMAS)
     .filter(([, s]) => s.scopes.includes(scope))
-    .map(([kind, s]) => ({ value: kind, label: s.label }));
+    .map(([kind, s]) => ({ value: kind, label: s.label, group: s.group || "Other" }));
 
   const isValid = () => {
     if (!name.trim()) return false;
@@ -153,20 +153,8 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
           </div>
 
           <div className="automation-editor-field">
-            <label>Scope</label>
+            <label>What's this for?</label>
             <div className="scope-radio-group">
-              <label className={`scope-radio ${scope === "cycle" ? "active" : ""} ${scopeLocked ? "locked" : ""}`}>
-                <input
-                  type="radio"
-                  checked={scope === "cycle"}
-                  disabled={scopeLocked}
-                  onChange={() => setScope("cycle")}
-                />
-                <span>
-                  <strong>Per cycle</strong>
-                  <small>Evaluates once per brain tick — used for scheduled runs, stale-state watches, incident correlation.</small>
-                </span>
-              </label>
               <label className={`scope-radio ${scope === "pupdate" ? "active" : ""} ${scopeLocked ? "locked" : ""}`}>
                 <input
                   type="radio"
@@ -175,13 +163,25 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
                   onChange={() => setScope("pupdate")}
                 />
                 <span>
-                  <strong>Per pupdate</strong>
-                  <small>Iterates each incoming pupdate, first-match wins. Used for dismiss / create-task / complete-linked-task rules.</small>
+                  <strong>Handle an incoming pupdate</strong>
+                  <small>"When this kind of notification arrives, do this to it." Dismiss noise, turn events into tasks, close tasks when PRs merge.</small>
+                </span>
+              </label>
+              <label className={`scope-radio ${scope === "cycle" ? "active" : ""} ${scopeLocked ? "locked" : ""}`}>
+                <input
+                  type="radio"
+                  checked={scope === "cycle"}
+                  disabled={scopeLocked}
+                  onChange={() => setScope("cycle")}
+                />
+                <span>
+                  <strong>Watch the state of the world</strong>
+                  <small>"On a schedule / when a condition holds, do this." Scheduled skill runs, stale-overview refresh, incident correlation.</small>
                 </span>
               </label>
             </div>
             {scopeLocked && (
-              <div className="automation-editor-hint"><AlertTriangle size={10} /> Scope is locked for existing automations — create a new one to change it.</div>
+              <div className="automation-editor-hint"><AlertTriangle size={10} /> Locked after creation — to change, delete + recreate.</div>
             )}
           </div>
 
@@ -301,6 +301,29 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
 // ConditionRow + ActionRow — kind dropdown + dynamic field renderer.
 // --------------------------------------------------------------------------
 
+function GroupedOptions({ options }) {
+  // Stable-order the groups as they first appear in the list so "Time"
+  // stays above "Coverage state" etc. without alphabetizing unexpectedly.
+  const groupOrder = [];
+  const byGroup = {};
+  for (const opt of options) {
+    if (!(opt.group in byGroup)) {
+      groupOrder.push(opt.group);
+      byGroup[opt.group] = [];
+    }
+    byGroup[opt.group].push(opt);
+  }
+  return (
+    <>
+      {groupOrder.map((g) => (
+        <optgroup key={g} label={g}>
+          {byGroup[g].map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </optgroup>
+      ))}
+    </>
+  );
+}
+
 function ConditionRow({ condition, options, onChange, onRemove }) {
   const schema = CONDITION_SCHEMAS[condition.kind];
   return (
@@ -312,7 +335,7 @@ function ConditionRow({ condition, options, onChange, onRemove }) {
           onChange={(e) => onChange({ kind: e.target.value, config: defaultConfigFor(CONDITION_SCHEMAS[e.target.value]) })}
         >
           <option value="">Select a trigger…</option>
-          {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          <GroupedOptions options={options} />
         </select>
         {onRemove && (
           <button className="btn-ghost automation-entry-remove" onClick={onRemove} title="Remove">
@@ -336,7 +359,7 @@ function ActionRow({ action, options, onChange, onRemove }) {
           onChange={(e) => onChange({ kind: e.target.value, config: defaultConfigFor(ACTION_SCHEMAS[e.target.value]) })}
         >
           <option value="">Select an action…</option>
-          {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          <GroupedOptions options={options} />
         </select>
         {onRemove && (
           <button className="btn-ghost automation-entry-remove" onClick={onRemove} title="Remove">
@@ -351,7 +374,9 @@ function ActionRow({ action, options, onChange, onRemove }) {
 
 
 function DynamicFields({ schema, config, onChange }) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
   if (!schema || !schema.fields?.length) return null;
+
   const setField = (name, value) => {
     // Support dotted paths like "draft.title" — write into nested shape.
     if (!name.includes(".")) {
@@ -379,12 +404,44 @@ function DynamicFields({ schema, config, onChange }) {
     return cursor;
   };
 
+  const basicFields = schema.fields.filter((f) => !f.advanced);
+  const advancedFields = schema.fields.filter((f) => f.advanced);
+
+  // Auto-expand advanced when any advanced field already has a value —
+  // otherwise the user opens their existing row and can't see settings
+  // they previously configured.
+  const hasAdvancedValue = advancedFields.some((f) => {
+    const v = getField(f.name);
+    return v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0);
+  });
+  const expanded = showAdvanced || hasAdvancedValue;
+
   return (
     <div className="automation-entry-fields">
       {schema.help && <div className="automation-entry-help">{schema.help}</div>}
-      {schema.fields.map((f) => (
+      {basicFields.map((f) => (
         <FieldInput key={f.name} field={f} value={getField(f.name)} onChange={(v) => setField(f.name, v)} />
       ))}
+      {advancedFields.length > 0 && (
+        <div className="automation-entry-advanced">
+          {!expanded ? (
+            <button
+              type="button"
+              className="automation-entry-advanced-toggle"
+              onClick={() => setShowAdvanced(true)}
+            >
+              + {advancedFields.length} more option{advancedFields.length === 1 ? "" : "s"}
+            </button>
+          ) : (
+            <>
+              <div className="automation-entry-advanced-label">Advanced</div>
+              {advancedFields.map((f) => (
+                <FieldInput key={f.name} field={f} value={getField(f.name)} onChange={(v) => setField(f.name, v)} />
+              ))}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -523,6 +580,7 @@ const TASK_TYPE_OPTIONS = [
 const CONDITION_SCHEMAS = {
   cadence: {
     label: "On a schedule",
+    group: "Time",
     scopes: ["cycle"],
     help: "Fires every N minutes. Uses last_fired_at + interval as the clock.",
     fields: [
@@ -530,7 +588,8 @@ const CONDITION_SCHEMAS = {
     ],
   },
   overview_stale: {
-    label: "Repo overview is stale",
+    label: "A repo's overview goes stale",
+    group: "Coverage state",
     scopes: ["cycle"],
     help: "Fires when a repo's cartographer insight is missing or older than the threshold.",
     fields: [
@@ -539,7 +598,8 @@ const CONDITION_SCHEMAS = {
     ],
   },
   lora_missing: {
-    label: "Repo has rules but no LoRA adapter",
+    label: "Enough rules pile up without a LoRA",
+    group: "Coverage state",
     scopes: ["cycle"],
     help: "Fires when a repo has N+ active Learnings and no AgentProfile for that scope has an adapter_path set.",
     fields: [
@@ -548,103 +608,115 @@ const CONDITION_SCHEMAS = {
     ],
   },
   pupdate_chain: {
-    label: "Multiple pupdate types within a window",
+    label: "A chain of pupdate types lands together",
+    group: "Events",
     scopes: ["cycle"],
     help: "Fires when all the listed pupdate types appear within the time window, grouped by the same key (usually repo).",
     fields: [
-      { name: "types", type: "list", label: "Pupdate types", placeholder: "pr_ci_failed, error_spike", help: "comma-separated" },
+      { name: "types", type: "list", label: "Pupdate types (all required)", placeholder: "pr_ci_failed, error_spike", help: "comma-separated" },
       { name: "within_minutes", type: "number", label: "Window (minutes)", default: 30, min: 1 },
-      { name: "group_by", type: "select", label: "Group by", default: "repo", options: ["repo", "tag"] },
+      { name: "group_by", type: "select", label: "Group by", default: "repo", options: ["repo", "tag"], advanced: true },
     ],
   },
   pupdate_match: {
-    label: "Pupdate matches criteria",
+    label: "A pupdate of a specific type comes in",
+    group: "Events",
     scopes: ["cycle", "pupdate"],
-    help: "Single-pupdate matcher — works in both scopes. In cycle scope it scans recent; in pupdate scope it tests each incoming pupdate.",
+    help: "Picks up individual incoming pupdates. Type is the most common filter; the other fields narrow further when you need it.",
     fields: [
-      { name: "source", type: "string", label: "Source", placeholder: "github, linear, calendar…" },
-      { name: "type", type: "select", label: "Type (exact)", options: PUPDATE_TYPE_OPTIONS },
-      { name: "type_prefix", type: "string", label: "Type prefix", placeholder: "pr_" },
-      { name: "priority", type: "select", label: "Priority", options: PRIORITY_OPTIONS },
-      { name: "actionable", type: "bool", label: "Must be actionable" },
-      { name: "has_tag", type: "string", label: "Has tag", placeholder: "e.g. ci" },
-      { name: "title_contains", type: "string", label: "Title contains", placeholder: "substring, case-insensitive" },
-      { name: "within_minutes", type: "number", label: "Window (cycle scope only)", help: "lookback window; default 60" },
+      { name: "type", type: "select", label: "Type", options: PUPDATE_TYPE_OPTIONS, help: "the pupdate's type field" },
+      { name: "title_contains", type: "string", label: "Title contains", placeholder: "substring, case-insensitive", help: "optional extra filter on the title" },
+      // Everything below is rare — collapsed under Advanced.
+      { name: "source", type: "string", label: "Source", placeholder: "github, linear, calendar…", advanced: true },
+      { name: "type_prefix", type: "string", label: "Type prefix", placeholder: "pr_", advanced: true, help: "match a family of types (e.g. pr_*)" },
+      { name: "priority", type: "select", label: "Priority", options: PRIORITY_OPTIONS, advanced: true },
+      { name: "actionable", type: "bool", label: "Must be actionable", advanced: true },
+      { name: "has_tag", type: "string", label: "Has tag", placeholder: "e.g. ci", advanced: true },
+      { name: "within_minutes", type: "number", label: "Window (minutes, cycle-scope only)", help: "how far back to scan in cycle scope; default 60", advanced: true },
     ],
   },
 };
 
 const ACTION_SCHEMAS = {
   propose: {
-    label: "Propose a task (user approves)",
+    label: "Propose a task (asks you first)",
+    group: "Ask the user",
     scopes: ["cycle"],
     help: "Emits an agent_proposal pupdate. Approving turns the draft into a routed task.",
     fields: [
       { name: "draft.title", type: "string", label: "Proposal title", placeholder: "Can template {service} etc." },
-      { name: "draft.type", type: "select", label: "Task type", default: "todo", options: TASK_TYPE_OPTIONS },
-      { name: "draft.priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS },
-      { name: "draft.repo", type: "string", label: "Repo", placeholder: "org/repo or {service}" },
       { name: "draft.description", type: "textarea", label: "Description", placeholder: "What the task is. Can template {service}, {types}, {title}." },
+      // Task shape fields default sensibly; tuck them into Advanced.
+      { name: "draft.type", type: "select", label: "Task type", default: "todo", options: TASK_TYPE_OPTIONS, advanced: true },
+      { name: "draft.priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS, advanced: true },
+      { name: "draft.repo", type: "string", label: "Repo", placeholder: "org/repo or {service}", advanced: true },
     ],
   },
   nudge: {
-    label: "Post an inbox nudge (user clicks to act)",
+    label: "Post an inbox nudge (reminder, no task)",
+    group: "Ask the user",
     scopes: ["cycle"],
     help: "Low-priority maiko_nudge pupdate pointing at a URL. No task created.",
     fields: [
       { name: "title", type: "string", label: "Title" },
-      { name: "body", type: "textarea", label: "Body", rows: 2 },
-      { name: "url", type: "string", label: "URL (relative or absolute)", placeholder: "/knowledge?tab=training" },
-      { name: "action_hint", type: "string", label: "Action hint", placeholder: "Open Training" },
+      { name: "url", type: "string", label: "URL", placeholder: "/knowledge?tab=training" },
+      { name: "body", type: "textarea", label: "Body", rows: 2, advanced: true },
+      { name: "action_hint", type: "string", label: "Action hint", placeholder: "Open Training", advanced: true },
     ],
   },
   create_task: {
-    label: "Create a task (no approval step)",
+    label: "Create a task directly (no approval)",
+    group: "Create work",
     scopes: ["cycle"],
-    help: "Skips the propose step — creates a Task directly. Use sparingly; proposals are the safer default.",
+    help: "Skips the propose step — creates a Task directly. Use when you're sure; proposals are safer.",
     fields: [
       { name: "title", type: "string", label: "Title" },
       { name: "type", type: "select", label: "Task type", default: "todo", options: TASK_TYPE_OPTIONS },
-      { name: "priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS },
-      { name: "repo", type: "string", label: "Repo", placeholder: "org/repo" },
-      { name: "description", type: "textarea", label: "Description" },
+      { name: "priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS, advanced: true },
+      { name: "repo", type: "string", label: "Repo", placeholder: "org/repo", advanced: true },
+      { name: "description", type: "textarea", label: "Description", advanced: true },
     ],
   },
   run_skill: {
     label: "Run a skill as a one-shot task",
+    group: "Create work",
     scopes: ["cycle"],
-    help: "Creates a task whose `type` is the skill name; the cycle's execute phase runs it as a one-shot.",
+    help: "Creates a task whose type is the skill name; the cycle's execute phase runs it as a one-shot.",
     fields: [
       { name: "skill_name", type: "string", label: "Skill name", placeholder: "brainstorm, investigate, morning-brief" },
-      { name: "title", type: "string", label: "Task title (optional)" },
-      { name: "input", type: "textarea", label: "Skill input (description on the task)", rows: 2 },
-      { name: "scope_repo", type: "string", label: "Repo scope", placeholder: "org/repo" },
-      { name: "priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS },
+      { name: "input", type: "textarea", label: "Input to the skill", rows: 2, help: "populates task.description — the skill's actual prompt input" },
+      { name: "title", type: "string", label: "Task title (optional)", advanced: true },
+      { name: "scope_repo", type: "string", label: "Repo scope", placeholder: "org/repo", advanced: true },
+      { name: "priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS, advanced: true },
     ],
   },
   dismiss_pupdate: {
-    label: "Dismiss the matched pupdate",
+    label: "Dismiss it (hide from inbox)",
+    group: "Handle the pupdate",
     scopes: ["pupdate"],
     help: "Archives the pupdate. Pure noise-reduction.",
     fields: [],
   },
   create_task_from_pupdate: {
-    label: "Create a task from the matched pupdate",
+    label: "Create a task from it",
+    group: "Handle the pupdate",
     scopes: ["pupdate"],
     help: "Uses the pupdate's title/priority as the task seed. Override type and priority here.",
     fields: [
       { name: "task_type", type: "select", label: "Task type", default: "todo", options: TASK_TYPE_OPTIONS },
-      { name: "task_priority", type: "select", label: "Task priority", options: PRIORITY_OPTIONS },
+      { name: "task_priority", type: "select", label: "Task priority", options: PRIORITY_OPTIONS, advanced: true },
     ],
   },
   complete_linked_task: {
-    label: "Close the linked review/coding task",
+    label: "Close the linked task (PR merged / approved)",
+    group: "Handle the pupdate",
     scopes: ["pupdate"],
     help: "Closes tasks whose url matches the pupdate's url. Cleans up worktrees for Maiko-owned coding tasks.",
     fields: [],
   },
   skip: {
-    label: "Skip (no-op, claim the pupdate)",
+    label: "Skip it (acknowledge, no action)",
+    group: "Handle the pupdate",
     scopes: ["pupdate"],
     help: "Marks the pupdate processed without dispatching anything. Useful for 'ignore this pattern' without deleting the automation.",
     fields: [],

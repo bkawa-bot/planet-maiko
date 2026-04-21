@@ -178,6 +178,36 @@
   font-size: 10px;
 }
 
+/* Advanced fields — collapsed by default under a "+ N more options"
+   link; expands into a bordered sub-section with its own label so the
+   user sees they're entering the deep-water form. */
+.automation-entry-advanced {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-top: 2px;
+}
+.automation-entry-advanced-toggle {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  padding: 2px 0;
+  font-family: inherit;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+.automation-entry-advanced-toggle:hover { color: var(--pink); }
+.automation-entry-advanced-label {
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding-top: 6px;
+  margin-top: 2px;
+  border-top: 1px dashed var(--border-subtle);
+}
+
 .automation-editor-hint {
   font-size: 10px; color: var(--text-muted);
   display: flex; align-items: center; gap: 4px;
