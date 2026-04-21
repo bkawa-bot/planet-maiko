@@ -50,12 +50,14 @@
   --lavender-soft: rgba(195, 166, 232, 0.15);
   --lavender-faint: rgba(195, 166, 232, 0.08);
 
-  /* Pixel / terminal font pair — body runs in JetBrains Mono so the
-     interface reads like a cozy terminal, display uses Bitcount Prop
-     Single (Google Fonts' variable pixel typeface) for headings and
-     the wordmark. Falls back to the existing mono stack if the
-     Google CDN is slow so the page never boots in Times New Roman. */
-  --font: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  /* Body runs in Inter — neutral, proportional, readable at long
+     prose lengths (agent bios, learning rules, overview meat).
+     Pixel personality lives in the display + tone fonts only. Now
+     that Inter is actually loaded, the Mac/Windows split the
+     pre-experiment stack suffered from is gone. JetBrains Mono
+     stays available as --font-mono for code-ish surfaces (diff
+     view, agent messages, .mono class). */
+  --font: 'Inter', -apple-system, 'Segoe UI', sans-serif;
   --font-display: 'Bitcount Prop Single', 'JetBrains Mono', monospace;
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
   --radius: 12px;
