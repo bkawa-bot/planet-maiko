@@ -219,6 +219,7 @@ def create_app(start_scheduler=False):
         # seeded 'keep overview current' watch.
         from planet_maiko.brain.automations import (
             migrate_agent_goals, ensure_seed_automations,
+            ensure_seed_chain_automations,
         )
         try:
             migrate_agent_goals()
@@ -228,6 +229,10 @@ def create_app(start_scheduler=False):
             ensure_seed_automations()
         except Exception as e:
             logger.warning(f"[startup] Automation seeding skipped: {e}")
+        try:
+            ensure_seed_chain_automations()
+        except Exception as e:
+            logger.warning(f"[startup] Chain automation seeding skipped: {e}")
 
         # Wake-registry cleanup: the previous run may have crashed with
         # agents flagged "working" and with session-registry entries

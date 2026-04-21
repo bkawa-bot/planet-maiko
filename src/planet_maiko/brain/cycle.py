@@ -9,7 +9,7 @@ Pipeline (phases run in this order):
     1.5 auto_complete_reviews — close review tasks for approved/merged PRs
     2.  awareness            — A2A conflict detection + resolution
     2.5 calendar_focus       — auto-focus from calendar events
-    3.  correlator           — group related pupdates into incidents
+    3.2 automations          — evaluate user-editable when/then rows (replaced correlator)
     3.5 pupdates             — match remaining pupdates against rules
     3.6 llm_triage           — Tier 2 LLM triage for unmatched pupdates
     4.  learning             — aggregate signals into learnings
@@ -147,12 +147,6 @@ def _phase_calendar_focus():
     except Exception as e:
         logger.warning(f"[cycle] Calendar focus check skipped: {e}")
         return {"changed": False}
-
-
-def _phase_correlator():
-    """Phase 3: Correlate related pupdates into incidents."""
-    from planet_maiko.brain.pupdates.correlator import correlate
-    return correlate()
 
 
 def _phase_automations():
@@ -683,7 +677,6 @@ _PHASES = [
     ("auto_complete_reviews", _phase_auto_complete_reviews),
     ("awareness", _phase_awareness),
     ("calendar_focus", _phase_calendar_focus),
-    ("correlator", _phase_correlator),
     ("automations", _phase_automations),
     ("pupdates", _phase_pupdates),
     ("llm_triage", _phase_llm_triage),

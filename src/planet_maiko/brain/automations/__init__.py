@@ -47,6 +47,7 @@ that actions reference by name.
 
 import logging
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
 from planet_maiko.database import db
@@ -54,6 +55,25 @@ from planet_maiko.models.automation import Automation
 from planet_maiko.models.pupdate import Pupdate
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_format(template, context):
+    """Substitute {key} placeholders in a template string with values
+    from `context`. Missing keys render as "(unknown)" rather than
+    raising — automation text should degrade gracefully when upstream
+    shape shifts, not crash the cycle.
+    """
+    if not template or not isinstance(template, str):
+        return template
+    if "{" not in template:
+        return template
+    try:
+        class _Defaulting(dict):
+            def __missing__(self, key):  # noqa: D401
+                return "(unknown)"
+        return template.format_map(_Defaulting(context or {}))
+    except Exception:
+        return template
 
 
 # ---------------------------------------------------------------------------
@@ -124,10 +144,115 @@ def _cond_lora_missing(automation, config):
     return True
 
 
+def _cond_pupdate_match(automation, config):
+    """Fires when any non-dismissed pupdate of the given type(s) has
+    arrived within the last `within_minutes` window.
+
+    Config:
+      types: list[str]        — pupdate type names (required)
+      within_minutes: int     — lookback window, default 60
+      require_actionable: bool — only match if pupdate.actionable
+
+    Returns match + context {service, pupdate_ids, types, pupdate_id}
+    where `service` is the matched pupdate's repo (first tag if no
+    extra.repo) so actions can templatize "{service}".
+    """
+    types = config.get("types") or []
+    if not types:
+        return {"match": False}
+    within = int(config.get("within_minutes", 60))
+    require_actionable = bool(config.get("require_actionable", False))
+
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=within)
+    q = Pupdate.query.filter(
+        Pupdate.timestamp >= cutoff,
+        Pupdate.dismissed == False,  # noqa: E712
+        Pupdate.type.in_(types),
+    )
+    if require_actionable:
+        q = q.filter(Pupdate.actionable == True)  # noqa: E712
+    match = q.order_by(Pupdate.timestamp.desc()).first()
+    if match is None:
+        return {"match": False}
+    repo = (match.extra or {}).get("repo")
+    if not repo and (match.tags or []):
+        repo = (match.tags or [None])[0]
+    return {
+        "match": True,
+        "context": {
+            "service": repo or "",
+            "types": [match.type],
+            "pupdate_id": match.id,
+            "pupdate_ids": [match.id],
+            "title": match.title or "",
+        },
+    }
+
+
+def _cond_pupdate_chain(automation, config):
+    """Fires when ALL of `types` appear within `within_minutes`, grouped
+    by the same key (service/repo). Replaces the correlator's
+    CAUSE_CHAINS matching.
+
+    Config:
+      types: list[str]       — required chain of pupdate types
+      within_minutes: int    — window, default 30
+      group_by: "repo" | "tag" — how to group (default "repo")
+
+    Returns match + context {service, types, pupdate_ids} where
+    service is the shared group key (usually an org/repo).
+    """
+    types = config.get("types") or []
+    if len(types) < 2:
+        return {"match": False}
+    within = int(config.get("within_minutes", automation.within_minutes or 30))
+    group_by = config.get("group_by", "repo")
+
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=within)
+    pupdates = (
+        Pupdate.query
+        .filter(Pupdate.timestamp >= cutoff)
+        .filter(Pupdate.dismissed == False)  # noqa: E712
+        .filter(Pupdate.type.in_(types))
+        .order_by(Pupdate.timestamp.asc())
+        .all()
+    )
+    if not pupdates:
+        return {"match": False}
+
+    groups = defaultdict(lambda: {"types": set(), "pupdate_ids": []})
+    for p in pupdates:
+        if group_by == "tag":
+            key = (p.tags or [None])[0]
+        else:
+            key = (p.extra or {}).get("repo")
+            if not key and (p.tags or []):
+                key = (p.tags or [None])[0]
+        if not key:
+            continue
+        groups[key]["types"].add(p.type)
+        groups[key]["pupdate_ids"].append(p.id)
+
+    required = set(types)
+    for service, data in groups.items():
+        if data["types"].issuperset(required):
+            return {
+                "match": True,
+                "context": {
+                    "service": service,
+                    "types": sorted(list(data["types"])),
+                    "pupdate_ids": data["pupdate_ids"],
+                },
+            }
+    return {"match": False}
+
+
 CONDITIONS = {
     "cadence": _cond_cadence,
     "overview_stale": _cond_overview_stale,
     "lora_missing": _cond_lora_missing,
+    "pupdate_match": _cond_pupdate_match,
+    "pupdate_chain": _cond_pupdate_chain,
 }
 
 
@@ -272,12 +397,28 @@ def _cooldown_active(automation):
     return (datetime.now(timezone.utc) - last) < timedelta(days=automation.cooldown_days)
 
 
+def _normalize_cond_result(result):
+    """Conditions can return bool (legacy) or {match, context} dict.
+    Normalize to a (bool, dict) tuple. Missing context defaults to {}.
+    """
+    if isinstance(result, dict):
+        return bool(result.get("match")), result.get("context") or {}
+    return bool(result), {}
+
+
 def _evaluate_conditions(automation):
+    """Run all when[] entries. Returns (bool, merged_context).
+
+    With when_logic == "all" every condition must match; for "any" one
+    is enough. Context from matched conditions is merged (later wins)
+    so actions can templatize over values the conditions extracted.
+    """
     when = automation.when or []
     if not when:
-        return False
+        return False, {}
     logic = (automation.when_logic or "all").lower()
     results = []
+    context = {}
     for trigger in when:
         kind = trigger.get("kind")
         handler = CONDITIONS.get(kind)
@@ -288,18 +429,41 @@ def _evaluate_conditions(automation):
             results.append(False)
             continue
         try:
-            results.append(bool(handler(automation, trigger.get("config") or {})))
+            matched, ctx = _normalize_cond_result(
+                handler(automation, trigger.get("config") or {})
+            )
         except Exception as e:
             logger.warning(
                 f"[automation {automation.id}] condition {kind} error: {e}"
             )
             results.append(False)
-    if logic == "any":
-        return any(results)
-    return all(results)
+            continue
+        results.append(matched)
+        if matched and ctx:
+            context.update(ctx)
+    ok = any(results) if logic == "any" else all(results)
+    return ok, context
 
 
-def _run_actions(automation):
+def _apply_context_to_config(config, context):
+    """Walk a config dict and .format() any string fields against
+    context. Leaves numbers / bools / lists of non-strings alone.
+    Used so actions can reference {service}, {types}, etc. in their
+    templated text without each action rewriting the substitution
+    logic.
+    """
+    if not context:
+        return config
+    if isinstance(config, dict):
+        return {k: _apply_context_to_config(v, context) for k, v in config.items()}
+    if isinstance(config, list):
+        return [_apply_context_to_config(v, context) for v in config]
+    if isinstance(config, str):
+        return _safe_format(config, context)
+    return config
+
+
+def _run_actions(automation, context=None):
     results = []
     for action in (automation.then or []):
         kind = action.get("kind")
@@ -311,7 +475,8 @@ def _run_actions(automation):
             results.append({"skipped": f"unknown kind {kind!r}"})
             continue
         try:
-            results.append(handler(automation, action.get("config") or {}))
+            config = _apply_context_to_config(action.get("config") or {}, context)
+            results.append(handler(automation, config))
         except Exception as e:
             logger.warning(
                 f"[automation {automation.id}] action {kind} error: {e}"
@@ -349,7 +514,8 @@ def evaluate():
             details.append({"id": a.id, "outcome": "cooldown"})
             continue
         try:
-            if not _evaluate_conditions(a):
+            matched, context = _evaluate_conditions(a)
+            if not matched:
                 unmet += 1
                 details.append({"id": a.id, "outcome": "unmet"})
                 continue
@@ -358,11 +524,16 @@ def evaluate():
             details.append({"id": a.id, "outcome": "error", "error": str(e)})
             continue
 
-        actions_result = _run_actions(a)
+        actions_result = _run_actions(a, context=context)
         a.last_fired_at = datetime.now(timezone.utc)
         a.fire_count = (a.fire_count or 0) + 1
         fired += 1
-        details.append({"id": a.id, "outcome": "fired", "actions": actions_result})
+        details.append({
+            "id": a.id,
+            "outcome": "fired",
+            "actions": actions_result,
+            "context": context,
+        })
 
     if fired:
         db.session.commit()
@@ -374,6 +545,131 @@ def evaluate():
 # ---------------------------------------------------------------------------
 # Seeding + migration from AgentGoal
 # ---------------------------------------------------------------------------
+
+_CHAIN_SEEDS = [
+    {
+        "slug": "ci_fail_rollback_error_spike",
+        "types": ["pr_ci_failed", "deploy_rollback", "error_spike"],
+        "name": "Investigate CI fail → rollback → error spike incident",
+        "description": (
+            "When a repo trips CI failure, a rollback, and an error spike "
+            "within 30 minutes, propose an investigation. Classic incident "
+            "shape — spawning an Investigator gets the timeline assembled "
+            "before the context goes stale."
+        ),
+    },
+    {
+        "slug": "deploy_blocked_stuck",
+        "types": ["deploy_blocked", "deploy_stuck"],
+        "name": "Investigate stuck deploy",
+        "description": (
+            "Deploy flagged as blocked AND stuck in the same 30-minute "
+            "window usually means the release pipeline is wedged. "
+            "Approving spawns an investigator to untangle it."
+        ),
+    },
+    {
+        "slug": "ci_fail_deploy_blocked",
+        "types": ["pr_ci_failed", "deploy_blocked"],
+        "name": "Investigate CI break blocking deploy",
+        "description": (
+            "CI red + deploy blocked on the same repo usually means the "
+            "master build is broken. Investigate the failing check so a "
+            "fix lands before the team is idle."
+        ),
+    },
+    {
+        "slug": "rollback_error_spike",
+        "types": ["deploy_rollback", "error_spike"],
+        "name": "Investigate rollback with error spike",
+        "description": (
+            "Rolled-back deploy + ongoing error spike suggests the rollback "
+            "didn't restore healthy state. Propose a targeted investigation."
+        ),
+    },
+    {
+        "slug": "batch_job_error_spike",
+        "types": ["batch_job_failing", "error_spike"],
+        "name": "Investigate failing batch job + error spike",
+        "description": (
+            "Batch job failure correlated with an error spike often points "
+            "to the same upstream. Propose an investigation to find the link."
+        ),
+    },
+    {
+        "slug": "rollback_batch_fail",
+        "types": ["deploy_rollback", "batch_job_failing"],
+        "name": "Investigate rollback breaking batch jobs",
+        "description": (
+            "A rollback that leaves batch jobs failing means the previous "
+            "version has drift. Investigate what assumptions broke."
+        ),
+    },
+]
+
+
+def ensure_seed_chain_automations():
+    """Seed one Automation per incident chain (replacing correlator
+    CAUSE_CHAINS). Idempotent — matches on a marker in automation.extra
+    so reseeding doesn't duplicate.
+    """
+    from sqlalchemy import func  # noqa: F401
+
+    # Use the name as an identity shim; if the user renamed the row
+    # we leave their version alone.
+    created = 0
+    for seed in _CHAIN_SEEDS:
+        marker = seed["slug"]
+        existing = (
+            Automation.query
+            .filter(Automation.created_by == "seed")
+            .filter(Automation.name == seed["name"])
+            .first()
+        )
+        if existing is not None:
+            continue
+        a = Automation(
+            name=seed["name"],
+            description=seed["description"],
+            when=[{
+                "kind": "pupdate_chain",
+                "config": {
+                    "types": seed["types"],
+                    "within_minutes": 30,
+                    "group_by": "repo",
+                },
+            }],
+            when_logic="all",
+            within_minutes=30,
+            then=[{
+                "kind": "propose",
+                "config": {
+                    "draft": {
+                        "title": "Investigate incident on {service}",
+                        "type": "investigation",
+                        "priority": "high",
+                        "repo": "{service}",
+                        "description": (
+                            "Correlated signals on {service}: {types}. "
+                            "Approving spawns an investigator that walks the "
+                            "worktree, assembles a timeline, and files a report."
+                        ),
+                    },
+                },
+            }],
+            status="active",
+            created_by="seed",
+            scope_repo=None,
+            cooldown_days=1,  # short cooldown — incidents re-fire quickly
+        )
+        db.session.add(a)
+        created += 1
+
+    if created:
+        db.session.commit()
+        logger.info(f"[automations] seeded {created} incident chain automation(s)")
+    return created
+
 
 def ensure_seed_automations():
     """For every configured repo, make sure the canonical 'keep overview
