@@ -315,6 +315,9 @@ export const api = {
 
   // Home overview — the rolling LLM-generated pane
   getHomeOverview: () => request("/home/overview"),
+  // Canonical "waiting on your review" list — plans to approve, diffs
+  // to read, pack-owned artifacts to skim. Exhaustive, not curated.
+  getReviewQueue: () => request("/home/review-queue"),
   refreshHomeOverview: () => request("/home/overview/refresh", { method: "POST" }),
 
   // System

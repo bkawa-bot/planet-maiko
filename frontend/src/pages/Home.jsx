@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import SetupWizard from "../components/SetupWizard";
 import OverviewPane from "../components/OverviewPane";
 import PackStatusPane from "../components/PackStatusPane";
+import ReviewQueue from "../components/ReviewQueue";
 import { formatTime, formatClock } from "../utils/dates";
 import { Brain, Calendar, Palette, Video, Sparkles } from "lucide-react";
 import { showToast } from "../components/Toast";
@@ -125,6 +126,7 @@ export default function Home() {
         {/* Main column: overview narrative + live pack status. */}
         <div className="home-main">
           <OverviewPane />
+          <ReviewQueue />
           <PackStatusPane />
         </div>
 
