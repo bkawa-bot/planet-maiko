@@ -25,6 +25,25 @@ export function formatRepo(scopeRepo, defaultOrg) {
   return scopeRepo.startsWith(prefix) ? scopeRepo.slice(prefix.length) : scopeRepo;
 }
 
+/**
+ * Derive a "default org" from a configured repos list.
+ *
+ * If every configured repo shares the same org prefix, that's the
+ * right thing to strip from display — one common case, no user
+ * action required. If repos span multiple orgs, return empty so
+ * formatRepo leaves the disambiguating prefix in.
+ */
+function inferDefaultOrg(repos) {
+  if (!Array.isArray(repos) || repos.length === 0) return "";
+  const orgs = new Set();
+  for (const r of repos) {
+    const idx = (r || "").indexOf("/");
+    if (idx > 0) orgs.add(r.slice(0, idx));
+  }
+  return orgs.size === 1 ? [...orgs][0] : "";
+}
+
+
 let _cachedOrg = null;
 let _inflight = null;
 
@@ -34,7 +53,13 @@ function loadDefaultOrg() {
     _inflight = api
       .getConfig()
       .then((cfg) => {
-        _cachedOrg = cfg?.github?.default_org || "";
+        // Honour an explicit default_org if the user set one; otherwise
+        // auto-derive from github.repos. Most users only ever touch one
+        // org, so inferring means formatRepo actually strips without
+        // needing a Settings visit.
+        const gh = cfg?.github || {};
+        _cachedOrg =
+          (gh.default_org || "").trim() || inferDefaultOrg(gh.repos);
         return _cachedOrg;
       })
       .catch(() => {
