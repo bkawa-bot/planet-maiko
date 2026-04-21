@@ -44,22 +44,33 @@
   flex: 1; min-width: 0;
   display: flex; flex-direction: column; gap: 4px;
 }
+/* Name and chips (status + repo) now sit on separate rows so a long
+   name never gets truncated by a long org/repo pill, and vice versa.
+   Matches the profile-card pattern. */
 .automation-card-name-row {
-  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  display: flex; align-items: center; gap: 6px;
+  min-width: 0;
 }
 .automation-card-name {
   font-size: 13px; font-weight: 600; color: var(--text);
   flex: 1; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.automation-card-chips {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin-top: 2px;
+}
 .automation-card-repo {
   font-size: 10px; color: var(--text-dim);
   font-family: var(--font-mono, monospace);
+  max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .automation-card-status {
   font-size: 9px; font-weight: 600; text-transform: uppercase;
   padding: 1px 6px; border-radius: 8px;
   background: var(--bg-hover); color: var(--text-muted);
+  flex-shrink: 0;
 }
 .automation-card-status.status-active {
   background: var(--green-soft, rgba(0, 200, 120, 0.15));

@@ -387,13 +387,17 @@ function AutomationsList() {
               <div className="automation-card-main">
                 <div className="automation-card-name-row">
                   <span className="automation-card-name">{a.name}</span>
-                  {a.scope_repo && (
-                    <span className="automation-card-repo" title={a.scope_repo}>
-                      {formatRepo(a.scope_repo, defaultOrg)}
-                    </span>
-                  )}
-                  <span className={`automation-card-status status-${a.status}`}>{a.status}</span>
                 </div>
+                {(a.scope_repo || a.status) && (
+                  <div className="automation-card-chips">
+                    <span className={`automation-card-status status-${a.status}`}>{a.status}</span>
+                    {a.scope_repo && (
+                      <span className="automation-card-repo" title={a.scope_repo}>
+                        {formatRepo(a.scope_repo, defaultOrg)}
+                      </span>
+                    )}
+                  </div>
+                )}
                 {a.description && <div className="automation-card-desc">{a.description}</div>}
                 <div className="automation-card-row">
                   <span className="automation-card-label">WHEN</span>
