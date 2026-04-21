@@ -264,6 +264,7 @@ def create_app(start_scheduler=False):
             ensure_seed_chain_automations, migrate_scheduled_skills,
             ensure_seed_rule_automations, migrate_legacy_action_kinds,
             migrate_tasks_to_agent_jobs, ensure_plugin_default_automations,
+            migrate_per_repo_overview_watches,
         )
         try:
             migrate_agent_goals()
@@ -277,6 +278,10 @@ def create_app(start_scheduler=False):
             ensure_seed_automations()
         except Exception as e:
             logger.warning(f"[startup] Automation seeding skipped: {e}")
+        try:
+            migrate_per_repo_overview_watches()
+        except Exception as e:
+            logger.warning(f"[startup] Per-repo overview-watch migration skipped: {e}")
         try:
             ensure_seed_chain_automations()
         except Exception as e:

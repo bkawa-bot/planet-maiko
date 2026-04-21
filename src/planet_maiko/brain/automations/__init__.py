@@ -99,12 +99,38 @@ def _cond_cadence(automation, config, pupdate=None):
 
 
 def _cond_overview_stale(automation, config, pupdate=None):
-    from planet_maiko.models.insight import Insight
-    repo = config.get("repo") or automation.scope_repo
-    if not repo:
-        return False
-    stale_days = int(config.get("stale_days", 30))
+    """Fires when a repo's cartographer overview is missing or older
+    than `stale_days`.
 
+    Repo selection:
+      - `repo: "org/name"` — check that repo specifically.
+      - `repo: ""` / `"*"` / omitted — wildcard. Walks every repo in
+        `config.github.repos` and fires on the first stale one; context
+        carries `{repo: <matched>}` so the spawned action's `scope_repo`
+        fallback lands on the right worktree.
+
+    Wildcard mode returns one match per cycle (the first stale repo
+    found). Subsequent cycles pick up the next stale repo until the
+    backlog drains, so the Automations page stays a single row instead
+    of one-per-repo.
+    """
+    stale_days = int(config.get("stale_days", 30))
+    explicit = config.get("repo") or automation.scope_repo
+    wildcard = not explicit or explicit == "*"
+
+    if wildcard:
+        repos = _configured_repos()
+    else:
+        repos = [explicit]
+
+    for repo in repos:
+        if _repo_overview_is_stale(repo, stale_days):
+            return {"match": True, "context": {"repo": repo}}
+    return {"match": False}
+
+
+def _repo_overview_is_stale(repo, stale_days):
+    from planet_maiko.models.insight import Insight
     rows = (
         Insight.query
         .filter(Insight.repo_scope == repo)
@@ -128,26 +154,49 @@ def _cond_overview_stale(automation, config, pupdate=None):
 
 
 def _cond_lora_missing(automation, config, pupdate=None):
+    """Fires when a repo has enough active learnings to train on but no
+    agent profile for that scope has an adapter_path set. Same wildcard
+    semantics as overview_stale — empty/`"*"` repo iterates all
+    configured repos, returns the first match's repo in context.
+    """
     from planet_maiko.models.learning import Learning
     from planet_maiko.models.agent_profile import AgentProfile
 
-    repo = config.get("repo") or automation.scope_repo
-    if not repo:
-        return False
     min_learnings = int(config.get("min_learnings", 10))
+    explicit = config.get("repo") or automation.scope_repo
+    wildcard = not explicit or explicit == "*"
 
-    active_count = (
-        Learning.query
-        .filter(Learning.status == "active")
-        .filter(Learning.scope_repo == repo)
-        .count()
-    )
-    if active_count < min_learnings:
-        return False
-    for profile in AgentProfile.query.filter(AgentProfile.scope_repo == repo).all():
-        if (profile.extra or {}).get("adapter_path"):
-            return False
-    return True
+    repos = _configured_repos() if wildcard else [explicit]
+
+    for repo in repos:
+        active_count = (
+            Learning.query
+            .filter(Learning.status == "active")
+            .filter(Learning.scope_repo == repo)
+            .count()
+        )
+        if active_count < min_learnings:
+            continue
+        has_adapter = any(
+            (p.extra or {}).get("adapter_path")
+            for p in AgentProfile.query.filter(AgentProfile.scope_repo == repo).all()
+        )
+        if has_adapter:
+            continue
+        return {"match": True, "context": {"repo": repo}}
+    return {"match": False}
+
+
+def _configured_repos():
+    """Return the list of `org/repo` strings from config.github.repos,
+    or [] if none configured. Used by wildcard conditions that need to
+    iterate every repo Maiko tracks.
+    """
+    try:
+        from planet_maiko.config import load_config
+        return (load_config().get("github") or {}).get("repos") or []
+    except Exception:
+        return []
 
 
 def _pupdate_matches_criteria(pupdate, config):
@@ -332,14 +381,22 @@ def _act_run_agent_job(automation, config, pupdate=None, context=None):
     ask_first = bool(config.get("ask_first", False))
     kind = config.get("kind") or "todo"
     title = config.get("title") or automation.name
-    # Chain conditions surface `service` (shared repo across the matched
-    # pupdates) — use it as the default scope_repo so the spawned agent's
-    # worktree lands in the right place without the user having to
-    # template "{service}" into config.scope_repo.
+    # Pick the right repo for the spawned agent's worktree. Priority:
+    #   1. Explicit config.scope_repo (user overrode it)
+    #   2. automation.scope_repo (hand-authored automations still work)
+    #   3. Chain condition's `service` (shared repo across a pupdate chain)
+    #   4. Wildcard condition's `repo` (overview_stale / lora_missing
+    #      picked a specific repo this cycle)
+    #   5. Pupdate's own repo when pupdate-scope fired
+    # Without (4) and (5), a single "all repos" automation couldn't
+    # route the job to the repo that actually triggered it.
+    pupdate_repo = (pupdate.extra or {}).get("repo") if pupdate is not None else None
     repo = (
         config.get("scope_repo")
         or automation.scope_repo
         or ctx.get("service")
+        or ctx.get("repo")
+        or pupdate_repo
         or None
     )
     description = config.get("description") or automation.description or ""
@@ -402,7 +459,13 @@ def _act_create_task(automation, config, pupdate=None, context=None):
         status="new",
         extra={
             "description": config.get("description") or automation.description or "",
-            "repo": config.get("repo") or automation.scope_repo or ctx.get("service") or "",
+            "repo": (
+                config.get("repo")
+                or automation.scope_repo
+                or ctx.get("service")
+                or ctx.get("repo")
+                or ""
+            ),
             "from_automation": automation.id,
         },
         tags=["from_automation"],
@@ -1021,18 +1084,27 @@ def ensure_seed_chain_automations():
 
 
 def ensure_seed_automations():
-    """For every configured repo, make sure the canonical 'keep overview
-    current' automation exists. Idempotent.
+    """Install the canonical "keep overviews current" automation.
 
-    This replaces ensure_seed_goals() and keeps the one-watch-per-repo
-    invariant the cartographer depends on.
+    Historically this seeded one row per configured repo — N repos gave
+    you N near-identical rows on the Automations page. Now it seeds
+    exactly one wildcard automation: overview_stale with no scope
+    iterates every configured repo each cycle, and run_agent_job's
+    repo fallback chain picks up the matched repo from context.
+
+    Idempotent — the wildcard row has a stable name so re-runs are
+    no-ops. Existing per-repo seeds from an older boot are archived
+    by migrate_per_repo_overview_watches() on startup (separate
+    function so the user can opt out by editing one of them manually).
     """
     from planet_maiko.config import load_config
 
     config = load_config()
     repos = (config.get("github") or {}).get("repos") or []
     if not repos:
-        return 0
+        # Still seed the wildcard — it's inert with no repos configured
+        # but means adding a repo later doesn't require another seed pass.
+        pass
 
     cart_cfg = (
         ((config.get("brain") or {}).get("role_autonomy") or {}).get("cartographer") or {}
@@ -1040,62 +1112,100 @@ def ensure_seed_automations():
     stale_days = int(cart_cfg.get("stale_days", 30))
     cooldown_days = int(cart_cfg.get("cooldown_days", 7))
 
-    created = 0
-    for repo in repos:
-        # Already seeded? Match on (scope_repo + condition kind) so a
-        # user who renamed the row doesn't get a duplicate.
-        existing = (
-            Automation.query
-            .filter(Automation.scope_repo == repo)
-            .filter(Automation.created_by == "seed")
-            .all()
-        )
+    wildcard_name = "Keep repo overviews current"
+    existing = (
+        Automation.query
+        .filter(Automation.name == wildcard_name)
+        .filter(Automation.created_by == "seed")
+        .first()
+    )
+    if existing:
+        return 0
+
+    a = Automation(
+        name=wildcard_name,
+        description=(
+            "Atlas re-cartographs any configured repo whose Repo Overview "
+            f"insight is missing or older than {stale_days} days. One row "
+            "covers every repo — the condition picks whichever is stale "
+            "first and spawns Atlas for it. Approving the proposal kicks "
+            "off the cartographer run."
+        ),
+        when=[{
+            "kind": "overview_stale",
+            # Empty repo = wildcard — condition iterates every repo in
+            # config.github.repos and fires on the first stale one.
+            "config": {"repo": "", "stale_days": stale_days},
+        }],
+        when_logic="all",
+        then=[{
+            "kind": "run_agent_job",
+            "config": {
+                "ask_first": True,
+                "kind": "cartograph",
+                "title": "Cartograph {repo}",
+                "priority": "normal",
+                # scope_repo falls back to context.repo from the
+                # condition automatically — no need to template here.
+                "description": (
+                    "{repo} hasn't been cartographed in a while. "
+                    "Approving spawns Atlas to walk the tree and "
+                    "produce a fresh Repo Overview."
+                ),
+            },
+        }],
+        status="active",
+        created_by="seed",
+        scope_repo=None,
+        cooldown_days=cooldown_days,
+    )
+    db.session.add(a)
+    db.session.commit()
+    logger.info("[automations] seeded 1 wildcard overview watch")
+    return 1
+
+
+def migrate_per_repo_overview_watches():
+    """Archive old per-repo `Keep <repo>'s overview current` seeds once
+    the wildcard version is in place.
+
+    Runs on every startup; a no-op after the first successful pass.
+    We archive rather than delete so the user's fire history stays
+    queryable. Only touches rows the seed code created — anything the
+    user hand-authored or edited stays put.
+    """
+    wildcard = (
+        Automation.query
+        .filter(Automation.name == "Keep repo overviews current")
+        .filter(Automation.created_by == "seed")
+        .first()
+    )
+    if wildcard is None:
+        return 0  # wildcard isn't in place yet — safer to leave old rows active
+
+    legacy = (
+        Automation.query
+        .filter(Automation.created_by == "seed")
+        .filter(Automation.status == "active")
+        .filter(Automation.scope_repo.isnot(None))
+        .all()
+    )
+    archived = 0
+    for a in legacy:
         has_overview_watch = any(
-            any(t.get("kind") == "overview_stale" for t in (a.when or []))
-            for a in existing
+            t.get("kind") == "overview_stale" for t in (a.when or [])
         )
-        if has_overview_watch:
+        if not has_overview_watch:
             continue
-
-        a = Automation(
-            name=f"Keep {repo}'s overview current",
-            description=(
-                f"Atlas re-cartographs {repo} when its Repo Overview insight "
-                f"is missing or older than {stale_days} days. Approving the "
-                f"proposal spawns a one-shot cartographer run."
-            ),
-            when=[{
-                "kind": "overview_stale",
-                "config": {"repo": repo, "stale_days": stale_days},
-            }],
-            when_logic="all",
-            then=[{
-                "kind": "run_agent_job",
-                "config": {
-                    "ask_first": True,
-                    "kind": "cartograph",
-                    "title": f"Cartograph {repo}",
-                    "priority": "normal",
-                    "scope_repo": repo,
-                    "description": (
-                        f"{repo} hasn't been cartographed in a while. "
-                        f"Approving spawns Atlas to walk the tree and "
-                        f"produce a fresh Repo Overview."
-                    ),
-                },
-            }],
-            status="active",
-            created_by="seed",
-            scope_repo=repo,
-            cooldown_days=cooldown_days,
-        )
-        db.session.add(a)
-        created += 1
-
-    if created:
+        a.status = "archived"
+        archived += 1
+    if archived:
         db.session.commit()
-        logger.info(f"[automations] seeded {created} overview watch(es)")
-    return created
+        logger.info(
+            f"[automations] archived {archived} per-repo overview "
+            "watch(es) superseded by the wildcard seed"
+        )
+    return archived
 
 
 def ensure_plugin_default_automations():
