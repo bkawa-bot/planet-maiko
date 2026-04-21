@@ -5,6 +5,7 @@ import { api } from "../api/client";
 import { applyCustomTheme, clearCustomTheme, hydrateCachedCustomTheme } from "../utils/themes";
 import SystemHealth from "./SystemHealth";
 import FocusDigestModal from "./FocusDigestModal";
+import MascotDock from "./MascotDock";
 import { showToast } from "./Toast";
 import "./Sidebar.css";
 import "./ShutdownModal.css";
@@ -176,22 +177,10 @@ export default function Sidebar({ onOpenShutdown }) {
             </div>
           </NavLink>
 
-          <nav className="topbar-nav">
-            {NAV_ITEMS.map(({ to, icon: Icon, label, end, badgeKey }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={end}
-                className={({ isActive }) => `nav-pill ${isActive ? "active" : ""}`}
-              >
-                <Icon size={15} className="nav-pill-icon" />
-                <span className="nav-pill-label">{label}</span>
-                {badgeKey && badges[badgeKey] > 0 && (
-                  <span className="nav-pill-badge">{badges[badgeKey]}</span>
-                )}
-              </NavLink>
-            ))}
-          </nav>
+          {/* Prototype: top-bar pill nav is replaced by the bottom
+              mascot dock. Leave NAV_ITEMS in place for now so we can
+              flip back by uncommenting the old block if the dock
+              doesn't survive feedback. */}
         </div>
 
         <div className="topbar-right">
@@ -328,6 +317,9 @@ export default function Sidebar({ onOpenShutdown }) {
           </button>
         </div>
       </div>
+
+      {/* Prototype mascot dock — floats at the bottom, centered. */}
+      <MascotDock />
 
       <FocusDigestModal digest={focusDigest} onClose={() => setFocusDigest(null)} />
 

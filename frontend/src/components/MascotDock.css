@@ -1,0 +1,130 @@
+/* Mascot dock — fixed at the bottom of the viewport, above the footer.
+   Built as a floating layer so it doesn't reshuffle main content; the
+   only layout change elsewhere is the dock-bottom-padding applied to
+   main-content so nothing critical hides behind the dock. */
+
+.mascot-dock {
+  position: fixed;
+  bottom: 48px;              /* clears the global footer */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  pointer-events: none;      /* inner row takes the clicks */
+}
+
+.mascot-dock-inner {
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--pane-bg, rgba(255, 255, 255, 0.85));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.06);
+  pointer-events: auto;
+}
+
+.mascot-tile {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  text-decoration: none;
+  background: var(--tone-soft);
+  transition:
+    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+  color: var(--text);
+  overflow: visible;
+}
+
+/* Per-tone soft colors — pull from the sherbet palette if present,
+   otherwise fall back to gentle defaults so the dock still reads on
+   a theme that hasn't defined every variant. */
+.mascot-tile.tone-pink     { --tone-soft: var(--pink-soft, #fde0eb);     --tone-vivid: var(--pink, #f5a8c6); }
+.mascot-tile.tone-lavender { --tone-soft: var(--lavender-soft, #e7deff); --tone-vivid: var(--lavender, #b59dd8); }
+.mascot-tile.tone-peach    { --tone-soft: var(--peach-soft, #ffdfca);    --tone-vivid: var(--peach, #ffb890); }
+.mascot-tile.tone-mint     { --tone-soft: var(--mint-soft, #d4f0e0);     --tone-vivid: var(--mint, #8fd1a4); }
+.mascot-tile.tone-lemon    { --tone-soft: var(--lemon-soft, #fff0c6);    --tone-vivid: var(--lemon, #f7d76e); }
+
+/* Idle breathing so the dock doesn't feel static on quiet days. A
+   very slow scale wobble — 6s cycle, barely perceptible. */
+@keyframes dock-breathe {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-1px); }
+}
+.mascot-tile {
+  animation: dock-breathe 6s ease-in-out infinite;
+}
+/* Stagger each tile's breathe so they don't all bob in unison. */
+.mascot-tile:nth-child(1) { animation-delay: 0.0s; }
+.mascot-tile:nth-child(2) { animation-delay: 0.8s; }
+.mascot-tile:nth-child(3) { animation-delay: 1.6s; }
+.mascot-tile:nth-child(4) { animation-delay: 2.4s; }
+.mascot-tile:nth-child(5) { animation-delay: 3.2s; }
+
+.mascot-tile:hover {
+  transform: translateY(-6px) scale(1.1);
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.18);
+  animation: none;  /* pause the idle bob while hovered */
+}
+
+.mascot-tile.active {
+  background: var(--tone-vivid);
+  transform: translateY(-4px) scale(1.08);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  animation: none;
+}
+.mascot-tile.active::after {
+  /* Little indicator pip under the active tile */
+  content: "";
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tone-vivid);
+}
+
+.mascot-tile-emoji {
+  font-size: 26px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.12));
+}
+
+.mascot-tile-label {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--pane-bg, rgba(255, 255, 255, 0.95));
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.mascot-tile:hover .mascot-tile-label,
+.mascot-tile.active .mascot-tile-label {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Give the main content room so the dock doesn't sit on top of the
+   last scrollable element. 120px leaves room for tooltip + hover lift. */
+.layout > .main-content {
+  padding-bottom: 120px;
+}
