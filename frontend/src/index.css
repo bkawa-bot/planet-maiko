@@ -157,6 +157,49 @@ h1, h2, h3,
   font-weight: 700;
 }
 
+/* Inline tone shifts — used by <ToneText> to render snippets of
+   Maiko's voice in different typefaces depending on the moment.
+   Each span is a short phrase, not a whole paragraph; the weight /
+   size tweak below keeps the shift readable without breaking
+   baseline with surrounding mono body text. */
+.tone-glitch {
+  font-family: 'Rubik Glitch', 'Rubik Mono One', monospace;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: none;
+  color: var(--urgent);
+  text-shadow: 1px 0 0 var(--pink-soft, rgba(94, 196, 200, 0.4));
+  /* Subtle flicker so the uprising bit physically reads unstable. */
+  animation: tone-glitch-flicker 4.2s steps(16, end) infinite;
+}
+@keyframes tone-glitch-flicker {
+  0%, 92%, 100% { opacity: 1; }
+  93%           { opacity: 0.65; transform: translateX(-0.5px); }
+  95%           { opacity: 1;    transform: translateX(0.5px);  }
+  97%           { opacity: 0.8;  }
+}
+
+.tone-cozy {
+  font-family: 'Caveat', 'Patrick Hand', cursive;
+  font-weight: 700;
+  font-size: 1.12em;  /* Caveat reads smaller than mono at same px */
+  letter-spacing: 0;
+  color: var(--peach, #ffb89a);
+}
+
+.tone-dramatic {
+  font-family: 'Bungee Inline', 'Impact', sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  color: var(--lemon, #f9e07f);
+  text-transform: uppercase;
+}
+
+.tone-whisper {
+  font-style: italic;
+  opacity: 0.65;
+  letter-spacing: 0.01em;
+}
+
 body {
   background-color: var(--bg);
   background-image: url('/world-night.svg');

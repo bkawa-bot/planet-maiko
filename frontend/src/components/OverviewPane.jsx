@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { renderMarkdown } from "../utils/markdown";
 import { relativeTime } from "../utils/dates";
+import ToneText from "../utils/toneText";
 import { Sunrise, RefreshCw, FileText, X, Loader, Brain } from "lucide-react";
 import "./OverviewPane.css";
 
@@ -183,7 +184,11 @@ export default function OverviewPane() {
   return (
     <div className="overview-pane">
       <header className="overview-header">
-        <h1 className="overview-greeting">{overview.greeting || "Hi 🐾"}</h1>
+        <ToneText
+          as="h1"
+          className="overview-greeting"
+          text={overview.greeting || "Hi 🐾"}
+        />
         <button
           className="overview-refresh"
           onClick={refresh}
@@ -196,7 +201,11 @@ export default function OverviewPane() {
       </header>
 
       {overview.summary && (
-        <p className="overview-summary">{overview.summary}</p>
+        <ToneText
+          as="p"
+          className="overview-summary"
+          text={overview.summary}
+        />
       )}
 
       {overview.focus?.length > 0 && (
@@ -210,7 +219,13 @@ export default function OverviewPane() {
                 <div key={f.task_id} className="overview-card overview-focus-card">
                   <div className="overview-card-body">
                     <div className="overview-card-title">{task.title}</div>
-                    {f.why && <div className="overview-card-why">{f.why}</div>}
+                    {f.why && (
+                      <ToneText
+                        as="div"
+                        className="overview-card-why"
+                        text={f.why}
+                      />
+                    )}
                   </div>
                   <button
                     className="btn btn-sm"
@@ -249,7 +264,11 @@ export default function OverviewPane() {
                     onClick={go || undefined}
                     style={{ cursor: go ? "pointer" : "default" }}
                   >
-                    <div className="overview-card-title">{n.summary}</div>
+                    <ToneText
+                      as="div"
+                      className="overview-card-title"
+                      text={n.summary}
+                    />
                     {originalAsk && (
                       <div className="overview-card-refresher">
                         you asked{askedAt ? ` ${relativeTime(askedAt)}` : ""}: "{originalAsk.length > 120 ? originalAsk.slice(0, 117) + "…" : originalAsk}"
@@ -323,13 +342,21 @@ export default function OverviewPane() {
       )}
 
       {overview.alive && (
-        <p className="overview-alive">{overview.alive}</p>
+        <ToneText
+          as="p"
+          className="overview-alive"
+          text={overview.alive}
+        />
       )}
 
       {overview.closing && (
         <section className="overview-closing">
           <div className="overview-closing-label">Enough for today</div>
-          <p className="overview-closing-body">{overview.closing}</p>
+          <ToneText
+            as="p"
+            className="overview-closing-body"
+            text={overview.closing}
+          />
           {overview.overnight?.length > 0 && (
             <div className="overview-overnight">
               <div className="overview-overnight-label">Continuing overnight</div>
