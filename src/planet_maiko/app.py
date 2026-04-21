@@ -219,12 +219,16 @@ def create_app(start_scheduler=False):
         # seeded 'keep overview current' watch.
         from planet_maiko.brain.automations import (
             migrate_agent_goals, ensure_seed_automations,
-            ensure_seed_chain_automations,
+            ensure_seed_chain_automations, migrate_scheduled_skills,
         )
         try:
             migrate_agent_goals()
         except Exception as e:
             logger.warning(f"[startup] AgentGoal migration skipped: {e}")
+        try:
+            migrate_scheduled_skills()
+        except Exception as e:
+            logger.warning(f"[startup] Scheduled-skill migration skipped: {e}")
         try:
             ensure_seed_automations()
         except Exception as e:

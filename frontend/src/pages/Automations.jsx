@@ -441,8 +441,15 @@ function AutomationsList() {
 function describeCondition(trigger) {
   const cfg = trigger?.config || {};
   switch (trigger?.kind) {
-    case "cadence":
+    case "cadence": {
+      if (cfg.interval_minutes) {
+        const m = cfg.interval_minutes;
+        if (m < 60) return `every ${m}min`;
+        if (m % 60 === 0) return `every ${m / 60}h`;
+        return `every ${Math.floor(m / 60)}h ${m % 60}min`;
+      }
       return `every ${cfg.interval_hours || 24}h`;
+    }
     case "overview_stale":
       return `overview >${cfg.stale_days || 30}d stale`;
     case "lora_missing":

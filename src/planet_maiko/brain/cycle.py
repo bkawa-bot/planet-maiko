@@ -294,16 +294,6 @@ def _phase_projects():
         return {"advanced": 0, "completed": 0, "error": str(e)}
 
 
-def _phase_scheduled_skills():
-    """Phase 7: Run skills on their schedules."""
-    try:
-        from planet_maiko.pollers.skill_runner import run_scheduled_skills
-        return run_scheduled_skills()
-    except Exception as e:
-        logger.warning(f"[cycle] Skill runner error: {e}")
-        return []
-
-
 _INVESTIGATION_TYPES = ("pr_ci_failed", "incident", "error_spike")
 
 
@@ -684,7 +674,6 @@ _PHASES = [
     ("learning", _phase_learning),
     ("heartbeats", _phase_heartbeats),
     ("projects", _phase_projects),
-    ("scheduled_skills", _phase_scheduled_skills),
     ("orchestrate", _phase_orchestrate),
     ("unblock", _phase_unblock_tasks),
     ("execute_agent_tasks", _phase_execute_agent_tasks),

@@ -83,13 +83,19 @@ def _safe_format(template, context):
 # ---------------------------------------------------------------------------
 
 def _cond_cadence(automation, config):
-    hours = int(config.get("interval_hours", 24))
+    # Native unit is minutes so scheduled skill migrations (which come
+    # in at minute precision — 15, 30, 60, etc.) stay lossless.
+    # interval_hours is accepted as a convenience alias.
+    if "interval_minutes" in config:
+        minutes = int(config["interval_minutes"])
+    else:
+        minutes = int(config.get("interval_hours", 24)) * 60
     last = automation.last_fired_at
     if last is None:
         return True  # never fired yet — fire this cycle
     if last.tzinfo is None:
         last = last.replace(tzinfo=timezone.utc)
-    return (datetime.now(timezone.utc) - last) >= timedelta(hours=hours)
+    return (datetime.now(timezone.utc) - last) >= timedelta(minutes=minutes)
 
 
 def _cond_overview_stale(automation, config):
@@ -748,6 +754,62 @@ def ensure_seed_automations():
         db.session.commit()
         logger.info(f"[automations] seeded {created} overview watch(es)")
     return created
+
+
+def migrate_scheduled_skills():
+    """One-time import of CustomSkills that have a non-null
+    schedule_interval_minutes into Automations (cadence + run_skill).
+
+    Idempotent: clears schedule_interval_minutes on the source skill
+    after migration so the skill runner (now deleted) wouldn't also
+    fire, and subsequent boots see no more rows to migrate.
+    """
+    try:
+        from planet_maiko.models.custom_skill import CustomSkill
+    except Exception:
+        return 0
+
+    skills = (
+        CustomSkill.query
+        .filter(CustomSkill.schedule_interval_minutes.isnot(None))
+        .filter(CustomSkill.schedule_interval_minutes > 0)
+        .all()
+    )
+    if not skills:
+        return 0
+
+    migrated = 0
+    for s in skills:
+        automation = Automation(
+            name=f"{s.name} on a schedule",
+            description=(
+                f"Scheduled run of the {s.name} skill every "
+                f"{s.schedule_interval_minutes} minute(s). "
+                + (s.description or "")
+            ).strip(),
+            when=[{
+                "kind": "cadence",
+                "config": {"interval_minutes": int(s.schedule_interval_minutes)},
+            }],
+            when_logic="all",
+            then=[{
+                "kind": "run_skill",
+                "config": {"skill_name": s.id},
+            }],
+            status="active",
+            created_by="seed",
+            cooldown_days=0,  # cadence condition is the timing source
+        )
+        db.session.add(automation)
+        # Clear the legacy schedule so the old runner (if it still
+        # somehow got called) wouldn't double-fire.
+        s.schedule_interval_minutes = None
+        migrated += 1
+
+    if migrated:
+        db.session.commit()
+        logger.info(f"[automations] migrated {migrated} scheduled CustomSkill(s) to Automation")
+    return migrated
 
 
 def migrate_agent_goals():

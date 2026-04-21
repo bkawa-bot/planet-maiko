@@ -90,8 +90,10 @@ class PollerScheduler:
         brain_thread.start()
         logger.info(f"[scheduler] Started brain cycle (every {brain_interval}s)")
 
-        # Start scheduled skills
-        self._start_scheduled_skills()
+        # Scheduled skills moved to the Automation engine — any
+        # CustomSkill with schedule_interval_minutes now runs via a
+        # seeded Automation (cadence + run_skill) evaluated by the
+        # brain cycle's automations phase.
 
         # Start script pollers
         self._start_script_pollers(config)
@@ -193,43 +195,6 @@ class PollerScheduler:
         config = load_config().get(poller_name, {})
         with self.app.app_context():
             return poller.run(config, db.session)
-
-    def _start_scheduled_skills(self):
-        """Start threads for skills with schedule_interval_minutes set."""
-        try:
-            with self.app.app_context():
-                from planet_maiko.models.custom_skill import CustomSkill
-                skills = CustomSkill.query.filter(
-                    CustomSkill.schedule_interval_minutes.isnot(None)
-                ).all()
-
-                for skill in skills:
-                    interval = skill.schedule_interval_minutes * 60
-                    thread = threading.Thread(
-                        target=self._skill_loop,
-                        args=(skill.id, interval),
-                        daemon=True,
-                        name=f"skill-{skill.id}",
-                    )
-                    self._threads[f"skill:{skill.id}"] = thread
-                    thread.start()
-                    logger.info(f"[scheduler] Started skill '{skill.name}' (every {skill.schedule_interval_minutes}m)")
-        except Exception as e:
-            logger.debug(f"[scheduler] Scheduled skills skipped: {e}")
-
-    def _skill_loop(self, skill_id, interval):
-        """Run a scheduled skill on a loop."""
-        time.sleep(5)  # Initial delay
-        while not self._stop_event.is_set():
-            try:
-                from planet_maiko.pollers.skill_runner import run_scheduled_skill
-                run_scheduled_skill(skill_id, self.app)
-            except Exception as e:
-                logger.error(f"[scheduler] Skill {skill_id} error: {e}")
-            for _ in range(int(interval)):
-                if self._stop_event.is_set():
-                    break
-                time.sleep(1)
 
     def _start_script_pollers(self, config):
         """Start threads for script-based pollers from config."""
