@@ -100,7 +100,7 @@ def get_review_queue():
 
     Items are shaped:
         {
-            kind:   "plan" | "review" | "job_artifact",
+            kind:   "plan" | "review" | "job_artifact" | "proposal",
             task_id: <str|null>,      # null for standalone AgentJobs
             job_id:  <str|null>,      # set when driven by an AgentJob
             title:   <str>,
@@ -109,6 +109,7 @@ def get_review_queue():
             route:   <str>,           # where the UI should navigate
             age_seconds: <int>,
             timestamp: <iso>,
+            proposal: <pupdate dict|undefined>,  # present for kind="proposal"
         }
     """
     from datetime import datetime, timezone
@@ -226,6 +227,35 @@ def get_review_queue():
             "route": route,
             "age_seconds": _age(j.finished_at),
             "timestamp": iso_utc(j.finished_at),
+        })
+
+    # 4. Agent proposals — PROPOSAL: blocks from investigation / review
+    #    agent output that turn into approve-or-dismiss cards. The
+    #    ProposalCard component needs the full pupdate (title, body,
+    #    extra.draft, extra.from_agent_id) to render its edit form, so
+    #    include the whole dict inline rather than a thin summary.
+    proposals = (
+        Pupdate.query
+        .filter(Pupdate.type == "agent_proposal")
+        .filter(Pupdate.dismissed == False)  # noqa: E712
+        .order_by(Pupdate.timestamp.desc())
+        .limit(30)
+        .all()
+    )
+    for p in proposals:
+        extra = p.extra or {}
+        draft = extra.get("draft") or {}
+        items.append({
+            "kind": "proposal",
+            "task_id": None,
+            "job_id": None,
+            "title": p.title,
+            "repo": draft.get("repo") or None,
+            "agent_name": extra.get("from_agent_id"),
+            "route": None,
+            "age_seconds": _age(p.timestamp),
+            "timestamp": iso_utc(p.timestamp),
+            "proposal": p.to_dict(),
         })
 
     # Fresh items first — the user wants to see "what just landed",

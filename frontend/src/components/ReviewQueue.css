@@ -125,3 +125,15 @@
 }
 .review-queue-row.tone-plan .review-queue-cta { color: var(--lavender, #b59dd8); }
 .review-queue-row.tone-artifact .review-queue-cta { color: var(--mint, var(--blue)); }
+
+/* Proposals render their full approve/edit/dismiss form inline
+   instead of the compact navigate-on-click row pattern. Wrap the
+   ProposalCard so it inherits the list gap but drops the row's
+   left-accent tint (the card has its own header affordance). */
+.review-queue-proposal {
+  display: block;
+  padding: 0;
+}
+.review-queue-proposal .proposal-card {
+  margin: 0;
+}

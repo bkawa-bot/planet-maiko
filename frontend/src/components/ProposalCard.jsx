@@ -3,6 +3,10 @@ import { Check, X, Pencil, Sparkles, Loader, ChevronDown, ChevronRight, Compass 
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
+// ProposalCard can be rendered anywhere (Home ReviewQueue, Tasks
+// page, etc.) — pull in the card styles here so callers don't
+// have to remember to import cards.css separately.
+import "../pages/cards.css";
 
 /**
  * Proposal card — a specialized pupdate renderer for type=agent_proposal

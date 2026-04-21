@@ -6,6 +6,7 @@ import {
 import { api } from "../api/client";
 import { relativeTime } from "../utils/dates";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
+import ProposalCard from "./ProposalCard";
 import "./ReviewQueue.css";
 
 /**
@@ -39,6 +40,12 @@ const KIND_META = {
     cta: "Open report",
     label: "Report",
     tone: "artifact",
+  },
+  proposal: {
+    Icon: ClipboardCheck,
+    cta: null,   // renders inline ProposalCard — no nav CTA
+    label: "Proposal",
+    tone: "plan",
   },
 };
 
@@ -87,6 +94,25 @@ export default function ReviewQueue() {
         {items.map((it) => {
           const meta = KIND_META[it.kind] || KIND_META.review;
           const Icon = iconFor(it);
+
+          // Proposals need their full edit/approve/dismiss form inline —
+          // a click-to-navigate row doesn't cut it. Render the dedicated
+          // ProposalCard component and hand it our fetch to refresh the
+          // queue when the user approves or dismisses.
+          if (it.kind === "proposal" && it.proposal) {
+            return (
+              <div
+                key={`proposal:${it.proposal.id}`}
+                className="review-queue-proposal"
+              >
+                <ProposalCard
+                  proposal={it.proposal}
+                  onAction={fetchQueue}
+                />
+              </div>
+            );
+          }
+
           return (
             <button
               key={`${it.kind}:${it.task_id || it.job_id}`}
