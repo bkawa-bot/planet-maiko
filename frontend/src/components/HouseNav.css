@@ -1,0 +1,186 @@
+/* House-as-nav — fixed bottom-left floating cottage, windows light up
+   for the active surface. Prototype. Delete this + HouseNav.jsx and
+   uncomment the topbar-nav block in Sidebar.jsx to revert. */
+
+.house-nav {
+  position: fixed;
+  left: 20px;
+  bottom: 48px;       /* clears the footer */
+  width: 260px;
+  height: 220px;
+  z-index: 40;
+  pointer-events: none;  /* children that matter opt in */
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.22));
+}
+
+.house-nav-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Cottage paint — sherbet palette, falls back to readable defaults so
+   a theme without these vars still renders something cozy. */
+.house-grass {
+  fill: var(--mint, #b8dcc2);
+  opacity: 0.85;
+}
+.house-roof {
+  fill: var(--pink, #e08aa0);
+}
+.house-roof-rim {
+  fill: #9e5a6c;
+  opacity: 0.35;
+}
+.house-chimney {
+  fill: var(--peach, #dca087);
+}
+.house-chimney-cap {
+  fill: #8a5340;
+}
+.house-wall {
+  fill: var(--peach-soft, #f6e1cf);
+}
+.house-porch {
+  fill: #c79c7d;
+  opacity: 0.6;
+}
+.house-siding {
+  stroke: #a67960;
+  stroke-width: 1;
+  opacity: 0.14;
+}
+.house-window-frames rect {
+  fill: #6f3a2c;
+  opacity: 0.55;
+}
+
+/* Interactive windows — overlaid on the painted cottage. Each window
+   translates to center on its coord, soft-glows when active, and
+   pops a tooltip label above on hover. */
+.house-window {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  pointer-events: auto;
+  border-radius: 6px;
+  background: var(--lemon-soft, #fff3c4);
+  box-shadow: inset 0 0 0 1.5px rgba(0, 0, 0, 0.25);
+  transition:
+    background 0.2s ease,
+    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.2s ease;
+  cursor: pointer;
+}
+
+.house-window-small {
+  width: 34px;
+  height: 28px;
+}
+.house-window-big {
+  width: 56px;
+  height: 40px;
+  border-radius: 8px;
+}
+
+.house-window-emoji {
+  font-size: 18px;
+  line-height: 1;
+  filter: saturate(0.85);
+  transition: filter 0.18s ease, transform 0.25s ease;
+  z-index: 1;
+}
+.house-window-big .house-window-emoji { font-size: 22px; }
+
+.house-window-glow {
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 0 transparent;
+  transition: box-shadow 0.25s ease;
+}
+
+/* Hover — window brightens + a slight lift. */
+.house-window:hover {
+  background: var(--lemon, #ffdf86);
+  transform: translate(-50%, -50%) scale(1.06);
+}
+.house-window:hover .house-window-emoji {
+  filter: saturate(1.1);
+  transform: scale(1.08);
+}
+
+/* Active — the lit room. Strong glow + richer fill. */
+.house-window.lit {
+  background: var(--lemon, #ffdf86);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(0, 0, 0, 0.28),
+    0 0 14px 2px color-mix(in srgb, var(--lemon, #ffdf86) 70%, transparent);
+  transform: translate(-50%, -50%) scale(1.08);
+}
+.house-window.lit .house-window-emoji {
+  filter: saturate(1.2);
+}
+
+/* Tooltip label — shows on hover or when active. Positioned above the
+   window so it doesn't collide with the cottage body. */
+.house-window-label {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--pane-bg, rgba(255, 255, 255, 0.95));
+  border: 1px solid var(--border);
+  padding: 2px 7px;
+  border-radius: 8px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.house-window:hover .house-window-label,
+.house-window.lit .house-window-label {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Smoke from the chimney — pure vibes, barely-visible puffs rising
+   and fading. Three staggered blobs keep the loop from looking
+   mechanical. */
+.house-smoke {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  top: 28px;                 /* starts at the chimney top */
+  left: 198px;               /* aligned with chimney x */
+  filter: blur(3px);
+  opacity: 0;
+  animation: house-smoke-rise 5.5s ease-out infinite;
+  pointer-events: none;
+}
+.house-smoke-2 { animation-delay: 1.8s; left: 200px; width: 18px; height: 18px; }
+.house-smoke-3 { animation-delay: 3.6s; left: 196px; width: 11px; height: 11px; }
+
+@keyframes house-smoke-rise {
+  0%   { transform: translateY(0)   scale(0.4); opacity: 0;    }
+  30%  { transform: translateY(-10px) scale(0.8); opacity: 0.55; }
+  70%  { transform: translateY(-28px) scale(1.3); opacity: 0.25; }
+  100% { transform: translateY(-44px) scale(1.6); opacity: 0;    }
+}
+
+/* Keep the main content clear of the cottage so the bottom of any
+   scrollable surface isn't tucked behind it. The cottage sits in the
+   lower-left, so a left+bottom margin is enough without shifting the
+   whole page. */
+.layout > .main-content {
+  padding-bottom: 120px;
+}

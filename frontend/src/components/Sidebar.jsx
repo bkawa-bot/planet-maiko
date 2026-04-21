@@ -5,6 +5,7 @@ import { api } from "../api/client";
 import { applyCustomTheme, clearCustomTheme, hydrateCachedCustomTheme } from "../utils/themes";
 import SystemHealth from "./SystemHealth";
 import FocusDigestModal from "./FocusDigestModal";
+import HouseNav from "./HouseNav";
 import { showToast } from "./Toast";
 import "./Sidebar.css";
 import "./ShutdownModal.css";
@@ -176,22 +177,9 @@ export default function Sidebar({ onOpenShutdown }) {
             </div>
           </NavLink>
 
-          <nav className="topbar-nav">
-            {NAV_ITEMS.map(({ to, icon: Icon, label, end, badgeKey }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={end}
-                className={({ isActive }) => `nav-pill ${isActive ? "active" : ""}`}
-              >
-                <Icon size={15} className="nav-pill-icon" />
-                <span className="nav-pill-label">{label}</span>
-                {badgeKey && badges[badgeKey] > 0 && (
-                  <span className="nav-pill-badge">{badges[badgeKey]}</span>
-                )}
-              </NavLink>
-            ))}
-          </nav>
+          {/* Prototype: top-bar pill nav replaced by the bottom-left
+              HouseNav. Delete HouseNav import + <HouseNav /> render
+              below and restore this block to go back. */}
         </div>
 
         <div className="topbar-right">
@@ -328,6 +316,9 @@ export default function Sidebar({ onOpenShutdown }) {
           </button>
         </div>
       </div>
+
+      {/* Prototype house-as-nav — floats bottom-left. */}
+      <HouseNav />
 
       <FocusDigestModal digest={focusDigest} onClose={() => setFocusDigest(null)} />
 
