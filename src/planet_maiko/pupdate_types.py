@@ -12,8 +12,16 @@ types). Grouped by source so the dropdown renders with optgroups.
 
 
 # (name, label, group)
+#
+# Only types that a default poller or Maiko core actually emits live
+# here. Ops-y types (incident, error_spike, deploy_*, batch_job_*)
+# were removed — nothing in the default install produces them, so
+# advertising them in the Automation dropdown led to user-created
+# rules that could never fire. Plugins that add those signal sources
+# register their own types via `register_pupdate_types()` and they
+# show up in the dropdown alongside these.
 BUILTIN_PUPDATE_TYPES = [
-    # GitHub
+    # GitHub poller
     ("pr_review_requested",     "PR review requested",      "GitHub"),
     ("pr_changes_requested",    "PR changes requested",     "GitHub"),
     ("pr_approved",             "PR approved",              "GitHub"),
@@ -21,25 +29,18 @@ BUILTIN_PUPDATE_TYPES = [
     ("pr_ci_passed",            "PR CI passed",             "GitHub"),
     ("pr_ci_failed",            "PR CI failed",             "GitHub"),
     ("pr_review_commented",     "PR review comment",        "GitHub"),
-    # Linear
+    # Linear poller
     ("linear_assigned",         "Linear issue assigned",    "Linear"),
     ("linear_mention",          "Linear mention",           "Linear"),
     ("linear_status_changed",   "Linear status changed",    "Linear"),
-    # Calendar
+    # Calendar poller
     ("calendar_event",          "Calendar event",           "Calendar"),
     ("calendar_1on1",           "Calendar 1:1",             "Calendar"),
-    # Agents
+    # Agents (emitted by Maiko core — the agents themselves)
     ("agent_ready_for_review",  "Agent ready for review",   "Agents"),
     ("agent_plan_for_approval", "Agent plan ready",         "Agents"),
     ("agent_stuck",             "Agent stuck",              "Agents"),
     ("agent_proposal",          "Agent proposal",           "Agents"),
-    # Ops
-    ("incident",                "Incident",                 "Ops"),
-    ("error_spike",             "Error spike",              "Ops"),
-    ("deploy_rollback",         "Deploy rollback",          "Ops"),
-    ("deploy_blocked",          "Deploy blocked",           "Ops"),
-    ("deploy_stuck",            "Deploy stuck",             "Ops"),
-    ("batch_job_failing",       "Batch job failing",        "Ops"),
 ]
 
 

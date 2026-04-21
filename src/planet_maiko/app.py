@@ -265,6 +265,7 @@ def create_app(start_scheduler=False):
             ensure_seed_rule_automations, migrate_legacy_action_kinds,
             migrate_tasks_to_agent_jobs, ensure_plugin_default_automations,
             migrate_per_repo_overview_watches,
+            migrate_archive_retired_chain_seeds,
         )
         try:
             migrate_agent_goals()
@@ -282,6 +283,10 @@ def create_app(start_scheduler=False):
             migrate_per_repo_overview_watches()
         except Exception as e:
             logger.warning(f"[startup] Per-repo overview-watch migration skipped: {e}")
+        try:
+            migrate_archive_retired_chain_seeds()
+        except Exception as e:
+            logger.warning(f"[startup] Retired-chain-seed archive skipped: {e}")
         try:
             ensure_seed_chain_automations()
         except Exception as e:

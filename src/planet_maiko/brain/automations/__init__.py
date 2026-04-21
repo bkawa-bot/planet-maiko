@@ -866,66 +866,27 @@ def evaluate():
 # Seeding + migration from AgentGoal
 # ---------------------------------------------------------------------------
 
-_CHAIN_SEEDS = [
-    {
-        "slug": "ci_fail_rollback_error_spike",
-        "types": ["pr_ci_failed", "deploy_rollback", "error_spike"],
-        "name": "Investigate CI fail → rollback → error spike incident",
-        "description": (
-            "When a repo trips CI failure, a rollback, and an error spike "
-            "within 30 minutes, propose an investigation. Classic incident "
-            "shape — spawning an Investigator gets the timeline assembled "
-            "before the context goes stale."
-        ),
-    },
-    {
-        "slug": "deploy_blocked_stuck",
-        "types": ["deploy_blocked", "deploy_stuck"],
-        "name": "Investigate stuck deploy",
-        "description": (
-            "Deploy flagged as blocked AND stuck in the same 30-minute "
-            "window usually means the release pipeline is wedged. "
-            "Approving spawns an investigator to untangle it."
-        ),
-    },
-    {
-        "slug": "ci_fail_deploy_blocked",
-        "types": ["pr_ci_failed", "deploy_blocked"],
-        "name": "Investigate CI break blocking deploy",
-        "description": (
-            "CI red + deploy blocked on the same repo usually means the "
-            "master build is broken. Investigate the failing check so a "
-            "fix lands before the team is idle."
-        ),
-    },
-    {
-        "slug": "rollback_error_spike",
-        "types": ["deploy_rollback", "error_spike"],
-        "name": "Investigate rollback with error spike",
-        "description": (
-            "Rolled-back deploy + ongoing error spike suggests the rollback "
-            "didn't restore healthy state. Propose a targeted investigation."
-        ),
-    },
-    {
-        "slug": "batch_job_error_spike",
-        "types": ["batch_job_failing", "error_spike"],
-        "name": "Investigate failing batch job + error spike",
-        "description": (
-            "Batch job failure correlated with an error spike often points "
-            "to the same upstream. Propose an investigation to find the link."
-        ),
-    },
-    {
-        "slug": "rollback_batch_fail",
-        "types": ["deploy_rollback", "batch_job_failing"],
-        "name": "Investigate rollback breaking batch jobs",
-        "description": (
-            "A rollback that leaves batch jobs failing means the previous "
-            "version has drift. Investigate what assumptions broke."
-        ),
-    },
-]
+# No default chain seeds — the old ones all depended on Ops-y
+# pupdate types (incident / error_spike / deploy_rollback /
+# deploy_blocked / deploy_stuck / batch_job_failing) that no default
+# poller emits, so they were inert on every install. Plugins that
+# add an ops signal source ship their own chain starters via
+# `register_default_automations()`. Kept as a list (not deleted) so
+# ensure_seed_chain_automations stays import-compatible and a
+# future plugin-agnostic seed pattern has a spot to land.
+_CHAIN_SEEDS = []
+
+# Pupdate types the old Ops-chain seeds referenced. Used by the
+# migration to archive existing rows that still reference them, so
+# users don't see rows that can never fire.
+_RETIRED_OPS_TYPES = {
+    "incident",
+    "error_spike",
+    "deploy_rollback",
+    "deploy_blocked",
+    "deploy_stuck",
+    "batch_job_failing",
+}
 
 
 _RULE_SEEDS = [
@@ -1163,6 +1124,51 @@ def ensure_seed_automations():
     db.session.commit()
     logger.info("[automations] seeded 1 wildcard overview watch")
     return 1
+
+
+def migrate_archive_retired_chain_seeds():
+    """Archive seeded incident-chain automations that reference
+    pupdate types no default poller emits.
+
+    The original chain seeds assumed an ops signal source (Datadog,
+    Sentry, PagerDuty) emitting `incident` / `error_spike` /
+    `deploy_*` / `batch_job_failing`. Maiko doesn't ship those
+    pollers — so the chains sat on the Automations page forever
+    unable to fire. Archive them so the list only shows rules that
+    can actually trigger on this install.
+
+    Only touches seed-created rows. User-authored automations that
+    reference retired types are left alone — if the user wrote it,
+    they might have a plugin in flight that emits the type.
+    """
+    legacy = (
+        Automation.query
+        .filter(Automation.created_by == "seed")
+        .filter(Automation.status == "active")
+        .all()
+    )
+    archived = 0
+    for a in legacy:
+        # A chain seed references its required types in when[].config.types.
+        retired_refs = False
+        for cond in (a.when or []):
+            if cond.get("kind") != "pupdate_chain":
+                continue
+            types = (cond.get("config") or {}).get("types") or []
+            if any(t in _RETIRED_OPS_TYPES for t in types):
+                retired_refs = True
+                break
+        if not retired_refs:
+            continue
+        a.status = "archived"
+        archived += 1
+    if archived:
+        db.session.commit()
+        logger.info(
+            f"[automations] archived {archived} seeded chain(s) that "
+            "referenced retired ops pupdate types"
+        )
+    return archived
 
 
 def migrate_per_repo_overview_watches():
