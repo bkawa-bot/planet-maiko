@@ -307,7 +307,7 @@ CONDITIONS = {
 # Action dispatchers — each returns a short result dict for logging.
 # ---------------------------------------------------------------------------
 
-def _act_run_agent_job(automation, config, pupdate=None):
+def _act_run_agent_job(automation, config, pupdate=None, context=None):
     """Spawn an AgentJob — the pack-owned "run this skill / role" primitive.
 
     Config:
@@ -317,7 +317,10 @@ def _act_run_agent_job(automation, config, pupdate=None):
                             which role spawns.
       title: str          — defaults to automation.name.
       description: str    — skill input / body / instructions for the agent.
-      scope_repo: str     — org/repo; drives worktree resolution.
+      scope_repo: str     — org/repo; drives worktree resolution. When
+                            unset, falls back to the chain condition's
+                            `service` (shared repo across the matched
+                            pupdates) or the automation's own scope.
       priority: str       — low | normal | high | urgent. Default normal.
       ask_first: bool     — true → status=pending_approval (user approves
                             from the AgentJobs dashboard). false → direct
@@ -325,14 +328,34 @@ def _act_run_agent_job(automation, config, pupdate=None):
     """
     from planet_maiko.models.agent_job import AgentJob
 
+    ctx = context or {}
     ask_first = bool(config.get("ask_first", False))
     kind = config.get("kind") or "todo"
     title = config.get("title") or automation.name
-    repo = config.get("scope_repo") or automation.scope_repo or None
+    # Chain conditions surface `service` (shared repo across the matched
+    # pupdates) — use it as the default scope_repo so the spawned agent's
+    # worktree lands in the right place without the user having to
+    # template "{service}" into config.scope_repo.
+    repo = (
+        config.get("scope_repo")
+        or automation.scope_repo
+        or ctx.get("service")
+        or None
+    )
     description = config.get("description") or automation.description or ""
     priority = config.get("priority") or "normal"
 
     job_id = f"job-{uuid.uuid4().hex[:10]}"
+    extra = {"from_automation": automation.id}
+    # Stash the triggering pupdate ids so the execute phase can enrich
+    # TASK.md with their titles/bodies/urls/tags. Covers both the
+    # single-match path (pupdate_match) via pupdate.id and the chain
+    # path (pupdate_chain) via context.pupdate_ids.
+    if pupdate is not None:
+        extra["triggered_by_pupdate"] = pupdate.id
+    chain_ids = ctx.get("pupdate_ids") or []
+    if chain_ids:
+        extra["triggered_by_pupdates"] = list(chain_ids)
     job = AgentJob(
         id=job_id,
         kind=kind,
@@ -346,13 +369,13 @@ def _act_run_agent_job(automation, config, pupdate=None):
         status="pending_approval" if ask_first else "queued",
         approved_by=None if ask_first else "auto",
         approved_at=None if ask_first else datetime.now(timezone.utc),
-        extra={"from_automation": automation.id},
+        extra=extra,
     )
     db.session.add(job)
     return {"job_id": job_id, "kind": "run_agent_job", "status": job.status}
 
 
-def _act_create_task(automation, config, pupdate=None):
+def _act_create_task(automation, config, pupdate=None, context=None):
     """Create a user-owed Task.
 
     Use this when the automation surfaces work the *user* needs to do
@@ -364,11 +387,12 @@ def _act_create_task(automation, config, pupdate=None):
       title: str
       description: str
       priority: str
-      repo: str
+      repo: str           — falls back to chain `service` when unset.
     """
     from planet_maiko.models.task import Task
     from planet_maiko.orchestration import route, is_ready
 
+    ctx = context or {}
     task_id = f"task-{uuid.uuid4().hex[:10]}"
     task = Task(
         id=task_id,
@@ -378,7 +402,7 @@ def _act_create_task(automation, config, pupdate=None):
         status="new",
         extra={
             "description": config.get("description") or automation.description or "",
-            "repo": config.get("repo") or automation.scope_repo or "",
+            "repo": config.get("repo") or automation.scope_repo or ctx.get("service") or "",
             "from_automation": automation.id,
         },
         tags=["from_automation"],
@@ -391,7 +415,7 @@ def _act_create_task(automation, config, pupdate=None):
     return {"task_id": task_id, "kind": "create_task"}
 
 
-def _act_spawn_agent_job_from_pupdate(automation, config, pupdate=None):
+def _act_spawn_agent_job_from_pupdate(automation, config, pupdate=None, context=None):
     """Pupdate-scope sibling of run_agent_job — spawns an AgentJob
     using the matched pupdate for context (repo, title).
 
@@ -409,6 +433,16 @@ def _act_spawn_agent_job_from_pupdate(automation, config, pupdate=None):
     description = config.get("description") or pupdate.body or pupdate.title or ""
 
     job_id = f"job-{uuid.uuid4().hex[:10]}"
+    extra = {
+        "from_automation": automation.id,
+        "triggered_by_pupdate": pupdate.id,
+    }
+    # pupdate_chain may also be in the condition set (rare but valid).
+    # If context surfaces a chain, stash those ids too so the execute
+    # phase sees the full triggering batch.
+    chain_ids = (context or {}).get("pupdate_ids") or []
+    if chain_ids and chain_ids != [pupdate.id]:
+        extra["triggered_by_pupdates"] = list(chain_ids)
     job = AgentJob(
         id=job_id,
         kind=kind,
@@ -422,16 +456,13 @@ def _act_spawn_agent_job_from_pupdate(automation, config, pupdate=None):
         status="pending_approval" if ask_first else "queued",
         approved_by=None if ask_first else "auto",
         approved_at=None if ask_first else datetime.now(timezone.utc),
-        extra={
-            "from_automation": automation.id,
-            "triggered_by_pupdate": pupdate.id,
-        },
+        extra=extra,
     )
     db.session.add(job)
     return {"job_id": job_id, "kind": "spawn_agent_job_from_pupdate", "status": job.status}
 
 
-def _act_dismiss_pupdate(automation, config, pupdate=None):
+def _act_dismiss_pupdate(automation, config, pupdate=None, context=None):
     if pupdate is None:
         return {"skipped": "dismiss_pupdate requires pupdate context"}
     pupdate.dismissed = True
@@ -439,7 +470,7 @@ def _act_dismiss_pupdate(automation, config, pupdate=None):
     return {"kind": "dismiss_pupdate", "pupdate_id": pupdate.id}
 
 
-def _act_create_task_from_pupdate(automation, config, pupdate=None):
+def _act_create_task_from_pupdate(automation, config, pupdate=None, context=None):
     """Rule-style create-a-task: use the pupdate's title/priority as the
     task seed, letting config override task_type and task_priority.
     Mirrors _execute_create_task in the old processor."""
@@ -476,7 +507,7 @@ def _act_create_task_from_pupdate(automation, config, pupdate=None):
     return {"kind": "create_task_from_pupdate", "task_id": task_id, "pupdate_id": pupdate.id}
 
 
-def _act_complete_linked_task(automation, config, pupdate=None):
+def _act_complete_linked_task(automation, config, pupdate=None, context=None):
     """Close review / coding tasks whose url matches this pupdate's url.
     Replaces the old ACTION_COMPLETE_TASK in rules.py — same cleanup
     semantics, now living inside the Automation engine."""
@@ -521,7 +552,7 @@ def _act_complete_linked_task(automation, config, pupdate=None):
     }
 
 
-def _act_skip(automation, config, pupdate=None):
+def _act_skip(automation, config, pupdate=None, context=None):
     """Explicit no-op — useful for 'mark this pattern as handled,
     don't dispatch anything.' Pairs with pupdate-scope automations
     where you want the first-match behavior to claim the pupdate but
@@ -639,7 +670,10 @@ def _run_actions(automation, context=None, pupdate=None):
             continue
         try:
             config = _apply_context_to_config(action.get("config") or {}, context)
-            results.append(handler(automation, config, pupdate=pupdate))
+            # Pass context so handlers can pull chain-level info (service,
+            # pupdate_ids) even when the string templates didn't surface it
+            # — e.g., auto-filling scope_repo from a chain's shared repo.
+            results.append(handler(automation, config, pupdate=pupdate, context=context))
         except Exception as e:
             logger.warning(
                 f"[automation {automation.id}] action {kind} error: {e}"

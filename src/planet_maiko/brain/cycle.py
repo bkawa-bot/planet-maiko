@@ -625,6 +625,50 @@ def _phase_execute_agent_jobs():
                 prompt_parts = [job.title]
                 if job.description:
                     prompt_parts.append(f"\n## Description\n\n{job.description}")
+
+                # Fold in the triggering pupdate(s) so a chain-fired agent
+                # can see the incident / CI failure / error-spike bodies
+                # that made this automation fire. Without this, the agent
+                # only sees a templated title + static description and has
+                # to go fish for context.
+                try:
+                    from planet_maiko.models.pupdate import Pupdate as _Pup
+                    job_extra = job.extra or {}
+                    pupdate_ids = []
+                    single_id = job_extra.get("triggered_by_pupdate")
+                    if single_id:
+                        pupdate_ids.append(single_id)
+                    for pid in (job_extra.get("triggered_by_pupdates") or []):
+                        if pid not in pupdate_ids:
+                            pupdate_ids.append(pid)
+                    if pupdate_ids:
+                        triggering = (
+                            _Pup.query
+                            .filter(_Pup.id.in_(pupdate_ids))
+                            .order_by(_Pup.timestamp.asc())
+                            .all()
+                        )
+                        if triggering:
+                            heading = (
+                                "Triggering event" if len(triggering) == 1
+                                else f"Triggering events ({len(triggering)})"
+                            )
+                            lines = [f"\n## {heading}\n"]
+                            for p in triggering:
+                                lines.append(f"### {p.type}: {p.title or '(no title)'}")
+                                if p.source:
+                                    lines.append(f"Source: {p.source}")
+                                if p.url:
+                                    lines.append(f"URL: {p.url}")
+                                if p.tags:
+                                    lines.append(f"Tags: {', '.join(p.tags)}")
+                                if p.body:
+                                    lines.append(f"\n{p.body}")
+                                lines.append("")
+                            prompt_parts.append("\n".join(lines))
+                except Exception as e:
+                    logger.debug(f"[cycle] pupdate-context enrich skipped for {job.id}: {e}")
+
                 if role in ("review", "investigation"):
                     try:
                         from planet_maiko.agents.skills import get_skill_prompt
