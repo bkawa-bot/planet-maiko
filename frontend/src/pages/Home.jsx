@@ -7,6 +7,7 @@ import { formatTime, formatClock } from "../utils/dates";
 import { Brain, Calendar, Palette, Video, Sparkles } from "lucide-react";
 import { showToast } from "../components/Toast";
 import FooterPendingPopover from "../components/FooterPendingPopover";
+import GoalsListModal from "../components/GoalsListModal";
 import "./Home.css";
 
 // Home polls sidebar data (scene, brain status, calendar, task stats).
@@ -45,6 +46,7 @@ export default function Home() {
   const [homeConfig, setHomeConfig] = useState(null);
   const [cycling, setCycling] = useState(false);
   const [showPendingPopover, setShowPendingPopover] = useState(false);
+  const [showGoalsModal, setShowGoalsModal] = useState(false);
 
   const fetchSidebar = async () => {
     try {
@@ -224,10 +226,15 @@ export default function Home() {
                 <div className="widget-stat-label">Projects</div>
               </div>
               {stats.goals_active > 0 && (
-                <div className="widget-stat" title="Standing goals the pack is watching. Tune from an agent's profile.">
+                <button
+                  type="button"
+                  className="widget-stat widget-stat-clickable"
+                  onClick={() => setShowGoalsModal(true)}
+                  title="See what each agent is watching for. Click to review and pause."
+                >
                   <div className="widget-stat-value" style={{ color: "var(--lavender, #b59dd8)" }}>{stats.goals_active}</div>
                   <div className="widget-stat-label">Goals</div>
-                </div>
+                </button>
               )}
             </div>
           </div>
@@ -269,6 +276,7 @@ export default function Home() {
           </div>
         </div>
       </div>
+      {showGoalsModal && <GoalsListModal onClose={() => setShowGoalsModal(false)} />}
     </div>
   );
 }
