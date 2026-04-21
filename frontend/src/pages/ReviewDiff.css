@@ -4,7 +4,11 @@
 
 .review-diff-page {
   padding: 16px 20px 40px;
-  max-width: 1400px;
+  /* Widened from 1400 -> 1800: modern displays cap at >=1920 and the
+     previous bound was making hunks uncomfortably narrow after the
+     360px comment rail. Still capped so 4K monitors don't stretch
+     line-length into unreadable territory. */
+  max-width: 1800px;
   margin: 0 auto;
 }
 
@@ -135,9 +139,17 @@
 
 .review-diff-layout {
   display: grid;
-  grid-template-columns: 1fr 360px;
+  /* Sidebar trimmed from 360px -> 300px. Comment threads still fit
+     (they wrap to their own inner width) and the diff gets 60px back. */
+  grid-template-columns: 1fr 300px;
   gap: 16px;
   align-items: flex-start;
+}
+
+/* "Wide" mode: user toggled the sidebar off to read the diff full-width.
+   Grid collapses to a single column so the diff-main can fill the page. */
+.review-diff-layout.sidebar-hidden {
+  grid-template-columns: 1fr;
 }
 
 @media (max-width: 1100px) {

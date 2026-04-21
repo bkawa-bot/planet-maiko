@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, ExternalLink, GitPullRequest, Loader, MessageSquare, X } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, GitPullRequest, Loader, MessageSquare, PanelRightClose, PanelRightOpen, X } from "lucide-react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import DiffView from "../components/diff/DiffView";
@@ -55,6 +55,10 @@ export default function ReviewDiff() {
   const [newCommentBody, setNewCommentBody] = useState("");
   const [task, setTask] = useState(null);
   const [focusedKey, setFocusedKey] = useState(null);
+  // Toggle the right-rail comment sidebar off to read hunks full-width.
+  // Persists for the session — the user who wants wide-mode for one
+  // file usually wants it for the whole review.
+  const [sidebarHidden, setSidebarHidden] = useState(false);
   const threadRefs = useRef({});
 
   const fetchAll = useCallback(async () => {
@@ -267,6 +271,14 @@ export default function ReviewDiff() {
           )}
         </div>
         <div className="review-diff-actions">
+          <button
+            className="btn btn-sm"
+            onClick={() => setSidebarHidden((v) => !v)}
+            title={sidebarHidden ? "Show the comments sidebar" : "Hide the comments sidebar for wider diff"}
+          >
+            {sidebarHidden ? <PanelRightOpen size={10} /> : <PanelRightClose size={10} />}
+            {sidebarHidden ? " show sidebar" : " wide"}
+          </button>
           {isReviewTask ? (
             <button
               className="btn btn-sm"
@@ -310,7 +322,7 @@ export default function ReviewDiff() {
         </div>
       )}
 
-      <div className="review-diff-layout">
+      <div className={`review-diff-layout${sidebarHidden ? " sidebar-hidden" : ""}`}>
         <div className="review-diff-main">
           <DiffView
             rawDiff={diff?.raw_diff}
@@ -320,6 +332,7 @@ export default function ReviewDiff() {
           />
         </div>
 
+        {!sidebarHidden && (
         <aside className="review-diff-sidebar">
           <div className="review-diff-sidebar-title">
             <MessageSquare size={12} /> Comments
@@ -366,6 +379,7 @@ export default function ReviewDiff() {
             );
           })}
         </aside>
+        )}
       </div>
 
       {newCommentAnchor && (
