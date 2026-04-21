@@ -172,7 +172,9 @@ h1, h2, h3,
 .thread-msg-sender,
 .inbox-tab,
 .knowledge-tabs button,
-.agents-tabs button {
+.agents-tabs button,
+.nav-pill,
+.nav-pill-label {
   font-family: var(--font-mono);
   letter-spacing: 0.005em;
 }
