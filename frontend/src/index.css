@@ -50,15 +50,14 @@
   --lavender-soft: rgba(195, 166, 232, 0.15);
   --lavender-faint: rgba(195, 166, 232, 0.08);
 
-  /* Font stack is now self-consistent: DM Sans is imported in
-     index.html, so Mac and Windows finally render the same body type
-     instead of falling through to SF vs. Segoe UI. Fraunces is the
-     display companion — used for headings, page titles, and the
-     greeting. Both fall back gracefully if the Google Fonts CDN is
-     slow or unreachable. */
-  --font: 'DM Sans', -apple-system, 'Segoe UI', sans-serif;
-  --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
-  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  /* Pixel / terminal font pair — body runs in JetBrains Mono so the
+     interface reads like a cozy terminal, display uses Bitcount Prop
+     Single (Google Fonts' variable pixel typeface) for headings and
+     the wordmark. Falls back to the existing mono stack if the
+     Google CDN is slow so the page never boots in Times New Roman. */
+  --font: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font-display: 'Bitcount Prop Single', 'JetBrains Mono', monospace;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
   --radius: 12px;
   --radius-sm: 8px;
   --radius-xs: 6px;
@@ -134,8 +133,10 @@
 
 /* Display type — applied anywhere we want the page to feel
    "character over chrome": headings, the planet-maiko wordmark, the
-   home greeting, section titles. Body copy stays on --font (DM Sans).
-   Opsz 9..144 lets the variable-font pick a cut tuned to the size. */
+   home greeting, section titles. Body copy stays on --font
+   (JetBrains Mono). Bitcount is a pixel font, so the normal font
+   smoothing you want for prose is actively wrong here; kill it so
+   the bitmap grid renders crisp instead of fuzzy-blurry. */
 h1, h2, h3,
 .topbar-planet, .topbar-maiko,
 .overview-greeting,
@@ -143,17 +144,17 @@ h1, h2, h3,
 .review-queue-header,
 .home-widget .widget-header {
   font-family: var(--font-display);
-  font-optical-sizing: auto;
-  letter-spacing: -0.005em;
+  letter-spacing: 0.02em;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
 }
-/* Fraunces renders a touch heavy compared to DM Sans at the same
-   weight; nudge small display uses down a step so section titles
-   don't over-assert. */
+/* Section-scale display text — nudge the weight up a step so the
+   pixel grid reads solid at smaller sizes (Bitcount gets spindly
+   under ~14px). */
 .overview-section-title,
 .review-queue-header,
 .home-widget .widget-header {
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  font-weight: 700;
 }
 
 body {
