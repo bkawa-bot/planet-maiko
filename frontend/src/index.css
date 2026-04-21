@@ -159,6 +159,24 @@ h1, h2, h3,
   font-weight: 700;
 }
 
+/* Label-y surfaces that read well in the mono cut from the earlier
+   all-mono experiment — agent names (kind of a callsign), tab titles
+   (kind of a tab header on a dev tool). Keeps the "cozy terminal"
+   character where it lands without stretching prose. */
+.agent-name,
+.profile-card-name,
+.profile-card-name-text,
+.pack-row-name,
+.assign-agent-name,
+.campfire-agent-name,
+.thread-msg-sender,
+.inbox-tab,
+.knowledge-tabs button,
+.agents-tabs button {
+  font-family: var(--font-mono);
+  letter-spacing: 0.005em;
+}
+
 /* Inline tone shifts — used by <ToneText> to render snippets of
    Maiko's voice in different typefaces depending on the moment.
    Each span is a short phrase, not a whole paragraph; the weight /
