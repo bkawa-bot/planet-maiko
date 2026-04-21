@@ -228,7 +228,7 @@ def create_app(start_scheduler=False):
         from planet_maiko.brain.automations import (
             migrate_agent_goals, ensure_seed_automations,
             ensure_seed_chain_automations, migrate_scheduled_skills,
-            ensure_seed_rule_automations,
+            ensure_seed_rule_automations, migrate_legacy_action_kinds,
         )
         try:
             migrate_agent_goals()
@@ -250,6 +250,10 @@ def create_app(start_scheduler=False):
             ensure_seed_rule_automations()
         except Exception as e:
             logger.warning(f"[startup] Rule automation seeding skipped: {e}")
+        try:
+            migrate_legacy_action_kinds()
+        except Exception as e:
+            logger.warning(f"[startup] Legacy action-kind migration skipped: {e}")
 
         # Wake-registry cleanup: the previous run may have crashed with
         # agents flagged "working" and with session-registry entries

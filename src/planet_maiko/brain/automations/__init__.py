@@ -307,46 +307,98 @@ CONDITIONS = {
 # Action dispatchers — each returns a short result dict for logging.
 # ---------------------------------------------------------------------------
 
-def _act_propose(automation, config, pupdate=None):
-    draft = config.get("draft") or {}
-    if not draft.get("title"):
-        return {"skipped": "proposal draft missing title"}
+def _act_create_task(automation, config, pupdate=None):
+    """Unified task creation — supersedes the old propose / create_task /
+    run_skill split. When ask_first is True, emits an agent_proposal
+    pupdate that the user approves to spawn the task. When False,
+    creates the Task directly.
 
-    repo = draft.get("repo") or automation.scope_repo or ""
-    pupdate_id = f"automation-{automation.id}-{uuid.uuid4().hex[:8]}"
-    tag = f"automation:{automation.id}"
-    pupdate = Pupdate(
-        id=pupdate_id,
-        source="maiko",
-        source_id=f"automation/{automation.id}",
-        type="agent_proposal",
-        priority=draft.get("priority", "low"),
-        title=draft.get("title") or automation.name,
-        body=draft.get("description") or automation.description or "",
-        actionable=True,
-        action_hint="Approve / dismiss",
-        tags=["proposal", "from_maiko", tag],
-        extra={
-            "from_agent_id": None,
-            "draft": {
-                "title": draft.get("title"),
-                "type": draft.get("type") or "todo",
-                "priority": draft.get("priority") or "normal",
-                "repo": repo,
-                "description": draft.get("description") or automation.description or "",
+    Config:
+      ask_first: bool     — default False. True = propose for approval.
+      type: str           — task type (e.g. "todo", "cartograph",
+                            "investigation", "brainstorm"). Also maps to
+                            skill name for one-shot skill runs — the
+                            cycle's execute phase picks the role by
+                            task.type via ONE_SHOT_ROLE_FOR_TYPE.
+      title: str          — defaults to automation.name when unset.
+      priority: str       — low | normal | high | urgent. Defaults
+                            "normal" for direct creation, "low" for
+                            proposals (avoids interrupt noise).
+      repo: str           — task.extra.repo; drives agent routing.
+      description: str    — task.extra.description; usually the skill's
+                            input / freeform detail for the agent.
+    """
+    ask_first = bool(config.get("ask_first", False))
+    title = config.get("title") or automation.name
+    task_type = config.get("type") or "todo"
+    priority = config.get("priority") or ("low" if ask_first else "normal")
+    repo = config.get("repo") or automation.scope_repo or ""
+    description = config.get("description") or automation.description or ""
+
+    if ask_first:
+        pupdate_id = f"automation-{automation.id}-{uuid.uuid4().hex[:8]}"
+        tag = f"automation:{automation.id}"
+        p = Pupdate(
+            id=pupdate_id,
+            source="maiko",
+            source_id=f"automation/{automation.id}",
+            type="agent_proposal",
+            priority=priority,
+            title=title,
+            body=description,
+            actionable=True,
+            action_hint="Approve / dismiss",
+            tags=["proposal", "from_maiko", tag],
+            extra={
+                "from_agent_id": None,
+                "draft": {
+                    "title": title,
+                    "type": task_type,
+                    "priority": priority,
+                    "repo": repo,
+                    "description": description,
+                },
+                "automation_id": automation.id,
             },
-            "automation_id": automation.id,
+            brain_processed=True,
+        )
+        db.session.add(p)
+        return {"pupdate_id": pupdate_id, "kind": "create_task", "ask_first": True}
+
+    # Direct creation — no approval step.
+    from planet_maiko.models.task import Task
+    from planet_maiko.orchestration import route, is_ready
+
+    task_id = f"task-{uuid.uuid4().hex[:10]}"
+    task = Task(
+        id=task_id,
+        title=title,
+        type=task_type,
+        priority=priority,
+        status="new",
+        extra={
+            "description": description,
+            "repo": repo,
+            "from_automation": automation.id,
         },
-        brain_processed=True,
+        tags=["from_automation"],
     )
-    db.session.add(pupdate)
-    return {"pupdate_id": pupdate_id, "kind": "propose"}
+    db.session.add(task)
+    db.session.flush()
+    route(task)
+    if not is_ready(task):
+        task.status = "blocked"
+    return {"task_id": task_id, "kind": "create_task", "ask_first": False}
 
 
 def _act_nudge(automation, config, pupdate=None):
+    """Drop a note in the inbox with a link — used when the user
+    should go somewhere (Training page, a URL) rather than have a task
+    spawned. Low-priority informational pupdate.
+    """
     pupdate_id = f"automation-nudge-{automation.id}-{uuid.uuid4().hex[:8]}"
     tag = f"automation:{automation.id}"
-    pupdate = Pupdate(
+    p = Pupdate(
         id=pupdate_id,
         source="maiko",
         source_id=f"automation/{automation.id}",
@@ -361,66 +413,8 @@ def _act_nudge(automation, config, pupdate=None):
         extra={"automation_id": automation.id},
         brain_processed=True,
     )
-    db.session.add(pupdate)
+    db.session.add(p)
     return {"pupdate_id": pupdate_id, "kind": "nudge"}
-
-
-def _act_create_task(automation, config, pupdate=None):
-    from planet_maiko.models.task import Task
-    from planet_maiko.orchestration import route, is_ready
-
-    task_id = f"task-{uuid.uuid4().hex[:10]}"
-    task = Task(
-        id=task_id,
-        title=config.get("title") or automation.name,
-        type=config.get("type") or "todo",
-        priority=config.get("priority") or "normal",
-        status="new",
-        extra={
-            "description": config.get("description") or "",
-            "repo": config.get("repo") or automation.scope_repo or "",
-            "from_automation": automation.id,
-        },
-        tags=["from_automation"],
-    )
-    db.session.add(task)
-    db.session.flush()
-    route(task)
-    if not is_ready(task):
-        task.status = "blocked"
-    return {"task_id": task_id, "kind": "create_task"}
-
-
-def _act_run_skill(automation, config, pupdate=None):
-    # Shortcut over create_task: builds a task of the right `type` so
-    # the cycle's execute-agent-tasks phase runs it as a one-shot skill.
-    # `skill_name` maps to task.type (the execute phase picks role from
-    # ONE_SHOT_ROLE_FOR_TYPE in brain_session.py).
-    from planet_maiko.models.task import Task
-    from planet_maiko.orchestration import route
-
-    skill_name = config.get("skill_name")
-    if not skill_name:
-        return {"skipped": "run_skill missing skill_name"}
-
-    task_id = f"task-{uuid.uuid4().hex[:10]}"
-    task = Task(
-        id=task_id,
-        title=config.get("title") or f"{skill_name}: {automation.name}",
-        type=skill_name,
-        priority=config.get("priority") or "normal",
-        status="new",
-        extra={
-            "description": config.get("input") or automation.description or "",
-            "repo": config.get("scope_repo") or automation.scope_repo or "",
-            "from_automation": automation.id,
-        },
-        tags=["from_automation"],
-    )
-    db.session.add(task)
-    db.session.flush()
-    route(task)
-    return {"task_id": task_id, "kind": "run_skill", "skill": skill_name}
 
 
 def _act_dismiss_pupdate(automation, config, pupdate=None):
@@ -522,10 +516,8 @@ def _act_skip(automation, config, pupdate=None):
 
 
 ACTIONS = {
-    "propose": _act_propose,
-    "nudge": _act_nudge,
     "create_task": _act_create_task,
-    "run_skill": _act_run_skill,
+    "nudge": _act_nudge,
     # Pupdate-scope actions (require context.pupdate to operate).
     "dismiss_pupdate": _act_dismiss_pupdate,
     "create_task_from_pupdate": _act_create_task_from_pupdate,
@@ -950,19 +942,18 @@ def ensure_seed_chain_automations():
             when_logic="all",
             within_minutes=30,
             then=[{
-                "kind": "propose",
+                "kind": "create_task",
                 "config": {
-                    "draft": {
-                        "title": "Investigate incident on {service}",
-                        "type": "investigation",
-                        "priority": "high",
-                        "repo": "{service}",
-                        "description": (
-                            "Correlated signals on {service}: {types}. "
-                            "Approving spawns an investigator that walks the "
-                            "worktree, assembles a timeline, and files a report."
-                        ),
-                    },
+                    "ask_first": True,
+                    "title": "Investigate incident on {service}",
+                    "type": "investigation",
+                    "priority": "high",
+                    "repo": "{service}",
+                    "description": (
+                        "Correlated signals on {service}: {types}. "
+                        "Approving spawns an investigator that walks the "
+                        "worktree, assembles a timeline, and files a report."
+                    ),
                 },
             }],
             status="active",
@@ -1029,19 +1020,18 @@ def ensure_seed_automations():
             }],
             when_logic="all",
             then=[{
-                "kind": "propose",
+                "kind": "create_task",
                 "config": {
-                    "draft": {
-                        "title": f"Cartograph {repo}",
-                        "type": "cartograph",
-                        "priority": "normal",
-                        "repo": repo,
-                        "description": (
-                            f"{repo} hasn't been cartographed in a while. "
-                            f"Approving spawns Atlas to walk the tree and "
-                            f"produce a fresh Repo Overview."
-                        ),
-                    },
+                    "ask_first": True,
+                    "title": f"Cartograph {repo}",
+                    "type": "cartograph",
+                    "priority": "normal",
+                    "repo": repo,
+                    "description": (
+                        f"{repo} hasn't been cartographed in a while. "
+                        f"Approving spawns Atlas to walk the tree and "
+                        f"produce a fresh Repo Overview."
+                    ),
                 },
             }],
             status="active",
@@ -1095,8 +1085,12 @@ def migrate_scheduled_skills():
             }],
             when_logic="all",
             then=[{
-                "kind": "run_skill",
-                "config": {"skill_name": s.id},
+                "kind": "create_task",
+                "config": {
+                    "ask_first": False,
+                    "type": s.id,  # skill name = task type for one-shot
+                    "title": s.name,
+                },
             }],
             status="active",
             created_by="seed",
@@ -1112,6 +1106,62 @@ def migrate_scheduled_skills():
         db.session.commit()
         logger.info(f"[automations] migrated {migrated} scheduled CustomSkill(s) to Automation")
     return migrated
+
+
+def migrate_legacy_action_kinds():
+    """One-time rewrite of existing Automations that still use the old
+    `propose` and `run_skill` action kinds. Rewrites them into the
+    unified `create_task` action with ask_first set appropriately.
+    Idempotent: subsequent boots find no more legacy rows and return 0.
+    """
+    rewrote = 0
+    rows = (
+        Automation.query
+        .filter(Automation.status != "archived")
+        .all()
+    )
+    for a in rows:
+        new_then = []
+        changed = False
+        for action in (a.then or []):
+            kind = action.get("kind")
+            cfg = action.get("config") or {}
+            if kind == "propose":
+                draft = cfg.get("draft") or {}
+                new_then.append({
+                    "kind": "create_task",
+                    "config": {
+                        "ask_first": True,
+                        "title": draft.get("title") or "",
+                        "type": draft.get("type") or "todo",
+                        "priority": draft.get("priority") or "normal",
+                        "repo": draft.get("repo") or "",
+                        "description": draft.get("description") or "",
+                    },
+                })
+                changed = True
+            elif kind == "run_skill":
+                new_then.append({
+                    "kind": "create_task",
+                    "config": {
+                        "ask_first": False,
+                        "title": cfg.get("title") or "",
+                        "type": cfg.get("skill_name") or "todo",
+                        "priority": cfg.get("priority") or "normal",
+                        "repo": cfg.get("scope_repo") or "",
+                        "description": cfg.get("input") or "",
+                    },
+                })
+                changed = True
+            else:
+                new_then.append(action)
+        if changed:
+            a.then = new_then
+            rewrote += 1
+    if rewrote:
+        db.session.commit()
+        logger.info(f"[automations] rewrote {rewrote} legacy action kind(s) to create_task")
+    return rewrote
 
 
 def migrate_agent_goals():

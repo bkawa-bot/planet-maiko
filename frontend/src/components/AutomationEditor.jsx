@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, Plus, Trash2, Loader, Save, AlertTriangle } from "lucide-react";
+import { X, Plus, Trash2, Loader, Save } from "lucide-react";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import "./AutomationEditor.css";
@@ -21,7 +21,6 @@ import "./AutomationEditor.css";
 export default function AutomationEditor({ mode = "edit", automation, onClose, onSaved }) {
   const [name, setName] = useState(automation?.name || "");
   const [description, setDescription] = useState(automation?.description || "");
-  const [scope, setScope] = useState(automation?.execution_scope || "cycle");
   const [scopeRepo, setScopeRepo] = useState(automation?.scope_repo || "");
   const [status, setStatus] = useState(automation?.status || "active");
   const [cooldownDays, setCooldownDays] = useState(
@@ -39,28 +38,32 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Locking the scope for existing rows — changing it would invalidate
-  // every entry in when[]/then[], cleaner to just tell the user they
-  // can't flip it and force them to create a new one if they want.
-  const scopeLocked = mode === "edit";
-
-  // When the scope toggles on a fresh create, reset when[]/then[] so
-  // we don't carry invalid kinds across (e.g. overview_stale isn't
-  // valid in pupdate scope).
-  useEffect(() => {
-    if (!scopeLocked) {
-      setWhen([{ kind: "", config: {} }]);
-      setThen([{ kind: "", config: {} }]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope]);
+  // Scope is derived from the chosen condition kinds — the user never
+  // picks it directly. If any condition is pupdate_match, scope is
+  // "pupdate"; otherwise "cycle". Drives which actions are compatible.
+  const scope = when.some((c) => CONDITION_SCHEMAS[c.kind]?.scopes?.includes("pupdate")
+      && !CONDITION_SCHEMAS[c.kind]?.scopes?.includes("cycle"))
+    ? "pupdate"
+    : "cycle";
 
   const conditionOptions = Object.entries(CONDITION_SCHEMAS)
-    .filter(([, s]) => s.scopes.includes(scope))
     .map(([kind, s]) => ({ value: kind, label: s.label, group: s.group || "Other" }));
   const actionOptions = Object.entries(ACTION_SCHEMAS)
     .filter(([, s]) => s.scopes.includes(scope))
     .map(([kind, s]) => ({ value: kind, label: s.label, group: s.group || "Other" }));
+
+  // If the chosen condition forces pupdate-scope, incompatible action
+  // kinds become nonsense — clear them so the user re-picks something
+  // valid. Runs once when scope flips.
+  useEffect(() => {
+    setThen((rows) => rows.map((a) => {
+      const schema = ACTION_SCHEMAS[a.kind];
+      if (!schema || !schema.scopes.includes(scope)) {
+        return { kind: "", config: {} };
+      }
+      return a;
+    }));
+  }, [scope]);
 
   const isValid = () => {
     if (!name.trim()) return false;
@@ -79,6 +82,7 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
       const payload = {
         name: name.trim(),
         description: description.trim(),
+        // Derived from the chosen conditions — never user-picked.
         execution_scope: scope,
         scope_repo: scopeRepo.trim() || null,
         status,
@@ -152,39 +156,6 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
             />
           </div>
 
-          <div className="automation-editor-field">
-            <label>What's this for?</label>
-            <div className="scope-radio-group">
-              <label className={`scope-radio ${scope === "pupdate" ? "active" : ""} ${scopeLocked ? "locked" : ""}`}>
-                <input
-                  type="radio"
-                  checked={scope === "pupdate"}
-                  disabled={scopeLocked}
-                  onChange={() => setScope("pupdate")}
-                />
-                <span>
-                  <strong>Handle an incoming pupdate</strong>
-                  <small>"When this kind of notification arrives, do this to it." Dismiss noise, turn events into tasks, close tasks when PRs merge.</small>
-                </span>
-              </label>
-              <label className={`scope-radio ${scope === "cycle" ? "active" : ""} ${scopeLocked ? "locked" : ""}`}>
-                <input
-                  type="radio"
-                  checked={scope === "cycle"}
-                  disabled={scopeLocked}
-                  onChange={() => setScope("cycle")}
-                />
-                <span>
-                  <strong>Watch the state of the world</strong>
-                  <small>"On a schedule / when a condition holds, do this." Scheduled skill runs, stale-overview refresh, incident correlation.</small>
-                </span>
-              </label>
-            </div>
-            {scopeLocked && (
-              <div className="automation-editor-hint"><AlertTriangle size={10} /> Locked after creation — to change, delete + recreate.</div>
-            )}
-          </div>
-
           <div className="automation-editor-section">
             <div className="automation-editor-section-header">
               <span className="automation-editor-section-label">WHEN</span>
@@ -215,6 +186,11 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
               >
                 <Plus size={10} /> Add another condition
               </button>
+            )}
+            {scope === "pupdate" && (
+              <div className="automation-editor-hint">
+                Per-pupdate triggers take a single matcher — actions below operate on the matched pupdate.
+              </div>
             )}
           </div>
 
@@ -572,9 +548,27 @@ const PRIORITY_OPTIONS = [
   { value: "urgent", label: "urgent" },
 ];
 
+// Task types + skill names. Skills become task.type directly for
+// one-shot runs (the cycle's execute phase dispatches them via
+// ONE_SHOT_ROLE_FOR_TYPE). Grouped so users can see which picks
+// spawn an agent vs. just create a todo-shaped task.
 const TASK_TYPE_OPTIONS = [
-  "todo", "bug", "feature", "review", "pr_review",
-  "investigation", "repo_analysis", "cartograph", "coding",
+  { value: "todo", label: "todo (generic)" },
+  { value: "bug", label: "bug" },
+  { value: "feature", label: "feature" },
+  { value: "coding", label: "coding (spawns a coding agent)" },
+  { value: "review", label: "review (spawns a reviewer)" },
+  { value: "investigation", label: "investigation (spawns an investigator)" },
+  { value: "repo_analysis", label: "repo_analysis (investigator + read-only)" },
+  { value: "cartograph", label: "cartograph (Atlas walks the repo)" },
+  { value: "brainstorm", label: "brainstorm (skill)" },
+  { value: "morning-brief", label: "morning-brief (skill)" },
+  { value: "evening-wrap", label: "evening-wrap (skill)" },
+  { value: "checkin", label: "checkin (skill)" },
+  { value: "plan", label: "plan (skill)" },
+  { value: "team", label: "team (skill)" },
+  { value: "verify", label: "verify (skill)" },
+  { value: "home-overview", label: "home-overview (skill)" },
 ];
 
 const CONDITION_SCHEMAS = {
@@ -638,56 +632,30 @@ const CONDITION_SCHEMAS = {
 };
 
 const ACTION_SCHEMAS = {
-  propose: {
-    label: "Propose a task (asks you first)",
-    group: "Ask the user",
+  create_task: {
+    label: "Create a task (optionally ask first)",
+    group: "Do work",
     scopes: ["cycle"],
-    help: "Emits an agent_proposal pupdate. Approving turns the draft into a routed task.",
+    help: "Creates a task. Pick a skill-like type (cartograph, investigate, brainstorm) to spawn the matching agent as a one-shot, or a generic type (todo, bug) for manual work. Check 'ask first' to route through the inbox for approval.",
     fields: [
-      { name: "draft.title", type: "string", label: "Proposal title", placeholder: "Can template {service} etc." },
-      { name: "draft.description", type: "textarea", label: "Description", placeholder: "What the task is. Can template {service}, {types}, {title}." },
-      // Task shape fields default sensibly; tuck them into Advanced.
-      { name: "draft.type", type: "select", label: "Task type", default: "todo", options: TASK_TYPE_OPTIONS, advanced: true },
-      { name: "draft.priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS, advanced: true },
-      { name: "draft.repo", type: "string", label: "Repo", placeholder: "org/repo or {service}", advanced: true },
+      { name: "title", type: "string", label: "Title", placeholder: "Can template {service} etc." },
+      { name: "type", type: "select", label: "Task type / skill", default: "todo", options: TASK_TYPE_OPTIONS },
+      { name: "ask_first", type: "bool", label: "Ask me before running", help: "when on, this proposes in the inbox instead of creating the task directly" },
+      { name: "description", type: "textarea", label: "Description / skill input", rows: 2, help: "populates task.description — skill prompt input or task detail" },
+      { name: "repo", type: "string", label: "Repo", placeholder: "org/repo or {service}", advanced: true },
+      { name: "priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS, advanced: true },
     ],
   },
   nudge: {
-    label: "Post an inbox nudge (reminder, no task)",
-    group: "Ask the user",
+    label: "Drop a reminder in the inbox",
+    group: "Do work",
     scopes: ["cycle"],
-    help: "Low-priority maiko_nudge pupdate pointing at a URL. No task created.",
+    help: "Posts a low-priority inbox item with a link. Clicking the inbox card opens the URL. Use when you want to poke yourself toward a page without spawning a task.",
     fields: [
-      { name: "title", type: "string", label: "Title" },
-      { name: "url", type: "string", label: "URL", placeholder: "/knowledge?tab=training" },
+      { name: "title", type: "string", label: "Reminder title" },
+      { name: "url", type: "string", label: "Where to send me", placeholder: "/knowledge?tab=training or https://…" },
       { name: "body", type: "textarea", label: "Body", rows: 2, advanced: true },
-      { name: "action_hint", type: "string", label: "Action hint", placeholder: "Open Training", advanced: true },
-    ],
-  },
-  create_task: {
-    label: "Create a task directly (no approval)",
-    group: "Create work",
-    scopes: ["cycle"],
-    help: "Skips the propose step — creates a Task directly. Use when you're sure; proposals are safer.",
-    fields: [
-      { name: "title", type: "string", label: "Title" },
-      { name: "type", type: "select", label: "Task type", default: "todo", options: TASK_TYPE_OPTIONS },
-      { name: "priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS, advanced: true },
-      { name: "repo", type: "string", label: "Repo", placeholder: "org/repo", advanced: true },
-      { name: "description", type: "textarea", label: "Description", advanced: true },
-    ],
-  },
-  run_skill: {
-    label: "Run a skill as a one-shot task",
-    group: "Create work",
-    scopes: ["cycle"],
-    help: "Creates a task whose type is the skill name; the cycle's execute phase runs it as a one-shot.",
-    fields: [
-      { name: "skill_name", type: "string", label: "Skill name", placeholder: "brainstorm, investigate, morning-brief" },
-      { name: "input", type: "textarea", label: "Input to the skill", rows: 2, help: "populates task.description — the skill's actual prompt input" },
-      { name: "title", type: "string", label: "Task title (optional)", advanced: true },
-      { name: "scope_repo", type: "string", label: "Repo scope", placeholder: "org/repo", advanced: true },
-      { name: "priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS, advanced: true },
+      { name: "action_hint", type: "string", label: "Button label", placeholder: "Open Training", advanced: true },
     ],
   },
   dismiss_pupdate: {

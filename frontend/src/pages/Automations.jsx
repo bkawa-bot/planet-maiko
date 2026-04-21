@@ -551,14 +551,13 @@ function describeCondition(trigger) {
 function describeAction(action) {
   const cfg = action?.config || {};
   switch (action?.kind) {
-    case "propose":
-      return `propose "${cfg.draft?.title || "(untitled)"}"`;
+    case "create_task": {
+      const askNote = cfg.ask_first ? " (asks first)" : "";
+      const type = cfg.type ? ` [${cfg.type}]` : "";
+      return `create task "${cfg.title || "(untitled)"}"${type}${askNote}`;
+    }
     case "nudge":
-      return `nudge "${cfg.title || "(untitled)"}"`;
-    case "create_task":
-      return `create task "${cfg.title || "(untitled)"}"`;
-    case "run_skill":
-      return `run skill "${cfg.skill_name || "(none)"}"`;
+      return `reminder "${cfg.title || "(untitled)"}"`;
     case "dismiss_pupdate":
       return "dismiss the matched pupdate";
     case "create_task_from_pupdate": {
@@ -571,6 +570,12 @@ function describeAction(action) {
       return "close tasks linked to the matched PR";
     case "skip":
       return "skip (leave for manual)";
+    // Legacy kinds — still show readable text if a row hasn't been
+    // migrated yet.
+    case "propose":
+      return `propose "${cfg.draft?.title || "(untitled)"}"`;
+    case "run_skill":
+      return `run skill "${cfg.skill_name || "(none)"}"`;
     default:
       return action?.kind || "unknown";
   }
