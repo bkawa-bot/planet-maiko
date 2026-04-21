@@ -32,10 +32,6 @@ export default function Tasks() {
   const [projectForm, setProjectForm] = useState({ title: "", description: "", priority: "normal" });
   const [editingTask, setEditingTask] = useState(null);
   const [editForm, setEditForm] = useState({ title: "", description: "", type: "coding", priority: "normal", status: "new", project_id: "", url: "", due_date: "", repo: "" });
-  const [askingMaiko, setAskingMaiko] = useState(null);
-  const [maikoQuery, setMaikoQuery] = useState("");
-  const [maikoResult, setMaikoResult] = useState(null);
-  const [maikoRunning, setMaikoRunning] = useState(false);
   const [detailTask, setDetailTask] = useState(null);
 
   const [config, setConfig] = useState(null);
@@ -301,12 +297,6 @@ export default function Tasks() {
                       <Sparkles size={10} /> Review ({(project.metadata?.generated_tasks || project.extra?.generated_tasks).length} ideas)
                     </button>
                   )}
-                  <button className="btn btn-sm btn-action" onClick={(e) => {
-                    e.stopPropagation();
-                    setAskingMaiko({ id: project.id, title: project.title, type: "project", status: "active", project_id: project.id });
-                  }}>
-                    <Brain size={10} /> Ask Maiko
-                  </button>
                   {project.source_url && (
                     <a href={project.source_url} target="_blank" rel="noreferrer" className="btn btn-sm" onClick={(e) => e.stopPropagation()}>
                       <ExternalLink size={10} />
@@ -323,7 +313,6 @@ export default function Tasks() {
                         onAction={handleAction}
                         onAssignAgent={setAssigningTask}
                         onEdit={(task, form) => { setEditForm(form); setEditingTask(task); }}
-                        onAskMaiko={setAskingMaiko}
                         onShowDetail={setDetailTask}
                         onRefresh={fetchData}
                         projects={projects}
@@ -346,7 +335,6 @@ export default function Tasks() {
               onAction={handleAction}
               onAssignAgent={setAssigningTask}
               onEdit={(task, form) => { setEditForm(form); setEditingTask(task); }}
-              onAskMaiko={setAskingMaiko}
               onShowDetail={setDetailTask}
               onRefresh={fetchData}
               projects={projects}
@@ -734,89 +722,6 @@ export default function Tasks() {
                 <button type="submit" className="btn btn-primary">Save Changes</button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Ask Maiko modal */}
-      {askingMaiko && (
-        <div className="modal-overlay" onClick={() => { setAskingMaiko(null); setMaikoQuery(""); setMaikoResult(null); }}>
-          <div className="generated-tasks-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <Brain size={14} />
-              <span>Ask Maiko about: {askingMaiko.title}</span>
-              <button className="btn btn-sm" onClick={() => { setAskingMaiko(null); setMaikoQuery(""); setMaikoResult(null); }} style={{ marginLeft: "auto" }}><X size={10} /></button>
-            </div>
-            <div className="modal-body">
-              <div className="form-row">
-                <label>
-                  What would you like Maiko to investigate?
-                  <input
-                    type="text"
-                    value={maikoQuery}
-                    onChange={(e) => setMaikoQuery(e.target.value)}
-                    placeholder="e.g. What's the best approach for this?"
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && maikoQuery.trim() && !maikoRunning) {
-                        e.preventDefault();
-                        (async () => {
-                          setMaikoRunning(true);
-                          setMaikoResult(null);
-                          try {
-                            const res = await api.runSkill("investigate", {
-                              context: {
-                                query: maikoQuery,
-                                context: `Task: ${askingMaiko.title}\nType: ${askingMaiko.type}\nStatus: ${askingMaiko.status}\nProject: ${askingMaiko.project_id || "none"}`,
-                                pupdates: "[]", tasks: "[]", calendar: "[]",
-                              },
-                            });
-                            setMaikoResult(res);
-                          } catch (err) {
-                            setMaikoResult({ error: err.message || "Something went wrong" });
-                          }
-                          setMaikoRunning(false);
-                        })();
-                      }
-                    }}
-                  />
-                </label>
-              </div>
-              <div className="form-actions">
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={!maikoQuery.trim() || maikoRunning}
-                  onClick={async () => {
-                    setMaikoRunning(true);
-                    setMaikoResult(null);
-                    try {
-                      const res = await api.runSkill("investigate", {
-                        context: {
-                          query: maikoQuery,
-                          context: `Task: ${askingMaiko.title}\nType: ${askingMaiko.type}\nStatus: ${askingMaiko.status}\nProject: ${askingMaiko.project_id || "none"}`,
-                          pupdates: "[]", tasks: "[]", calendar: "[]",
-                        },
-                      });
-                      setMaikoResult(res);
-                    } catch (err) {
-                      setMaikoResult({ error: err.message || "Something went wrong" });
-                    }
-                    setMaikoRunning(false);
-                  }}
-                >
-                  <Brain size={12} /> {maikoRunning ? "Maiko is thinking…" : "Ask Maiko"}
-                </button>
-              </div>
-              {maikoResult && (
-                <div className="md-content" style={{ marginTop: 12 }}>
-                  {maikoResult.error
-                    ? <p style={{ color: "var(--urgent)" }}>{maikoResult.error}</p>
-                    : <pre style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{typeof maikoResult === "string" ? maikoResult : JSON.stringify(maikoResult, null, 2)}</pre>
-                  }
-                </div>
-              )}
-            </div>
           </div>
         </div>
       )}

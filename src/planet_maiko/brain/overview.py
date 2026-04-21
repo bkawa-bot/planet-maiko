@@ -184,9 +184,17 @@ def _schedule_context():
 
 
 def _calendar_context():
-    """Today's calendar pupdates (source='calendar')."""
+    """Today's calendar pupdates (source='calendar').
+
+    Each event is tagged with `when` relative to the current local time
+    so the overview prompt can phrase past events in past tense and only
+    call future events "upcoming". Without this marker the LLM saw the
+    raw event list and occasionally referred to this-morning's standup
+    as "coming up" at 5pm.
+    """
     from planet_maiko.config import user_now
     from planet_maiko.models.pupdate import Pupdate
+    from datetime import datetime as _dt
 
     now_local = user_now()
     midnight_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -203,10 +211,39 @@ def _calendar_context():
         .limit(30)
         .all()
     )
+
+    now_for_compare = now_local.replace(tzinfo=None) if now_local.tzinfo else now_local
+
+    def _classify(start_iso):
+        """Return past / now / upcoming based on event start time.
+
+        The calendar poller writes event start under extra.start as an
+        ISO string — we compare against local-now (naive) after stripping
+        tz for apples-to-apples. Events without a parseable start fall
+        back to "unknown" rather than misclassifying.
+        """
+        if not start_iso:
+            return "unknown"
+        try:
+            dt = _dt.fromisoformat(start_iso)
+        except Exception:
+            return "unknown"
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(now_local.tzinfo).replace(tzinfo=None) if now_local.tzinfo else dt.replace(tzinfo=None)
+        # Rough "in progress" window of 60 minutes — covers a standup
+        # you're mid-way through so the LLM doesn't say it's "coming up".
+        delta_min = (now_for_compare - dt).total_seconds() / 60.0
+        if delta_min > 60:
+            return "past"
+        if delta_min >= 0:
+            return "now"
+        return "upcoming"
+
     return [
         {
             "id": p.id,
             "time": iso_utc(p.timestamp),
+            "when": _classify((p.extra or {}).get("start")),
             "title": _trim(p.title, 300),
             "body": _trim(p.body or "", 400),
             "url": p.url,

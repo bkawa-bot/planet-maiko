@@ -266,6 +266,9 @@ export default function BrainView() {
 
         {tab === "training" && <Training />}
 
+        {/* Everything below is the learnings/signals surface — hide it on
+            the Training tab so that tab shows only training controls. */}
+        {tab !== "training" && <>
         {tab === "unsynthesized" && unsynthesized.length > 0 && (
           <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 0", marginBottom: 8 }}>
             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, flex: 1 }}>
@@ -369,7 +372,15 @@ export default function BrainView() {
                     <div className="category-items">
                       {catItems.map((l) => (
                         <div key={l.id}>
-                        <div className={`learning-row status-${l.status}`}>
+                        <div
+                          className={`learning-row status-${l.status} ${expandedLearning === l.id ? "expanded" : ""}`}
+                          onClick={() => l.status !== "unsynthesized" && toggleProvenance(l.id)}
+                          style={{ cursor: l.status === "unsynthesized" ? "default" : "pointer" }}
+                        >
+                          <ChevronRight
+                            size={12}
+                            className={`learning-chevron ${expandedLearning === l.id ? "open" : ""}`}
+                          />
                           <div className="learning-left">
                             {l.status === "pending" && <span className="badge paused">pending</span>}
                             {l.status === "unsynthesized" && <span className="badge" title="Raw PR-comment signal waiting for LLM synthesis">raw</span>}
@@ -383,10 +394,10 @@ export default function BrainView() {
                             <div className="confidence-bar" style={{ width: `${l.confidence * 100}%` }} />
                           </div>
                           <span className="signal-count">{l.signal_count} signal{l.signal_count === 1 ? "" : "s"}</span>
-                          <span className={`learning-rule ${expandedLearning === l.id ? "expanded" : ""}`} onClick={(e) => { e.stopPropagation(); toggleProvenance(l.id); }}>
+                          <span className={`learning-rule ${expandedLearning === l.id ? "expanded" : ""}`}>
                             {l.rule}
                           </span>
-                          <div className="learning-btns">
+                          <div className="learning-btns" onClick={(e) => e.stopPropagation()}>
                             {l.status === "pending" && (
                               <button className="btn btn-sm" onClick={() => handleApprove(l.id)}>
                                 <Check size={10} /> Approve
@@ -430,6 +441,7 @@ export default function BrainView() {
             <button className="btn" onClick={handleAdd}><Check size={12} /></button>
           </div>
         </div>
+        </>}
       </div>
 
       {/* Backfill modal */}

@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import {
-  Bot, Brain, CheckSquare, ChevronDown, ChevronRight, Clock, Plus,
+  Bot, Brain, CheckSquare, ChevronDown, ChevronRight, Plus,
   Target, X, Pencil, Save, Code2, Eye, Search, Map, Loader, Compass, Pause, Play,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
 import { formatRepo, useDefaultOrg } from "../../utils/repo";
 import { relativeTime } from "../../utils/dates";
-import AgentTimelineModal from "./AgentTimelineModal";
 
 const ROLE_META = {
   coding: { icon: Code2, label: "Coder", color: "var(--pink)" },
@@ -184,7 +183,7 @@ function describeAutomationTrigger(automation) {
 
 // Full profile modal — shown when a card is clicked.
 function ProfileDetailModal({
-  profile, allLearnings, onClose, onEdit, onTimeline, onArchive, onUnarchive,
+  profile, allLearnings, onClose, onEdit, onArchive, onUnarchive,
 }) {
   const [showContextSet, setShowContextSet] = useState(false);
   const [automations, setAutomations] = useState(null);
@@ -361,9 +360,6 @@ function ProfileDetailModal({
         </div>
 
         <div className="profile-modal-footer">
-          <button className="btn btn-sm" onClick={() => onTimeline(profile)}>
-            <Clock size={10} /> Timeline
-          </button>
           <button className="btn btn-sm" onClick={() => onEdit(profile)}>
             <Pencil size={10} /> Edit
           </button>
@@ -394,7 +390,6 @@ export default function AgentsProfilesTab({
   onShowArchived,
 }) {
   const [showArchived, setShowArchived] = useState(false);
-  const [timelineFor, setTimelineFor] = useState(null);
   const [profileModal, setProfileModal] = useState(null);
   const [editing, setEditing] = useState(null);
   const [editForm, setEditForm] = useState({ role: "coding", scope_repo: "", instructions: "", flavor_text: "" });
@@ -548,7 +543,6 @@ export default function AgentsProfilesTab({
           allLearnings={allLearnings}
           onClose={() => setProfileModal(null)}
           onEdit={(p) => { setProfileModal(null); openEdit(p); }}
-          onTimeline={(p) => { setProfileModal(null); setTimelineFor({ agentId: p.id, agentName: p.display_name }); }}
           onArchive={(p) => { handleArchive(p); setProfileModal(null); }}
           onUnarchive={(p) => { handleUnarchive(p); setProfileModal(null); }}
         />
@@ -616,13 +610,6 @@ export default function AgentsProfilesTab({
         </div>
       )}
 
-      {timelineFor && (
-        <AgentTimelineModal
-          agentId={timelineFor.agentId}
-          agentName={timelineFor.agentName}
-          onClose={() => setTimelineFor(null)}
-        />
-      )}
     </div>
   );
 }

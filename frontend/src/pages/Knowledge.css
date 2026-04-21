@@ -28,9 +28,18 @@
 .learning-row {
   display: flex; align-items: center; gap: 8px; padding: 8px 14px;
   border-bottom: 1px solid var(--border-subtle); font-size: 12px;
+  transition: background 0.12s;
 }
+.learning-row:hover { background: var(--bg-hover); }
+.learning-row.expanded { background: var(--bg-hover); }
 .learning-row:last-child { border-bottom: none; }
 .learning-row.status-pending { background: var(--lemon-faint); }
+
+.learning-chevron {
+  color: var(--text-muted); flex-shrink: 0;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.learning-chevron.open { transform: rotate(90deg); color: var(--pink); }
 
 .learning-left { display: flex; gap: 4px; flex-shrink: 0; }
 

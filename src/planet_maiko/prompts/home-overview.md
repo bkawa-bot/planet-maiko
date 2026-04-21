@@ -34,6 +34,12 @@ Use the actual day of week in your greeting — don't guess.
 {schedule}
 
 ### Calendar events for today
+Each event is tagged with `when`: `past` (already finished), `now` (in progress,
+inside the last 60 minutes), `upcoming` (still in the future), or `unknown`.
+Phrase past events in past tense ("you had your 1:1 at 9") and never call
+them "coming up" or "upcoming." Skip `past` events entirely if there's
+nothing useful to say about them.
+
 {calendar}
 
 ### Agent profiles and recent activity

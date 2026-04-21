@@ -222,13 +222,13 @@ def _phase_learning():
 
 
 def _phase_heartbeats():
-    """Phase 5: Heartbeats — nudge silent agents."""
+    """Phase 5: Heartbeats — auto-wake silent agents on in-progress tasks."""
     try:
         from planet_maiko.agents.monitor import check_heartbeats
-        return {"nudged": check_heartbeats()}
+        return {"woken": check_heartbeats()}
     except Exception as e:
         logger.warning(f"[cycle] Heartbeat check error: {e}")
-        return {"nudged": 0, "error": str(e)}
+        return {"woken": 0, "error": str(e)}
 
 
 def _phase_projects():

@@ -76,7 +76,7 @@
 .btn-quick-start:hover { color: var(--green); }
 .btn-quick-done:hover { color: var(--green); }
 .task-title { font-size: 13px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pupdate-card.expanded .card-title { white-space: normal; }
+.pupdate-card.expanded .card-title { -webkit-line-clamp: unset; display: block; }
 .task-title a { color: var(--text); text-decoration: none; }
 .task-title a:hover { color: var(--pink); }
 

@@ -337,6 +337,18 @@ a:hover { text-decoration: underline; }
 .btn-comms { border-color: #fbbf24; color: #fbbf24; }
 .btn-comms:hover { background: rgba(251, 191, 36, 0.1); }
 .btn-sm { padding: 2px 6px; font-size: 10px; }
+/* Icon-only button — square footprint, no label. Used when a card has
+   so many actions that inline labels push past its width. */
+.btn-icon {
+  padding: 4px; width: 26px; height: 26px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); background: transparent;
+  border-radius: 6px; color: var(--text-muted); cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.btn-icon:hover { background: var(--bg-hover); color: var(--text); }
+.btn-icon.btn-danger { color: var(--urgent); border-color: currentColor; }
+.btn-icon.btn-danger:hover { background: var(--urgent-faint); }
 
 /* === Tags === */
 .tag {

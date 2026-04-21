@@ -9,7 +9,6 @@ source="agent". The monitor processes these to:
 """
 
 import logging
-import uuid
 from datetime import datetime, timezone, timedelta
 
 from planet_maiko.database import db
@@ -213,15 +212,13 @@ def get_stuck_agents():
 
 
 def check_heartbeats():
-    """Check for agents that haven't sent a pupdate recently.
+    """Auto-wake silent agents on their in-progress tasks.
 
-    Two actions per stale profile:
-      1. Emit an agent_nudge pupdate so the user sees "haven't heard
-         from Daisy in 30min".
-      2. Auto-wake the agent on any in-progress tasks they're assigned
-         to. The wake orchestrator drops source="heartbeat" calls when
-         the agent is already running, so this is safe to fire on every
-         cycle tick — it only actually wakes truly silent agents.
+    Previously also emitted user-facing `agent_nudge` pupdates, but those
+    were noise now that wake_agent handles the actual re-wake. The
+    circuit-breaker in wake_agent drops source="heartbeat" calls when
+    the agent is already running, so this is safe to fire every cycle —
+    it only actually wakes truly silent agents.
     """
     from planet_maiko.models.agent_profile import AgentProfile
     from planet_maiko.models.task import Task
@@ -244,30 +241,8 @@ def check_heartbeats():
         (AgentProfile.archived == False) | (AgentProfile.archived == None),  # noqa: E712
     ).all()
 
-    nudged = 0
     woken = 0
     for profile in active_profiles:
-        recent_nudge = Pupdate.query.filter(
-            Pupdate.type == "agent_nudge",
-            Pupdate.source_id == f"nudge/{profile.id}",
-            Pupdate.timestamp > threshold,
-        ).first()
-
-        if not recent_nudge:
-            nudge = Pupdate(
-                id=f"nudge-{profile.id}-{uuid.uuid4().hex[:8]}",
-                source="maiko",
-                source_id=f"nudge/{profile.id}",
-                type="agent_nudge",
-                priority="normal",
-                title=f"Nudge: {profile.display_name} — are you still working?",
-                body="No activity detected in 30+ minutes. Please report your status.",
-                tags=[profile.id, "nudge"],
-                extra={"agent_id": profile.id},
-            )
-            db.session.add(nudge)
-            nudged += 1
-
         tasks = Task.query.filter(
             Task.assigned_agent_id == profile.id,
             Task.status == "in_progress",
@@ -286,6 +261,4 @@ def check_heartbeats():
             if ok:
                 woken += 1
 
-    if nudged:
-        db.session.commit()
-    return nudged
+    return woken

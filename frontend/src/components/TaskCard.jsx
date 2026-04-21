@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   CheckSquare, Square, FolderOpen, Pin, PinOff, ExternalLink,
   ChevronRight, GitBranch, Clock, Bot, Eye, Play,
-  X, Pencil, Brain, Circle, Send, Loader, FileText, GitPullRequest, Zap, Map,
+  X, Pencil, Circle, Send, Loader, FileText, GitPullRequest, Zap, Map,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
@@ -35,7 +35,6 @@ const STATUS_ICONS = {
  *   onAction            — (e, taskId, action) => void, for status transitions
  *   onAssignAgent       — (task) => void, opens the assign modal
  *   onEdit              — (task, editForm) => void, opens edit modal
- *   onAskMaiko          — (task) => void, opens Ask Maiko panel
  *   onShowDetail        — (task) => void, opens task detail modal
  *   onRefresh           — () => void, called after mutations
  *   projects            — Project[] for the project dropdown
@@ -48,7 +47,6 @@ export default function TaskCard({
   onAction,
   onAssignAgent,
   onEdit,
-  onAskMaiko,
   onShowDetail,
   onRefresh,
   projects,
@@ -280,9 +278,6 @@ export default function TaskCard({
                   <FolderOpen size={10} /> Details
                 </button>
               )}
-              <button className="btn btn-sm btn-action" onClick={() => onAskMaiko(t)}>
-                <Brain size={10} /> Ask Maiko
-              </button>
               {linearIdentifier ? (
                 linearUrl ? (
                   <a

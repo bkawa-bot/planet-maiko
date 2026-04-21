@@ -106,6 +106,37 @@ def _ensure_columns():
     db.session.commit()
 
 
+def _reconcile_learning_signal_counts():
+    """Backfill Learning.signal_count from the actual Signal rows.
+
+    Historical cluster merges and dismissals left many learnings with a
+    cached signal_count that no longer matched reality — users saw
+    "2 signals" on a card but got an empty list on drill-down.
+    Re-sync on startup so the row count and the expansion agree.
+    """
+    from planet_maiko.models.learning import Learning
+    from planet_maiko.models.signal import Signal
+    from sqlalchemy import func
+
+    actual = dict(
+        Signal.query
+        .with_entities(Signal.learning_id, func.count(Signal.id))
+        .filter(Signal.learning_id.isnot(None))
+        .group_by(Signal.learning_id)
+        .all()
+    )
+
+    fixed = 0
+    for l in Learning.query.all():
+        real = actual.get(l.id, 0)
+        if l.signal_count != real:
+            l.signal_count = real
+            fixed += 1
+    if fixed:
+        db.session.commit()
+        logger.info(f"[startup] Reconciled signal_count on {fixed} learning(s)")
+
+
 def create_app(start_scheduler=False):
     app = Flask(__name__)
 
@@ -262,6 +293,10 @@ def create_app(start_scheduler=False):
             migrate_tasks_to_agent_jobs()
         except Exception as e:
             logger.warning(f"[startup] Task→AgentJob migration skipped: {e}")
+        try:
+            _reconcile_learning_signal_counts()
+        except Exception as e:
+            logger.warning(f"[startup] Learning signal-count reconcile skipped: {e}")
 
         # Wake-registry cleanup: the previous run may have crashed with
         # agents flagged "working" and with session-registry entries

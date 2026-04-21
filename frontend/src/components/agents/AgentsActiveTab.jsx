@@ -1,14 +1,12 @@
 import { useState } from "react";
 import {
-  Bot, CheckSquare, Clock, ExternalLink, GitBranch,
-  GitPullRequest, HeartPulse, Link2, MessageCircle, Moon, Play, Sparkles, X,
+  Bot, CheckSquare, ExternalLink, GitBranch,
+  HeartPulse, Link2, MessageCircle, Play, Sparkles, X,
 } from "lucide-react";
-import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
 import { formatTime, relativeFromMinutes } from "../../utils/dates";
 import { formatRepo, useDefaultOrg } from "../../utils/repo";
-import AgentTimelineModal from "./AgentTimelineModal";
 
 /**
  * Active tab — pack awareness, queued tasks, ready-to-launch agents, live
@@ -52,16 +50,6 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
   const [selectedThread, setSelectedThread] = useState(null);
   const [messages, setMessages] = useState([]);
   const [msgInput, setMsgInput] = useState("");
-  const [timelineFor, setTimelineFor] = useState(null);
-
-  const openTimeline = (agentId) => {
-    if (!agentId) return;
-    const profile = profiles.find((p) => p.id === agentId);
-    setTimelineFor({
-      agentId,
-      agentName: profile?.display_name || agentId.replace(/^agent-/, ""),
-    });
-  };
 
   const loadThread = async (taskId) => {
     setSelectedThread(taskId);
@@ -275,15 +263,14 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                   </div>
                 </div>
                 <div className="agent-actions">
-                  {a.role === "coding" && a.task_id && (
-                    <Link
-                      to={`/tasks/${a.task_id}/review`}
-                      className="btn btn-sm btn-primary"
-                      title="Review the agent's changes"
-                    >
-                      <GitPullRequest size={12} /> Review diff
-                    </Link>
-                  )}
+                  {/* Primary action: Chat. Everything else is an icon. */}
+                  <button
+                    className="btn btn-sm btn-primary"
+                    onClick={() => loadThread(a.task_id)}
+                    title="Chat with the agent"
+                  >
+                    <MessageCircle size={12} /> Chat
+                  </button>
                   {/* Re-run is the right escape hatch for one-shot
                       agents (review / investigation): re-fires the
                       autonomous skill in the same worktree without
@@ -291,45 +278,35 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                       back to Relaunch (open a terminal). */}
                   {isOneShot && a.task_id && (
                     <button
-                      className="btn btn-sm btn-approve"
+                      className="btn btn-icon"
                       onClick={() => handleRerun(a.task_id)}
-                      title="Re-fire the autonomous run for this review/investigation"
+                      title="Re-run the autonomous skill"
                     >
-                      <Sparkles size={12} /> Re-run
+                      <Sparkles size={12} />
                     </button>
                   )}
                   <button
-                    className="btn btn-sm"
+                    className="btn btn-icon"
                     onClick={() => handleResume(a)}
                     title="Attach to the agent's session in a terminal"
                   >
-                    <ExternalLink size={12} /> View Session
-                  </button>
-                  <button className="btn btn-sm" onClick={() => loadThread(a.task_id)}>
-                    <MessageCircle size={12} /> Chat
-                  </button>
-                  <button
-                    className="btn btn-sm"
-                    onClick={() => openTimeline(a.agent_id)}
-                    title={`See ${profiles.find((p) => p.id === a.agent_id)?.display_name || "this agent"}'s full activity across all tasks`}
-                  >
-                    <Clock size={12} /> Timeline
+                    <ExternalLink size={12} />
                   </button>
                   {!isOneShot && (
                     <button
-                      className="btn btn-sm"
+                      className="btn btn-icon"
                       onClick={() => handleLaunch(a)}
-                      title="Open a terminal in the worktree (use if the auto-start failed)"
+                      title="Open a terminal in the worktree"
                     >
-                      <Play size={12} /> Relaunch
+                      <Play size={12} />
                     </button>
                   )}
                   <button
-                    className="btn btn-sm btn-danger"
+                    className="btn btn-icon btn-danger"
                     onClick={() => handleStop(a.task_id, a.task_title)}
                     title="Stop the agent, clean up the worktree, and delete this task"
                   >
-                    <X size={12} /> Stop
+                    <X size={12} />
                   </button>
                 </div>
               </div>
@@ -381,45 +358,30 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                   </div>
                 </div>
                 <div className="agent-actions">
-                  {/* Review diff is available on any active task —
-                      gating on prepared?.role was wrong, since
-                      list_prepared filters out tasks that are already
-                      done and the prepared entry can just be missing
-                      (e.g. user dismissed the agent_ready pupdate).
-                      The review page itself shows an empty-diff
-                      state gracefully if there's no worktree yet. */}
-                  {a.task_id && (
-                    <Link
-                      to={`/tasks/${a.task_id}/review`}
-                      className="btn btn-sm btn-primary"
-                      title="Review the agent's changes"
-                    >
-                      <GitPullRequest size={12} /> Review diff
-                    </Link>
-                  )}
+                  {/* Primary action on an active card is Chat — the
+                      review diff lives on Home and the Task so it
+                      doesn't need to duplicate here. Session attach
+                      and Stop stay as icon-only escape hatches. */}
                   <button
-                    className="btn btn-sm"
-                    onClick={() => handleResume({ task_id: a.task_id, working_path: prepared?.working_path, branch: prepared?.branch })}
-                    title="Resume the agent's Claude Code session in a terminal"
+                    className="btn btn-sm btn-primary"
+                    onClick={() => loadThread(a.task_id)}
+                    title="Chat with the agent"
                   >
-                    <ExternalLink size={12} /> View Session
-                  </button>
-                  <button className="btn btn-sm" onClick={() => loadThread(a.task_id)}>
                     <MessageCircle size={12} /> Chat
                   </button>
                   <button
-                    className="btn btn-sm"
-                    onClick={() => openTimeline(profileId)}
-                    title="See this agent's full activity across all tasks"
+                    className="btn btn-icon"
+                    onClick={() => handleResume({ task_id: a.task_id, working_path: prepared?.working_path, branch: prepared?.branch })}
+                    title="Resume the agent's session in a terminal"
                   >
-                    <Clock size={12} /> Timeline
+                    <ExternalLink size={12} />
                   </button>
                   <button
-                    className="btn btn-sm btn-danger"
+                    className="btn btn-icon btn-danger"
                     onClick={() => handleStop(a.task_id, a.task_title)}
                     title="Stop the agent, clean up the worktree, and delete this task"
                   >
-                    <X size={12} /> Stop
+                    <X size={12} />
                   </button>
                 </div>
               </div>
@@ -465,13 +427,6 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
           </div>
         )}
 
-        {timelineFor && (
-          <AgentTimelineModal
-            agentId={timelineFor.agentId}
-            agentName={timelineFor.agentName}
-            onClose={() => setTimelineFor(null)}
-          />
-        )}
     </div>
   );
 }

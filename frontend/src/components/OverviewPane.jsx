@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { renderMarkdown } from "../utils/markdown";
 import { relativeTime } from "../utils/dates";
-import { Sunrise, RefreshCw, FileText, X, Loader } from "lucide-react";
+import { Sunrise, RefreshCw, FileText, X, Loader, Brain } from "lucide-react";
 import "./OverviewPane.css";
 
 /**
@@ -78,6 +78,7 @@ export default function OverviewPane() {
   const [error, setError] = useState(null);
   const [pupdates, setPupdates] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [pendingLearnings, setPendingLearnings] = useState([]);
   const [showAllNeeds, setShowAllNeeds] = useState(false);
   const [artifactModal, setArtifactModal] = useState(null);
   const navigate = useNavigate();
@@ -98,15 +99,17 @@ export default function OverviewPane() {
     setLoading(true);
     setError(null);
     try {
-      const [overviewRes, pupRes, taskRes] = await Promise.all([
+      const [overviewRes, pupRes, taskRes, pendingRes] = await Promise.all([
         api.getHomeOverview(),
         api.getPupdates(),
         api.getTasks(),
+        api.getLearnings({ status: "pending" }).catch(() => []),
       ]);
       setOverview(overviewRes.overview);
       setGeneratedAt(overviewRes.generated_at);
       setPupdates(pupRes);
       setTasks(taskRes);
+      setPendingLearnings(pendingRes || []);
     } catch (err) {
       setError(err.message || "Overview unavailable");
     }
@@ -289,6 +292,32 @@ export default function OverviewPane() {
                   : `+ ${allNeeds.length - 3} more`}
               </button>
             )}
+          </div>
+        </section>
+      )}
+
+      {pendingLearnings.length > 0 && (
+        <section className="overview-section">
+          <h2 className="overview-section-title">
+            New learnings to review
+          </h2>
+          <div className="overview-learnings-card" onClick={() => navigate("/knowledge?tab=pending")}>
+            <div className="overview-learnings-icon"><Brain size={16} /></div>
+            <div className="overview-learnings-body">
+              <div className="overview-learnings-count">
+                {pendingLearnings.length} learning{pendingLearnings.length === 1 ? "" : "s"} waiting for your nod
+              </div>
+              <ul className="overview-learnings-preview">
+                {pendingLearnings.slice(0, 3).map((l) => (
+                  <li key={l.id}>{l.rule}</li>
+                ))}
+                {pendingLearnings.length > 3 && (
+                  <li className="overview-learnings-more">
+                    + {pendingLearnings.length - 3} more
+                  </li>
+                )}
+              </ul>
+            </div>
           </div>
         </section>
       )}

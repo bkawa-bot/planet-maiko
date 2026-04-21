@@ -12,7 +12,7 @@ import "./ShutdownModal.css";
 const NAV_ITEMS = [
   { to: "/", icon: Home, label: "Home", end: true },
   { to: "/tasks", icon: CheckSquare, label: "Tasks" },
-  { to: "/agents", icon: Bot, label: "Agents" },
+  { to: "/agents", icon: Bot, label: "Pack" },
   { to: "/knowledge", icon: Brain, label: "Knowledge" },
   { to: "/automations", icon: Zap, label: "Automations" },
 ];
