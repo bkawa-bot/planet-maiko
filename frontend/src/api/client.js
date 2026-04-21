@@ -289,6 +289,9 @@ export const api = {
   // Plugins
   getPlugins: () => request("/plugins"),
   togglePlugin: (name) => request(`/plugins/${name}/toggle`, { method: "POST" }),
+  // Pupdate type registry — built-ins + anything plugins register via
+  // register_pupdate_types(). Drives the Automation editor's dropdown.
+  getPupdateTypes: () => request("/pupdate-types"),
 
   // Project plan orchestration
   approveProjectPlan: (projectId, tasks) =>

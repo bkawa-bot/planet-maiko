@@ -76,6 +76,52 @@ class MaikoPlugin:
         """
         return {}
 
+    def register_pupdate_types(self):
+        """Declare pupdate types this plugin emits.
+
+        Entries surface in the Automation editor's type dropdown so users
+        can build "when / then" rules that fire on plugin events. Return
+        an empty list (default) to stay invisible.
+
+        Each entry:
+            {
+                "name":  "jira_issue_created",       # required — the type value
+                "label": "Jira issue created",       # optional — shown in the UI
+                "group": "Jira",                     # optional — optgroup header
+            }
+
+        The `name` is what your poller writes into `Pupdate.type`. The
+        `label` defaults to a prettified version of `name`, and `group`
+        defaults to the plugin's `name` attribute.
+        """
+        return []
+
+    def register_default_automations(self):
+        """Seed starter automations for this plugin.
+
+        Installed on startup the first time the plugin loads and marked
+        with `created_by="plugin:<plugin-name>"` so they're visible and
+        editable from the Automations page. Returning the same entry
+        again is a no-op — re-seed is gated on (created_by + seed_key).
+
+        Each entry mirrors the Automation row's JSON shape:
+            {
+                "seed_key":    "on_jira_assigned",   # stable id within plugin
+                "name":        "Triage new Jira assignments",
+                "description": "…",
+                "when":  [{"kind": "pupdate_match", "config": {...}}],
+                "then":  [{"kind": "create_task", "config": {...}}],
+                "when_logic": "all",                 # optional, default "all"
+                "execution_scope": "pupdate",        # optional, default "cycle"
+                "cooldown_days": 7,                  # optional, default 7
+            }
+
+        `seed_key` is what distinguishes two automations from the same
+        plugin — pick something stable so you don't duplicate when the
+        user renames the row.
+        """
+        return []
+
     def get_config_schema(self):
         """Describe configurable fields so Settings can render a form for them.
 

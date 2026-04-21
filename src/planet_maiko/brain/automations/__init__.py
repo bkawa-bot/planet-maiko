@@ -1064,6 +1064,85 @@ def ensure_seed_automations():
     return created
 
 
+def ensure_plugin_default_automations():
+    """Install automations that plugins declare via
+    `register_default_automations()`.
+
+    Idempotent: each seeded row carries `created_by="plugin:<name>"`
+    and is uniquely identified within the plugin by the `seed_key`
+    field stored in the row's description prefix. Re-running this
+    finds the existing row and leaves it alone — so editing a seeded
+    automation from the UI won't have it overwritten on next boot.
+
+    Seeded rows are regular Automations — the user can pause, edit,
+    or archive them from the Automations page like any other.
+    """
+    from planet_maiko.plugins.loader import get_plugins
+
+    created = 0
+    for plugin in get_plugins():
+        try:
+            entries = plugin.register_default_automations() or []
+        except Exception as e:
+            logger.warning(
+                f"[automations] plugin '{plugin.name}' "
+                f"register_default_automations failed: {e}"
+            )
+            continue
+
+        created_by = f"plugin:{plugin.name}"
+        for raw in entries:
+            if not isinstance(raw, dict):
+                continue
+            seed_key = raw.get("seed_key") or raw.get("name")
+            if not seed_key:
+                continue
+
+            existing = (
+                Automation.query
+                .filter(Automation.created_by == created_by)
+                .all()
+            )
+            already_seeded = any(
+                (a.description or "").startswith(f"[seed:{seed_key}]")
+                for a in existing
+            )
+            if already_seeded:
+                continue
+
+            name = raw.get("name") or seed_key
+            desc_body = raw.get("description") or ""
+            # Prefix the description with a machine tag so we can
+            # find the row later even if the user renamed it. The
+            # Automations UI just shows the description as-is so
+            # the tag is visible — low cost for idempotence.
+            description = f"[seed:{seed_key}] {desc_body}".strip()
+
+            a = Automation(
+                name=name,
+                description=description,
+                when=raw.get("when") or [],
+                when_logic=raw.get("when_logic") or "all",
+                within_minutes=raw.get("within_minutes"),
+                then=raw.get("then") or [],
+                status=raw.get("status") or "active",
+                created_by=created_by,
+                scope_repo=raw.get("scope_repo"),
+                execution_scope=raw.get("execution_scope") or "cycle",
+                cooldown_days=int(raw.get("cooldown_days") or 7),
+            )
+            db.session.add(a)
+            created += 1
+            logger.info(
+                f"[automations] plugin '{plugin.name}' seeded automation "
+                f"'{name}' (seed_key={seed_key})"
+            )
+
+    if created:
+        db.session.commit()
+    return created
+
+
 def migrate_scheduled_skills():
     """One-time import of CustomSkills that have a non-null
     schedule_interval_minutes into Automations (cadence + run_skill).

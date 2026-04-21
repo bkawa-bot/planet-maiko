@@ -263,7 +263,7 @@ def create_app(start_scheduler=False):
             migrate_agent_goals, ensure_seed_automations,
             ensure_seed_chain_automations, migrate_scheduled_skills,
             ensure_seed_rule_automations, migrate_legacy_action_kinds,
-            migrate_tasks_to_agent_jobs,
+            migrate_tasks_to_agent_jobs, ensure_plugin_default_automations,
         )
         try:
             migrate_agent_goals()
@@ -297,6 +297,10 @@ def create_app(start_scheduler=False):
             _reconcile_learning_signal_counts()
         except Exception as e:
             logger.warning(f"[startup] Learning signal-count reconcile skipped: {e}")
+        try:
+            ensure_plugin_default_automations()
+        except Exception as e:
+            logger.warning(f"[startup] Plugin automation seeding skipped: {e}")
 
         # Wake-registry cleanup: the previous run may have crashed with
         # agents flagged "working" and with session-registry entries

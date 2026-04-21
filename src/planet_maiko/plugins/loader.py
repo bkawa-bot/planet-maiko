@@ -229,6 +229,15 @@ def load_plugins(app):
     def list_all_plugins():
         return jsonify(_discovered)
 
+    @plugins_bp.route("/pupdate-types", methods=["GET"])
+    def list_pupdate_types():
+        """Pupdate types known to Maiko — built-ins + anything plugins
+        registered via `register_pupdate_types()`. Drives the Automation
+        editor's type dropdown.
+        """
+        from planet_maiko.pupdate_types import collect_all
+        return jsonify(collect_all())
+
     @plugins_bp.route("/plugins/<name>/toggle", methods=["POST"])
     def toggle_plugin(name):
         """Enable or disable a plugin. Requires server restart to take effect."""

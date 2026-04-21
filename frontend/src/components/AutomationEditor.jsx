@@ -37,6 +37,25 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [pupdateTypes, setPupdateTypes] = useState(null);
+
+  // Fetch the authoritative type list once per editor open so a plugin
+  // that registered a new type shows up in the dropdown without a page
+  // reload. Falls back to the hardcoded list on failure.
+  useEffect(() => {
+    let cancelled = false;
+    api.getPupdateTypes()
+      .then((types) => {
+        if (cancelled || !Array.isArray(types)) return;
+        setPupdateTypes(types.map((t) => ({
+          value: t.name,
+          label: t.label || t.name,
+          group: t.group || "Other",
+        })));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // Scope is derived from the chosen condition kinds — the user never
   // picks it directly. If any condition is pupdate_match, scope is
@@ -175,6 +194,7 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
                 key={idx}
                 condition={c}
                 options={conditionOptions}
+                pupdateTypes={pupdateTypes}
                 onChange={(patch) => updateWhen(idx, patch)}
                 onRemove={when.length > 1 ? () => setWhen(when.filter((_, i) => i !== idx)) : null}
               />
@@ -300,8 +320,22 @@ function GroupedOptions({ options }) {
   );
 }
 
-function ConditionRow({ condition, options, onChange, onRemove }) {
-  const schema = CONDITION_SCHEMAS[condition.kind];
+function ConditionRow({ condition, options, pupdateTypes, onChange, onRemove }) {
+  let schema = CONDITION_SCHEMAS[condition.kind];
+  // pupdate_match's `type` field needs the live list (built-ins plus
+  // anything plugins registered). Override the field's options when
+  // the fetch has returned; otherwise fall back to whatever the schema
+  // was built with.
+  if (schema && pupdateTypes && pupdateTypes.length > 0) {
+    schema = {
+      ...schema,
+      fields: schema.fields.map((f) =>
+        f.name === "type" && f.type === "select"
+          ? { ...f, options: pupdateTypes }
+          : f
+      ),
+    };
+  }
   return (
     <div className="automation-entry-row">
       <div className="automation-entry-top">
@@ -531,6 +565,11 @@ function defaultConfigFor(schema) {
 // brain/automations/__init__.py AND adding an entry here.
 // --------------------------------------------------------------------------
 
+// Fallback pupdate-type list used only when /api/pupdate-types is
+// unreachable (first render before the fetch resolves, or API down).
+// The authoritative list lives in src/planet_maiko/pupdate_types.py
+// and is augmented at runtime by any plugin that implements
+// register_pupdate_types().
 const PUPDATE_TYPE_OPTIONS = [
   "pr_review_requested", "pr_changes_requested", "pr_approved", "pr_merged",
   "pr_ci_passed", "pr_ci_failed", "pr_review_commented",
