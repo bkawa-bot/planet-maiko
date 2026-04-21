@@ -292,6 +292,9 @@ export const api = {
   // Pupdate type registry — built-ins + anything plugins register via
   // register_pupdate_types(). Drives the Automation editor's dropdown.
   getPupdateTypes: () => request("/pupdate-types"),
+  // Pupdate source registry — poller names + the "maiko"/"agent"
+  // built-ins. Also drives the Automation editor's autocomplete.
+  getPupdateSources: () => request("/pupdate-sources"),
 
   // Project plan orchestration
   approveProjectPlan: (projectId, tasks) =>

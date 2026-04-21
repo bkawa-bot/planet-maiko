@@ -38,10 +38,12 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [pupdateTypes, setPupdateTypes] = useState(null);
+  const [pupdateSources, setPupdateSources] = useState([]);
+  const [configuredRepos, setConfiguredRepos] = useState([]);
 
-  // Fetch the authoritative type list once per editor open so a plugin
-  // that registered a new type shows up in the dropdown without a page
-  // reload. Falls back to the hardcoded list on failure.
+  // Fetch authoritative dropdown data once per editor open so plugins
+  // and config changes propagate without a page reload. All failures
+  // are silent — the editor still works with raw text inputs.
   useEffect(() => {
     let cancelled = false;
     api.getPupdateTypes()
@@ -54,8 +56,29 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
         })));
       })
       .catch(() => {});
+    api.getPupdateSources()
+      .then((sources) => {
+        if (cancelled || !Array.isArray(sources)) return;
+        setPupdateSources(sources.map((s) => s.name));
+      })
+      .catch(() => {});
+    api.getConfig()
+      .then((cfg) => {
+        if (cancelled) return;
+        setConfiguredRepos((cfg?.github?.repos) || []);
+      })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, []);
+
+  // Resolve a schema's string-type fields with a `datalist` tag to
+  // their live option list. ConditionRow / ActionRow pass this down
+  // to DynamicFields so a field can say `datalist: "repos"` and get
+  // the configured repo list without the schema knowing about state.
+  const datalists = {
+    repos: configuredRepos,
+    sources: pupdateSources,
+  };
 
   // Scope is derived from the chosen condition kinds — the user never
   // picks it directly. If any condition is pupdate_match, scope is
@@ -195,6 +218,7 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
                 condition={c}
                 options={conditionOptions}
                 pupdateTypes={pupdateTypes}
+                datalists={datalists}
                 onChange={(patch) => updateWhen(idx, patch)}
                 onRemove={when.length > 1 ? () => setWhen(when.filter((_, i) => i !== idx)) : null}
               />
@@ -223,6 +247,7 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
                 key={idx}
                 action={a}
                 options={actionOptions}
+                datalists={datalists}
                 onChange={(patch) => updateThen(idx, patch)}
                 onRemove={then.length > 1 ? () => setThen(then.filter((_, i) => i !== idx)) : null}
               />
@@ -243,7 +268,13 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
                 value={scopeRepo}
                 onChange={(e) => setScopeRepo(e.target.value)}
                 placeholder="org/repo — helps with filtering"
+                list={configuredRepos.length ? "automation-editor-scope-repos" : undefined}
               />
+              {configuredRepos.length > 0 && (
+                <datalist id="automation-editor-scope-repos">
+                  {configuredRepos.map((r) => <option key={r} value={r} />)}
+                </datalist>
+              )}
             </div>
             {scope === "cycle" && (
               <div className="automation-editor-field">
@@ -320,7 +351,7 @@ function GroupedOptions({ options }) {
   );
 }
 
-function ConditionRow({ condition, options, pupdateTypes, onChange, onRemove }) {
+function ConditionRow({ condition, options, pupdateTypes, datalists, onChange, onRemove }) {
   let schema = CONDITION_SCHEMAS[condition.kind];
   // pupdate_match's `type` field needs the live list (built-ins plus
   // anything plugins registered). Override the field's options when
@@ -353,12 +384,12 @@ function ConditionRow({ condition, options, pupdateTypes, onChange, onRemove }) 
           </button>
         )}
       </div>
-      {schema && <DynamicFields schema={schema} config={condition.config} onChange={(config) => onChange({ config })} />}
+      {schema && <DynamicFields schema={schema} config={condition.config} datalists={datalists} onChange={(config) => onChange({ config })} />}
     </div>
   );
 }
 
-function ActionRow({ action, options, onChange, onRemove }) {
+function ActionRow({ action, options, datalists, onChange, onRemove }) {
   const schema = ACTION_SCHEMAS[action.kind];
   return (
     <div className="automation-entry-row">
@@ -377,13 +408,13 @@ function ActionRow({ action, options, onChange, onRemove }) {
           </button>
         )}
       </div>
-      {schema && <DynamicFields schema={schema} config={action.config} onChange={(config) => onChange({ config })} />}
+      {schema && <DynamicFields schema={schema} config={action.config} datalists={datalists} onChange={(config) => onChange({ config })} />}
     </div>
   );
 }
 
 
-function DynamicFields({ schema, config, onChange }) {
+function DynamicFields({ schema, config, datalists, onChange }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   if (!schema || !schema.fields?.length) return null;
 
@@ -430,7 +461,7 @@ function DynamicFields({ schema, config, onChange }) {
     <div className="automation-entry-fields">
       {schema.help && <div className="automation-entry-help">{schema.help}</div>}
       {basicFields.map((f) => (
-        <FieldInput key={f.name} field={f} value={getField(f.name)} onChange={(v) => setField(f.name, v)} />
+        <FieldInput key={f.name} field={f} value={getField(f.name)} datalists={datalists} onChange={(v) => setField(f.name, v)} />
       ))}
       {advancedFields.length > 0 && (
         <div className="automation-entry-advanced">
@@ -446,7 +477,7 @@ function DynamicFields({ schema, config, onChange }) {
             <>
               <div className="automation-entry-advanced-label">Advanced</div>
               {advancedFields.map((f) => (
-                <FieldInput key={f.name} field={f} value={getField(f.name)} onChange={(v) => setField(f.name, v)} />
+                <FieldInput key={f.name} field={f} value={getField(f.name)} datalists={datalists} onChange={(v) => setField(f.name, v)} />
               ))}
             </>
           )}
@@ -456,7 +487,7 @@ function DynamicFields({ schema, config, onChange }) {
   );
 }
 
-function FieldInput({ field, value, onChange }) {
+function FieldInput({ field, value, datalists, onChange }) {
   const v = value != null ? value : (field.default != null ? field.default : "");
   if (field.type === "bool") {
     return (
@@ -522,7 +553,13 @@ function FieldInput({ field, value, onChange }) {
       </label>
     );
   }
-  // string default
+  // string default — supports a datalist hint for autocomplete
+  // (`datalist: "repos"` or `datalist: "sources"`). Users can still
+  // type a value that isn't in the list; the list is a suggestion.
+  const datalistValues = field.datalist && datalists ? datalists[field.datalist] : null;
+  const listId = datalistValues?.length
+    ? `field-datalist-${field.datalist}-${field.name}`
+    : undefined;
   return (
     <label className="automation-field">
       <span>{field.label}{field.help && <small> — {field.help}</small>}</span>
@@ -531,7 +568,13 @@ function FieldInput({ field, value, onChange }) {
         value={v || ""}
         placeholder={field.placeholder || ""}
         onChange={(e) => onChange(e.target.value)}
+        list={listId}
       />
+      {listId && (
+        <datalist id={listId}>
+          {datalistValues.map((opt) => <option key={opt} value={opt} />)}
+        </datalist>
+      )}
     </label>
   );
 }
@@ -628,7 +671,7 @@ const CONDITION_SCHEMAS = {
     scopes: ["cycle"],
     help: "Fires when a repo's cartographer insight is missing or older than the threshold.",
     fields: [
-      { name: "repo", type: "string", label: "Repo (org/name)", placeholder: "org/repo", help: "required" },
+      { name: "repo", type: "string", label: "Repo (org/name)", placeholder: "org/repo", help: "required", datalist: "repos" },
       { name: "stale_days", type: "number", label: "Days before stale", default: 30, min: 1 },
     ],
   },
@@ -638,7 +681,7 @@ const CONDITION_SCHEMAS = {
     scopes: ["cycle"],
     help: "Fires when a repo has N+ active Learnings and no AgentProfile for that scope has an adapter_path set.",
     fields: [
-      { name: "repo", type: "string", label: "Repo (org/name)", placeholder: "org/repo" },
+      { name: "repo", type: "string", label: "Repo (org/name)", placeholder: "org/repo", datalist: "repos" },
       { name: "min_learnings", type: "number", label: "Min active learnings", default: 10, min: 1 },
     ],
   },
@@ -662,7 +705,7 @@ const CONDITION_SCHEMAS = {
       { name: "type", type: "select", label: "Type", options: PUPDATE_TYPE_OPTIONS, help: "the pupdate's type field" },
       { name: "title_contains", type: "string", label: "Title contains", placeholder: "substring, case-insensitive", help: "optional extra filter on the title" },
       // Everything below is rare — collapsed under Advanced.
-      { name: "source", type: "string", label: "Source", placeholder: "github, linear, calendar…", advanced: true },
+      { name: "source", type: "string", label: "Source", placeholder: "github, linear, calendar…", advanced: true, datalist: "sources", help: "poller name (auto-suggested from your configured pollers)" },
       { name: "type_prefix", type: "string", label: "Type prefix", placeholder: "pr_", advanced: true, help: "match a family of types (e.g. pr_*)" },
       { name: "priority", type: "select", label: "Priority", options: PRIORITY_OPTIONS, advanced: true },
       { name: "actionable", type: "bool", label: "Must be actionable", advanced: true },
@@ -683,7 +726,7 @@ const ACTION_SCHEMAS = {
       { name: "ask_first", type: "bool", label: "Ask me before running", help: "when on, the job waits for your approval; off runs it directly." },
       { name: "title", type: "string", label: "Title", placeholder: "Can template {service} etc." },
       { name: "description", type: "textarea", label: "Description / input", rows: 2, help: "skill input / what the agent should focus on" },
-      { name: "scope_repo", type: "string", label: "Repo", placeholder: "org/repo or {service}", advanced: true },
+      { name: "scope_repo", type: "string", label: "Repo", placeholder: "org/repo or {service}", advanced: true, datalist: "repos" },
       { name: "priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS, advanced: true },
     ],
   },
@@ -696,7 +739,7 @@ const ACTION_SCHEMAS = {
       { name: "title", type: "string", label: "Title" },
       { name: "type", type: "select", label: "Task type", default: "todo", options: TASK_TYPE_OPTIONS },
       { name: "description", type: "textarea", label: "Description", rows: 2 },
-      { name: "repo", type: "string", label: "Repo", placeholder: "org/repo", advanced: true },
+      { name: "repo", type: "string", label: "Repo", placeholder: "org/repo", advanced: true, datalist: "repos" },
       { name: "priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS, advanced: true },
     ],
   },

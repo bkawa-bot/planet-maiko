@@ -96,6 +96,7 @@ function compareRows(a, b) {
 }
 
 export default function PackStatusPane() {
+  const defaultOrg = useDefaultOrg();
   const [rows, setRows] = useState([]);
   const [externalRequests, setExternalRequests] = useState([]);
   const [pendingJobs, setPendingJobs] = useState([]);
@@ -180,7 +181,11 @@ export default function PackStatusPane() {
                 <div className="pack-status-pending-title">{j.title}</div>
                 <div className="pack-status-pending-meta">
                   <span className="tag">{j.kind}</span>
-                  {j.scope_repo && <span className="tag">{j.scope_repo}</span>}
+                  {j.scope_repo && (
+                    <span className="tag" title={j.scope_repo}>
+                      {formatRepo(j.scope_repo, defaultOrg)}
+                    </span>
+                  )}
                   {j.description && <span className="pack-status-pending-desc">{j.description}</span>}
                 </div>
               </div>

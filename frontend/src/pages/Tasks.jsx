@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import AssignAgentModal from "../components/AssignAgentModal";
 import TaskCard from "../components/TaskCard";
-import { formatRepo, useDefaultOrg } from "../utils/repo";
+import { formatRepo, useDefaultOrg, useConfiguredRepos } from "../utils/repo";
 import {
   CheckSquare, Plus, FolderPlus, FolderOpen, ExternalLink,
   ChevronDown, ChevronRight, Folder, Loader,
@@ -14,6 +14,7 @@ import "./cards.css";
 
 export default function Tasks() {
   const defaultOrg = useDefaultOrg();
+  const configuredRepos = useConfiguredRepos();
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -711,7 +712,13 @@ export default function Tasks() {
                       value={editForm.repo}
                       onChange={(e) => setEditForm((f) => ({ ...f, repo: e.target.value }))}
                       placeholder="org/repo (drives agent routing)"
+                      list={configuredRepos.length ? "tasks-edit-repos" : undefined}
                     />
+                    {configuredRepos.length > 0 && (
+                      <datalist id="tasks-edit-repos">
+                        {configuredRepos.map((r) => <option key={r} value={r} />)}
+                      </datalist>
+                    )}
                   </label>
                   <label>URL <input type="text" value={editForm.url} onChange={(e) => setEditForm((f) => ({ ...f, url: e.target.value }))} placeholder="https://..." /></label>
                   <label>Due Date <input type="date" value={editForm.due_date} onChange={(e) => setEditForm((f) => ({ ...f, due_date: e.target.value }))} /></label>

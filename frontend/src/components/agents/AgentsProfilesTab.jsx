@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
-import { formatRepo, useDefaultOrg } from "../../utils/repo";
+import { formatRepo, useDefaultOrg, useConfiguredRepos } from "../../utils/repo";
 import { relativeTime } from "../../utils/dates";
 
 const ROLE_META = {
@@ -394,6 +394,7 @@ export default function AgentsProfilesTab({
   const [editing, setEditing] = useState(null);
   const [editForm, setEditForm] = useState({ role: "coding", scope_repo: "", instructions: "", flavor_text: "" });
   const [editSaving, setEditSaving] = useState(false);
+  const configuredRepos = useConfiguredRepos();
 
   // Collapsed role-section state — persisted to localStorage so the
   // layout sticks across visits. When nothing's persisted, sections
@@ -578,7 +579,13 @@ export default function AgentsProfilesTab({
                     value={editForm.scope_repo}
                     onChange={(e) => setEditForm({ ...editForm, scope_repo: e.target.value })}
                     placeholder="org/repo  (leave blank for global)"
+                    list={configuredRepos.length ? "agents-edit-profile-repos" : undefined}
                   />
+                  {configuredRepos.length > 0 && (
+                    <datalist id="agents-edit-profile-repos">
+                      {configuredRepos.map((r) => <option key={r} value={r} />)}
+                    </datalist>
+                  )}
                 </label>
               </div>
               <label className="agent-edit-full">

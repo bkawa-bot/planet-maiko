@@ -238,6 +238,29 @@ def load_plugins(app):
         from planet_maiko.pupdate_types import collect_all
         return jsonify(collect_all())
 
+    @plugins_bp.route("/pupdate-sources", methods=["GET"])
+    def list_pupdate_sources():
+        """Pupdate sources known to Maiko — built-ins (maiko, agent)
+        plus every discovered poller name. Drives the Automation
+        editor's source autocomplete so users don't have to type
+        "github" / "linear" / "calendar" from memory.
+        """
+        try:
+            from planet_maiko.pollers.scheduler import _get_pollers
+            poller_names = list(_get_pollers().keys())
+        except Exception:
+            poller_names = []
+        # Core sources that aren't pollers.
+        core = ["maiko", "agent"]
+        seen = set()
+        out = []
+        for name in core + sorted(poller_names):
+            if name in seen:
+                continue
+            seen.add(name)
+            out.append({"name": name})
+        return jsonify(out)
+
     @plugins_bp.route("/plugins/<name>/toggle", methods=["POST"])
     def toggle_plugin(name):
         """Enable or disable a plugin. Requires server restart to take effect."""

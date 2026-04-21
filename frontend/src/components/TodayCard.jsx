@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import { api } from "../api/client";
 import { relativeTime } from "../utils/dates";
+import { formatRepo, useDefaultOrg } from "../utils/repo";
 import "./TodayCard.css";
 
 
@@ -24,6 +25,7 @@ const AVATAR_EMOJI = {
  * Home with empty buckets.
  */
 export default function TodayCard() {
+  const defaultOrg = useDefaultOrg();
   const [today, setToday] = useState(null);
   const [expanded, setExpanded] = useState(false);
 
@@ -152,7 +154,7 @@ export default function TodayCard() {
                 {(today.insights_approved || []).map((i) => (
                   <li key={i.id} className="home-today-item">
                     {i.text}
-                    {i.repo_scope && <span className="home-today-item-meta"> · {i.repo_scope}</span>}
+                    {i.repo_scope && <span className="home-today-item-meta" title={i.repo_scope}> · {formatRepo(i.repo_scope, defaultOrg)}</span>}
                   </li>
                 ))}
               </ul>

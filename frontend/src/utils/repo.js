@@ -76,3 +76,55 @@ export function useDefaultOrg() {
   }, []);
   return org;
 }
+
+
+let _cachedRepos = null;
+let _reposInflight = null;
+
+function loadConfiguredRepos() {
+  if (_cachedRepos !== null) return Promise.resolve(_cachedRepos);
+  if (!_reposInflight) {
+    _reposInflight = api
+      .getConfig()
+      .then((cfg) => {
+        _cachedRepos = (cfg?.github?.repos) || [];
+        return _cachedRepos;
+      })
+      .catch(() => {
+        _cachedRepos = [];
+        return [];
+      })
+      .finally(() => {
+        _reposInflight = null;
+      });
+  }
+  return _reposInflight;
+}
+
+/**
+ * Invalidate the cached repo list. Call after the user saves Settings →
+ * Integrations so existing pages pick up new/removed repos.
+ */
+export function invalidateConfiguredRepos() {
+  _cachedRepos = null;
+  _reposInflight = null;
+}
+
+/**
+ * Hook for any input that accepts a repo. Returns the configured
+ * `github.repos` list so components can render a <datalist> for
+ * autocomplete without duplicating the fetch. Starts empty; components
+ * should treat an empty list as "no suggestions available, still allow
+ * free-form input".
+ */
+export function useConfiguredRepos() {
+  const [repos, setRepos] = useState(_cachedRepos || []);
+  useEffect(() => {
+    let cancelled = false;
+    loadConfiguredRepos().then((v) => {
+      if (!cancelled) setRepos(v);
+    });
+    return () => { cancelled = true; };
+  }, []);
+  return repos;
+}

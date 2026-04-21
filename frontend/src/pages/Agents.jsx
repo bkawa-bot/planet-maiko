@@ -8,11 +8,12 @@ import InfoButton from "../components/InfoButton";
 import AgentsActiveTab from "../components/agents/AgentsActiveTab";
 import AgentsProfilesTab from "../components/agents/AgentsProfilesTab";
 import AgentsInsightsTab from "../components/agents/AgentsInsightsTab";
-import { formatRepo, useDefaultOrg } from "../utils/repo";
+import { formatRepo, useDefaultOrg, useConfiguredRepos } from "../utils/repo";
 import "./Agents.css";
 
 export default function Agents() {
   const defaultOrg = useDefaultOrg();
+  const configuredRepos = useConfiguredRepos();
   const [tab, setTab] = useState("active");
   const [profiles, setProfiles] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -118,7 +119,13 @@ export default function Agents() {
                     value={createForm.scope_repo}
                     onChange={(e) => setCreateForm({ ...createForm, scope_repo: e.target.value })}
                     placeholder="org/repo-name  (leave blank for global)"
+                    list={configuredRepos.length ? "agents-create-repos" : undefined}
                   />
+                  {configuredRepos.length > 0 && (
+                    <datalist id="agents-create-repos">
+                      {configuredRepos.map((r) => <option key={r} value={r} />)}
+                    </datalist>
+                  )}
                 </label>
               </div>
               <label className="agent-edit-full">
