@@ -67,9 +67,22 @@ export default function Home() {
         goals_active: (goals || []).length,
       });
       setBrainStatus(brain);
+      // Today's events only. Calendar pupdates use a YYYY-MM-DD date in
+      // their source_id, so yesterday's events linger in the DB as
+      // read-but-not-dismissed rows and would otherwise leak into
+      // today's Today widget. Filter by the start timestamp's local
+      // date matching today's local date.
+      const todayStr = new Date().toLocaleDateString("en-CA"); // yyyy-mm-dd
       setCalendarEvents(
         pupdates
           .filter((p) => p.source === "calendar")
+          .filter((p) => {
+            const start = p.metadata?.start;
+            if (!start) return false;
+            // Compare on local-date strings so a 10pm meeting doesn't
+            // drop off the list just because UTC rolled to tomorrow.
+            return new Date(start).toLocaleDateString("en-CA") === todayStr;
+          })
           .sort((a, b) => (a.metadata?.start || "").localeCompare(b.metadata?.start || "")),
       );
     } catch (err) {
