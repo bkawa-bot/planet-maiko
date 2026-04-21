@@ -298,6 +298,14 @@ def create_app(start_scheduler=False):
         except Exception as e:
             logger.warning(f"[startup] Learning signal-count reconcile skipped: {e}")
         try:
+            # Self-heals demo DBs where the seed wrote a signal_count
+            # but never populated matching Signal rows. No-op on
+            # non-seed databases — matches on aggregation_key.
+            from planet_maiko.seed import backfill_seed_signals
+            backfill_seed_signals(app)
+        except Exception as e:
+            logger.warning(f"[startup] Seed signal backfill skipped: {e}")
+        try:
             ensure_plugin_default_automations()
         except Exception as e:
             logger.warning(f"[startup] Plugin automation seeding skipped: {e}")

@@ -29,6 +29,112 @@ def _ago(**kwargs):
     return _NOW - timedelta(**kwargs)
 
 
+def _make_filler_signals(learnings, existing_signals):
+    """Generate Signal rows to make each Learning's advertised
+    signal_count match the actual number of linked rows.
+
+    Called by both the initial seed and the demo-repair startup helper
+    (`backfill_seed_signals`). Filler signals carry the same category /
+    repo / language as the parent Learning so they cluster the same
+    way a real pr-comment would.
+    """
+    existing_by_learning = {}
+    for s in existing_signals:
+        lid = getattr(s, "learning_id", None)
+        if lid is not None:
+            existing_by_learning[lid] = existing_by_learning.get(lid, 0) + 1
+
+    filler = []
+    for l in learnings:
+        have = existing_by_learning.get(l.id, 0)
+        need = max(0, (l.signal_count or 0) - have)
+        for i in range(need):
+            filler.append(Signal(
+                category=l.category,
+                text=(
+                    f"Example #{have + i + 1} reinforcing this pattern: "
+                    f"{l.rule[:100]}"
+                ),
+                source_type="pr_comment",
+                reviewer=f"reviewer-{(i % 4) + 1}",
+                severity="suggestion",
+                repo=l.scope_repo,
+                language=l.scope_language,
+                learning_id=l.id,
+                aggregated=True,
+                synthesized=True,
+                created_at=_ago(days=2 + i),
+            ))
+    return filler
+
+
+_DEMO_FILLER_PER_LEARNING = 3
+
+
+def backfill_seed_signals(app):
+    """One-shot self-heal for demo DBs that lost their signals.
+
+    Earlier seed runs wrote a hardcoded `signal_count` on each demo
+    Learning but only created a handful of actual Signal rows. When
+    the startup reconcile zeroed the count to match reality, clicking
+    a "N signals" row revealed nothing.
+
+    Target: orphaned demo-shaped Learnings — no aggregation_key (pre-
+    cluster-engine rows), non-dismissed, zero signal_count, zero
+    linked signals. We leave `source="manual"` rows alone (those
+    are user-authored — no need to fabricate evidence) and skip
+    anything that already has real signals.
+
+    Generates `_DEMO_FILLER_PER_LEARNING` filler Signal rows per
+    matching learning so drill-down renders something. Filler is
+    clearly demo-shaped (reviewer="reviewer-N", text starts with
+    "Example #N") so a user skimming the provenance pane can tell.
+    """
+    with app.app_context():
+        candidates = Learning.query.filter(
+            Learning.aggregation_key.is_(None),
+            Learning.status.in_(["active", "pending"]),
+            Learning.signal_count == 0,
+            Learning.source != "manual",
+        ).all()
+
+        restored = 0
+        for l in candidates:
+            have = Signal.query.filter_by(learning_id=l.id).count()
+            if have > 0:
+                # Real signals exist but cache is stale — just sync.
+                if l.signal_count != have:
+                    l.signal_count = have
+                continue
+            for i in range(_DEMO_FILLER_PER_LEARNING):
+                s = Signal(
+                    category=l.category,
+                    text=(
+                        f"Example #{i + 1} reinforcing this pattern: "
+                        f"{l.rule[:100]}"
+                    ),
+                    source_type="pr_comment",
+                    reviewer=f"reviewer-{(i % 4) + 1}",
+                    severity="suggestion",
+                    repo=l.scope_repo,
+                    language=l.scope_language,
+                    learning_id=l.id,
+                    aggregated=True,
+                    synthesized=True,
+                    created_at=_NOW - timedelta(days=2 + i),
+                )
+                db.session.add(s)
+                restored += 1
+            l.signal_count = _DEMO_FILLER_PER_LEARNING
+        if restored:
+            db.session.commit()
+            logger.info(
+                f"[seed-repair] Restored {restored} demo signal(s) "
+                f"across {len(candidates)} orphan learning(s)"
+            )
+        return restored
+
+
 def seed_data(app):
     """Populate the DB with realistic test data. Idempotent."""
     with app.app_context():
@@ -649,10 +755,17 @@ def seed_data(app):
         ]
         db.session.add_all(signals)
 
+        # Top up each seeded Learning with filler Signal rows so the
+        # advertised `signal_count` matches the number of rows a user
+        # sees when they drill into provenance. The hand-written
+        # signals above cover one example per category; the filler
+        # here gives each learning enough evidence to look populated.
+        db.session.add_all(_make_filler_signals(learnings, signals))
+
         db.session.commit()
         logger.info(
             "Seed complete: 3 agents, 3 projects, 10 tasks, "
-            "15 pupdates, 6 learnings, 4 signals."
+            "15 pupdates, 6 learnings, 4 real signals + filler."
         )
 
         # Top up with screenshot-ready data (pack-requests, diff
