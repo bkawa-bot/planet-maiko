@@ -123,13 +123,11 @@ export default function Sidebar({ onOpenShutdown }) {
   useEffect(() => {
     const fetchBadges = async () => {
       try {
-        const [pupdates, tasks, learnings] = await Promise.all([
-          api.getPupdates(),
+        const [tasks, learnings] = await Promise.all([
           api.getTasks({ status: "new" }),
           api.getLearnings({ status: "pending" }).catch(() => []),
         ]);
         setBadges({
-          pupdates: pupdates.filter((p) => !p.read).length,
           tasks: tasks.length,
           learnings: learnings.length,
         });

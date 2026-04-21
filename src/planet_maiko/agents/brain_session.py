@@ -53,55 +53,6 @@ def _get_runtime():
     return _runtime
 
 
-def triage_pupdate(pupdate):
-    """Ask the brain to decide what to do with an unmatched pupdate.
-
-    Returns:
-        dict with:
-            - action: "dismiss", "create_task", "mark_read", "skip"
-            - reason: str explaining the decision
-            - task_title: str (if action is create_task)
-            - task_priority: str (if action is create_task)
-    """
-    runtime = _get_runtime()
-    if not runtime.is_available():
-        return {"action": "skip", "reason": "Brain runtime not available"}
-
-    prompt = f"""You are a notification triage assistant. Analyze this notification and decide what to do.
-
-Notification:
-- Source: {pupdate.source}
-- Type: {pupdate.type}
-- Priority: {pupdate.priority}
-- Title: {pupdate.title}
-- Body: {pupdate.body or '(none)'}
-- Tags: {', '.join(pupdate.tags or [])}
-- Actionable: {pupdate.actionable}
-- Action hint: {pupdate.action_hint or '(none)'}
-
-Decide ONE action:
-- "dismiss": This is noise, not relevant, or already handled
-- "create_task": This requires work - create a task for it
-- "mark_read": Informational only, no action needed
-- "skip": Unsure, leave for the user to decide
-
-Respond with JSON:
-{{"action": "...", "reason": "...", "task_title": "...", "task_priority": "low|normal|high|urgent"}}
-
-task_title and task_priority are only needed if action is "create_task"."""
-
-    from planet_maiko.agents.routing import resolve_model
-    # Release DB before LLM call to avoid SQLite locks
-    db.session.close()
-    result = runtime.send_json(prompt, timeout=30, model=resolve_model("triage"))
-
-    if not result["success"] or not result.get("parsed"):
-        logger.warning(f"[brain] Triage failed for {pupdate.id}: {result.get('error')}")
-        return {"action": "skip", "reason": f"Triage failed: {result.get('error')}"}
-
-    return result["parsed"]
-
-
 def run_skill(skill_name, context=None, working_dir=None):
     """Run a named skill through the brain runtime.
 

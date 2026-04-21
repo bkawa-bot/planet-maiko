@@ -93,15 +93,6 @@ def create_pupdate():
     return jsonify(pupdate.to_dict()), 201
 
 
-@pupdates_bp.route("/pupdates/<pupdate_id>/read", methods=["POST"])
-def mark_read(pupdate_id):
-    """Mark a pupdate as read."""
-    pupdate = db.get_or_404(Pupdate, pupdate_id)
-    pupdate.read = True
-    db.session.commit()
-    return jsonify(pupdate.to_dict())
-
-
 @pupdates_bp.route("/pupdates/<pupdate_id>/dismiss", methods=["POST"])
 def dismiss_pupdate(pupdate_id):
     """Dismiss (archive) a pupdate."""

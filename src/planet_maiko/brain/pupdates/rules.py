@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 # Actions the processor can execute
 ACTION_DISMISS = "dismiss"
-ACTION_MARK_READ = "mark_read"
 ACTION_CREATE_TASK = "create_task"
+ACTION_COMPLETE_TASK = "complete_task"  # close the review/coding task linked to this PR
 ACTION_SKIP = "skip"  # explicitly skip (don't process, leave for user)
 
 
@@ -56,12 +56,6 @@ def _matches(pupdate, conditions):
 
 # Built-in default rules (applied if user hasn't overridden)
 DEFAULT_RULES = [
-    {
-        "name": "skip_agent_ready",
-        "description": "Mark agent-ready notifications as read (informational)",
-        "match": {"type": "agent_ready"},
-        "action": ACTION_MARK_READ,
-    },
     {
         "name": "auto_dismiss_ci_pass",
         "description": "Auto-dismiss CI passing notifications",
@@ -106,22 +100,16 @@ DEFAULT_RULES = [
         "task_priority": "high",
     },
     {
-        "name": "read_approved_prs",
-        "description": "Mark approved PRs as read and complete review task",
+        "name": "close_task_on_pr_approved",
+        "description": "Close the linked review/coding task when a PR is approved",
         "match": {"type": "pr_approved"},
-        "action": ACTION_MARK_READ,
+        "action": ACTION_COMPLETE_TASK,
     },
     {
-        "name": "read_merged_prs",
-        "description": "Mark merged PRs as read and complete review task",
+        "name": "close_task_on_pr_merged",
+        "description": "Close the linked review/coding task + clean up its worktree when the PR merges",
         "match": {"type": "pr_merged"},
-        "action": ACTION_MARK_READ,
-    },
-    {
-        "name": "read_calendar_events",
-        "description": "Mark calendar events as read",
-        "match": {"source": "calendar"},
-        "action": ACTION_MARK_READ,
+        "action": ACTION_COMPLETE_TASK,
     },
 ]
 

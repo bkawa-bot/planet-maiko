@@ -172,61 +172,6 @@ def _phase_pupdates():
     return process_pupdates()
 
 
-def _phase_llm_triage():
-    """Phase 3.6: Tier 2 LLM triage for unmatched pupdates."""
-    try:
-        from planet_maiko.config import load_config
-        config = load_config()
-        if not config.get("brain", {}).get("llm_triage", False):
-            return {"processed": 0, "skipped": "disabled"}
-
-        from planet_maiko.models.pupdate import Pupdate
-        unmatched = Pupdate.query.filter(
-            Pupdate.brain_processed == False,  # noqa: E712
-            Pupdate.dismissed == False,  # noqa: E712
-            Pupdate.read == False,  # noqa: E712
-        ).limit(5).all()
-        if not unmatched:
-            return {"processed": 0}
-
-        from planet_maiko.agents.brain_session import _get_runtime, triage_pupdate
-        runtime = _get_runtime()
-        if not (runtime and runtime.is_available()):
-            return {"processed": 0, "skipped": "no_runtime"}
-
-        from planet_maiko.database import db
-        from planet_maiko.models.task import Task
-        for p in unmatched:
-            try:
-                decision = triage_pupdate(p)
-                if decision:
-                    action = decision.get("action", "skip")
-                    if action == "dismiss":
-                        p.dismissed = True
-                        p.dismissed_at = datetime.now(timezone.utc)
-                    elif action == "mark_read":
-                        p.read = True
-                    elif action == "create_task":
-                        task = Task(
-                            id=f"task-{p.id}",
-                            title=decision.get("task_title", p.title),
-                            type=decision.get("task_type", "todo"),
-                            priority=decision.get("task_priority", p.priority),
-                            source_pupdate_id=p.id,
-                            url=p.url,
-                            tags=p.tags or [],
-                        )
-                        db.session.add(task)
-                p.brain_processed = True
-            except Exception as e:
-                logger.warning(f"[cycle] LLM triage failed for {p.id}: {e}")
-        db.session.commit()
-        return {"processed": len(unmatched)}
-    except Exception as e:
-        logger.warning(f"[cycle] LLM triage phase error: {e}")
-        return {"processed": 0, "error": str(e)}
-
-
 def _phase_synthesis():
     """Phase 3.8: Self-healing synthesis.
 
@@ -509,7 +454,6 @@ def _emit_missing_clone_pupdate(task, repo):
         # User dismissed but the problem is back — resurrect.
         existing.dismissed = False
         existing.dismissed_at = None
-        existing.read = False
         existing.timestamp = datetime.now(timezone.utc)
         existing.body = (
             f"Maiko routed a {task.type} task ({task.id}) to an agent but "
@@ -669,7 +613,6 @@ _PHASES = [
     ("calendar_focus", _phase_calendar_focus),
     ("automations", _phase_automations),
     ("pupdates", _phase_pupdates),
-    ("llm_triage", _phase_llm_triage),
     ("synthesis", _phase_synthesis),
     ("learning", _phase_learning),
     ("heartbeats", _phase_heartbeats),

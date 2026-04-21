@@ -185,7 +185,6 @@ def process_agent_pupdates():
     for p in agent_pupdates:
         # Mark as processed so the pupdate processor skips these
         p.brain_processed = True
-        p.read = True
 
         if p.type == "agent_done":
             task_tags = [t for t in (p.tags or []) if t.startswith("task-")]

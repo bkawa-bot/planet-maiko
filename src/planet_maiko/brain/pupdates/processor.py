@@ -1,9 +1,16 @@
-"""Pupdate processor - fetches unprocessed pupdates and runs them through the rules pipeline.
+"""Pupdate processor - fetches unprocessed pupdates and runs them
+through the rules pipeline.
 
-This is the brain's equivalent of fetch → decode → execute for pupdates:
+Fetch → decode → execute for pupdates:
     1. Fetch: query all pupdates where brain_processed=False
     2. Decode: evaluate each pupdate against the rules
-    3. Execute: perform the matched action (dismiss, mark_read, create_task)
+    3. Execute: perform the matched action (dismiss / create_task /
+       complete_task), or mark the pupdate processed-without-action
+       when no rule matches.
+
+No LLM in the loop. If a pupdate's type isn't covered by any rule,
+it just sits — unmatched pupdates are the signal that the user should
+add a rule (or the plugin that emitted the type should ship one).
 """
 
 import logging
@@ -13,39 +20,11 @@ from datetime import datetime, timezone, timedelta
 from planet_maiko.database import db
 from planet_maiko.models.pupdate import Pupdate
 from planet_maiko.models.task import Task
-from planet_maiko.brain.pupdates.rules import evaluate, ACTION_DISMISS, ACTION_MARK_READ, ACTION_CREATE_TASK, ACTION_SKIP
+from planet_maiko.brain.pupdates.rules import (
+    evaluate, ACTION_DISMISS, ACTION_CREATE_TASK, ACTION_COMPLETE_TASK, ACTION_SKIP,
+)
 
 logger = logging.getLogger(__name__)
-
-
-# Maximum LLM triage calls per single processor pass. Above this, the
-# cycle starts deferring unmatched pupdates for the next tick so a
-# single burst of ambient pupdates (e.g. a backfill, or a noisy poller)
-# can't fan out into dozens of LLM calls in one cycle.
-# Configurable via brain.llm_triage_per_cycle; the default matches
-# _phase_llm_triage's existing limit so both phases are consistent.
-DEFAULT_MAX_LLM_TRIAGE_PER_CYCLE = 10
-
-
-def _try_llm_triage(pupdate):
-    """Attempt LLM-based triage for an unmatched pupdate.
-
-    Returns the triage result dict, or None if LLM is unavailable or disabled.
-    """
-    from planet_maiko.config import load_config
-    brain_config = load_config().get("brain", {})
-    if not brain_config.get("llm_triage", True):
-        return None
-
-    try:
-        from planet_maiko.agents.brain_session import triage_pupdate
-        result = triage_pupdate(pupdate)
-        if result.get("action") != "skip":
-            logger.info(f"  -> LLM triage: {result.get('action')} ({result.get('reason', '')})")
-        return result
-    except Exception as e:
-        logger.debug(f"  -> LLM triage unavailable: {e}")
-        return None
 
 
 def _slugify(text, max_len=60):
@@ -60,21 +39,18 @@ def _execute_dismiss(pupdate):
     """Dismiss a pupdate (archive it)."""
     pupdate.dismissed = True
     pupdate.dismissed_at = datetime.now(timezone.utc)
-    pupdate.read = True
     logger.info(f"  -> dismissed: {pupdate.title}")
 
 
-def _execute_mark_read(pupdate):
-    """Mark a pupdate as read.
-
-    For pr_approved/pr_merged, also complete the matching review task.
+def _execute_complete_task(pupdate):
+    """Close the review/coding task tied to this PR (pr_approved /
+    pr_merged). Not really a pupdate-shaped action — it's task
+    cleanup. The old code coupled this with 'mark as read'; keeping
+    the cleanup, dropping the read-flag side effect.
     """
-    pupdate.read = True
-
-    if pupdate.type in ("pr_approved", "pr_merged") and pupdate.url:
+    if pupdate.url:
         _complete_review_task(pupdate.url)
-
-    logger.info(f"  -> marked read: {pupdate.title}")
+    logger.info(f"  -> completed tasks linked to: {pupdate.title}")
 
 
 def _complete_review_task(pr_url):
@@ -376,7 +352,6 @@ def _execute_create_task(pupdate, rule):
         extra=pupdate.extra or {},
     )
     db.session.add(task)
-    pupdate.read = True
     logger.info(f"  -> created task: {task_id}")
 
 
@@ -386,14 +361,11 @@ def process():
     Returns:
         dict with counts: {processed, dismissed, read, tasks_created, skipped, unmatched}
     """
-    # Grab just the IDs up front. triage_pupdate internally calls
-    # db.session.close() to release the SQLite write lock before its
-    # LLM call; that detaches every Pupdate object held in Python,
-    # including the ones still in this loop. Iterating over IDs and
-    # re-fetching each pass keeps every mutation on an attached row,
-    # so dismiss / mark_read / brain_processed actually persist.
-    # (Previously: every triage decision was logged but silently
-    # dropped at commit time because the mutated object was detached.)
+    # Grab just the IDs up front and re-fetch per iteration. The
+    # original motivation was the old LLM-triage path closing the DB
+    # session mid-loop (detaching rows); that's gone now, but the
+    # cheap re-fetch is harmless and defends against any future
+    # action handler that needs to release the session.
     pupdate_ids = [
         p.id for p in
         Pupdate.query
@@ -403,35 +375,15 @@ def process():
     ]
 
     if not pupdate_ids:
-        return {"processed": 0, "dismissed": 0, "read": 0, "tasks_created": 0, "skipped": 0, "unmatched": 0}
+        return {"processed": 0, "dismissed": 0, "tasks_created": 0, "tasks_completed": 0, "skipped": 0, "unmatched": 0}
 
     logger.info(f"Processing {len(pupdate_ids)} pupdate(s)...")
 
     counts = {
-        "processed": 0, "dismissed": 0, "read": 0, "tasks_created": 0,
+        "processed": 0, "dismissed": 0, "tasks_created": 0, "tasks_completed": 0,
         "skipped": 0, "unmatched": 0, "held": 0,
-        "llm_triage": 0, "llm_cached": 0, "llm_deferred": 0,
     }
 
-    # Rate-limit LLM triage calls per processor pass. Backfill bursts
-    # and noisy pollers used to fan out into dozens of LLM calls;
-    # capping here keeps the token footprint predictable. Deferred
-    # pupdates stay brain_processed=False and get picked up next cycle.
-    from planet_maiko.config import load_config as _lc
-    max_llm = int(
-        _lc().get("brain", {}).get("llm_triage_per_cycle", DEFAULT_MAX_LLM_TRIAGE_PER_CYCLE)
-    )
-
-    # Within a single processor pass, cache LLM decisions by pupdate
-    # type — if we asked "what do I do with pr_stale?" once, every
-    # other pr_stale in this batch gets the same answer without another
-    # LLM hit. This alone typically drops 70–90% of calls on bursty
-    # days. `_execute_create_task` ignores triage_result.task_title
-    # and uses pupdate.title directly, so caching is safe across
-    # different pupdates of the same type.
-    triage_cache_by_type = {}
-
-    # Import focus manager for gating
     from planet_maiko.brain.focus.manager import should_surface, hold_pupdate
 
     for pid in pupdate_ids:
@@ -448,10 +400,8 @@ def process():
             # Still process through rules (actions happen, just not surfaced)
 
         # PR-comment events on a Maiko-owned coding task → wake the
-        # agent autonomously. The pupdate's source_id includes the
-        # latest comment timestamp so the poller emits this exactly
-        # once per new batch; we just translate the event to an
-        # inbox message + claude --resume kick.
+        # agent autonomously. Bypass the generic rule path because the
+        # action here is more involved than the simple dispatch table.
         if pupdate.type == "pr_review_commented":
             _resume_agent_for_pr_comments(pupdate)
             pupdate.brain_processed = True
@@ -462,55 +412,14 @@ def process():
         rule = evaluate(pupdate)
 
         if rule is None:
-            # No rule matched → LLM triage path. Consult the type
-            # cache first, then call out to the LLM, up to the per-
-            # cycle cap.
-            pupdate_type = pupdate.type
-            triage_result = triage_cache_by_type.get(pupdate_type)
-            used_cache = triage_result is not None
-
-            if triage_result is None:
-                if counts["llm_triage"] >= max_llm:
-                    # Cap hit: defer this one to the next cycle. Leave
-                    # brain_processed=False so the next pass picks it up.
-                    counts["llm_deferred"] += 1
-                    continue
-
-                triage_result = _try_llm_triage(pupdate)
-                pupdate = db.session.get(Pupdate, pid)
-                if pupdate is None:
-                    continue
-                if triage_result is not None:
-                    triage_cache_by_type[pupdate_type] = triage_result
-                    counts["llm_triage"] += 1
-            else:
-                counts["llm_cached"] += 1
-
-            if triage_result:
-                action = triage_result.get("action", "skip")
-                if action == ACTION_DISMISS:
-                    _execute_dismiss(pupdate)
-                    counts["dismissed"] += 1
-                elif action == ACTION_MARK_READ:
-                    _execute_mark_read(pupdate)
-                    counts["read"] += 1
-                elif action == ACTION_CREATE_TASK:
-                    _execute_create_task(pupdate, {
-                        "task_type": _infer_task_type(pupdate, triage_result),
-                        "task_priority": triage_result.get("task_priority", pupdate.priority),
-                    })
-                    counts["tasks_created"] += 1
-                else:
-                    counts["unmatched"] += 1
-            else:
-                counts["unmatched"] += 1
-
+            # No rule handled this one — mark it processed so we don't
+            # keep reconsidering it every cycle, but leave it visible
+            # (not dismissed). An unmatched pupdate is a signal that
+            # the user should add a rule (or the plugin that emits the
+            # type should ship one). No LLM guessing step.
             pupdate.brain_processed = True
+            counts["unmatched"] += 1
             counts["processed"] += 1
-            # Commit per-pupdate so partial failures don't roll back
-            # earlier triage decisions. Cache path commits too — same
-            # semantics even without an LLM call.
-            db.session.commit()
             continue
 
         action = rule.get("action")
@@ -518,12 +427,12 @@ def process():
         if action == ACTION_DISMISS:
             _execute_dismiss(pupdate)
             counts["dismissed"] += 1
-        elif action == ACTION_MARK_READ:
-            _execute_mark_read(pupdate)
-            counts["read"] += 1
         elif action == ACTION_CREATE_TASK:
             _execute_create_task(pupdate, rule)
             counts["tasks_created"] += 1
+        elif action == ACTION_COMPLETE_TASK:
+            _execute_complete_task(pupdate)
+            counts["tasks_completed"] += 1
         elif action == ACTION_SKIP:
             counts["skipped"] += 1
         else:
@@ -535,10 +444,12 @@ def process():
 
     db.session.commit()
 
-    # Auto-dismiss: informational pupdates older than 24h that are read
+    # Auto-dismiss: low-priority pupdates older than 24h that have
+    # already been processed. Previously this also required read=True,
+    # but the read flag has been removed; any low-priority informational
+    # pupdate that's been through the processor once is fair game.
     stale_threshold = datetime.now(timezone.utc) - timedelta(hours=24)
     stale = Pupdate.query.filter(
-        Pupdate.read == True,
         Pupdate.dismissed == False,
         Pupdate.brain_processed == True,
         Pupdate.priority.in_(["low", "normal"]),
@@ -551,7 +462,7 @@ def process():
 
     if stale:
         db.session.commit()
-        logger.info(f"[processor] Auto-dismissed {len(stale)} stale read pupdates")
+        logger.info(f"[processor] Auto-dismissed {len(stale)} stale pupdates")
 
     logger.info(f"Cycle complete: {counts}")
     return counts

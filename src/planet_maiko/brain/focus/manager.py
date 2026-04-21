@@ -116,7 +116,6 @@ def get_held():
     """Get all held pupdates."""
     held = Pupdate.query.filter(
         Pupdate.dismissed == False,
-        Pupdate.read == False,
     ).all()
     return [p for p in held if (p.extra or {}).get("held")]
 

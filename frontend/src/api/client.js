@@ -44,7 +44,6 @@ export const api = {
   getPupdate: (id) => request(`/pupdates/${id}`),
   createPupdate: (data) =>
     request("/pupdates", { method: "POST", body: JSON.stringify(data) }),
-  markRead: (id) => request(`/pupdates/${id}/read`, { method: "POST" }),
   dismissPupdate: (id) =>
     request(`/pupdates/${id}/dismiss`, { method: "POST" }),
 

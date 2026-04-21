@@ -597,15 +597,15 @@ function describeRuleMatch(match) {
 function describeRuleAction(rule) {
   switch (rule.action) {
     case "dismiss":
-      return "dismiss (hide from inbox)";
-    case "mark_read":
-      return "mark as read";
+      return "dismiss (archive)";
     case "create_task": {
       const bits = [];
       if (rule.task_type) bits.push(`type=${rule.task_type}`);
       if (rule.task_priority) bits.push(`priority=${rule.task_priority}`);
       return `create task${bits.length ? ` (${bits.join(", ")})` : ""}`;
     }
+    case "complete_task":
+      return "close linked task + clean up its worktree";
     case "skip":
       return "skip (leave for manual triage)";
     default:

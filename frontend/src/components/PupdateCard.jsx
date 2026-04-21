@@ -67,7 +67,7 @@ export default function PupdateCard({
 
   return (
     <div
-      className={`card pupdate-card ${p.priority} ${p.read ? "read" : ""} ${isExpanded ? "expanded" : ""}`}
+      className={`card pupdate-card ${p.priority} ${isExpanded ? "expanded" : ""}`}
       onClick={onToggleExpand}
     >
       <div className="card-left-bar" />

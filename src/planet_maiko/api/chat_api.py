@@ -68,8 +68,7 @@ def _gather_context():
     if pupdates:
         lines = []
         for p in pupdates:
-            read_mark = "" if p.read else " [unread]"
-            lines.append(f"- [{p.source}/{p.type}]{read_mark} {p.title}")
+            lines.append(f"- [{p.source}/{p.type}] {p.title}")
         sections.append("## Recent Notifications\n" + "\n".join(lines))
 
     # Agent profiles
