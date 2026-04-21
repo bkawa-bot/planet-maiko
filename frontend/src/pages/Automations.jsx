@@ -4,10 +4,11 @@ import { showToast } from "../components/Toast";
 import {
   Zap, Wand2, Sunrise, Brain, Coffee, Search, GitFork,
   Rocket, Clipboard, X, Loader, Plus, Save, Eye, Pencil, Trash2, Clock,
-  Compass, Pause, Play,
+  Compass, Pause, Play, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import { relativeTime } from "../utils/dates";
+import AutomationEditor from "../components/AutomationEditor";
 import "./Automations.css";
 
 const ICON_MAP = {
@@ -343,6 +344,8 @@ function AutomationsList() {
   const defaultOrg = useDefaultOrg();
   const [automations, setAutomations] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null);  // {mode, automation?}
+  const [defaultsOpen, setDefaultsOpen] = useState(false);
 
   const fetchAll = () => {
     setLoading(true);
@@ -366,71 +369,141 @@ function AutomationsList() {
     }
   };
 
+  const yours = (automations || []).filter((a) => a.created_by !== "seed");
+  const defaults = (automations || []).filter((a) => a.created_by === "seed");
+
   return (
     <div className="automations-section">
       <div className="skills-section-header">
-        <h3><Compass size={14} style={{ verticalAlign: "middle" }} /> Watches</h3>
+        <h3><Compass size={14} style={{ verticalAlign: "middle" }} /> Automations</h3>
         <p className="skills-section-sub">
-          When a condition holds, Maiko runs the matching action. Pause to silence without deleting. These are the building blocks — each one sees a condition, fires a skill or posts a proposal.
+          When / then rules that tell Maiko what to do without asking you every time. Tap an automation to edit, pause to silence without deleting.
         </p>
+        <button
+          className="btn btn-sm btn-primary"
+          style={{ marginLeft: "auto" }}
+          onClick={() => setEditing({ mode: "create" })}
+        >
+          <Plus size={12} /> New automation
+        </button>
       </div>
+
       {loading ? (
         <div className="automations-empty"><Loader size={12} className="spin" /> Loading…</div>
-      ) : !automations || automations.length === 0 ? (
-        <div className="automations-empty">
-          No automations yet. Goals from earlier versions migrate here on first boot; new ones appear when you approve a gap proposal.
-        </div>
       ) : (
-        <div className="automations-list">
-          {automations.map((a) => (
-            <div key={a.id} className={`automation-card card status-${a.status}`}>
-              <div className="automation-card-main">
-                <div className="automation-card-name-row">
-                  <span className="automation-card-name">{a.name}</span>
-                </div>
-                {(a.scope_repo || a.status) && (
-                  <div className="automation-card-chips">
-                    <span className={`automation-card-status status-${a.status}`}>{a.status}</span>
-                    {a.scope_repo && (
-                      <span className="automation-card-repo" title={a.scope_repo}>
-                        {formatRepo(a.scope_repo, defaultOrg)}
-                      </span>
-                    )}
-                  </div>
-                )}
-                {a.description && <div className="automation-card-desc">{a.description}</div>}
-                <div className="automation-card-row">
-                  <span className="automation-card-label">WHEN</span>
-                  <span>{describeAutomationTrigger(a)}</span>
-                </div>
-                <div className="automation-card-row">
-                  <span className="automation-card-label">THEN</span>
-                  <span>{(a.then || []).map(describeAction).join(" → ") || "(no action)"}</span>
-                </div>
-                <div className="automation-card-footer">
-                  {a.last_fired_at ? (
-                    <>fired {relativeTime(a.last_fired_at)} · {a.fire_count || 0}× total</>
-                  ) : (
-                    <>never fired yet</>
-                  )}
-                  {a.cooldown_days > 0 && <> · {a.cooldown_days}d cooldown</>}
-                </div>
-              </div>
-              <div className="automation-card-actions">
-                <button
-                  className="btn btn-sm"
-                  onClick={() => toggle(a)}
-                  disabled={a.status === "archived"}
-                  title={a.status === "active" ? "Pause this automation" : "Resume this automation"}
-                >
-                  {a.status === "active" ? <Pause size={10} /> : <Play size={10} />}
-                  {a.status === "active" ? " pause" : a.status === "paused" ? " resume" : " archived"}
-                </button>
-              </div>
+        <>
+          <div className="automation-group-label">Yours</div>
+          {yours.length === 0 ? (
+            <div className="automations-empty">
+              Nothing custom yet. Click "New automation" to build one, or approve a gap proposal from the inbox.
             </div>
-          ))}
-        </div>
+          ) : (
+            <div className="automations-list">
+              {yours.map((a) => (
+                <AutomationCard
+                  key={a.id}
+                  automation={a}
+                  defaultOrg={defaultOrg}
+                  onToggle={() => toggle(a)}
+                  onEdit={() => setEditing({ mode: "edit", automation: a })}
+                />
+              ))}
+            </div>
+          )}
+
+          {defaults.length > 0 && (
+            <div className="automation-group-collapsible">
+              <button
+                className="automation-group-toggle"
+                onClick={() => setDefaultsOpen((v) => !v)}
+              >
+                {defaultsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                <span>Defaults</span>
+                <span className="automation-group-count">{defaults.length}</span>
+                <span className="automation-group-note">built-ins that ship with Maiko — pause if one misfires</span>
+              </button>
+              {defaultsOpen && (
+                <div className="automations-list">
+                  {defaults.map((a) => (
+                    <AutomationCard
+                      key={a.id}
+                      automation={a}
+                      defaultOrg={defaultOrg}
+                      onToggle={() => toggle(a)}
+                      onEdit={() => setEditing({ mode: "edit", automation: a })}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
+
+      {editing && (
+        <AutomationEditor
+          mode={editing.mode}
+          automation={editing.automation}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); fetchAll(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+
+function AutomationCard({ automation: a, defaultOrg, onToggle, onEdit }) {
+  return (
+    <div className={`automation-card card status-${a.status}`}>
+      <button className="automation-card-click-target" onClick={onEdit} title="Edit this automation">
+        <div className="automation-card-main">
+          <div className="automation-card-name-row">
+            <span className="automation-card-name">{a.name}</span>
+          </div>
+          {(a.scope_repo || a.status) && (
+            <div className="automation-card-chips">
+              <span className={`automation-card-status status-${a.status}`}>{a.status}</span>
+              {a.execution_scope === "pupdate" && (
+                <span className="automation-card-status" style={{ background: "var(--bg)", color: "var(--text-muted)" }}>rule</span>
+              )}
+              {a.scope_repo && (
+                <span className="automation-card-repo" title={a.scope_repo}>
+                  {formatRepo(a.scope_repo, defaultOrg)}
+                </span>
+              )}
+            </div>
+          )}
+          {a.description && <div className="automation-card-desc">{a.description}</div>}
+          <div className="automation-card-row">
+            <span className="automation-card-label">WHEN</span>
+            <span>{describeAutomationTrigger(a)}</span>
+          </div>
+          <div className="automation-card-row">
+            <span className="automation-card-label">THEN</span>
+            <span>{(a.then || []).map(describeAction).join(" → ") || "(no action)"}</span>
+          </div>
+          <div className="automation-card-footer">
+            {a.last_fired_at ? (
+              <>fired {relativeTime(a.last_fired_at)} · {a.fire_count || 0}× total</>
+            ) : (
+              <>never fired yet</>
+            )}
+            {a.cooldown_days > 0 && <> · {a.cooldown_days}d cooldown</>}
+          </div>
+        </div>
+      </button>
+      <div className="automation-card-actions">
+        <button
+          className="btn btn-sm"
+          onClick={(e) => { e.stopPropagation(); onToggle(); }}
+          disabled={a.status === "archived"}
+          title={a.status === "active" ? "Pause this automation" : "Resume this automation"}
+        >
+          {a.status === "active" ? <Pause size={10} /> : <Play size={10} />}
+          {a.status === "active" ? " pause" : a.status === "paused" ? " resume" : " archived"}
+        </button>
+      </div>
     </div>
   );
 }

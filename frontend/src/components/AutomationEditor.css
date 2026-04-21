@@ -1,0 +1,192 @@
+.automation-editor {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: min(720px, 96vw);
+  max-height: 92vh;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.28);
+}
+
+.automation-editor-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.automation-editor-header h3 { margin: 0; font-size: 14px; font-weight: 600; }
+
+.automation-editor-body {
+  padding: 14px 16px 20px;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 14px;
+}
+
+.automation-editor-field {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 11px; color: var(--text-muted);
+  flex: 1;
+}
+.automation-editor-field label,
+.automation-editor-field > span {
+  font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  font-size: 10px;
+}
+.automation-editor-field input,
+.automation-editor-field textarea,
+.automation-editor-field select {
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  color: var(--text); font-size: 12px;
+  font-family: inherit;
+}
+.automation-editor-field input:focus,
+.automation-editor-field textarea:focus,
+.automation-editor-field select:focus {
+  outline: none;
+  border-color: var(--pink);
+}
+
+.automation-editor-row {
+  display: flex; gap: 12px; flex-wrap: wrap;
+}
+
+.automation-editor-section {
+  background: var(--bg-card-alt, var(--bg-hover));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.automation-editor-section-header {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.automation-editor-section-label {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--lavender, #b59dd8);
+}
+
+.scope-radio-group {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.scope-radio {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  background: var(--bg);
+  transition: border-color 0.15s;
+}
+.scope-radio.active { border-color: var(--lavender, #b59dd8); }
+.scope-radio.locked { cursor: not-allowed; opacity: 0.7; }
+.scope-radio input { margin-top: 2px; }
+.scope-radio span { display: flex; flex-direction: column; gap: 2px; }
+.scope-radio strong { font-size: 12px; color: var(--text); text-transform: none; letter-spacing: 0; }
+.scope-radio small { font-size: 10.5px; color: var(--text-muted); line-height: 1.4; font-weight: 400; }
+
+.when-logic-toggle {
+  display: flex; gap: 6px;
+  font-size: 10px;
+}
+.when-logic-toggle label {
+  display: inline-flex; gap: 3px; align-items: center;
+  padding: 2px 8px; border-radius: 10px;
+  background: var(--bg);
+  cursor: pointer;
+  color: var(--text-muted);
+}
+.when-logic-toggle label.active { background: var(--lavender-soft, rgba(181, 157, 216, 0.18)); color: var(--lavender, #b59dd8); }
+.when-logic-toggle label input { accent-color: var(--lavender, #b59dd8); }
+
+.automation-entry-row {
+  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.automation-entry-top {
+  display: flex; align-items: center; gap: 8px;
+}
+.automation-entry-kind {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  font-size: 12px; color: var(--text);
+}
+.automation-entry-remove {
+  padding: 4px;
+  color: var(--text-muted);
+}
+.automation-entry-remove:hover { color: var(--urgent, #d25050); }
+.automation-entry-fields {
+  display: flex; flex-direction: column; gap: 6px;
+  padding-left: 4px;
+  border-left: 2px solid var(--border-subtle);
+  padding: 4px 0 4px 10px;
+}
+.automation-entry-help {
+  font-size: 10.5px; color: var(--text-muted); font-style: italic;
+  margin-bottom: 2px;
+}
+
+.automation-field {
+  display: flex; flex-direction: column; gap: 3px;
+  font-size: 11px;
+}
+.automation-field > span {
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.automation-field small {
+  font-weight: 400; text-transform: none; letter-spacing: 0;
+  color: var(--text-muted); font-size: 10px;
+}
+.automation-field input,
+.automation-field textarea,
+.automation-field select {
+  padding: 5px 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  font-size: 11.5px; color: var(--text);
+  font-family: inherit;
+}
+.automation-field input:focus,
+.automation-field textarea:focus,
+.automation-field select:focus {
+  outline: none;
+  border-color: var(--pink);
+}
+.automation-field-bool {
+  flex-direction: row; align-items: center; gap: 6px;
+  padding: 2px 0;
+}
+.automation-field-bool span {
+  font-size: 11px; font-weight: 500; text-transform: none; letter-spacing: 0;
+  color: var(--text);
+}
+
+.automation-editor-add {
+  align-self: flex-start;
+  font-size: 10px;
+}
+
+.automation-editor-hint {
+  font-size: 10px; color: var(--text-muted);
+  display: flex; align-items: center; gap: 4px;
+  margin-top: 2px;
+}
+
+.automation-editor-footer {
+  display: flex; align-items: center; gap: 6px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg);
+}

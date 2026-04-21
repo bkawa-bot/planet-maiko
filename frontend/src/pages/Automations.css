@@ -103,6 +103,65 @@
   display: flex; align-items: flex-start;
 }
 
+/* Whole-card click target opens the editor. Button reset so it doesn't
+   inherit native button chrome. */
+.automation-card-click-target {
+  all: unset;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.automation-card-click-target:focus-visible {
+  outline: 2px solid var(--pink);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+.automation-group-label {
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin: 16px 0 8px;
+}
+
+.automation-group-collapsible {
+  margin-top: 18px;
+}
+.automation-group-toggle {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+  text-align: left;
+}
+.automation-group-toggle:hover { background: var(--bg-card-alt, var(--bg)); }
+.automation-group-toggle span:first-of-type {
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.automation-group-count {
+  font-size: 10px; font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-muted);
+}
+.automation-group-note {
+  font-size: 10px; font-weight: 400;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+.automation-group-collapsible .automations-list {
+  margin-top: 10px;
+}
+
 .skills-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;
 }
