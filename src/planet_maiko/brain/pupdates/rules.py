@@ -165,7 +165,7 @@ def _discover_poller_rules():
     return poller_rules
 
 
-def load_rules():
+def load_rules(*, include_disabled=False):
     """Load rules from: user config > plugin rules > poller rules > defaults.
 
     Priority order:
@@ -173,28 +173,64 @@ def load_rules():
         2. Default built-in rules
         3. Plugin-registered rules (entry_points "planet_maiko.rules")
         4. Poller-provided rules (from get_rules() on each poller)
+
+    User-disabled rules (via config.brain.disabled_rules) are filtered
+    out unless include_disabled=True — the Automations dashboard passes
+    that so disabled rules still render (greyed out) and can be
+    re-enabled from the UI.
     """
     config = load_config()
     brain_config = config.get("brain", {})
     user_rules = brain_config.get("rules")
 
     if user_rules is not None:
-        return user_rules
+        rules = list(user_rules)
+    else:
+        rules = list(DEFAULT_RULES)
 
-    rules = list(DEFAULT_RULES)
+        # Merge plugin rules
+        plugin_rules = _discover_plugin_rules()
+        poller_rules = _discover_poller_rules()
 
-    # Merge plugin rules
-    plugin_rules = _discover_plugin_rules()
-    poller_rules = _discover_poller_rules()
+        # Deduplicate by name
+        seen = {r["name"] for r in rules}
+        for r in plugin_rules + poller_rules:
+            if r.get("name") and r["name"] not in seen:
+                rules.append(r)
+                seen.add(r["name"])
 
-    # Deduplicate by name
-    seen = {r["name"] for r in rules}
-    for r in plugin_rules + poller_rules:
-        if r.get("name") and r["name"] not in seen:
-            rules.append(r)
-            seen.add(r["name"])
+    if include_disabled:
+        return rules
 
+    # User can pause any rule from the Automations dashboard without
+    # having to rewrite the defaults file. Paused rules stay in the
+    # full list above; we just filter them out of the live processor.
+    disabled = set(brain_config.get("disabled_rules") or [])
+    if disabled:
+        rules = [r for r in rules if r.get("name") not in disabled]
     return rules
+
+
+def is_rule_disabled(name):
+    """True if the named rule is in the disabled_rules config list."""
+    config = load_config()
+    disabled = (config.get("brain") or {}).get("disabled_rules") or []
+    return name in disabled
+
+
+def set_rule_disabled(name, disabled):
+    """Add/remove a rule name from config.brain.disabled_rules. Persists."""
+    from planet_maiko.config import save_config
+    config = load_config()
+    brain_cfg = config.setdefault("brain", {})
+    current = list(brain_cfg.get("disabled_rules") or [])
+    if disabled and name not in current:
+        current.append(name)
+    elif not disabled and name in current:
+        current.remove(name)
+    brain_cfg["disabled_rules"] = current
+    save_config(config)
+    return current
 
 
 def evaluate(pupdate, rules=None):

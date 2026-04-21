@@ -257,6 +257,8 @@ export const api = {
   createAutomation: (data) => request("/automations", { method: "POST", body: JSON.stringify(data) }),
   updateAutomation: (id, data) => request(`/automations/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteAutomation: (id) => request(`/automations/${id}`, { method: "DELETE" }),
+  getRules: () => request("/rules"),
+  updateRule: (name, data) => request(`/rules/${encodeURIComponent(name)}`, { method: "PATCH", body: JSON.stringify(data) }),
 
   // Insights (Team Playbook — tribal / operational notes injected into CLAUDE.md)
   getInsights: (params = {}) => {

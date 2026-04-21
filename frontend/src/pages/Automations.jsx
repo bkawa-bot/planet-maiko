@@ -162,6 +162,8 @@ export default function Automations() {
 
       <AutomationsList />
 
+      <RulesList />
+
       <div className="skills-section-header">
         <h3>Skills</h3>
         <p className="skills-section-sub">Prompt templates that Automations can invoke. Also runnable on-demand or on a cadence of their own.</p>
@@ -445,6 +447,14 @@ function describeCondition(trigger) {
       return `overview >${cfg.stale_days || 30}d stale`;
     case "lora_missing":
       return `${cfg.min_learnings || 10}+ rules, no adapter`;
+    case "pupdate_match": {
+      const types = (cfg.types || []).join(", ");
+      return `pupdate of type ${types || "(any)"} within ${cfg.within_minutes || 60}min`;
+    }
+    case "pupdate_chain": {
+      const types = (cfg.types || []).join(" + ");
+      return `${types} within ${cfg.within_minutes || 30}min (same ${cfg.group_by || "repo"})`;
+    }
     default:
       return trigger?.kind || "unknown";
   }
@@ -472,4 +482,126 @@ function describeAutomationTrigger(automation) {
   if (when.length === 1) return describeCondition(when[0]);
   const logic = automation.when_logic === "any" ? " OR " : " AND ";
   return when.map(describeCondition).join(logic);
+}
+
+
+// --------------------------------------------------------------------------
+// RulesList — pupdate-processor rules surfaced so the user can see
+// what's auto-handled (dismissed, marked read, turned into a task)
+// and pause individual rules. Edits are not supported from the UI;
+// these live in code because they're protocol shape, not workflow.
+// --------------------------------------------------------------------------
+
+function RulesList() {
+  const [rules, setRules] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchRules = () => {
+    setLoading(true);
+    api.getRules()
+      .then((rows) => setRules(rows || []))
+      .catch(() => setRules([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchRules(); }, []);
+
+  const toggleRule = async (rule) => {
+    const nextDisabled = !rule.disabled;
+    setRules((rows) => rows.map((r) => r.name === rule.name ? { ...r, disabled: nextDisabled } : r));
+    try {
+      await api.updateRule(rule.name, { disabled: nextDisabled });
+    } catch (err) {
+      setRules((rows) => rows.map((r) => r.name === rule.name ? { ...r, disabled: rule.disabled } : r));
+      showToast("Couldn't update rule: " + (err.message || "unknown"), "high");
+    }
+  };
+
+  return (
+    <div className="automations-section">
+      <div className="skills-section-header">
+        <h3><Compass size={14} style={{ verticalAlign: "middle" }} /> Rules</h3>
+        <p className="skills-section-sub">
+          Pattern-matches on incoming pupdates — dismiss the noisy ones, mark the informational ones read, create tasks from actionable ones. These are protocol-level, edited in code; use the toggle to pause one if it misfires.
+        </p>
+      </div>
+      {loading ? (
+        <div className="automations-empty"><Loader size={12} className="spin" /> Loading…</div>
+      ) : !rules || rules.length === 0 ? (
+        <div className="automations-empty">No pupdate rules loaded.</div>
+      ) : (
+        <div className="automations-list">
+          {rules.map((r) => (
+            <div key={r.name} className={`automation-card card status-${r.disabled ? "paused" : "active"}`}>
+              <div className="automation-card-main">
+                <div className="automation-card-name-row">
+                  <span className="automation-card-name">{r.name}</span>
+                </div>
+                <div className="automation-card-chips">
+                  <span className={`automation-card-status status-${r.disabled ? "paused" : "active"}`}>
+                    {r.disabled ? "paused" : "active"}
+                  </span>
+                  <span className="automation-card-status" style={{ background: "transparent", color: "var(--text-muted)", textTransform: "none", fontWeight: 500 }}>
+                    rule
+                  </span>
+                </div>
+                {r.description && <div className="automation-card-desc">{r.description}</div>}
+                <div className="automation-card-row">
+                  <span className="automation-card-label">WHEN</span>
+                  <span>{describeRuleMatch(r.match)}</span>
+                </div>
+                <div className="automation-card-row">
+                  <span className="automation-card-label">THEN</span>
+                  <span>{describeRuleAction(r)}</span>
+                </div>
+              </div>
+              <div className="automation-card-actions">
+                <button
+                  className="btn btn-sm"
+                  onClick={() => toggleRule(r)}
+                  title={r.disabled ? "Resume this rule" : "Pause this rule (pupdates matching it go untouched)"}
+                >
+                  {r.disabled ? <Play size={10} /> : <Pause size={10} />}
+                  {r.disabled ? " resume" : " pause"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function describeRuleMatch(match) {
+  if (!match || Object.keys(match).length === 0) return "any pupdate";
+  const parts = [];
+  if (match.source) parts.push(`source=${match.source}`);
+  if (match.type) parts.push(`type=${match.type}`);
+  if (match.type_prefix) parts.push(`type starts with ${match.type_prefix}`);
+  if (match.priority) parts.push(`priority=${match.priority}`);
+  if (match.priority_in) parts.push(`priority in [${match.priority_in.join(", ")}]`);
+  if (match.actionable !== undefined) parts.push(`actionable=${match.actionable}`);
+  if (match.has_tag) parts.push(`tagged ${match.has_tag}`);
+  if (match.title_contains) parts.push(`title contains "${match.title_contains}"`);
+  return parts.join(" AND ");
+}
+
+function describeRuleAction(rule) {
+  switch (rule.action) {
+    case "dismiss":
+      return "dismiss (hide from inbox)";
+    case "mark_read":
+      return "mark as read";
+    case "create_task": {
+      const bits = [];
+      if (rule.task_type) bits.push(`type=${rule.task_type}`);
+      if (rule.task_priority) bits.push(`priority=${rule.task_priority}`);
+      return `create task${bits.length ? ` (${bits.join(", ")})` : ""}`;
+    }
+    case "skip":
+      return "skip (leave for manual triage)";
+    default:
+      return rule.action || "unknown";
+  }
 }

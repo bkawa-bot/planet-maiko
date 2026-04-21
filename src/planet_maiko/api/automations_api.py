@@ -119,3 +119,39 @@ def delete_automation(automation_id):
     db.session.delete(a)
     db.session.commit()
     return jsonify({"deleted": automation_id})
+
+
+# ---------------------------------------------------------------------------
+# Pupdate rules — surfaced here so the Automations dashboard can show
+# them alongside the when/then rows. Rules themselves stay code-authored
+# (they're protocol-level); users can pause/resume from the UI but can't
+# edit match criteria or actions inline.
+# ---------------------------------------------------------------------------
+
+@automations_bp.route("/rules", methods=["GET"])
+def list_rules():
+    from planet_maiko.brain.pupdates.rules import load_rules, is_rule_disabled
+    all_rules = load_rules(include_disabled=True)
+    out = []
+    for r in all_rules:
+        name = r.get("name") or "(unnamed)"
+        out.append({
+            "name": name,
+            "description": r.get("description", ""),
+            "match": r.get("match") or {},
+            "action": r.get("action"),
+            "task_type": r.get("task_type"),
+            "task_priority": r.get("task_priority"),
+            "disabled": is_rule_disabled(name),
+        })
+    return jsonify(out)
+
+
+@automations_bp.route("/rules/<name>", methods=["PATCH"])
+def update_rule(name):
+    from planet_maiko.brain.pupdates.rules import set_rule_disabled
+    data = request.get_json(silent=True) or {}
+    if "disabled" not in data:
+        return jsonify({"error": "only `disabled` is editable"}), 400
+    set_rule_disabled(name, bool(data["disabled"]))
+    return jsonify({"name": name, "disabled": bool(data["disabled"])})
