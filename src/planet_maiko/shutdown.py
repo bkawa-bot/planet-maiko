@@ -26,6 +26,7 @@ from planet_maiko.database import db
 from planet_maiko.models.pupdate import Pupdate, ACTION_TYPES
 from planet_maiko.models.task import Task
 from planet_maiko.models.agent_message import AgentMessage
+from planet_maiko.models.agent_job import AgentJob
 from planet_maiko.models.signal import Signal
 from planet_maiko.models.insight import Insight
 from planet_maiko.models.learning import Learning
@@ -76,12 +77,16 @@ def preview():
 
 
 def _count_active_sessions():
-    """Tasks with a live worktree and status that looks in-flight."""
-    return Task.query.filter(
+    """Tasks + AgentJobs with live worktrees — union so a pack-owned
+    run without a linked Task still counts for the "N active" banner
+    the shutdown modal shows before you commit."""
+    task_cnt = Task.query.filter(
         Task.status.in_(("new", "in_progress", "in_review", "review")),
-        # extra JSON contains working_path — SQLite doesn't have a great
-        # JSON filter, so load + Python-filter. Cheap at Maiko scale.
     ).count()
+    job_cnt = AgentJob.query.filter(
+        AgentJob.status.in_(("queued", "running", "pending_approval")),
+    ).count()
+    return task_cnt + job_cnt
 
 
 def _count_done_worktrees():
@@ -89,6 +94,16 @@ def _count_done_worktrees():
     tasks = Task.query.filter(Task.status.in_(("done", "cancelled"))).all()
     for t in tasks:
         wp = (t.extra or {}).get("working_path")
+        if wp and "/.maiko-worktrees/" in wp.replace("\\", "/"):
+            cnt += 1
+    # AgentJobs that finished (done / failed / cancelled) still own
+    # their worktree until shutdown cleans it up.
+    done_jobs = AgentJob.query.filter(
+        AgentJob.status.in_(("done", "failed", "cancelled")),
+        AgentJob.worktree_path.isnot(None),
+    ).all()
+    for j in done_jobs:
+        wp = j.worktree_path or ""
         if wp and "/.maiko-worktrees/" in wp.replace("\\", "/"):
             cnt += 1
     return cnt
@@ -175,7 +190,19 @@ def stop_active_agents():
     they're mid-work they finish gracefully, if dormant they simply
     don't wake back up. Session IDs stay in agent-sessions.json so a
     fresh "Resume" tomorrow still works.
+
+    Post–Stage D, pack-owned AgentJob runs (cartograph, investigation,
+    review) report to MCP with task_id == job.id — so we also need to
+    drop shutdown messages on AgentJob ids for the outbox handler to
+    route them correctly.
     """
+    body = (
+        "Maiko is settling the pack in for the night. If you're "
+        "mid-task, wrap up the current step and exit cleanly; "
+        "otherwise just rest. Your session and worktree will be "
+        "here tomorrow if the user resumes."
+    )
+
     count = 0
     active = Task.query.filter(
         Task.status.in_(("new", "in_progress", "in_review", "review")),
@@ -184,29 +211,47 @@ def stop_active_agents():
         wp = (t.extra or {}).get("working_path")
         if not wp:
             continue
-        msg = AgentMessage(
+        db.session.add(AgentMessage(
             task_id=t.id,
             direction="to_agent",
             sender="maiko",
             message_type="shutdown",
-            content=(
-                "Maiko is settling the pack in for the night. If you're "
-                "mid-task, wrap up the current step and exit cleanly; "
-                "otherwise just rest. Your session and worktree will be "
-                "here tomorrow if the user resumes."
-            ),
-        )
-        db.session.add(msg)
+            content=body,
+        ))
         count += 1
+
+    active_jobs = AgentJob.query.filter(
+        AgentJob.status.in_(("queued", "running")),
+        AgentJob.worktree_path.isnot(None),
+    ).all()
+    for j in active_jobs:
+        db.session.add(AgentMessage(
+            task_id=j.id,
+            direction="to_agent",
+            sender="maiko",
+            message_type="shutdown",
+            content=body,
+        ))
+        count += 1
+
     db.session.commit()
     return {"stopped": count}
 
 
 def cleanup_worktrees():
-    """Remove worktrees for tasks that are done / cancelled."""
-    from planet_maiko.agents.coding_agent import cleanup_task_worktree
+    """Remove worktrees for tasks + AgentJobs that are terminally done.
+
+    Post–Stage D, pack-owned worktrees live on AgentJob.worktree_path
+    (not on a Task). Both paths matter: we clean up worktrees for
+    done/cancelled Tasks AND done/failed/cancelled AgentJobs, and the
+    orphan-directory sweep treats **active** AgentJob paths as
+    protected so it doesn't nuke a cartograph or investigation mid-run.
+    """
+    from planet_maiko.agents.coding_agent import cleanup_task_worktree, cleanup as _cleanup_worktree_paths
 
     cleaned = 0
+
+    # Task-owned worktrees (coding tasks mostly).
     tasks = Task.query.filter(Task.status.in_(("done", "cancelled"))).all()
     for t in tasks:
         wp = (t.extra or {}).get("working_path")
@@ -223,20 +268,46 @@ def cleanup_worktrees():
             t.extra = extra
         except Exception as e:
             logger.warning(f"[shutdown] Worktree cleanup failed for {t.id}: {e}")
+
+    # AgentJob-owned worktrees (cartograph / investigation / review
+    # runs that finished). Don't touch queued/running/pending_approval —
+    # those still need their worktree.
+    done_jobs = AgentJob.query.filter(
+        AgentJob.status.in_(("done", "failed", "cancelled")),
+        AgentJob.worktree_path.isnot(None),
+    ).all()
+    for j in done_jobs:
+        wp = j.worktree_path or ""
+        if "/.maiko-worktrees/" not in wp.replace("\\", "/"):
+            continue
+        try:
+            _cleanup_worktree_paths(j.worktree_path, j.branch)
+            cleaned += 1
+            j.worktree_path = None
+            j.branch = None
+        except Exception as e:
+            logger.warning(f"[shutdown] AgentJob worktree cleanup failed for {j.id}: {e}")
+
     if cleaned:
         db.session.commit()
 
-    # Also try to scrub .maiko-worktrees directories for repos that
-    # have orphaned trees (task row gone entirely). Best-effort walk
-    # over configured repo_roots.
+    # Orphan sweep — scrub .maiko-worktrees directories on disk that no
+    # DB row claims. CRITICAL: the "known paths" set must union Tasks
+    # AND AgentJobs, otherwise we'd delete the worktree of an active
+    # pack-owned run (the Task row is null, only AgentJob.worktree_path
+    # points at it).
     orphaned = 0
     try:
         from planet_maiko.config import load_config
         roots = (load_config().get("github") or {}).get("repo_roots") or []
-        existing_paths = {
-            (t.extra or {}).get("working_path") for t in Task.query.all()
-            if (t.extra or {}).get("working_path")
-        }
+        known_paths = set()
+        for t in Task.query.all():
+            wp = (t.extra or {}).get("working_path")
+            if wp:
+                known_paths.add(wp)
+        for j in AgentJob.query.filter(AgentJob.worktree_path.isnot(None)).all():
+            if j.worktree_path:
+                known_paths.add(j.worktree_path)
         for root in roots:
             root_exp = os.path.expanduser(root)
             if not os.path.isdir(root_exp):
@@ -247,7 +318,7 @@ def cleanup_worktrees():
                     continue
                 for leaf in os.listdir(wt_dir):
                     leaf_path = os.path.join(wt_dir, leaf)
-                    if leaf_path in existing_paths:
+                    if leaf_path in known_paths:
                         continue
                     try:
                         shutil.rmtree(leaf_path, ignore_errors=True)
