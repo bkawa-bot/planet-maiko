@@ -363,6 +363,40 @@ def _time_bucket_for(dt):
     return _time_bucket(dt.hour)
 
 
+def _available_sprites():
+    """Scan for Maiko sprite files the user has dropped in.
+
+    The frontend serves everything under `frontend/public/sprites/` at
+    runtime (via the bundled static_dir), and the convention is
+    `maiko-<mood>.png` — the dash-suffix is the vibe the user picked
+    when saving the file (e.g., `maiko-sleeping.png`, `maiko-demon.png`,
+    `maiko-raincoat.png`).
+
+    This scan happens once per overview generation, so adding a new
+    sprite file shows up in the next refresh without a restart.
+    Returns a list of plain mood names (no `maiko-` prefix, no `.png`
+    suffix) to inject into the prompt vocabulary.
+    """
+    from planet_maiko.paths import static_dir
+    import os
+
+    moods = []
+    try:
+        sprites_dir = os.path.join(static_dir(), "sprites")
+        if not os.path.isdir(sprites_dir):
+            return moods
+        for name in sorted(os.listdir(sprites_dir)):
+            if not name.startswith("maiko-"):
+                continue
+            stem, ext = os.path.splitext(name)
+            if ext.lower() not in (".png", ".svg", ".webp"):
+                continue
+            moods.append(stem[len("maiko-"):])
+    except Exception as e:
+        logger.debug(f"[overview] sprite scan failed: {e}")
+    return moods
+
+
 def _build_context():
     """Aggregate everything the prompt needs into format-string values.
 
@@ -386,10 +420,16 @@ def _build_context():
     budget = user_cfg.get("interruption_budget")
     over_budget = bool(isinstance(budget, int) and budget > 0 and interruptions_today > budget)
 
+    available_sprites = _available_sprites()
+    sprite_hint = (
+        ", ".join(available_sprites) if available_sprites else "(none available)"
+    )
+
     return {
         "user_name": user_name,
         "current_time": now.strftime("%I:%M %p"),
         "time_bucket": time_bucket,
+        "available_sprites": sprite_hint,
         "pupdates": json.dumps(_pupdates_context(), indent=2, default=str),
         "tasks": json.dumps(_tasks_context(), indent=2, default=str),
         "schedule": json.dumps(_schedule_context(), indent=2, default=str),
@@ -679,6 +719,16 @@ def generate_overview():
     parsed.setdefault("alive", "")
     parsed.setdefault("custom_section", "")
     parsed.setdefault("closing", "")
+    parsed.setdefault("sprite", None)
+
+    # Validate sprite pick: only keep it if the LLM picked a mood
+    # the user actually has a file for. Cheaper than having the
+    # frontend retry on a 404 onError, and matches the prompt's
+    # "never invent a mood name" rule.
+    if parsed.get("sprite"):
+        valid = set(_available_sprites())
+        if parsed["sprite"] not in valid:
+            parsed["sprite"] = None
 
     # Evening wrap: during the closing window, inject a structured list
     # of tasks the pack will continue on overnight. Deterministic (not

@@ -227,9 +227,20 @@ export default function OverviewPane() {
     <div className={`overview-pane ${papyrusMode ? "papyrus-mode" : ""}`}>
       <header className="overview-header">
         <div className="overview-greeting-wrap">
+          {/* Sprite mood picked by the overview LLM from the files
+              in public/sprites/ (backend scans + validates so we
+              never render a bogus name). Falls back to
+              maiko-greeting.png if the LLM didn't pick one. The
+              onError handler hides the img silently if neither
+              file exists yet, so the UI works before any sprites
+              are saved. */}
           <img
             className="overview-greeting-sprite"
-            src="/sprites/maiko-greeting.png"
+            src={
+              overview.sprite
+                ? `/sprites/maiko-${overview.sprite}.png`
+                : "/sprites/maiko-greeting.png"
+            }
             alt=""
             aria-hidden="true"
             onError={(e) => { e.currentTarget.style.display = "none"; }}
