@@ -70,7 +70,12 @@
 
 .provenance-signal {
   padding: 8px 10px;
-  background: var(--surface, #fff);
+  /* --surface was never defined, so this always fell through to #fff,
+     which made signal text unreadable on dark themes (white on white).
+     --bg-card-alt exists in every theme and sits slightly lighter than
+     the parent panel — reads as a card-within-a-card. */
+  background: var(--bg-card-alt);
+  color: var(--text);
   border-radius: 6px;
   border: 1px solid var(--border-subtle);
   font-size: 11.5px;

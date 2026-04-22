@@ -533,7 +533,7 @@
 .profile-modal-goal {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 10px;
-  background: var(--surface, var(--bg-faint, transparent));
+  background: var(--bg-card-alt);
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   font-size: 12px;
