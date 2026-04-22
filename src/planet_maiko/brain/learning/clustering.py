@@ -124,7 +124,14 @@ def _call_cluster_llm(rules):
     payload = [{"id": r["id"], "rule": r["rule"]} for r in rules]
     prompt = CLUSTER_PROMPT.format(rules_json=json.dumps(payload, indent=2))
 
-    db.session.close()
+    # Intentionally do NOT close the session here. An earlier version
+    # called db.session.close() to release the connection during the
+    # long LLM call — but that detached every Signal / Learning object
+    # the caller had in scope, so subsequent assignments like
+    # signal.learning_id = learning.id silently failed to persist on
+    # commit (learnings landed, their signals never got linked). This
+    # is a drift-collector pass on a short queue, connection hold is
+    # fine. Keep the session live.
     result = runtime.send_json(prompt, timeout=120, model=resolve_model("classify"))
     parsed = result.get("parsed") if isinstance(result, dict) else None
     if not isinstance(parsed, dict):
@@ -380,7 +387,15 @@ def _call_attach_llm(category, existing, signals, rejected=None):
         signals_json=json.dumps(signal_payload, indent=2),
     )
 
-    db.session.close()
+    # CRITICAL: do not close the session before the LLM call. The
+    # caller (cluster_signals_into_learnings) is holding every Signal
+    # in `signals` as attached ORM instances and relies on being able
+    # to mutate them in the cluster loop after we return
+    # (signal.learning_id = learning.id). db.session.close() detaches
+    # them — the assignments succeed silently on detached objects and
+    # never hit the database, which is why backfilled learnings
+    # historically landed with zero linked signals. Connection hold
+    # during the 120s LLM call is acceptable; integrity isn't.
     result = runtime.send_json(prompt, timeout=120, model=resolve_model("classify"))
     parsed = result.get("parsed") if isinstance(result, dict) else None
     if not isinstance(parsed, dict):
