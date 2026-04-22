@@ -106,6 +106,61 @@ def _ensure_columns():
     db.session.commit()
 
 
+def _reconcile_agent_profile_counts():
+    """Backfill AgentProfile.tasks_completed / tasks_failed from the
+    actual Task + AgentJob history. The counters only moved via the
+    legacy one-shot Task path historically, so post-Stage D profiles
+    showed stale numbers (most "done" work is on AgentJobs now).
+    Runs once per boot; idempotent since it sets the counters to the
+    computed truth every time.
+    """
+    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.models.agent_job import AgentJob
+    from planet_maiko.models.task import Task
+    from sqlalchemy import func
+
+    # Done tasks per profile.
+    done_tasks = dict(
+        Task.query
+        .with_entities(Task.assigned_agent_id, func.count(Task.id))
+        .filter(Task.status == "done")
+        .filter(Task.assigned_agent_id.isnot(None))
+        .group_by(Task.assigned_agent_id)
+        .all()
+    )
+    # Done + failed AgentJobs per profile.
+    done_jobs = dict(
+        AgentJob.query
+        .with_entities(AgentJob.agent_profile_id, func.count(AgentJob.id))
+        .filter(AgentJob.status == "done")
+        .filter(AgentJob.agent_profile_id.isnot(None))
+        .group_by(AgentJob.agent_profile_id)
+        .all()
+    )
+    failed_jobs = dict(
+        AgentJob.query
+        .with_entities(AgentJob.agent_profile_id, func.count(AgentJob.id))
+        .filter(AgentJob.status.in_(("failed", "cancelled")))
+        .filter(AgentJob.agent_profile_id.isnot(None))
+        .group_by(AgentJob.agent_profile_id)
+        .all()
+    )
+
+    fixed = 0
+    for p in AgentProfile.query.all():
+        total_done = done_tasks.get(p.id, 0) + done_jobs.get(p.id, 0)
+        total_failed = failed_jobs.get(p.id, 0)
+        if p.tasks_completed != total_done or p.tasks_failed != total_failed:
+            p.tasks_completed = total_done
+            p.tasks_failed = total_failed
+            fixed += 1
+    if fixed:
+        db.session.commit()
+        logger.info(
+            f"[startup] Reconciled done/failed counts on {fixed} agent profile(s)"
+        )
+
+
 def _reconcile_learning_signal_counts():
     """Backfill Learning.signal_count from the actual Signal rows.
 
@@ -307,6 +362,10 @@ def create_app(start_scheduler=False):
             _reconcile_learning_signal_counts()
         except Exception as e:
             logger.warning(f"[startup] Learning signal-count reconcile skipped: {e}")
+        try:
+            _reconcile_agent_profile_counts()
+        except Exception as e:
+            logger.warning(f"[startup] Agent profile count reconcile skipped: {e}")
         try:
             # Self-heals demo DBs where the seed wrote a signal_count
             # but never populated matching Signal rows. No-op on

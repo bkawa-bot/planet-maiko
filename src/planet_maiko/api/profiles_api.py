@@ -34,28 +34,57 @@ def list_profiles():
     if not profiles:
         return jsonify([])
 
-    # Bulk-fetch recent done tasks for every profile in one query,
-    # then bucket by agent in Python. Faster than querying per profile.
+    # Bulk-fetch recent done work for every profile in one pass —
+    # union of user-owed Tasks (status=done) AND pack-owned AgentJobs
+    # (status=done). Post-Stage D most review/cartograph/investigation
+    # runs finish as AgentJobs, so if we only queried Tasks the recent
+    # section would look empty even on an agent who just landed five
+    # cartographs. Merge both, sort by finish time, keep 3 per agent.
+    from planet_maiko.models.agent_job import AgentJob
     ids = [p.id for p in profiles]
     recent_tasks = (
         Task.query
         .filter(Task.assigned_agent_id.in_(ids))
         .filter(Task.status == "done")
         .order_by(Task.updated_at.desc())
-        .limit(500)  # soft cap; 3 per profile from ~hundred still fits
+        .limit(500)
         .all()
     )
-    by_agent = {}
+    recent_jobs = (
+        AgentJob.query
+        .filter(AgentJob.agent_profile_id.in_(ids))
+        .filter(AgentJob.status == "done")
+        .order_by(AgentJob.finished_at.desc())
+        .limit(500)
+        .all()
+    )
+    by_agent = {p.id: [] for p in profiles}
     for t in recent_tasks:
-        bucket = by_agent.setdefault(t.assigned_agent_id, [])
-        if len(bucket) < 3:
-            bucket.append({
-                "id": t.id,
-                "title": t.title,
-                "type": t.type,
-                "updated_at": iso_utc(t.updated_at),
-                "has_artifact": bool((t.extra or {}).get("artifact")),
-            })
+        by_agent[t.assigned_agent_id].append({
+            "id": t.id,
+            "title": t.title,
+            "type": t.type,
+            "kind": "task",
+            "sort_at": t.updated_at,
+            "updated_at": iso_utc(t.updated_at),
+            "has_artifact": bool((t.extra or {}).get("artifact")),
+        })
+    for j in recent_jobs:
+        by_agent[j.agent_profile_id].append({
+            "id": j.id,
+            "title": j.title,
+            "type": j.kind,
+            "kind": "job",
+            "sort_at": j.finished_at or j.updated_at,
+            "updated_at": iso_utc(j.finished_at or j.updated_at),
+            "has_artifact": bool(j.artifact),
+        })
+    # Sort each agent's list by finish time desc, keep top 3.
+    for agent_id, items in by_agent.items():
+        items.sort(key=lambda x: x["sort_at"] or 0, reverse=True)
+        by_agent[agent_id] = [
+            {k: v for k, v in i.items() if k != "sort_at"} for i in items[:3]
+        ]
 
     out = []
     for p in profiles:

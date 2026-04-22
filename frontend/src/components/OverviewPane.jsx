@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { renderMarkdown } from "../utils/markdown";
 import { relativeTime } from "../utils/dates";
-import { Sunrise, RefreshCw, FileText, X, Loader, Brain } from "lucide-react";
+import { Sunrise, RefreshCw, FileText, X, Loader, Brain, Plus } from "lucide-react";
 import "./OverviewPane.css";
 
 /**
@@ -152,6 +152,43 @@ export default function OverviewPane() {
     }
   };
 
+  /** Quick-action: turn the pupdate into a todo Task, link it back
+   *  via source_pupdate_id for provenance, drop the pupdate from the
+   *  needs list. Useful for pupdates that don't have a type-specific
+   *  resolveAction() target but still represent work the user wants
+   *  to track. */
+  const handleMakeTask = async (pup) => {
+    try {
+      const repo = pup.metadata?.repo || pup.metadata?.repository || pup.extra?.repo;
+      await api.createTask({
+        title: pup.title || "New task",
+        type: "todo",
+        priority: pup.priority || "normal",
+        url: pup.url || "",
+        source_pupdate_id: pup.id,
+        tags: ["from_pupdate"],
+        extra: {
+          description: pup.body || "",
+          repo: repo || "",
+          from_pupdate: pup.id,
+        },
+      });
+      showToast("Task created 🐾", "normal");
+      // Dismissing the pupdate implicitly since it's been actioned —
+      // the Task is the new artifact to track.
+      await api.dismissPupdate(pup.id).catch(() => {});
+      setPupdates((prev) => prev.filter((p) => p.id !== pup.id));
+      if (overview?.needs) {
+        setOverview({
+          ...overview,
+          needs: overview.needs.filter((n) => n.pupdate_id !== pup.id),
+        });
+      }
+    } catch (err) {
+      showToast(err.message || "Couldn't create task", "high");
+    }
+  };
+
   useEffect(() => { fetchAll(); }, []);
 
   if (loading) {
@@ -277,6 +314,14 @@ export default function OverviewPane() {
                       {action.label}
                     </button>
                   )}
+                  <button
+                    className="btn-ghost overview-make-task"
+                    onClick={() => handleMakeTask(pup)}
+                    title="Make a task from this"
+                    aria-label="Make a task"
+                  >
+                    <Plus size={12} />
+                  </button>
                   <button
                     className="btn-ghost overview-dismiss"
                     onClick={() => handleDismiss(pup.id)}

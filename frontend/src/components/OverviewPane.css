@@ -304,6 +304,28 @@
 .overview-custom .brief-content p:first-child { margin-top: 0; }
 .overview-custom .brief-content p:last-child { margin-bottom: 0; }
 
+/* Quick "make a task" button on needs cards — sibling of the
+   dismiss X. Styled like the dismiss but in lavender so it reads
+   "do something with this" vs "drop it." */
+.overview-make-task {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--lavender, #b59dd8);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.overview-make-task:hover {
+  background: color-mix(in srgb, var(--lavender, #b59dd8) 14%, transparent);
+  border-color: var(--lavender, #b59dd8);
+}
+
 /* Pending learnings — separate call-out card, clicks through to
    /knowledge?tab=pending so the user can approve or dismiss in bulk. */
 .overview-learnings-card {

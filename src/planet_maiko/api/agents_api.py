@@ -398,6 +398,7 @@ def _assign_review_via_agent_job(task, profile, data):
         job.status = "failed"
         job.error = kickoff.get("error") or "kickoff failed"
         job.finished_at = datetime.now(timezone.utc)
+        profile.tasks_failed = (profile.tasks_failed or 0) + 1
 
     # Mirror worktree onto task.extra so the existing diff / relaunch
     # UI (which still reads task.extra.working_path) keeps working.
@@ -1032,6 +1033,12 @@ def _handle_agent_job_reply(job, msg, data, message_type):
         job.extra = extra
         if ag:
             ag.last_active_at = datetime.now(timezone.utc)
+            # Post-Stage D, most work finishes as an AgentJob (not a
+            # Task), so AgentProfile.tasks_completed stopped moving —
+            # the number in the profile modal was frozen wherever the
+            # legacy one-shot Task path last left it. Bump here so the
+            # "done" stat reflects reality.
+            ag.tasks_completed = (ag.tasks_completed or 0) + 1
 
         # Sync the linked Task (Stage D: review tasks have a linked job).
         if job.source_task_id:

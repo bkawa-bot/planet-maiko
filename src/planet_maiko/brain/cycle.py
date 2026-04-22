@@ -549,6 +549,19 @@ def _phase_spawn_jobs_for_tasks():
         return {"spawned": 0, "error": str(e)}
 
 
+def _bump_agent_failed(agent_profile_id):
+    """Increment the agent profile's tasks_failed counter. No-op when
+    the profile id is unknown (stray job with no assigned agent).
+    Caller is responsible for committing the session."""
+    if not agent_profile_id:
+        return
+    from planet_maiko.models.agent_profile import AgentProfile as _AP
+    from planet_maiko.database import db as _db
+    prof = _db.session.get(_AP, agent_profile_id)
+    if prof is not None:
+        prof.tasks_failed = (prof.tasks_failed or 0) + 1
+
+
 def _phase_execute_agent_jobs():
     """Phase 8c: run queued AgentJobs. Sibling of _phase_execute_agent_tasks
     — same prepare+headless-kickoff machinery, reading from the AgentJob
@@ -601,6 +614,7 @@ def _phase_execute_agent_jobs():
                 job.status = "failed"
                 job.error = f"No local clone found for {job.scope_repo}"
                 job.finished_at = datetime.now(timezone.utc)
+                _bump_agent_failed(job.agent_profile_id)
                 db.session.commit()
                 continue
 
@@ -710,6 +724,7 @@ def _phase_execute_agent_jobs():
                     job.status = "failed"
                     job.error = str(e)[:500]
                     job.finished_at = datetime.now(timezone.utc)
+                    _bump_agent_failed(job.agent_profile_id)
                     db.session.commit()
                     continue
                 if not prep:
@@ -743,6 +758,7 @@ def _phase_execute_agent_jobs():
                 job.status = "failed"
                 job.error = kickoff.get("error") or "kickoff failed"
                 job.finished_at = datetime.now(timezone.utc)
+                _bump_agent_failed(job.agent_profile_id)
                 logger.warning(
                     f"[cycle] kickoff failed for agent_job {job.id}: {kickoff.get('error')}"
                 )
