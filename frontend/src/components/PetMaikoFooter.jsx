@@ -91,7 +91,7 @@ export default function PetMaikoFooter() {
         title={atCap ? "Maiko's had enough for today, see you tomorrow." : "Pet Maiko"}
         aria-label={atCap ? "Maiko's had enough for today" : "Pet Maiko"}
       >
-        <img src="/icon.png" alt="Maiko" />
+        <img src="/icon.svg" alt="Maiko" />
         <span className="footer-pet-particles" aria-hidden>
           {particles.map((p) => (
             <span

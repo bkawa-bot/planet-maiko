@@ -100,7 +100,7 @@ export default function SetupWizard({ onComplete }) {
         {/* Step 0: Welcome */}
         {step === 0 && (
           <div className="setup-step setup-step-centered">
-            <img src="/icon.png" alt="Maiko" className="setup-maiko-icon" />
+            <img src="/icon.svg" alt="Maiko" className="setup-maiko-icon" />
             <h1>Welcome to Planet Maiko</h1>
             <p className="setup-sub">Your personal engineering companion. Maiko monitors your PRs, triages notifications, and orchestrates coding agents that learn from your team.</p>
             <button className="btn btn-primary" onClick={() => setStep(1)} style={{ marginTop: 16 }}>

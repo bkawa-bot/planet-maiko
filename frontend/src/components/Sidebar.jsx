@@ -169,7 +169,7 @@ export default function Sidebar({ onOpenShutdown }) {
       <div className="topbar">
         <div className="topbar-left">
           <NavLink to="/" className="topbar-logo">
-            <img src="/icon.png" alt="Maiko" className="topbar-icon" />
+            <img src="/icon.svg" alt="Maiko" className="topbar-icon" />
             <div className="topbar-logo-text">
               <span className="topbar-planet">PLANET</span>
               <span className="topbar-maiko">MAIKO</span>
