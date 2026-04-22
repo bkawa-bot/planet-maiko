@@ -739,6 +739,7 @@ const ACTION_SCHEMAS = {
       { name: "title", type: "string", label: "Title" },
       { name: "type", type: "select", label: "Task type", default: "todo", options: TASK_TYPE_OPTIONS },
       { name: "description", type: "textarea", label: "Description", rows: 2 },
+      { name: "auto_launch", type: "bool", label: "Launch an agent immediately", help: "For review/investigation/cartograph/repo_analysis types: skip manual Assign and spawn a linked agent job. No-op on todo/bug/feature." },
       { name: "repo", type: "string", label: "Repo", placeholder: "org/repo", advanced: true, datalist: "repos" },
       { name: "priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS, advanced: true },
     ],

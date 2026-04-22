@@ -445,6 +445,13 @@ def _act_create_task(automation, config, pupdate=None, context=None):
       description: str
       priority: str
       repo: str           — falls back to chain `service` when unset.
+      auto_launch: bool   — when true and the task type is agent-runnable
+                            (review / investigation / cartograph /
+                            repo_analysis), immediately spawn a linked
+                            AgentJob so the cycle's execute phase kicks
+                            off an agent without waiting for manual
+                            Assign. No-op on user-owed types (todo /
+                            bug / feature) — there's no agent to launch.
     """
     from planet_maiko.models.task import Task
     from planet_maiko.orchestration import route, is_ready
@@ -475,6 +482,44 @@ def _act_create_task(automation, config, pupdate=None, context=None):
     route(task)
     if not is_ready(task):
         task.status = "blocked"
+
+    # Auto-launch: spawn a linked AgentJob so the cycle's execute
+    # phase picks it up next tick. Mirrors the Stage-D pattern where
+    # a review Task's spawn_jobs_for_tasks phase does the same thing
+    # — just doing it inline here saves up to one cycle tick (~30s)
+    # of latency when the user wants "create task and go."
+    agent_runnable = {"review", "pr_review", "investigation", "repo_analysis", "cartograph"}
+    if bool(config.get("auto_launch")) and task.type in agent_runnable and task.assigned_agent_id:
+        from planet_maiko.models.agent_job import AgentJob
+        job_extra = {
+            "from_automation": automation.id,
+            "from_task": task.id,
+        }
+        if pupdate is not None:
+            job_extra["triggered_by_pupdate"] = pupdate.id
+        chain_ids = ctx.get("pupdate_ids") or []
+        if chain_ids:
+            job_extra["triggered_by_pupdates"] = list(chain_ids)
+        job = AgentJob(
+            id=f"job-{uuid.uuid4().hex[:10]}",
+            kind=task.type,
+            title=task.title,
+            description=(task.extra or {}).get("description") or "",
+            scope_repo=(task.extra or {}).get("repo") or None,
+            priority=task.priority or "normal",
+            created_by="automation",
+            automation_id=automation.id,
+            source_task_id=task.id,
+            agent_profile_id=task.assigned_agent_id,
+            requires_approval=False,
+            approved_by="auto",
+            approved_at=datetime.now(timezone.utc),
+            status="queued",
+            extra=job_extra,
+        )
+        db.session.add(job)
+        return {"task_id": task_id, "job_id": job.id, "kind": "create_task", "auto_launched": True}
+
     return {"task_id": task_id, "kind": "create_task"}
 
 
