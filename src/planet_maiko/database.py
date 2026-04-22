@@ -61,8 +61,16 @@ def _sqlite_pragmas(dbapi_connection, connection_record):
     writer-vs-writer contends. busy_timeout=30000 makes SQLite wait
     up to 30s for a lock, matching the longest LLM-held transaction
     we'd expect (clustering caps at 120s but commits per batch).
-    foreign_keys=ON flips on FK enforcement (SQLite defaults to OFF,
-    silently ignoring constraints declared on AgentJob → Task etc).
+
+    foreign_keys is intentionally NOT enabled. It's tempting (we
+    have FK declarations on AgentJob → Task, Signal → Learning,
+    etc.) but existing DBs carry orphan refs from the era before
+    enforcement was on — merged-away learnings, deleted tasks
+    whose linked jobs still reference them, etc. Turning FK
+    enforcement on mid-flight makes every touching write fail with
+    "FOREIGN KEY constraint failed" until those orphans are swept
+    up. We'll flip this on once there's a boot-time cleanup that
+    nulls out orphan FK columns.
     """
     if not isinstance(dbapi_connection, sqlite3.Connection):
         return
@@ -70,7 +78,6 @@ def _sqlite_pragmas(dbapi_connection, connection_record):
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.execute("PRAGMA busy_timeout=30000")
     cursor.execute("PRAGMA synchronous=NORMAL")
-    cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
 
 
