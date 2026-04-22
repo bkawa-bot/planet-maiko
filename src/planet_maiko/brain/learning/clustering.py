@@ -527,6 +527,15 @@ def cluster_signals_into_learnings():
 
             batch_by_id = {s.id: s for s in batch}
             placed = set()
+            # Track every Learning whose signals changed this batch so
+            # we can run the global-promote check exactly once per
+            # learning AFTER the commit releases the write lock. The
+            # old path ran it inline per-cluster + per-orphan, which
+            # triggered an autoflush on every iteration (the query
+            # inside _maybe_promote_global forces pending writes out
+            # under the write lock) — one of the two things making
+            # clustering tx times show up as "slow tx" warnings.
+            batch_new_learnings = []
 
             for cluster in clusters:
                 member_ids = [
@@ -555,11 +564,13 @@ def cluster_signals_into_learnings():
                 learning = existing_by_id.get(existing_id) if isinstance(existing_id, int) else None
 
                 if learning is None:
-                    # New Learning for this cluster. signal_count / confidence
-                    # start at 0 and get bumped once per member below, so
-                    # the math matches _apply_positive_signal's post-creation
-                    # contract (a 3-signal cluster ends at signal_count=3,
-                    # confidence=0.3 just like the old prefix path).
+                    # New Learning for this cluster. signal_count /
+                    # confidence start at 0; bumped once per member by
+                    # _apply_positive_signal below. No flush here —
+                    # _apply_positive_signal uses the `signal.learning`
+                    # relationship (not the `.learning_id` FK), so the
+                    # ORM resolves the FK at commit time without us
+                    # needing to materialise an autoincrement id now.
                     canonical = (cluster.get("canonical") or "").strip()
                     if not canonical:
                         canonical = batch_by_id[member_ids[0]].text[:300]
@@ -577,8 +588,7 @@ def cluster_signals_into_learnings():
                         last_signal_at=datetime.now(timezone.utc),
                     )
                     db.session.add(learning)
-                    db.session.flush()
-                    existing_by_id[learning.id] = learning
+                    batch_new_learnings.append(learning)
                     counts["new_learnings"] += 1
 
                 for sid in member_ids:
@@ -588,11 +598,6 @@ def cluster_signals_into_learnings():
                     placed.add(sid)
                     counts["processed"] += 1
                     touched.add(category)
-
-                # If signals from 3+ distinct repos now back this rule,
-                # flip it to global so training feeds it into every LoRA.
-                if _maybe_promote_global(learning):
-                    counts["promoted_global"] = counts.get("promoted_global", 0) + 1
 
             # Any signal the LLM dropped on the floor — park it as its
             # own new Learning using its own text. Safer than losing it.
@@ -612,16 +617,38 @@ def cluster_signals_into_learnings():
                     last_signal_at=datetime.now(timezone.utc),
                 )
                 db.session.add(learning)
-                db.session.flush()
-                existing_by_id[learning.id] = learning
+                batch_new_learnings.append(learning)
                 counts["new_learnings"] += 1
                 _apply_positive_signal(sig, learning, counts)
                 sig.aggregated = True
                 counts["processed"] += 1
                 touched.add(category)
+
+            # Single commit per batch — all the Learnings + signal
+            # relinks go out in one write lock acquisition instead of
+            # dozens.
+            db.session.commit()
+
+            # Global-promote check runs *after* commit so (a) the FK
+            # writes are in the DB so the count query sees truth, and
+            # (b) the check's SELECT doesn't trigger an autoflush
+            # under the write lock. Only look at learnings touched
+            # this batch — the drift-dedupe pass handles older ones.
+            touched_learnings = set(batch_new_learnings)
+            for sid in placed:
+                sig = batch_by_id[sid]
+                if sig.learning is not None:
+                    touched_learnings.add(sig.learning)
+            for learning in touched_learnings:
+                # Refresh the existing_by_id so later batches in this
+                # same category can reuse newly-created Learnings
+                # instead of creating parallel duplicates.
+                if learning.id is not None:
+                    existing_by_id.setdefault(learning.id, learning)
                 if _maybe_promote_global(learning):
                     counts["promoted_global"] = counts.get("promoted_global", 0) + 1
-
+            # The global flip is a tiny UPDATE on learnings; commit it
+            # on its own so the next batch starts clean.
             db.session.commit()
 
     counts["touched_categories"] = sorted(touched)

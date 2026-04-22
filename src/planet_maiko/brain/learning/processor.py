@@ -68,11 +68,18 @@ def _apply_positive_signal(signal, learning, counts):
     """A confirming signal — bump signal count + confidence, link the
     signal to the learning. The learning's status stays "pending" — the
     user has to explicitly approve it in the Knowledge UI.
+
+    Uses the `signal.learning = learning` relationship assignment
+    (not `signal.learning_id = learning.id`) so callers don't need to
+    flush just to materialise an autoincrement id for the FK. Matters
+    in the clustering hot path where a batch can create dozens of
+    Learning rows — flushing per-row meant dozens of tiny writes
+    holding the write lock, which is what showed up as slow tx.
     """
     learning.signal_count += 1
     learning.confidence = min(1.0, learning.confidence + CONFIDENCE_PER_SIGNAL)
     learning.last_signal_at = datetime.now(timezone.utc)
-    signal.learning_id = learning.id
+    signal.learning = learning
     counts["updated_learnings"] += 1
 
 
