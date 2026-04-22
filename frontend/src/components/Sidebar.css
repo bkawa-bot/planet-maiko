@@ -39,7 +39,7 @@
   width: 28px;
   height: 28px;
   border-radius: 5px;
-  image-rendering: pixelated;
+  object-fit: contain;
 }
 
 .topbar-logo-text {
