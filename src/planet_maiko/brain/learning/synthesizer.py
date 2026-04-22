@@ -167,6 +167,13 @@ Respond as JSON:
                 db.session.delete(target)
                 dropped_junk += 1
                 continue
+            # Preserve the raw comment body before synthesis rewrites
+            # it. The provenance UI shows original_text so the user can
+            # see exactly what a reviewer actually said, not the LLM
+            # paraphrase. First-time set only — if original_text is
+            # already populated, a previous synthesis pass stashed it.
+            if not target.original_text:
+                target.original_text = target.text
             target.text = rule_data.get("rule", target.text)
             target.category = rule_data.get("category", "pattern")
             target.synthesized = True

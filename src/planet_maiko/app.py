@@ -29,6 +29,9 @@ def _ensure_columns():
         # so the older text-based dedup silently failed on re-scrape.
         "ALTER TABLE signals ADD COLUMN external_id VARCHAR(64)",
         "CREATE INDEX IF NOT EXISTS ix_signals_external_id ON signals(external_id)",
+        # Preserve the raw comment body before synthesis rewrites
+        # signal.text to a cleaner rule. Used by the provenance UI.
+        "ALTER TABLE signals ADD COLUMN original_text TEXT",
         "ALTER TABLE learnings ADD COLUMN is_global BOOLEAN DEFAULT 0",
         "ALTER TABLE custom_skills ADD COLUMN user_edited BOOLEAN DEFAULT 0",
         "ALTER TABLE agent_profiles ADD COLUMN extra JSON DEFAULT '{}'",

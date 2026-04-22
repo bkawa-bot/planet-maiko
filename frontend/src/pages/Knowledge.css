@@ -102,6 +102,17 @@
   color: var(--text); line-height: 1.4;
   white-space: pre-wrap; word-break: break-word;
 }
+/* The LLM's cleaned-rule version of the comment — shown as a subtle
+   subtitle so the user can verify the synthesis made sense while
+   still reading the raw comment as the primary content. */
+.provenance-rule {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-style: italic;
+  margin-top: 4px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border-subtle);
+}
 .provenance-examples {
   display: flex; flex-direction: column; gap: 2px;
   margin-top: 6px; padding-top: 6px;

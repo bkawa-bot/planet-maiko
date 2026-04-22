@@ -597,7 +597,17 @@ function LearningProvenance({ loading, signals, defaultOrg }) {
                 </a>
               )}
             </div>
-            <div className="provenance-text">{s.text}</div>
+            {/* Prefer the raw comment body so the user sees exactly
+                what a reviewer actually wrote. Fall back to the
+                cleaned rule text when we don't have the original
+                (pre-column signals from before the migration, or
+                agent/manual signals that never had a "raw" form). */}
+            <div className="provenance-text">{s.original_text || s.text}</div>
+            {s.original_text && s.text && s.original_text !== s.text && (
+              <div className="provenance-rule" title="LLM-cleaned rule summary">
+                ↳ rule: {s.text}
+              </div>
+            )}
             {examples.length > 0 && (
               <div className="provenance-examples">
                 {examples.map((ex, i) => (

@@ -61,6 +61,15 @@ class Signal(db.Model):
     # text-based dedup silently fails once a signal has been synthesized.
     external_id = db.Column(db.String(64), nullable=True, index=True)
 
+    # Preserves the raw comment body (or agent-authored signal text)
+    # before synthesis rewrites `text` to a cleaner rule. Without this
+    # column, the provenance view could only ever show the LLM's
+    # paraphrase — losing the trust-building ability to read what a
+    # real reviewer actually said. Backfilled lazily: whenever
+    # synthesis runs on a signal that's missing original_text, it
+    # stashes the pre-rewrite body first.
+    original_text = db.Column(db.Text, nullable=True)
+
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     learning = db.relationship("Learning", backref="signals")
@@ -70,6 +79,7 @@ class Signal(db.Model):
             "id": self.id,
             "category": self.category,
             "text": self.text,
+            "original_text": self.original_text,
             "source_type": self.source_type,
             "reviewer": self.reviewer,
             "severity": self.severity,
