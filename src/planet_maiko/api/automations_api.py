@@ -116,6 +116,25 @@ def update_automation(automation_id):
 @automations_bp.route("/automations/<int:automation_id>", methods=["DELETE"])
 def delete_automation(automation_id):
     a = db.get_or_404(Automation, automation_id)
+    # Seeded automations (from core seeders or plugins) respawn on
+    # the next boot if hard-deleted — the seeder's "does a row with
+    # this key already exist?" check sees nothing and creates a new
+    # one. User experience: "I turned this off but it came back."
+    # Archive instead so the dedup check still fires. Archived is
+    # filtered from the default list view, so to the user it looks
+    # gone. They can explicitly unearth + re-activate from the
+    # archived filter if they change their mind.
+    is_seeded = (
+        a.created_by == "seed"
+        or (a.created_by or "").startswith("plugin:")
+    )
+    if is_seeded:
+        a.status = "archived"
+        db.session.commit()
+        return jsonify({
+            "archived": automation_id,
+            "note": "Seeded automation archived — won't re-seed on restart.",
+        })
     db.session.delete(a)
     db.session.commit()
     return jsonify({"deleted": automation_id})
