@@ -24,7 +24,7 @@ BATCH_SIZE = 40
 
 
 def synthesize_unsynthesized_signals(max_signals=None, batch_size=BATCH_SIZE,
-                                     on_progress=None):
+                                     on_progress=None, max_workers=3):
     """Batch `synthesized=False` pr_comment signals through Claude.
 
     Args:
@@ -35,6 +35,7 @@ def synthesize_unsynthesized_signals(max_signals=None, batch_size=BATCH_SIZE,
         on_progress: optional callback (synthesized_count: int) -> None,
             called after each batch commit so the backfill progress bar
             moves in real time.
+        max_workers: concurrent LLM calls. Default 3.
 
     Returns:
         dict with:
@@ -44,6 +45,8 @@ def synthesize_unsynthesized_signals(max_signals=None, batch_size=BATCH_SIZE,
             dropped_junk: int — non-actionable signals deleted
             error: str or None
     """
+    from planet_maiko.brain.learning.llm_pool import run_parallel
+
     raw = (Signal.query
            .filter_by(source_type="pr_comment", synthesized=False)
            .order_by(Signal.id.asc())
@@ -62,10 +65,9 @@ def synthesize_unsynthesized_signals(max_signals=None, batch_size=BATCH_SIZE,
     runtime = ClaudeCodeRuntime()
     model = resolve_model("classify")
 
-    synthesized = 0
-    dropped_junk = 0
-    error = None
-
+    # --- Phase 1: build batch jobs on the main thread. Workers receive
+    # only primitives — no ORM instances cross the thread boundary. ---
+    jobs = []
     for start in range(0, len(raw), batch_size):
         batch = raw[start:start + batch_size]
         comments = [
@@ -119,20 +121,50 @@ Respond as JSON:
   ...
 ]}}"""
 
-        db.session.close()
-        try:
-            result = runtime.send_json(prompt, timeout=120, model=model)
-        except Exception as e:
-            error = str(e)[:300]
-            logger.warning(f"[synthesizer] LLM call failed: {error}")
-            break
+        jobs.append({
+            "start": start,
+            "end": start + len(batch),
+            "signal_ids": [s.id for s in batch],
+            "prompt": prompt,
+        })
+
+    # Release the main-thread session — workers don't need it, and
+    # on_result will open a fresh session per batch to re-fetch and
+    # commit updates.
+    db.session.close()
+
+    state = {
+        "synthesized": 0,
+        "dropped_junk": 0,
+        "error": None,
+    }
+
+    def runner(job):
+        # Worker thread: pure LLM call.
+        return runtime.send_json(job["prompt"], timeout=120, model=model)
+
+    def on_result(job, result, error):
+        # Main thread: apply DB updates for this batch.
+        if error:
+            # First hard error wins; subsequent ones get logged but
+            # don't overwrite. Workers in flight still complete —
+            # ThreadPoolExecutor can't cancel running futures — but
+            # their DB writes go through, so any batch that did succeed
+            # still lands.
+            if state["error"] is None:
+                state["error"] = error
+            logger.warning(
+                f"[synthesizer] Batch {job['start']}-{job['end']} LLM call failed: {error}"
+            )
+            return
 
         parsed_rules = (result.get("parsed") or {}).get("rules") if result else None
         if not parsed_rules:
-            # Skip this batch — signals stay synthesized=False, next
-            # cycle tick retries. Don't commit partial progress.
-            logger.info(f"[synthesizer] Batch {start}-{start + len(batch)} had no parseable rules; deferring")
-            continue
+            logger.info(
+                f"[synthesizer] Batch {job['start']}-{job['end']} "
+                "had no parseable rules; deferring"
+            )
+            return
 
         # LLMs occasionally return ids as strings ("1234") instead of
         # ints, which used to silently drop the whole row. Coerce
@@ -148,24 +180,35 @@ Respond as JSON:
                 continue
             if isinstance(rid, str) and rid.strip().isdigit():
                 coerced = int(rid.strip())
-                r["id"] = coerced  # normalize so the lookup loop matches
+                r["id"] = coerced
                 returned_ids.append(coerced)
                 continue
             skipped_ids += 1
         if skipped_ids:
-            logger.debug(f"[synthesizer] Dropped {skipped_ids} rule(s) with non-numeric id in batch {start}-{start + len(batch)}")
-        refetched = Signal.query.filter(Signal.id.in_(returned_ids)).all() if returned_ids else []
+            logger.debug(
+                f"[synthesizer] Dropped {skipped_ids} rule(s) with "
+                f"non-numeric id in batch {job['start']}-{job['end']}"
+            )
+
+        # Re-fetch signals fresh — the ones loaded in Phase 1 are
+        # detached after db.session.close(). Filter to ids we actually
+        # asked about so we don't pick up stray rows with the same id.
+        allowed = set(job["signal_ids"])
+        lookup_ids = [rid for rid in returned_ids if rid in allowed]
+        refetched = (Signal.query.filter(Signal.id.in_(lookup_ids)).all()
+                     if lookup_ids else [])
         by_id = {s.id: s for s in refetched}
+        batch_synthesized = 0
         for rule_data in parsed_rules:
             target = by_id.get(rule_data.get("id"))
             if target is None:
                 continue
-            # Treat missing "actionable" as true so we don't silently
+            # Missing "actionable" defaults to true so we don't silently
             # drop rules when the LLM forgets the field.
             actionable = rule_data.get("actionable", True)
             if not actionable:
                 db.session.delete(target)
-                dropped_junk += 1
+                state["dropped_junk"] += 1
                 continue
             # Preserve the raw comment body before synthesis rewrites
             # it. The provenance UI shows original_text so the user can
@@ -177,24 +220,28 @@ Respond as JSON:
             target.text = rule_data.get("rule", target.text)
             target.category = rule_data.get("category", "pattern")
             target.synthesized = True
-            synthesized += 1
+            batch_synthesized += 1
         db.session.commit()
+        state["synthesized"] += batch_synthesized
 
         if on_progress:
             try:
-                on_progress(synthesized)
+                on_progress(state["synthesized"])
             except Exception:
                 pass
 
-    if dropped_junk:
-        logger.info(f"[synthesizer] Dropped {dropped_junk} non-actionable signal(s)")
-    if synthesized:
-        logger.info(f"[synthesizer] Synthesized {synthesized} signal(s) out of {len(raw)} processed")
+    run_parallel(jobs, runner, max_workers=max_workers,
+                 on_result=on_result, log_prefix="synth")
+
+    if state["dropped_junk"]:
+        logger.info(f"[synthesizer] Dropped {state['dropped_junk']} non-actionable signal(s)")
+    if state["synthesized"]:
+        logger.info(f"[synthesizer] Synthesized {state['synthesized']} signal(s) out of {len(raw)} processed")
 
     return {
         "found": found,
         "processed": len(raw),
-        "synthesized": synthesized,
-        "dropped_junk": dropped_junk,
-        "error": error,
+        "synthesized": state["synthesized"],
+        "dropped_junk": state["dropped_junk"],
+        "error": state["error"],
     }
