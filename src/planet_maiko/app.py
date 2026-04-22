@@ -1,7 +1,10 @@
 import os
 import logging
+import sqlite3
 from flask import Flask, send_from_directory
 from flask_cors import CORS
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 from planet_maiko.database import db
 from planet_maiko.paths import db_path as get_db_path, static_dir, ensure_dirs, config_path
 
@@ -10,6 +13,39 @@ logging.basicConfig(
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+# SQLite tuning — dramatically reduces lock-contention errors during
+# backfills + clustering. Applied on every new connection.
+#
+# journal_mode=WAL  — write-ahead log. Default is DELETE which takes a
+#   process-wide file lock on every write, blocking readers AND other
+#   writers for the duration. WAL lets readers keep going while a
+#   writer is active and serializes writers cleanly without the shared
+#   lock. This is the #1 fix for "database is locked" errors on a
+#   multi-thread Flask + SQLite setup.
+# busy_timeout=30000 — if a writer arrives while another write is in
+#   flight (WAL serializes writers), wait up to 30s for the lock
+#   instead of erroring immediately. Matches the longest LLM call
+#   we'd hold a transaction across (120s clustering is capped below).
+# synchronous=NORMAL — WAL makes NORMAL safe (fsync at checkpoint
+#   rather than every commit) and takes ~5x off commit latency. The
+#   only exposure is that a power-loss mid-commit can lose the last
+#   in-flight transaction, which for a local dev tool is fine.
+# foreign_keys=ON — SQLite disables FK enforcement by default; we
+#   use FKs on AgentJob → Task and everywhere else, and want them
+#   actually enforced.
+@event.listens_for(Engine, "connect")
+def _sqlite_tuning(dbapi_connection, _connection_record):
+    if isinstance(dbapi_connection, sqlite3.Connection):
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=30000")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA foreign_keys=ON")
+        finally:
+            cursor.close()
 
 
 def _ensure_columns():
