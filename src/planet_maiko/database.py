@@ -58,16 +58,19 @@ def _sqlite_pragmas(dbapi_connection, connection_record):
     """Apply concurrency-friendly pragmas to every SQLite connection.
 
     WAL mode lets readers and writers run concurrently — only
-    writer-vs-writer contends. busy_timeout=15000 makes SQLite wait up
-    to 15s for a lock instead of raising "database is locked"
-    immediately.
+    writer-vs-writer contends. busy_timeout=30000 makes SQLite wait
+    up to 30s for a lock, matching the longest LLM-held transaction
+    we'd expect (clustering caps at 120s but commits per batch).
+    foreign_keys=ON flips on FK enforcement (SQLite defaults to OFF,
+    silently ignoring constraints declared on AgentJob → Task etc).
     """
     if not isinstance(dbapi_connection, sqlite3.Connection):
         return
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA busy_timeout=15000")
+    cursor.execute("PRAGMA busy_timeout=30000")
     cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
 
 
