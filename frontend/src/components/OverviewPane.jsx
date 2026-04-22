@@ -226,7 +226,16 @@ export default function OverviewPane() {
   return (
     <div className={`overview-pane ${papyrusMode ? "papyrus-mode" : ""}`}>
       <header className="overview-header">
-        <h1 className="overview-greeting">{overview.greeting || "Hi 🐾"}</h1>
+        <div className="overview-greeting-wrap">
+          <img
+            className="overview-greeting-sprite"
+            src="/sprites/maiko-greeting.png"
+            alt=""
+            aria-hidden="true"
+            onError={(e) => { e.currentTarget.style.display = "none"; }}
+          />
+          <h1 className="overview-greeting">{overview.greeting || "Hi 🐾"}</h1>
+        </div>
         <button
           className="overview-refresh"
           onClick={refresh}
@@ -238,9 +247,23 @@ export default function OverviewPane() {
         </button>
       </header>
 
-      {overview.summary && (
-        <p className="overview-summary">{overview.summary}</p>
-      )}
+      {overview.summary && (() => {
+        // Split into a bold-ish "lead" sentence and the rest so the
+        // Home overview reads greeting → punchy one-liner → body
+        // instead of one dense paragraph. Splits on the first ". ",
+        // "! ", or "? " so exclamations / questions survive. If the
+        // summary is a single sentence, `rest` is empty and we just
+        // render the lead.
+        const match = overview.summary.match(/^(.+?[.!?])(\s+)(.+)$/s);
+        const lead = match ? match[1] : overview.summary;
+        const rest = match ? match[3] : "";
+        return (
+          <>
+            <p className="overview-lead">{lead}</p>
+            {rest && <p className="overview-summary">{rest}</p>}
+          </>
+        );
+      })()}
 
       {overview.focus?.length > 0 && (
         <section className="overview-section">

@@ -47,20 +47,53 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 1s linear infinite; }
 
-/* Header: greeting + refresh */
+/* Header: [sprite + greeting] on the left, refresh button on the right. */
 .overview-header {
   display: flex;
   align-items: center;
   gap: 12px;
 }
+
+/* Wrapper holds the sprite inline-left of the H1. Flex so they sit
+   on the same baseline regardless of greeting length. */
+.overview-greeting-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.overview-greeting-sprite {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  object-fit: contain;
+  /* No background / border — sprite carries its own silhouette.
+     If the file isn't present at /sprites/maiko-greeting.png, an
+     onError handler in the JSX hides the <img> so the greeting
+     slides left cleanly. */
+}
+
 .overview-greeting {
-  font-size: 22px;
+  font-size: 30px;
   font-weight: 600;
   color: var(--text);
   margin: 0;
-  flex: 1;
-  letter-spacing: -0.01em;
-  line-height: 1.3;
+  line-height: 1.15;
+  /* font-family lives in index.css (Fraunces) so it's applied
+     consistently wherever the .overview-greeting class appears. */
+}
+
+/* "Lead" sentence — the first sentence of overview.summary gets
+   its own line with bumped size + medium weight. Reads as the
+   one-liner subtitle between the greeting and the body paragraph. */
+.overview-lead {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.5;
+  margin: 0;
 }
 .overview-refresh {
   background: none;
