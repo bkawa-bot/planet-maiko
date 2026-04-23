@@ -1124,7 +1124,7 @@ def _handle_agent_job_reply(job, msg, data, message_type):
 
     if message_type == "insight":
         try:
-            from planet_maiko.models.insight import Insight
+            from planet_maiko.models.insight import Insight, find_duplicate
             ag = db.session.get(_AP, job.agent_profile_id) if job.agent_profile_id else None
             author_role = ag.role if ag else None
             is_cartographer = author_role == "cartographer" or job.kind == "cartograph"
@@ -1134,19 +1134,38 @@ def _handle_agent_job_reply(job, msg, data, message_type):
                     if t_ not in tags:
                         tags.append(t_)
             max_len = 8000 if is_cartographer else 2000
-            ins = Insight(
-                text=content.strip()[:max_len],
-                repo_scope=job.scope_repo,
-                tags=tags,
-                author_agent_id=job.agent_profile_id,
-                status="pending",
-                source_message_id=msg.id,
-            )
-            db.session.add(ins)
-            logger.info(
-                f"[outbox/job] insight from {job.id} "
-                f"(repo={job.scope_repo or 'global'}, tags={tags})"
-            )
+            text = content.strip()[:max_len]
+            existing = find_duplicate(text, job.scope_repo, tags)
+            if existing is not None:
+                # Refresh the timestamp + source pointer so the UI
+                # sorts this one to the top of the "recently reconfirmed"
+                # list. Merge tags so any new ones the agent attached
+                # this round get kept.
+                existing.last_confirmed_at = datetime.now(timezone.utc)
+                existing.source_message_id = msg.id
+                merged_tags = list(existing.tags or [])
+                for t_ in tags:
+                    if t_ not in merged_tags:
+                        merged_tags.append(t_)
+                existing.tags = merged_tags
+                logger.info(
+                    f"[outbox/job] insight dedup match on #{existing.id} "
+                    f"(repo={job.scope_repo or 'global'}) — refreshed"
+                )
+            else:
+                ins = Insight(
+                    text=text,
+                    repo_scope=job.scope_repo,
+                    tags=tags,
+                    author_agent_id=job.agent_profile_id,
+                    status="pending",
+                    source_message_id=msg.id,
+                )
+                db.session.add(ins)
+                logger.info(
+                    f"[outbox/job] insight from {job.id} "
+                    f"(repo={job.scope_repo or 'global'}, tags={tags})"
+                )
         except Exception as e:
             logger.warning(f"[outbox/job] insight save failed for {job.id}: {e}")
         return
@@ -1278,7 +1297,7 @@ def agent_sends_message(task_id):
     # confidence scoring, just a note.
     if message_type == "insight":
         try:
-            from planet_maiko.models.insight import Insight
+            from planet_maiko.models.insight import Insight, find_duplicate
             from planet_maiko.models.task import Task as _Task
             from planet_maiko.models.agent_profile import AgentProfile as _AP
             t = db.session.get(_Task, task_id)
@@ -1305,19 +1324,34 @@ def agent_sends_message(task_id):
                         tags.append(t_)
 
             max_len = 8000 if is_cartographer else 2000
-            ins = Insight(
-                text=(data["content"] or "").strip()[:max_len],
-                repo_scope=repo_scope,
-                tags=tags,
-                author_agent_id=(t.assigned_agent_id if t else None),
-                status="pending",
-                source_message_id=msg.id,
-            )
-            db.session.add(ins)
-            logger.info(
-                f"[outbox] Agent insight recorded (task={task_id}, "
-                f"repo={repo_scope or 'global'}, tags={tags}): {ins.text[:80]}"
-            )
+            text = (data["content"] or "").strip()[:max_len]
+            existing = find_duplicate(text, repo_scope, tags)
+            if existing is not None:
+                existing.last_confirmed_at = datetime.now(timezone.utc)
+                existing.source_message_id = msg.id
+                merged_tags = list(existing.tags or [])
+                for t_ in tags:
+                    if t_ not in merged_tags:
+                        merged_tags.append(t_)
+                existing.tags = merged_tags
+                logger.info(
+                    f"[outbox] insight dedup match on #{existing.id} "
+                    f"(task={task_id}, repo={repo_scope or 'global'}) — refreshed"
+                )
+            else:
+                ins = Insight(
+                    text=text,
+                    repo_scope=repo_scope,
+                    tags=tags,
+                    author_agent_id=(t.assigned_agent_id if t else None),
+                    status="pending",
+                    source_message_id=msg.id,
+                )
+                db.session.add(ins)
+                logger.info(
+                    f"[outbox] Agent insight recorded (task={task_id}, "
+                    f"repo={repo_scope or 'global'}, tags={tags}): {ins.text[:80]}"
+                )
         except Exception as e:
             logger.warning(f"[outbox] insight save failed for {task_id}: {e}")
 

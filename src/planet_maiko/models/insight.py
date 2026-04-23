@@ -89,3 +89,52 @@ class Insight(db.Model):
             "last_confirmed_at": iso_utc(self.last_confirmed_at),
             "expired": self.is_expired(),
         }
+
+
+def _fingerprint(text):
+    """Stable-ish fingerprint for near-duplicate detection.
+
+    Normalizes whitespace + casing + trailing punctuation and returns
+    the first 120 characters. Agents re-running on a repo tend to
+    resurface the same observations with minor wording jitter; a
+    leading-120 fingerprint catches most of those while tolerating
+    trailing prose variation.
+    """
+    import re
+    if not text:
+        return ""
+    normalized = re.sub(r"\s+", " ", text.strip().lower())
+    # Strip surrounding markdown / punctuation that varies run-to-run.
+    normalized = normalized.strip("`*_#>-. \t")
+    return normalized[:120]
+
+
+def find_duplicate(text, repo_scope, tags=None):
+    """Return an existing Insight that duplicates this one, or None.
+
+    Match rules (all must hold):
+      - Same repo_scope (None == None counts)
+      - status in (pending, active) — dismissed rows don't block
+      - Leading-120-char normalized fingerprint matches
+
+    Tags are not part of the match — an agent might tag the same
+    observation differently across runs, and we still want to collapse.
+    The first match wins; caller is expected to refresh
+    last_confirmed_at and (optionally) append the new source_message_id
+    to the existing row instead of inserting.
+    """
+    fp = _fingerprint(text)
+    if not fp:
+        return None
+    candidates = (
+        Insight.query
+        .filter(Insight.status.in_(["pending", "active"]))
+        .filter(Insight.repo_scope == repo_scope)
+        .order_by(Insight.last_confirmed_at.desc())
+        .limit(50)
+        .all()
+    )
+    for ins in candidates:
+        if _fingerprint(ins.text) == fp:
+            return ins
+    return None
