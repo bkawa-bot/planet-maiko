@@ -40,6 +40,7 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
   const [pupdateTypes, setPupdateTypes] = useState(null);
   const [pupdateSources, setPupdateSources] = useState([]);
   const [configuredRepos, setConfiguredRepos] = useState([]);
+  const [skills, setSkills] = useState([]);
 
   // Fetch authoritative dropdown data once per editor open so plugins
   // and config changes propagate without a page reload. All failures
@@ -68,8 +69,28 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
         setConfiguredRepos((cfg?.github?.repos) || []);
       })
       .catch(() => {});
+    api.getSkills()
+      .then((list) => {
+        if (cancelled || !Array.isArray(list)) return;
+        setSkills(list);
+      })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, []);
+
+  // Agent-role kinds + skills from the backend, merged. Roles are
+  // static (cartograph/investigation/repo_analysis aren't skills —
+  // they're executor dispatch keys); skills are dynamic so custom
+  // skills added via /api/skills show up without a frontend change.
+  const agentJobKinds = [
+    { value: "cartograph", label: "cartograph — walk the repo" },
+    { value: "investigation", label: "investigation — spawn an investigator" },
+    { value: "repo_analysis", label: "repo_analysis — read-only investigation" },
+    ...skills.map((s) => ({
+      value: s.id || s.name,
+      label: `${s.name}${s.is_default ? " (skill)" : " (custom skill)"}`,
+    })),
+  ];
 
   // Resolve a schema's string-type fields with a `datalist` tag to
   // their live option list. ConditionRow / ActionRow pass this down
@@ -78,6 +99,12 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
   const datalists = {
     repos: configuredRepos,
     sources: pupdateSources,
+  };
+  // Same pattern for select fields — `optionsKey: "agent_job_kinds"`
+  // resolves against this map so the schema stays static while the
+  // real option list reflects currently-registered skills.
+  const optionsMap = {
+    agent_job_kinds: agentJobKinds,
   };
 
   // Scope is derived from the chosen condition kinds — the user never
@@ -219,6 +246,7 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
                 options={conditionOptions}
                 pupdateTypes={pupdateTypes}
                 datalists={datalists}
+                optionsMap={optionsMap}
                 onChange={(patch) => updateWhen(idx, patch)}
                 onRemove={when.length > 1 ? () => setWhen(when.filter((_, i) => i !== idx)) : null}
               />
@@ -248,6 +276,7 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
                 action={a}
                 options={actionOptions}
                 datalists={datalists}
+                optionsMap={optionsMap}
                 onChange={(patch) => updateThen(idx, patch)}
                 onRemove={then.length > 1 ? () => setThen(then.filter((_, i) => i !== idx)) : null}
               />
@@ -351,7 +380,7 @@ function GroupedOptions({ options }) {
   );
 }
 
-function ConditionRow({ condition, options, pupdateTypes, datalists, onChange, onRemove }) {
+function ConditionRow({ condition, options, pupdateTypes, datalists, optionsMap, onChange, onRemove }) {
   let schema = CONDITION_SCHEMAS[condition.kind];
   // pupdate_match's `type` field needs the live list (built-ins plus
   // anything plugins registered). Override the field's options when
@@ -384,12 +413,12 @@ function ConditionRow({ condition, options, pupdateTypes, datalists, onChange, o
           </button>
         )}
       </div>
-      {schema && <DynamicFields schema={schema} config={condition.config} datalists={datalists} onChange={(config) => onChange({ config })} />}
+      {schema && <DynamicFields schema={schema} config={condition.config} datalists={datalists} optionsMap={optionsMap} onChange={(config) => onChange({ config })} />}
     </div>
   );
 }
 
-function ActionRow({ action, options, datalists, onChange, onRemove }) {
+function ActionRow({ action, options, datalists, optionsMap, onChange, onRemove }) {
   const schema = ACTION_SCHEMAS[action.kind];
   return (
     <div className="automation-entry-row">
@@ -408,13 +437,13 @@ function ActionRow({ action, options, datalists, onChange, onRemove }) {
           </button>
         )}
       </div>
-      {schema && <DynamicFields schema={schema} config={action.config} datalists={datalists} onChange={(config) => onChange({ config })} />}
+      {schema && <DynamicFields schema={schema} config={action.config} datalists={datalists} optionsMap={optionsMap} onChange={(config) => onChange({ config })} />}
     </div>
   );
 }
 
 
-function DynamicFields({ schema, config, datalists, onChange }) {
+function DynamicFields({ schema, config, datalists, optionsMap, onChange }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   if (!schema || !schema.fields?.length) return null;
 
@@ -461,7 +490,7 @@ function DynamicFields({ schema, config, datalists, onChange }) {
     <div className="automation-entry-fields">
       {schema.help && <div className="automation-entry-help">{schema.help}</div>}
       {basicFields.map((f) => (
-        <FieldInput key={f.name} field={f} value={getField(f.name)} datalists={datalists} onChange={(v) => setField(f.name, v)} />
+        <FieldInput key={f.name} field={f} value={getField(f.name)} datalists={datalists} optionsMap={optionsMap} onChange={(v) => setField(f.name, v)} />
       ))}
       {advancedFields.length > 0 && (
         <div className="automation-entry-advanced">
@@ -477,7 +506,7 @@ function DynamicFields({ schema, config, datalists, onChange }) {
             <>
               <div className="automation-entry-advanced-label">Advanced</div>
               {advancedFields.map((f) => (
-                <FieldInput key={f.name} field={f} value={getField(f.name)} datalists={datalists} onChange={(v) => setField(f.name, v)} />
+                <FieldInput key={f.name} field={f} value={getField(f.name)} datalists={datalists} optionsMap={optionsMap} onChange={(v) => setField(f.name, v)} />
               ))}
             </>
           )}
@@ -487,7 +516,7 @@ function DynamicFields({ schema, config, datalists, onChange }) {
   );
 }
 
-function FieldInput({ field, value, datalists, onChange }) {
+function FieldInput({ field, value, datalists, optionsMap, onChange }) {
   const v = value != null ? value : (field.default != null ? field.default : "");
   if (field.type === "bool") {
     return (
@@ -498,12 +527,18 @@ function FieldInput({ field, value, datalists, onChange }) {
     );
   }
   if (field.type === "select") {
+    // `optionsKey` lets a schema reference a dynamic list (e.g.
+    // "agent_job_kinds" → built-in kinds + custom skills) without
+    // the schema having to know about state.
+    const options = field.options
+      || (field.optionsKey && optionsMap?.[field.optionsKey])
+      || [];
     return (
       <label className="automation-field">
         <span>{field.label}{field.help && <small> — {field.help}</small>}</span>
         <select value={v || ""} onChange={(e) => onChange(e.target.value || null)}>
           <option value="">(none)</option>
-          {(field.options || []).map((opt) => (
+          {options.map((opt) => (
             <option key={opt.value || opt} value={opt.value || opt}>{opt.label || opt}</option>
           ))}
         </select>
@@ -639,22 +674,6 @@ const TASK_TYPE_OPTIONS = [
   { value: "review", label: "review (you owe someone a review)" },
 ];
 
-// AgentJob kinds — what the pack runs. Maps 1:1 to task types the
-// cycle execute phase dispatches to a role.
-const AGENT_JOB_KIND_OPTIONS = [
-  { value: "cartograph", label: "cartograph (Atlas walks the repo)" },
-  { value: "investigation", label: "investigation (spawns an investigator)" },
-  { value: "repo_analysis", label: "repo_analysis (read-only investigation)" },
-  { value: "brainstorm", label: "brainstorm (skill)" },
-  { value: "morning-brief", label: "morning-brief (skill)" },
-  { value: "evening-wrap", label: "evening-wrap (skill)" },
-  { value: "checkin", label: "checkin (skill)" },
-  { value: "plan", label: "plan (skill)" },
-  { value: "team", label: "team (skill)" },
-  { value: "verify", label: "verify (skill)" },
-  { value: "home-overview", label: "home-overview (skill)" },
-];
-
 const CONDITION_SCHEMAS = {
   cadence: {
     label: "On a schedule",
@@ -722,7 +741,7 @@ const ACTION_SCHEMAS = {
     scopes: ["cycle"],
     help: "Spawn an agent to do a one-shot task — cartograph a repo, investigate an incident, run a scheduled skill. Pack-owned: lands on the Agents page, not the Tasks list.",
     fields: [
-      { name: "kind", type: "select", label: "Kind", default: "cartograph", options: AGENT_JOB_KIND_OPTIONS },
+      { name: "kind", type: "select", label: "Kind", default: "cartograph", optionsKey: "agent_job_kinds" },
       { name: "ask_first", type: "bool", label: "Ask me before running", help: "when on, the job waits for your approval; off runs it directly." },
       { name: "title", type: "string", label: "Title", placeholder: "Can template {service} etc." },
       { name: "description", type: "textarea", label: "Description / input", rows: 2, help: "skill input / what the agent should focus on" },
@@ -767,7 +786,7 @@ const ACTION_SCHEMAS = {
     scopes: ["pupdate"],
     help: "Pack handles this pupdate — e.g. incident → investigate. Job uses the pupdate's repo and title as context.",
     fields: [
-      { name: "kind", type: "select", label: "Job kind", default: "investigation", options: AGENT_JOB_KIND_OPTIONS },
+      { name: "kind", type: "select", label: "Job kind", default: "investigation", optionsKey: "agent_job_kinds" },
       { name: "ask_first", type: "bool", label: "Ask me before running" },
       { name: "title", type: "string", label: "Title override (optional)", advanced: true },
       { name: "description", type: "textarea", label: "Description override (optional)", rows: 2, advanced: true },
