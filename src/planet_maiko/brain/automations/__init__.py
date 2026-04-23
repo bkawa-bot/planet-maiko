@@ -717,7 +717,22 @@ def _act_create_task_from_pupdate(automation, config, pupdate=None, context=None
             }
 
     task_id = f"task-{_uuid.uuid4().hex[:10]}"
-    repo = (pupdate.extra or {}).get("repo") or ""
+    pup_extra = pupdate.extra or {}
+    repo = pup_extra.get("repo") or ""
+    extra = {
+        "description": pupdate.body or "",
+        "repo": repo,
+        "from_automation": automation.id,
+    }
+    # Carry integration-specific identifiers through so downstream
+    # sync (e.g. Linear status mirroring) can find the task by its
+    # source id. Narrow list — don't leak unrelated pupdate fields.
+    for key in (
+        "linear_id", "identifier",
+        "linear_cycle_id", "linear_cycle_number", "linear_cycle_name",
+    ):
+        if pup_extra.get(key) is not None:
+            extra[key] = pup_extra[key]
     task = Task(
         id=task_id,
         title=pupdate.title,
@@ -727,11 +742,7 @@ def _act_create_task_from_pupdate(automation, config, pupdate=None, context=None
         source_pupdate_id=pupdate.id,
         url=pupdate.url,
         tags=list(pupdate.tags or []),
-        extra={
-            "description": pupdate.body or "",
-            "repo": repo,
-            "from_automation": automation.id,
-        },
+        extra=extra,
     )
     db.session.add(task)
     db.session.flush()

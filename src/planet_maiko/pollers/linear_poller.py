@@ -113,6 +113,11 @@ query {
           url
           state
         }
+        cycle {
+          id
+          number
+          name
+        }
         updatedAt
         createdAt
       }
@@ -206,14 +211,28 @@ class LinearPoller(BasePoller):
             issue = issue_by_id[lid]
             state = issue.get("state") or {}
             new_status = state_type_to_status.get(state.get("type", ""))
-            if not new_status or new_status == t.status:
+            cycle = issue.get("cycle") or {}
+            cycle_id = cycle.get("id")
+            cycle_changed = cycle_id != extra.get("linear_cycle_id")
+
+            if (not new_status or new_status == t.status) and not cycle_changed:
                 continue
-            logger.info(f"[linear] Task {t.id} status {t.status} → {new_status}")
-            t.status = new_status
-            # Keep stored state name fresh for downstream display.
+
             new_extra = dict(extra)
+            if new_status and new_status != t.status:
+                logger.info(f"[linear] Task {t.id} status {t.status} → {new_status}")
+                t.status = new_status
             if state.get("name"):
                 new_extra["state"] = state["name"]
+            if cycle_changed:
+                if cycle_id:
+                    new_extra["linear_cycle_id"] = cycle_id
+                    new_extra["linear_cycle_number"] = cycle.get("number")
+                    new_extra["linear_cycle_name"] = cycle.get("name")
+                else:
+                    new_extra.pop("linear_cycle_id", None)
+                    new_extra.pop("linear_cycle_number", None)
+                    new_extra.pop("linear_cycle_name", None)
             t.extra = new_extra
             updated += 1
 
@@ -367,6 +386,24 @@ class LinearPoller(BasePoller):
             labels = [l["name"] for l in issue.get("labels", {}).get("nodes", [])]
             due_date = issue.get("dueDate")
 
+            cycle = issue.get("cycle") or {}
+            metadata = {
+                "linear_id": linear_id,
+                "identifier": identifier,
+                "state": state_name,
+                "due_date": due_date,
+                # Carry the description through so when the pupdate
+                # is converted to a Task the body survives —
+                # TaskCard reads t.extra.description for the
+                # expanded view, otherwise tasks end up titled
+                # but blank.
+                "description": issue.get("description") or "",
+            }
+            if cycle:
+                metadata["linear_cycle_id"] = cycle.get("id")
+                metadata["linear_cycle_number"] = cycle.get("number")
+                metadata["linear_cycle_name"] = cycle.get("name")
+
             # Main assignment pupdate
             pupdates.append({
                 "source_id": f"{identifier}/assigned",
@@ -378,18 +415,7 @@ class LinearPoller(BasePoller):
                 "actionable": True,
                 "action_hint": "Create task",
                 "tags": [identifier] + labels,
-                "metadata": {
-                    "linear_id": linear_id,
-                    "identifier": identifier,
-                    "state": state_name,
-                    "due_date": due_date,
-                    # Carry the description through so when the pupdate
-                    # is converted to a Task the body survives —
-                    # TaskCard reads t.extra.description for the
-                    # expanded view, otherwise tasks end up titled
-                    # but blank.
-                    "description": issue.get("description") or "",
-                },
+                "metadata": metadata,
             })
 
             # Due date warning (if due within 2 days)
@@ -621,6 +647,18 @@ class LinearPoller(BasePoller):
             priority = PRIORITY_MAP.get(issue.get("priority", 0), "normal")
             labels = [l["name"] for l in issue.get("labels", {}).get("nodes", [])]
 
+            extra = {
+                "linear_id": issue.get("id"),
+                "identifier": identifier,
+                "due_date": issue.get("dueDate"),
+                "state": issue.get("state", {}).get("name"),
+                "description": issue.get("description") or "",
+            }
+            cycle = issue.get("cycle")
+            if cycle:
+                extra["linear_cycle_id"] = cycle.get("id")
+                extra["linear_cycle_number"] = cycle.get("number")
+                extra["linear_cycle_name"] = cycle.get("name")
             task = Task(
                 id=task_id,
                 title=f"{identifier}: {issue.get('title', '')}",
@@ -630,13 +668,7 @@ class LinearPoller(BasePoller):
                 project_id=project_id,
                 url=issue.get("url", ""),
                 tags=[identifier] + labels,
-                extra={
-                    "linear_id": issue.get("id"),
-                    "identifier": identifier,
-                    "due_date": issue.get("dueDate"),
-                    "state": issue.get("state", {}).get("name"),
-                    "description": issue.get("description") or "",
-                },
+                extra=extra,
             )
             db.session.add(task)
             stats["tasks_created"] += 1

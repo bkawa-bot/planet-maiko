@@ -87,6 +87,8 @@ export default function TaskCard({
 
   const linearIdentifier = t.extra?.linear_identifier || t.extra?.identifier || t.metadata?.linear_identifier || t.metadata?.identifier;
   const linearUrl = t.extra?.linear_url || t.metadata?.linear_url || (t.url?.includes("linear.app") ? t.url : null);
+  const linearCycleNumber = t.extra?.linear_cycle_number ?? t.metadata?.linear_cycle_number;
+  const linearCycleName = t.extra?.linear_cycle_name || t.metadata?.linear_cycle_name;
   const [showLinearModal, setShowLinearModal] = useState(false);
 
   // One-shot agent work (review / investigation / cartograph) runs
@@ -290,6 +292,14 @@ export default function TaskCard({
                 >
                   <Send size={10} /> Send to Linear
                 </button>
+              )}
+              {linearCycleNumber != null && (
+                <span
+                  className="tag"
+                  title={linearCycleName ? `Cycle ${linearCycleNumber}: ${linearCycleName}` : `Cycle ${linearCycleNumber}`}
+                >
+                  cycle #{linearCycleNumber}
+                </span>
               )}
               {!isDone && !t.assigned_agent_id && (
                 <button className="btn btn-sm btn-action" onClick={() => onAssignAgent(t)}>

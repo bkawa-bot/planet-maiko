@@ -79,6 +79,11 @@ export default function LinearCreateModal({ task, onClose, onCreated }) {
       return;
     }
     setSubmitting(true);
+    // Resolve cycle number + name client-side so the backend can
+    // store them on task.extra without a second roundtrip. The poll
+    // will overwrite if the issue later moves.
+    const allCycles = [meta.activeCycle, ...(meta.upcomingCycles || [])].filter(Boolean);
+    const pickedCycle = cycleId ? allCycles.find((c) => c.id === cycleId) : null;
     try {
       const payload = {
         title: title.trim(),
@@ -86,6 +91,8 @@ export default function LinearCreateModal({ task, onClose, onCreated }) {
         state_id: stateId || undefined,
         priority: priority === "" ? undefined : parseInt(priority, 10),
         cycle_id: cycleId || undefined,
+        cycle_number: pickedCycle?.number,
+        cycle_name: pickedCycle?.name,
         label_ids: labelIds.length ? labelIds : undefined,
         assignee_id: assigneeId || undefined,
         project_id: projectId || undefined,

@@ -18,15 +18,21 @@ const ICON_MAP = {
 
 // This page hosts two surfaces: the when/then Automations list at
 // the top, and the Specialties list (role protocol prompts an agent
-// adopts when doing a specific kind of work) below. Theme-designer
-// is driven from the Theme menu, and pr-review is invoked internally
-// by the review agent, so those don't need to appear in the list.
-// agent-protocol stays visible because it's the full coding-agent
-// protocol template — an advanced knob distinct from Settings >
-// Agent Preferences > role_instructions (which only appends extras).
+// adopts when doing a specific kind of work) below. Things that
+// don't fit the specialty model are hidden from the grid:
+//   - theme-designer: driven from the Theme menu
+//   - pr-review: invoked internally by the review agent
+//   - agent-protocol: global CLAUDE.md template, not a role
+//   - checkin / plan / team: legacy digest prompts (same family
+//     as the retired morning-brief / evening-wrap); kept in the
+//     registry for now but not surfaced as specialties.
 const HIDDEN_SKILL_IDS = new Set([
   "theme-designer",
   "pr-review",
+  "agent-protocol",
+  "checkin",
+  "plan",
+  "team",
 ]);
 
 export default function Automations() {

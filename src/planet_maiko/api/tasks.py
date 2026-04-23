@@ -491,6 +491,15 @@ def send_task_to_linear(task_id):
     extra["linear_identifier"] = issue.get("identifier")
     extra["linear_url"] = issue.get("url")
     extra["linear_team_id"] = team_id
+    # Persist cycle membership from the modal payload — the next
+    # poll's sync_statuses() will keep it fresh if the issue moves
+    # between cycles in Linear.
+    if data.get("cycle_id"):
+        extra["linear_cycle_id"] = data.get("cycle_id")
+        if data.get("cycle_number") is not None:
+            extra["linear_cycle_number"] = data.get("cycle_number")
+        if data.get("cycle_name"):
+            extra["linear_cycle_name"] = data.get("cycle_name")
     # Opt-in close-sync — persists on the task. /tasks/:id/done + cancel
     # check this flag before pushing a state update back to Linear.
     if data.get("sync_close"):
