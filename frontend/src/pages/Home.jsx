@@ -4,6 +4,7 @@ import SetupWizard from "../components/SetupWizard";
 import OverviewPane from "../components/OverviewPane";
 import PackStatusPane from "../components/PackStatusPane";
 import ReviewQueue from "../components/ReviewQueue";
+import NotificationsPane from "../components/NotificationsPane";
 import RecentSkillsPane from "../components/RecentSkillsPane";
 import { formatTime, formatClock } from "../utils/dates";
 import { Brain, Calendar, Palette, Video, Sparkles, CheckCircle2 } from "lucide-react";
@@ -119,6 +120,7 @@ export default function Home() {
         {/* Main column: overview narrative + live pack status. */}
         <div className="home-main">
           <OverviewPane />
+          <NotificationsPane />
           <ReviewQueue />
           <PackStatusPane />
         </div>

@@ -707,10 +707,92 @@ def _act_skip(automation, config, pupdate=None, context=None):
     return {"kind": "skip"}
 
 
+def _interpolate(template, pupdate=None, context=None):
+    """Substitute {pupdate_title}, {pupdate_body}, {pupdate_url},
+    {repo}, {task_title} into a notify template.
+
+    Tokens that can't be resolved pass through as the empty string;
+    we'd rather the user see "PR  was reviewed" with a visual gap
+    than a crash or a literal "{pupdate_title}" showing up in the
+    notification body. Missing-data blanks are a clearer bug signal.
+    """
+    if not template:
+        return ""
+    ctx = context or {}
+    mapping = {
+        "pupdate_title": getattr(pupdate, "title", "") or "" if pupdate else "",
+        "pupdate_body": (getattr(pupdate, "body", "") or "")[:500] if pupdate else "",
+        "pupdate_url": getattr(pupdate, "url", "") or "" if pupdate else "",
+        "repo": (ctx.get("repo")
+                 or ctx.get("service")
+                 or (getattr(pupdate, "extra", {}) or {}).get("repo")
+                 or ""),
+        "task_title": ctx.get("task_title", ""),
+    }
+    out = template
+    for key, value in mapping.items():
+        out = out.replace("{" + key + "}", str(value))
+    return out
+
+
+def _act_notify(automation, config, pupdate=None, context=None):
+    """Emit a user-facing notification pupdate.
+
+    The Home page's NotificationsPane surfaces type="notification"
+    pupdates as dismissable cards. Useful when you want to be told
+    something fired without routing a task or spawning an agent —
+    e.g. "notify me when a PR approval lands from someone outside
+    my team" or "notify me when CI has been red for 30 minutes."
+
+    Config fields (all optional except title):
+      title:    short headline (required). Supports {pupdate_title}.
+      body:     longer markdown (optional). Supports {pupdate_body}.
+      priority: normal | high | urgent. Default normal.
+      url:      optional click-through. Supports {pupdate_url}.
+    """
+    from planet_maiko.models.pupdate import Pupdate
+
+    title_template = (config.get("title") or "").strip()
+    if not title_template:
+        return {"skipped": "notify_me requires a title"}
+    title = _interpolate(title_template, pupdate=pupdate, context=context)
+    body = _interpolate(config.get("body") or "", pupdate=pupdate, context=context)
+    url_template = config.get("url") or (pupdate.url if pupdate else "")
+    url = _interpolate(url_template, pupdate=pupdate, context=context) or None
+    priority = (config.get("priority") or "normal").lower()
+    if priority not in ("low", "normal", "high", "urgent"):
+        priority = "normal"
+
+    notif = Pupdate(
+        id=f"notify-{uuid.uuid4().hex[:12]}",
+        source="maiko",
+        source_id=f"notify/{automation.id}/{uuid.uuid4().hex[:8]}",
+        type="notification",
+        priority=priority,
+        title=title[:200],
+        body=body,
+        actionable=False,
+        action_hint=None,
+        url=url,
+        tags=["notification", f"automation:{automation.id}"],
+        extra={
+            "from_automation": automation.id,
+            "triggered_by_pupdate": pupdate.id if pupdate else None,
+        },
+        # Self-addressed signal; the brain cycle has nothing to route
+        # it through (automations already consumed the trigger), so
+        # flag processed up-front to keep the Queue tab clean.
+        brain_processed=True,
+    )
+    db.session.add(notif)
+    return {"kind": "notify_me", "pupdate_id": notif.id, "title": title[:80]}
+
+
 ACTIONS = {
     # Cycle-scope
     "run_agent_job": _act_run_agent_job,
     "create_task": _act_create_task,
+    "notify_me": _act_notify,
     # Pupdate-scope (require context.pupdate to operate).
     "spawn_agent_job_from_pupdate": _act_spawn_agent_job_from_pupdate,
     "dismiss_pupdate": _act_dismiss_pupdate,

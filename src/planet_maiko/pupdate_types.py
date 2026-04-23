@@ -43,6 +43,8 @@ BUILTIN_PUPDATE_TYPES = [
     ("agent_proposal",          "Agent proposal",           "Agents"),
     # Skills (emitted when a skill completes with user-facing output)
     ("skill_result",            "Skill result",             "Skills"),
+    # Notifications (emitted by the notify_me automation action)
+    ("notification",            "Notification",             "Notifications"),
 ]
 
 
