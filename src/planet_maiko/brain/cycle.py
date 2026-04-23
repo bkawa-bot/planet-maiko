@@ -518,8 +518,20 @@ def _phase_spawn_jobs_for_tasks():
 
         spawned = 0
         for task in candidates:
-            # Skip if a job already exists for this task.
-            existing = AgentJob.query.filter_by(source_task_id=task.id).first()
+            # Skip if an ACTIVE job already exists for this task. A
+            # previous review round that's done/cancelled/failed
+            # shouldn't block a fresh spawn — e.g. the PR author
+            # re-requested review after pushing new commits, the task
+            # went "waiting" → "new", and we want another review pass
+            # against the updated diff.
+            existing = (
+                AgentJob.query
+                .filter_by(source_task_id=task.id)
+                .filter(AgentJob.status.in_([
+                    "pending_approval", "queued", "running",
+                ]))
+                .first()
+            )
             if existing:
                 continue
 

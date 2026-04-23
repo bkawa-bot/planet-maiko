@@ -610,11 +610,45 @@ def _act_create_task_from_pupdate(automation, config, pupdate=None, context=None
         if existing:
             existing.source_pupdate_id = pupdate.id
             existing.updated_at = datetime.now(timezone.utc)
+            # If the task was parked in "waiting" (user posted their
+            # review, ball in author's court), a fresh re-request
+            # means the author wants another look — flip back to
+            # "new" so it reappears in What-I'd-start-with and the
+            # cycle's spawn_jobs_for_tasks phase picks it up for a
+            # new review pass. Tasks in "new"/"in_progress" stay as
+            # they are.
+            status_flipped = False
+            if existing.status == "waiting":
+                existing.status = "new"
+                status_flipped = True
+                # Clear the old worktree pointer so the cycle's prep
+                # phase re-preps against the PR's current HEAD. The
+                # previous worktree's on an old SHA; the fresh review
+                # pass needs the new commits the author just pushed.
+                # cleanup_task_worktree tears down the old dir; the
+                # prep phase rebuilds.
+                extra = dict(existing.extra or {})
+                wp = extra.get("working_path")
+                branch = extra.get("branch")
+                if wp and branch and ".maiko-worktrees" in wp:
+                    try:
+                        from planet_maiko.agents.coding_agent import cleanup
+                        cleanup(wp, branch)
+                    except Exception as e:
+                        logger.debug(
+                            f"[automation {automation.id}] "
+                            f"stale worktree cleanup skipped: {e}"
+                        )
+                extra.pop("working_path", None)
+                extra.pop("branch", None)
+                extra.pop("session_id", None)
+                existing.extra = extra
             return {
                 "kind": "create_task_from_pupdate",
                 "task_id": existing.id,
                 "pupdate_id": pupdate.id,
                 "deduped": True,
+                "status_flipped": status_flipped,
             }
 
     task_id = f"task-{_uuid.uuid4().hex[:10]}"
@@ -645,13 +679,22 @@ def _act_create_task_from_pupdate(automation, config, pupdate=None, context=None
 def _act_complete_linked_task(automation, config, pupdate=None, context=None):
     """Close review / coding tasks whose url matches this pupdate's url.
     Replaces the old ACTION_COMPLETE_TASK in rules.py — same cleanup
-    semantics, now living inside the Automation engine."""
+    semantics, now living inside the Automation engine.
+
+    Also dismisses every un-dismissed pupdate pointing at the same URL
+    so the overview and ReviewQueue stop surfacing "reviewer requested"
+    / "changes requested" cards for a PR that's already closed. Without
+    this the pupdates linger for their full 24h freshness window and
+    Maiko keeps mentioning them in the narrative.
+    """
     if pupdate is None or not pupdate.url:
         return {"skipped": "no url"}
     from planet_maiko.models.task import Task
+    from planet_maiko.models.pupdate import Pupdate
 
     closed_review = 0
     closed_coding = 0
+    dismissed_linked = 0
     # Review tasks hold onto their worktree through the "review" status
     # (so the user can load the diff inline) — once the PR is merged or
     # approved and we close the task, the worktree has no remaining job.
@@ -692,10 +735,28 @@ def _act_complete_linked_task(automation, config, pupdate=None, context=None):
                 except Exception as e:
                     logger.debug(f"[automation {automation.id}] worktree cleanup failed: {e}")
 
+    # Dismiss all pupdates pointing at this URL (review_requested,
+    # changes_requested, approved, merged, etc.) so the overview and
+    # ReviewQueue stop showing cards for a PR that's closed. The
+    # triggering pupdate itself is included — once we've acted on it,
+    # it has no further value sitting in the inbox.
+    linked_pupdates = (
+        Pupdate.query
+        .filter(Pupdate.url == pupdate.url)
+        .filter(Pupdate.dismissed == False)  # noqa: E712
+        .all()
+    )
+    now = datetime.now(timezone.utc)
+    for p in linked_pupdates:
+        p.dismissed = True
+        p.dismissed_at = now
+        dismissed_linked += 1
+
     return {
         "kind": "complete_linked_task",
         "review_tasks_closed": closed_review,
         "coding_tasks_closed": closed_coding,
+        "pupdates_dismissed": dismissed_linked,
     }
 
 

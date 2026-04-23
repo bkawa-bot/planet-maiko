@@ -347,6 +347,38 @@ export default function TaskCard({
                   <Loader size={10} className="spin" /> {agentName || "Agent"} working…
                 </span>
               )}
+              {/* Review-task specific: once the agent's done and the
+                  user has copied the comments over to GitHub (without
+                  approving), "Posted review" flips the task to
+                  status=waiting. It stays open but drops out of the
+                  waiting-on-you surfaces until the PR author re-
+                  requests review on a new commit, which flips it back. */}
+              {(t.type === "review" || t.type === "pr_review") && t.status === "review" && (
+                <button
+                  className="btn btn-sm"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      await api.updateTask(t.id, { status: "waiting" });
+                      showToast("Parked — waiting on the PR author", "normal");
+                      onRefresh?.();
+                    } catch (err) {
+                      showToast("Couldn't update: " + (err.message || "unknown"), "high");
+                    }
+                  }}
+                  title="I've posted my review comments on GitHub. Park the task until the author re-requests review."
+                >
+                  <Send size={10} /> Posted review
+                </button>
+              )}
+              {(t.type === "review" || t.type === "pr_review") && t.status === "waiting" && (
+                <span
+                  className="badge"
+                  title="You posted your review. The task will wake back up if the author re-requests review on a new commit."
+                >
+                  <Clock size={10} /> Waiting on author
+                </span>
+              )}
               {!isDone && (
                 <button className="btn btn-sm btn-danger" onClick={(e) => onAction(e, t.id, "cancel")}>
                   <X size={10} /> Cancel
