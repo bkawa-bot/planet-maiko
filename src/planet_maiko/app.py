@@ -277,6 +277,11 @@ def create_app(start_scheduler=False):
     app.register_blueprint(agent_jobs_bp, url_prefix="/api")
     app.register_blueprint(memos_bp, url_prefix="/api")
 
+    # Register kind-specific memo approve handlers (agent_proposal → task,
+    # future: job_approval → AgentJob). Side-effect-only on import.
+    from planet_maiko.brain.memo_handlers import register_all as _register_memo_handlers
+    _register_memo_handlers()
+
     # Load plugins (entry_points + ~/.maiko/plugins/)
     from planet_maiko.plugins.loader import load_plugins
     load_plugins(app)

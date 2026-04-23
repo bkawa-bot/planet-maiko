@@ -1426,34 +1426,74 @@ def agent_sends_message(task_id):
             if task.created_at:
                 asked_at_iso = task.created_at.isoformat() if hasattr(task.created_at, "isoformat") else str(task.created_at)
 
-        from planet_maiko.models.pupdate import Pupdate
-        pupdate = Pupdate(
-            id=f"agent-msg-{task_id}-{uuid.uuid4().hex[:8]}",
-            source="maiko",
-            source_id=f"agent-msg/{task_id}/{msg.id or uuid.uuid4().hex[:8]}",
-            type=pupdate_type,
-            priority=priority,
-            title=f"{agent_name} {type_label}: {preview}",
-            body=content,
-            actionable=True,
-            action_hint=action_hint,
-            url=pr_url,
-            tags=[task_id, "agent-message"],
-            extra={
-                "task_id": task_id,
-                "agent_id": task.assigned_agent_id if task else None,
-                "message_type": message_type,
-                "pr_url": pr_url,
-                "original_ask": original_ask[:500],
-                "original_non_goals": original_non_goals[:500] if original_non_goals else "",
-                "asked_at": asked_at_iso,
-            },
-            # These pupdates already link back to the task — LLM triage
-            # would otherwise spawn a duplicate task for every
-            # ready_for_review / agent_done / agent_stuck event.
-            brain_processed=True,
-        )
-        db.session.add(pupdate)
+        # User-gated signals (ready_for_review / stuck / plan_for_approval)
+        # become Memos instead of pupdates. Memo is the canonical
+        # surface for "this is waiting on you" — lives in the Memos
+        # pane, has a clear CTA, dismisses on action.
+        # Other message_types (pr_opened, done, message) stay as
+        # pupdates for now; they're informational flow signals rather
+        # than state the user needs to act on.
+        memo_kind = {
+            "ready_for_review": "agent_ready",
+            "stuck": "agent_stuck",
+            "plan_for_approval": "agent_plan",
+        }.get(message_type)
+
+        if memo_kind:
+            from planet_maiko.brain.memos import create_memo
+            cta = {
+                "agent_ready": ("Review diff", "review", f"/tasks/{task_id}/review"),
+                "agent_stuck": ("Help out", "open", f"/tasks/{task_id}"),
+                "agent_plan": ("Review plan", "review", f"/tasks/{task_id}/plan"),
+            }[memo_kind]
+            create_memo(
+                kind=memo_kind,
+                category="waiting",
+                title=f"{agent_name} {type_label}: {preview}",
+                body=content,
+                url=pr_url or cta[2],
+                cta_label=cta[0],
+                cta_action=cta[1],
+                priority=priority,
+                source_agent_id=task.assigned_agent_id if task else None,
+                source_task_id=task_id,
+                extra={
+                    "task_id": task_id,
+                    "agent_id": task.assigned_agent_id if task else None,
+                    "message_type": message_type,
+                    "pr_url": pr_url,
+                    "original_ask": original_ask[:500],
+                    "original_non_goals": original_non_goals[:500] if original_non_goals else "",
+                    "asked_at": asked_at_iso,
+                    "review_url": cta[2],
+                },
+            )
+        else:
+            from planet_maiko.models.pupdate import Pupdate
+            pupdate = Pupdate(
+                id=f"agent-msg-{task_id}-{uuid.uuid4().hex[:8]}",
+                source="maiko",
+                source_id=f"agent-msg/{task_id}/{msg.id or uuid.uuid4().hex[:8]}",
+                type=pupdate_type,
+                priority=priority,
+                title=f"{agent_name} {type_label}: {preview}",
+                body=content,
+                actionable=True,
+                action_hint=action_hint,
+                url=pr_url,
+                tags=[task_id, "agent-message"],
+                extra={
+                    "task_id": task_id,
+                    "agent_id": task.assigned_agent_id if task else None,
+                    "message_type": message_type,
+                    "pr_url": pr_url,
+                    "original_ask": original_ask[:500],
+                    "original_non_goals": original_non_goals[:500] if original_non_goals else "",
+                    "asked_at": asked_at_iso,
+                },
+                brain_processed=True,
+            )
+            db.session.add(pupdate)
 
     # Agent reporting it just opened a PR (in response to an
     # approved message from the user). Parse the URL out of the

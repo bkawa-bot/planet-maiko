@@ -126,7 +126,7 @@ def parse_and_apply_blocks(output, *, agent, task, repo=None):
     """
     from planet_maiko.database import db
     from planet_maiko.models.signal import Signal
-    from planet_maiko.models.pupdate import Pupdate
+    from planet_maiko.brain.memos import create_memo
 
     if not output:
         return {"cleaned_output": "", "patterns_emitted": 0, "proposals_emitted": 0, "confidence": None}
@@ -169,8 +169,10 @@ def parse_and_apply_blocks(output, *, agent, task, repo=None):
         except Exception as e:
             logger.warning(f"[agent-output] Failed to persist PATTERN: {e}")
 
-    # PROPOSAL: blocks → agent_proposal pupdates (land in From Maiko
-    # for approval; the user can turn them into tasks with one click).
+    # PROPOSAL: / TASK: blocks → agent_proposal Memos (category=offer —
+    # user approves to mint a routed Task, edits the draft in place,
+    # or dismisses). Previously emitted pupdates; memos are the new
+    # canonical surface for persistent user-owed items.
     for m in _PROPOSAL_RE.finditer(output):
         title = m.group("title").strip()
         fields = _parse_kv_body(m.group("body"))
@@ -186,23 +188,22 @@ def parse_and_apply_blocks(output, *, agent, task, repo=None):
                 "category": fields.get("category") or "",
                 "description": fields.get("description") or "",
             }
-            proposal = Pupdate(
-                id=f"proposal-{uuid.uuid4().hex[:10]}",
-                source="maiko",
-                type="agent_proposal",
-                priority=priority,
+            create_memo(
+                kind="agent_proposal",
+                category="offer",
                 title=title[:200],
-                body=draft["description"],
-                actionable=True,
-                action_hint="Approve / edit / dismiss",
-                tags=["proposal", "from_maiko", agent.id],
+                body=draft["description"] or None,
+                priority=priority,
+                cta_label="Approve",
+                cta_action="approve",
+                source_agent_id=agent.id,
+                source_task_id=task.id,
                 extra={
                     "from_agent_id": agent.id,
                     "from_task_id": task.id,
                     "draft": draft,
                 },
             )
-            db.session.add(proposal)
             proposals_emitted += 1
         except Exception as e:
             logger.warning(f"[agent-output] Failed to persist PROPOSAL: {e}")

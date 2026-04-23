@@ -9,8 +9,8 @@ import { formatRepo, useDefaultOrg } from "../utils/repo";
 import "../pages/cards.css";
 
 /**
- * Proposal card — a specialized pupdate renderer for type=agent_proposal
- * pupdates.
+ * Proposal card — renders agent_proposal Memos (new) and legacy
+ * agent_proposal pupdates (until they age out).
  *
  * Two flavors based on what's in extra:
  *   - extra.draft set: TASK proposal — user approves to create a routed Task.
@@ -18,8 +18,12 @@ import "../pages/cards.css";
  *     row so Maiko keeps watching the condition. No edit form; goals are
  *     tuned from the profile detail modal after adoption.
  *
+ * Shape detection: Memos have a `kind` field and numeric `id`; pupdates
+ * have a `type` field and string `id`. We branch the approve/dismiss
+ * call sites off `isMemo` so the right endpoint runs.
+ *
  * Props:
- *   proposal  — pupdate dict.
+ *   proposal  — memo dict (new) or pupdate dict (legacy).
  *   onAction  — () => void called after approve or dismiss so the parent
  *               list can refresh.
  */
@@ -28,6 +32,9 @@ export default function ProposalCard({ proposal, onAction }) {
   const [editing, setEditing] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Memo has `kind`, pupdate has `type`. Neither has both, so this is
+  // unambiguous even if someone adds more fields later.
+  const isMemo = proposal?.kind != null && proposal?.type == null;
   const extra = proposal.metadata || proposal.extra || {};
   const proposedGoal = extra.proposed_goal;
   const isGoalProposal = !!proposedGoal;
@@ -46,9 +53,27 @@ export default function ProposalCard({ proposal, onAction }) {
     setBusy(true);
     try {
       if (isGoalProposal) {
+        // Goal proposals still flow through the pupdate path —
+        // gap-detector hasn't migrated yet and these aren't memos.
         const res = await api.approveProposalAsGoal(proposal.id);
         const note = res.note === "already_installed" ? " (already tracked)" : "";
         showToast(`Goal adopted${note}`, "normal");
+      } else if (isMemo) {
+        // Memo approve lets us ship an edited draft by first PATCHing
+        // extra.draft then calling /memos/<id>/approve. Keeps the
+        // memo's on-the-fly editability without a parallel approve-
+        // with-draft endpoint.
+        if (editing) {
+          await api.updateMemo(proposal.id, {
+            extra: { ...extra, draft },
+          });
+        }
+        const res = await api.approveMemo(proposal.id);
+        const task = res?.result?.task;
+        showToast(
+          `Approved — task created${task?.assigned_agent_id ? ` (${task.assigned_agent_id})` : ""}`,
+          "normal",
+        );
       } else {
         const payload = editing ? draft : initialDraft;
         const res = await api.approveProposal(proposal.id, payload);
@@ -64,7 +89,11 @@ export default function ProposalCard({ proposal, onAction }) {
   const dismiss = async () => {
     setBusy(true);
     try {
-      await api.dismissProposal(proposal.id);
+      if (isMemo) {
+        await api.dismissMemo(proposal.id);
+      } else {
+        await api.dismissProposal(proposal.id);
+      }
       showToast("Proposal dismissed", "normal");
       onAction?.();
     } catch (err) {

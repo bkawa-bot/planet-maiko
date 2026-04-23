@@ -145,27 +145,25 @@ def get_review_queue():
             "timestamp": iso_utc(t.updated_at),
         })
 
-    # 2. Tasks with a pending plan_for_approval pupdate. The pupdate is
-    #    the source of truth for "an agent has asked for your nod on a
-    #    plan" — dedup by task_id so a spam of plan pupdates doesn't
-    #    double-list.
-    plan_pups = (
-        Pupdate.query
-        .filter(Pupdate.type == "agent_plan_for_approval")
-        .filter(Pupdate.dismissed == False)  # noqa: E712
-        .order_by(Pupdate.timestamp.desc())
+    # 2. Agent plan memos (waiting on user's nod). Source is Memo now
+    #    (kind=agent_plan) — pupdates of type agent_plan_for_approval
+    #    are retired. Dedup by source_task_id so multiple plan revisions
+    #    from the same agent don't double-list.
+    from planet_maiko.models.memo import Memo
+    plan_memos = (
+        Memo.query
+        .filter(Memo.kind == "agent_plan")
+        .filter(Memo.status.in_(("pending", "seen")))
+        .order_by(Memo.created_at.desc())
         .all()
     )
     seen_task_ids = set()
-    for p in plan_pups:
-        extra = p.extra or {}
-        task_id = extra.get("task_id")
+    for m in plan_memos:
+        task_id = m.source_task_id
         if not task_id or task_id in seen_task_ids:
             continue
         seen_task_ids.add(task_id)
         task = db.session.get(Task, task_id)
-        # Skip if the task is already done/cancelled — plan is no
-        # longer relevant, but the pupdate wasn't dismissed.
         if task is None or task.status in ("done", "cancelled"):
             continue
         task_extra = task.extra or {}
@@ -177,8 +175,9 @@ def get_review_queue():
             "repo": task_extra.get("repo") or task_extra.get("repository"),
             "agent_name": _agent_name(task.assigned_agent_id),
             "route": f"/tasks/{task.id}/plan",
-            "age_seconds": _age(p.timestamp),
-            "timestamp": iso_utc(p.timestamp),
+            "age_seconds": _age(m.created_at),
+            "timestamp": iso_utc(m.created_at),
+            "memo_id": m.id,
         })
 
     # 3. Standalone AgentJobs with an artifact — cartograph walks,
@@ -250,11 +249,38 @@ def get_review_queue():
             "description": j.description,
         })
 
-    # 5. Agent proposals — PROPOSAL: blocks from investigation / review
-    #    agent output that turn into approve-or-dismiss cards. The
-    #    ProposalCard component needs the full pupdate (title, body,
-    #    extra.draft, extra.from_agent_id) to render its edit form, so
-    #    include the whole dict inline rather than a thin summary.
+    # 5. Agent proposals — PROPOSAL:/TASK: blocks parsed out of
+    #    investigation / review agent output. Now kind=agent_proposal
+    #    Memos instead of pupdates. ProposalCard gets the full memo
+    #    dict inline — its shape (title, body, extra.draft,
+    #    extra.from_agent_id) mirrors the old pupdate dict close enough
+    #    that the component handles both with small detection logic.
+    proposal_memos = (
+        Memo.query
+        .filter(Memo.kind == "agent_proposal")
+        .filter(Memo.status.in_(("pending", "seen")))
+        .order_by(Memo.created_at.desc())
+        .limit(30)
+        .all()
+    )
+    for m in proposal_memos:
+        items.append({
+            "kind": "proposal",
+            "task_id": m.source_task_id,
+            "job_id": None,
+            "title": m.title,
+            "repo": (m.extra or {}).get("draft", {}).get("repo"),
+            "agent_name": m.source_agent_id,
+            "route": None,
+            "age_seconds": _age(m.created_at),
+            "timestamp": iso_utc(m.created_at),
+            "proposal": m.to_dict(),
+            "memo_id": m.id,
+        })
+
+    # Legacy agent_proposal pupdates still in the DB (pre-Memo
+    # migration). Shown until they age out / get dismissed. Newer
+    # proposals come from memos above.
     proposals = (
         Pupdate.query
         .filter(Pupdate.type == "agent_proposal")
