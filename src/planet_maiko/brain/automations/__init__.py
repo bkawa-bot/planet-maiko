@@ -581,7 +581,15 @@ def _act_dismiss_pupdate(automation, config, pupdate=None, context=None):
 def _act_create_task_from_pupdate(automation, config, pupdate=None, context=None):
     """Rule-style create-a-task: use the pupdate's title/priority as the
     task seed, letting config override task_type and task_priority.
-    Mirrors _execute_create_task in the old processor."""
+    Mirrors _execute_create_task in the old processor.
+
+    Dedupes on (url, type) — GitHub's review-request source_id includes
+    the head SHA so every push to an open PR creates a fresh pupdate,
+    which used to spawn a new task each time. If an open task of the
+    same type already points at this PR, we skip and just link the new
+    pupdate to the existing task via source_pupdate_id so the thread
+    of activity stays together.
+    """
     if pupdate is None:
         return {"skipped": "create_task_from_pupdate requires pupdate context"}
     from planet_maiko.models.task import Task
@@ -590,6 +598,25 @@ def _act_create_task_from_pupdate(automation, config, pupdate=None, context=None
 
     task_type = config.get("task_type") or pupdate.type
     task_priority = config.get("task_priority") or pupdate.priority or "normal"
+
+    if pupdate.url:
+        existing = (
+            Task.query
+            .filter(Task.url == pupdate.url)
+            .filter(Task.type == task_type)
+            .filter(Task.status.notin_(["done", "cancelled"]))
+            .first()
+        )
+        if existing:
+            existing.source_pupdate_id = pupdate.id
+            existing.updated_at = datetime.now(timezone.utc)
+            return {
+                "kind": "create_task_from_pupdate",
+                "task_id": existing.id,
+                "pupdate_id": pupdate.id,
+                "deduped": True,
+            }
+
     task_id = f"task-{_uuid.uuid4().hex[:10]}"
     repo = (pupdate.extra or {}).get("repo") or ""
     task = Task(
