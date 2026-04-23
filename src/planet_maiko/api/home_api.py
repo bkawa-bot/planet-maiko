@@ -305,6 +305,71 @@ def get_review_queue():
             "proposal": p.to_dict(),
         })
 
+    # 6. Notifications — kind=notification Memos from the notify_me
+    #    automation action. Info-category, dismissable, optional url.
+    #    Used to live in their own NotificationsPane; folded into the
+    #    unified Memos feed so there's one place to scan.
+    notification_memos = (
+        Memo.query
+        .filter(Memo.kind == "notification")
+        .filter(Memo.status.in_(("pending", "seen")))
+        .order_by(Memo.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    for m in notification_memos:
+        items.append({
+            "kind": "notification",
+            "task_id": None,
+            "job_id": None,
+            "title": m.title,
+            "body": m.body,
+            "repo": None,
+            "agent_name": None,
+            "route": m.url,
+            "age_seconds": _age(m.created_at),
+            "timestamp": iso_utc(m.created_at),
+            "priority": m.priority,
+            "memo_id": m.id,
+        })
+
+    # 7. Agent-ready / agent-stuck Memos. These fire when a one-shot
+    #    agent replies ready_for_review or stuck. They carry the task
+    #    link so the CTA routes straight to the diff or the task page.
+    #    Dedup against the #1 review-task entries — one memo per task
+    #    is enough, and the task row is the source-of-truth record.
+    agent_signal_memos = (
+        Memo.query
+        .filter(Memo.kind.in_(("agent_ready", "agent_stuck")))
+        .filter(Memo.status.in_(("pending", "seen")))
+        .order_by(Memo.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    already_linked_tasks = {i.get("task_id") for i in items if i.get("task_id")}
+    for m in agent_signal_memos:
+        if m.source_task_id and m.source_task_id in already_linked_tasks:
+            # The review-task entry (#1) or plan entry (#2) already
+            # represents this user-owed work; a second row would just
+            # clutter the pane.
+            continue
+        route = (m.extra or {}).get("review_url") or m.url
+        items.append({
+            "kind": m.kind,
+            "task_id": m.source_task_id,
+            "job_id": None,
+            "title": m.title,
+            "body": m.body,
+            "repo": None,
+            "agent_name": m.source_agent_id,
+            "route": route,
+            "cta_label": m.cta_label,
+            "age_seconds": _age(m.created_at),
+            "timestamp": iso_utc(m.created_at),
+            "priority": m.priority,
+            "memo_id": m.id,
+        })
+
     # Fresh items first — the user wants to see "what just landed",
     # not "what's been sitting forever".
     items.sort(key=lambda x: x["age_seconds"])

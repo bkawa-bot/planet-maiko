@@ -3,8 +3,7 @@ import { api } from "../api/client";
 import SetupWizard from "../components/SetupWizard";
 import OverviewPane from "../components/OverviewPane";
 import PackStatusPane from "../components/PackStatusPane";
-import ReviewQueue from "../components/ReviewQueue";
-import NotificationsPane from "../components/NotificationsPane";
+import MemosPane from "../components/MemosPane";
 import RecentSkillsPane from "../components/RecentSkillsPane";
 import { formatTime, formatClock } from "../utils/dates";
 import { Brain, Calendar, Palette, Video, Sparkles, CheckCircle2 } from "lucide-react";
@@ -117,11 +116,13 @@ export default function Home() {
   return (
     <div className="home">
       <div className="home-grid">
-        {/* Main column: overview narrative + live pack status. */}
+        {/* Main column: overview narrative + unified memos feed +
+            live pack status. Memos folds in what was separately
+            ReviewQueue (waiting-on-you items) and Notifications
+            (info-only asks). */}
         <div className="home-main">
           <OverviewPane />
-          <NotificationsPane />
-          <ReviewQueue />
+          <MemosPane />
           <PackStatusPane />
         </div>
 

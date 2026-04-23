@@ -1,0 +1,107 @@
+/* MemosPane augments the shared .review-queue-* styles from
+   ReviewQueue.css with a few bits specific to the unified feed:
+   notification rows, the info tone, and a tucked-in dismiss X
+   on click-through rows. */
+
+.review-queue-row.tone-info {
+  border-left-color: var(--lavender, #b59dd8);
+}
+.review-queue-row.tone-info:hover {
+  background: color-mix(in srgb, var(--lavender, #b59dd8) 8%, transparent);
+}
+.review-queue-row.tone-info .review-queue-icon {
+  color: var(--lavender, #b59dd8);
+}
+.review-queue-row.tone-info .review-queue-kind {
+  color: var(--lavender, #b59dd8);
+}
+
+.review-queue-row.tone-stuck {
+  border-left-color: var(--urgent);
+}
+.review-queue-row.tone-stuck:hover {
+  background: color-mix(in srgb, var(--urgent) 8%, transparent);
+}
+.review-queue-row.tone-stuck .review-queue-icon {
+  color: var(--urgent);
+}
+.review-queue-row.tone-stuck .review-queue-kind {
+  color: var(--urgent);
+}
+
+.review-queue-row.tone-urgent {
+  border-left-color: var(--urgent);
+  background: color-mix(in srgb, var(--urgent) 5%, transparent);
+}
+.review-queue-row.tone-high {
+  border-left-color: var(--pink);
+}
+
+/* Notification rows need the body to flow naturally — no nowrap clip
+   like the other kinds — so the markdown body is legible. The bottom
+   margin keeps successive notifications breathing. */
+.review-queue-row-notification {
+  flex-direction: row;
+  align-items: flex-start;
+  cursor: default;
+}
+.review-queue-row-notification:hover {
+  background: transparent;
+  border-color: transparent;
+  border-left-color: var(--lavender, #b59dd8);
+}
+.review-queue-row-notification .review-queue-description {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-dim, var(--text-muted));
+  margin-top: 4px;
+  /* Let markdown content wrap naturally. */
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  max-height: 140px;
+  overflow-y: auto;
+}
+.review-queue-row-notification .review-queue-description > *:first-child {
+  margin-top: 0;
+}
+.review-queue-row-notification .review-queue-description > *:last-child {
+  margin-bottom: 0;
+}
+
+/* The click-to-navigate rows stack a dismiss X after the main button
+   — we flex-row the wrapper so the X sits beside the CTA. */
+.review-queue-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.review-queue-row-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  min-width: 0;
+}
+.review-queue-row-main:disabled {
+  cursor: default;
+}
+.memos-pane-dismiss {
+  flex-shrink: 0;
+  padding: 4px 6px;
+  opacity: 0.4;
+  transition: opacity 0.12s;
+}
+.review-queue-row:hover .memos-pane-dismiss {
+  opacity: 0.9;
+}
+.memos-pane-dismiss:hover {
+  opacity: 1;
+}
