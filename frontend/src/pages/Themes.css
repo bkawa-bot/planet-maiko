@@ -158,3 +158,16 @@
   .themes-grid { grid-template-columns: 1fr; }
   .themes-colors { grid-template-columns: 1fr; }
 }
+
+
+/* Inline hint text after a color-field label — explains what the
+   variable controls when the label alone is ambiguous (e.g. bg vs
+   bg_plain). Muted + italic so it reads as a gloss, not another
+   field label. */
+.themes-color-hint {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-style: italic;
+  font-weight: 400;
+  margin-left: 4px;
+}

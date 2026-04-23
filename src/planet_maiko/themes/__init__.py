@@ -26,8 +26,11 @@ logger = logging.getLogger(__name__)
 # rejected at save time so we don't accidentally grant arbitrary CSS
 # injection through user-authored themes.
 ALLOWED_COLOR_KEYS = {
-    # Backgrounds
-    "bg", "bg_card", "bg_card_alt", "bg_hover", "bg_selected",
+    # Backgrounds. bg_plain is the flat page backdrop visible when the
+    # world_background is "none" (hills off) — it also sits behind the
+    # hill SVG when one is on, so an intentional miscoloring here shows
+    # through where the SVG is transparent. Falls back to bg when unset.
+    "bg", "bg_plain", "bg_card", "bg_card_alt", "bg_hover", "bg_selected",
     # Text
     "text", "text_dim", "text_muted",
     # Accent hues

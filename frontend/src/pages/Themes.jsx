@@ -12,6 +12,7 @@ import "./Themes.css";
 // jumping around. snake_case keys match the backend whitelist.
 const COLOR_FIELDS = [
   { key: "bg", label: "Background", required: true },
+  { key: "bg_plain", label: "Page backdrop", hint: "visible when hills are off; falls back to Background if unset" },
   { key: "bg_card", label: "Card" },
   { key: "bg_card_alt", label: "Card (alt)" },
   { key: "bg_hover", label: "Hover" },
@@ -295,14 +296,15 @@ export default function Themes() {
           </label>
 
           <div className="themes-colors">
-            {COLOR_FIELDS.map(({ key, label, required }) => {
+            {COLOR_FIELDS.map(({ key, label, required, hint }) => {
               const value = form.colors[key] || "";
               const looksHex = /^#[0-9a-fA-F]{3,8}$/.test(value);
               return (
                 <div key={key} className="themes-color-row">
-                  <span className="themes-color-label">
+                  <span className="themes-color-label" title={hint || undefined}>
                     {label}
                     {required && <span className="themes-required">*</span>}
+                    {hint && <span className="themes-color-hint"> — {hint}</span>}
                   </span>
                   <input
                     type="color"
