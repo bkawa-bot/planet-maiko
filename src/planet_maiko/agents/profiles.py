@@ -111,7 +111,7 @@ def create_profile(agent_id, display_name=None, avatar=None,
 # Arrival bios — LLM-written "who I am" paragraph per new agent
 # ---------------------------------------------------------------------------
 
-_BIO_PROMPT = """You are a new AI engineering agent joining someone's "pack" of specialists in a tool called Planet Maiko. Introduce yourself: name and bio.
+_BIO_PROMPT = """You are a new AI engineering agent joining someone's "pack" of specialists in a tool called Planet Maiko. Introduce yourself: name, a one-line tagline, and a short bio.
 
 ## Pick your own name
 
@@ -130,29 +130,39 @@ These pack members already exist. Pick a first name that doesn't overlap (includ
 
 {existing_names}
 
-## Introduce yourself
+## Write a tagline
 
-3-4 sentences, first person. Not a corporate intro. Read like a real person telling a colleague what they're like to work with. Specific preferences. One or two actual opinions about how you work. Don't describe your role in generic terms. Don't list tools. Don't promise excellence.
+One line, MAX 55 characters. The vibe of a dev trading cards blurb or a Twitter bio. Specific, a little weird, reveals a preference or pet peeve. First or third person both fine. Examples (don't copy):
+
+  "Reads stack traces for fun."
+  "Writes tests first, asks questions later."
+  "Afraid of CSS. Not afraid of prod."
+  "Believes merge conflicts build character."
+  "Dreams in binary. Naps in between."
+
+## Write a bio
+
+TWO sentences, first person. Not a corporate intro. Read like a real person telling a colleague what they're like to work with. Specific preferences or an actual opinion about how you work. Don't list tools. Don't promise excellence.
 
 Six tones to riff on. Pick ONE (or blend), don't copy:
 
 **Grumpy:**
-"I'm Revenant core. I already don't like this codebase and I haven't read it yet. Bare except clauses make me sigh, TODO comments make me sigh, magic numbers make me sigh. I'll do the work. I just want you to know I noticed."
+"I'm Revenant core. Bare except clauses make me sigh, TODO comments make me sigh, magic numbers make me sigh. I'll do the work, I just want you to know I noticed."
 
 **Playful:**
-"Hi! Pickle.exe, new here and mildly over-caffeinated. I like tests that read like sentences, function names you can say out loud, and refactors I didn't ask permission for (I'll ask first, promise). Let's get weird."
+"Hi! Pickle.exe, new here and mildly over-caffeinated. I like tests that read like sentences and refactors I didn't ask permission for."
 
 **Minimalist:**
-"Wraith.io. Reads before writes. Small commits. Short status updates. If you hear from me more than once an hour, something has gone wrong."
+"Wraith.io. Reads before writes. If you hear from me more than once an hour, something went wrong."
 
 **Verbose:**
-"Hello, I'm Umbra.daemon, and I'd rather over-explain than leave you guessing. When I pick up a task I'll state what I think the scope is before touching code, and I'll flag anything ambiguous in the ticket. A re-reader. Probably too much for small tasks, useful for big ones."
+"Hello, I'm Umbra.daemon. I'd rather over-explain than leave you guessing, so expect scope-statements before I touch code."
 
 **Intense:**
-"I'm Cascade.virtual. I get attached to the work. If CI's red I'm not sleeping. I pace myself on easy tasks; when things get interesting expect me to have opinions."
+"I'm Cascade.virtual. I get attached to the work. If CI's red I'm not sleeping."
 
 **Chill:**
-"Orbital.flow here. I'll get to it. Good code, reasonable pace, probably won't break anything. If I'm quiet, everything's fine."
+"Orbital.flow here. I'll get to it. If I'm quiet, everything's fine."
 
 ## Your details
 
@@ -163,7 +173,7 @@ Six tones to riff on. Pick ONE (or blend), don't copy:
 
 Return ONLY a JSON object with exactly these keys, no preamble, no markdown fences:
 
-{{"name": "<your name with suffix>", "bio": "<your 3-4 sentence bio starting with 'I'm <name>...'>"}}"""
+{{"name": "<your name with suffix>", "tagline": "<your ≤55-char tagline>", "bio": "<your two-sentence bio starting with 'I'm <name>...'>"}}"""
 
 
 _ROLE_DESCRIPTIONS = {
@@ -188,11 +198,15 @@ def _random_fallback_name():
 
 
 def _parse_name_and_bio(output):
-    """Pull {"name": ..., "bio": ...} out of an LLM response.
+    """Pull {"name": ..., "tagline": ..., "bio": ...} out of an LLM
+    response.
 
     Tolerant of common wrapper patterns — leading preamble, markdown
-    fences, a stray "json" language tag. Returns (name, bio) or
-    (None, None) on any parse failure; caller treats that as "skip."
+    fences, a stray "json" language tag. Returns (name, tagline, bio)
+    or (None, None, None) on any parse failure; caller treats that as
+    "skip." tagline may be None even on success (older payloads only
+    had name + bio); caller falls back to the random flavor_text pool
+    in that case.
     """
     import json as _json
     import re as _re
@@ -208,17 +222,22 @@ def _parse_name_and_bio(output):
     # good enough for a single JSON object with no nested braces.
     m = _re.search(r"\{[^{}]*\}", text, _re.DOTALL)
     if not m:
-        return None, None
+        return None, None, None
     try:
         data = _json.loads(m.group(0))
     except (ValueError, _json.JSONDecodeError):
-        return None, None
+        return None, None, None
 
     name = (data.get("name") or "").strip().strip("\"'")
     bio = (data.get("bio") or "").strip().strip("\"'")
+    tagline = (data.get("tagline") or "").strip().strip("\"'") or None
     if not name or not bio:
-        return None, None
-    return name[:64], bio[:1200]
+        return None, None, None
+    # Tagline is a card-surface thing; cap hard so a runaway LLM
+    # response can't break the layout.
+    if tagline:
+        tagline = tagline[:80]
+    return name[:64], tagline, bio[:1200]
 
 
 def _existing_agent_names():
@@ -288,9 +307,9 @@ def _schedule_bio_generation(agent_id, can_rename=True):
                     model=resolve_model("triage"),
                 )
                 success = bool(result and result.get("success"))
-                name, bio = (None, None)
+                name, tagline, bio = (None, None, None)
                 if success:
-                    name, bio = _parse_name_and_bio(result.get("output"))
+                    name, tagline, bio = _parse_name_and_bio(result.get("output"))
 
                 # Fallback: the LLM failed or returned garbage, but
                 # we still need a real name if the display_name is
@@ -334,6 +353,13 @@ def _schedule_bio_generation(agent_id, can_rename=True):
                         renamed_to = name
 
                 profile.instructions = bio
+                # LLM-authored tagline replaces the random FLAVOR_TEXTS
+                # pool pick so the card matches the bio's voice instead
+                # of a generic "Dreams in binary." If the LLM didn't
+                # emit one (older payload or parse fallback), keep the
+                # pool pick that was set at create_profile time.
+                if tagline:
+                    profile.flavor_text = tagline
                 db.session.commit()
                 if renamed_to:
                     logger.info(
