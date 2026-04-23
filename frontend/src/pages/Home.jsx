@@ -5,7 +5,7 @@ import OverviewPane from "../components/OverviewPane";
 import PackStatusPane from "../components/PackStatusPane";
 import ReviewQueue from "../components/ReviewQueue";
 import { formatTime, formatClock } from "../utils/dates";
-import { Brain, Calendar, Palette, Video, Sparkles } from "lucide-react";
+import { Brain, Calendar, Palette, Video, Sparkles, CheckCircle2 } from "lucide-react";
 import { showToast } from "../components/Toast";
 import FooterPendingPopover from "../components/FooterPendingPopover";
 import { useNavigate } from "react-router-dom";
@@ -41,7 +41,7 @@ function seasonPoem(season) {
 
 export default function Home() {
   const [scene, setScene] = useState(null);
-  const [stats, setStats] = useState({ tasks_new: 0, tasks_ip: 0, projects: 0, goals_active: 0 });
+  const [shippedToday, setShippedToday] = useState([]);
   const [brainStatus, setBrainStatus] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [homeConfig, setHomeConfig] = useState(null);
@@ -51,24 +51,16 @@ export default function Home() {
 
   const fetchSidebar = async () => {
     try {
-      const [sc, tasksNew, tasksIp, projects, brain, cfg, pupdates, goals] = await Promise.all([
+      const [sc, shipped, brain, cfg, pupdates] = await Promise.all([
         api.getScene(),
-        api.getTasks({ status: "new" }),
-        api.getTasks({ status: "in_progress" }),
-        api.getProjects({ status: "active" }),
+        api.getShippedToday().catch(() => ({ items: [] })),
         api.getBrainStatus().catch(() => null),
         api.getConfig().catch(() => null),
         api.getPupdates(),
-        api.getAutomations({ status: "active" }).catch(() => []),
       ]);
       setScene(sc);
       setHomeConfig(cfg);
-      setStats({
-        tasks_new: tasksNew.length,
-        tasks_ip: tasksIp.length,
-        projects: projects.length,
-        goals_active: (goals || []).length,  // field name kept for the chip binding; counts automations now
-      });
+      setShippedToday(shipped?.items || []);
       setBrainStatus(brain);
       // Today's events only. Calendar pupdates use a YYYY-MM-DD date in
       // their source_id, so yesterday's events linger in the DB as
@@ -212,33 +204,33 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="home-widget">
-            <div className="widget-header">Tasks</div>
-            <div className="widget-stat-grid">
-              <div className="widget-stat">
-                <div className="widget-stat-value" style={{ color: "var(--blue)" }}>{stats.tasks_ip}</div>
-                <div className="widget-stat-label">In Progress</div>
-              </div>
-              <div className="widget-stat">
-                <div className="widget-stat-value" style={{ color: "var(--pink)" }}>{stats.tasks_new}</div>
-                <div className="widget-stat-label">New</div>
-              </div>
-              <div className="widget-stat">
-                <div className="widget-stat-value" style={{ color: "var(--green)" }}>{stats.projects}</div>
-                <div className="widget-stat-label">Projects</div>
-              </div>
-              {stats.goals_active > 0 && (
-                <button
-                  type="button"
-                  className="widget-stat widget-stat-clickable"
-                  onClick={() => navigate("/automations")}
-                  title="Open the Automations dashboard to see what each agent is watching and control the autonomy."
-                >
-                  <div className="widget-stat-value" style={{ color: "var(--lavender, #b59dd8)" }}>{stats.goals_active}</div>
-                  <div className="widget-stat-label">Automations</div>
-                </button>
+          <div className="home-widget shipped-today-widget">
+            <div className="widget-header">
+              <CheckCircle2 size={12} /> Shipped today
+              {shippedToday.length > 0 && (
+                <span className="widget-count">{shippedToday.length}</span>
               )}
             </div>
+            {shippedToday.length > 0 ? (
+              <ul className="shipped-list">
+                {shippedToday.slice(0, 3).map((t) => (
+                  <li
+                    key={t.id}
+                    className={`shipped-item shipped-${t.status}`}
+                    title={t.repo || t.type}
+                  >
+                    <span className="shipped-title">{t.title}</span>
+                  </li>
+                ))}
+                {shippedToday.length > 3 && (
+                  <li className="shipped-more">
+                    + {shippedToday.length - 3} more
+                  </li>
+                )}
+              </ul>
+            ) : (
+              <div className="widget-empty">Nothing shipped yet. First one's the heaviest.</div>
+            )}
           </div>
 
           <div className="home-widget home-brain-widget">
