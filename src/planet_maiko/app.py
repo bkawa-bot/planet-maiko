@@ -20,6 +20,7 @@ def _ensure_columns():
         "ALTER TABLE tasks ADD COLUMN depends_on JSON DEFAULT '[]'",
         "ALTER TABLE custom_skills ADD COLUMN schedule_interval_minutes INTEGER",
         "ALTER TABLE custom_skills ADD COLUMN creates_pupdates BOOLEAN DEFAULT 0",
+        "ALTER TABLE custom_skills ADD COLUMN needs_worktree BOOLEAN DEFAULT 0",
         "ALTER TABLE custom_skills ADD COLUMN last_run_at DATETIME",
         "ALTER TABLE signals ADD COLUMN code_context TEXT",
         "ALTER TABLE signals ADD COLUMN incorporated_at DATETIME",

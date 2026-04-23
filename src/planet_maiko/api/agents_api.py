@@ -138,6 +138,7 @@ def create_skill():
         is_default=False,
         schedule_interval_minutes=data.get("schedule_interval_minutes"),
         creates_pupdates=data.get("creates_pupdates", False),
+        needs_worktree=bool(data.get("needs_worktree", False)),
     )
     db.session.add(skill)
     db.session.commit()
@@ -165,6 +166,8 @@ def update_skill(skill_id):
         skill.schedule_interval_minutes = data["schedule_interval_minutes"] or None
     if "creates_pupdates" in data:
         skill.creates_pupdates = data["creates_pupdates"]
+    if "needs_worktree" in data:
+        skill.needs_worktree = bool(data["needs_worktree"])
     db.session.commit()
     return jsonify(skill.to_dict())
 

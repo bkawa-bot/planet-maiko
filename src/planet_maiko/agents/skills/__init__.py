@@ -81,6 +81,7 @@ def seed_defaults():
                 mcps=s.get("mcps", []),
                 icon=s.get("icon", "wand"),
                 is_default=True,
+                needs_worktree=bool(s.get("needs_worktree", False)),
             )
             db.session.add(skill)
             logger.info(f"[skills] Seeded default skill: {s['name']}")

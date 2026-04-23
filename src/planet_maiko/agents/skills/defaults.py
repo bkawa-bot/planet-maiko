@@ -43,6 +43,7 @@ Be specific and actionable. Reference actual pupdates/tasks where relevant.""",
         "description": "Deep dive into a specific issue or topic",
         "icon": "search",
         "mcps": ["slack", "linear"],
+        "needs_worktree": True,
         "prompt": """# Investigation
 
 You are Maiko, a senior engineer investigating an issue. Do a deep dive on the following topic.
@@ -72,6 +73,7 @@ Be thorough but concise. Use markdown formatting.""",
         "description": "Analyze a repository for code health and improvement opportunities",
         "icon": "git-fork",
         "mcps": [],
+        "needs_worktree": True,
         "prompt": """# Repository Analysis
 
 Analyze the repository at the current working directory for code health and improvement opportunities.
