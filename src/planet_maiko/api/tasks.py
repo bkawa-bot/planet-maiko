@@ -147,6 +147,30 @@ def _maybe_push_close_to_linear(task, target_state_type):
         _log.warning(f"[linear-sync] close-sync failed for task {task.id}: {e}")
 
 
+def _clear_task_dependents(task):
+    """Orphan-clean rows that point at tasks.id before the delete.
+
+    Two tables have FKs into tasks.id without an ON DELETE clause on
+    the column, so with PRAGMA foreign_keys=ON SQLite blocks the
+    delete even when the row's semantics say "OK to drop":
+      - diff_comments.task_id (NOT NULL) — a comment that belongs to
+        this task is meaningless without it; delete the rows.
+      - agent_jobs.source_task_id (nullable) — the job may outlive
+        the task (artifact-retention), so null out the pointer and
+        leave the job row intact.
+
+    Called from /tasks/<id>/done and /tasks/<id>/cancel before the
+    db.session.delete(task) so the commit succeeds.
+    """
+    from planet_maiko.models.diff_comment import DiffComment
+    from planet_maiko.models.agent_job import AgentJob
+
+    DiffComment.query.filter_by(task_id=task.id).delete(synchronize_session=False)
+    (AgentJob.query
+        .filter_by(source_task_id=task.id)
+        .update({"source_task_id": None}, synchronize_session=False))
+
+
 @tasks_bp.route("/tasks/<task_id>/done", methods=["POST"])
 def complete_task(task_id):
     """Mark a task as done — deletes it from the active list and
@@ -159,6 +183,7 @@ def complete_task(task_id):
     # the row). Best-effort — won't block the delete on Linear issues.
     _maybe_push_close_to_linear(task, "completed")
     cleanup_task_worktree(task)
+    _clear_task_dependents(task)
     db.session.delete(task)
     db.session.commit()
     return jsonify({"status": "deleted", "id": task_id})
@@ -179,6 +204,7 @@ def cancel_task(task_id):
     stopped = stop_agent_session(task_id)
     _maybe_push_close_to_linear(task, "canceled")
     cleanup_task_worktree(task)
+    _clear_task_dependents(task)
     db.session.delete(task)
     db.session.commit()
     return jsonify({"status": "deleted", "id": task_id, "agent_stopped": stopped})
