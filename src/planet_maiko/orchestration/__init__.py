@@ -127,8 +127,8 @@ def build_task_prompt(task, role, custom_prompt=""):
 
     return "\n".join(parts)
 
-# Task.type → required agent role. Anything not in this map defaults to
-# "coding" — the historical behavior.
+# Task.type → required agent role for built-in roles. Anything not in
+# this map AND not a registered specialty defaults to "coding".
 TYPE_TO_ROLE = {
     "review": "review",
     "pr_review": "review",
@@ -139,7 +139,35 @@ TYPE_TO_ROLE = {
 
 
 def role_for_task(task: Task) -> str:
-    return TYPE_TO_ROLE.get(task.type or "", "coding")
+    """Resolve which agent role should own a task.
+
+    Resolution order:
+      1. Built-in TYPE_TO_ROLE map (review / investigation / cartographer)
+      2. Specialty match — if task.type matches a CustomSkill.id, the
+         role IS that specialty id (e.g. type=error-triage → role=
+         error-triage). Lazy-spawned agents pick up the specialty's
+         identity via the normal spawn path.
+      3. Fallback: coding.
+    """
+    t = task.type or ""
+    if t in TYPE_TO_ROLE:
+        return TYPE_TO_ROLE[t]
+    if t and _is_specialty(t):
+        return t
+    return "coding"
+
+
+def _is_specialty(role_id: str) -> bool:
+    """True iff role_id corresponds to a registered CustomSkill row.
+
+    Tolerant of DB errors (returns False) — the caller falls back to
+    "coding" on failure, which preserves pre-specialty behavior.
+    """
+    try:
+        from planet_maiko.models.custom_skill import CustomSkill
+        return db.session.get(CustomSkill, role_id) is not None
+    except Exception:
+        return False
 
 
 def scope_for_task(task: Task) -> Optional[str]:

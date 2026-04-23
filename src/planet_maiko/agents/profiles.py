@@ -288,9 +288,24 @@ def _schedule_bio_generation(agent_id, can_rename=True):
 
                 scope = profile.scope_repo or "whatever repo you drop them into"
                 role = profile.role or "coding"
+                # Specialty roles (CustomSkill.id) pull their role
+                # description from the specialty's description field so
+                # the bio prompt sees "you analyze repo performance"
+                # instead of the generic fallback.
+                role_description = _ROLE_DESCRIPTIONS.get(role)
+                if role_description is None:
+                    try:
+                        from planet_maiko.models.custom_skill import CustomSkill
+                        specialty = db.session.get(CustomSkill, role)
+                        if specialty and specialty.description:
+                            role_description = specialty.description
+                    except Exception:
+                        pass
+                if role_description is None:
+                    role_description = "you work on whatever comes in"
                 prompt = _BIO_PROMPT.format(
                     role=role,
-                    role_description=_ROLE_DESCRIPTIONS.get(role, "you work on whatever comes in"),
+                    role_description=role_description,
                     scope=scope,
                     existing_names=_existing_agent_names(),
                 )
