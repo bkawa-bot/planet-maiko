@@ -59,9 +59,11 @@ def seed_defaults():
     # Retirement sweep: morning-brief + evening-wrap are gone
     # (home-overview covers their terrain). pack-insights was
     # renamed to evening-wrap in an earlier migration and is
-    # also retired. Drop any existing rows so they stop appearing
-    # in the Skills list and no scheduled runs try to fire them.
-    for retired_id in ("pack-insights", "morning-brief", "evening-wrap"):
+    # also retired. home-overview moved to engine-plumbing status —
+    # it's not a user-facing skill anymore, just an LLM call the
+    # overview pane makes internally. Drop any CustomSkill row for
+    # these so they stop appearing in the Specialties list.
+    for retired_id in ("pack-insights", "morning-brief", "evening-wrap", "home-overview"):
         row = db.session.get(CustomSkill, retired_id)
         if row is not None:
             db.session.delete(row)
