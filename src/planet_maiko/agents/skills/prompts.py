@@ -11,13 +11,14 @@ from pathlib import Path
 
 _PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent / "prompts"
 
-# Skill IDs that have prompt files
+# Skill IDs that have prompt files. morning-brief + evening-wrap were
+# retired — home-overview's greeting/summary/closing cover the same
+# ground and fire more often. Their prompt files stay on disk as a
+# reference in case anyone wants to resurrect them.
 _SKILL_IDS = [
     "home-overview",
-    "morning-brief",
     "brainstorm",
     "investigate",
-    "evening-wrap",
     "repo-analysis",
     "checkin",
     "plan",

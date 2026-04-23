@@ -14,7 +14,7 @@ class CustomSkill(db.Model):
     """
     __tablename__ = "custom_skills"
 
-    id = db.Column(db.String(50), primary_key=True)  # e.g. "morning-brief"
+    id = db.Column(db.String(50), primary_key=True)  # e.g. "investigate"
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.String(256), nullable=True)
     prompt = db.Column(db.Text, nullable=False)

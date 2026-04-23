@@ -56,29 +56,17 @@ def seed_defaults():
     from planet_maiko.models.custom_skill import CustomSkill
     from planet_maiko.agents.skills.defaults import DEFAULT_SKILLS
 
-    # One-shot rename: `pack-insights` (end-of-day digest skill) collided
-    # with the Pack Insights ritual tab on /agents. Skill gets renamed to
-    # `evening-wrap`; the ritual keeps the Pack Insights name. Preserve
-    # any user-edited prompt, schedule, and creates_pupdates flag.
-    legacy = db.session.get(CustomSkill, "pack-insights")
-    if legacy:
-        replacement = db.session.get(CustomSkill, "evening-wrap")
-        if replacement is None:
-            db.session.add(CustomSkill(
-                id="evening-wrap",
-                name="Evening Wrap",
-                description=legacy.description,
-                prompt=legacy.prompt,
-                mcps=list(legacy.mcps or []),
-                icon=legacy.icon or "coffee",
-                is_default=True,
-                user_edited=bool(legacy.user_edited),
-                schedule_interval_minutes=legacy.schedule_interval_minutes,
-                creates_pupdates=bool(legacy.creates_pupdates),
-            ))
-            logger.info("[skills] Migrated pack-insights → evening-wrap")
-        db.session.delete(legacy)
-        db.session.commit()
+    # Retirement sweep: morning-brief + evening-wrap are gone
+    # (home-overview covers their terrain). pack-insights was
+    # renamed to evening-wrap in an earlier migration and is
+    # also retired. Drop any existing rows so they stop appearing
+    # in the Skills list and no scheduled runs try to fire them.
+    for retired_id in ("pack-insights", "morning-brief", "evening-wrap"):
+        row = db.session.get(CustomSkill, retired_id)
+        if row is not None:
+            db.session.delete(row)
+            logger.info(f"[skills] Retired skill removed: {retired_id}")
+    db.session.commit()
 
     for s in DEFAULT_SKILLS:
         existing = db.session.get(CustomSkill, s["id"])

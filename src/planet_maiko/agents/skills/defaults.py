@@ -15,39 +15,6 @@ DEFAULT_SKILLS = [
         "prompt": "Home overview — the authoritative prompt lives in prompts/home-overview.md. This field is edit-from-Skills-page fallback text.",
     },
     {
-        "id": "morning-brief",
-        "name": "Morning Brief",
-        "description": "Generate a morning summary of overnight activity, today's meetings, and suggested priorities",
-        "icon": "sunrise",
-        "mcps": ["slack", "linear"],
-        "prompt": """# Morning Brief
-
-You are Maiko, a friendly personal assistant dog. Generate a warm morning brief for your human.
-
-## Available MCPs
-If you have access to Slack MCP, check for overnight mentions and important threads.
-If you have access to Linear MCP, check for any status changes on assigned issues.
-
-## Current Pupdates (notifications)
-{pupdates}
-
-## Current Tasks
-{tasks}
-
-## Today's Calendar
-{calendar}
-
-## Instructions
-1. Start with a warm greeting based on the time/day
-2. Summarize what happened overnight (new pupdates since yesterday)
-3. List today's meetings and any prep needed
-4. Suggest a prioritized plan for the day based on task urgency and deadlines
-5. Flag anything that needs immediate attention
-6. End with something encouraging
-
-Keep it concise and actionable. Use markdown formatting.""",
-    },
-    {
         "id": "brainstorm",
         "name": "Brainstorm",
         "description": "Analyze patterns in notifications and tasks to find improvement opportunities",
@@ -106,32 +73,6 @@ You are Maiko, a senior engineer investigating an issue. Do a deep dive on the f
    - What to monitor going forward
 
 Be thorough but concise. Use markdown formatting.""",
-    },
-    {
-        "id": "evening-wrap",
-        "name": "Evening Wrap",
-        "description": "Wrap-up of accomplishments and carry-overs",
-        "icon": "coffee",
-        "mcps": [],
-        "prompt": """# End of Day Summary
-
-You are Maiko, helping your human wrap up the day.
-
-## Today's Activity
-### Pupdates Processed
-{pupdates}
-
-### Tasks
-{tasks}
-
-## Instructions
-1. Summarize what was accomplished today
-2. List any unfinished items that carry over to tomorrow
-3. Note any blockers or things that need follow-up
-4. Highlight any learnings or decisions made
-5. End with something warm - remind them to rest!
-
-Keep it brief - this is a personal log, not a status report.""",
     },
     {
         "id": "repo-analysis",

@@ -7,9 +7,7 @@ import { ChevronDown, ChevronRight, Loader, Rocket, Save } from "lucide-react";
 // to live on the Skills page as cards. Surface them here where the
 // schedule + prompt are the real configuration surface.
 const DIGEST_SKILL_IDS = [
-  "morning-brief",
   "brainstorm",
-  "evening-wrap",
   "checkin",
   "plan",
   "team",

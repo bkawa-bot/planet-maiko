@@ -836,7 +836,6 @@ export default function Settings() {
                   { key: "scene", label: "Scene creative note", tier: "haiku" },
                   { key: "conflict_query", label: "Conflict detection", tier: "haiku" },
                   { key: "skill", label: "Skills (default)", tier: "sonnet" },
-                  { key: "skill:morning-brief", label: "Morning Brief", tier: "sonnet" },
                   { key: "skill:pr-review", label: "PR Review", tier: "sonnet" },
                   { key: "project_plan", label: "Project planning", tier: "sonnet" },
                   { key: "profile_judge", label: "Task outcome judging", tier: "sonnet" },

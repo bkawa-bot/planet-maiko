@@ -32,7 +32,7 @@ class AgentJob(db.Model):
     id = db.Column(db.String(64), primary_key=True)
 
     # What this job is — matches task.type today (cartograph, investigation,
-    # repo_analysis, or a skill name like brainstorm / morning-brief).
+    # repo_analysis, or a skill name like brainstorm / verify).
     # The cycle's execute phase dispatches by this to pick the role.
     kind = db.Column(db.String(64), nullable=False, index=True)
 

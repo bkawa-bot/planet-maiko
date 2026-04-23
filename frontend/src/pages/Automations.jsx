@@ -25,7 +25,7 @@ const ICON_MAP = {
 // want to edit, distinct from Settings > Agent Preferences >
 // role_instructions which only appends extra rules.
 const HIDDEN_SKILL_IDS = new Set([
-  "morning-brief", "brainstorm", "evening-wrap",
+  "brainstorm",
   "checkin", "plan", "team", "verify",
   "investigate", "repo-analysis",
   "theme-designer",

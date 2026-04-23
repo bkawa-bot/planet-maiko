@@ -12,7 +12,6 @@ DEFAULT_ROUTING = {
     # Sonnet tier
     "chat": "sonnet",
     "skill": "sonnet",
-    "skill:morning-brief": "sonnet",
     "skill:home-overview": "opus",
     "skill:brainstorm": "sonnet",
     "skill:investigate": "sonnet",
