@@ -19,42 +19,6 @@
   letter-spacing: 0.5px;
 }
 
-/* Pending AgentJob approvals — minimal render so automation-proposed
-   jobs don't get stranded between Stage A and Stage B's full dashboard. */
-.pack-status-pending-jobs {
-  display: flex; flex-direction: column; gap: 6px;
-  margin: 10px 0;
-  padding: 10px 12px;
-  background: var(--lavender-soft, rgba(181, 157, 216, 0.12));
-  border: 1px solid var(--lavender, #b59dd8);
-  border-radius: var(--radius-xs);
-}
-.pack-status-pending-label {
-  font-size: 9px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--lavender, #b59dd8);
-}
-.pack-status-pending-job {
-  display: flex; align-items: flex-start; gap: 10px;
-  padding: 8px 0;
-  border-top: 1px solid var(--border-subtle);
-}
-.pack-status-pending-job:first-of-type { border-top: none; padding-top: 2px; }
-.pack-status-pending-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.pack-status-pending-title {
-  font-size: 12px; font-weight: 600; color: var(--text);
-}
-.pack-status-pending-meta {
-  display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
-  font-size: 10.5px; color: var(--text-muted);
-}
-.pack-status-pending-desc {
-  font-size: 10.5px; color: var(--text-dim);
-  flex-basis: 100%;
-  line-height: 1.4;
-}
-.pack-status-pending-actions { display: flex; gap: 4px; flex-shrink: 0; }
-
 .pack-status-empty {
   font-size: 12px;
   color: var(--text-muted);

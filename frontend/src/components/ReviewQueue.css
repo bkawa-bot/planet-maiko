@@ -137,3 +137,40 @@
 .review-queue-proposal .proposal-card {
   margin: 0;
 }
+
+/* Pending-approval AgentJob rows — inline approve/dismiss buttons in
+   place of the nav CTA. Not clickable as a whole row, so override
+   the cursor and hover tint. */
+.review-queue-row-pending {
+  cursor: default;
+  align-items: flex-start;
+}
+.review-queue-row-pending:hover {
+  background: transparent;
+  border-color: transparent;
+  border-left-color: var(--lavender, #b59dd8);
+}
+.review-queue-subkind {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  padding: 1px 6px;
+  background: var(--bg-hover);
+  border-radius: 4px;
+}
+.review-queue-description {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-top: 2px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.review-queue-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 8px;
+}

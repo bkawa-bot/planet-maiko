@@ -229,7 +229,33 @@ def get_review_queue():
             "timestamp": iso_utc(j.finished_at),
         })
 
-    # 4. Agent proposals — PROPOSAL: blocks from investigation / review
+    # 4. Pending AgentJobs — "ask me first" automations land jobs in
+    #    pending_approval until the user approves. Used to only show on
+    #    the Pack page, which meant ask-first asks were invisible if
+    #    you didn't navigate there. Surface them here so they sit next
+    #    to plans/diffs/proposals in the single gated-action list.
+    pending_jobs = (
+        AgentJob.query
+        .filter(AgentJob.status == "pending_approval")
+        .order_by(AgentJob.created_at.desc())
+        .all()
+    )
+    for j in pending_jobs:
+        items.append({
+            "kind": "pending_job",
+            "task_id": None,
+            "job_id": j.id,
+            "title": j.title,
+            "repo": j.scope_repo,
+            "agent_name": _agent_name(j.agent_profile_id),
+            "route": None,  # inline approve/dismiss, no navigate
+            "age_seconds": _age(j.created_at),
+            "timestamp": iso_utc(j.created_at),
+            "job_kind": j.kind,
+            "description": j.description,
+        })
+
+    # 5. Agent proposals — PROPOSAL: blocks from investigation / review
     #    agent output that turn into approve-or-dismiss cards. The
     #    ProposalCard component needs the full pupdate (title, body,
     #    extra.draft, extra.from_agent_id) to render its edit form, so

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ClipboardCheck, FileText, GitPullRequest, Map, Inbox,
+  ClipboardCheck, FileText, GitPullRequest, Map, Inbox, Bot, Check, X,
 } from "lucide-react";
 import { api } from "../api/client";
+import { showToast } from "./Toast";
 import { relativeTime } from "../utils/dates";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import ProposalCard from "./ProposalCard";
@@ -45,6 +46,12 @@ const KIND_META = {
     Icon: ClipboardCheck,
     cta: null,   // renders inline ProposalCard — no nav CTA
     label: "Proposal",
+    tone: "plan",
+  },
+  pending_job: {
+    Icon: Bot,
+    cta: null,   // renders inline approve/dismiss — no nav CTA
+    label: "Approval",
     tone: "plan",
   },
 };
@@ -109,6 +116,78 @@ export default function ReviewQueue() {
                   proposal={it.proposal}
                   onAction={fetchQueue}
                 />
+              </div>
+            );
+          }
+
+          // Pending AgentJobs land here for ask-first automations. No
+          // navigation destination — the user approves or dismisses in
+          // place and the queue refetches.
+          if (it.kind === "pending_job") {
+            const onApprove = async (e) => {
+              e.stopPropagation();
+              try {
+                await api.approveAgentJob(it.job_id);
+                fetchQueue();
+              } catch (err) {
+                showToast("Couldn't approve: " + (err.message || "unknown"), "high");
+              }
+            };
+            const onDismiss = async (e) => {
+              e.stopPropagation();
+              try {
+                await api.cancelAgentJob(it.job_id);
+                fetchQueue();
+              } catch (err) {
+                showToast("Couldn't dismiss: " + (err.message || "unknown"), "high");
+              }
+            };
+            return (
+              <div
+                key={`pending_job:${it.job_id}`}
+                className={`review-queue-row tone-${meta.tone} review-queue-row-pending`}
+              >
+                <div className="review-queue-icon"><Icon size={14} /></div>
+                <div className="review-queue-body">
+                  <div className="review-queue-title">
+                    {it.title || "(untitled)"}
+                  </div>
+                  <div className="review-queue-meta">
+                    <span className="review-queue-kind">{meta.label}</span>
+                    {it.job_kind && (
+                      <span className="review-queue-subkind">{it.job_kind}</span>
+                    )}
+                    {it.repo && (
+                      <span className="review-queue-repo" title={it.repo}>
+                        {formatRepo(it.repo, defaultOrg)}
+                      </span>
+                    )}
+                    {it.timestamp && (
+                      <span className="review-queue-time">
+                        {relativeTime(it.timestamp)}
+                      </span>
+                    )}
+                  </div>
+                  {it.description && (
+                    <div className="review-queue-description">{it.description}</div>
+                  )}
+                </div>
+                <div className="review-queue-actions">
+                  <button
+                    className="btn btn-sm btn-primary"
+                    onClick={onApprove}
+                    title="Approve and queue the agent job"
+                  >
+                    <Check size={12} /> Approve
+                  </button>
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={onDismiss}
+                    title="Dismiss without running"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
               </div>
             );
           }
