@@ -8,6 +8,7 @@ import {
   Sunrise, RefreshCw, FileText, X, Loader, Brain,
   MoreHorizontal, ListTodo, Search, ExternalLink,
 } from "lucide-react";
+import TaskCard from "./TaskCard";
 import "./OverviewPane.css";
 
 /**
@@ -88,6 +89,12 @@ export default function OverviewPane() {
   // one menu is ever open at a time — a single shared ref is enough.
   const [menuOpenFor, setMenuOpenFor] = useState(null);
   const menuRef = useRef(null);
+  // Focus section uses the full TaskCard. Track which one is expanded
+  // and enough lookup data (projects, agentNames) for the card's inline
+  // chrome to render. Fetched alongside the overview in fetchAll.
+  const [focusExpanded, setFocusExpanded] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const [agentNames, setAgentNames] = useState({});
   // Easter egg: 1-in-50 chance Maiko delivers the overview in Papyrus.
   // Rolled fresh on every fetch + manual refresh, so it's rare, not
   // sticky, and refreshing lets you escape (98% chance).
@@ -111,16 +118,20 @@ export default function OverviewPane() {
     setError(null);
     setPapyrusMode(Math.random() < 0.02);
     try {
-      const [overviewRes, pupRes, taskRes, pendingRes] = await Promise.all([
+      const [overviewRes, pupRes, taskRes, pendingRes, projectRes, profileRes] = await Promise.all([
         api.getHomeOverview(),
         api.getPupdates(),
         api.getTasks(),
         api.getLearnings({ status: "pending" }).catch(() => []),
+        api.getProjects().catch(() => []),
+        api.getProfiles().catch(() => []),
       ]);
       setOverview(overviewRes.overview);
       setGeneratedAt(overviewRes.generated_at);
       setPupdates(pupRes);
       setTasks(taskRes);
+      setProjects(projectRes || []);
+      setAgentNames(Object.fromEntries((profileRes || []).map((p) => [p.id, p.display_name])));
       setPendingLearnings(pendingRes || []);
     } catch (err) {
       setError(err.message || "Overview unavailable");
@@ -200,6 +211,28 @@ export default function OverviewPane() {
   const handleOpenSource = (pup) => {
     if (pup.url) window.open(pup.url, "_blank", "noreferrer");
   };
+
+  // TaskCard's action handler — status transitions + launch. Modal-
+  // requiring actions (assign, edit, detail) drop the user on the
+  // /tasks page with the card expanded, where the full machinery
+  // lives. Keeps the focus row on Home scannable without cloning
+  // every modal over here.
+  const handleTaskAction = async (e, id, action) => {
+    e.stopPropagation();
+    try {
+      if (action === "start") await api.startTask(id);
+      else if (action === "done") await api.completeTask(id);
+      else if (action === "cancel") await api.cancelTask(id);
+      else if (action === "launch") {
+        await api.launchTask(id);
+        showToast("On the way 🐾", "normal");
+      }
+      fetchAll();
+    } catch (err) {
+      showToast("Couldn't " + action + ": " + (err.message || "unknown"), "high");
+    }
+  };
+  const goToTasks = () => navigate("/tasks");
 
   // Close the action menu on outside click or Escape. The click
   // handler runs AFTER React's onClick (which sets the state), so
@@ -334,23 +367,30 @@ export default function OverviewPane() {
 
       {overview.focus?.length > 0 && (
         <section className="overview-section">
-          <h2 className="overview-section-title">Today's focus</h2>
-          <div className="overview-card-list">
+          <h2 className="overview-section-title">Current focus</h2>
+          <div className="overview-focus-list">
             {overview.focus.map((f) => {
               const task = taskById[f.task_id];
               if (!task) return null;
               return (
-                <div key={f.task_id} className="overview-card overview-focus-card">
-                  <div className="overview-card-body">
-                    <div className="overview-card-title">{task.title}</div>
-                    {f.why && <div className="overview-card-why">{f.why}</div>}
-                  </div>
-                  <button
-                    className="btn btn-sm"
-                    onClick={() => navigate("/tasks")}
-                  >
-                    Open task
-                  </button>
+                <div key={f.task_id} className="overview-focus-entry">
+                  {f.why && (
+                    <div className="overview-focus-why">{f.why}</div>
+                  )}
+                  <TaskCard
+                    task={task}
+                    isExpanded={focusExpanded === task.id}
+                    onToggleExpand={() => setFocusExpanded(
+                      focusExpanded === task.id ? null : task.id,
+                    )}
+                    onAction={handleTaskAction}
+                    onAssignAgent={goToTasks}
+                    onEdit={goToTasks}
+                    onShowDetail={goToTasks}
+                    onRefresh={fetchAll}
+                    projects={projects}
+                    agentNames={agentNames}
+                  />
                 </div>
               );
             })}
