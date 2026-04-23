@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Loader, FolderGit2 } from "lucide-react";
 import { api } from "../../api/client";
 
@@ -25,6 +25,22 @@ export default function IntegrationsSection({
   const [open, setOpen] = useState(openByDefault);
   const [discovering, setDiscovering] = useState(false);
   const [linearTeams, setLinearTeams] = useState([]);
+  const [linearCycle, setLinearCycle] = useState(null);
+
+  // Fetch the configured team's metadata (mainly activeCycle) so the
+  // Linear section can show which cycle the Send-to-Linear modal will
+  // default to. Quiet failure — not all Linear teams use cycles.
+  useEffect(() => {
+    const teamId = config.linear?.team_id;
+    const apiKey = config.linear?.api_key;
+    if (!teamId || !apiKey || !open) {
+      setLinearCycle(null);
+      return;
+    }
+    api.getLinearTeamMeta(teamId)
+      .then((m) => setLinearCycle(m?.activeCycle || null))
+      .catch(() => setLinearCycle(null));
+  }, [config.linear?.team_id, config.linear?.api_key, open]);
 
   const discoverRepos = async () => {
     setDiscovering(true);
@@ -229,6 +245,18 @@ export default function IntegrationsSection({
                 )}
               </label>
               <button className="btn btn-sm" onClick={fetchLinearTeams}>Fetch my teams</button>
+              {linearCycle && (
+                <div className="linear-cycle-chip" title="The Send-to-Linear modal defaults new issues to this cycle.">
+                  <strong>Active cycle:</strong> #{linearCycle.number}
+                  {linearCycle.name ? ` · ${linearCycle.name}` : ""}
+                  {linearCycle.startsAt && linearCycle.endsAt
+                    ? ` · ${_formatShort(linearCycle.startsAt)}–${_formatShort(linearCycle.endsAt)}`
+                    : ""}
+                  {typeof linearCycle.progress === "number"
+                    ? ` · ${Math.round(linearCycle.progress * 100)}% through`
+                    : ""}
+                </div>
+              )}
               {pollerStatus.linear && (
                 <div className="poller-status">
                   Status: {pollerStatus.linear.running ? "Running" : "Stopped"}
@@ -283,4 +311,15 @@ export default function IntegrationsSection({
       )}
     </section>
   );
+}
+
+
+// Short "Apr 23" style for cycle date chips. Locale-aware.
+function _formatShort(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  } catch {
+    return iso;
+  }
 }

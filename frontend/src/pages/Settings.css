@@ -284,3 +284,20 @@
   padding: 8px 10px;
 }
 .briefing-prompt textarea:focus { border-color: var(--pink); outline: none; }
+
+/* Linear active-cycle chip under the team picker — read-only peek at
+   which cycle the Send-to-Linear modal will default to. Matches the
+   poller-status + setup-hint styling so it reads as one consistent
+   secondary strip. */
+.linear-cycle-chip {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--lavender, #b59dd8) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--lavender, #b59dd8) 25%, transparent);
+  border-radius: var(--radius-xs);
+}
+.linear-cycle-chip strong {
+  color: var(--text);
+  font-weight: 600;
+}
