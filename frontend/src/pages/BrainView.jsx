@@ -195,6 +195,17 @@ export default function BrainView() {
 
   const handleApprove = async (id) => { await api.approveLearning(id); fetchLearnings(); };
   const handleDismiss = async (id) => { await api.dismissLearning(id); fetchLearnings(); };
+  const handleToggleGlobal = async (l) => {
+    // Flip the global flag. Flipping to global clears scope_repo
+    // server-side; flipping back leaves scope_repo null (the user
+    // re-scopes manually if they need a specific repo).
+    try {
+      await api.updateLearning(l.id, { is_global: !l.is_global });
+      fetchLearnings();
+    } catch (err) {
+      showToast("Couldn't update: " + (err.message || "unknown"), "high");
+    }
+  };
 
   const toggleProvenance = async (id) => {
     // Collapse if already expanded.
@@ -448,6 +459,17 @@ export default function BrainView() {
                             {l.status === "pending" && (
                               <button className="btn btn-sm" onClick={() => handleApprove(l.id)}>
                                 <Check size={10} /> Approve
+                              </button>
+                            )}
+                            {(l.status === "active" || l.status === "pending") && (
+                              <button
+                                className="btn btn-sm"
+                                onClick={() => handleToggleGlobal(l)}
+                                title={l.is_global
+                                  ? "This rule applies to every repo. Click to make it scope-only."
+                                  : "Make this rule apply to every repo (no scope_repo)."}
+                              >
+                                🌐 {l.is_global ? "Scoped" : "Global"}
                               </button>
                             )}
                             {l.status === "active" || l.status === "pending" ? (

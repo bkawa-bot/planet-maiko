@@ -79,6 +79,22 @@ export default function PlaybookTab({ onCountsChange }) {
     fetchAll();
   };
 
+  const makeGlobal = async (insight) => {
+    // One-way: mark a repo-scoped insight as global (clears repo_scope
+    // so every agent inherits it via CLAUDE.md). To undo, re-scope
+    // through the edit flow — we don't expose a "un-global" button
+    // because we'd need a repo picker for it to be useful, and the
+    // common case is "this was scoped to repo X but actually applies
+    // everywhere" flipped once and left.
+    try {
+      await api.updateInsight(insight.id, { repo_scope: null });
+      showToast("Marked global 🌐", "normal");
+      fetchAll();
+    } catch (err) {
+      showToast("Couldn't mark global: " + (err.message || "unknown"), "high");
+    }
+  };
+
   const handleCartograph = async (repo) => {
     if (!repo || repo === "(global)" || cartographing) return;
     setCartographing(repo);
@@ -268,6 +284,15 @@ export default function PlaybookTab({ onCountsChange }) {
                               title="Confirm — bumps freshness, sorts to top"
                             >
                               <RefreshCw size={10} />
+                            </button>
+                          )}
+                          {ins.repo_scope && (
+                            <button
+                              className="btn btn-sm"
+                              onClick={() => makeGlobal(ins)}
+                              title="Mark this insight global — every agent inherits it via CLAUDE.md, not just agents working in this repo."
+                            >
+                              🌐 Global
                             </button>
                           )}
                           <button className="btn btn-sm" onClick={() => startEdit(ins)} title="Edit">

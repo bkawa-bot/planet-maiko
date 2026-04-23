@@ -203,7 +203,14 @@ def dismiss_learning(learning_id):
 
 @learning_bp.route("/learnings/<int:learning_id>", methods=["PATCH"])
 def edit_learning(learning_id):
-    """Edit a learning's rule text or category."""
+    """Edit a learning's rule text, category, scope, or is_global flag.
+
+    Auto-promotion (seen across 3+ repos) already flips is_global, but
+    users sometimes want to mark a rule as global up front — e.g. team
+    conventions that apply everywhere even when only one repo has
+    surfaced them. Accept is_global here; when true, clear scope_repo
+    since the two contradict.
+    """
     learning = db.get_or_404(Learning, learning_id)
     data = request.get_json()
     if "rule" in data:
@@ -214,6 +221,10 @@ def edit_learning(learning_id):
         learning.scope_repo = data["scope_repo"]
     if "scope_language" in data:
         learning.scope_language = data["scope_language"]
+    if "is_global" in data:
+        learning.is_global = bool(data["is_global"])
+        if learning.is_global:
+            learning.scope_repo = None
     db.session.commit()
     return jsonify(learning.to_dict())
 
