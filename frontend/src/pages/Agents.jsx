@@ -27,6 +27,10 @@ export default function Agents() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] = useState({ role: "coding", scope_repo: "", instructions: "" });
   const [creating, setCreating] = useState(false);
+  // Specialties appear as additional role options in the dropdown.
+  // Fetched once on mount since creating one requires a page round
+  // trip via the Specialties tab anyway.
+  const [specialties, setSpecialties] = useState([]);
 
   const fetchData = async () => {
     try {
@@ -53,6 +57,15 @@ export default function Agents() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  useEffect(() => {
+    // Pull the list of specialties (CustomSkills) so the role picker
+    // can offer them alongside the built-in roles. Silent on failure —
+    // the dropdown just doesn't show specialties if /skills errors.
+    api.getSkills()
+      .then((list) => setSpecialties(Array.isArray(list) ? list : []))
+      .catch(() => setSpecialties([]));
+  }, []);
 
   const handleCreateAgent = () => {
     // Open the pre-creation form so the user can pick role/scope first.
@@ -107,9 +120,20 @@ export default function Agents() {
                     value={createForm.role}
                     onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
                   >
-                    <option value="coding">Coder — writes code, opens PRs</option>
-                    <option value="review">Reviewer — reviews PRs</option>
-                    <option value="investigation">Investigator — digs into incidents & CI</option>
+                    <optgroup label="Core roles">
+                      <option value="coding">Coder — writes code, opens PRs</option>
+                      <option value="review">Reviewer — reviews PRs</option>
+                      <option value="investigation">Investigator — digs into incidents & CI</option>
+                    </optgroup>
+                    {specialties.length > 0 && (
+                      <optgroup label="Specialties">
+                        {specialties.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}{s.description ? ` — ${s.description.slice(0, 60)}${s.description.length > 60 ? "…" : ""}` : ""}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                 </label>
                 <label>
