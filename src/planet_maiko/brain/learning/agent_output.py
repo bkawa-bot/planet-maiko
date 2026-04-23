@@ -32,15 +32,19 @@ _VALID_CONFIDENCE = {"high", "medium", "low"}
 # (another keyword, a heading, or end-of-string) — close-enough for
 # free-form model output.
 _BLOCK_TERMINATORS = (
-    r"(?=\nPATTERN:|\nPROPOSAL:|\nCONFIDENCE:|\n#|\Z)"
+    r"(?=\nPATTERN:|\nPROPOSAL:|\nTASK:|\nCONFIDENCE:|\n#|\Z)"
 )
 
 _PATTERN_RE = re.compile(
     r"^PATTERN:\s*(?P<header>.+?)\n(?P<body>[\s\S]*?)" + _BLOCK_TERMINATORS,
     re.MULTILINE,
 )
+# TASK: is a semantic alias for PROPOSAL: — agents who intuit "propose
+# a follow-up task" reach for the TASK keyword more naturally than
+# PROPOSAL, and both land in the same approve/edit/dismiss queue. The
+# parser runs the union regex below and treats them identically.
 _PROPOSAL_RE = re.compile(
-    r"^PROPOSAL:\s*(?P<title>.+?)\n(?P<body>[\s\S]*?)" + _BLOCK_TERMINATORS,
+    r"^(?:PROPOSAL|TASK):\s*(?P<title>.+?)\n(?P<body>[\s\S]*?)" + _BLOCK_TERMINATORS,
     re.MULTILINE,
 )
 _CONFIDENCE_RE = re.compile(

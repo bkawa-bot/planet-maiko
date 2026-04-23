@@ -23,7 +23,7 @@ reply(content="<text>", message_type="<type>")
 
 Valid `message_type` values: `message`, `status`, `feedback`, `stuck`, `ready_for_review`, `done`.
 
-**For your final report:** call `reply(content="<full report markdown>", message_type="ready_for_review")`. The server scans the content for `PATTERN:` / `PROPOSAL:` / `CONFIDENCE:` blocks, strips them out, saves the cleaned report on the task as `task.extra.artifact`, and marks the task done.
+**For your final report:** call `reply(content="<full report markdown>", message_type="ready_for_review")`. The server scans the content for `PATTERN:` / `PROPOSAL:` / `TASK:` / `CONFIDENCE:` blocks, strips them out, saves the cleaned report on the task as `task.extra.artifact`, and marks the task done.
 
 **For mid-run status:** call `reply(content="<short update>", message_type="status")` — chatter, no inbox pupdate.
 
@@ -46,21 +46,36 @@ code:
 
 Valid categories: `security`, `error_handling`, `testing`, `performance`, `api_design`, `architecture`, `null_safety`, `style`, `naming`, `docs`, `pattern`, `domain_knowledge`, `gotcha`, `team`.
 
-### `PROPOSAL:` — request follow-up work
+### `TASK:` (or `PROPOSAL:`) — propose follow-up work
 
-Use this to propose the fix (or mitigation) as a real task. This is the primary hand-off from "we investigated" to "we're going to fix it" — lands in the user's approval queue and, once approved, routes to a coding agent.
+Use this to hand off a concrete piece of follow-up work as a real,
+approvable task. This is the primary bridge from "we investigated"
+to "we're going to fix it" — each block lands in the user's approval
+queue as a draft, and when the user approves it the draft becomes a
+real Task that routes to a coding agent.
+
+Don't be shy with these. One investigation often surfaces three or
+four distinct follow-ups (fix the proximate cause, add a regression
+test, tighten an adjacent validator, file a longer-term refactor) —
+emit one block per distinct piece of work. The user can approve,
+edit, or dismiss each one independently.
+
+`TASK:` and `PROPOSAL:` are interchangeable keywords; pick whichever
+reads more naturally for the specific item. Either creates the same
+approval-queue card.
 
 ```
-PROPOSAL: Short task title
+TASK: Short task title
 priority: high
 repo: org/auth-service
 category: error_handling
 description:
   What needs to happen. Reference files/functions where possible.
-  If you found more than one fix, emit one PROPOSAL per fix.
+  Scope this one task — if you found three fixes, emit three blocks.
 ```
 
-Keep each PROPOSAL scoped to one coherent piece of work — not "fix everything."
+Keep each block scoped to one coherent piece of work, not "fix
+everything."
 
 ### `CONFIDENCE:` — hedge when evidence is thin
 
