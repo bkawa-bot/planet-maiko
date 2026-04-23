@@ -128,29 +128,120 @@ def cancel_task(task_id):
 
 @tasks_bp.route("/tasks/<task_id>/launch", methods=["POST"])
 def launch_task(task_id):
-    """Start the assigned coding agent's work on this task NOW.
+    """Start the assigned agent's work on this task NOW.
 
     Kicks off the same headless agent flow as /agents/assign, but
     against the existing assignment — used by the "Launch" button on
     tasks that were assigned (e.g. via project plan approval) without
-    a kickoff, or where the initial kickoff failed. Optional body:
-    `{ plan_first: bool }` to override (defaults to whatever was
-    captured on task.extra.plan_first, else False).
+    a kickoff, or where the initial kickoff failed or the agent was
+    reassigned.
 
-    Only coding agents need a manual launch — review/investigation
-    agents run autonomously at assign time via /agents/assign.
+    Branches on task type:
+      - Coding tasks → kickoff_coding_task (prep worktree if needed,
+        start claude --print in it)
+      - One-shot tasks (investigation / cartograph / repo_analysis /
+        review) → prep worktree + _kickoff_agent_headless with the
+        role's protocol
+
+    Optional body: `{ plan_first: bool }` — only honored for coding
+    tasks (one-shot agents don't have a plan step).
     """
-    from planet_maiko.agents.coding_agent import kickoff_coding_task
-
     task = db.get_or_404(Task, task_id)
     data = request.get_json(silent=True) or {}
     plan_first = data.get("plan_first")
     if plan_first is None:
         plan_first = bool((task.extra or {}).get("plan_first"))
-    result = kickoff_coding_task(task, plan_first=bool(plan_first))
+
+    result = _launch_task(task, plan_first=bool(plan_first))
     if not result.get("success"):
         return jsonify({"error": result.get("error", "Launch failed")}), 400
-    return jsonify({"mode": "coding", "launch_result": result}), 200
+    return jsonify({"mode": result.get("mode", "coding"), "launch_result": result}), 200
+
+
+def _launch_task(task, plan_first=False):
+    """Route a launch to the right kickoff path based on task type.
+
+    Returns {"success": bool, "error": str?, "mode": str, ...}.
+    Commits the session on success — caller doesn't need to.
+    """
+    from planet_maiko.agents.brain_session import ONE_SHOT_ROLE_FOR_TYPE
+
+    if not task.assigned_agent_id:
+        return {"success": False, "error": "no agent assigned"}
+
+    if task.type in ONE_SHOT_ROLE_FOR_TYPE:
+        return _launch_one_shot(task)
+
+    from planet_maiko.agents.coding_agent import kickoff_coding_task
+    result = kickoff_coding_task(task, plan_first=plan_first)
+    result = dict(result or {})
+    result.setdefault("mode", "coding")
+    return result
+
+
+def _launch_one_shot(task):
+    """Prep worktree if missing, then kickoff the one-shot headless run.
+
+    Mirrors the investigation/cartographer path in /agents/assign — the
+    difference is we already have an assigned agent (so no profile
+    lookup from the request) and we re-prep a fresh worktree if the
+    previous one was cleared (e.g. after reassign).
+    """
+    import os
+    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.orchestration import resolve_repo_path, scope_for_task, build_task_prompt
+    from planet_maiko.agents.coding_agent import prepare, _kickoff_agent_headless
+
+    profile = db.session.get(AgentProfile, task.assigned_agent_id)
+    if not profile:
+        return {"success": False, "error": "assigned agent not found"}
+
+    role = profile.role or "investigation"
+    working_path = (task.extra or {}).get("working_path")
+
+    if not working_path or not os.path.isdir(working_path):
+        repo = scope_for_task(task)
+        local_path = resolve_repo_path(repo)
+        if not local_path:
+            return {"success": False, "error": f"no local clone found for {repo or 'this task'}"}
+
+        full_prompt = build_task_prompt(task, role, "")
+        prep_result = prepare(
+            task_id=task.id,
+            task_title=task.title,
+            prompt=full_prompt,
+            repo_path=local_path,
+            branch_prefix="maiko",
+            auto_kickoff=False,
+            use_worktree=True,
+            agent_profile_id=profile.id,
+            role=role,
+        )
+        if not prep_result:
+            return {"success": False, "error": "failed to prepare worktree"}
+        working_path = prep_result.get("working_path")
+        extra = dict(task.extra or {})
+        if working_path:
+            extra["working_path"] = working_path
+        if prep_result.get("branch"):
+            extra["branch"] = prep_result.get("branch")
+        task.extra = extra
+
+    if task.status in ("new", "blocked"):
+        task.status = "in_progress"
+    task.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    kickoff = _kickoff_agent_headless(
+        profile.id, working_path, task.id,
+        branch_name=None, plan_first=False, role=role,
+    )
+    return {
+        "success": True,
+        "mode": role,
+        "kickoff": kickoff,
+        "working_path": working_path,
+    }
 
 
 @tasks_bp.route("/tasks/<task_id>/reassign", methods=["POST"])

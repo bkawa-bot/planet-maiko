@@ -322,11 +322,12 @@ export default function TaskCard({
                   <Bot size={10} /> Reassign
                 </button>
               )}
-              {/* Assigned but never kicked off (plan-approve failed to
-                  spawn, or user manually assigned without auto-start).
-                  Coding agents only — one-shot roles spawn themselves
-                  on assign. */}
-              {!isDone && !isOneShotTask && t.assigned_agent_id && !t.extra?.working_path && (
+              {/* Launch: assigned but not yet running. Covers both
+                  coding (plan-approve failed to spawn, manual assign
+                  skipped kickoff) and one-shot (initial assign kickoff
+                  failed, or user reassigned — reassign clears the
+                  worktree, and the backend routes launch by task type). */}
+              {!isDone && t.assigned_agent_id && t.status !== "in_progress" && !t.extra?.working_path && (
                 <button
                   className="btn btn-sm btn-primary"
                   onClick={(e) => onAction(e, t.id, "launch")}
