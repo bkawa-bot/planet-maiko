@@ -16,18 +16,15 @@ const ICON_MAP = {
   "search": Search, "git-fork": GitFork, "wand": Wand2,
 };
 
-// Automations = the thinned-out Skills surface. Digest briefings live
-// in Settings > Scheduled Briefings, investigation-class skills are
-// now auto-spawned agent tasks, theme-designer is driven from the
-// Theme menu, and pr-review is invoked internally by the review
-// agent. agent-protocol stays visible here because it's the full
-// coding-agent protocol template — an advanced knob power users may
-// want to edit, distinct from Settings > Agent Preferences >
-// role_instructions which only appends extra rules.
+// This page hosts two surfaces: the when/then Automations list at
+// the top, and the Specialties list (role protocol prompts an agent
+// adopts when doing a specific kind of work) below. Theme-designer
+// is driven from the Theme menu, and pr-review is invoked internally
+// by the review agent, so those don't need to appear in the list.
+// agent-protocol stays visible because it's the full coding-agent
+// protocol template — an advanced knob distinct from Settings >
+// Agent Preferences > role_instructions (which only appends extras).
 const HIDDEN_SKILL_IDS = new Set([
-  "brainstorm",
-  "checkin", "plan", "team", "verify",
-  "investigate", "repo-analysis",
   "theme-designer",
   "pr-review",
 ]);
@@ -44,7 +41,7 @@ export default function Automations() {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [newSkill, setNewSkill] = useState({ id: "", name: "", description: "", prompt: "", mcps: "", schedule_interval_minutes: "", creates_pupdates: false });
+  const [newSkill, setNewSkill] = useState({ id: "", name: "", description: "", prompt: "", mcps: "", schedule_interval_minutes: "", creates_pupdates: false, needs_worktree: false });
 
   const fetchSkills = () => api.getSkills()
     .then((list) => setSkills(list.filter((s) => !HIDDEN_SKILL_IDS.has(s.id))))
@@ -75,7 +72,7 @@ export default function Automations() {
       schedule_interval_minutes: editSchedule ? parseInt(editSchedule) : null,
       creates_pupdates: editCreatesPupdates,
     });
-    showToast("Automation updated! ✏️", "normal");
+    showToast("Specialty updated! ✏️", "normal");
     setEditing(false);
     fetchSkills();
     const updated = await api.getSkill(selected.id);
@@ -85,7 +82,7 @@ export default function Automations() {
   const runSkill = async (name) => {
     setRunning(true);
     setResult(null);
-    showToast("Running automation... 🐕", "normal");
+    showToast("Running specialty... 🐕", "normal");
     try {
       const pupdates = await api.getPupdates();
       const tasks = await api.getTasks();
@@ -111,7 +108,15 @@ export default function Automations() {
         working_dir,
       });
       setResult(res);
-      showToast(res.success ? "Automation complete! ✨" : "Automation had trouble", res.success ? "normal" : "high");
+      const queued = res.status === "queued";
+      showToast(
+        queued
+          ? "Queued — the cycle will pick it up shortly 🐾"
+          : res.success
+            ? "Specialty run complete ✨"
+            : "Specialty run had trouble",
+        res.success ? "normal" : "high",
+      );
     } catch (err) {
       setResult({ success: false, error: err.message });
     }
@@ -129,28 +134,28 @@ export default function Automations() {
         mcps: newSkill.mcps.split(",").map(s => s.trim()).filter(Boolean),
         schedule_interval_minutes: newSkill.schedule_interval_minutes ? parseInt(newSkill.schedule_interval_minutes) : null,
       });
-      showToast(`Automation "${newSkill.name}" created! 🎉`, "normal");
+      showToast(`Specialty "${newSkill.name}" created! 🎉`, "normal");
       setShowCreate(false);
-      setNewSkill({ id: "", name: "", description: "", prompt: "", mcps: "", schedule_interval_minutes: "", creates_pupdates: false });
+      setNewSkill({ id: "", name: "", description: "", prompt: "", mcps: "", schedule_interval_minutes: "", creates_pupdates: false, needs_worktree: false });
       fetchSkills();
     } catch (err) {
-      showToast(err.message || "Couldn't create automation", "high");
+      showToast(err.message || "Couldn't create specialty", "high");
     }
   };
 
   const handleDelete = async (id) => {
     try {
       await api.deleteSkill(id);
-      showToast("Automation deleted", "normal");
+      showToast("Specialty deleted", "normal");
       setSelected(null);
       fetchSkills();
     } catch (err) {
-      showToast(err.message || "Can't delete this automation", "high");
+      showToast(err.message || "Can't delete this specialty", "high");
     }
   };
 
   const openCreate = () => {
-    setNewSkill({ id: "", name: "", description: "", prompt: "# My Automation\n\nUse {pupdates} and {tasks} for context.\n\n## Instructions\n1. ...", mcps: "" });
+    setNewSkill({ id: "", name: "", description: "", prompt: "# My Specialty\n\nUse {pupdates} and {tasks} for context.\n\n## Instructions\n1. ...", mcps: "", needs_worktree: false, schedule_interval_minutes: "", creates_pupdates: false });
     setShowCreate(true);
   };
 
@@ -164,10 +169,10 @@ export default function Automations() {
       <AutomationsList />
 
       <div className="skills-section-header">
-        <h3>Skills</h3>
-        <p className="skills-section-sub">Prompt templates that Automations can invoke. Also runnable on-demand or on a cadence of their own.</p>
+        <h3>Specialties</h3>
+        <p className="skills-section-sub">Role protocols agents adopt when doing a specific kind of work (analysis, triage, brainstorming). Run on-demand, on a cadence, or spawn a dedicated agent for a specialty from the Agents page. Running a specialty either uses an existing agent with that role or lazy-spawns one.</p>
         <button className="btn btn-primary" onClick={openCreate} style={{ marginLeft: "auto" }}>
-          <Plus size={12} /> New Skill
+          <Plus size={12} /> New Specialty
         </button>
       </div>
 
@@ -177,16 +182,27 @@ export default function Automations() {
           <div className="skill-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <Zap size={14} />
-              <span>New Automation</span>
+              <span>New Specialty</span>
               <button className="btn btn-sm" onClick={() => setShowCreate(false)} style={{ marginLeft: "auto" }}><X size={10} /></button>
             </div>
             <div className="modal-body">
               <div className="skill-editor">
                 <div className="skill-form-row">
-                  <label>ID <input type="text" value={newSkill.id} onChange={e => setNewSkill(s => ({ ...s, id: e.target.value }))} placeholder="my-skill" /></label>
-                  <label>Name <input type="text" value={newSkill.name} onChange={e => setNewSkill(s => ({ ...s, name: e.target.value }))} placeholder="My Custom Automation" /></label>
+                  <label>ID <input type="text" value={newSkill.id} onChange={e => setNewSkill(s => ({ ...s, id: e.target.value }))} placeholder="error-triage" /></label>
+                  <label>Name <input type="text" value={newSkill.name} onChange={e => setNewSkill(s => ({ ...s, name: e.target.value }))} placeholder="Error triage" /></label>
                 </div>
-                <label>Description <input type="text" value={newSkill.description} onChange={e => setNewSkill(s => ({ ...s, description: e.target.value }))} placeholder="What this automation does" /></label>
+                <label>Description <input type="text" value={newSkill.description} onChange={e => setNewSkill(s => ({ ...s, description: e.target.value }))} placeholder="What agents doing this specialty produce" /></label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={!!newSkill.needs_worktree}
+                    onChange={e => setNewSkill(s => ({ ...s, needs_worktree: e.target.checked }))}
+                  />
+                  Needs a repo worktree
+                  <small style={{ display: "block", marginTop: "2px", fontStyle: "italic", color: "var(--text-muted)" }}>
+                    On for specialties that read actual code (investigation-style). Off for ones that just compose a prompt from DB state (brainstorm / planning / analysis).
+                  </small>
+                </label>
                 <label>MCPs (comma-separated) <input type="text" value={newSkill.mcps} onChange={e => setNewSkill(s => ({ ...s, mcps: e.target.value }))} placeholder="slack, linear, figma" /></label>
                 <div className="skill-form-row">
                   <label>Schedule
@@ -212,7 +228,7 @@ export default function Automations() {
                 </label>
                 <div className="skill-form-actions">
                   <button className="btn" onClick={() => setShowCreate(false)}>Cancel</button>
-                  <button className="btn btn-primary" onClick={handleCreate}><Plus size={12} /> Create Automation</button>
+                  <button className="btn btn-primary" onClick={handleCreate}><Plus size={12} /> Create Specialty</button>
                 </div>
               </div>
             </div>
