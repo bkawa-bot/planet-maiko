@@ -26,7 +26,21 @@ def _looks_like_uuid(value):
     return bool(value and isinstance(value, str) and _UUID_RE.match(value.lower()))
 
 
-TEAMS_QUERY = "query { teams { nodes { id name key } } }"
+# viewer.teams (NOT workspace-wide `teams`) returns teams the API-key
+# owner is a member of — more relevant for a single-user integration,
+# and avoids the unordered-pagination trap where the root `teams`
+# connection returns a 50-wide slice that doesn't include the user's
+# own team alphabetically. first: 250 is Linear's per-page max so the
+# picker covers workspaces up to that size without a pagination loop.
+TEAMS_QUERY = """
+query {
+  viewer {
+    teams(first: 250) {
+      nodes { id name key }
+    }
+  }
+}
+"""
 
 # Maiko priority → Linear priority. Linear uses 0=No priority, 1=Urgent,
 # 2=High, 3=Normal/Medium, 4=Low. We pick 3 for "normal" so new issues land
@@ -432,7 +446,12 @@ class LinearPoller(BasePoller):
         data = resp.json()
         if "errors" in data:
             raise RuntimeError(f"Linear API errors: {data['errors']}")
-        return (data.get("data") or {}).get("teams", {}).get("nodes", []) or []
+        return (
+            (data.get("data") or {})
+            .get("viewer", {})
+            .get("teams", {})
+            .get("nodes", [])
+        ) or []
 
     @staticmethod
     def create_issue(task, description="", team_id=None, project_id=None, api_key=None):
