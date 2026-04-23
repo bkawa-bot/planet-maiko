@@ -701,6 +701,17 @@ def open_terminal():
         return jsonify({"error": str(e)}), 500
 
 
+# Skills whose output lands on a purpose-built surface (the home
+# overview pane, the scene widget, the greeting line). Emitting a
+# generic "skill ran" pupdate for these would flood the Recent Skills
+# widget with auto-cadence noise that already has a better render path.
+# User can still find the raw output in /skill-results if needed.
+_SELF_RENDERING_SKILLS = {
+    "home-overview", "scene", "scene-mood",
+    "morning-brief", "evening-wrap",
+}
+
+
 @agents_bp.route("/skills/<skill_name>/run", methods=["POST"])
 def run_skill_endpoint(skill_name):
     """Run a skill through the brain session and save the result."""
@@ -713,6 +724,7 @@ def run_skill_endpoint(skill_name):
     # Auto-save successful results
     if result.get("success") and result.get("output"):
         from planet_maiko.models.skill_result import SkillResult
+        from planet_maiko.models.pupdate import Pupdate
         from planet_maiko.config import user_now
         now_local = user_now()
         title_map = {
@@ -722,14 +734,60 @@ def run_skill_endpoint(skill_name):
             "investigate": f"Investigation — {now_local.strftime('%B %d %H:%M')}",
             "repo-analysis": f"Repo Analysis — {now_local.strftime('%B %d')}",
         }
+        title = title_map.get(skill_name, f"{skill_name} — {now_local.strftime('%B %d %H:%M')}")
         sr = SkillResult(
             skill_name=skill_name,
-            title=title_map.get(skill_name, f"{skill_name} — {now_local.strftime('%B %d %H:%M')}"),
+            title=title,
             content=result["output"],
         )
         db.session.add(sr)
-        db.session.commit()
+        db.session.flush()
         result["result_id"] = sr.id
+
+        # Emit a skill_result pupdate so the output lands on Home's
+        # Recent Skills widget + in the normal pupdate stream. Skills
+        # with their own dedicated render path (morning brief, scene,
+        # etc.) are excluded so the widget doesn't get flooded by
+        # auto-cadence runs. Manual re-runs of self-rendering skills
+        # still save the SkillResult row — just no pupdate fanfare.
+        if skill_name not in _SELF_RENDERING_SKILLS:
+            output = result["output"]
+            # Title gets the skill's display title + a preview of the
+            # first non-empty line for scannability. Preview is capped
+            # short; full output is on extra.full_output for the widget
+            # to expand inline.
+            first_line = ""
+            for line in output.splitlines():
+                stripped = line.strip().lstrip("# ").strip()
+                if stripped:
+                    first_line = stripped
+                    break
+            preview_title = first_line[:80] if first_line else title
+            body_preview = output[:600]
+            pup = Pupdate(
+                id=f"skill-{sr.id}-{uuid.uuid4().hex[:6]}",
+                source="maiko",
+                source_id=f"skill_result/{sr.id}",
+                type="skill_result",
+                priority="normal",
+                title=f"{skill_name}: {preview_title}",
+                body=body_preview,
+                actionable=False,
+                tags=["skill", skill_name],
+                extra={
+                    "skill_name": skill_name,
+                    "skill_title": title,
+                    "result_id": sr.id,
+                    "full_output": output[:16000],
+                },
+                # These are informational; the brain cycle has nothing
+                # to route them to. Pre-flag as processed so they don't
+                # sit in the Queue tab.
+                brain_processed=True,
+            )
+            db.session.add(pup)
+
+        db.session.commit()
 
     return jsonify(result)
 
