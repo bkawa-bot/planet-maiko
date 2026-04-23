@@ -223,11 +223,38 @@ def get_review_queue():
             "timestamp": iso_utc(j.finished_at),
         })
 
-    # 4. Pending AgentJobs — "ask me first" automations land jobs in
-    #    pending_approval until the user approves. Used to only show on
-    #    the Pack page, which meant ask-first asks were invisible if
-    #    you didn't navigate there. Surface them here so they sit next
-    #    to plans/diffs/proposals in the single gated-action list.
+    # 4. job_approval Memos — "ask me first" automations that used to
+    #    create a pending_approval AgentJob now create a Memo carrying
+    #    the job spec in extra.job_spec. Approve mints the real
+    #    AgentJob; dismiss just marks the memo done. No phantom jobs
+    #    in the DB until the user actually commits.
+    job_approval_memos = (
+        Memo.query
+        .filter(Memo.kind == "job_approval")
+        .filter(Memo.status.in_(("pending", "seen")))
+        .order_by(Memo.created_at.desc())
+        .all()
+    )
+    for m in job_approval_memos:
+        spec = (m.extra or {}).get("job_spec") or {}
+        items.append({
+            "kind": "pending_job",
+            "task_id": None,
+            "job_id": None,
+            "memo_id": m.id,
+            "title": m.title,
+            "repo": spec.get("scope_repo"),
+            "agent_name": None,
+            "route": None,
+            "age_seconds": _age(m.created_at),
+            "timestamp": iso_utc(m.created_at),
+            "job_kind": spec.get("kind"),
+            "description": m.body or spec.get("description"),
+        })
+
+    # Legacy: AgentJobs already in the DB with status=pending_approval
+    # from pre-memo-migration. Shown until the user approves/dismisses
+    # them through their existing approve endpoints.
     pending_jobs = (
         AgentJob.query
         .filter(AgentJob.status == "pending_approval")
@@ -239,10 +266,11 @@ def get_review_queue():
             "kind": "pending_job",
             "task_id": None,
             "job_id": j.id,
+            "memo_id": None,
             "title": j.title,
             "repo": j.scope_repo,
             "agent_name": _agent_name(j.agent_profile_id),
-            "route": None,  # inline approve/dismiss, no navigate
+            "route": None,
             "age_seconds": _age(j.created_at),
             "timestamp": iso_utc(j.created_at),
             "job_kind": j.kind,

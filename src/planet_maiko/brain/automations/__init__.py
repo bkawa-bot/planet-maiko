@@ -402,17 +402,50 @@ def _act_run_agent_job(automation, config, pupdate=None, context=None):
     description = config.get("description") or automation.description or ""
     priority = config.get("priority") or "normal"
 
-    job_id = f"job-{uuid.uuid4().hex[:10]}"
     extra = {"from_automation": automation.id}
-    # Stash the triggering pupdate ids so the execute phase can enrich
-    # TASK.md with their titles/bodies/urls/tags. Covers both the
-    # single-match path (pupdate_match) via pupdate.id and the chain
-    # path (pupdate_chain) via context.pupdate_ids.
     if pupdate is not None:
         extra["triggered_by_pupdate"] = pupdate.id
     chain_ids = ctx.get("pupdate_ids") or []
     if chain_ids:
         extra["triggered_by_pupdates"] = list(chain_ids)
+
+    # Ask-first path: no AgentJob is created yet. A kind=job_approval
+    # Memo carries the full job spec in extra.job_spec, and
+    # /memos/<id>/approve (see brain/memo_handlers.py) mints the real
+    # AgentJob with status=queued when the user approves. Stops phantom
+    # "might never run" AgentJobs from sitting in the DB.
+    if ask_first:
+        from planet_maiko.brain.memos import create_memo
+        memo = create_memo(
+            kind="job_approval",
+            category="offer",
+            title=title,
+            body=description or None,
+            priority=priority,
+            cta_label="Approve",
+            cta_action="approve",
+            source_pupdate_id=pupdate.id if pupdate is not None else None,
+            extra={
+                **extra,
+                "job_spec": {
+                    "kind": kind,
+                    "title": title,
+                    "description": description,
+                    "scope_repo": repo,
+                    "priority": priority,
+                    "automation_id": automation.id,
+                },
+            },
+        )
+        db.session.flush()
+        return {
+            "memo_id": memo.id,
+            "kind": "run_agent_job",
+            "status": "awaiting_approval",
+        }
+
+    # No approval gate: mint the AgentJob directly.
+    job_id = f"job-{uuid.uuid4().hex[:10]}"
     job = AgentJob(
         id=job_id,
         kind=kind,
@@ -422,10 +455,10 @@ def _act_run_agent_job(automation, config, pupdate=None, context=None):
         priority=priority,
         created_by="automation",
         automation_id=automation.id,
-        requires_approval=ask_first,
-        status="pending_approval" if ask_first else "queued",
-        approved_by=None if ask_first else "auto",
-        approved_at=None if ask_first else datetime.now(timezone.utc),
+        requires_approval=False,
+        status="queued",
+        approved_by="auto",
+        approved_at=datetime.now(timezone.utc),
         extra=extra,
     )
     db.session.add(job)
@@ -539,31 +572,63 @@ def _act_spawn_agent_job_from_pupdate(automation, config, pupdate=None, context=
     repo = (pupdate.extra or {}).get("repo") or automation.scope_repo or None
     title = config.get("title") or f"{kind} triggered by {pupdate.type}"
     description = config.get("description") or pupdate.body or pupdate.title or ""
+    priority = config.get("priority") or pupdate.priority or "normal"
 
-    job_id = f"job-{uuid.uuid4().hex[:10]}"
     extra = {
         "from_automation": automation.id,
         "triggered_by_pupdate": pupdate.id,
     }
-    # pupdate_chain may also be in the condition set (rare but valid).
-    # If context surfaces a chain, stash those ids too so the execute
-    # phase sees the full triggering batch.
     chain_ids = (context or {}).get("pupdate_ids") or []
     if chain_ids and chain_ids != [pupdate.id]:
         extra["triggered_by_pupdates"] = list(chain_ids)
+
+    # Ask-first → Memo, not a pending_approval AgentJob. Same
+    # rationale as _act_run_agent_job: we don't mint jobs until the
+    # user has decided they'll actually run.
+    if ask_first:
+        from planet_maiko.brain.memos import create_memo
+        memo = create_memo(
+            kind="job_approval",
+            category="offer",
+            title=title,
+            body=description or None,
+            priority=priority,
+            cta_label="Approve",
+            cta_action="approve",
+            source_pupdate_id=pupdate.id,
+            extra={
+                **extra,
+                "job_spec": {
+                    "kind": kind,
+                    "title": title,
+                    "description": description,
+                    "scope_repo": repo,
+                    "priority": priority,
+                    "automation_id": automation.id,
+                },
+            },
+        )
+        db.session.flush()
+        return {
+            "memo_id": memo.id,
+            "kind": "spawn_agent_job_from_pupdate",
+            "status": "awaiting_approval",
+        }
+
+    job_id = f"job-{uuid.uuid4().hex[:10]}"
     job = AgentJob(
         id=job_id,
         kind=kind,
         title=title,
         description=description,
         scope_repo=repo,
-        priority=config.get("priority") or pupdate.priority or "normal",
+        priority=priority,
         created_by="automation",
         automation_id=automation.id,
-        requires_approval=ask_first,
-        status="pending_approval" if ask_first else "queued",
-        approved_by=None if ask_first else "auto",
-        approved_at=None if ask_first else datetime.now(timezone.utc),
+        requires_approval=False,
+        status="queued",
+        approved_by="auto",
+        approved_at=datetime.now(timezone.utc),
         extra=extra,
     )
     db.session.add(job)

@@ -166,12 +166,19 @@ export default function MemosPane() {
             );
           }
 
-          // Pending AgentJobs land here for ask-first automations.
+          // Ask-first approval rows. New memo-backed entries approve
+          // through /memos/<id>/approve (handler mints the real
+          // AgentJob). Legacy pending_approval AgentJobs still exist
+          // in the DB — those approve through the old endpoint.
           if (it.kind === "pending_job") {
             const onApprove = async (e) => {
               e.stopPropagation();
               try {
-                await api.approveAgentJob(it.job_id);
+                if (it.memo_id) {
+                  await api.approveMemo(it.memo_id);
+                } else {
+                  await api.approveAgentJob(it.job_id);
+                }
                 fetchQueue();
               } catch (err) {
                 showToast("Couldn't approve: " + (err.message || "unknown"), "high");
@@ -180,7 +187,11 @@ export default function MemosPane() {
             const onDismiss = async (e) => {
               e.stopPropagation();
               try {
-                await api.cancelAgentJob(it.job_id);
+                if (it.memo_id) {
+                  await api.dismissMemo(it.memo_id);
+                } else {
+                  await api.cancelAgentJob(it.job_id);
+                }
                 fetchQueue();
               } catch (err) {
                 showToast("Couldn't dismiss: " + (err.message || "unknown"), "high");
@@ -188,7 +199,7 @@ export default function MemosPane() {
             };
             return (
               <div
-                key={`pending_job:${it.job_id}`}
+                key={`pending_job:${it.memo_id || it.job_id}`}
                 className={`review-queue-row tone-${meta.tone} review-queue-row-pending`}
               >
                 <div className="review-queue-icon"><Icon size={14} /></div>
