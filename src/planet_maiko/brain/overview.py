@@ -114,35 +114,40 @@ def _trim(text, limit):
     return text[: limit - 1] + "\u2026"
 
 
-def _pupdates_context():
-    """Non-dismissed pupdates from the last 24h, JSON-serialisable."""
-    from planet_maiko.models.pupdate import Pupdate
+def _memos_context():
+    """Live memos (status ∈ pending|seen) as the LLM-facing context.
 
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    Memos are the persistent user-facing state — they stick around
+    until the user handles them, so no time cutoff. Pupdates don't
+    enter the prompt at all anymore: they're ephemeral queue events,
+    their effects live on tasks / memos / agent jobs by the time the
+    overview regenerates.
+    """
+    from planet_maiko.models.memo import Memo
+
     rows = (
-        Pupdate.query
-        .filter(Pupdate.dismissed == False)  # noqa: E712
-        .filter(Pupdate.timestamp >= cutoff)
-        .order_by(Pupdate.timestamp.desc())
+        Memo.query
+        .filter(Memo.status.in_(("pending", "seen")))
+        .order_by(Memo.created_at.desc())
         .limit(MAX_PUPDATES)
         .all()
     )
     return [
         {
-            "id": p.id,
-            "timestamp": iso_utc(p.timestamp),
-            "source": p.source,
-            "type": p.type,
-            "priority": p.priority,
-            "category": p.category or "activity",
-            "title": _trim(p.title, 300),
-            "body": _trim(p.body or "", PUPDATE_BODY_CHARS),
-            "url": p.url,
-            "actionable": bool(p.actionable),
-            "action_hint": p.action_hint,
-            "tags": p.tags or [],
+            "id": m.id,
+            "created_at": iso_utc(m.created_at),
+            "kind": m.kind,
+            "category": m.category,
+            "priority": m.priority,
+            "title": _trim(m.title, 300),
+            "body": _trim(m.body or "", PUPDATE_BODY_CHARS),
+            "url": m.url,
+            "cta_label": m.cta_label,
+            "cta_action": m.cta_action,
+            "source_agent_id": m.source_agent_id,
+            "source_task_id": m.source_task_id,
         }
-        for p in rows
+        for m in rows
     ]
 
 
@@ -431,7 +436,7 @@ def _build_context():
         "current_time": now.strftime("%I:%M %p"),
         "time_bucket": time_bucket,
         "available_sprites": sprite_hint,
-        "pupdates": json.dumps(_pupdates_context(), indent=2, default=str),
+        "memos": json.dumps(_memos_context(), indent=2, default=str),
         "tasks": json.dumps(_tasks_context(), indent=2, default=str),
         "schedule": json.dumps(_schedule_context(), indent=2, default=str),
         "calendar": json.dumps(_calendar_context(), indent=2, default=str),
@@ -456,27 +461,30 @@ def _build_context():
 
 
 def _interruptions_today():
-    """Count today's high/urgent, non-dismissed pupdates (user-local day).
+    """Count today's high/urgent live memos (user-local day).
 
-    An "interruption" is any event loud enough to pull a focused user
-    out of what they're doing. Approximated here as priority in
-    {urgent, high} with dismissed=False, created since local midnight.
-    Read-only — this is purely a surface signal for the overview
-    prompt. Nothing is blocked or altered based on it.
+    An "interruption" is any item loud enough to pull a focused user
+    out of what they're doing. Counted off Memos now (pupdates auto-
+    dismiss once routed, so they can't serve as the signal anymore);
+    high/urgent memos that are still pending or seen since local
+    midnight is the right approximation.
+
+    Read-only — purely a surface signal for the overview prompt.
+    Nothing is blocked or altered based on it.
     """
     try:
         from datetime import timezone as _tz
         from planet_maiko.config import user_now
-        from planet_maiko.models.pupdate import Pupdate
+        from planet_maiko.models.memo import Memo
 
         now_local = user_now()
         midnight_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
         midnight_utc = midnight_local.astimezone(_tz.utc).replace(tzinfo=None)
         return (
-            Pupdate.query
-            .filter(Pupdate.priority.in_(("urgent", "high")))
-            .filter(Pupdate.dismissed == False)  # noqa: E712
-            .filter(Pupdate.timestamp >= midnight_utc)
+            Memo.query
+            .filter(Memo.priority.in_(("urgent", "high")))
+            .filter(Memo.status.in_(("pending", "seen")))
+            .filter(Memo.created_at >= midnight_utc)
             .count()
         )
     except Exception as e:

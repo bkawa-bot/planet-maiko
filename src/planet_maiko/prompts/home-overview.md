@@ -24,8 +24,16 @@ Use the actual day of week in your greeting — don't guess.
 
 ## Context
 
-### Pupdates (non-dismissed, last 24h)
-{pupdates}
+### Memos (live user-facing state)
+
+These are every persistent item waiting on the user — skill run
+results, notifications, agent asks (ready-for-review, stuck, plan,
+proposal), pending job approvals. Each has a `kind` (the type), a
+`category` (`info` / `waiting` / `offer`), and a `status` (`pending`
+when the user hasn't seen it, `seen` when they've at least had it
+rendered). Pick `needs` items from this list.
+
+{memos}
 
 ### Tasks (status: new / in_progress / blocked)
 {tasks}
@@ -126,7 +134,7 @@ the JSON object, starting with `{` and ending with `}`.
     {"task_id": "<id from the tasks context>", "why": "<one sentence on why this matters today>"}
   ],
   "needs": [
-    {"pupdate_id": "<id from the pupdates context>", "summary": "<one-line summary of what it needs from the user>"}
+    {"memo_id": <int from the memos context>, "summary": "<one-line summary of what it needs from the user>"}
   ],
   "alive": "<one-sentence narrative of system + pack status — NOT tabular>",
   "custom_section": "<markdown output from the user's custom add-on prompt; empty string if no add-on configured>",
@@ -161,17 +169,17 @@ the JSON object, starting with `{` and ending with `}`.
   sentence: why this specific task deserves attention today.
 
 - **needs**: Where you'd start if you only had 30 minutes today. Pick
-  **3-5** pupdates, ordered by what you'd tackle first — biggest leverage
-  at the top. This is a *recommendation*, not a gated queue: a separate
-  "Waiting on you" panel already lists everything that's literally
-  blocking the user, so you don't need to enumerate every pending review
-  here. Prefer things where the user's attention unlocks real movement
-  — a PR review that's blocking a teammate, a stuck agent a nudge would
-  free, a plan that needs sign-off to start the day's real work. Skip
-  pure FYIs and skip items that can genuinely wait. Each `pupdate_id`
-  MUST come from the provided pupdates context. `summary` is one line:
-  what it is and why it's worth starting here. Empty array is fine if
-  nothing stands out.
+  **3-5** memos, ordered by what you'd tackle first — biggest leverage
+  at the top. This is a *recommendation*, not a gated queue: the
+  Memos pane already lists everything that's literally waiting, so
+  you don't need to enumerate every pending review here. Prefer
+  memos where the user's attention unlocks real movement — a PR
+  review that's blocking a teammate, a stuck agent a nudge would
+  free, a plan that needs sign-off to start the day's real work.
+  Skip pure FYIs (category=info) unless something is genuinely
+  pressing. Each `memo_id` MUST come from the provided memos context
+  as an integer. `summary` is one line: what it is and why it's
+  worth starting here. Empty array is fine if nothing stands out.
 
 - **alive**: **One sentence.** Narrative, not tabular. Something like
   "Pollers all green; Mori is 10 minutes into the auth refactor and
@@ -210,5 +218,5 @@ the JSON object, starting with `{` and ending with `}`.
     - End with a warm, decisive line. Permission to stop, not a cheer.
 
 Remember: the frontend parses the JSON and wires real action buttons to
-the `task_id` / `pupdate_id` values. **IDs must match the context**
+the `task_id` / `memo_id` values. **IDs must match the context**
 exactly or the buttons won't work.

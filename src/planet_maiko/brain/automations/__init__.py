@@ -1124,6 +1124,17 @@ def evaluate():
                 a.fire_count = (a.fire_count or 0) + 1
                 pupdate_fired += 1
                 fired_for_this = True
+                # Auto-dismiss: the automation routed this pupdate to
+                # its downstream effect (task, memo, agent job). The
+                # pupdate is a queue event — once routed, it has no
+                # remaining value sitting in the inbox or the overview's
+                # context. Individual actions can still mark
+                # brain_processed early if they need to suppress
+                # re-firing between the action and this commit, but the
+                # dismiss happens here uniformly.
+                if not p.dismissed:
+                    p.dismissed = True
+                    p.dismissed_at = datetime.now(timezone.utc)
                 break  # first-match wins
             if not fired_for_this:
                 pupdate_unmatched += 1

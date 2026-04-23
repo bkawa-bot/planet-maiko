@@ -25,52 +25,41 @@ import "./OverviewPane.css";
  * as the main-column content.
  */
 
-// Pupdate → action resolver. Given the pupdate referenced in needs,
-// returns where the primary button should go. Mirrors the logic that
-// used to live in Home's waitingCta so action routing stays consistent
-// with what the old "What needs you" card did.
-// Map a pupdate to where its action button should go. Returns null
-// when there's no useful destination — caller hides the button in
-// that case instead of rendering "Open" that bounces back to Home.
-function resolveAction(p) {
-  if (!p) return null;
-  const taskId = p.metadata?.task_id;
-  if (p.type === "agent_plan_for_approval" && taskId) {
-    return { label: "Review plan", to: `/tasks/${taskId}/plan` };
+// Memo → action resolver. Given the memo referenced in overview.needs,
+// returns where the primary button should go. Returns null when
+// there's no useful destination — caller hides the button so the user
+// doesn't click an "Open" that bounces back to Home.
+function resolveAction(m) {
+  if (!m) return null;
+  const taskId = m.source_task_id || m.extra?.task_id;
+  const kind = m.kind;
+
+  if (kind === "agent_plan" && taskId) {
+    return { label: m.cta_label || "Review plan", to: m.url || `/tasks/${taskId}/plan` };
   }
-  const tags = p.tags || [];
-  // Review agents produce a diff + inline comments + verdict — route
-  // straight to the diff page so the user sees everything in context.
-  const isReviewAgent =
-    p.type === "agent_ready_for_review" && tags.includes("review");
-  if (isReviewAgent && taskId) {
-    return { label: "Open review", to: `/tasks/${taskId}/review` };
+  if (kind === "agent_ready" && taskId) {
+    return { label: m.cta_label || "Review diff", to: m.url || `/tasks/${taskId}/review` };
   }
-  // Investigation / cartographer output is a markdown document, not
-  // a diff — keep the artifact-modal path for those.
-  const isReportLike =
-    p.type === "pr_review_complete" ||
-    p.type === "investigation_complete" ||
-    (p.type === "agent_ready_for_review" &&
-      (tags.includes("investigation") || tags.includes("cartographer")));
-  if (isReportLike) {
-    return { label: "Read report", artifact: true };
+  if (kind === "agent_stuck" && taskId) {
+    return { label: m.cta_label || "Help out", to: m.url || `/tasks/${taskId}` };
   }
-  if (p.type === "agent_ready_for_review" && taskId) {
-    return { label: "Review diff", to: `/tasks/${taskId}/review` };
+  if (kind === "job_approval") {
+    // Inline approve on the Memos pane; no nav destination.
+    return null;
   }
-  if (p.type === "agent_stuck" && taskId) {
-    return { label: "Help out", to: `/tasks/${taskId}` };
+  if (kind === "notification") {
+    return m.url ? { label: "Open", href: m.url } : null;
   }
-  if (p.type === "pr_review_requested" || p.type === "pr_changes_requested") {
-    return p.url
-      ? { label: p.type === "pr_review_requested" ? "Review PR" : "Revise", href: p.url }
-      : null;
+  if (kind === "skill_result") {
+    // Output lives on the Recent Skills widget; no nav needed from here.
+    return null;
   }
-  // Fall-through: unknown type, or known type missing the context it
-  // needs to route (agent_stuck without a task_id, etc). Return null
-  // so the caller renders a read-only card — better than an "Open"
-  // button that lands the user back on the page they came from.
+  if (kind === "agent_proposal") {
+    // The Memos pane renders ProposalCard inline for approve/edit/dismiss;
+    // the overview just calls it out narratively.
+    return null;
+  }
+  // Unknown or unhandled kind — render a read-only card.
   return null;
 }
 
@@ -80,12 +69,12 @@ export default function OverviewPane() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const [pupdates, setPupdates] = useState([]);
+  const [memos, setMemos] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [pendingLearnings, setPendingLearnings] = useState([]);
   const [showAllNeeds, setShowAllNeeds] = useState(false);
   const [artifactModal, setArtifactModal] = useState(null);
-  // Which needs-card's action menu is open (pupdate_id), or null. Only
+  // Which needs-card's action menu is open (memo_id), or null. Only
   // one menu is ever open at a time — a single shared ref is enough.
   const [menuOpenFor, setMenuOpenFor] = useState(null);
   const menuRef = useRef(null);
@@ -101,11 +90,11 @@ export default function OverviewPane() {
   const [papyrusMode, setPapyrusMode] = useState(false);
   const navigate = useNavigate();
 
-  const pupdateById = useMemo(() => {
-    const m = {};
-    for (const p of pupdates) m[p.id] = p;
-    return m;
-  }, [pupdates]);
+  const memoById = useMemo(() => {
+    const idx = {};
+    for (const m of memos) idx[m.id] = m;
+    return idx;
+  }, [memos]);
 
   const taskById = useMemo(() => {
     const m = {};
@@ -118,9 +107,9 @@ export default function OverviewPane() {
     setError(null);
     setPapyrusMode(Math.random() < 0.02);
     try {
-      const [overviewRes, pupRes, taskRes, pendingRes, projectRes, profileRes] = await Promise.all([
+      const [overviewRes, memoRes, taskRes, pendingRes, projectRes, profileRes] = await Promise.all([
         api.getHomeOverview(),
-        api.getPupdates(),
+        api.getMemos({ limit: 200 }),
         api.getTasks(),
         api.getLearnings({ status: "pending" }).catch(() => []),
         api.getProjects().catch(() => []),
@@ -128,7 +117,7 @@ export default function OverviewPane() {
       ]);
       setOverview(overviewRes.overview);
       setGeneratedAt(overviewRes.generated_at);
-      setPupdates(pupRes);
+      setMemos(memoRes || []);
       setTasks(taskRes);
       setProjects(projectRes || []);
       setAgentNames(Object.fromEntries((profileRes || []).map((p) => [p.id, p.display_name])));
@@ -153,16 +142,16 @@ export default function OverviewPane() {
     setRefreshing(false);
   };
 
-  const handleDismiss = async (pupdateId) => {
+  const handleDismiss = async (memoId) => {
     try {
-      await api.dismissPupdate(pupdateId);
-      setPupdates((prev) => prev.filter((p) => p.id !== pupdateId));
+      await api.dismissMemo(memoId);
+      setMemos((prev) => prev.filter((m) => m.id !== memoId));
       // Optimistic: drop from overview.needs locally so the row
       // disappears without waiting for a regeneration.
       if (overview?.needs) {
         setOverview({
           ...overview,
-          needs: overview.needs.filter((n) => n.pupdate_id !== pupdateId),
+          needs: overview.needs.filter((n) => n.memo_id !== memoId),
         });
       }
     } catch (err) {
@@ -170,37 +159,36 @@ export default function OverviewPane() {
     }
   };
 
-  /** Quick-action: turn the pupdate into a Task of the given type,
-   *  link it back via source_pupdate_id for provenance, drop the
-   *  pupdate from the needs list. `type` defaults to "todo" — pass
-   *  "investigation" to route the task to an investigator agent on
-   *  the next cycle tick. */
-  const handleMakeTask = async (pup, type = "todo") => {
+  /** Quick-action: turn the memo into a Task of the given type.
+   *  `type` defaults to "todo" — pass "investigation" to route the
+   *  task to an investigator agent on the next cycle tick. Dismisses
+   *  the memo once the task is created.
+   */
+  const handleMakeTask = async (memo, type = "todo") => {
     try {
-      const repo = pup.metadata?.repo || pup.metadata?.repository || pup.extra?.repo;
+      const repo = memo.extra?.repo || memo.extra?.draft?.repo;
       const toastMsg = type === "investigation"
         ? "Investigation queued 🐾"
         : "Task created 🐾";
       await api.createTask({
-        title: pup.title || "New task",
+        title: memo.title || "New task",
         type,
-        priority: pup.priority || "normal",
-        url: pup.url || "",
-        source_pupdate_id: pup.id,
-        tags: ["from_pupdate"],
+        priority: memo.priority || "normal",
+        url: memo.url || "",
+        tags: ["from_memo"],
         metadata: {
-          description: pup.body || "",
+          description: memo.body || "",
           repo: repo || "",
-          from_pupdate: pup.id,
+          from_memo_id: memo.id,
         },
       });
       showToast(toastMsg, "normal");
-      await api.dismissPupdate(pup.id).catch(() => {});
-      setPupdates((prev) => prev.filter((p) => p.id !== pup.id));
+      await api.dismissMemo(memo.id).catch(() => {});
+      setMemos((prev) => prev.filter((m) => m.id !== memo.id));
       if (overview?.needs) {
         setOverview({
           ...overview,
-          needs: overview.needs.filter((n) => n.pupdate_id !== pup.id),
+          needs: overview.needs.filter((n) => n.memo_id !== memo.id),
         });
       }
     } catch (err) {
@@ -208,8 +196,8 @@ export default function OverviewPane() {
     }
   };
 
-  const handleOpenSource = (pup) => {
-    if (pup.url) window.open(pup.url, "_blank", "noreferrer");
+  const handleOpenSource = (memo) => {
+    if (memo.url) window.open(memo.url, "_blank", "noreferrer");
   };
 
   // TaskCard's action handler — status transitions + launch. Modal-
@@ -403,12 +391,12 @@ export default function OverviewPane() {
           <h2 className="overview-section-title">What I'd start with</h2>
           <div className="overview-card-list">
             {needsToShow.map((n) => {
-              const pup = pupdateById[n.pupdate_id];
-              if (!pup) return null;
-              const action = resolveAction(pup);
+              const memo = memoById[n.memo_id];
+              if (!memo) return null;
+              const action = resolveAction(memo);
               const go = action ? (e) => {
                 e.stopPropagation();
-                if (action.artifact) { setArtifactModal(pup); return; }
+                if (action.artifact) { setArtifactModal(memo); return; }
                 if (action.href) window.open(action.href, "_blank", "noreferrer");
                 else navigate(action.to);
               } : null;
@@ -418,14 +406,14 @@ export default function OverviewPane() {
               // was even interactive.
               const onBodyClick = go || ((e) => {
                 e.stopPropagation();
-                setMenuOpenFor(pup.id);
+                setMenuOpenFor(memo.id);
               });
-              const originalAsk = pup.metadata?.original_ask;
-              const originalNonGoals = pup.metadata?.original_non_goals;
-              const askedAt = pup.metadata?.asked_at;
-              const menuOpen = menuOpenFor === pup.id;
+              const originalAsk = memo.extra?.original_ask;
+              const originalNonGoals = memo.extra?.original_non_goals;
+              const askedAt = memo.extra?.asked_at;
+              const menuOpen = menuOpenFor === memo.id;
               return (
-                <div key={n.pupdate_id} className="overview-card">
+                <div key={n.memo_id} className="overview-card">
                   <div
                     className="overview-card-body"
                     onClick={onBodyClick}
@@ -442,9 +430,9 @@ export default function OverviewPane() {
                         must not: {originalNonGoals.length > 120 ? originalNonGoals.slice(0, 117) + "…" : originalNonGoals}
                       </div>
                     )}
-                    {pup.timestamp && (
+                    {memo.created_at && (
                       <div className="overview-card-meta">
-                        {relativeTime(pup.timestamp)}
+                        {relativeTime(memo.created_at)}
                       </div>
                     )}
                   </div>
@@ -458,7 +446,7 @@ export default function OverviewPane() {
                       className="btn-ghost overview-card-menu-btn"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setMenuOpenFor(menuOpen ? null : pup.id);
+                        setMenuOpenFor(menuOpen ? null : memo.id);
                       }}
                       title="More actions"
                       aria-label="More actions"
@@ -473,7 +461,7 @@ export default function OverviewPane() {
                           onClick={(e) => {
                             e.stopPropagation();
                             setMenuOpenFor(null);
-                            handleMakeTask(pup, "todo");
+                            handleMakeTask(memo, "todo");
                           }}
                         >
                           <ListTodo size={13} /> Make a todo
@@ -483,18 +471,18 @@ export default function OverviewPane() {
                           onClick={(e) => {
                             e.stopPropagation();
                             setMenuOpenFor(null);
-                            handleMakeTask(pup, "investigation");
+                            handleMakeTask(memo, "investigation");
                           }}
                         >
                           <Search size={13} /> Investigate with an agent
                         </button>
-                        {pup.url && (
+                        {memo.url && (
                           <button
                             className="overview-card-menu-item"
                             onClick={(e) => {
                               e.stopPropagation();
                               setMenuOpenFor(null);
-                              handleOpenSource(pup);
+                              handleOpenSource(memo);
                             }}
                           >
                             <ExternalLink size={13} /> Open source
@@ -505,7 +493,7 @@ export default function OverviewPane() {
                           onClick={(e) => {
                             e.stopPropagation();
                             setMenuOpenFor(null);
-                            handleDismiss(pup.id);
+                            handleDismiss(memo.id);
                           }}
                         >
                           <X size={13} /> Dismiss
