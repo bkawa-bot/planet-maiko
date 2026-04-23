@@ -25,6 +25,14 @@ def list_pupdates():
     include_held = request.args.get("include_held", "false").lower() == "true"
     limit = min(int(request.args.get("limit", 200)), 500)
     offset = int(request.args.get("offset", 0))
+    # brain_processed filter — used by the Brain Queue tab to show
+    # exactly the pupdates the brain cycle hasn't routed yet.
+    # Pass "false" for the unprocessed queue, "true" for processed,
+    # omit for "don't care".
+    brain_processed_raw = request.args.get("brain_processed")
+    brain_processed = None
+    if brain_processed_raw is not None:
+        brain_processed = brain_processed_raw.lower() in ("true", "1", "yes")
 
     query = Pupdate.query
     if not show_dismissed:
@@ -35,6 +43,8 @@ def list_pupdates():
         query = query.filter_by(priority=priority)
     if category:
         query = query.filter_by(category=category)
+    if brain_processed is not None:
+        query = query.filter_by(brain_processed=brain_processed)
 
     pupdates = query.order_by(Pupdate.timestamp.desc()).limit(limit).offset(offset).all()
 
