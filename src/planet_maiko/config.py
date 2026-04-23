@@ -85,6 +85,11 @@ DEFAULT_CONFIG = {
         "team_id": "",
         "poll_interval_minutes": 60,
     },
+    "pagerduty": {
+        "enabled": False,
+        "api_token": "",
+        "poll_interval_minutes": 10,
+    },
     "calendar": {
         "enabled": False,
         "ical_urls": [],

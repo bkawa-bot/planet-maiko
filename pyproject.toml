@@ -36,6 +36,7 @@ maiko-desktop = "planet_maiko.desktop:main"
 github = "planet_maiko.pollers.github_poller:GitHubPoller"
 linear = "planet_maiko.pollers.linear_poller:LinearPoller"
 calendar = "planet_maiko.pollers.calendar_poller:CalendarPoller"
+pagerduty = "planet_maiko.pollers.pagerduty_poller:PagerDutyPoller"
 
 [project.entry-points."planet_maiko.runtimes"]
 claude-code = "planet_maiko.agents.runtimes.claude_code:ClaudeCodeRuntime"

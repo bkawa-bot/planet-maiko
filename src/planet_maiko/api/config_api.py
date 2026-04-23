@@ -78,6 +78,19 @@ def test_integration(integration):
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)}), 400
 
+    elif integration == "pagerduty":
+        from planet_maiko.pollers.pagerduty_client import PagerDutyClient
+        try:
+            client = PagerDutyClient()
+        except ValueError as e:
+            return jsonify({"status": "error", "message": str(e)}), 400
+        try:
+            me = client.fetch_me()
+            name = me.get("name") or me.get("email") or "unknown"
+            return jsonify({"status": "ok", "user": name})
+        except Exception as e:
+            return jsonify({"status": "error", "message": str(e)}), 400
+
     return jsonify({"status": "error", "message": f"Unknown integration: {integration}"}), 400
 
 

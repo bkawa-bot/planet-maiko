@@ -267,6 +267,52 @@ export default function IntegrationsSection({
             </div>
           </div>
 
+          {/* PagerDuty */}
+          <div className="integration-section">
+            <h3>PagerDuty</h3>
+            <div className="setup-hint">
+              Create an API token in PagerDuty: <strong>User icon → My Profile → User Settings → API Access → Create New API User Token</strong>.
+              Maiko polls for incidents assigned to you in triggered / acknowledged state.
+            </div>
+            <div className="integration-fields">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={config.pagerduty?.enabled || false}
+                  onChange={(e) => updateField("pagerduty", "enabled", e.target.checked)}
+                />
+                Enabled
+              </label>
+              <label>
+                API Token
+                <input
+                  type="password"
+                  value={config.pagerduty?.api_token || ""}
+                  onChange={(e) => updateField("pagerduty", "api_token", e.target.value)}
+                  placeholder="u+..."
+                />
+              </label>
+              <label>
+                Poll interval (minutes)
+                <input
+                  type="number"
+                  min="1"
+                  value={config.pagerduty?.poll_interval_minutes || 10}
+                  onChange={(e) =>
+                    updateField("pagerduty", "poll_interval_minutes", parseInt(e.target.value) || 10)
+                  }
+                />
+              </label>
+              {pollerStatus.pagerduty && (
+                <div className="poller-status">
+                  Status: {pollerStatus.pagerduty.running ? "Running" : "Stopped"}
+                  <button onClick={() => onRunPoller("pagerduty")}>Run Now</button>
+                </div>
+              )}
+              <button className="btn btn-sm" onClick={() => testIntegration("pagerduty")}>Test Connection</button>
+            </div>
+          </div>
+
           {/* Calendar */}
           <div className="integration-section">
             <h3>Calendar</h3>

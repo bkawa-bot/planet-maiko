@@ -36,6 +36,8 @@ BUILTIN_PUPDATE_TYPES = [
     # Calendar poller
     ("calendar_event",          "Calendar event",           "Calendar"),
     ("calendar_1on1",           "Calendar 1:1",             "Calendar"),
+    # PagerDuty poller
+    ("pagerduty_incident",      "PagerDuty incident",       "PagerDuty"),
     # Agents (emitted by Maiko core — the agents themselves)
     ("agent_ready_for_review",  "Agent ready for review",   "Agents"),
     ("agent_plan_for_approval", "Agent plan ready",         "Agents"),

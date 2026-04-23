@@ -1225,6 +1225,13 @@ _RULE_SEEDS = [
         "action_config": {"task_type": "todo"},
     },
     {
+        "name": "Create task on PagerDuty incident",
+        "description": "An incident assigned to you becomes a high-priority bug task.",
+        "match": {"type": "pagerduty_incident"},
+        "action": "create_task_from_pupdate",
+        "action_config": {"task_type": "bug", "task_priority": "high"},
+    },
+    {
         "name": "Create task on PR changes requested",
         "description": "Reviewer wants changes — create a high-priority bug task to address them.",
         "match": {"type": "pr_changes_requested"},
