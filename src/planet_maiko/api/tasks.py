@@ -36,10 +36,14 @@ def get_task(task_id):
 
 @tasks_bp.route("/tasks", methods=["POST"])
 def create_task():
-    """Create a new task."""
+    """Create a new task. `id` is auto-generated if the client doesn't
+    provide one — matches the pattern used by _act_create_task so the
+    same task-{hex10} shape lands regardless of origin."""
+    import uuid
     data = request.get_json()
+    task_id = data.get("id") or f"task-{uuid.uuid4().hex[:10]}"
     task = Task(
-        id=data["id"],
+        id=task_id,
         title=data["title"],
         type=data.get("type", "todo"),
         status=data.get("status", "new"),

@@ -160,12 +160,18 @@ the JSON object, starting with `{` and ending with `}`.
   come from the provided tasks context — do not invent IDs. `why` is one
   sentence: why this specific task deserves attention today.
 
-- **needs**: Up to **5** pupdates that actually need the user's hands.
-  These are things blocked on them — PR reviews requested, agent plans
-  waiting for approval, stuck agents, conflicts, incidents. Skip pure
-  FYIs. Each `pupdate_id` MUST come from the provided pupdates context.
-  `summary` is one line: what it needs. If fewer than 5 genuinely need
-  the user, return fewer. Empty array is fine.
+- **needs**: Where you'd start if you only had 30 minutes today. Pick
+  **3-5** pupdates, ordered by what you'd tackle first — biggest leverage
+  at the top. This is a *recommendation*, not a gated queue: a separate
+  "Waiting on you" panel already lists everything that's literally
+  blocking the user, so you don't need to enumerate every pending review
+  here. Prefer things where the user's attention unlocks real movement
+  — a PR review that's blocking a teammate, a stuck agent a nudge would
+  free, a plan that needs sign-off to start the day's real work. Skip
+  pure FYIs and skip items that can genuinely wait. Each `pupdate_id`
+  MUST come from the provided pupdates context. `summary` is one line:
+  what it is and why it's worth starting here. Empty array is fine if
+  nothing stands out.
 
 - **alive**: **One sentence.** Narrative, not tabular. Something like
   "Pollers all green; Mori is 10 minutes into the auth refactor and

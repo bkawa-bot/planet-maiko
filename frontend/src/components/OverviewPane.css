@@ -203,22 +203,6 @@
   opacity: 0.75;
 }
 
-.overview-dismiss {
-  flex-shrink: 0;
-  padding: 4px;
-  opacity: 0.35;
-  color: var(--text-muted);
-  transition: opacity 0.15s;
-  background: none;
-  border: none;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.overview-card:hover .overview-dismiss { opacity: 0.7; }
-.overview-dismiss:hover { opacity: 1; }
-
 /* Show more / less toggle for needs */
 .overview-more-toggle {
   align-self: stretch;
@@ -337,26 +321,74 @@
 .overview-custom .brief-content p:first-child { margin-top: 0; }
 .overview-custom .brief-content p:last-child { margin-bottom: 0; }
 
-/* Quick "make a task" button on needs cards — sibling of the
-   dismiss X. Styled like the dismiss but in lavender so it reads
-   "do something with this" vs "drop it." */
-.overview-make-task {
+/* Action menu on needs cards — a `…` button that opens a dropdown
+   with the per-card actions (Make a todo / Investigate / Open source
+   / Dismiss). The wrap is the anchor for the absolute-positioned
+   menu below. */
+.overview-card-menu-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.overview-card-menu-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 4px;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 6px;
-  color: var(--lavender, #b59dd8);
+  color: var(--text-muted);
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  opacity: 0.5;
+  transition: opacity 0.15s, background 0.15s, border-color 0.15s;
 }
-.overview-make-task:hover {
-  background: color-mix(in srgb, var(--lavender, #b59dd8) 14%, transparent);
-  border-color: var(--lavender, #b59dd8);
+.overview-card:hover .overview-card-menu-btn { opacity: 0.9; }
+.overview-card-menu-btn:hover,
+.overview-card-menu-btn[aria-expanded="true"] {
+  opacity: 1;
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+
+.overview-card-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 200px;
+  padding: 4px;
+  background: var(--bg-card, #1e1e24);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.overview-card-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.overview-card-menu-item:hover {
+  background: var(--bg-hover);
+}
+.overview-card-menu-item-muted {
+  color: var(--text-muted);
+}
+.overview-card-menu-item-muted:hover {
+  color: var(--text);
 }
 
 /* Pending learnings — separate call-out card, clicks through to

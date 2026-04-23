@@ -1,10 +1,13 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { renderMarkdown } from "../utils/markdown";
 import { relativeTime } from "../utils/dates";
-import { Sunrise, RefreshCw, FileText, X, Loader, Brain, Plus } from "lucide-react";
+import {
+  Sunrise, RefreshCw, FileText, X, Loader, Brain,
+  MoreHorizontal, ListTodo, Search, ExternalLink,
+} from "lucide-react";
 import "./OverviewPane.css";
 
 /**
@@ -81,6 +84,10 @@ export default function OverviewPane() {
   const [pendingLearnings, setPendingLearnings] = useState([]);
   const [showAllNeeds, setShowAllNeeds] = useState(false);
   const [artifactModal, setArtifactModal] = useState(null);
+  // Which needs-card's action menu is open (pupdate_id), or null. Only
+  // one menu is ever open at a time — a single shared ref is enough.
+  const [menuOpenFor, setMenuOpenFor] = useState(null);
+  const menuRef = useRef(null);
   // Easter egg: 1-in-50 chance Maiko delivers the overview in Papyrus.
   // Rolled fresh on every fetch + manual refresh, so it's rare, not
   // sticky, and refreshing lets you escape (98% chance).
@@ -152,30 +159,31 @@ export default function OverviewPane() {
     }
   };
 
-  /** Quick-action: turn the pupdate into a todo Task, link it back
-   *  via source_pupdate_id for provenance, drop the pupdate from the
-   *  needs list. Useful for pupdates that don't have a type-specific
-   *  resolveAction() target but still represent work the user wants
-   *  to track. */
-  const handleMakeTask = async (pup) => {
+  /** Quick-action: turn the pupdate into a Task of the given type,
+   *  link it back via source_pupdate_id for provenance, drop the
+   *  pupdate from the needs list. `type` defaults to "todo" — pass
+   *  "investigation" to route the task to an investigator agent on
+   *  the next cycle tick. */
+  const handleMakeTask = async (pup, type = "todo") => {
     try {
       const repo = pup.metadata?.repo || pup.metadata?.repository || pup.extra?.repo;
+      const toastMsg = type === "investigation"
+        ? "Investigation queued 🐾"
+        : "Task created 🐾";
       await api.createTask({
         title: pup.title || "New task",
-        type: "todo",
+        type,
         priority: pup.priority || "normal",
         url: pup.url || "",
         source_pupdate_id: pup.id,
         tags: ["from_pupdate"],
-        extra: {
+        metadata: {
           description: pup.body || "",
           repo: repo || "",
           from_pupdate: pup.id,
         },
       });
-      showToast("Task created 🐾", "normal");
-      // Dismissing the pupdate implicitly since it's been actioned —
-      // the Task is the new artifact to track.
+      showToast(toastMsg, "normal");
       await api.dismissPupdate(pup.id).catch(() => {});
       setPupdates((prev) => prev.filter((p) => p.id !== pup.id));
       if (overview?.needs) {
@@ -188,6 +196,31 @@ export default function OverviewPane() {
       showToast(err.message || "Couldn't create task", "high");
     }
   };
+
+  const handleOpenSource = (pup) => {
+    if (pup.url) window.open(pup.url, "_blank", "noreferrer");
+  };
+
+  // Close the action menu on outside click or Escape. The click
+  // handler runs AFTER React's onClick (which sets the state), so
+  // toggling from the menu button works without racing: when menu
+  // opens, menuRef is still null on this tick, so the close check
+  // short-circuits.
+  useEffect(() => {
+    if (!menuOpenFor) return;
+    const onDocClick = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpenFor(null);
+      }
+    };
+    const onKey = (e) => { if (e.key === "Escape") setMenuOpenFor(null); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpenFor]);
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -304,7 +337,7 @@ export default function OverviewPane() {
 
       {allNeeds.length > 0 && (
         <section className="overview-section">
-          <h2 className="overview-section-title">A few things need you</h2>
+          <h2 className="overview-section-title">What I'd start with</h2>
           <div className="overview-card-list">
             {needsToShow.map((n) => {
               const pup = pupdateById[n.pupdate_id];
@@ -316,15 +349,24 @@ export default function OverviewPane() {
                 if (action.href) window.open(action.href, "_blank", "noreferrer");
                 else navigate(action.to);
               } : null;
+              // Cards with no primary CTA fall back to "click anywhere
+              // on the body opens the action menu" — instead of just
+              // sitting there inert, which made it unclear the card
+              // was even interactive.
+              const onBodyClick = go || ((e) => {
+                e.stopPropagation();
+                setMenuOpenFor(pup.id);
+              });
               const originalAsk = pup.metadata?.original_ask;
               const originalNonGoals = pup.metadata?.original_non_goals;
               const askedAt = pup.metadata?.asked_at;
+              const menuOpen = menuOpenFor === pup.id;
               return (
                 <div key={n.pupdate_id} className="overview-card">
                   <div
                     className="overview-card-body"
-                    onClick={go || undefined}
-                    style={{ cursor: go ? "pointer" : "default" }}
+                    onClick={onBodyClick}
+                    style={{ cursor: "pointer" }}
                   >
                     <div className="overview-card-title">{n.summary}</div>
                     {originalAsk && (
@@ -348,22 +390,66 @@ export default function OverviewPane() {
                       {action.label}
                     </button>
                   )}
-                  <button
-                    className="btn-ghost overview-make-task"
-                    onClick={() => handleMakeTask(pup)}
-                    title="Make a task from this"
-                    aria-label="Make a task"
-                  >
-                    <Plus size={12} />
-                  </button>
-                  <button
-                    className="btn-ghost overview-dismiss"
-                    onClick={() => handleDismiss(pup.id)}
-                    title="Dismiss"
-                    aria-label="Dismiss"
-                  >
-                    <X size={12} />
-                  </button>
+                  <div className="overview-card-menu-wrap">
+                    <button
+                      className="btn-ghost overview-card-menu-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuOpenFor(menuOpen ? null : pup.id);
+                      }}
+                      title="More actions"
+                      aria-label="More actions"
+                      aria-expanded={menuOpen}
+                    >
+                      <MoreHorizontal size={14} />
+                    </button>
+                    {menuOpen && (
+                      <div className="overview-card-menu" ref={menuRef}>
+                        <button
+                          className="overview-card-menu-item"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuOpenFor(null);
+                            handleMakeTask(pup, "todo");
+                          }}
+                        >
+                          <ListTodo size={13} /> Make a todo
+                        </button>
+                        <button
+                          className="overview-card-menu-item"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuOpenFor(null);
+                            handleMakeTask(pup, "investigation");
+                          }}
+                        >
+                          <Search size={13} /> Investigate with an agent
+                        </button>
+                        {pup.url && (
+                          <button
+                            className="overview-card-menu-item"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMenuOpenFor(null);
+                              handleOpenSource(pup);
+                            }}
+                          >
+                            <ExternalLink size={13} /> Open source
+                          </button>
+                        )}
+                        <button
+                          className="overview-card-menu-item overview-card-menu-item-muted"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuOpenFor(null);
+                            handleDismiss(pup.id);
+                          }}
+                        >
+                          <X size={13} /> Dismiss
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })}
