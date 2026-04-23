@@ -721,9 +721,11 @@ def run_skill_endpoint(skill_name):
 
     result = run_skill(skill_name, context=context, working_dir=working_dir)
 
-    # Auto-save successful results
+    # Memo-only persistence now that overview graduated to its own
+    # file cache. User-facing skills land as kind=skill_result memos;
+    # self-rendering skills (home-overview / morning-brief / etc.)
+    # have purpose-built surfaces already and skip the memo.
     if result.get("success") and result.get("output"):
-        from planet_maiko.models.skill_result import SkillResult
         from planet_maiko.brain.memos import create_memo
         from planet_maiko.config import user_now
         now_local = user_now()
@@ -735,22 +737,7 @@ def run_skill_endpoint(skill_name):
             "repo-analysis": f"Repo Analysis — {now_local.strftime('%B %d')}",
         }
         title = title_map.get(skill_name, f"{skill_name} — {now_local.strftime('%B %d %H:%M')}")
-        # SkillResult still writes for the home-overview cache path
-        # (brain/overview.py reads from it). It'll retire in a later
-        # phase when overview graduates out of skills entirely.
-        sr = SkillResult(
-            skill_name=skill_name,
-            title=title,
-            content=result["output"],
-        )
-        db.session.add(sr)
-        db.session.flush()
-        result["result_id"] = sr.id
 
-        # User-facing skills (not home-overview / morning-brief / etc.
-        # which render through their own surfaces) land on Home's
-        # RecentSkillsPane as a Memo. Memo is the new canonical
-        # surface — skill_result pupdates are retired.
         if skill_name not in _SELF_RENDERING_SKILLS:
             output = result["output"]
             first_line = ""
@@ -760,7 +747,7 @@ def run_skill_endpoint(skill_name):
                     first_line = stripped
                     break
             preview_title = first_line[:80] if first_line else title
-            create_memo(
+            memo = create_memo(
                 kind="skill_result",
                 category="info",
                 title=f"{skill_name}: {preview_title}",
@@ -769,33 +756,14 @@ def run_skill_endpoint(skill_name):
                 extra={
                     "skill_name": skill_name,
                     "skill_title": title,
-                    "result_id": sr.id,
                 },
             )
+            db.session.flush()
+            result["memo_id"] = memo.id
 
         db.session.commit()
 
     return jsonify(result)
-
-
-@agents_bp.route("/skill-results", methods=["GET"])
-def list_skill_results():
-    """List all skill results, optionally filtered by skill name."""
-    from planet_maiko.models.skill_result import SkillResult
-    skill_name = request.args.get("skill_name")
-    query = SkillResult.query
-    if skill_name:
-        query = query.filter_by(skill_name=skill_name)
-    results = query.order_by(SkillResult.created_at.desc()).limit(50).all()
-    return jsonify([r.to_dict() for r in results])
-
-
-@agents_bp.route("/skill-results/<int:result_id>", methods=["GET"])
-def get_skill_result(result_id):
-    """Get a single skill result."""
-    from planet_maiko.models.skill_result import SkillResult
-    sr = db.get_or_404(SkillResult, result_id)
-    return jsonify(sr.to_dict())
 
 
 @agents_bp.route("/agents", methods=["GET"])

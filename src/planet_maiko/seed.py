@@ -17,7 +17,6 @@ from planet_maiko.models.task import Task
 from planet_maiko.models.pupdate import Pupdate
 from planet_maiko.models.learning import Learning
 from planet_maiko.models.signal import Signal
-from planet_maiko.models.skill_result import SkillResult
 
 logger = logging.getLogger(__name__)
 

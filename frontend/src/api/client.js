@@ -221,11 +221,6 @@ export const api = {
   deleteSkill: (id) => request(`/skills/${id}`, { method: "DELETE" }),
   runSkill: (name, data) =>
     request(`/skills/${name}/run`, { method: "POST", body: JSON.stringify(data) }),
-  getSkillResults: (skillName) => {
-    const query = skillName ? `?skill_name=${encodeURIComponent(skillName)}` : "";
-    return request(`/skill-results${query}`);
-  },
-  getSkillResult: (id) => request(`/skill-results/${id}`),
 
   // Suggestions
   runScan: (repos) =>
