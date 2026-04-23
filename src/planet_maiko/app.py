@@ -247,6 +247,7 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.pet_api import pet_bp
     from planet_maiko.api.automations_api import automations_bp
     from planet_maiko.api.agent_jobs_api import agent_jobs_bp
+    from planet_maiko.api.memos_api import memos_bp
     app.register_blueprint(pupdates_bp, url_prefix="/api")
     app.register_blueprint(tasks_bp, url_prefix="/api")
     app.register_blueprint(projects_bp, url_prefix="/api")
@@ -274,6 +275,7 @@ def create_app(start_scheduler=False):
     app.register_blueprint(pet_bp, url_prefix="/api")
     app.register_blueprint(automations_bp, url_prefix="/api")
     app.register_blueprint(agent_jobs_bp, url_prefix="/api")
+    app.register_blueprint(memos_bp, url_prefix="/api")
 
     # Load plugins (entry_points + ~/.maiko/plugins/)
     from planet_maiko.plugins.loader import load_plugins
@@ -296,6 +298,7 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.pet import Pet  # noqa: F401
         from planet_maiko.models.automation import Automation  # noqa: F401
         from planet_maiko.models.agent_job import AgentJob  # noqa: F401
+        from planet_maiko.models.memo import Memo  # noqa: F401
         # Legacy AgentGoal kept imported only so the one-time migration
         # below can see its rows on first boot after this upgrade.
         # Remove the import and the table once the migration has run on
