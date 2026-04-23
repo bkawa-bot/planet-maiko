@@ -224,6 +224,29 @@ export default function OverviewPane() {
 
   useEffect(() => { fetchAll(); }, []);
 
+  // Pending-learnings count goes stale when the user approves/dismisses
+  // elsewhere (Brain page, inline on a learning). The overview itself
+  // is heavy to refetch (LLM-cached), so poll just the pending list on
+  // an interval and also whenever the window regains focus — catches
+  // the common "approve on another tab, come back" case without a full
+  // overview regen.
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const list = await api.getLearnings({ status: "pending" });
+        setPendingLearnings(list || []);
+      } catch {
+        /* non-fatal */
+      }
+    };
+    const id = setInterval(refresh, 30_000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="overview-pane overview-loading">

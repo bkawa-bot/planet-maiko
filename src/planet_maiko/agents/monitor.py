@@ -39,9 +39,22 @@ def get_agent_activity():
 
     STALE_AGENT_DAYS = 7
 
+    # source="agent" catches the post-tool-use hook (agent_update). The
+    # reply-handler pupdates (ready_for_review, stuck, plan_for_approval,
+    # agent_message) are stamped source="maiko" but represent agent
+    # activity just the same — their task_id tag drives the same
+    # per-agent grouping. Without them, a review agent that posts
+    # ready_for_review without any intermediate tool-use hook looks
+    # "dormant" on the Agents page even though it's clearly finished.
+    from sqlalchemy import or_, and_
     agent_pupdates = (
         Pupdate.query
-        .filter_by(source="agent")
+        .filter(
+            or_(
+                Pupdate.source == "agent",
+                and_(Pupdate.source == "maiko", Pupdate.type.like("agent_%")),
+            )
+        )
         .order_by(Pupdate.timestamp.desc())
         .all()
     )

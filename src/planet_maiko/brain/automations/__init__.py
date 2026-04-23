@@ -652,15 +652,27 @@ def _act_complete_linked_task(automation, config, pupdate=None, context=None):
 
     closed_review = 0
     closed_coding = 0
+    # Review tasks hold onto their worktree through the "review" status
+    # (so the user can load the diff inline) — once the PR is merged or
+    # approved and we close the task, the worktree has no remaining job.
+    # Clean it up here alongside coding tasks below.
     review_tasks = Task.query.filter(
         Task.url == pupdate.url,
         Task.type.in_(["review", "pr_review"]),
-        Task.status.in_(["new", "in_progress"]),
+        Task.status.in_(["new", "in_progress", "review"]),
     ).all()
     for t in review_tasks:
         t.status = "done"
         t.updated_at = datetime.now(timezone.utc)
         closed_review += 1
+        branch = (t.extra or {}).get("branch")
+        wp = (t.extra or {}).get("working_path")
+        if branch and wp and ".maiko-worktrees" in wp:
+            try:
+                from planet_maiko.agents.coding_agent import cleanup
+                cleanup(wp, branch)
+            except Exception as e:
+                logger.debug(f"[automation {automation.id}] review worktree cleanup failed: {e}")
 
     coding_tasks = Task.query.filter(
         Task.status.in_(["new", "in_progress", "in_review"]),
