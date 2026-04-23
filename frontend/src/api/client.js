@@ -322,6 +322,26 @@ export const api = {
   // Home overview — the rolling LLM-generated pane
   getHomeOverview: () => request("/home/overview"),
   getShippedToday: () => request("/home/shipped-today"),
+
+  // Memos — canonical surface for persistent user-facing items
+  // (skill results, notifications, agent asks, job approvals, etc.).
+  // The URLSearchParams handles arrays for repeated ?status= filters.
+  getMemos: (params = {}) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v === undefined || v === null || v === "") continue;
+      if (Array.isArray(v)) v.forEach((x) => qs.append(k, x));
+      else qs.append(k, String(v));
+    }
+    const q = qs.toString();
+    return request(`/memos${q ? `?${q}` : ""}`);
+  },
+  getMemo: (id) => request(`/memos/${id}`),
+  markMemoSeen: (id) => request(`/memos/${id}/mark-seen`, { method: "POST" }),
+  dismissMemo: (id) => request(`/memos/${id}/dismiss`, { method: "POST" }),
+  approveMemo: (id) => request(`/memos/${id}/approve`, { method: "POST" }),
+  updateMemo: (id, data) =>
+    request(`/memos/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   // Canonical "waiting on your review" list — plans to approve, diffs
   // to read, pack-owned artifacts to skim. Exhaustive, not curated.
   getReviewQueue: () => request("/home/review-queue"),

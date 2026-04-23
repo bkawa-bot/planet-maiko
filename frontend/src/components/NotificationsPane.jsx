@@ -6,7 +6,7 @@ import { renderMarkdown } from "../utils/markdown";
 import "./NotificationsPane.css";
 
 /**
- * Home pane for type=notification pupdates — the surface for the
+ * Home pane for kind=notification Memos — the surface for the
  * notify_me automation action. Auto-hides when the list is empty so
  * quiet days don't grow an empty bucket. Items are dismissable, and
  * clicking a notification with a url opens that url; otherwise it's
@@ -32,9 +32,8 @@ export default function NotificationsPane() {
 
   const fetchAll = async () => {
     try {
-      const list = await api.getPupdates({ limit: 50 });
-      const notes = (list || []).filter((p) => p.type === "notification");
-      setItems(notes);
+      const list = await api.getMemos({ kind: "notification", limit: 50 });
+      setItems(list || []);
     } catch {
       /* non-fatal — pane stays with its last-known state */
     }
@@ -53,9 +52,9 @@ export default function NotificationsPane() {
   }, []);
 
   const dismiss = async (id) => {
-    setItems((prev) => prev.filter((p) => p.id !== id));
+    setItems((prev) => prev.filter((m) => m.id !== id));
     try {
-      await api.dismissPupdate(id);
+      await api.dismissMemo(id);
     } catch {
       // If the dismiss call failed, next poll will restore the row —
       // user will see it again and can retry.
@@ -74,36 +73,36 @@ export default function NotificationsPane() {
         <span className="notifications-count">{items.length}</span>
       </div>
       <ul className="notifications-list">
-        {visible.map((p) => {
-          const tone = PRIORITY_TONE[p.priority] || "normal";
+        {visible.map((m) => {
+          const tone = PRIORITY_TONE[m.priority] || "normal";
           return (
             <li
-              key={p.id}
+              key={m.id}
               className={`notifications-item tone-${tone}`}
             >
               <div className="notifications-body">
-                <div className="notifications-title">{p.title || "(notification)"}</div>
-                {p.body && (
+                <div className="notifications-title">{m.title || "(notification)"}</div>
+                {m.body && (
                   <div
                     className="notifications-detail markdown"
-                    dangerouslySetInnerHTML={{ __html: renderMarkdown(p.body) }}
+                    dangerouslySetInnerHTML={{ __html: renderMarkdown(m.body) }}
                   />
                 )}
                 <div className="notifications-meta">
-                  {p.priority && p.priority !== "normal" && (
+                  {m.priority && m.priority !== "normal" && (
                     <span className={`notifications-priority notifications-priority-${tone}`}>
-                      {p.priority}
+                      {m.priority}
                     </span>
                   )}
-                  {p.timestamp && (
-                    <span className="notifications-time">{relativeTime(p.timestamp)}</span>
+                  {m.created_at && (
+                    <span className="notifications-time">{relativeTime(m.created_at)}</span>
                   )}
                 </div>
               </div>
               <div className="notifications-actions">
-                {p.url && (
+                {m.url && (
                   <a
-                    href={p.url}
+                    href={m.url}
                     target="_blank"
                     rel="noreferrer"
                     className="btn btn-sm"
@@ -114,7 +113,7 @@ export default function NotificationsPane() {
                 )}
                 <button
                   className="btn-ghost notifications-dismiss"
-                  onClick={() => dismiss(p.id)}
+                  onClick={() => dismiss(m.id)}
                   title="Dismiss"
                   aria-label="Dismiss"
                 >

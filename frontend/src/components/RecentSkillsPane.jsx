@@ -7,9 +7,9 @@ import "./RecentSkillsPane.css";
 
 /**
  * Sidebar widget listing the last few skill runs with expand-to-read
- * inline. Fed by skill_result pupdates — the run endpoint emits one
- * per successful run (except for self-rendering skills like
- * home-overview that have their own surface).
+ * inline. Fed by kind=skill_result Memos — the skill-run endpoint
+ * emits one per successful run (except for self-rendering skills
+ * like home-overview that have their own surface).
  *
  * Zero-state stays visible so the widget doesn't pop in and out of
  * existence; once a user plays with a custom skill, the results
@@ -19,16 +19,15 @@ const POLL_MS = 30_000;
 const DEFAULT_LIMIT = 4;
 
 export default function RecentSkillsPane() {
-  const [pupdates, setPupdates] = useState([]);
+  const [memos, setMemos] = useState([]);
   const [expanded, setExpanded] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const fetch = async () => {
+  const fetchMemos = async () => {
     try {
-      // Server returns non-dismissed by default + newest-first.
-      const list = await api.getPupdates({ limit: 20 });
-      const skills = (list || []).filter((p) => p.type === "skill_result");
-      setPupdates(skills);
+      // Default filter returns pending+seen — exactly what we want.
+      const list = await api.getMemos({ kind: "skill_result", limit: 20 });
+      setMemos(list || []);
     } catch {
       /* non-fatal */
     }
@@ -36,9 +35,9 @@ export default function RecentSkillsPane() {
   };
 
   useEffect(() => {
-    fetch();
-    const id = setInterval(fetch, POLL_MS);
-    const onFocus = () => fetch();
+    fetchMemos();
+    const id = setInterval(fetchMemos, POLL_MS);
+    const onFocus = () => fetchMemos();
     window.addEventListener("focus", onFocus);
     return () => {
       clearInterval(id);
@@ -48,8 +47,8 @@ export default function RecentSkillsPane() {
 
   const handleDismiss = async (id) => {
     try {
-      await api.dismissPupdate(id);
-      setPupdates((prev) => prev.filter((p) => p.id !== id));
+      await api.dismissMemo(id);
+      setMemos((prev) => prev.filter((m) => m.id !== id));
       if (expanded === id) setExpanded(null);
     } catch {
       /* ignore */
@@ -62,33 +61,33 @@ export default function RecentSkillsPane() {
     <div className="home-widget recent-skills-widget">
       <div className="widget-header">
         <Sparkles size={12} /> Recent skills
-        {pupdates.length > 0 && (
-          <span className="widget-count">{pupdates.length}</span>
+        {memos.length > 0 && (
+          <span className="widget-count">{memos.length}</span>
         )}
       </div>
-      {pupdates.length === 0 ? (
+      {memos.length === 0 ? (
         <div className="widget-empty">
           No skill runs yet. Kick one off from Automations or a /skill endpoint.
         </div>
       ) : (
         <ul className="recent-skills-list">
-          {pupdates.slice(0, DEFAULT_LIMIT).map((p) => {
-            const isOpen = expanded === p.id;
-            const skillName = p.metadata?.skill_name || p.extra?.skill_name || "skill";
-            const full = p.metadata?.full_output || p.extra?.full_output || p.body || "";
-            const headline = (p.title || "").replace(new RegExp(`^${skillName}:\\s*`), "");
+          {memos.slice(0, DEFAULT_LIMIT).map((m) => {
+            const isOpen = expanded === m.id;
+            const skillName = m.extra?.skill_name || "skill";
+            const full = m.body || "";
+            const headline = (m.title || "").replace(new RegExp(`^${skillName}:\\s*`), "");
             return (
-              <li key={p.id} className={`recent-skills-item${isOpen ? " expanded" : ""}`}>
+              <li key={m.id} className={`recent-skills-item${isOpen ? " expanded" : ""}`}>
                 <button
                   type="button"
                   className="recent-skills-row"
-                  onClick={() => setExpanded(isOpen ? null : p.id)}
+                  onClick={() => setExpanded(isOpen ? null : m.id)}
                 >
                   {isOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
                   <span className="recent-skills-name">{skillName}</span>
                   <span className="recent-skills-headline">{headline || "(no preview)"}</span>
                   <span className="recent-skills-time">
-                    {p.timestamp ? relativeTime(p.timestamp) : ""}
+                    {m.created_at ? relativeTime(m.created_at) : ""}
                   </span>
                 </button>
                 {isOpen && (
@@ -101,7 +100,7 @@ export default function RecentSkillsPane() {
                       <button
                         type="button"
                         className="btn-ghost"
-                        onClick={() => handleDismiss(p.id)}
+                        onClick={() => handleDismiss(m.id)}
                         title="Dismiss"
                       >
                         <X size={10} /> Dismiss
@@ -112,9 +111,9 @@ export default function RecentSkillsPane() {
               </li>
             );
           })}
-          {pupdates.length > DEFAULT_LIMIT && (
+          {memos.length > DEFAULT_LIMIT && (
             <li className="recent-skills-more">
-              + {pupdates.length - DEFAULT_LIMIT} more (see Inbox)
+              + {memos.length - DEFAULT_LIMIT} more (see Inbox)
             </li>
           )}
         </ul>

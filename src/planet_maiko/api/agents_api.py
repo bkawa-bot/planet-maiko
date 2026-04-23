@@ -724,7 +724,7 @@ def run_skill_endpoint(skill_name):
     # Auto-save successful results
     if result.get("success") and result.get("output"):
         from planet_maiko.models.skill_result import SkillResult
-        from planet_maiko.models.pupdate import Pupdate
+        from planet_maiko.brain.memos import create_memo
         from planet_maiko.config import user_now
         now_local = user_now()
         title_map = {
@@ -735,6 +735,9 @@ def run_skill_endpoint(skill_name):
             "repo-analysis": f"Repo Analysis — {now_local.strftime('%B %d')}",
         }
         title = title_map.get(skill_name, f"{skill_name} — {now_local.strftime('%B %d %H:%M')}")
+        # SkillResult still writes for the home-overview cache path
+        # (brain/overview.py reads from it). It'll retire in a later
+        # phase when overview graduates out of skills entirely.
         sr = SkillResult(
             skill_name=skill_name,
             title=title,
@@ -744,18 +747,12 @@ def run_skill_endpoint(skill_name):
         db.session.flush()
         result["result_id"] = sr.id
 
-        # Emit a skill_result pupdate so the output lands on Home's
-        # Recent Skills widget + in the normal pupdate stream. Skills
-        # with their own dedicated render path (morning brief, scene,
-        # etc.) are excluded so the widget doesn't get flooded by
-        # auto-cadence runs. Manual re-runs of self-rendering skills
-        # still save the SkillResult row — just no pupdate fanfare.
+        # User-facing skills (not home-overview / morning-brief / etc.
+        # which render through their own surfaces) land on Home's
+        # RecentSkillsPane as a Memo. Memo is the new canonical
+        # surface — skill_result pupdates are retired.
         if skill_name not in _SELF_RENDERING_SKILLS:
             output = result["output"]
-            # Title gets the skill's display title + a preview of the
-            # first non-empty line for scannability. Preview is capped
-            # short; full output is on extra.full_output for the widget
-            # to expand inline.
             first_line = ""
             for line in output.splitlines():
                 stripped = line.strip().lstrip("# ").strip()
@@ -763,29 +760,18 @@ def run_skill_endpoint(skill_name):
                     first_line = stripped
                     break
             preview_title = first_line[:80] if first_line else title
-            body_preview = output[:600]
-            pup = Pupdate(
-                id=f"skill-{sr.id}-{uuid.uuid4().hex[:6]}",
-                source="maiko",
-                source_id=f"skill_result/{sr.id}",
-                type="skill_result",
-                priority="normal",
+            create_memo(
+                kind="skill_result",
+                category="info",
                 title=f"{skill_name}: {preview_title}",
-                body=body_preview,
-                actionable=False,
-                tags=["skill", skill_name],
+                body=output[:16000],
+                priority="normal",
                 extra={
                     "skill_name": skill_name,
                     "skill_title": title,
                     "result_id": sr.id,
-                    "full_output": output[:16000],
                 },
-                # These are informational; the brain cycle has nothing
-                # to route them to. Pre-flag as processed so they don't
-                # sit in the Queue tab.
-                brain_processed=True,
             )
-            db.session.add(pup)
 
         db.session.commit()
 

@@ -797,13 +797,13 @@ def _interpolate(template, pupdate=None, context=None):
 
 
 def _act_notify(automation, config, pupdate=None, context=None):
-    """Emit a user-facing notification pupdate.
+    """Emit a user-facing notification Memo.
 
-    The Home page's NotificationsPane surfaces type="notification"
-    pupdates as dismissable cards. Useful when you want to be told
-    something fired without routing a task or spawning an agent —
-    e.g. "notify me when a PR approval lands from someone outside
-    my team" or "notify me when CI has been red for 30 minutes."
+    The Home page's NotificationsPane surfaces kind=notification memos
+    as dismissable cards. Useful when you want to be told something
+    fired without routing a task or spawning an agent — e.g. "notify
+    me when a PR approval lands from someone outside my team" or
+    "notify me when CI has been red for 30 minutes."
 
     Config fields (all optional except title):
       title:    short headline (required). Supports {pupdate_title}.
@@ -811,7 +811,7 @@ def _act_notify(automation, config, pupdate=None, context=None):
       priority: normal | high | urgent. Default normal.
       url:      optional click-through. Supports {pupdate_url}.
     """
-    from planet_maiko.models.pupdate import Pupdate
+    from planet_maiko.brain.memos import create_memo
 
     title_template = (config.get("title") or "").strip()
     if not title_template:
@@ -824,29 +824,21 @@ def _act_notify(automation, config, pupdate=None, context=None):
     if priority not in ("low", "normal", "high", "urgent"):
         priority = "normal"
 
-    notif = Pupdate(
-        id=f"notify-{uuid.uuid4().hex[:12]}",
-        source="maiko",
-        source_id=f"notify/{automation.id}/{uuid.uuid4().hex[:8]}",
-        type="notification",
-        priority=priority,
+    memo = create_memo(
+        kind="notification",
+        category="info",
         title=title[:200],
-        body=body,
-        actionable=False,
-        action_hint=None,
+        body=body or None,
         url=url,
-        tags=["notification", f"automation:{automation.id}"],
+        priority=priority,
+        source_pupdate_id=pupdate.id if pupdate else None,
         extra={
             "from_automation": automation.id,
             "triggered_by_pupdate": pupdate.id if pupdate else None,
         },
-        # Self-addressed signal; the brain cycle has nothing to route
-        # it through (automations already consumed the trigger), so
-        # flag processed up-front to keep the Queue tab clean.
-        brain_processed=True,
     )
-    db.session.add(notif)
-    return {"kind": "notify_me", "pupdate_id": notif.id, "title": title[:80]}
+    db.session.flush()
+    return {"kind": "notify_me", "memo_id": memo.id, "title": title[:80]}
 
 
 ACTIONS = {
