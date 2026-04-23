@@ -716,54 +716,108 @@ _SELF_RENDERING_SKILLS = {
 
 @agents_bp.route("/skills/<skill_name>/run", methods=["POST"])
 def run_skill_endpoint(skill_name):
-    """Run a skill through the brain session and save the result."""
+    """Invoke a specialty by creating a Task + AgentJob.
+
+    Two execution shapes:
+      - Specialty with needs_worktree=False: runs inline in this
+        request and returns the output so the caller can render it.
+      - Specialty with needs_worktree=True: queues an AgentJob; the
+        cycle's execute phase picks it up on the next tick. The
+        response is 202 with task_id/job_id so the client can poll
+        its memo / follow-up.
+
+    Output lands as a skill_result Memo attributed to the lazy-
+    spawned specialty agent — visible on Home's Recent Skills and
+    attributed to the agent on the Pack page.
+
+    Falls through to the legacy direct-run path for anything not
+    registered as a CustomSkill (internal engine calls like
+    home-overview / scene that still route through this endpoint
+    by name).
+    """
+    from planet_maiko.models.custom_skill import CustomSkill
+    from planet_maiko.models.task import Task
+    from planet_maiko.models.agent_job import AgentJob
+    from planet_maiko.orchestration import route, is_ready, maybe_spawn
+    from planet_maiko.brain.cycle import _execute_lightweight_specialty
+    import uuid as _uuid
+
+    specialty = db.session.get(CustomSkill, skill_name)
     data = request.get_json() or {}
-    context = data.get("context", {})
-    working_dir = data.get("working_dir")
 
-    result = run_skill(skill_name, context=context, working_dir=working_dir)
+    # Legacy direct-run path for unregistered skills (home-overview
+    # and other engine-internal prompts that still get called by
+    # name). Keeps tests + internal callers working.
+    if specialty is None:
+        result = run_skill(
+            skill_name,
+            context=data.get("context", {}),
+            working_dir=data.get("working_dir"),
+        )
+        return jsonify(result)
 
-    # Memo-only persistence now that overview graduated to its own
-    # file cache. User-facing skills land as kind=skill_result memos;
-    # self-rendering skills (home-overview / morning-brief / etc.)
-    # have purpose-built surfaces already and skip the memo.
-    if result.get("success") and result.get("output"):
-        from planet_maiko.brain.memos import create_memo
-        from planet_maiko.config import user_now
-        now_local = user_now()
-        title_map = {
-            "brainstorm": f"Brainstorm — {now_local.strftime('%B %d')}",
-            "investigate": f"Investigation — {now_local.strftime('%B %d %H:%M')}",
-            "repo-analysis": f"Repo Analysis — {now_local.strftime('%B %d')}",
-        }
-        title = title_map.get(skill_name, f"{skill_name} — {now_local.strftime('%B %d %H:%M')}")
+    scope_repo = (
+        (data.get("context") or {}).get("repo")
+        or (data.get("context") or {}).get("repository")
+        or None
+    )
 
-        if skill_name not in _SELF_RENDERING_SKILLS:
-            output = result["output"]
-            first_line = ""
-            for line in output.splitlines():
-                stripped = line.strip().lstrip("# ").strip()
-                if stripped:
-                    first_line = stripped
-                    break
-            preview_title = first_line[:80] if first_line else title
-            memo = create_memo(
-                kind="skill_result",
-                category="info",
-                title=f"{skill_name}: {preview_title}",
-                body=output[:16000],
-                priority="normal",
-                extra={
-                    "skill_name": skill_name,
-                    "skill_title": title,
-                },
-            )
-            db.session.flush()
-            result["memo_id"] = memo.id
+    task_id = f"task-{_uuid.uuid4().hex[:10]}"
+    task = Task(
+        id=task_id,
+        title=data.get("title") or specialty.name,
+        type=specialty.id,
+        priority=data.get("priority") or "normal",
+        status="new",
+        extra={
+            "description": data.get("description") or specialty.description or "",
+            "repo": scope_repo or "",
+            "from_run_now": True,
+        },
+        tags=["specialty-run"],
+    )
+    db.session.add(task)
+    db.session.flush()
+    route(task)
+    if not is_ready(task):
+        task.status = "blocked"
 
-        db.session.commit()
+    profile = maybe_spawn(specialty.id, scope_repo)
+    task.assigned_agent_id = profile.id
 
-    return jsonify(result)
+    job = AgentJob(
+        id=_uuid.uuid4().hex[:24],
+        kind=specialty.id,
+        title=task.title,
+        description=(task.extra or {}).get("description"),
+        scope_repo=scope_repo,
+        priority=task.priority,
+        created_by="user",
+        source_task_id=task.id,
+        agent_profile_id=profile.id,
+        status="queued",
+        extra={},
+    )
+    db.session.add(job)
+    db.session.commit()
+
+    if not specialty.needs_worktree:
+        ok = _execute_lightweight_specialty(job, specialty)
+        return jsonify({
+            "success": ok and job.status == "done",
+            "task_id": task.id,
+            "job_id": job.id,
+            "status": job.status,
+            "output": job.artifact or "",
+            "error": job.error if job.status == "failed" else None,
+        })
+
+    return jsonify({
+        "success": True,
+        "task_id": task.id,
+        "job_id": job.id,
+        "status": "queued",
+    }), 202
 
 
 @agents_bp.route("/agents", methods=["GET"])
