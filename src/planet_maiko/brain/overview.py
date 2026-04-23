@@ -2,18 +2,19 @@
 
 This module owns the "Home page overview" surface. The flow:
 
-    1. `get_latest_overview()` looks up the most recent
-       SkillResult(skill_name="home-overview"). If it's fresh (< max_age_hours),
-       return it. Otherwise call `generate_overview()`.
-    2. `generate_overview()` aggregates every relevant piece of state —
-       pupdates, tasks, schedule, agents, pollers, calendar, scene, and
-       the user's optional custom add-on prompt — and runs the
-       `home-overview` skill as a full Claude Code agent with
-       `skip_permissions=True` so every tool (Bash, Read, WebFetch,
-       MCPs) works without permission prompts.
-    3. The skill is instructed to emit strict JSON. We parse it
-       robustly, stash it as a `SkillResult.content` string, and return
-       the parsed dict.
+    1. `get_latest_overview()` reads data/overview.json. If it's fresh
+       (< max_age_hours), return it. Otherwise call `generate_overview()`.
+    2. Before aggregating context, `generate_overview()` drains every
+       enabled poller and runs one brain cycle so the state the LLM
+       sees is up to date — no "reviewer requested your review" cards
+       that actually got handled 30 min ago.
+    3. `generate_overview()` then aggregates state (memos, pupdates
+       where still meaningful, tasks, schedule, agents, pollers,
+       calendar, scene, the user's optional custom add-on prompt) and
+       runs the `home-overview` skill as a full Claude Code agent with
+       `skip_permissions=True` so every tool works without prompts.
+    4. Strict-JSON output is parsed, written atomically to
+       data/overview.json, and returned to the caller.
 
 Why a full agent and not `send_json`? The whole point of the overview
 is that Maiko can *look things up* — Slack threads, a Linear issue, a
@@ -674,22 +675,139 @@ def _run_home_overview_skill(prompt, working_dir):
     )
 
 
-def generate_overview():
-    """Run the home-overview skill and persist the result as a SkillResult.
+_OVERVIEW_CACHE_FILENAME = "overview.json"
 
-    Aggregates every relevant piece of state, runs the
-    `home-overview` skill through the Claude Code runtime with full
-    tool permissions, parses the JSON response, and writes it to the
-    `skill_results` table (`skill_name="home-overview"`, `content` =
-    stringified JSON). Returns the parsed dict.
+
+def _overview_cache_path():
+    """Path to the home-overview JSON cache.
+
+    File (not DB) because the overview is a pure render — there's no
+    historical-audit value in keeping old ones, and the cache is a
+    single writer / single reader pattern. A row in SkillResult was
+    overkill.
+    """
+    from planet_maiko.paths import data_dir
+    return os.path.join(data_dir(), _OVERVIEW_CACHE_FILENAME)
+
+
+def _read_cached_overview():
+    """Return (generated_at_iso, overview_dict) or (None, None).
+
+    None on every failure path (missing, unreadable, corrupt JSON);
+    the caller treats None as "regenerate."
+    """
+    path = _overview_cache_path()
+    if not os.path.exists(path):
+        return None, None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            blob = json.load(f)
+    except (OSError, ValueError) as e:
+        logger.warning("[overview] cache read failed (%s); will regen", e)
+        return None, None
+    return blob.get("generated_at"), blob.get("overview")
+
+
+def _write_overview_cache(parsed):
+    """Atomic write: JSON to `.tmp`, os.replace to final path.
+
+    Returns the iso timestamp we stamped on the blob so the caller
+    can hand it back to the frontend without a re-read.
+    """
+    path = _overview_cache_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    generated_at = datetime.now(timezone.utc).isoformat()
+    blob = {"generated_at": generated_at, "overview": parsed}
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(blob, f, ensure_ascii=False)
+    os.replace(tmp, path)
+    return generated_at
+
+
+def _iso_is_stale(iso_str, max_age_hours):
+    """True if `iso_str` is missing/unparseable or older than max_age_hours."""
+    if not iso_str:
+        return True
+    try:
+        ts = datetime.fromisoformat(iso_str)
+    except ValueError:
+        return True
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - ts > timedelta(hours=max_age_hours)
+
+
+def _prepoll_and_cycle(app):
+    """Drain every enabled poller + run one brain cycle so generate
+    sees fresh state. Synchronous — overview regen is already a slow
+    op, and stale context is worse than a slower render.
+
+    Pollers run in parallel (they hit distinct external services).
+    Brain cycle runs after so synthesis/clustering/routing pull in
+    anything the pollers just landed. Failures log-and-continue —
+    one broken poller shouldn't block the overview.
+    """
+    import concurrent.futures
+    from planet_maiko.pollers.scheduler import _get_pollers
+    from planet_maiko.config import load_config
+    from planet_maiko.brain.cycle import run as run_brain_cycle
+
+    config = load_config()
+    to_run = []
+    for name, poller in _get_pollers().items():
+        cfg = config.get(name, {}) or {}
+        if not cfg.get("enabled", False):
+            continue
+        to_run.append((name, poller, cfg))
+
+    def _one(name, poller, cfg):
+        with app.app_context():
+            return poller.run(cfg, db.session)
+
+    if to_run:
+        logger.info("[overview] pre-poll: %s", [n for (n, _, _) in to_run])
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=max(1, len(to_run)), thread_name_prefix="overview-prepoll"
+        ) as ex:
+            futures = {ex.submit(_one, n, p, c): n for (n, p, c) in to_run}
+            # 90s total wall budget — any single poller that's stuck
+            # that long is stuck, and we'd rather regen overview with
+            # slightly-stale data from that one source than hang here.
+            try:
+                for future in concurrent.futures.as_completed(futures, timeout=90):
+                    name = futures[future]
+                    try:
+                        future.result(timeout=1)
+                    except Exception as e:
+                        logger.warning("[overview] pre-poll %s failed: %s", name, e)
+            except concurrent.futures.TimeoutError:
+                logger.warning("[overview] pre-poll overall timeout, proceeding")
+
+    try:
+        run_brain_cycle(app)
+    except Exception as e:
+        logger.warning("[overview] pre-cycle failed: %s", e)
+
+
+def generate_overview():
+    """Run the home-overview skill and persist the result to the
+    on-disk JSON cache.
+
+    Flow: prepoll every enabled poller + run one brain cycle (so
+    context is fresh), aggregate state into the skill prompt, run the
+    `home-overview` skill through Claude Code, parse JSON, stamp it
+    onto data/overview.json.
 
     Raises RuntimeError if the runtime is unavailable or the LLM call
     fails; raises ValueError if the response can't be parsed as JSON.
     The caller is responsible for turning those into HTTP responses.
     """
+    from flask import current_app
     from planet_maiko.agents.skills import get_skill_prompt
-    from planet_maiko.config import user_now
-    from planet_maiko.models.skill_result import SkillResult
+
+    app = current_app._get_current_object()
+    _prepoll_and_cycle(app)
 
     context = _build_context()
     prompt = get_skill_prompt("home-overview", context)
@@ -737,47 +855,14 @@ def generate_overview():
     # nothing is queued.
     parsed["overnight"] = _overnight_tasks_context(context)
 
-    now_local = user_now()
-    sr = SkillResult(
-        skill_name="home-overview",
-        title=f"Home Overview — {now_local.strftime('%B %d %H:%M')}",
-        content=json.dumps(parsed, ensure_ascii=False),
-        context_summary=None,
-    )
-    db.session.add(sr)
-    db.session.commit()
+    generated_at = _write_overview_cache(parsed)
 
-    # Log token usage if the runtime surfaces it (current claude_code
-    # runtime doesn't, but future runtimes / SDK integrations might).
+    # Log token usage if the runtime surfaces it.
     if isinstance(result, dict) and result.get("usage"):
         logger.info("[overview] usage: %s", result.get("usage"))
 
-    logger.info("[overview] generated (skill_result_id=%s)", sr.id)
+    logger.info("[overview] generated (at=%s)", generated_at)
     return parsed
-
-
-def _latest_skill_result():
-    """Return the most recent home-overview SkillResult row, or None."""
-    from planet_maiko.models.skill_result import SkillResult
-    return (
-        SkillResult.query
-        .filter_by(skill_name="home-overview")
-        .order_by(SkillResult.created_at.desc())
-        .first()
-    )
-
-
-def _is_stale(row, max_age_hours):
-    """True if `row` is missing or older than `max_age_hours`."""
-    if row is None:
-        return True
-    created = row.created_at
-    if created is None:
-        return True
-    if created.tzinfo is None:
-        created = created.replace(tzinfo=timezone.utc)
-    age = datetime.now(timezone.utc) - created
-    return age > timedelta(hours=max_age_hours)
 
 
 def get_latest_overview(max_age_hours=DEFAULT_MAX_AGE_HOURS):
@@ -791,36 +876,22 @@ def get_latest_overview(max_age_hours=DEFAULT_MAX_AGE_HOURS):
     Returns:
         dict with:
             overview: the parsed JSON the LLM produced
-            generated_at: ISO timestamp the result row was written
+            generated_at: ISO timestamp the cache file was written
             stale: True iff we had to regenerate on this call
     """
-    row = _latest_skill_result()
-    needs_regen = _is_stale(row, max_age_hours)
+    generated_at, overview = _read_cached_overview()
 
-    if needs_regen:
+    if overview is None or _iso_is_stale(generated_at, max_age_hours):
         parsed = generate_overview()
-        row = _latest_skill_result()
+        fresh_at, _ = _read_cached_overview()
         return {
             "overview": parsed,
-            "generated_at": iso_utc(row.created_at) if row else None,
-            "stale": True,
-        }
-
-    try:
-        overview = json.loads(row.content)
-    except (TypeError, ValueError) as e:
-        # Stored content isn't parseable — treat as missing and regenerate.
-        logger.warning("[overview] cached content unparseable, regenerating: %s", e)
-        parsed = generate_overview()
-        row = _latest_skill_result()
-        return {
-            "overview": parsed,
-            "generated_at": iso_utc(row.created_at) if row else None,
+            "generated_at": fresh_at,
             "stale": True,
         }
 
     return {
         "overview": overview,
-        "generated_at": iso_utc(row.created_at),
+        "generated_at": generated_at,
         "stale": False,
     }

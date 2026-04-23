@@ -993,8 +993,14 @@ def seed_screenshot_demo(app):
                     added += 1
 
         # --- Pre-baked home overview so the page renders immediately ---
-        existing_overview = SkillResult.query.filter_by(skill_name="home-overview").first()
-        if not existing_overview:
+        # Lives as a file cache at data/overview.json (the overview
+        # system graduated out of SkillResult in the Memo refactor).
+        # Skip if the file already exists so demo regenerations don't
+        # clobber a real overview the user just generated.
+        import os as _os
+        from planet_maiko.brain.overview import _overview_cache_path
+        cache_path = _overview_cache_path()
+        if not _os.path.exists(cache_path):
             overview_json = {
                 "greeting": "Morning, Brigitte. Wednesday. 🐾",
                 "summary": "The PKCE work landed clean — Mochi's got it up for review with two tiny comments worth a look. Hazel's stuck on the multi-key org question again (we should just pick one), and Biscuit's testing the token refresh race. Nothing on fire. Quiet-ish morning, honestly.",
@@ -1012,12 +1018,13 @@ def seed_screenshot_demo(app):
                 "custom_section": "",
                 "closing": "",
             }
-            db.session.add(SkillResult(
-                skill_name="home-overview",
-                title="Home Overview",
-                content=json.dumps(overview_json),
-                created_at=_ago(minutes=8),
-            ))
+            _os.makedirs(_os.path.dirname(cache_path), exist_ok=True)
+            blob = {
+                "generated_at": _ago(minutes=8).isoformat(),
+                "overview": overview_json,
+            }
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(blob, f, ensure_ascii=False)
             added += 1
 
         if added:

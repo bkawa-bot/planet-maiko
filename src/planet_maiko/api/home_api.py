@@ -37,7 +37,7 @@ from flask import Blueprint, jsonify
 from planet_maiko.brain.overview import (
     generate_overview,
     get_latest_overview,
-    _latest_skill_result,
+    _read_cached_overview,
 )
 from planet_maiko.database import iso_utc
 
@@ -49,20 +49,15 @@ home_bp = Blueprint("home", __name__)
 def _last_good_payload():
     """Best-effort last-known-good overview for error response bodies.
 
-    Returns the parsed JSON and timestamp of the most recent cached
-    `home-overview` SkillResult. Returns None if nothing cached or the
-    content doesn't parse.
+    Reads the file cache rather than trying to regenerate; returns
+    None if nothing's cached.
     """
-    row = _latest_skill_result()
-    if row is None:
-        return None
-    try:
-        overview = json.loads(row.content)
-    except (TypeError, ValueError):
+    generated_at, overview = _read_cached_overview()
+    if overview is None:
         return None
     return {
         "overview": overview,
-        "generated_at": iso_utc(row.created_at),
+        "generated_at": generated_at,
     }
 
 
@@ -330,10 +325,10 @@ def refresh_home_overview():
     """Force-regenerate the overview, bypassing the cache age check."""
     try:
         parsed = generate_overview()
-        row = _latest_skill_result()
+        generated_at, _ = _read_cached_overview()
         return jsonify({
             "overview": parsed,
-            "generated_at": iso_utc(row.created_at) if row else None,
+            "generated_at": generated_at,
             "stale_triggered_regen": True,
         })
     except Exception as e:
