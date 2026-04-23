@@ -201,11 +201,11 @@ def _refresh_creative_note(weather, season, time_bucket, mood):
         if result and result.get("success") and result.get("output"):
             text = result["output"].strip().strip('"')
             _creative_note_cache["text"] = text
-            # 2h TTL. Refresh is lazy (only fires when /api/scene is polled
-            # and the cache is stale), so off-hours cost is already zero.
-            # 1h was overkill for a decorative sentence — 2h still feels
-            # fresh across a working session.
-            _creative_note_cache["expires"] = time.time() + 7200
+            # 4h TTL, matched to the home overview's regen cadence
+            # (DEFAULT_MAX_AGE_HOURS in brain/overview.py). Scene note
+            # is decorative, not alerting, so syncing with the overview
+            # means one LLM call per overview cycle instead of two.
+            _creative_note_cache["expires"] = time.time() + 14400
             _creative_note_cache["next_retry"] = 0
         else:
             # LLM responded but with no usable output — back off shorter
