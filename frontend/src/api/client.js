@@ -103,6 +103,10 @@ export const api = {
   discoverGithubRepos: () => request("/github/discover", { method: "POST" }),
   testIntegration: (name) => request(`/config/test/${name}`, { method: "POST" }),
   getLinearTeams: () => request("/config/linear/teams"),
+  getLinearTeamMeta: (teamId) => {
+    const q = teamId ? `?team_id=${encodeURIComponent(teamId)}` : "";
+    return request(`/config/linear/team-meta${q}`);
+  },
 
   // Pollers
   getPollerStatus: () => request("/pollers/status"),

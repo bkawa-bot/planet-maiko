@@ -10,6 +10,7 @@ import { showToast } from "./Toast";
 import { formatDate } from "../utils/dates";
 import { renderMarkdown } from "../utils/markdown";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
+import LinearCreateModal from "./LinearCreateModal";
 
 const STATUS_COLORS = {
   new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
@@ -86,7 +87,7 @@ export default function TaskCard({
 
   const linearIdentifier = t.extra?.linear_identifier || t.extra?.identifier || t.metadata?.linear_identifier || t.metadata?.identifier;
   const linearUrl = t.extra?.linear_url || t.metadata?.linear_url || (t.url?.includes("linear.app") ? t.url : null);
-  const [sendingToLinear, setSendingToLinear] = useState(false);
+  const [showLinearModal, setShowLinearModal] = useState(false);
 
   // One-shot agent work (review / investigation / cartograph) runs
   // autonomously after assignment — no manual launch needed. Shows a
@@ -101,22 +102,10 @@ export default function TaskCard({
   const agentName = agentNames?.[t.assigned_agent_id] || t.assigned_agent_id?.replace(/^agent-/, "");
   const [showArtifact, setShowArtifact] = useState(false);
 
-  const handleSendToLinear = async () => {
-    if (sendingToLinear) return;
-    setSendingToLinear(true);
-    try {
-      const result = await api.sendTaskToLinear(t.id);
-      if (result?.linear_identifier) {
-        showToast(`Sent to Linear as ${result.linear_identifier}`, "normal");
-        onRefresh();
-      } else if (result?.error) {
-        showToast(result.error, "high");
-      }
-    } catch (err) {
-      const msg = err?.message || "Failed to send to Linear";
-      showToast(msg.includes("team_id") ? "Set your Linear team_id in Settings first" : msg, "high");
-    }
-    setSendingToLinear(false);
+  // Opens the Send-to-Linear modal so the user can set cycle / labels /
+  // state / etc. The modal owns the actual /tasks/<id>/linear call.
+  const handleSendToLinear = () => {
+    setShowLinearModal(true);
   };
 
   const handleEditClick = () => {
@@ -297,10 +286,9 @@ export default function TaskCard({
                 <button
                   className="btn btn-sm btn-action"
                   onClick={handleSendToLinear}
-                  disabled={sendingToLinear}
                   title="Create a Linear issue from this task"
                 >
-                  <Send size={10} /> {sendingToLinear ? "Sending..." : "Send to Linear"}
+                  <Send size={10} /> Send to Linear
                 </button>
               )}
               {!isDone && !t.assigned_agent_id && (
@@ -378,6 +366,13 @@ export default function TaskCard({
         </button>
         <ChevronRight size={14} className={`card-chevron ${isExpanded ? "open" : ""}`} />
       </div>
+      {showLinearModal && (
+        <LinearCreateModal
+          task={t}
+          onClose={() => setShowLinearModal(false)}
+          onCreated={() => onRefresh?.()}
+        />
+      )}
     </div>
   );
 }
