@@ -93,6 +93,60 @@ def start_task(task_id):
     return jsonify(task.to_dict())
 
 
+def _maybe_push_close_to_linear(task, target_state_type):
+    """Opt-in: if task.extra.linear_sync_close is set, push a state
+    update back to the linked Linear issue.
+
+    target_state_type should be "completed" (for done) or "canceled"
+    (for cancelled). We look up the team's first WorkflowState with
+    that type — Linear workflow states are per-team, so we pick the
+    default destination rather than hardcoding a stateId.
+
+    Best-effort: any failure logs a warning and returns. We never
+    fail the task-close because Linear sync misbehaved; the Maiko
+    state change is the source of truth locally.
+    """
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
+    extra = task.extra or {}
+    if not extra.get("linear_sync_close"):
+        return
+    issue_id = extra.get("linear_id") or extra.get("linear_identifier")
+    if not issue_id:
+        return
+    team_id = extra.get("linear_team_id")
+    if not team_id:
+        # Fallback to the configured team — works when the issue was
+        # originally created against it (the common case).
+        from planet_maiko.config import load_config
+        team_id = (load_config().get("linear") or {}).get("team_id")
+    if not team_id:
+        _log.warning(f"[linear-sync] No team_id for task {task.id}, skipping")
+        return
+
+    try:
+        from planet_maiko.pollers.linear_client import LinearClient
+        client = LinearClient()
+        meta = client.team_meta(team_id)
+        target_state = next(
+            (s for s in (meta.get("states") or [])
+             if s.get("type") == target_state_type),
+            None,
+        )
+        if not target_state:
+            _log.warning(
+                f"[linear-sync] Team {team_id} has no {target_state_type!r} state"
+            )
+            return
+        client.update_issue(issue_id, stateId=target_state["id"])
+        _log.info(
+            f"[linear-sync] Pushed {target_state_type} to Linear issue "
+            f"{extra.get('linear_identifier')} ({issue_id})"
+        )
+    except Exception as e:
+        _log.warning(f"[linear-sync] close-sync failed for task {task.id}: {e}")
+
+
 @tasks_bp.route("/tasks/<task_id>/done", methods=["POST"])
 def complete_task(task_id):
     """Mark a task as done — deletes it from the active list and
@@ -101,6 +155,9 @@ def complete_task(task_id):
     worktree itself is just throwaway scratch space at this point."""
     from planet_maiko.agents.coding_agent import cleanup_task_worktree
     task = db.get_or_404(Task, task_id)
+    # Push to Linear before we delete the task row (extra disappears with
+    # the row). Best-effort — won't block the delete on Linear issues.
+    _maybe_push_close_to_linear(task, "completed")
     cleanup_task_worktree(task)
     db.session.delete(task)
     db.session.commit()
@@ -120,6 +177,7 @@ def cancel_task(task_id):
     from planet_maiko.agents.coding_agent import cleanup_task_worktree, stop_agent_session
     task = db.get_or_404(Task, task_id)
     stopped = stop_agent_session(task_id)
+    _maybe_push_close_to_linear(task, "canceled")
     cleanup_task_worktree(task)
     db.session.delete(task)
     db.session.commit()
@@ -328,8 +386,16 @@ def send_task_to_linear(task_id):
 
     Stores the new Linear id/identifier/url on task.extra so the UI can
     deep-link and avoid creating duplicates.
+
+    Accepts an optional body with any of:
+      title, description, state_id, priority (0-4), cycle_id, project_id,
+      label_ids[], assignee_id, parent_id, estimate, due_date (YYYY-MM-DD),
+      team_id, sync_close (bool — opt-in to close the Linear issue when
+      this task closes; off by default).
     """
-    from planet_maiko.pollers.linear_poller import LinearPoller
+    from planet_maiko.pollers.linear_client import LinearClient
+    from planet_maiko.pollers.linear_poller import MAIKO_TO_LINEAR_PRIORITY
+    from planet_maiko.config import load_config
 
     task = db.get_or_404(Task, task_id)
     extra = dict(task.extra or {})
@@ -345,36 +411,74 @@ def send_task_to_linear(task_id):
         })
 
     data = request.get_json(silent=True) or {}
+    linear_cfg = (load_config().get("linear") or {})
+    team_id = data.get("team_id") or linear_cfg.get("team_id")
+    if not team_id:
+        return jsonify({"error": "Linear team not configured — pick one in Settings"}), 400
 
-    # Description falls back to the originating pupdate's body.
+    # Description falls back chain: explicit > task.extra.description >
+    # originating pupdate body.
     description = data.get("description")
     if description is None:
         description = extra.get("description") or ""
         if not description and task.source_pupdate is not None:
             description = task.source_pupdate.body or ""
+    description = description or None
+
+    # Priority: explicit numeric > mapped from task priority name.
+    priority = data.get("priority")
+    if priority is None:
+        priority = MAIKO_TO_LINEAR_PRIORITY.get(
+            (task.priority or "normal").lower(), 3,
+        )
+
+    # Due date: explicit > task.due_date. Linear wants YYYY-MM-DD.
+    due_date = data.get("due_date")
+    if due_date is None and task.due_date is not None:
+        try:
+            due_date = task.due_date.isoformat()
+        except Exception:
+            due_date = None
 
     try:
-        issue = LinearPoller.create_issue(
-            task,
+        client = LinearClient()
+        issue = client.create_issue(
+            team_id=team_id,
+            title=data.get("title") or task.title,
             description=description,
-            team_id=data.get("team_id") or None,
-            project_id=data.get("project_id") or None,
+            stateId=data.get("state_id"),
+            priority=priority,
+            estimate=data.get("estimate"),
+            assigneeId=data.get("assignee_id"),
+            labelIds=data.get("label_ids") or None,
+            cycleId=data.get("cycle_id"),
+            projectId=data.get("project_id") or linear_cfg.get("default_project_id"),
+            parentId=data.get("parent_id"),
+            dueDate=due_date,
         )
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": f"Linear create failed: {e}"}), 502
 
-    extra["linear_id"] = issue["id"]
-    extra["linear_identifier"] = issue["identifier"]
-    extra["linear_url"] = issue["url"]
+    extra["linear_id"] = issue.get("id")
+    extra["linear_identifier"] = issue.get("identifier")
+    extra["linear_url"] = issue.get("url")
+    extra["linear_team_id"] = team_id
+    # Opt-in close-sync — persists on the task. /tasks/:id/done + cancel
+    # check this flag before pushing a state update back to Linear.
+    if data.get("sync_close"):
+        extra["linear_sync_close"] = True
     task.extra = extra
+    # Pin the URL onto task.url too so existing link affordances work.
+    if not task.url and issue.get("url"):
+        task.url = issue["url"]
     db.session.commit()
     return jsonify({
         "success": True,
-        "linear_id": issue["id"],
-        "linear_identifier": issue["identifier"],
-        "linear_url": issue["url"],
+        "linear_id": issue.get("id"),
+        "linear_identifier": issue.get("identifier"),
+        "linear_url": issue.get("url"),
     }), 201
 
 

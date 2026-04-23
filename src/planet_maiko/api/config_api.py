@@ -95,6 +95,34 @@ def linear_teams():
     return jsonify({"teams": teams})
 
 
+@config_bp.route("/config/linear/team-meta", methods=["GET"])
+def linear_team_meta():
+    """Fetch states / labels / cycles / projects / members for a team.
+
+    Used by the Send-to-Linear modal to populate its pickers. Accepts
+    ?team_id= for ad-hoc lookups (e.g. a team-switch picker); falls
+    back to config.linear.team_id for the default case.
+    """
+    from planet_maiko.pollers.linear_client import LinearClient
+
+    team_id = request.args.get("team_id")
+    if not team_id:
+        team_id = (load_config().get("linear") or {}).get("team_id") or ""
+    if not team_id:
+        return jsonify({"error": "team_id required (config or query param)"}), 400
+
+    try:
+        client = LinearClient()
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    try:
+        meta = client.team_meta(team_id)
+    except Exception as e:
+        return jsonify({"error": f"team-meta fetch failed: {e}"}), 502
+    return jsonify(meta)
+
+
 @config_bp.route("/github/discover", methods=["POST"])
 def discover_github_repos():
     """Discover recent repos the user has committed to via gh CLI."""
