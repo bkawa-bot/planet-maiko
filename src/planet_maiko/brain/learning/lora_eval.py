@@ -147,7 +147,7 @@ def evaluate_adapter(adapter_path=None, repo=None, holdout_fraction=0.2):
 
     logger.info(f"[lora-eval] P={precision:.2f} R={recall:.2f} F1={f1:.2f} (tp={tp} fp={fp} fn={fn} tn={tn})")
 
-    return {
+    result = {
         "success": True,
         "precision": precision,
         "recall": recall,
@@ -157,6 +157,50 @@ def evaluate_adapter(adapter_path=None, repo=None, holdout_fraction=0.2):
         "per_category": cat_metrics,
         "adapter_path": adapter_path,
     }
+
+    # Persist the eval so /lora/adapters can surface eval_score and the
+    # UI can show a trend line. Best-effort — a DB failure here
+    # shouldn't swallow the result the caller already has.
+    try:
+        _record_eval(result, repo=repo, holdout_fraction=holdout_fraction)
+    except Exception as e:
+        logger.warning(f"[lora-eval] Failed to persist eval row: {e}")
+
+    return result
+
+
+def _record_eval(result, repo=None, holdout_fraction=None):
+    """Insert an AdapterEval row from an evaluate_adapter() result dict.
+
+    Requires an active Flask app context. CLI entrypoints that call
+    evaluate_adapter() set one up with create_app(start_scheduler=False)
+    so the commit lands in the shared SQLite DB. Silently skips if no
+    context is active — callers wrap this in a try/except anyway.
+    """
+    from planet_maiko.database import db
+    from planet_maiko.models.adapter_eval import AdapterEval
+
+    adapter_path = result.get("adapter_path")
+    if not adapter_path:
+        return
+
+    row = AdapterEval(
+        adapter_path=adapter_path,
+        adapter_version=os.path.basename(adapter_path.rstrip(os.sep)),
+        repo=repo,
+        precision=result.get("precision", 0.0),
+        recall=result.get("recall", 0.0),
+        f1=result.get("f1", 0.0),
+        tp=result.get("tp", 0),
+        fp=result.get("fp", 0),
+        fn=result.get("fn", 0),
+        tn=result.get("tn", 0),
+        test_count=result.get("test_count", 0),
+        holdout_fraction=holdout_fraction,
+        per_category=result.get("per_category") or {},
+    )
+    db.session.add(row)
+    db.session.commit()
 
 
 def compare_adapters(adapter_a, adapter_b, repo=None, holdout_fraction=0.2):

@@ -83,6 +83,34 @@ def _ensure_columns():
         # ContextSelection was only ever read by the now-gone
         # record_task_outcome / record_session_feedback functions.
         "DROP TABLE IF EXISTS context_selections",
+        # LoRA eval persistence — one row per evaluate_adapter() call.
+        # db.create_all() handles fresh installs; explicit CREATE
+        # covers existing DBs where the model was registered after
+        # first boot.
+        (
+            "CREATE TABLE IF NOT EXISTS adapter_evals ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "adapter_path VARCHAR(1024) NOT NULL, "
+            "adapter_version VARCHAR(256), "
+            "repo VARCHAR(256), "
+            "precision FLOAT NOT NULL DEFAULT 0, "
+            "recall FLOAT NOT NULL DEFAULT 0, "
+            "f1 FLOAT NOT NULL DEFAULT 0, "
+            "tp INTEGER NOT NULL DEFAULT 0, "
+            "fp INTEGER NOT NULL DEFAULT 0, "
+            "fn INTEGER NOT NULL DEFAULT 0, "
+            "tn INTEGER NOT NULL DEFAULT 0, "
+            "test_count INTEGER NOT NULL DEFAULT 0, "
+            "holdout_fraction FLOAT, "
+            "per_category JSON DEFAULT '{}', "
+            "extra JSON DEFAULT '{}', "
+            "created_at DATETIME NOT NULL"
+            ")"
+        ),
+        "CREATE INDEX IF NOT EXISTS ix_adapter_evals_adapter_path ON adapter_evals(adapter_path)",
+        "CREATE INDEX IF NOT EXISTS ix_adapter_evals_repo ON adapter_evals(repo)",
+        "CREATE INDEX IF NOT EXISTS ix_adapter_evals_f1 ON adapter_evals(f1)",
+        "CREATE INDEX IF NOT EXISTS ix_adapter_evals_created_at ON adapter_evals(created_at)",
     ]
     for sql in migrations:
         try:
@@ -305,6 +333,7 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.automation import Automation  # noqa: F401
         from planet_maiko.models.agent_job import AgentJob  # noqa: F401
         from planet_maiko.models.memo import Memo  # noqa: F401
+        from planet_maiko.models.adapter_eval import AdapterEval  # noqa: F401
         # Legacy AgentGoal kept imported only so the one-time migration
         # below can see its rows on first boot after this upgrade.
         # Remove the import and the table once the migration has run on

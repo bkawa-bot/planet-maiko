@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 
-from planet_maiko.database import db
+from planet_maiko.database import db, iso_utc
 from planet_maiko.models.task import Task
 
 logger = logging.getLogger(__name__)
@@ -289,14 +289,17 @@ def _read_adapter_metadata(adapter_path):
 
     Returns a dict with trained_at / base_model / dataset_size /
     eval_score populated when the corresponding artifacts exist, or
-    None for any field we can't pin down. No eval-result persistence
-    exists today — eval_score always comes back None until we add one.
+    None for any field we can't pin down. eval_score / eval_at read
+    from the latest AdapterEval row for this path; both are None
+    until someone runs `maiko eval` against the adapter.
     """
     meta = {
         "trained_at": None,
         "base_model": None,
         "dataset_size": None,
         "eval_score": None,
+        "eval_at": None,
+        "eval_test_count": None,
     }
 
     # trained_at: prefer adapters.safetensors mtime (the real "done"
@@ -333,6 +336,18 @@ def _read_adapter_metadata(adapter_path):
         except OSError:
             pass
 
+    # eval_score / eval_at: latest AdapterEval row for this path.
+    # Left None if nobody's run `maiko eval` against this adapter yet.
+    try:
+        from planet_maiko.models.adapter_eval import AdapterEval
+        latest = AdapterEval.latest_for_adapter(adapter_path)
+        if latest is not None:
+            meta["eval_score"] = latest.f1
+            meta["eval_at"] = iso_utc(latest.created_at)
+            meta["eval_test_count"] = latest.test_count
+    except Exception as e:
+        logger.debug(f"[lora] eval lookup skipped: {e}")
+
     return meta
 
 
@@ -356,7 +371,9 @@ def adapter_for_repo():
           "version": string | null,       // adapter directory name
           "trained_at": iso8601 | null,
           "base_model": string | null,
-          "eval_score": float | null,     // null until eval persistence lands
+          "eval_score": float | null,     // latest F1 (0-1); null until evaluated
+          "eval_at": iso8601 | null,      // when eval_score was recorded
+          "eval_test_count": int | null,  // size of the eval's holdout set
           "dataset_size": int | null,
           "adapter_path": string | null   // absolute path (localhost use)
         }
@@ -377,6 +394,8 @@ def adapter_for_repo():
             "trained_at": None,
             "base_model": None,
             "eval_score": None,
+            "eval_at": None,
+            "eval_test_count": None,
             "dataset_size": None,
             "adapter_path": None,
         })
@@ -389,8 +408,51 @@ def adapter_for_repo():
         "trained_at": meta["trained_at"],
         "base_model": meta["base_model"],
         "eval_score": meta["eval_score"],
+        "eval_at": meta["eval_at"],
+        "eval_test_count": meta["eval_test_count"],
         "dataset_size": meta["dataset_size"],
         "adapter_path": adapter_path,
+    })
+
+
+@lora_bp.route("/lora/adapters/evals", methods=["GET"])
+def adapter_eval_history():
+    """Return eval history for the adapter currently configured for a repo.
+
+    Query params:
+        repo: "org/name". Required.
+        limit: max rows to return (default 20).
+
+    Response 200:
+        {
+          "repo": "org/name",
+          "adapter_path": string | null,
+          "evals": [ AdapterEval.to_dict(), ... ]  // newest first
+        }
+    Response 400: when repo is missing.
+    """
+    from planet_maiko.brain.learning.lora_eval import resolve_lora_for_repo
+    from planet_maiko.models.adapter_eval import AdapterEval
+
+    repo = (request.args.get("repo") or "").strip()
+    if not repo:
+        return jsonify({"error": "repo is required"}), 400
+
+    try:
+        limit = int(request.args.get("limit", 20))
+    except ValueError:
+        limit = 20
+    limit = max(1, min(limit, 200))
+
+    adapter_path = resolve_lora_for_repo(repo)
+    if not adapter_path:
+        return jsonify({"repo": repo, "adapter_path": None, "evals": []})
+
+    rows = AdapterEval.history_for_adapter(adapter_path, limit=limit)
+    return jsonify({
+        "repo": repo,
+        "adapter_path": adapter_path,
+        "evals": [r.to_dict() for r in rows],
     })
 
 

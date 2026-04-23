@@ -347,13 +347,19 @@ def cmd_eval_prs(args):
 def cmd_eval(args):
     """Evaluate a LoRA adapter's precision/recall on held-out data."""
     from planet_maiko.brain.learning.lora_eval import evaluate_adapter
+    from planet_maiko.app import create_app
 
-    print("Evaluating adapter...")
-    result = evaluate_adapter(
-        adapter_path=args.adapter,
-        repo=args.repo,
-        holdout_fraction=args.holdout,
-    )
+    # App context so evaluate_adapter can persist the row into the
+    # adapter_evals table — /lora/adapters reads from that to surface
+    # eval_score and trend.
+    app = create_app(start_scheduler=False)
+    with app.app_context():
+        print("Evaluating adapter...")
+        result = evaluate_adapter(
+            adapter_path=args.adapter,
+            repo=args.repo,
+            holdout_fraction=args.holdout,
+        )
 
     if not result.get("success"):
         print(f"Error: {result.get('error')}")
