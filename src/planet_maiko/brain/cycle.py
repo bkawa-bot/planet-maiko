@@ -574,6 +574,137 @@ def _bump_agent_failed(agent_profile_id):
         prof.tasks_failed = (prof.tasks_failed or 0) + 1
 
 
+def _execute_lightweight_specialty(job, specialty):
+    """Run a no-worktree specialty as a single synchronous LLM call.
+
+    The full prepare + _kickoff_agent_headless machinery exists for
+    long-running agents that need a worktree + MCP reply channel.
+    Specialties like brainstorm / plan / verify just compose a prompt
+    from DB state and call the LLM once — that overhead is pure waste
+    for them. This path:
+
+      1. Lazy-spawn an agent for role=specialty.id / scope=job.scope_repo
+         (if not already assigned).
+      2. Compose the specialty's prompt via get_skill_prompt, which
+         handles context injection + voice + user-edit overrides.
+      3. Call runtime.send synchronously (bounded by timeout).
+      4. Parse PATTERN / PROPOSAL / TASK blocks if the job is linked
+         to a Task (same mechanism investigation agents use).
+      5. Write a skill_result Memo so the output lands in Recent Skills.
+      6. Mark job done; if linked to a Task, mark that done too.
+
+    Returns True on success, False on failure. Failures update the job
+    with status=failed + error so the caller's committed.
+    """
+    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.models.task import Task
+    from planet_maiko.database import db
+    from planet_maiko.agents.brain_session import _get_runtime
+    from planet_maiko.agents.routing import resolve_model
+    from planet_maiko.agents.skills import get_skill_prompt
+    from planet_maiko.brain.memos import create_memo
+    from planet_maiko.brain.learning.agent_output import parse_and_apply_blocks
+    from planet_maiko.orchestration import maybe_spawn
+
+    # Ensure we have an agent for this specialty + scope.
+    if job.agent_profile_id:
+        agent = db.session.get(AgentProfile, job.agent_profile_id)
+    else:
+        agent = maybe_spawn(specialty.id, job.scope_repo)
+        job.agent_profile_id = agent.id
+
+    runtime = _get_runtime()
+    if not runtime or not runtime.is_available():
+        job.status = "failed"
+        job.error = "LLM runtime unavailable"
+        job.finished_at = datetime.now(timezone.utc)
+        logger.warning(f"[cycle] specialty {specialty.id} ({job.id}): runtime unavailable")
+        return False
+
+    context = {
+        "query": job.title,
+        "context": (job.description or "") + (f"\nRepo: {job.scope_repo}" if job.scope_repo else ""),
+        "pupdates": "[]",
+        "tasks": "[]",
+        "calendar": "[]",
+    }
+    prompt = get_skill_prompt(specialty.id, context) or specialty.prompt
+
+    model = resolve_model(f"skill:{specialty.id}") or resolve_model("skill")
+    try:
+        result = runtime.send(prompt, timeout=300, model=model)
+    except Exception as e:
+        job.status = "failed"
+        job.error = str(e)[:500]
+        job.finished_at = datetime.now(timezone.utc)
+        logger.warning(f"[cycle] specialty {specialty.id} ({job.id}): send failed: {e}")
+        return False
+
+    if not result or not result.get("success"):
+        err = (result or {}).get("error") or "LLM call failed"
+        job.status = "failed"
+        job.error = str(err)[:500]
+        job.finished_at = datetime.now(timezone.utc)
+        logger.warning(f"[cycle] specialty {specialty.id} ({job.id}): {err}")
+        return False
+
+    output = (result.get("output") or "").strip()
+
+    # Parse structured blocks. Needs a task for attribution — without
+    # one, specialty runs don't feed signals / proposals into the
+    # pool. Standalone specialty jobs still produce a readable memo.
+    linked_task = db.session.get(Task, job.source_task_id) if job.source_task_id else None
+    cleaned = output
+    if agent is not None and linked_task is not None:
+        try:
+            parsed = parse_and_apply_blocks(
+                output, agent=agent, task=linked_task, repo=job.scope_repo,
+            )
+            cleaned = parsed.get("cleaned_output", output)
+        except Exception as e:
+            logger.debug(f"[cycle] block parse failed for {specialty.id}: {e}")
+
+    # Write the user-facing memo.
+    first_line = ""
+    for line in cleaned.splitlines():
+        stripped = line.strip().lstrip("# ").strip()
+        if stripped:
+            first_line = stripped
+            break
+    preview = first_line[:80] if first_line else specialty.name
+    create_memo(
+        kind="skill_result",
+        category="info",
+        title=f"{specialty.id}: {preview}",
+        body=cleaned[:16000],
+        priority=job.priority or "normal",
+        source_agent_id=job.agent_profile_id,
+        source_task_id=job.source_task_id,
+        extra={
+            "skill_name": specialty.id,
+            "skill_title": specialty.name,
+            "from_agent_job": job.id,
+        },
+    )
+
+    job.status = "done"
+    job.finished_at = datetime.now(timezone.utc)
+    job.artifact = cleaned[:16000] or None
+    if linked_task is not None:
+        linked_task.status = "done"
+        task_extra = dict(linked_task.extra or {})
+        if cleaned:
+            task_extra["artifact"] = cleaned[:16000]
+        linked_task.extra = task_extra
+    db.session.commit()
+
+    logger.info(
+        f"[cycle] specialty {specialty.id} ({job.id}) done by {agent.display_name if agent else 'unknown'}: "
+        f"{len(cleaned)} chars"
+    )
+    return True
+
+
 def _phase_execute_agent_jobs():
     """Phase 8c: run queued AgentJobs. Sibling of _phase_execute_agent_tasks
     — same prepare+headless-kickoff machinery, reading from the AgentJob
@@ -582,15 +713,20 @@ def _phase_execute_agent_jobs():
     Skips pending_approval (user hasn't approved yet) and running / done /
     failed / cancelled. Capped at 2 per cycle to bound token spend.
 
-    When the job has a source_task_id (Stage D review/pr_review), we
-    compose the full TASK.md via build_task_prompt(task, role) so the
-    agent sees everything the Task-direct path saw: source pupdate,
-    project, url, tags, skill prompt. The linked Task's status moves
-    to in_progress on kickoff.
+    Three execution shapes:
+      - Specialty with needs_worktree=False: direct LLM call via
+        runtime.send. Output lands as a skill_result memo, no worktree,
+        no MCP round-trip. Runs synchronously inside the cycle.
+      - Specialty with needs_worktree=True: the existing prepare +
+        _kickoff_agent_headless path, with the specialty's protocol
+        embedded into the prompt.
+      - Built-in roles (review / investigation / cartograph): unchanged
+        — same path, same prompt composition as before.
     """
     from planet_maiko.models.agent_job import AgentJob
     from planet_maiko.models.agent_profile import AgentProfile
     from planet_maiko.models.task import Task
+    from planet_maiko.models.custom_skill import CustomSkill
     from planet_maiko.database import db
     from planet_maiko.agents.brain_session import ONE_SHOT_ROLE_FOR_TYPE
     from planet_maiko.agents.coding_agent import prepare, _kickoff_agent_headless
@@ -609,7 +745,21 @@ def _phase_execute_agent_jobs():
 
         executed = 0
         for job in candidates:
+            # Specialty fast path: no-worktree specialties run as a
+            # direct LLM call, not the full prepare+kickoff dance.
+            specialty = db.session.get(CustomSkill, job.kind)
+            if specialty is not None and not specialty.needs_worktree:
+                if _execute_lightweight_specialty(job, specialty):
+                    executed += 1
+                continue
+
             role = (ONE_SHOT_ROLE_FOR_TYPE.get(job.kind) or (None, None))[0]
+            if role is None and specialty is not None:
+                # needs_worktree=True specialty: role IS the specialty
+                # id so maybe_spawn creates an agent with the specialty
+                # role, and the skill-prompt embed below picks up the
+                # specialty's protocol.
+                role = specialty.id
             if role is None:
                 role = {
                     "cartograph": "cartographer",
@@ -695,18 +845,26 @@ def _phase_execute_agent_jobs():
                 except Exception as e:
                     logger.debug(f"[cycle] pupdate-context enrich skipped for {job.id}: {e}")
 
-                if role in ("review", "investigation"):
+                # Embed the skill/specialty protocol into the prompt
+                # for roles whose work is guided by one. Specialties
+                # use job.kind directly (it's the CustomSkill.id);
+                # built-in review/investigation roles pick up from
+                # ONE_SHOT_ROLE_FOR_TYPE's skill mapping.
+                skill_name = None
+                if specialty is not None:
+                    skill_name = specialty.id
+                elif role in ("review", "investigation"):
+                    skill_name = (ONE_SHOT_ROLE_FOR_TYPE.get(job.kind) or (None, None))[1]
+                if skill_name:
                     try:
                         from planet_maiko.agents.skills import get_skill_prompt
-                        skill_name = (ONE_SHOT_ROLE_FOR_TYPE.get(job.kind) or (None, None))[1]
-                        if skill_name:
-                            skill_prompt = get_skill_prompt(skill_name, {
-                                "query": job.title,
-                                "context": f"Repo: {job.scope_repo or ''}",
-                                "pupdates": "[]", "tasks": "[]", "calendar": "[]",
-                            }) or ""
-                            if skill_prompt.strip():
-                                prompt_parts.append(f"\n## Skill: {skill_name}\n\n{skill_prompt}")
+                        skill_prompt = get_skill_prompt(skill_name, {
+                            "query": job.title,
+                            "context": f"Repo: {job.scope_repo or ''}",
+                            "pupdates": "[]", "tasks": "[]", "calendar": "[]",
+                        }) or ""
+                        if skill_prompt.strip():
+                            prompt_parts.append(f"\n## Skill: {skill_name}\n\n{skill_prompt}")
                     except Exception as e:
                         logger.debug(f"[cycle] skill prompt embed skipped: {e}")
                 full_prompt = "\n".join(prompt_parts)
