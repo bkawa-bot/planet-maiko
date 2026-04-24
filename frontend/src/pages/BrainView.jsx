@@ -59,6 +59,9 @@ export default function BrainView() {
     setSearchParams(params, { replace: true });
   };
   const [synthesizing, setSynthesizing] = useState(false);
+  // Scope filter: "all" / "global" / "scoped" / "unscoped". Purely a
+  // view-layer filter — doesn't touch the learning rows themselves.
+  const [scopeFilter, setScopeFilter] = useState("all");
 
   const fetchLearnings = async () => {
     setKLoading(true);
@@ -162,11 +165,30 @@ export default function BrainView() {
     status: "unsynthesized",
   }));
 
-  const visible = tab === "unsynthesized"
+  const baseVisible = tab === "unsynthesized"
     ? unsynthesized
     : tab === "pending"
       ? pending
       : learnings.filter((l) => l.status !== "dismissed");
+
+  // Scope filter pills: "all" (default) / "global" (is_global=true) /
+  // "scoped" (has a scope_repo) / "unscoped" (neither). The filter is
+  // most useful on the Pool tab where a mixed bag of rules arrives —
+  // but it also works on pending/unsynthesized without getting in the way.
+  const matchesScopeFilter = (l) => {
+    if (scopeFilter === "all") return true;
+    if (scopeFilter === "global") return !!l.is_global;
+    if (scopeFilter === "scoped") return !l.is_global && !!l.scope_repo;
+    if (scopeFilter === "unscoped") return !l.is_global && !l.scope_repo;
+    return true;
+  };
+  const visible = baseVisible.filter(matchesScopeFilter);
+  const scopeCounts = {
+    all: baseVisible.length,
+    global: baseVisible.filter((l) => l.is_global).length,
+    scoped: baseVisible.filter((l) => !l.is_global && l.scope_repo).length,
+    unscoped: baseVisible.filter((l) => !l.is_global && !l.scope_repo).length,
+  };
 
   const byCategory = {};
   for (const l of visible) {
@@ -355,14 +377,47 @@ export default function BrainView() {
           </InfoButton>
         </div>
 
+        {baseVisible.length > 0 && (
+          <div className="scope-filter-row">
+            {[
+              { key: "all", label: "All" },
+              { key: "global", label: "Global" },
+              { key: "scoped", label: "Scoped" },
+              { key: "unscoped", label: "Unscoped" },
+            ].map((o) => (
+              <button
+                key={o.key}
+                type="button"
+                className={`scope-filter-pill ${scopeFilter === o.key ? "active" : ""}`}
+                onClick={() => setScopeFilter(o.key)}
+                disabled={scopeCounts[o.key] === 0 && o.key !== "all"}
+                title={
+                  o.key === "global" ? "Applies to every repo (seen in 3+ repos or flipped by hand)"
+                  : o.key === "scoped" ? "Pinned to a single repo"
+                  : o.key === "unscoped" ? "No scope set — matches every lookup"
+                  : "Everything"
+                }
+              >
+                {o.label} <span className="scope-filter-count">{scopeCounts[o.key]}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {kLoading ? (
           <p className="page-empty">Loading...</p>
         ) : Object.keys(byCategory).length === 0 ? (
           <div className="empty-state">
             <Brain size={36} className="empty-icon" />
-            <div className="empty-title">The brain's still fresh</div>
+            <div className="empty-title">
+              {baseVisible.length === 0
+                ? "The brain's still fresh"
+                : `Nothing here with scope: ${scopeFilter}`}
+            </div>
             <div className="empty-sub">
-              Learnings show up here as your agents review PRs, notice patterns, and get feedback. Give it a few cycles, or add one by hand.
+              {baseVisible.length === 0
+                ? "Learnings show up here as your agents review PRs, notice patterns, and get feedback. Give it a few cycles, or add one by hand."
+                : "Try a different scope filter."}
             </div>
           </div>
         ) : (
@@ -399,9 +454,13 @@ export default function BrainView() {
                             {l.status === "pending" && <span className="badge paused">pending</span>}
                             {l.status === "unsynthesized" && <span className="badge" title="Raw PR-comment signal waiting for LLM synthesis">raw</span>}
                             {l.source && <span className="tag">{l.source}</span>}
-                            {l.is_global
-                              ? <span className="tag tag-global" title="Seen in 3+ repos — feeds every LoRA">🌐 global</span>
-                              : l.scope_repo && <span className="tag" title={l.scope_repo}>{formatRepo(l.scope_repo, defaultOrg)}</span>}
+                            {l.is_global ? (
+                              <span className="tag tag-global" title="Seen in 3+ repos — feeds every LoRA">🌐 global</span>
+                            ) : l.scope_repo ? (
+                              <span className="tag" title={l.scope_repo}>{formatRepo(l.scope_repo, defaultOrg)}</span>
+                            ) : (
+                              <span className="tag" title="No scope set — matches every lookup">unscoped</span>
+                            )}
                             {l.scope_language && <span className="tag">{l.scope_language}</span>}
                           </div>
                           <div className="confidence-bar-wrapper">
@@ -422,10 +481,10 @@ export default function BrainView() {
                                 className="btn btn-sm"
                                 onClick={() => handleToggleGlobal(l)}
                                 title={l.is_global
-                                  ? "This rule applies to every repo. Click to make it scope-only."
-                                  : "Make this rule apply to every repo (no scope_repo)."}
+                                  ? "This rule applies to every repo. Click to un-global it (leaves scope blank)."
+                                  : "Make this rule apply to every repo."}
                               >
-                                🌐 {l.is_global ? "Scoped" : "Global"}
+                                🌐 {l.is_global ? "Un-global" : "Make global"}
                               </button>
                             )}
                             {l.status === "active" || l.status === "pending" ? (
