@@ -27,15 +27,6 @@
   padding: 4px 2px 2px 2px;
 }
 
-.pack-status-external-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border);
-}
-
 .pack-status-list {
   display: flex;
   flex-direction: column;
@@ -83,12 +74,6 @@
   border-left-color: var(--blue, var(--mint));
 }
 
-/* External (teammate) rows get a distinct mint accent */
-.pack-row.tone-external {
-  background: color-mix(in srgb, var(--mint, var(--blue)) 6%, transparent);
-  border-left: 2px solid var(--mint, var(--blue));
-}
-
 .pack-row-avatar {
   flex-shrink: 0;
   width: 32px;
@@ -108,9 +93,6 @@
 }
 .pack-row.has-request.tone-plan .pack-row-avatar {
   color: var(--lavender);
-}
-.pack-row.tone-external .pack-row-avatar {
-  color: var(--mint, var(--blue));
 }
 
 .pack-row-body {
@@ -161,10 +143,6 @@
 }
 .pack-row.has-request.tone-idea .pack-row-request-label {
   color: var(--peach);
-}
-.pack-row.tone-external .pack-row-request-label {
-  color: var(--mint, var(--blue));
-  margin-left: 4px;
 }
 
 .pack-row-task {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Bot, ClipboardCheck, FileText, GitPullRequest, HelpCircle,
+  Bot, ClipboardCheck, FileText, HelpCircle,
   Lightbulb, Loader, Users,
 } from "lucide-react";
 import { api } from "../api/client";
@@ -20,9 +20,9 @@ import "./PackStatusPane.css";
  *   - last status message (truncated)
  *   - pending pack-request inline when present (plan / review / stuck)
  *
- * External teammate events (pr_review_requested) render as a separate
- * stack at the top — they're from outside the pack so the agent-row
- * shape doesn't fit.
+ * Pack-internal only. External teammate events (a human asking you to
+ * review their PR) flow through the review-task automation → Memos
+ * pane, not this one — no point duplicating the ask here.
  *
  * Sort order: rows with a pending request first, then stuck agents,
  * then working, then idle. Capped at 10 rows.
@@ -31,8 +31,6 @@ import "./PackStatusPane.css";
 const POLL_MS = 30_000;
 const MAX_ROWS = 10;
 
-// Matches the request-type map the API endpoint produces. Tone drives
-// the row's accent color; external=true takes the teammate-request path.
 const REQUEST_META = {
   agent_plan_for_approval: {
     icon: ClipboardCheck,
@@ -71,13 +69,6 @@ const REQUEST_META = {
     route: () => "/",
     tone: "idea",
   },
-  pr_review_requested: {
-    icon: GitPullRequest,
-    label: "wants your review",
-    route: (p) => p.url || "/",
-    external: true,
-    tone: "external",
-  },
 };
 
 const STATE_PRIORITY = { stuck: 0, working: 1, idle: 2 };
@@ -97,7 +88,6 @@ function compareRows(a, b) {
 
 export default function PackStatusPane() {
   const [rows, setRows] = useState([]);
-  const [externalRequests, setExternalRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const fetchAll = async () => {
@@ -109,11 +99,8 @@ export default function PackStatusPane() {
       ]);
       const profileById = Object.fromEntries((profiles || []).map((p) => [p.id, p]));
       const requestByTask = {};
-      const external = [];
       for (const r of (requests || [])) {
-        if (REQUEST_META[r.type]?.external) {
-          external.push(r);
-        } else if (r.metadata?.task_id) {
+        if (r.metadata?.task_id) {
           requestByTask[r.metadata.task_id] = r;
         }
       }
@@ -124,7 +111,6 @@ export default function PackStatusPane() {
       }));
       merged.sort(compareRows);
       setRows(merged.slice(0, MAX_ROWS));
-      setExternalRequests(external);
     } catch {
       // silent — pane just stays with its last-known state
     }
@@ -139,53 +125,16 @@ export default function PackStatusPane() {
 
   if (loading) return null;
   // Still render the pane when the pack is idle — the ask-box belongs
-  // on Home even before there are rows to show. Only skip render when
-  // the whole pane would be truly empty.
-  const hasAnything = rows.length > 0 || externalRequests.length > 0;
-
+  // on Home even before there are rows to show.
   return (
     <div className="pack-status-pane frost-pane">
       <div className="pack-status-header">
         <Users size={12} /> Your pack
       </div>
       <PackAskBox />
-      {!hasAnything && (
+      {rows.length === 0 && (
         <div className="pack-status-empty">
           Pack's quiet. Ask something up there and I'll pick someone.
-        </div>
-      )}
-
-      {externalRequests.length > 0 && (
-        <div className="pack-status-external-list">
-          {externalRequests.map((r) => {
-            const meta = REQUEST_META[r.type];
-            const Icon = meta.icon;
-            const author = r.metadata?.author || "A teammate";
-            return (
-              <a
-                key={r.id}
-                href={meta.route(r)}
-                target="_blank"
-                rel="noreferrer"
-                className={`pack-row tone-${meta.tone}`}
-              >
-                <div className="pack-row-avatar">
-                  <Icon size={14} />
-                </div>
-                <div className="pack-row-body">
-                  <div className="pack-row-title">
-                    <span className="pack-row-name">{author}</span>
-                    <span className="pack-row-request-label">{meta.label}</span>
-                  </div>
-                  {r.timestamp && (
-                    <div className="pack-row-update">
-                      <span className="pack-row-time">{relativeTime(r.timestamp)}</span>
-                    </div>
-                  )}
-                </div>
-              </a>
-            );
-          })}
         </div>
       )}
 

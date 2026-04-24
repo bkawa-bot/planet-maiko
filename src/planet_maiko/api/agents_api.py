@@ -1669,12 +1669,12 @@ def pack_requests():
     invalidation); that's the wrong shape for "an agent just asked for
     a plan review, show me now."
 
-    Covers both pack-internal requests (plan waiting, review ready,
-    agent stuck, proposal) AND genuine asks-on-you from teammates
-    (a GitHub review requested on you). Excludes pr_changes_requested
-    and similar "something happened on your PR" events — those are
-    background noise handled by the agent-wake-up flow, not things
-    you need to click on.
+    Pack-internal only: plan waiting, review ready, agent stuck,
+    proposal, working on feedback. External teammate events
+    (pr_review_requested) are NOT included here — the automation
+    already spawns a review Task for those, and the Task flows through
+    the review-queue memo, so surfacing them here too would just be
+    duplicate noise.
 
     Held pupdates (from focus mode) are hidden here too, matching the
     main /api/pupdates behavior.
@@ -1689,7 +1689,6 @@ def pack_requests():
         "agent_stuck",                   # agent blocked, needs user help
         "agent_proposal",                # "From Maiko" proposal in the approval queue
         "agent_working_on_feedback",     # transient: agent iterating on PR-review comments
-        "pr_review_requested",           # teammate asked you to review their PR (external)
     )
 
     limit = min(int(request.args.get("limit") or 10), 30)
