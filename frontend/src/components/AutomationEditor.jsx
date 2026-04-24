@@ -769,7 +769,7 @@ const ACTION_SCHEMAS = {
     scopes: ["cycle", "pupdate"],
     help: "Drops a notification on the Home page. Use when you just want to be told something happened, no task or agent spawn. Dismissable.",
     fields: [
-      { name: "title", type: "string", label: "Title", placeholder: "e.g. 'CI has been red for 30 min' or '{pupdate_title}'", help: "Required. Supports tokens like {pupdate_title}, {repo}." },
+      { name: "title", type: "string", label: "Title", placeholder: "e.g. 'CI has been red for 30 min' or '{pupdate_title}'", help: "Defaults to the triggering pupdate's title. Supports tokens like {pupdate_title}, {repo}." },
       { name: "body", type: "textarea", label: "Body", rows: 2, help: "Optional extra detail. Markdown. Supports {pupdate_body}, {pupdate_url}, {repo}." },
       { name: "priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS, advanced: true },
       { name: "url", type: "string", label: "Click-through URL", placeholder: "https:// or {pupdate_url}", advanced: true },

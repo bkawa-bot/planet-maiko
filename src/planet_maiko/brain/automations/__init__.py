@@ -941,10 +941,25 @@ def _act_notify(automation, config, pupdate=None, context=None):
     """
     from planet_maiko.brain.memos import create_memo
 
+    # Default: use the triggering pupdate's title. Matches what
+    # _act_spawn_agent_job_from_pupdate does. Leaving the field blank
+    # in the editor silently dropped every notify_me fire before this,
+    # which was its own silent bug — by the time you noticed nothing
+    # was showing up, the automation's fire_count was happily
+    # incrementing and there was no trace in the memos table.
     title_template = (config.get("title") or "").strip()
     if not title_template:
-        return {"skipped": "notify_me requires a title"}
+        if pupdate is not None:
+            title_template = "{pupdate_title}"
+        else:
+            title_template = automation.name or "Notification"
     title = _interpolate(title_template, pupdate=pupdate, context=context)
+    # _interpolate can still return "" if the pupdate had an empty
+    # title AND the template was just {pupdate_title} — fall back one
+    # more step so the memo always has something rather than being
+    # filed under "(notification)" in the UI.
+    if not title.strip():
+        title = automation.name or "Notification"
     body = _interpolate(config.get("body") or "", pupdate=pupdate, context=context)
     url_template = config.get("url") or (pupdate.url if pupdate else "")
     url = _interpolate(url_template, pupdate=pupdate, context=context) or None
