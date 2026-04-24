@@ -189,7 +189,7 @@ def _write_task_file(working_path, task_id, task_title, prompt):
         f.write(content)
 
 
-def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_port=None, parent_repo_path=None, agent_profile_id=None):
+def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_port=None, parent_repo_path=None, agent_profile_id=None, specialty_id=None):
     """Write CLAUDE.md with full agent protocol.
 
     Loads the protocol template for the given role. "coding" uses the
@@ -208,6 +208,12 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
     `instructions` field off their AgentProfile and appends it as a
     per-agent "Your Notes" section — carry-forward context so the
     agent doesn't re-learn the same things every session.
+
+    specialty_id, when set, appends a CustomSkill's prompt as a
+    "Your specialty for this run" section. Specialties are chosen
+    per-run (by automation action_config, the assign modal, or a
+    one-shot spawn) from the AgentProfile.specialty_ids pool. None
+    = run on base role protocol only.
     """
     if maiko_port is None:
         from planet_maiko.config import MAIKO_PORT
@@ -299,6 +305,10 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
     if agent_notes:
         content += f"\n\n{agent_notes}\n"
 
+    specialty_block = _build_specialty_section(specialty_id, agent_profile_id)
+    if specialty_block:
+        content += f"\n\n{specialty_block}\n"
+
     claude_dir = os.path.join(working_path, ".claude")
     os.makedirs(claude_dir, exist_ok=True)
     with open(os.path.join(working_path, "CLAUDE.md"), "w", encoding="utf-8") as f:
@@ -341,6 +351,43 @@ def _build_agent_notes_section(agent_profile_id):
         )
     except Exception as e:
         logger.debug(f"[claude_md] agent notes skipped: {e}")
+        return ""
+
+
+def _build_specialty_section(specialty_id, agent_profile_id):
+    """Render the CustomSkill prompt as a "Your specialty for this run"
+    section. Only kicks in when specialty_id is set AND it's one of the
+    specialties attached to this agent's profile — guards against callers
+    passing a stray id the agent was never supposed to run with.
+    """
+    if not specialty_id:
+        return ""
+    try:
+        from planet_maiko.database import db
+        from planet_maiko.models.custom_skill import CustomSkill
+        from planet_maiko.models.agent_profile import AgentProfile
+
+        if agent_profile_id:
+            profile = db.session.get(AgentProfile, agent_profile_id)
+            attached = set(profile.specialty_ids or []) if profile else set()
+            if specialty_id not in attached:
+                logger.info(
+                    f"[claude_md] specialty {specialty_id} not attached to "
+                    f"agent {agent_profile_id}; skipping injection."
+                )
+                return ""
+
+        skill = db.session.get(CustomSkill, specialty_id)
+        if not skill or not (skill.prompt or "").strip():
+            return ""
+        return (
+            "## Your specialty for this run\n\n"
+            f"This run picked **{skill.name}** — extra context on top of "
+            "your base role protocol.\n\n"
+            f"{skill.prompt.strip()}"
+        )
+    except Exception as e:
+        logger.debug(f"[claude_md] specialty section skipped: {e}")
         return ""
 
 
@@ -900,7 +947,7 @@ def _finalize_branch(repo_path):
 
 def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
             auto_kickoff=False, use_worktree=True, agent_profile_id=None,
-            role="coding"):
+            role="coding", specialty_id=None):
     """Prepare for an agent to work on a task.
 
     Two modes:
@@ -920,8 +967,12 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
         branch_prefix: prefix for the branch name
         auto_kickoff: if True, immediately start the agent via the runtime
         use_worktree: if True, create a git worktree; if False, just create a branch
-        role: "coding" | "review" | "investigation" — picks the CLAUDE.md
-            protocol template and role-scoped team instructions.
+        role: "coding" | "review" | "investigation" | "cartographer" —
+            picks the CLAUDE.md protocol template and role-scoped team
+            instructions.
+        specialty_id: optional CustomSkill id. If set and attached to
+            the agent, its prompt is layered onto CLAUDE.md as the
+            "specialty for this run" section. None = base role only.
 
     Returns:
         dict with agent info and launch instructions, or None on failure
@@ -967,6 +1018,7 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
         working_path, task_id, task_title,
         role=role, parent_repo_path=repo_path,
         agent_profile_id=agent_profile_id,
+        specialty_id=specialty_id,
     )
     # Pass repo_path so the worktree's .mcp.json inherits the user's
     # per-project MCPs (Linear / Slack / etc.) — otherwise the agent
