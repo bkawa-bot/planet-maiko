@@ -61,6 +61,14 @@
   --font: 'Inter', -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'Inconsolata', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
   --font-display: 'Bitcount Prop Single', 'Inconsolata', monospace;
+  /* Greeting font — swap between these four by changing this one var:
+       'Pixelify Sans'  — pixel-era but legible at size (default)
+       'Jersey 15'      — blocky jersey-numeric, very game-y
+       'Handjet'        — variable pixel, most stylized
+       'Geo'            — clean display sans, less pixel-y
+     Keep a sensible serif fallback so missed font-loads still feel
+     warm rather than collapsing to a system default. */
+  --font-greeting: 'Pixelify Sans', 'Fraunces', Georgia, serif;
   --radius: 12px;
   --radius-sm: 8px;
   --radius-xs: 6px;
@@ -170,10 +178,11 @@
   -moz-osx-font-smoothing: grayscale;
 }
 .overview-greeting {
-  font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
-  font-optical-sizing: auto;
+  font-family: var(--font-greeting);
+  /* Pixelify Sans reads cleaner at slightly higher weight; Fraunces
+     (fallback) handled well at 600. Kept at 600 so both look correct. */
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 body {
