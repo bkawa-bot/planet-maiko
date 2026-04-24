@@ -48,6 +48,7 @@ export default function ProposalCard({ proposal, onAction }) {
     description: initialDraft.description || "",
   });
   const fromAgentId = extra.from_agent_id;
+  const fromAgentName = extra.from_agent_display_name || fromAgentId;
 
   const approve = async () => {
     setBusy(true);
@@ -121,7 +122,7 @@ export default function ProposalCard({ proposal, onAction }) {
           </button>
         )}
       </div>
-      {fromAgentId && <div className="proposal-from">Proposed by {fromAgentId}</div>}
+      {fromAgentId && <div className="proposal-from">Proposed by {fromAgentName}</div>}
       {isGoalProposal && (
         <div className="proposal-from">
           This becomes a standing goal — Maiko keeps watching the condition.
@@ -204,7 +205,20 @@ export default function ProposalCard({ proposal, onAction }) {
 
       <div className="proposal-actions">
         {!isGoalProposal && (
-          <button className="btn btn-sm" onClick={() => setEditing((v) => !v)} disabled={busy}>
+          <button
+            className="btn btn-sm"
+            onClick={() => {
+              // Expand so the draft form is visible the moment you
+              // click Edit — otherwise the form stays hidden behind
+              // the collapsed state and nothing appears to happen.
+              setEditing((v) => {
+                const next = !v;
+                if (next) setExpanded(true);
+                return next;
+              });
+            }}
+            disabled={busy}
+          >
             <Pencil size={10} /> {editing ? "Done editing" : "Edit"}
           </button>
         )}
@@ -212,7 +226,7 @@ export default function ProposalCard({ proposal, onAction }) {
           <X size={10} /> Dismiss
         </button>
         <button className="btn btn-sm btn-primary" onClick={approve} disabled={busy}>
-          {busy ? <Loader size={10} className="spin" /> : <Check size={10} />} {isGoalProposal ? "Adopt goal" : "Approve"}
+          {busy ? <Loader size={10} className="spin" /> : <Check size={10} />} {isGoalProposal ? "Adopt goal" : "Approve → create task"}
         </button>
       </div>
     </div>

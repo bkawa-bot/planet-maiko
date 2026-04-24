@@ -200,6 +200,7 @@ def parse_and_apply_blocks(output, *, agent, task, repo=None):
                 source_task_id=task.id,
                 extra={
                     "from_agent_id": agent.id,
+                    "from_agent_display_name": agent.display_name,
                     "from_task_id": task.id,
                     "draft": draft,
                 },
