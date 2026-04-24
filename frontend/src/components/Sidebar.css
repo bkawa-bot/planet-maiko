@@ -74,52 +74,7 @@
   gap: 4px;
 }
 
-.focus-wrapper { position: relative; }
-.focus-pill-topbar {
-  display: flex; align-items: center; gap: 4px;
-  padding: 4px 10px; border-radius: 10px;
-  cursor: pointer;
-  font-size: 11px; font-weight: 600; text-transform: capitalize;
-  font-family: var(--font);
-  transition: all 0.15s;
-}
-.focus-pill-topbar.available { background: #1a4a2e; color: #7DDBA3; border: 1px solid #2a6a42; }
-.focus-pill-topbar.soft_focus { background: #1a3450; color: #89CFF0; border: 1px solid #2a4a6a; }
-.focus-pill-topbar.deep_focus { background: #2a2250; color: #C3A6E8; border: 1px solid #3a3268; }
-.focus-pill-topbar.away { background: #2a2a30; color: #8b9da8; border: 1px solid #3a3a42; }
-
-[data-theme="light"] .focus-pill-topbar.available { background: #d4f0dc; color: #2a6a3e; border-color: #a8d8b4; }
-[data-theme="light"] .focus-pill-topbar.soft_focus { background: #d0e8f8; color: #2a5a80; border-color: #a0c8e0; }
-[data-theme="light"] .focus-pill-topbar.deep_focus { background: #e4d8f0; color: #5a3a80; border-color: #c0a8d8; }
-[data-theme="light"] .focus-pill-topbar.away { background: #e0dcd8; color: #6a6058; border-color: #c8c0b8; }
-
-[data-theme="morning"] .focus-pill-topbar.available { background: #d8f0dc; color: #2a6a3e; border-color: #b0d8b8; }
-[data-theme="morning"] .focus-pill-topbar.soft_focus { background: #d4e8f4; color: #2a5a78; border-color: #a8c8d8; }
-[data-theme="morning"] .focus-pill-topbar.deep_focus { background: #e0d4f0; color: #5a3878; border-color: #c0a8d0; }
-[data-theme="morning"] .focus-pill-topbar.away { background: #e0d8d0; color: #6a5a48; border-color: #c8c0b0; }
-
-[data-theme="sunset"] .focus-pill-topbar.available { background: #1a3a2e; color: #7dd4a0; border-color: #2a5a42; }
-[data-theme="sunset"] .focus-pill-topbar.soft_focus { background: #1a2a50; color: #7eb8d9; border-color: #2a3a68; }
-[data-theme="sunset"] .focus-pill-topbar.deep_focus { background: #2a1a48; color: #857CEB; border-color: #3a2a60; }
-[data-theme="sunset"] .focus-pill-topbar.away { background: #2a2440; color: #6A72B0; border-color: #3a3458; }
-.focus-pill-topbar:hover { opacity: 0.8; }
-
-.focus-held-badge {
-  margin-left: 4px;
-  padding: 1px 5px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.18);
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1;
-}
-[data-theme="light"] .focus-held-badge,
-[data-theme="morning"] .focus-held-badge {
-  background: rgba(0, 0, 0, 0.12);
-}
-
-/* Weekend-mode topbar pill — quiet when off, warm when on.
-   Reuses focus-pill sizing so it lines up visually next to it. */
+/* Weekend-mode topbar pill — quiet when off, warm when on. */
 .weekend-pill-topbar {
   display: flex; align-items: center; gap: 4px;
   padding: 4px 10px; border-radius: 10px;

@@ -12,8 +12,8 @@ import "./PackAskBox.css";
  * other pages) via the ask-maiko-* / ask-pack-* classes and the
  * PackTurn component.
  *
- * Pause-first gating (deep_focus / too-many-active) mirrors what
- * AskMaiko does — not a hard block, just a "sure?" step.
+ * Pause-first gating (too-many-active) kicks in when the pack is
+ * already chewing on a lot — a "sure?" step, not a hard block.
  */
 
 const PAUSE_FIRST_THRESHOLD = 3;
@@ -77,20 +77,11 @@ export default function PackAskBox() {
     const ctx = context.trim();
     const ng = nonGoals.trim();
 
-    // Pause-first: surface deep-focus / too-many-active as a
-    // confirmation step instead of dispatching silently. Mirrors
-    // the AskMaiko panel so both flows behave the same.
+    // Pause-first: surface too-many-active as a "sure?" step rather
+    // than silently piling another agent on top.
     try {
-      const [focus, tasks] = await Promise.all([
-        api.getFocus().catch(() => null),
-        api.getTasks({ status: "in_progress" }).catch(() => []),
-      ]);
+      const tasks = await api.getTasks({ status: "in_progress" }).catch(() => []);
       const active = (tasks || []).filter((t) => t.assigned_agent_id).length;
-      const focusState = focus?.current_state || focus?.state;
-      if (focusState === "deep_focus" || focusState === "away") {
-        setPendingSend({ ask, ctx, ng, active, reason: "focus", focusState });
-        return;
-      }
       if (active >= PAUSE_FIRST_THRESHOLD) {
         setPendingSend({ ask, ctx, ng, active, reason: "load" });
         return;
@@ -195,16 +186,10 @@ export default function PackAskBox() {
           {pendingSend && (
             <div className="ask-pack-pause">
               <div className="ask-pack-pause-head">
-                <span>
-                  {pendingSend.reason === "focus"
-                    ? `You're in ${(pendingSend.focusState || "focus").replace("_", " ")}`
-                    : `${pendingSend.active} agents already working`}
-                </span>
+                <span>{pendingSend.active} agents already working</span>
               </div>
               <div className="ask-pack-pause-body">
-                {pendingSend.reason === "focus"
-                  ? "Heads-down right now. Want to hold this until focus ends, or send it through anyway?"
-                  : "A lot's already in motion. Want to hold this one until your next check-in, or send it now?"}
+                A lot's already in motion. Want to hold this one until your next check-in, or send it now?
               </div>
               <div className="ask-pack-pause-actions">
                 <button className="ask-pack-pause-secondary" onClick={cancelPending}>Hold it</button>

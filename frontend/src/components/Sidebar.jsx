@@ -1,11 +1,9 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Home, CheckSquare, Bot, Brain, Wand2, Zap, Settings, Shield, HelpCircle, X, Palette, Power, Leaf } from "lucide-react";
+import { Home, CheckSquare, Bot, Brain, Zap, Settings, Palette, Power, Leaf } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api/client";
 import { applyCustomTheme, clearCustomTheme, hydrateCachedCustomTheme } from "../utils/themes";
 import SystemHealth from "./SystemHealth";
-import FocusDigestModal from "./FocusDigestModal";
-import { showToast } from "./Toast";
 import "./Sidebar.css";
 import "./ShutdownModal.css";
 
@@ -47,15 +45,9 @@ export default function Sidebar({ onOpenShutdown }) {
   const [customThemes, setCustomThemes] = useState([]);
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const [badges, setBadges] = useState({});
-  const [focusState, setFocusState] = useState("available");
-  const [focusHeldCount, setFocusHeldCount] = useState(0);
-  const [showFocusMenu, setShowFocusMenu] = useState(false);
-  const [showFocusInfo, setShowFocusInfo] = useState(false);
-  const [focusDigest, setFocusDigest] = useState(null);
   const [weekendMode, setWeekendMode] = useState(false);
   const [weekendBusy, setWeekendBusy] = useState(false);
   const themeRef = useRef(null);
-  const focusRef = useRef(null);
 
   // Hydrate weekend-mode from config so the topbar pill reflects
   // the persisted state rather than defaulting to off on every reload.
@@ -131,18 +123,11 @@ export default function Sidebar({ onOpenShutdown }) {
           tasks: tasks.length,
           learnings: learnings.length,
         });
-        const foc = await api.getFocus().catch(() => null);
-        if (foc) {
-          setFocusState(foc.current_state || "available");
-          setFocusHeldCount(foc.held_count || 0);
-        }
       } catch (err) { /* ignore */ }
     };
     fetchBadges();
-    // Badges hit /api/pupdates + /api/tasks + /api/learnings + /api/focus
-    // on every tick. 30s is the right balance — visible enough that a
-    // freshly-arrived pupdate shows up quickly, slow enough that we're
-    // not hammering the backend from every page.
+    // 30s poll — fresh enough that newly-arrived items show up quickly,
+    // slow enough that we're not hammering the backend from every page.
     const interval = setInterval(fetchBadges, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -150,7 +135,6 @@ export default function Sidebar({ onOpenShutdown }) {
   useEffect(() => {
     const handleClick = (e) => {
       if (themeRef.current && !themeRef.current.contains(e.target)) setShowThemeMenu(false);
-      if (focusRef.current && !focusRef.current.contains(e.target)) setShowFocusMenu(false);
     };
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
@@ -210,70 +194,6 @@ export default function Sidebar({ onOpenShutdown }) {
             </button>
           )}
 
-          <div className="focus-wrapper" ref={focusRef}>
-            <button
-              className={`focus-pill-topbar ${focusState}`}
-              onClick={() => setShowFocusMenu(!showFocusMenu)}
-              title={
-                focusState === "available"
-                  ? "Focus mode"
-                  : focusHeldCount > 0
-                  ? `Focus mode — ${focusHeldCount} held, digest shows on return`
-                  : "Focus mode — nothing held yet"
-              }
-            >
-              <Shield size={10} /> {focusState.replace("_", " ")}
-              {focusState !== "available" && focusHeldCount > 0 && (
-                <span className="focus-held-badge">{focusHeldCount}</span>
-              )}
-            </button>
-            {showFocusMenu && (
-              <div className="topbar-dropdown">
-                {["available", "soft_focus", "deep_focus", "away"].map((s) => (
-                  <button
-                    key={s}
-                    className={`dropdown-item ${focusState === s ? "active" : ""}`}
-                    onClick={async () => {
-                      // Going focus → available: capture the digest first.
-                      // set_state("available") releases held pupdates on
-                      // the server, so calling /focus/digest after would
-                      // return empty — we'd miss the "welcome back" moment.
-                      const wasInFocus = focusState !== "available" && s === "available";
-                      let digest = null;
-                      if (wasInFocus) {
-                        try { digest = await api.getFocusDigest(); } catch { /* best effort */ }
-                      }
-                      try {
-                        await api.setFocus(s);
-                      } catch {
-                        // If the set fails we don't want to show a digest
-                        // for a transition that didn't happen.
-                        setShowFocusMenu(false);
-                        return;
-                      }
-                      setFocusState(s);
-                      setShowFocusMenu(false);
-                      if (digest && digest.total_held > 0) {
-                        setFocusDigest(digest);
-                      } else if (wasInFocus) {
-                        // Nothing was held, but still confirm the transition
-                        // so the user sees that focus → available actually
-                        // took effect. Prevents the silent-flip confusion.
-                        showToast("Back in available — nothing came in.", "normal");
-                      }
-                    }}
-                  >
-                    {s.replace("_", " ")}
-                  </button>
-                ))}
-                <div className="dropdown-divider" />
-                <button className="dropdown-item dropdown-info" onClick={() => { setShowFocusInfo(true); setShowFocusMenu(false); }}>
-                  <HelpCircle size={10} /> What is this?
-                </button>
-              </div>
-            )}
-          </div>
-
           <div className="theme-wrapper" ref={themeRef}>
             <button className="topbar-action" onClick={() => setShowThemeMenu(!showThemeMenu)} title="Theme">
               {themeEmoji}
@@ -329,33 +249,6 @@ export default function Sidebar({ onOpenShutdown }) {
         </div>
       </div>
 
-      <FocusDigestModal digest={focusDigest} onClose={() => setFocusDigest(null)} />
-
-      {showFocusInfo && (
-        <div className="modal-overlay" onClick={() => setShowFocusInfo(false)}>
-          <div className="info-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <Shield size={16} /> Focus Mode
-              <span style={{ flex: 1 }} />
-              <button className="btn btn-sm" onClick={() => setShowFocusInfo(false)} style={{ border: "none", padding: 4 }}><X size={14} /></button>
-            </div>
-            <div className="modal-body info-modal-body">
-              <p>Focus mode controls which notifications reach you. Set it based on how deep in the zone you are.</p>
-              <h4>States</h4>
-              <ul>
-                <li><strong>Available</strong> — all notifications come through (critical, urgent, high, normal, low).</li>
-                <li><strong>Soft focus</strong> — only critical, urgent, and high priority. Low-priority items are held until you exit.</li>
-                <li><strong>Deep focus</strong> — only critical and urgent. Everything else is held.</li>
-                <li><strong>Away</strong> — same as deep focus. Signals to agents and teammates that you're not around.</li>
-              </ul>
-              <h4>Held notifications</h4>
-              <p>Notifications that were held during focus mode don't disappear — they're collected and released as a digest when you switch back to available.</p>
-              <h4>Auto-focus</h4>
-              <p>If you have a calendar integration, Maiko can auto-set soft focus when a meeting starts and return to available when it ends.</p>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

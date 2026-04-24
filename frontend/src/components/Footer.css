@@ -30,12 +30,6 @@
 }
 .footer-dot.brain { background: var(--green); box-shadow: 0 0 4px var(--green); }
 
-.footer-focus { text-transform: capitalize; }
-.footer-focus.available { color: var(--green); }
-.footer-focus.soft_focus { color: var(--lemon); }
-.footer-focus.deep_focus { color: var(--urgent); }
-.footer-focus.away { color: var(--low); }
-
 .footer-pending {
   font-size: 9px; padding: 1px 5px; border-radius: 8px;
   background: var(--pink-soft); color: var(--pink); font-weight: 600;

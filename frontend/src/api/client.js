@@ -145,12 +145,6 @@ export const api = {
   },
   refreshScene: () => request("/scene/refresh", { method: "POST" }),
 
-  // Focus
-  getFocus: () => request("/focus"),
-  setFocus: (state, duration_minutes) =>
-    request("/focus", { method: "POST", body: JSON.stringify({ state, duration_minutes }) }),
-  getFocusDigest: () => request("/focus/digest"),
-
   // Learnings
   getLearnings: (params = {}) => {
     const query = new URLSearchParams(params).toString();

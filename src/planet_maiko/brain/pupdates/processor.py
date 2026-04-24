@@ -253,21 +253,13 @@ def process():
 
     logger.info(f"Processing {len(pupdate_ids)} pupdate(s)...")
 
-    counts = {"processed": 0, "held": 0, "pr_comments_woke": 0, "unmatched": 0}
-
-    from planet_maiko.brain.focus.manager import should_surface, hold_pupdate
+    counts = {"processed": 0, "pr_comments_woke": 0, "unmatched": 0}
 
     for pid in pupdate_ids:
         pupdate = db.session.get(Pupdate, pid)
         if pupdate is None or pupdate.brain_processed or pupdate.dismissed:
             # Claimed by the Automation engine or another worker.
             continue
-
-        # Focus mode gating: mark held without processing (lets a later
-        # focus-exit release them in the digest).
-        if not should_surface(pupdate):
-            hold_pupdate(pupdate)
-            counts["held"] += 1
 
         # PR-comment events wake the coding agent. State-heavy, so
         # handled here rather than as an automation action.

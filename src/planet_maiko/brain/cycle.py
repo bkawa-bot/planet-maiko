@@ -139,18 +139,6 @@ def _phase_awareness():
         return {"conflicts": 0, "warnings_sent": 0}
 
 
-def _phase_calendar_focus():
-    """Phase 2.5: Auto-focus from calendar events."""
-    try:
-        from planet_maiko.brain.focus.manager import check_calendar_focus
-        from planet_maiko.models.pupdate import Pupdate
-        recent = Pupdate.query.filter(Pupdate.brain_processed == False).all()  # noqa: E712
-        return {"changed": check_calendar_focus(recent)}
-    except Exception as e:
-        logger.warning(f"[cycle] Calendar focus check skipped: {e}")
-        return {"changed": False}
-
-
 def _phase_automations():
     """Phase 3.2: Unified Automation engine — evaluates every active
     when/then row and fires actions.
@@ -1073,7 +1061,6 @@ _PHASES = [
     ("agents", _phase_agents),
     ("auto_complete_reviews", _phase_auto_complete_reviews),
     ("awareness", _phase_awareness),
-    ("calendar_focus", _phase_calendar_focus),
     ("automations", _phase_automations),
     ("pupdates", _phase_pupdates),
     ("synthesis", _phase_synthesis),
