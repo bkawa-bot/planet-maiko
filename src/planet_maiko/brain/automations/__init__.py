@@ -421,6 +421,20 @@ def _act_run_agent_job(automation, config, pupdate=None, context=None):
     # "might never run" AgentJobs from sitting in the DB.
     if ask_first:
         from planet_maiko.brain.memos import create_memo
+        memo_extra = {
+            **extra,
+            "job_spec": {
+                "kind": kind,
+                "title": title,
+                "description": description,
+                "scope_repo": repo,
+                "priority": priority,
+                "automation_id": automation.id,
+            },
+        }
+        snap = _pupdate_snapshot(pupdate)
+        if snap:
+            memo_extra["pupdate_snapshot"] = snap
         memo = create_memo(
             kind="job_approval",
             category="offer",
@@ -430,17 +444,7 @@ def _act_run_agent_job(automation, config, pupdate=None, context=None):
             cta_label="Approve",
             cta_action="approve",
             source_pupdate_id=pupdate.id if pupdate is not None else None,
-            extra={
-                **extra,
-                "job_spec": {
-                    "kind": kind,
-                    "title": title,
-                    "description": description,
-                    "scope_repo": repo,
-                    "priority": priority,
-                    "automation_id": automation.id,
-                },
-            },
+            extra=memo_extra,
         )
         db.session.flush()
         return {
@@ -595,6 +599,20 @@ def _act_spawn_agent_job_from_pupdate(automation, config, pupdate=None, context=
     # user has decided they'll actually run.
     if ask_first:
         from planet_maiko.brain.memos import create_memo
+        memo_extra = {
+            **extra,
+            "job_spec": {
+                "kind": kind,
+                "title": title,
+                "description": description,
+                "scope_repo": repo,
+                "priority": priority,
+                "automation_id": automation.id,
+            },
+        }
+        snap = _pupdate_snapshot(pupdate)
+        if snap:
+            memo_extra["pupdate_snapshot"] = snap
         memo = create_memo(
             kind="job_approval",
             category="offer",
@@ -604,17 +622,7 @@ def _act_spawn_agent_job_from_pupdate(automation, config, pupdate=None, context=
             cta_label="Approve",
             cta_action="approve",
             source_pupdate_id=pupdate.id,
-            extra={
-                **extra,
-                "job_spec": {
-                    "kind": kind,
-                    "title": title,
-                    "description": description,
-                    "scope_repo": repo,
-                    "priority": priority,
-                    "automation_id": automation.id,
-                },
-            },
+            extra=memo_extra,
         )
         db.session.flush()
         return {
@@ -866,7 +874,10 @@ def _interpolate(template, pupdate=None, context=None):
     ctx = context or {}
     mapping = {
         "pupdate_title": getattr(pupdate, "title", "") or "" if pupdate else "",
-        "pupdate_body": (getattr(pupdate, "body", "") or "")[:500] if pupdate else "",
+        # 2000 chars is enough for most PR descriptions / incident
+        # bodies / Linear issue bodies to fit without cutting context
+        # the user is trying to read.
+        "pupdate_body": (getattr(pupdate, "body", "") or "")[:2000] if pupdate else "",
         "pupdate_url": getattr(pupdate, "url", "") or "" if pupdate else "",
         "repo": (ctx.get("repo")
                  or ctx.get("service")
@@ -878,6 +889,39 @@ def _interpolate(template, pupdate=None, context=None):
     for key, value in mapping.items():
         out = out.replace("{" + key + "}", str(value))
     return out
+
+
+def _pupdate_snapshot(pupdate):
+    """Extract the useful surface of a pupdate for embedding in memo
+    extra. Gives the user-facing memo a complete "triggered by" view
+    later without having to re-fetch + re-render the original pupdate
+    on every open.
+
+    Kept narrow: no raw extra blob, no internal flags. Just the fields
+    a human would want back ("what was it", "where did it come from",
+    "when", "link out").
+    """
+    if pupdate is None:
+        return None
+    body = getattr(pupdate, "body", None) or ""
+    return {
+        "id": getattr(pupdate, "id", None),
+        "type": getattr(pupdate, "type", None),
+        "title": (getattr(pupdate, "title", None) or "")[:300],
+        # Full body here — the memo's top-level body field may have
+        # been templated/truncated by the user's copy; this keeps the
+        # raw text available for context.
+        "body": body[:4000],
+        "url": getattr(pupdate, "url", None),
+        "source": getattr(pupdate, "source", None),
+        "priority": getattr(pupdate, "priority", None),
+        "tags": list(getattr(pupdate, "tags", None) or []),
+        "timestamp": (
+            pupdate.timestamp.isoformat()
+            if getattr(pupdate, "timestamp", None) and hasattr(pupdate.timestamp, "isoformat")
+            else None
+        ),
+    }
 
 
 def _act_notify(automation, config, pupdate=None, context=None):
@@ -908,6 +952,14 @@ def _act_notify(automation, config, pupdate=None, context=None):
     if priority not in ("low", "normal", "high", "urgent"):
         priority = "normal"
 
+    memo_extra = {
+        "from_automation": automation.id,
+        "triggered_by_pupdate": pupdate.id if pupdate else None,
+    }
+    snap = _pupdate_snapshot(pupdate)
+    if snap:
+        memo_extra["pupdate_snapshot"] = snap
+
     memo = create_memo(
         kind="notification",
         category="info",
@@ -916,10 +968,7 @@ def _act_notify(automation, config, pupdate=None, context=None):
         url=url,
         priority=priority,
         source_pupdate_id=pupdate.id if pupdate else None,
-        extra={
-            "from_automation": automation.id,
-            "triggered_by_pupdate": pupdate.id if pupdate else None,
-        },
+        extra=memo_extra,
     )
     db.session.flush()
     return {"kind": "notify_me", "memo_id": memo.id, "title": title[:80]}

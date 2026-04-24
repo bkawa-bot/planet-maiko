@@ -236,7 +236,8 @@ def get_review_queue():
         .all()
     )
     for m in job_approval_memos:
-        spec = (m.extra or {}).get("job_spec") or {}
+        extra = m.extra or {}
+        spec = extra.get("job_spec") or {}
         items.append({
             "kind": "pending_job",
             "task_id": None,
@@ -250,6 +251,7 @@ def get_review_queue():
             "timestamp": iso_utc(m.created_at),
             "job_kind": spec.get("kind"),
             "description": m.body or spec.get("description"),
+            "pupdate_snapshot": extra.get("pupdate_snapshot"),
         })
 
     # Legacy: AgentJobs already in the DB with status=pending_approval
@@ -346,6 +348,7 @@ def get_review_queue():
         .all()
     )
     for m in notification_memos:
+        extra = m.extra or {}
         items.append({
             "kind": "notification",
             "task_id": None,
@@ -359,6 +362,11 @@ def get_review_queue():
             "timestamp": iso_utc(m.created_at),
             "priority": m.priority,
             "memo_id": m.id,
+            # Snapshot of the triggering pupdate so the frontend can
+            # render a "triggered by" context card below the memo body.
+            # Only set when the memo came from a pupdate-scoped
+            # automation action; standalone notifications leave it null.
+            "pupdate_snapshot": extra.get("pupdate_snapshot"),
         })
 
     # 7. Agent-ready / agent-stuck Memos. These fire when a one-shot

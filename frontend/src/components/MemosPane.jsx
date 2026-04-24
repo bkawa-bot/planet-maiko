@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ClipboardCheck, FileText, GitPullRequest, Map, Inbox, Bot, Check, X,
-  Bell, HelpCircle, ExternalLink,
+  Bell, HelpCircle, ExternalLink, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
@@ -232,6 +232,9 @@ export default function MemosPane() {
                   {it.description && (
                     <div className="review-queue-description">{it.description}</div>
                   )}
+                  {it.pupdate_snapshot && (
+                    <PupdateSnapshot snap={it.pupdate_snapshot} />
+                  )}
                 </div>
                 <div className="review-queue-actions">
                   <button
@@ -281,6 +284,9 @@ export default function MemosPane() {
                       className="review-queue-description markdown"
                       dangerouslySetInnerHTML={{ __html: renderMarkdown(it.body) }}
                     />
+                  )}
+                  {it.pupdate_snapshot && (
+                    <PupdateSnapshot snap={it.pupdate_snapshot} />
                   )}
                   <div className="review-queue-meta">
                     {it.priority && it.priority !== "normal" && (
@@ -375,6 +381,50 @@ export default function MemosPane() {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+
+/** Compact "triggered by" card — shows the pupdate that fired the
+ *  automation so the user has context without clicking through.
+ *  Collapsed by default; clicks expand to show the body. */
+function PupdateSnapshot({ snap }) {
+  const [open, setOpen] = useState(false);
+  if (!snap) return null;
+  const hasBody = !!(snap.body && snap.body.trim());
+  return (
+    <div className="pupdate-snapshot">
+      <button
+        type="button"
+        className="pupdate-snapshot-head"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        title={hasBody ? "Show triggering pupdate" : "Triggering pupdate"}
+      >
+        {hasBody && (open ? <ChevronDown size={10} /> : <ChevronRight size={10} />)}
+        <span className="pupdate-snapshot-label">Triggered by</span>
+        {snap.source && <span className="pupdate-snapshot-tag">{snap.source}</span>}
+        {snap.type && <span className="pupdate-snapshot-tag">{snap.type}</span>}
+        <span className="pupdate-snapshot-title">{snap.title}</span>
+        {snap.url && (
+          <a
+            href={snap.url}
+            target="_blank"
+            rel="noreferrer"
+            className="pupdate-snapshot-link"
+            onClick={(e) => e.stopPropagation()}
+            title="Open source"
+          >
+            <ExternalLink size={9} />
+          </a>
+        )}
+      </button>
+      {open && hasBody && (
+        <div
+          className="pupdate-snapshot-body markdown"
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(snap.body) }}
+        />
+      )}
     </div>
   );
 }
