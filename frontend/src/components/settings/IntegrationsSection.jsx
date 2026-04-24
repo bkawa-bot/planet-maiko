@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Loader, FolderGit2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader, FolderGit2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { api } from "../../api/client";
+import { relativeTime } from "../../utils/dates";
 
 /**
  * Integrations section of Settings.jsx.
@@ -26,6 +27,11 @@ export default function IntegrationsSection({
   const [discovering, setDiscovering] = useState(false);
   const [linearTeams, setLinearTeams] = useState([]);
   const [linearCycle, setLinearCycle] = useState(null);
+  // Per-integration test-connection result shown inline next to the
+  // button. The old path sent these through onMessage → top of the page,
+  // off-screen when the user scrolled down to the pager row.
+  // { [name]: {status: "ok"|"error"|"testing", text: string} }
+  const [testResult, setTestResult] = useState({});
 
   // Fetch the configured team's metadata (mainly activeCycle) so the
   // Linear section can show which cycle the Send-to-Linear modal will
@@ -77,12 +83,77 @@ export default function IntegrationsSection({
   };
 
   const testIntegration = async (name) => {
+    setTestResult((prev) => ({ ...prev, [name]: { status: "testing", text: "Testing…" } }));
     try {
       const result = await api.testIntegration(name);
-      onMessage(result.status === "ok" ? `Connected as ${result.user}` : result.message);
+      if (result.status === "ok") {
+        setTestResult((prev) => ({
+          ...prev,
+          [name]: { status: "ok", text: `Connected as ${result.user}` },
+        }));
+      } else {
+        setTestResult((prev) => ({
+          ...prev,
+          [name]: { status: "error", text: result.message || "Test failed" },
+        }));
+      }
     } catch (err) {
-      onMessage(err.message || "Test failed");
+      setTestResult((prev) => ({
+        ...prev,
+        [name]: { status: "error", text: err.message || "Test failed" },
+      }));
     }
+  };
+
+  // Builds the status strip shown below each integration's poll-
+  // interval row. Handles three cases honestly:
+  //   - Poller registered + running: show last-run relative time,
+  //     any error, last created count.
+  //   - Poller registered but disabled: show disabled state.
+  //   - Poller NOT in the status map at all: the entry point wasn't
+  //     discovered — usually means pip install hasn't been re-run
+  //     after a version bump. Tell the user, don't silently omit.
+  const renderPollerStatus = (name) => {
+    const status = pollerStatus[name];
+    if (!status) {
+      return (
+        <div className="poller-status poller-status-missing">
+          <AlertCircle size={11} /> Poller not registered. Try restarting the server after{" "}
+          <code>pip install -e .</code> so entry points pick up.
+        </div>
+      );
+    }
+    const errMsg = status.last_error;
+    const lastRun = status.last_run_at;
+    const lastCreated = status.last_created_count;
+    return (
+      <div className={`poller-status poller-status-${errMsg ? "error" : status.running ? "ok" : "stopped"}`}>
+        <div className="poller-status-row">
+          <span>
+            {status.running ? "Running" : "Stopped"}
+            {lastRun && <> · last ran {relativeTime(lastRun)}</>}
+            {!errMsg && lastCreated > 0 && <> · {lastCreated} new last poll</>}
+          </span>
+          <button onClick={() => onRunPoller(name)}>Run Now</button>
+        </div>
+        {errMsg && (
+          <div className="poller-status-error" title={errMsg}>
+            <AlertCircle size={10} /> {errMsg}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderTestResult = (name) => {
+    const r = testResult[name];
+    if (!r) return null;
+    const Icon = r.status === "ok" ? CheckCircle2 : r.status === "testing" ? Loader : AlertCircle;
+    return (
+      <span className={`test-result test-result-${r.status}`}>
+        <Icon size={11} className={r.status === "testing" ? "spin" : ""} /> {r.text}
+      </span>
+    );
   };
 
   return (
@@ -187,13 +258,11 @@ export default function IntegrationsSection({
                   }
                 />
               </label>
-              {pollerStatus.github && (
-                <div className="poller-status">
-                  Status: {pollerStatus.github.running ? "Running" : "Stopped"}
-                  <button onClick={() => onRunPoller("github")}>Run Now</button>
-                </div>
-              )}
-              <button className="btn btn-sm" onClick={() => testIntegration("github")}>Test Connection</button>
+              {renderPollerStatus("github")}
+              <div className="test-connection-row">
+                <button className="btn btn-sm" onClick={() => testIntegration("github")}>Test Connection</button>
+                {renderTestResult("github")}
+              </div>
             </div>
           </div>
 
@@ -257,13 +326,11 @@ export default function IntegrationsSection({
                     : ""}
                 </div>
               )}
-              {pollerStatus.linear && (
-                <div className="poller-status">
-                  Status: {pollerStatus.linear.running ? "Running" : "Stopped"}
-                  <button onClick={() => onRunPoller("linear")}>Run Now</button>
-                </div>
-              )}
-              <button className="btn btn-sm" onClick={() => testIntegration("linear")}>Test Connection</button>
+              {renderPollerStatus("linear")}
+              <div className="test-connection-row">
+                <button className="btn btn-sm" onClick={() => testIntegration("linear")}>Test Connection</button>
+                {renderTestResult("linear")}
+              </div>
             </div>
           </div>
 
@@ -303,13 +370,11 @@ export default function IntegrationsSection({
                   }
                 />
               </label>
-              {pollerStatus.pagerduty && (
-                <div className="poller-status">
-                  Status: {pollerStatus.pagerduty.running ? "Running" : "Stopped"}
-                  <button onClick={() => onRunPoller("pagerduty")}>Run Now</button>
-                </div>
-              )}
-              <button className="btn btn-sm" onClick={() => testIntegration("pagerduty")}>Test Connection</button>
+              {renderPollerStatus("pagerduty")}
+              <div className="test-connection-row">
+                <button className="btn btn-sm" onClick={() => testIntegration("pagerduty")}>Test Connection</button>
+                {renderTestResult("pagerduty")}
+              </div>
             </div>
           </div>
 
@@ -345,12 +410,7 @@ export default function IntegrationsSection({
                   rows={3}
                 />
               </label>
-              {pollerStatus.calendar && (
-                <div className="poller-status">
-                  Status: {pollerStatus.calendar.running ? "Running" : "Stopped"}
-                  <button onClick={() => onRunPoller("calendar")}>Run Now</button>
-                </div>
-              )}
+              {renderPollerStatus("calendar")}
             </div>
           </div>
         </div>

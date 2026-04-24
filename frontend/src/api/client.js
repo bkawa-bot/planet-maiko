@@ -34,8 +34,12 @@ async function request(path, options = {}) {
   }
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(error.error || res.statusText);
+    const body = await res.json().catch(() => ({}));
+    // Different endpoints use different error keys — /config/test/*
+    // returns `message`, others return `error`. Try both before
+    // falling back to the raw status text, otherwise users see
+    // "BAD REQUEST" instead of the actual reason.
+    throw new Error(body.error || body.message || res.statusText);
   }
   const data = await res.json();
 

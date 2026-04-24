@@ -64,12 +64,51 @@
 .integration-fields input:focus, .integration-fields textarea:focus { border-color: var(--pink); outline: none; }
 .integration-fields textarea { resize: vertical; }
 
-.poller-status { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--text-muted); padding-top: 4px; }
+.poller-status {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 0.8rem; color: var(--text-muted);
+  padding: 6px 8px; margin-top: 4px;
+  background: var(--bg); border: 1px solid var(--border-subtle);
+  border-left-width: 3px; border-radius: var(--radius-xs);
+}
+.poller-status-row { display: flex; align-items: center; gap: 10px; }
+.poller-status-row > span { flex: 1; }
+.poller-status.poller-status-ok { border-left-color: var(--green, #6bb573); }
+.poller-status.poller-status-stopped { border-left-color: var(--text-muted); }
+.poller-status.poller-status-error { border-left-color: var(--urgent); }
+.poller-status.poller-status-missing {
+  border-left-color: var(--urgent);
+  flex-direction: row; align-items: center; gap: 6px;
+  color: var(--urgent);
+}
+.poller-status.poller-status-missing code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.78rem;
+  background: var(--bg-hover); padding: 1px 5px; border-radius: 3px;
+  color: var(--text);
+}
+.poller-status-error {
+  display: flex; align-items: center; gap: 4px;
+  color: var(--urgent); font-size: 0.75rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .poller-status button {
   padding: 3px 10px; font-size: 0.7rem; border: 1px solid var(--blue); border-radius: var(--radius-xs);
   background: var(--bg-card); color: var(--blue); cursor: pointer;
+  flex-shrink: 0;
 }
 .poller-status button:hover { background: var(--blue-soft); }
+
+/* Test-connection row: button + inline result chip so the user sees
+   feedback where they clicked, not at the top of the page. */
+.test-connection-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 4px; }
+.test-result {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.75rem; color: var(--text-muted);
+}
+.test-result.test-result-ok { color: var(--green, #6bb573); }
+.test-result.test-result-error { color: var(--urgent); }
+.test-result.test-result-testing { color: var(--text-muted); }
 
 .brain-section { border-color: var(--pink); border-width: 2px; }
 .brain-status { display: flex; align-items: center; gap: 20px; margin-bottom: 16px; }
