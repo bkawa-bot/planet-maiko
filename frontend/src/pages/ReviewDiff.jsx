@@ -5,6 +5,7 @@ import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import DiffView from "../components/diff/DiffView";
 import CommentThread from "../components/diff/CommentThread";
+import { renderMarkdown } from "../utils/markdown";
 import "./ReviewDiff.css";
 
 const VERDICT_META = {
@@ -214,7 +215,7 @@ export default function ReviewDiff() {
     return (
       <div className="review-diff-page">
         <div className="review-diff-header">
-          <Loader className="spin" size={14} /> Loading diff…
+          <Loader className="spin" size={14} /> Loading…
         </div>
       </div>
     );
@@ -253,7 +254,10 @@ export default function ReviewDiff() {
         </button>
         <div className="review-diff-title">
           {task?.title || `Task ${taskId}`}
-          {diff?.base_branch && (
+          {/* Only show the branch-chip for coding tasks — for review
+              tasks the worktree is a scratch branch off main that
+              doesn't represent meaningful state. */}
+          {!isReviewTask && diff?.base_branch && (
             <span className="review-diff-branch">
               {diff.base_branch} ← {diff.head_sha?.slice(0, 7)}
             </span>
@@ -324,12 +328,30 @@ export default function ReviewDiff() {
 
       <div className={`review-diff-layout${sidebarHidden ? " sidebar-hidden" : ""}`}>
         <div className="review-diff-main">
-          <DiffView
-            rawDiff={diff?.raw_diff}
-            anchors={anchors}
-            onLineClick={handleLineClick}
-            viewType="unified"
-          />
+          {/* Review tasks produce a markdown report (the review itself),
+              not a code diff — the agent reviewed someone else's PR
+              without making commits. Render the artifact as the primary
+              content; the diff viewer is for coding tasks that produce
+              actual changes. */}
+          {isReviewTask && task?.extra?.artifact ? (
+            <div
+              className="review-diff-artifact"
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(task.extra.artifact) }}
+            />
+          ) : isReviewTask ? (
+            <div className="review-diff-empty">
+              {task && task.status === "review"
+                ? "Review complete, but no artifact was saved. Check the agent's session log if you need the notes."
+                : "Agent is still working on the review. Come back in a bit."}
+            </div>
+          ) : (
+            <DiffView
+              rawDiff={diff?.raw_diff}
+              anchors={anchors}
+              onLineClick={handleLineClick}
+              viewType="unified"
+            />
+          )}
         </div>
 
         {!sidebarHidden && (

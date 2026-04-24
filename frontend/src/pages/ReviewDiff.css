@@ -160,6 +160,44 @@
   min-width: 0;
 }
 
+/* Artifact view for review tasks — markdown report instead of a diff.
+   Shares the frost look with the diff-file blocks but scoped so markdown
+   renders clean (no monospace, no zebra-striped gutters). */
+.review-diff-artifact {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.review-diff-artifact h1,
+.review-diff-artifact h2,
+.review-diff-artifact h3 {
+  margin-top: 18px;
+  margin-bottom: 8px;
+}
+.review-diff-artifact pre,
+.review-diff-artifact code {
+  font-family: var(--font-mono, monospace);
+}
+.review-diff-artifact pre {
+  background: var(--bg);
+  padding: 10px 12px;
+  border-radius: var(--radius-xs);
+  overflow-x: auto;
+  font-size: 12px;
+}
+.review-diff-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
 .diff-view-empty {
   padding: 32px;
   text-align: center;
