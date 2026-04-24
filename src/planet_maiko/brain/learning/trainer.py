@@ -177,9 +177,28 @@ def train_agent(agent_profile_id, dataset_path=None, repo=None, config=None, ada
 
 
 def _prepare_training_file(dataset_path, output_dir, config):
-    """Convert our JSONL format to the chat format the training backend expects."""
+    """Convert our JSONL format to the chat format the training backend expects,
+    splitting into train / validation so the eval set is actually held out.
+
+    Previously the full dataset was written to train.jsonl and the evaluator
+    ran a fresh random 20% split at eval time — which meant training had
+    already fit to those examples. Precision/recall looked great because the
+    model had memorized the "held-out" set.
+
+    Now:
+      - Collect all pairs, shuffle deterministically (seeded), split 80/20.
+      - Write train.jsonl + valid.jsonl in the backend's chat format. MLX
+        and other backends pick up valid.jsonl automatically from --data.
+      - Write holdout.jsonl alongside, in the original {input,output}
+        format the evaluator reads. evaluate_adapter() loads this file
+        so eval uses exactly the pairs the trainer never saw.
+    """
+    import random as _random
+
     os.makedirs(output_dir, exist_ok=True)
     train_file = os.path.join(output_dir, "train.jsonl")
+    valid_file = os.path.join(output_dir, "valid.jsonl")
+    holdout_file = os.path.join(output_dir, "holdout.jsonl")
 
     system_prompt = "You are a code review assistant. Given a code change with its file path and PR context, identify violations of coding standards, missing edge cases, security issues, or other problems. Respond PASS if the code is clean."
 
@@ -200,22 +219,59 @@ def _prepare_training_file(dataset_path, output_dir, config):
                 source_files.append(fpath)
                 logger.info(f"[lora-train] Including rule-based training data from {fname}")
 
-    with open(train_file, "w", encoding="utf-8") as f_out:
-        for source in source_files:
-            with open(source) as f_in:
-                for line in f_in:
-                    try:
-                        pair = json.loads(line)
-                        chat = {
-                            "messages": [
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": pair["input"]},
-                                {"role": "assistant", "content": pair["output"]},
-                            ]
-                        }
-                        f_out.write(json.dumps(chat, ensure_ascii=False) + "\n")
-                    except (json.JSONDecodeError, KeyError):
-                        continue
+    all_pairs = []
+    for source in source_files:
+        with open(source) as f_in:
+            for line in f_in:
+                try:
+                    pair = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if "input" not in pair or "output" not in pair:
+                    continue
+                all_pairs.append(pair)
+
+    # Deterministic shuffle → same holdout every time the trainer runs on
+    # the same data. If the evaluator can't find holdout.jsonl it'll fall
+    # back to this same seed so the split is consistent across paths.
+    seed = int(config.get("split_seed", 42))
+    holdout_fraction = float(config.get("holdout_fraction", 0.2))
+    holdout_fraction = max(0.0, min(0.5, holdout_fraction))
+
+    rng = _random.Random(seed)
+    shuffled = list(all_pairs)
+    rng.shuffle(shuffled)
+
+    split_idx = int(len(shuffled) * holdout_fraction)
+    # Guarantee at least one valid pair when we have enough data — MLX
+    # won't gracefully handle valid.jsonl with zero rows.
+    if len(shuffled) >= 10 and split_idx == 0:
+        split_idx = 1
+    holdout_pairs = shuffled[:split_idx]
+    train_pairs = shuffled[split_idx:]
+
+    def _write_chat(path, pairs):
+        with open(path, "w", encoding="utf-8") as f_out:
+            for pair in pairs:
+                chat = {
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": pair["input"]},
+                        {"role": "assistant", "content": pair["output"]},
+                    ]
+                }
+                f_out.write(json.dumps(chat, ensure_ascii=False) + "\n")
+
+    _write_chat(train_file, train_pairs)
+    _write_chat(valid_file, holdout_pairs)
+    with open(holdout_file, "w", encoding="utf-8") as f_out:
+        for pair in holdout_pairs:
+            f_out.write(json.dumps(pair, ensure_ascii=False) + "\n")
+
+    logger.info(
+        f"[lora-train] Split {len(all_pairs)} pairs → train={len(train_pairs)} "
+        f"holdout={len(holdout_pairs)} (seed={seed}, fraction={holdout_fraction})"
+    )
 
     return train_file
 

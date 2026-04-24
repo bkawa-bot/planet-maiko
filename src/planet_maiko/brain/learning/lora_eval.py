@@ -39,16 +39,32 @@ def resolve_lora_for_repo(repo):
     return path if os.path.exists(path) else None
 
 
+SPLIT_SEED = 42
+
+
 def evaluate_adapter(adapter_path=None, repo=None, holdout_fraction=0.2):
     """Evaluate a LoRA adapter on held-out training data.
 
     Args:
         adapter_path: path to the adapter directory (uses latest if None)
         repo: filter test data to this repo
-        holdout_fraction: fraction of data to hold out for testing (default 0.2)
+        holdout_fraction: fraction of data to hold out for testing (default 0.2).
+            Only used for the fallback path; adapters trained with the new
+            code persist their actual holdout in <adapter_path>/holdout.jsonl.
 
     Returns:
         dict with {success, precision, recall, f1, test_count, per_category, adapter_path}
+
+    Sources of test pairs, in order:
+      1. <adapter_path>/holdout.jsonl — written by trainer._prepare_training_file.
+         This is the ONLY honest signal: these exact pairs were excluded from
+         train.jsonl, so eval measures generalization, not memorization.
+      2. Fallback: pairs collected from data_dir/training-data/rules-*.jsonl,
+         deterministically shuffled with SPLIT_SEED, top `holdout_fraction`
+         taken as the eval set. Used for adapters trained before the split
+         landed. Note: this is still contaminated for those adapters since
+         the trainer they ran fit to all of the data — numbers are best read
+         as "upper bound" not "held-out precision".
     """
     from planet_maiko.paths import data_dir
     from planet_maiko.brain.learning.trainer import review_code
@@ -64,33 +80,66 @@ def evaluate_adapter(adapter_path=None, repo=None, holdout_fraction=0.2):
     if not adapter_path or not os.path.isdir(adapter_path):
         return {"success": False, "error": "No adapter found. Train one first."}
 
-    # Load training data
-    data_path = os.path.join(data_dir(), "training-data")
-    if not os.path.isdir(data_path):
-        return {"success": False, "error": "No training data found."}
+    # Primary path: the adapter was trained with the new split, so there's
+    # a real holdout file sitting next to it.
+    holdout_path = os.path.join(adapter_path, "holdout.jsonl")
+    test_pairs = None
+    source = None
+    if os.path.isfile(holdout_path):
+        pairs = []
+        with open(holdout_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    pair = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if repo and pair.get("repo") and pair["repo"] != repo:
+                    continue
+                pairs.append(pair)
+        if pairs:
+            test_pairs = pairs
+            source = "adapter_holdout"
+            logger.info(f"[lora-eval] Using {len(test_pairs)} pairs from {holdout_path}")
 
-    # Collect all pairs from rules-*.jsonl files
-    all_pairs = []
-    for fname in sorted(os.listdir(data_path), reverse=True):
-        if fname.startswith("rules-") and fname.endswith(".jsonl"):
-            fpath = os.path.join(data_path, fname)
-            with open(fpath, "r", encoding="utf-8") as f:
-                for line in f:
-                    if line.strip():
-                        pair = json.loads(line)
-                        if repo and pair.get("repo") and pair["repo"] != repo:
-                            continue
-                        all_pairs.append(pair)
+    # Fallback: reconstruct the 20% with the same seed training would have used.
+    if test_pairs is None:
+        data_path = os.path.join(data_dir(), "training-data")
+        if not os.path.isdir(data_path):
+            return {"success": False, "error": "No training data found."}
 
-    if len(all_pairs) < 10:
-        return {"success": False, "error": f"Only {len(all_pairs)} test pairs — need at least 10."}
+        all_pairs = []
+        for fname in sorted(os.listdir(data_path), reverse=True):
+            if fname.startswith("rules-") and fname.endswith(".jsonl"):
+                fpath = os.path.join(data_path, fname)
+                with open(fpath, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.strip():
+                            pair = json.loads(line)
+                            if repo and pair.get("repo") and pair["repo"] != repo:
+                                continue
+                            all_pairs.append(pair)
 
-    # Split into train/test
-    random.shuffle(all_pairs)
-    split_idx = max(1, int(len(all_pairs) * holdout_fraction))
-    test_pairs = all_pairs[:split_idx]
+        if len(all_pairs) < 10:
+            return {"success": False, "error": f"Only {len(all_pairs)} test pairs — need at least 10."}
 
-    logger.info(f"[lora-eval] Evaluating on {len(test_pairs)} held-out examples")
+        # Deterministic shuffle so re-running the fallback on the same data
+        # produces the same holdout. Old adapter runs were non-deterministic
+        # (unseeded), so numbers across runs for the same model wandered.
+        rng = random.Random(SPLIT_SEED)
+        shuffled = list(all_pairs)
+        rng.shuffle(shuffled)
+        split_idx = max(1, int(len(shuffled) * holdout_fraction))
+        test_pairs = shuffled[:split_idx]
+        source = "reconstructed"
+        logger.warning(
+            f"[lora-eval] No holdout.jsonl next to adapter — reconstructing a "
+            f"seeded 20% split. Numbers are contaminated if this adapter was "
+            f"trained on the full dataset."
+        )
+
+    logger.info(f"[lora-eval] Evaluating on {len(test_pairs)} held-out examples ({source})")
 
     # Run inference on test set
     tp = 0  # true positives (model says VIOLATION, ground truth is VIOLATION)
@@ -156,6 +205,11 @@ def evaluate_adapter(adapter_path=None, repo=None, holdout_fraction=0.2):
         "test_count": len(test_pairs),
         "per_category": cat_metrics,
         "adapter_path": adapter_path,
+        # "adapter_holdout" means trainer persisted a real held-out set and
+        # we evaluated against it. "reconstructed" means we re-derived a 20%
+        # split from the source files — adapters pre-dating the split fix
+        # trained on everything, so those numbers are optimistic.
+        "test_source": source,
     }
 
     # Persist the eval so /lora/adapters can surface eval_score and the
@@ -198,6 +252,10 @@ def _record_eval(result, repo=None, holdout_fraction=None):
         test_count=result.get("test_count", 0),
         holdout_fraction=holdout_fraction,
         per_category=result.get("per_category") or {},
+        # Stash on extra so old rows that didn't know about test_source
+        # still deserialize cleanly. UI reads extra.test_source to flag
+        # "reconstructed" runs as optimistic.
+        extra={"test_source": result.get("test_source")},
     )
     db.session.add(row)
     db.session.commit()
