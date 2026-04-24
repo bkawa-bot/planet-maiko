@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Send, Loader, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { api } from "../api/client";
 import PackTurn from "./PackTurn";
@@ -26,7 +26,21 @@ export default function PackAskBox() {
   const [showDetails, setShowDetails] = useState(false);
   const [turns, setTurns] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadSeconds, setLoadSeconds] = useState(0);
   const [pendingSend, setPendingSend] = useState(null);
+
+  // Tick up while dispatch is in flight so the spinner can show a
+  // "still thinking" hint past the point where instant responses stop.
+  // Router has a 45s ceiling; anything over ~8s means the LLM is
+  // chewing on the request, not that we broke.
+  useEffect(() => {
+    if (!loading) {
+      setLoadSeconds(0);
+      return undefined;
+    }
+    const id = setInterval(() => setLoadSeconds((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [loading]);
 
   const dispatchNow = async (ask, ctx, ng) => {
     setTurns((prev) => [...prev, { kind: "user", text: ask, context: ctx, nonGoals: ng }]);
@@ -168,7 +182,12 @@ export default function PackAskBox() {
             <div className="ask-maiko-msg maiko">
               <span className="ask-maiko-avatar">M</span>
               <div className="ask-maiko-msg-text ask-maiko-typing">
-                <Loader size={12} className="spin" /> Finding the right agent…
+                <Loader size={12} className="spin" />
+                {loadSeconds < 8
+                  ? " Finding the right agent…"
+                  : loadSeconds < 30
+                    ? " Still thinking — router runs an LLM, usually settles in under 30s."
+                    : " Almost there — router has a 45s ceiling before it gives up."}
               </div>
             </div>
           )}

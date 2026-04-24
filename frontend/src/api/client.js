@@ -5,17 +5,34 @@ const _cache = {};
 const CACHE_TTL = 5000; // 5 seconds
 
 async function request(path, options = {}) {
-  const isGet = !options.method || options.method === "GET";
+  // timeoutMs is our own option — strip it before handing to fetch.
+  const { timeoutMs, ...fetchOpts } = options;
+  const isGet = !fetchOpts.method || fetchOpts.method === "GET";
 
   // Return cached response for GETs within TTL
   if (isGet && _cache[path] && (Date.now() - _cache[path].at) < CACHE_TTL) {
     return _cache[path].data;
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
+  const controller = timeoutMs ? new AbortController() : null;
+  const timer = timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      headers: { "Content-Type": "application/json" },
+      signal: controller?.signal,
+      ...fetchOpts,
+    });
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error("Request timed out — try again in a moment.");
+    }
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(error.error || res.statusText);
@@ -389,10 +406,13 @@ export const api = {
   markPetIrl: (id) => request(`/maiko/pets/${id}/mark_irl`, { method: "POST" }),
   markAllPetsIrl: () => request("/maiko/pets/mark_all_irl", { method: "POST" }),
 
-  // Ask the Pack — natural-language dispatcher that picks an agent and launches them
+  // Ask the Pack — natural-language dispatcher that picks an agent and launches them.
+  // Backend calls an LLM router with a 45s ceiling; we give the network a small cushion
+  // and fail loudly instead of hanging forever.
   dispatchPack: (request_text, context, non_goals) =>
     request("/pack/dispatch", {
       method: "POST",
+      timeoutMs: 60_000,
       body: JSON.stringify({
         request: request_text,
         context: context || "",
