@@ -1463,11 +1463,20 @@ def agent_sends_message(task_id):
 
         if memo_kind:
             from planet_maiko.brain.memos import create_memo
-            cta = {
-                "agent_ready": ("Review diff", "review", f"/tasks/{task_id}/review"),
-                "agent_stuck": ("Help out", "open", f"/tasks/{task_id}"),
-                "agent_plan": ("Review plan", "review", f"/tasks/{task_id}/plan"),
-            }[memo_kind]
+            # Report-producing one-shot roles (investigation, repo_analysis)
+            # finish with no diff — worktree is wiped and the artifact
+            # lives on task.extra. Route those to the report viewer so
+            # the CTA doesn't dead-end at an empty diff page.
+            task_type = task.type if task else None
+            is_report_task = task_type in ("investigation", "repo_analysis")
+            if memo_kind == "agent_ready" and is_report_task:
+                cta = ("View report", "open", f"/tasks/{task_id}/report")
+            else:
+                cta = {
+                    "agent_ready": ("Review diff", "review", f"/tasks/{task_id}/review"),
+                    "agent_stuck": ("Help out", "open", f"/tasks/{task_id}"),
+                    "agent_plan": ("Review plan", "review", f"/tasks/{task_id}/plan"),
+                }[memo_kind]
             create_memo(
                 kind=memo_kind,
                 category="waiting",

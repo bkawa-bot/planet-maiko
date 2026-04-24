@@ -19,6 +19,7 @@ const Automations = lazy(() => import("./pages/Automations"));
 const Themes = lazy(() => import("./pages/Themes"));
 const ReviewDiff = lazy(() => import("./pages/ReviewDiff"));
 const ReviewPlan = lazy(() => import("./pages/ReviewPlan"));
+const TaskReport = lazy(() => import("./pages/TaskReport"));
 const PetLog = lazy(() => import("./pages/PetLog"));
 import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
 
@@ -54,6 +55,7 @@ function AppRoutes() {
         <Route path="/settings" element={<Suspense fallback={<RouteFallback />}><Settings /></Suspense>} />
         <Route path="/tasks/:taskId/review" element={<Suspense fallback={<RouteFallback />}><ReviewDiff /></Suspense>} />
         <Route path="/tasks/:taskId/plan" element={<Suspense fallback={<RouteFallback />}><ReviewPlan /></Suspense>} />
+        <Route path="/tasks/:taskId/report" element={<Suspense fallback={<RouteFallback />}><TaskReport /></Suspense>} />
         <Route path="/pet-log" element={<Suspense fallback={<RouteFallback />}><PetLog /></Suspense>} />
         {/* Legacy routes */}
         <Route path="/skills" element={<Navigate to="/automations" replace />} />
