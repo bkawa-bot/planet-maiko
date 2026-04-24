@@ -5,7 +5,7 @@ import { showToast } from "../components/Toast";
 import {
   BookOpen, Brain, Clock, Layers, Check, X, Edit3,
   ChevronDown, ChevronRight, Plus, Shield, Download, Loader, Sparkles,
-  Flame, RefreshCw, GraduationCap, Inbox,
+  Flame, GraduationCap,
 } from "lucide-react";
 import { relativeTime } from "../utils/dates";
 import InfoButton from "../components/InfoButton";
@@ -42,13 +42,14 @@ export default function BrainView() {
   const [confirmingBackfill, setConfirmingBackfill] = useState(false);
   const [startingBackfill, setStartingBackfill] = useState(false);
   const [configuredRepos, setConfiguredRepos] = useState([]);
-  // Tab state persists through the URL — /knowledge?tab=queue opens
-  // the Queue tab directly (e.g. from the FooterPendingPopover link).
-  // Valid tabs: pool, queue, pending, unsynthesized, training.
+  // Tab state persists through the URL. Valid tabs: pool, pending,
+  // unsynthesized, training. (The old "queue" tab was retired — the
+  // unprocessed-pupdate queue now opens as a modal from the Brain
+  // widget on Home.)
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTabState] = useState(() => {
     const urlTab = searchParams.get("tab");
-    return ["pool", "queue", "pending", "unsynthesized", "training"].includes(urlTab) ? urlTab : "pool";
+    return ["pool", "pending", "unsynthesized", "training"].includes(urlTab) ? urlTab : "pool";
   });
   const setTab = (next) => {
     setTabState(next);
@@ -58,8 +59,6 @@ export default function BrainView() {
     setSearchParams(params, { replace: true });
   };
   const [synthesizing, setSynthesizing] = useState(false);
-  const [queuePupdates, setQueuePupdates] = useState([]);
-  const [queueLoading, setQueueLoading] = useState(false);
 
   const fetchLearnings = async () => {
     setKLoading(true);
@@ -92,25 +91,6 @@ export default function BrainView() {
 
   // Refetch the queue whenever the Queue tab is active. Drains fast
   // (brain cycle triages these every minute) so the list churns — a
-  // 10s poll while the tab is open keeps the user from staring at a
-  // stale snapshot without hitting the backend on other tabs.
-  const fetchQueue = async () => {
-    setQueueLoading(true);
-    try {
-      const list = await api.getPupdates({ brain_processed: false, limit: 500 });
-      setQueuePupdates(list || []);
-    } catch (err) {
-      console.error("[queue] fetch failed", err);
-    }
-    setQueueLoading(false);
-  };
-  useEffect(() => {
-    if (tab !== "queue") return undefined;
-    fetchQueue();
-    const id = setInterval(fetchQueue, 10_000);
-    return () => clearInterval(id);
-  }, [tab]);
-
   // Poll backfill status while a job is running; surface final summary toast.
   useEffect(() => {
     if (!backfilling) return undefined;
@@ -279,12 +259,6 @@ export default function BrainView() {
             Knowledge Pool
           </button>
           <button
-            className={`inbox-tab ${tab === "queue" ? "active" : ""}`}
-            onClick={() => setTab("queue")}
-          >
-            <Inbox size={11} /> Queue {queuePupdates.length > 0 && <span className="tab-badge">{queuePupdates.length}</span>}
-          </button>
-          <button
             className={`inbox-tab ${tab === "pending" ? "active" : ""}`}
             onClick={() => setTab("pending")}
           >
@@ -306,27 +280,9 @@ export default function BrainView() {
 
         {tab === "training" && <Training />}
 
-        {tab === "queue" && (
-          <QueueTab
-            pupdates={queuePupdates}
-            loading={queueLoading}
-            onRefresh={fetchQueue}
-            onTriggerCycle={async () => {
-              showToast("Brain's thinking...", "normal");
-              try {
-                await api.runBrainCycle();
-                showToast("Queue drained as much as it could", "normal");
-                fetchQueue();
-              } catch (err) {
-                showToast("Cycle failed: " + (err.message || "unknown"), "high");
-              }
-            }}
-          />
-        )}
-
         {/* Everything below is the learnings/signals surface — hide it on
-            the Training / Queue tabs which have their own content above. */}
-        {tab !== "training" && tab !== "queue" && <>
+            the Training tab which has its own content above. */}
+        {tab !== "training" && <>
         {tab === "unsynthesized" && unsynthesized.length > 0 && (
           <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 0", marginBottom: 8 }}>
             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, flex: 1 }}>
@@ -696,88 +652,3 @@ function LearningProvenance({ loading, signals, defaultOrg }) {
 }
 
 
-/** Queue tab — shows every pupdate the brain hasn't routed through
- *  automations yet. This is the "what's about to happen" view: the
- *  cycle drains these each tick (rules match → actions fire → pupdate
- *  flips brain_processed=true). Useful when the footer chip says
- *  "N pending" and the user wants to see WHAT's pending, not just
- *  that a number exists.
- *
- *  Grouped by source so an incoming backfill of 50 GitHub events
- *  reads as one group, not fifty rows. Each row shows the type +
- *  title and when it landed; deep detail lives on individual pupdate
- *  endpoints if we ever want to wire inline expansion.
- */
-function QueueTab({ pupdates, loading, onRefresh, onTriggerCycle }) {
-  if (loading && pupdates.length === 0) {
-    return (
-      <div className="empty-state">
-        <Loader size={32} className="spin" />
-        <div className="empty-title">Looking at the queue…</div>
-      </div>
-    );
-  }
-
-  if (pupdates.length === 0) {
-    return (
-      <div className="empty-state">
-        <Inbox size={48} style={{ color: "var(--text-muted)" }} />
-        <div className="empty-title">Queue's empty</div>
-        <div className="empty-sub">
-          The brain cycle routes incoming pupdates through automations
-          each tick — nothing's waiting right now.
-        </div>
-      </div>
-    );
-  }
-
-  const bySource = {};
-  for (const p of pupdates) {
-    const key = p.source || "other";
-    (bySource[key] = bySource[key] || []).push(p);
-  }
-  const sourceKeys = Object.keys(bySource).sort();
-
-  return (
-    <div className="queue-tab">
-      <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 0", marginBottom: 8 }}>
-        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, flex: 1 }}>
-          {pupdates.length} pupdate{pupdates.length === 1 ? "" : "s"} waiting for the next brain cycle — rules run, actions fire, and these drain automatically. Click "Run cycle now" to drain immediately.
-        </p>
-        <button className="btn btn-sm" onClick={onRefresh} title="Refetch">
-          <RefreshCw size={10} /> Refresh
-        </button>
-        <button className="btn btn-primary btn-sm" onClick={onTriggerCycle}>
-          <Sparkles size={10} /> Run cycle now
-        </button>
-      </div>
-
-      {sourceKeys.map((src) => (
-        <div key={src} className="queue-group">
-          <div className="queue-group-header">
-            <span className="queue-group-source">{src}</span>
-            <span className="queue-group-count">{bySource[src].length}</span>
-          </div>
-          <div className="queue-group-list">
-            {bySource[src].map((p) => (
-              <div key={p.id} className="queue-row">
-                <div className="queue-row-main">
-                  <span className="queue-row-type">{p.type}</span>
-                  <span className="queue-row-title">{p.title}</span>
-                </div>
-                <div className="queue-row-meta">
-                  {p.priority && p.priority !== "normal" && (
-                    <span className={`queue-row-priority queue-row-priority-${p.priority}`}>{p.priority}</span>
-                  )}
-                  {p.timestamp && (
-                    <span className="queue-row-time">{relativeTime(p.timestamp)}</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
