@@ -108,10 +108,11 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
   };
 
   // Scope is derived from the chosen condition kinds — the user never
-  // picks it directly. If any condition is pupdate_match, scope is
-  // "pupdate"; otherwise "cycle". Drives which actions are compatible.
-  const scope = when.some((c) => CONDITION_SCHEMAS[c.kind]?.scopes?.includes("pupdate")
-      && !CONDITION_SCHEMAS[c.kind]?.scopes?.includes("cycle"))
+  // picks it directly. Any condition that can fire per-pupdate makes
+  // the automation pupdate-scoped (today that's just pupdate_match).
+  // Everything else is cycle-scoped. Drives which actions are
+  // compatible below.
+  const scope = when.some((c) => CONDITION_SCHEMAS[c.kind]?.scopes?.includes("pupdate"))
     ? "pupdate"
     : "cycle";
 
