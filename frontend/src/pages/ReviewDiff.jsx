@@ -6,6 +6,7 @@ import { showToast } from "../components/Toast";
 import DiffView from "../components/diff/DiffView";
 import CommentThread from "../components/diff/CommentThread";
 import { renderMarkdown } from "../utils/markdown";
+import PlanetSpinner from "../components/PlanetSpinner";
 import "./ReviewDiff.css";
 
 const VERDICT_META = {
@@ -215,7 +216,7 @@ export default function ReviewDiff() {
     return (
       <div className="review-diff-page">
         <div className="review-diff-header">
-          <Loader className="spin" size={14} /> Loading…
+          <PlanetSpinner size={14} /> Loading…
         </div>
       </div>
     );

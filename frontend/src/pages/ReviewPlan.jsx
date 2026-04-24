@@ -5,6 +5,7 @@ import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import { renderMarkdown } from "../utils/markdown";
 import { formatTime } from "../utils/dates";
+import PlanetSpinner from "../components/PlanetSpinner";
 import "./ReviewPlan.css";
 
 const CHAT_POLL_INTERVAL_MS = 8000;
@@ -113,7 +114,7 @@ export default function ReviewPlan() {
     return (
       <div className="review-plan-page">
         <div className="review-plan-header">
-          <Loader className="spin" size={14} /> Loading plan…
+          <PlanetSpinner size={14} /> Loading plan…
         </div>
       </div>
     );

@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText, Loader } from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
 import { api } from "../api/client";
 import { renderMarkdown } from "../utils/markdown";
+import PlanetSpinner from "../components/PlanetSpinner";
 import "./ReviewPlan.css";
 
 /**
@@ -36,7 +37,7 @@ export default function TaskReport() {
     return (
       <div className="review-plan-page">
         <div className="review-plan-header">
-          <Loader className="spin" size={14} /> Loading report…
+          <PlanetSpinner size={14} /> Loading report…
         </div>
       </div>
     );

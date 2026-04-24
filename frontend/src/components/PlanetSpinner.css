@@ -1,0 +1,38 @@
+/* 3D-feeling planet loader. The outer span sets the perspective
+   window; the inner img does the actual rotateY spin. preserve-3d
+   keeps the edge-on frame thin rather than flat, which is what sells
+   the "real rotation" read. A tiny rotateX tilt + drop-shadow fakes
+   lighting so it doesn't look like just a spinning coin. */
+
+.planet-spinner {
+  display: inline-flex;
+  flex-shrink: 0;
+  vertical-align: middle;
+  perspective: 200px;
+}
+
+.planet-spinner img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  transform-style: preserve-3d;
+  backface-visibility: visible;
+  animation: planet-spin 2.4s linear infinite;
+  filter: drop-shadow(-1px 1px 1px rgba(0, 0, 0, 0.25));
+}
+
+@keyframes planet-spin {
+  from { transform: rotateY(0deg)   rotateX(10deg); }
+  to   { transform: rotateY(360deg) rotateX(10deg); }
+}
+
+/* Respect user motion preferences — no strobe, just a gentle pulse. */
+@media (prefers-reduced-motion: reduce) {
+  .planet-spinner img {
+    animation: planet-pulse 2s ease-in-out infinite;
+  }
+  @keyframes planet-pulse {
+    0%, 100% { opacity: 1; transform: none; }
+    50%      { opacity: 0.55; transform: none; }
+  }
+}

@@ -5,10 +5,11 @@ import { showToast } from "./Toast";
 import { renderMarkdown } from "../utils/markdown";
 import { relativeTime } from "../utils/dates";
 import {
-  Sunrise, RefreshCw, FileText, X, Loader, Brain,
+  Sunrise, RefreshCw, FileText, X, Brain,
   MoreHorizontal, ListTodo, Search, ExternalLink,
 } from "lucide-react";
 import TaskCard from "./TaskCard";
+import PlanetSpinner from "./PlanetSpinner";
 import "./OverviewPane.css";
 
 /**
@@ -271,7 +272,7 @@ export default function OverviewPane() {
   if (loading) {
     return (
       <div className="overview-pane overview-loading">
-        <Loader size={16} className="spin" />
+        <PlanetSpinner size={18} />
         <span>Looking around…</span>
       </div>
     );

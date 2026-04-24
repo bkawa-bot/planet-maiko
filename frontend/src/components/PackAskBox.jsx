@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Send, Loader, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { api } from "../api/client";
 import PackTurn from "./PackTurn";
+import PlanetSpinner from "./PlanetSpinner";
 import "./PackAskBox.css";
 
 /**
@@ -173,7 +174,7 @@ export default function PackAskBox() {
             <div className="ask-maiko-msg maiko">
               <span className="ask-maiko-avatar">M</span>
               <div className="ask-maiko-msg-text ask-maiko-typing">
-                <Loader size={12} className="spin" />
+                <PlanetSpinner size={14} />
                 {loadSeconds < 8
                   ? " Finding the right agent…"
                   : loadSeconds < 30
