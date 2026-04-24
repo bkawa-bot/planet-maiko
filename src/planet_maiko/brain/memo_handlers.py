@@ -3,8 +3,8 @@
 Registers the kind-specific side effects the /memos/<id>/approve
 endpoint runs before marking a memo actioned. Colocated here (rather
 than in brain/memos.py) so the model + API layer stays small and
-import-safe; this module is the one that imports Task / AgentGoal /
-Automation / etc. at registration time.
+import-safe; this module is the one that imports Task / Automation /
+etc. at registration time.
 
 Imported from app.py during blueprint setup so registration happens
 once per app boot.

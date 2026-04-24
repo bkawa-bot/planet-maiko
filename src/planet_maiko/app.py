@@ -86,6 +86,14 @@ def _ensure_columns():
         # ContextSelection was only ever read by the now-gone
         # record_task_outcome / record_session_feedback functions.
         "DROP TABLE IF EXISTS context_selections",
+        # Legacy autonomy — AgentGoal rows were migrated into
+        # Automations in a previous release. Table is inert; drop
+        # explicitly so fresh installs never materialize it.
+        "DROP TABLE IF EXISTS agent_goals",
+        # SkillResult was the old DB-backed cache for skill output.
+        # Graduated out during the Memo refactor (skill_result memos
+        # + home-overview file cache). Nothing reads it anymore.
+        "DROP TABLE IF EXISTS skill_results",
         # LoRA eval persistence — one row per evaluate_adapter() call.
         # db.create_all() handles fresh installs; explicit CREATE
         # covers existing DBs where the model was registered after
@@ -325,7 +333,6 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.signal import Signal  # noqa: F401
         from planet_maiko.models.learning import Learning  # noqa: F401
         from planet_maiko.models.agent_profile import AgentProfile  # noqa: F401
-        from planet_maiko.models.skill_result import SkillResult  # noqa: F401
         from planet_maiko.models.custom_skill import CustomSkill  # noqa: F401
         from planet_maiko.models.diff_comment import DiffComment  # noqa: F401
         from planet_maiko.models.insight import Insight  # noqa: F401
@@ -335,14 +342,6 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.agent_job import AgentJob  # noqa: F401
         from planet_maiko.models.memo import Memo  # noqa: F401
         from planet_maiko.models.adapter_eval import AdapterEval  # noqa: F401
-        # Legacy AgentGoal kept imported only so the one-time migration
-        # below can see its rows on first boot after this upgrade.
-        # Remove the import and the table once the migration has run on
-        # every install that cares. Harmless while present.
-        try:
-            from planet_maiko.models.agent_goal import AgentGoal  # noqa: F401
-        except Exception:
-            pass
         db.create_all()
 
         # Schema migrations for existing DBs (SQLite ALTER TABLE is safe)
@@ -352,22 +351,16 @@ def create_app(start_scheduler=False):
         from planet_maiko.agents.skills import seed_defaults
         seed_defaults()
 
-        # Unify the autonomy surface: migrate legacy AgentGoal rows
-        # into Automations (one-time, idempotent no-op after first
-        # successful run), then make sure every configured repo has a
+        # Seed per-repo watches + make sure every configured repo has a
         # seeded 'keep overview current' watch.
         from planet_maiko.brain.automations import (
-            migrate_agent_goals, ensure_seed_automations,
+            ensure_seed_automations,
             ensure_seed_chain_automations, migrate_scheduled_skills,
             ensure_seed_rule_automations, migrate_legacy_action_kinds,
             migrate_tasks_to_agent_jobs, ensure_plugin_default_automations,
             migrate_per_repo_overview_watches,
             migrate_archive_retired_chain_seeds,
         )
-        try:
-            migrate_agent_goals()
-        except Exception as e:
-            logger.warning(f"[startup] AgentGoal migration skipped: {e}")
         try:
             migrate_scheduled_skills()
         except Exception as e:

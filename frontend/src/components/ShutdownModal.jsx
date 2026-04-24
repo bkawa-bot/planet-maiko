@@ -43,12 +43,6 @@ const STEPS = [
     done: (r) => `${r.deleted || 0} old signals swept`,
   },
   {
-    name: "prune_skill_results",
-    label: "Prune old skill outputs",
-    narrator: "Recycling old briefs…",
-    done: (r) => `${r.deleted || 0} old briefs recycled`,
-  },
-  {
     name: "prune_dismissed",
     label: "Forget dismissed items",
     narrator: "Forgetting the stuff you let go of…",
@@ -69,7 +63,6 @@ const PREVIEW_FIELDS = {
   prune_pupdates: "pupdates",
   prune_messages: "agent_messages",
   prune_signals: "signals",
-  prune_skill_results: "skill_results",
   prune_dismissed: "dismissed",
   stop_server: null,  // no count
 };
@@ -222,7 +215,6 @@ function PreviewStage({ preview, selected, onToggle, onCancel, onConfirm }) {
     (preview.pupdates || 0) +
     (preview.agent_messages || 0) +
     (preview.signals || 0) +
-    (preview.skill_results || 0) +
     (preview.dismissed || 0);
 
   return (

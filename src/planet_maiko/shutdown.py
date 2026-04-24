@@ -30,7 +30,6 @@ from planet_maiko.models.agent_job import AgentJob
 from planet_maiko.models.signal import Signal
 from planet_maiko.models.insight import Insight
 from planet_maiko.models.learning import Learning
-from planet_maiko.models.skill_result import SkillResult
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +42,6 @@ logger = logging.getLogger(__name__)
 PUPDATE_MAX_AGE_HOURS = 24
 MESSAGE_MAX_AGE_DAYS = 14
 SIGNAL_MAX_AGE_DAYS = 90
-SKILL_RESULT_MAX_AGE_DAYS = 30
 DISMISSED_MAX_AGE_DAYS = 30
 
 
@@ -71,7 +69,6 @@ def preview():
         "pupdates": _count_prunable_pupdates(),
         "agent_messages": _count_prunable_messages(),
         "signals": _count_prunable_signals(),
-        "skill_results": _count_prunable_skill_results(),
         "dismissed": _count_prunable_dismissed(),
     }
 
@@ -153,15 +150,6 @@ def _prunable_signals_query():
 
 def _count_prunable_signals():
     return _prunable_signals_query().count()
-
-
-def _prunable_skill_results_query():
-    cutoff = _strip_tz(_utc_now() - timedelta(days=SKILL_RESULT_MAX_AGE_DAYS))
-    return SkillResult.query.filter(SkillResult.created_at < cutoff)
-
-
-def _count_prunable_skill_results():
-    return _prunable_skill_results_query().count()
 
 
 def _count_prunable_dismissed():
@@ -355,14 +343,6 @@ def prune_signals():
     return {"deleted": count}
 
 
-def prune_skill_results():
-    q = _prunable_skill_results_query()
-    count = q.count()
-    q.delete(synchronize_session=False)
-    db.session.commit()
-    return {"deleted": count}
-
-
 def prune_dismissed():
     cutoff = _strip_tz(_utc_now() - timedelta(days=DISMISSED_MAX_AGE_DAYS))
     ins_q = Insight.query.filter(Insight.status == "dismissed", Insight.updated_at < cutoff)
@@ -418,7 +398,6 @@ STEPS = {
     "prune_pupdates": prune_pupdates,
     "prune_messages": prune_messages,
     "prune_signals": prune_signals,
-    "prune_skill_results": prune_skill_results,
     "prune_dismissed": prune_dismissed,
     "stop_server": stop_server,
 }

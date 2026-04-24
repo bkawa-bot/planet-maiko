@@ -17,7 +17,6 @@ from planet_maiko.models.insight import Insight
 from planet_maiko.models.learning import Learning
 from planet_maiko.models.pupdate import Pupdate
 from planet_maiko.models.signal import Signal
-from planet_maiko.models.skill_result import SkillResult
 from planet_maiko.models.task import Task
 
 
@@ -133,29 +132,6 @@ def test_prune_signals_only_incorporated(app):
 
 
 # ---------------------------------------------------------------------------
-# prune_skill_results
-# ---------------------------------------------------------------------------
-
-def test_prune_skill_results_by_age(app):
-    with app.app_context():
-        db.session.add(SkillResult(
-            skill_name="morning-brief", title="old", content="x",
-            created_at=_old(days=60),
-        ))
-        db.session.add(SkillResult(
-            skill_name="morning-brief", title="recent", content="x",
-            created_at=_recent(hours=1),
-        ))
-        db.session.commit()
-
-        result = shutdown.prune_skill_results()
-
-    assert result["deleted"] == 1
-    with app.app_context():
-        assert SkillResult.query.count() == 1
-
-
-# ---------------------------------------------------------------------------
 # prune_dismissed
 # ---------------------------------------------------------------------------
 
@@ -222,6 +198,6 @@ def test_preview_returns_expected_keys(app):
         preview = shutdown.preview()
     expected = {
         "active_sessions", "worktrees", "pupdates", "agent_messages",
-        "signals", "skill_results", "dismissed",
+        "signals", "dismissed",
     }
     assert expected.issubset(set(preview.keys()))

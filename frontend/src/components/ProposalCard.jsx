@@ -14,9 +14,9 @@ import "../pages/cards.css";
  *
  * Two flavors based on what's in extra:
  *   - extra.draft set: TASK proposal — user approves to create a routed Task.
- *   - extra.proposed_goal set: GOAL proposal — approving installs an AgentGoal
- *     row so Maiko keeps watching the condition. No edit form; goals are
- *     tuned from the profile detail modal after adoption.
+ *   - extra.proposed_goal set: GOAL proposal — approving installs an
+ *     Automation so Maiko keeps watching the condition. No edit form;
+ *     goals are tuned from the profile detail modal after adoption.
  *
  * Shape detection: Memos have a `kind` field and numeric `id`; pupdates
  * have a `type` field and string `id`. We branch the approve/dismiss

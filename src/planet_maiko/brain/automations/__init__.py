@@ -1,8 +1,7 @@
 """Automation engine — evaluates every active Automation row each brain
 cycle and fires the action chain when conditions hold.
 
-Replaces the AgentGoal autonomy module. Same pattern (condition-based
-proposals), now user-editable and uniformly surfaced in the Automations
+Condition-based proposals, user-editable, surfaced in the Automations
 dashboard.
 
 Supported condition kinds (keep this comment + CONDITIONS dict in sync):
@@ -1178,7 +1177,7 @@ def evaluate():
 
 
 # ---------------------------------------------------------------------------
-# Seeding + migration from AgentGoal
+# Seeding
 # ---------------------------------------------------------------------------
 
 # No default chain seeds — the old ones all depended on Ops-y
@@ -1885,103 +1884,3 @@ def migrate_tasks_to_agent_jobs():
     return migrated_tasks + migrated_proposals
 
 
-def migrate_agent_goals():
-    """One-time import of existing AgentGoal rows into Automations.
-
-    Runs on every startup (cheap no-op when the goals table is empty or
-    gone); writes one Automation per goal. After a successful import,
-    drops the goal row so subsequent boots don't re-import.
-
-    Safe to delete this function after the goals table has been empty
-    for at least one release cycle.
-    """
-    try:
-        from planet_maiko.models.agent_goal import AgentGoal
-    except Exception:
-        return 0  # model removed; nothing to migrate
-
-    goals = AgentGoal.query.all()
-    if not goals:
-        return 0
-
-    migrated = 0
-    for g in goals:
-        when = []
-        then = []
-        if g.kind == "keep_overview_current":
-            cfg = g.trigger_config or {}
-            when = [{
-                "kind": "overview_stale",
-                "config": {
-                    "repo": g.scope_repo,
-                    "stale_days": int(cfg.get("stale_days", 30)),
-                },
-            }]
-            then = [{
-                "kind": "propose",
-                "config": {
-                    "draft": {
-                        "title": f"Cartograph {g.scope_repo}",
-                        "type": "cartograph",
-                        "priority": "normal",
-                        "repo": g.scope_repo,
-                        "description": f"Refresh Atlas's overview of {g.scope_repo}.",
-                    },
-                },
-            }]
-            name = f"Keep {g.scope_repo}'s overview current"
-            description = (g.extra or {}).get("description") or ""
-        elif g.kind == "train_lora_when_ready":
-            cfg = g.trigger_config or {}
-            when = [{
-                "kind": "lora_missing",
-                "config": {
-                    "repo": g.scope_repo,
-                    "min_learnings": int(cfg.get("min_learnings", 10)),
-                },
-            }]
-            then = [{
-                "kind": "nudge",
-                "config": {
-                    "title": f"Ready to train a LoRA for {g.scope_repo}?",
-                    "body": (
-                        f"{g.scope_repo} has crossed the learning threshold "
-                        f"and doesn't have a trained adapter yet."
-                    ),
-                    "url": "/knowledge?tab=training",
-                    "action_hint": "Open Training",
-                },
-            }]
-            name = f"Nudge when {g.scope_repo} is ready to train"
-            description = (g.extra or {}).get("description") or ""
-        else:
-            # Unknown kind — write a minimal placeholder that the user
-            # can inspect and edit. No detector for the condition kind
-            # will exist, so it'll simply never fire; not harmful.
-            name = f"Imported goal: {g.kind}"
-            description = f"Auto-migrated from legacy AgentGoal (kind={g.kind})."
-            when = []
-            then = []
-
-        automation = Automation(
-            name=name,
-            description=description,
-            when=when,
-            when_logic="all",
-            then=then,
-            status=g.status,
-            last_fired_at=g.last_fired_at,
-            fire_count=0,
-            created_by="seed" if g.created_by == "seed" else "proposal" if g.created_by == "proposal" else "user",
-            agent_profile_id=g.agent_profile_id,
-            scope_repo=g.scope_repo,
-            cooldown_days=7,
-        )
-        db.session.add(automation)
-        db.session.delete(g)
-        migrated += 1
-
-    if migrated:
-        db.session.commit()
-        logger.info(f"[automations] migrated {migrated} AgentGoal row(s) to Automation")
-    return migrated

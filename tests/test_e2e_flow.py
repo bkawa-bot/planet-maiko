@@ -26,7 +26,6 @@ from planet_maiko.models.agent_profile import AgentProfile
 from planet_maiko.models.signal import Signal
 from planet_maiko.models.learning import Learning
 from planet_maiko.models.agent_message import AgentMessage
-from planet_maiko.models.skill_result import SkillResult
 from planet_maiko.models.custom_skill import CustomSkill
 
 
@@ -672,52 +671,6 @@ class TestAPISmokeTests:
 
 
 # ---------------------------------------------------------------------------
-# Test 10: Skill Results
-# ---------------------------------------------------------------------------
-
-
-class TestSkillResults:
-
-    def test_skill_result_saved_and_retrieved(self, app, db):
-        """Verify that SkillResult records can be persisted and queried."""
-        sr = SkillResult(
-            skill_name="morning-brief",
-            title="Morning Brief -- April 1",
-            content="Here is your morning summary...",
-        )
-        db.session.add(sr)
-        db.session.commit()
-
-        fetched = SkillResult.query.filter_by(skill_name="morning-brief").first()
-        assert fetched is not None
-        assert fetched.title == "Morning Brief -- April 1"
-        assert "morning summary" in fetched.content
-
-    def test_skill_results_api_list(self, client, app, db):
-        sr = SkillResult(
-            skill_name="brainstorm",
-            title="Brainstorm -- April 1",
-            content="Ideas: ...",
-        )
-        db.session.add(sr)
-        db.session.commit()
-
-        resp = client.get("/api/skill-results")
-        assert resp.status_code == 200
-        data = resp.get_json()
-        assert len(data) >= 1
-
-    def test_skill_results_api_filter_by_name(self, client, app, db):
-        sr1 = SkillResult(skill_name="brief", title="B1", content="...")
-        sr2 = SkillResult(skill_name="investigate", title="I1", content="...")
-        db.session.add_all([sr1, sr2])
-        db.session.commit()
-
-        resp = client.get("/api/skill-results?skill_name=brief")
-        data = resp.get_json()
-        assert all(r["skill_name"] == "brief" for r in data)
-
-
 # ---------------------------------------------------------------------------
 # Test 11: Agent Monitor (auto-complete tasks)
 # ---------------------------------------------------------------------------
