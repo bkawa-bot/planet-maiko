@@ -616,6 +616,28 @@
 .agent-edit-body input:focus, .agent-edit-body select:focus, .agent-edit-body textarea:focus {
   border-color: var(--pink); outline: none;
 }
+.agent-specialty-grid {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  text-transform: none; letter-spacing: 0; font-weight: 400;
+}
+.agent-specialty-chip {
+  padding: 4px 10px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: transparent; color: var(--text-muted);
+  font-size: 11.5px; font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.agent-specialty-chip:hover { background: var(--bg-hover); color: var(--text); }
+.agent-specialty-chip.checked {
+  background: color-mix(in srgb, var(--pink) 14%, transparent);
+  border-color: var(--pink); color: var(--text);
+}
+.agent-edit-hint {
+  font-size: 10.5px; color: var(--text-muted);
+  text-transform: none; letter-spacing: 0; font-weight: 400;
+  margin-top: 2px;
+}
 .agent-edit-footer {
   display: flex; justify-content: flex-end; gap: 8px;
   padding: 12px 20px; border-top: 1px solid var(--border-subtle);

@@ -392,9 +392,19 @@ export default function AgentsProfilesTab({
   const [showArchived, setShowArchived] = useState(false);
   const [profileModal, setProfileModal] = useState(null);
   const [editing, setEditing] = useState(null);
-  const [editForm, setEditForm] = useState({ role: "coding", scope_repo: "", instructions: "", flavor_text: "" });
+  const [editForm, setEditForm] = useState({ role: "coding", scope_repo: "", instructions: "", flavor_text: "", specialty_ids: [] });
   const [editSaving, setEditSaving] = useState(false);
+  const [specialties, setSpecialties] = useState([]);
   const configuredRepos = useConfiguredRepos();
+
+  useEffect(() => {
+    // Pull available specialties once — the edit modal renders a chip
+    // grid so the user can attach / detach without leaving the agents
+    // page. Specialty authoring still lives on the Specialties tab.
+    api.getSkills()
+      .then((list) => setSpecialties(Array.isArray(list) ? list : []))
+      .catch(() => setSpecialties([]));
+  }, []);
 
   // Collapsed role-section state — persisted to localStorage so the
   // layout sticks across visits. When nothing's persisted, sections
@@ -426,6 +436,19 @@ export default function AgentsProfilesTab({
       scope_repo: p.scope_repo || "",
       instructions: p.instructions || "",
       flavor_text: p.flavor_text || "",
+      specialty_ids: Array.isArray(p.specialty_ids) ? [...p.specialty_ids] : [],
+    });
+  };
+
+  const toggleEditSpecialty = (id) => {
+    setEditForm((prev) => {
+      const has = prev.specialty_ids.includes(id);
+      return {
+        ...prev,
+        specialty_ids: has
+          ? prev.specialty_ids.filter((x) => x !== id)
+          : [...prev.specialty_ids, id],
+      };
     });
   };
 
@@ -570,6 +593,7 @@ export default function AgentsProfilesTab({
                     <option value="coding">Coder</option>
                     <option value="review">Reviewer</option>
                     <option value="investigation">Investigator</option>
+                    <option value="cartographer">Cartographer</option>
                   </select>
                 </label>
                 <label>
@@ -588,6 +612,30 @@ export default function AgentsProfilesTab({
                   )}
                 </label>
               </div>
+              {specialties.length > 0 && (
+                <label className="agent-edit-full">
+                  Specialties
+                  <div className="agent-specialty-grid">
+                    {specialties.map((s) => {
+                      const checked = editForm.specialty_ids.includes(s.id);
+                      return (
+                        <button
+                          type="button"
+                          key={s.id}
+                          className={`agent-specialty-chip ${checked ? "checked" : ""}`}
+                          onClick={() => toggleEditSpecialty(s.id)}
+                          title={s.description || s.name}
+                        >
+                          {s.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="agent-edit-hint">
+                    Extra context a run can layer on top of the role. A run with no specialty picked uses the base role protocol.
+                  </span>
+                </label>
+              )}
               <label className="agent-edit-full">
                 Flavor text
                 <input

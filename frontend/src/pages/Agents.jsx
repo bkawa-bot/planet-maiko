@@ -25,11 +25,12 @@ export default function Agents() {
   const [loading, setLoading] = useState(true);
   const [showArrival, setShowArrival] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [createForm, setCreateForm] = useState({ role: "coding", scope_repo: "", instructions: "" });
+  const [createForm, setCreateForm] = useState({ role: "coding", scope_repo: "", instructions: "", specialty_ids: [] });
   const [creating, setCreating] = useState(false);
-  // Specialties appear as additional role options in the dropdown.
-  // Fetched once on mount since creating one requires a page round
-  // trip via the Specialties tab anyway.
+  // Specialties the agent can be launched with. Role drives runtime
+  // dispatch; specialty_ids is the attached-context pool a run picks
+  // from. Fetched once on mount — the list changes rarely and the
+  // Specialties tab is the canonical place to edit the set.
   const [specialties, setSpecialties] = useState([]);
 
   const fetchData = async () => {
@@ -70,8 +71,20 @@ export default function Agents() {
   const handleCreateAgent = () => {
     // Open the pre-creation form so the user can pick role/scope first.
     // The arrival greeting follows once the profile is persisted.
-    setCreateForm({ role: "coding", scope_repo: "", instructions: "" });
+    setCreateForm({ role: "coding", scope_repo: "", instructions: "", specialty_ids: [] });
     setShowCreateForm(true);
+  };
+
+  const toggleSpecialty = (id) => {
+    setCreateForm((prev) => {
+      const has = prev.specialty_ids.includes(id);
+      return {
+        ...prev,
+        specialty_ids: has
+          ? prev.specialty_ids.filter((x) => x !== id)
+          : [...prev.specialty_ids, id],
+      };
+    });
   };
 
   const submitCreateAgent = async () => {
@@ -81,6 +94,7 @@ export default function Agents() {
         role: createForm.role,
         scope_repo: createForm.scope_repo.trim() || undefined,
         instructions: createForm.instructions.trim() || undefined,
+        specialty_ids: createForm.specialty_ids,
       });
       setShowCreateForm(false);
       setShowArrival(profile);
@@ -120,20 +134,10 @@ export default function Agents() {
                     value={createForm.role}
                     onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
                   >
-                    <optgroup label="Core roles">
-                      <option value="coding">Coder — writes code, opens PRs</option>
-                      <option value="review">Reviewer — reviews PRs</option>
-                      <option value="investigation">Investigator — digs into incidents & CI</option>
-                    </optgroup>
-                    {specialties.length > 0 && (
-                      <optgroup label="Specialties">
-                        {specialties.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}{s.description ? ` — ${s.description.slice(0, 60)}${s.description.length > 60 ? "…" : ""}` : ""}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
+                    <option value="coding">Coder — writes code, opens PRs</option>
+                    <option value="review">Reviewer — reviews PRs</option>
+                    <option value="investigation">Investigator — digs into incidents & CI</option>
+                    <option value="cartographer">Cartographer — maps repos into a playbook</option>
                   </select>
                 </label>
                 <label>
@@ -152,6 +156,30 @@ export default function Agents() {
                   )}
                 </label>
               </div>
+              {specialties.length > 0 && (
+                <label className="agent-edit-full">
+                  Specialties (optional)
+                  <div className="agent-specialty-grid">
+                    {specialties.map((s) => {
+                      const checked = createForm.specialty_ids.includes(s.id);
+                      return (
+                        <button
+                          type="button"
+                          key={s.id}
+                          className={`agent-specialty-chip ${checked ? "checked" : ""}`}
+                          onClick={() => toggleSpecialty(s.id)}
+                          title={s.description || s.name}
+                        >
+                          {s.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="agent-edit-hint">
+                    Role drives how the agent runs. Specialties are extra context a run can layer on top — pick none, one, or many to attach.
+                  </span>
+                </label>
+              )}
               <label className="agent-edit-full">
                 Starter instructions (optional, markdown)
                 <textarea
