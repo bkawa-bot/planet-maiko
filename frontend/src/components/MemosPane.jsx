@@ -121,17 +121,23 @@ export default function MemosPane() {
 
   // Dismiss: the memo-backed kinds go through /memos/<id>/dismiss; the
   // legacy pupdate + AgentJob kinds have their own dismiss paths.
+  // Review-diff rows are task-backed — "dismiss" for those means cancel
+  // the task (stops any running agent, cleans the worktree, deletes
+  // the row). Destructive, so we confirm first.
   const dismissItem = async (it) => {
     try {
       if (it.memo_id) {
         await api.dismissMemo(it.memo_id);
       } else if (it.kind === "pending_job" && it.job_id) {
         await api.cancelAgentJob(it.job_id);
-      } else if (it.task_id) {
-        // Review tasks etc. — no generic "dismiss" endpoint; the user
-        // marks them done through the task UI. We can still remove
-        // from the feed optimistically so the row doesn't block.
-        showToast("Mark the task done from the Tasks page", "normal");
+      } else if (it.kind === "review" && it.task_id) {
+        const ok = window.confirm(
+          `Cancel "${it.title || "this task"}"? Stops any running agent and discards the diff.`
+        );
+        if (!ok) return;
+        await api.cancelTask(it.task_id);
+      } else {
+        return;
       }
       fetchQueue();
     } catch (err) {
@@ -352,11 +358,15 @@ export default function MemosPane() {
                   <span className="review-queue-cta">{cta} →</span>
                 )}
               </button>
-              {it.memo_id && (
+              {(it.memo_id || (it.kind === "review" && it.task_id)) && (
                 <button
                   className="btn btn-sm btn-ghost memos-pane-dismiss"
                   onClick={() => dismissItem(it)}
-                  title="Dismiss"
+                  title={
+                    it.kind === "review" && !it.memo_id
+                      ? "Cancel task"
+                      : "Dismiss"
+                  }
                 >
                   <X size={12} />
                 </button>
