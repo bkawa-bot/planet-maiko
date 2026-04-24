@@ -8,6 +8,7 @@ import InfoButton from "../components/InfoButton";
 import AgentsActiveTab from "../components/agents/AgentsActiveTab";
 import AgentsProfilesTab from "../components/agents/AgentsProfilesTab";
 import AgentsInsightsTab from "../components/agents/AgentsInsightsTab";
+import ModalPortal from "../components/ModalPortal";
 import { formatRepo, useDefaultOrg, useConfiguredRepos } from "../utils/repo";
 import "./Agents.css";
 
@@ -117,6 +118,7 @@ export default function Agents() {
     <div className="agents-page frost-pane">
       {/* New Agent create form */}
       {showCreateForm && (
+        <ModalPortal>
         <div className="modal-overlay" onClick={() => !creating && setShowCreateForm(false)}>
           <div className="agent-edit-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -200,10 +202,12 @@ export default function Agents() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Arrival Modal */}
       {showArrival && (
+        <ModalPortal>
         <div className="modal-overlay" onClick={() => setShowArrival(null)}>
           <div className="modal arrival-modal" onClick={(e) => e.stopPropagation()}>
             <div className="arrival-content">
@@ -223,6 +227,7 @@ export default function Agents() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       <div className="inbox-tab-bar">

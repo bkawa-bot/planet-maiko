@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { X, Loader, Send } from "lucide-react";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
+import ModalPortal from "./ModalPortal";
 import "./LinearCreateModal.css";
 
 /**
@@ -118,6 +119,7 @@ export default function LinearCreateModal({ task, onClose, onCreated }) {
     : null;
 
   return (
+    <ModalPortal>
     <div className="modal-overlay" onClick={onClose}>
       <div className="linear-create-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
@@ -314,6 +316,7 @@ export default function LinearCreateModal({ task, onClose, onCreated }) {
         )}
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
