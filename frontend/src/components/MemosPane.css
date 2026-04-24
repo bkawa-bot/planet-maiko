@@ -114,6 +114,7 @@
   border-top: 1px dashed var(--border);
   padding-top: 6px;
   font-size: 11px;
+  min-width: 0;
 }
 .pupdate-snapshot-head {
   display: flex;
@@ -171,4 +172,26 @@
   color: var(--text-dim, var(--text-muted));
   max-height: 200px;
   overflow-y: auto;
+  /* PagerDuty / GitHub pupdate bodies sometimes carry long URLs or
+     stack-trace lines that would otherwise force the whole memo row
+     (and the parent grid track) wider. Break inside words, and let
+     code blocks scroll horizontally rather than grow the container. */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.pupdate-snapshot-body pre {
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* Same guard for the notification row's main markdown body, which
+   can carry the same kind of unbreakable content. */
+.review-queue-row-notification .review-queue-description {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.review-queue-row-notification .review-queue-description pre {
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

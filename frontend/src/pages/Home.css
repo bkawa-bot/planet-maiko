@@ -65,12 +65,17 @@
 /* === Grid layout === */
 .home-grid {
   display: grid;
-  grid-template-columns: 1fr 280px;
+  /* minmax(0, 1fr) instead of plain 1fr so a wide child (long URL,
+     <pre> block in a memo markdown body, etc.) can't force the main
+     column to grow past its share and spill into the sidebar. 1fr
+     resolves to minmax(auto, 1fr) by default, where `auto` means
+     min-content — so one stray unbreakable token blows the layout. */
+  grid-template-columns: minmax(0, 1fr) 280px;
   gap: 12px;
 }
 
-.home-main { display: flex; flex-direction: column; gap: 12px; }
-.home-sidebar { display: flex; flex-direction: column; gap: 10px; }
+.home-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.home-sidebar { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 
 /* === Cards === */
 .home-card {
