@@ -33,6 +33,8 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
   const defaultOrg = useDefaultOrg();
   const [profiles, setProfiles] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
+  const [specialtyId, setSpecialtyId] = useState("");
+  const [specialties, setSpecialties] = useState([]);
   const [repoPath, setRepoPath] = useState("");
   const [repoRoots, setRepoRoots] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -58,9 +60,13 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
       // when no matches exist.
       api.getProfiles({ role: expectedRole, ...(repo ? { repo } : {}) }),
       api.getConfig(),
-    ]).then(([ps, cfg]) => {
+      // Specialty names for the per-agent dropdown. Silent on failure —
+      // the dropdown just shows bare IDs or stays hidden.
+      api.getSkills().catch(() => []),
+    ]).then(([ps, cfg, skills]) => {
       setProfiles(ps || []);
       if (ps && ps.length > 0) setSelectedId(ps[0].id);
+      setSpecialties(Array.isArray(skills) ? skills : []);
 
       const roots = cfg?.github?.repo_roots || [];
       setRepoRoots(roots);
@@ -73,6 +79,15 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [task, expectedRole, repo]);
+
+  // When the user switches between agents, drop any specialty picked
+  // for the previous agent — the new agent may not have it attached.
+  useEffect(() => { setSpecialtyId(""); }, [selectedId]);
+
+  const selectedProfile = profiles.find((p) => p.id === selectedId) || null;
+  const attachedSpecialties = (selectedProfile?.specialty_ids || [])
+    .map((sid) => specialties.find((s) => s.id === sid))
+    .filter(Boolean);
 
   const handleCreateNew = async () => {
     try {
@@ -147,6 +162,7 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
         plan_first: planFirst,
         custom_prompt: customPrompt || undefined,
         branch_name: branchName || undefined,
+        specialty_id: specialtyId || undefined,
       });
       const agent = profiles.find((p) => p.id === selectedId);
       showToast(`${agent?.display_name || "Agent"} assigned!`, "normal");
@@ -212,6 +228,28 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
               <button className="btn btn-sm" onClick={handleCreateNew} style={{ marginTop: 8 }}>
                 <Plus size={10} /> Create a new {ROLE_META[expectedRole]?.label.toLowerCase() || "agent"}
               </button>
+
+              {attachedSpecialties.length > 0 && !isReassign && (
+                <>
+                  <div className="assign-section-label" style={{ marginTop: 16 }}>
+                    Use a specialty? <span style={{ fontWeight: 400, opacity: 0.7 }}>(optional)</span>
+                  </div>
+                  <select
+                    style={{
+                      width: "100%", padding: "8px 10px", fontSize: 12,
+                      border: "1px solid var(--border)", borderRadius: "var(--radius-xs)",
+                      background: "var(--bg)", color: "var(--text)", fontFamily: "var(--font)",
+                    }}
+                    value={specialtyId}
+                    onChange={(e) => setSpecialtyId(e.target.value)}
+                  >
+                    <option value="">Base role only — no specialty</option>
+                    {attachedSpecialties.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </>
+              )}
 
               {!isReassign && (
                 <>

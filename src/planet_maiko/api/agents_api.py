@@ -217,6 +217,11 @@ def assign_agent():
     # with any UI client still sending them.
     plan_first = bool(data.get("plan_first", False))
     branch_name = data.get("branch_name")
+    # Optional specialty chosen for this run. Only honored if the agent
+    # has this specialty in their attached pool; runner double-checks
+    # before injecting, but we also persist the choice on task.extra so
+    # a retry / cycle rerun picks the same specialty.
+    specialty_id = (data.get("specialty_id") or "").strip() or None
 
     if not task_id or not profile_id:
         return jsonify({"error": "task_id and profile_id are required"}), 400
@@ -224,6 +229,8 @@ def assign_agent():
     task = db.get_or_404(Task, task_id)
     profile = db.get_or_404(AgentProfile, profile_id)
     role = profile.role or "coding"
+    if specialty_id and specialty_id not in (profile.specialty_ids or []):
+        specialty_id = None  # silently drop — agent doesn't have it attached
 
     # Stage D: review / pr_review go through AgentJob. The job owns the
     # worktree + session + artifact; the Task stays as the user-owed
@@ -275,6 +282,7 @@ def assign_agent():
             use_worktree=True,
             agent_profile_id=profile.id,
             role=role,
+            specialty_id=specialty_id,
         )
     except Exception as e:
         return jsonify({"error": f"Agent preparation failed: {str(e)}"}), 500
@@ -303,6 +311,8 @@ def assign_agent():
         extra["branch"] = branch
     if plan_first and role == "coding":
         extra["plan_first"] = True
+    if specialty_id:
+        extra["specialty_id"] = specialty_id
     task.extra = extra
     db.session.commit()
 
