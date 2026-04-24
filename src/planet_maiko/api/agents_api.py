@@ -236,7 +236,7 @@ def assign_agent():
     # worktree + session + artifact; the Task stays as the user-owed
     # "please review this PR" entry.
     if role == "review":
-        return _assign_review_via_agent_job(task, profile, data)
+        return _assign_review_via_agent_job(task, profile, data, specialty_id)
 
     # Resolve repo_path. For coding the user picks one in the modal;
     # for investigation/cartographer the task's scope plus repo_roots
@@ -324,13 +324,16 @@ def assign_agent():
     }), 201
 
 
-def _assign_review_via_agent_job(task, profile, data):
+def _assign_review_via_agent_job(task, profile, data, specialty_id=None):
     """Review/pr_review assignment path. Spawns a linked AgentJob,
     prepares the worktree under the job id, and kicks off headless.
 
     The agent reports with task_id == job.id so outbox replies land
     in _handle_agent_job_reply. On ready_for_review the job stores
     the artifact and the linked Task moves to status=review.
+
+    specialty_id (optional) flows through to prepare() so the review
+    agent's CLAUDE.md gets the specialty prompt layered on top.
     """
     from planet_maiko.models.agent_job import AgentJob
     from planet_maiko.agents.coding_agent import prepare, _kickoff_agent_headless
@@ -353,6 +356,10 @@ def _assign_review_via_agent_job(task, profile, data):
     if existing and existing.status in ("queued", "pending_approval"):
         job = existing
         job.agent_profile_id = profile.id
+        if specialty_id:
+            j_extra = dict(job.extra or {})
+            j_extra["specialty_id"] = specialty_id
+            job.extra = j_extra
     else:
         job_id = f"job-{_uuid.uuid4().hex[:10]}"
         job = AgentJob(
@@ -369,7 +376,7 @@ def _assign_review_via_agent_job(task, profile, data):
             approved_at=datetime.now(timezone.utc),
             approved_by="user",
             status="queued",
-            extra={},
+            extra={"specialty_id": specialty_id} if specialty_id else {},
         )
         db.session.add(job)
     db.session.flush()
@@ -387,6 +394,7 @@ def _assign_review_via_agent_job(task, profile, data):
             use_worktree=True,
             agent_profile_id=profile.id,
             role="review",
+            specialty_id=specialty_id,
         )
     except Exception as e:
         return jsonify({"error": f"Agent preparation failed: {str(e)}"}), 500

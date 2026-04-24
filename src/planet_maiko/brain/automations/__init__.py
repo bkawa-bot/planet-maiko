@@ -381,6 +381,10 @@ def _act_run_agent_job(automation, config, pupdate=None, context=None):
     ask_first = bool(config.get("ask_first", False))
     kind = config.get("kind") or "todo"
     title = config.get("title") or automation.name
+    # Optional specialty — extra context the agent picks up on top of
+    # the role protocol. Persisted on the job so the execute phase can
+    # hand it to prepare() when the worktree spins up.
+    specialty_id = (config.get("specialty_id") or "").strip() or None
     # Pick the right repo for the spawned agent's worktree. Priority:
     #   1. Explicit config.scope_repo (user overrode it)
     #   2. automation.scope_repo (hand-authored automations still work)
@@ -408,6 +412,8 @@ def _act_run_agent_job(automation, config, pupdate=None, context=None):
     chain_ids = ctx.get("pupdate_ids") or []
     if chain_ids:
         extra["triggered_by_pupdates"] = list(chain_ids)
+    if specialty_id:
+        extra["specialty_id"] = specialty_id
 
     # Ask-first path: no AgentJob is created yet. A kind=job_approval
     # Memo carries the full job spec in extra.job_spec, and
@@ -573,6 +579,7 @@ def _act_spawn_agent_job_from_pupdate(automation, config, pupdate=None, context=
     title = config.get("title") or f"{kind} triggered by {pupdate.type}"
     description = config.get("description") or pupdate.body or pupdate.title or ""
     priority = config.get("priority") or pupdate.priority or "normal"
+    specialty_id = (config.get("specialty_id") or "").strip() or None
 
     extra = {
         "from_automation": automation.id,
@@ -581,6 +588,8 @@ def _act_spawn_agent_job_from_pupdate(automation, config, pupdate=None, context=
     chain_ids = (context or {}).get("pupdate_ids") or []
     if chain_ids and chain_ids != [pupdate.id]:
         extra["triggered_by_pupdates"] = list(chain_ids)
+    if specialty_id:
+        extra["specialty_id"] = specialty_id
 
     # Ask-first → Memo, not a pending_approval AgentJob. Same
     # rationale as _act_run_agent_job: we don't mint jobs until the

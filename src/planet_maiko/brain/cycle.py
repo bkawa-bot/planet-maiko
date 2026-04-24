@@ -865,6 +865,11 @@ def _phase_execute_agent_jobs():
                     # failed if we can't resolve a path.
                     logger.warning(f"[cycle] agent_job {job.id}: no repo path, skipping")
                     continue
+                # Specialty picked at automation-config time or via ask-
+                # first approval lives on job.extra. prepare() safety-
+                # checks it against the agent's attached pool; runner
+                # silently drops unattached ids.
+                specialty_id = (job.extra or {}).get("specialty_id") or None
                 try:
                     prep = prepare(
                         task_id=job.id,
@@ -876,6 +881,7 @@ def _phase_execute_agent_jobs():
                         use_worktree=True,
                         agent_profile_id=job.agent_profile_id,
                         role=role,
+                        specialty_id=specialty_id,
                     )
                 except Exception as e:
                     logger.warning(f"[cycle] prepare failed for agent_job {job.id}: {e}")
@@ -1008,6 +1014,11 @@ def _phase_execute_agent_tasks():
                     # task retried via the cycle arrived with less context
                     # than the same task via the API.
                     full_prompt = build_task_prompt(task, role)
+                    # Specialty picked at assign time lives on
+                    # task.extra — pass through so the retry-via-cycle
+                    # path builds the same CLAUDE.md the fresh assign
+                    # would have.
+                    specialty_id = (task.extra or {}).get("specialty_id") or None
                     prep = prepare(
                         task_id=task.id,
                         task_title=task.title,
@@ -1017,6 +1028,7 @@ def _phase_execute_agent_tasks():
                         use_worktree=True,
                         agent_profile_id=task.assigned_agent_id,
                         role=role,
+                        specialty_id=specialty_id,
                     )
                 except Exception as e:
                     logger.warning(f"[cycle] prepare failed for {task.id}: {e}")

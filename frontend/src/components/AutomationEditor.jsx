@@ -100,11 +100,23 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
     repos: configuredRepos,
     sources: pupdateSources,
   };
+  // Select options for the specialty_id field — empty option means
+  // "no specialty, just the base role". Backed by the same skills
+  // fetch that powers agent_job_kinds.
+  const specialtyOptions = [
+    { value: "", label: "— base role only (no specialty) —" },
+    ...skills.map((s) => ({
+      value: s.id || s.name,
+      label: s.name || s.id,
+    })),
+  ];
+
   // Same pattern for select fields — `optionsKey: "agent_job_kinds"`
   // resolves against this map so the schema stays static while the
   // real option list reflects currently-registered skills.
   const optionsMap = {
     agent_job_kinds: agentJobKinds,
+    specialties: specialtyOptions,
   };
 
   // Scope is derived from the chosen condition kinds — the user never
@@ -747,6 +759,7 @@ const ACTION_SCHEMAS = {
       { name: "title", type: "string", label: "Title", placeholder: "Can template {service} etc." },
       { name: "description", type: "textarea", label: "Description / input", rows: 2, help: "skill input / what the agent should focus on" },
       { name: "scope_repo", type: "string", label: "Repo", placeholder: "org/repo or {service}", advanced: true, datalist: "repos" },
+      { name: "specialty_id", type: "select", label: "Specialty", optionsKey: "specialties", advanced: true, help: "Extra context layered onto the agent's role. Silently dropped if the resolved agent doesn't have it attached." },
       { name: "priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS, advanced: true },
     ],
   },
@@ -803,6 +816,7 @@ const ACTION_SCHEMAS = {
       { name: "ask_first", type: "bool", label: "Ask me before running" },
       { name: "title", type: "string", label: "Title override (optional)", advanced: true },
       { name: "description", type: "textarea", label: "Description override (optional)", rows: 2, advanced: true },
+      { name: "specialty_id", type: "select", label: "Specialty", optionsKey: "specialties", advanced: true, help: "Extra context layered onto the agent's role. Silently dropped if the resolved agent doesn't have it attached." },
       { name: "priority", type: "select", label: "Priority", options: PRIORITY_OPTIONS, advanced: true },
     ],
   },
