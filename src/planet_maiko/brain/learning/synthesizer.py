@@ -22,6 +22,44 @@ logger = logging.getLogger(__name__)
 # precise on each row; Claude skims when batches get large.
 BATCH_SIZE = 40
 
+# Per-signal hunk budget in chars. The LLM sees this much of the diff
+# each signal landed on so it can distinguish "verify with X" (drop)
+# from "validate input length at the auth boundary" (keep, specific).
+# 600 chars is ~12 lines of source — enough context for a single comment,
+# small enough that a 40-signal batch stays under 30k total.
+CODE_CONTEXT_PER_SIGNAL_CHARS = 600
+
+
+def _format_signal_block(signal):
+    """Render one signal as a labelled block for the synthesis prompt.
+
+    Shape (file path + code context are optional):
+
+      --- id=1234 ---
+      repo: org/auth-service
+      file: src/auth/handler.py
+      comment: Always validate input lengths at API boundaries
+      context:
+      ```
+      def handle_auth(req):
+          body = req.json
+          return validate(body)
+      ```
+    """
+    parts = [f"--- id={signal.id} ---"]
+    parts.append(f"repo: {signal.repo or 'unknown'}")
+    if signal.file_path:
+        parts.append(f"file: {signal.file_path}")
+    parts.append(f"comment: {(signal.text or '')[:300]}")
+    ctx = (signal.code_context or "").strip()
+    if ctx:
+        ctx = ctx[:CODE_CONTEXT_PER_SIGNAL_CHARS]
+        parts.append("context:")
+        parts.append("```")
+        parts.append(ctx)
+        parts.append("```")
+    return "\n".join(parts)
+
 
 def synthesize_unsynthesized_signals(max_signals=None, batch_size=BATCH_SIZE,
                                      on_progress=None, max_workers=3):
@@ -70,15 +108,20 @@ def synthesize_unsynthesized_signals(max_signals=None, batch_size=BATCH_SIZE,
     jobs = []
     for start in range(0, len(raw), batch_size):
         batch = raw[start:start + batch_size]
-        comments = [
-            f"id={s.id} [{s.repo or 'unknown'}] {s.text[:300]}"
-            for s in batch
-        ]
+        blocks = [_format_signal_block(s) for s in batch]
         prompt = f"""Synthesize these PR review comments into clean, actionable coding rules for an autonomous coding agent.
 
 The agent can read code, write code, run tests, and check patterns. It
 CANNOT talk to teammates, consult product managers, weigh business
 trade-offs, or make judgment calls that require human context.
+
+Each input below is a single PR-comment signal with metadata. When a
+`context:` code block is present, it's the diff hunk the comment was
+left on — use it to ground the rule in what the reviewer was actually
+looking at. A comment that reads "use the existing error handler" is
+a generic rule without context; with the hunk, you can see whether
+it's about null-handling vs retries vs logging and extract a sharper
+rule that names the concrete category.
 
 For each comment, decide:
 
@@ -88,7 +131,9 @@ verify or apply by reading or writing code on its own. Good examples:
   - "Prefer connection pooling over new connections in batch jobs"
   - "Don't swallow exceptions without logging them"
 If actionable, extract the core lesson as a short one-sentence rule
-and classify it.
+and classify it. Lean on the code context to make the rule specific
+enough to be generalizable — not so specific it only applies to the
+exact file shown.
 
 Mark actionable: false for anything requiring human judgment, team
 coordination, or external decision-making. Examples to drop:
@@ -105,8 +150,9 @@ it's NOT actionable for a coding agent — mark it false.
 
 Echo back every id exactly as given. Include one entry per input.
 
-Comments:
-{chr(10).join(comments)}
+Signals:
+
+{(chr(10) + chr(10)).join(blocks)}
 
 Categories: security, error_handling, testing, performance, api_design,
 architecture, null_safety, style, naming, docs, pattern, domain_knowledge
