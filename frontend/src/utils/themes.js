@@ -30,6 +30,42 @@ const WORLD_PANE_BG = {
   sunset:    "rgba(58, 34, 72, 0.52)",
 };
 
+// Theme keys that DON'T correspond to a real CSS var — they're just
+// inputs the designer assembles into one. Skipped when emitting the
+// CSS var block so we don't leak a bogus --topbar-stop-top-left rule.
+const VIRTUAL_KEYS = new Set([
+  "topbar_stop_top_left",
+  "topbar_stop_middle_left",
+  "topbar_stop_middle_right",
+  "topbar_stop_top_right",
+]);
+
+// Snap stop keys onto the four gradient positions used by the
+// topbar (135deg, top-left → bottom-right). Order matters.
+const TOPBAR_STOP_KEYS = [
+  "topbar_stop_top_left",
+  "topbar_stop_middle_left",
+  "topbar_stop_middle_right",
+  "topbar_stop_top_right",
+];
+
+// Compose a 135deg linear-gradient from whichever of the four stop
+// fields are set. Returns null when fewer than 2 stops are filled —
+// a single color isn't a gradient, and the caller should fall back
+// to the legacy topbar_gradient string in that case.
+function composeStopsGradient(colors) {
+  const filled = TOPBAR_STOP_KEYS
+    .map((key) => (colors[key] || "").trim())
+    .filter(Boolean);
+  if (filled.length < 2) return null;
+  const step = 100 / (filled.length - 1);
+  const parts = filled.map((color, i) => {
+    const pos = i === filled.length - 1 ? 100 : Math.round(i * step);
+    return `${color} ${pos}%`;
+  });
+  return `linear-gradient(135deg, ${parts.join(", ")})`;
+}
+
 // snake_case key -> kebab CSS var name
 const cssVarName = (key) => `--${key.replace(/_/g, "-")}`;
 
@@ -51,6 +87,17 @@ export function themeToCss(theme) {
   // of :root's night values (which made every theme look like a dark
   // theme regardless of its declared vibe).
   const effectiveColors = { ...colors };
+
+  // If the designer set any of the four topbar stop fields, compose
+  // those into the gradient — overrides any topbar_gradient string
+  // the theme had (including one the LLM generator wrote). Falling
+  // back to topbar_gradient when fewer than two stops are filled
+  // keeps LLM-generated themes working without any stops at all.
+  const composed = composeStopsGradient(colors);
+  if (composed) {
+    effectiveColors.topbar_gradient = composed;
+  }
+
   if (!effectiveColors.topbar_gradient && WORLD_TOPBAR_GRADIENT[world]) {
     effectiveColors.topbar_gradient = WORLD_TOPBAR_GRADIENT[world];
   }
@@ -59,6 +106,7 @@ export function themeToCss(theme) {
   }
 
   const varLines = Object.entries(effectiveColors)
+    .filter(([k]) => !VIRTUAL_KEYS.has(k))
     .map(([k, v]) => `  ${cssVarName(k)}: ${v};`)
     .join("\n");
 

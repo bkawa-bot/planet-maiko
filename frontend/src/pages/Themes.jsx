@@ -34,6 +34,14 @@ const COLOR_FIELDS = [
   { key: "green", label: "Green / success" },
   { key: "border", label: "Border" },
   { key: "border_subtle", label: "Border (subtle)" },
+  // Topbar gradient — four stops along a 135° sweep, left→right. Any
+  // combination of these overrides the theme's legacy topbar_gradient
+  // string (≥2 filled in → composed). Leave blank to inherit the
+  // world-background default.
+  { key: "topbar_stop_top_left",     label: "Nav gradient — top left",      hint: "≥2 stops filled compose a custom topbar gradient" },
+  { key: "topbar_stop_middle_left",  label: "Nav gradient — middle left" },
+  { key: "topbar_stop_middle_right", label: "Nav gradient — middle right" },
+  { key: "topbar_stop_top_right",    label: "Nav gradient — top right" },
 ];
 
 const WORLD_OPTIONS = [

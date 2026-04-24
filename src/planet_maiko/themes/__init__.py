@@ -52,6 +52,16 @@ ALLOWED_COLOR_KEYS = {
     # takes a full CSS linear-gradient() string; `pane_bg` takes an
     # rgba() value so the frosted blur keeps its transparency.
     "topbar_gradient", "pane_bg",
+    # Four individual color stops for the topbar gradient, surfaced as
+    # regular color pickers in the theme designer. When any are set the
+    # frontend composes a 135deg linear-gradient from them — overrides
+    # topbar_gradient. Naming is spatial (left→right along the bar):
+    # top_left at 0%, middle_left at 33%, middle_right at 66%, top_right
+    # at 100%. Empty fields are dropped from the composed gradient.
+    "topbar_stop_top_left",
+    "topbar_stop_middle_left",
+    "topbar_stop_middle_right",
+    "topbar_stop_top_right",
 }
 
 # Hill SVGs the user can pick for the body background. "none" means a
