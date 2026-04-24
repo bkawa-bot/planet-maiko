@@ -57,16 +57,20 @@ FLAVOR_TEXTS = [
 
 
 def create_profile(agent_id, display_name=None, avatar=None,
-                   role="coding", scope_repo=None, instructions=None):
+                   role="coding", scope_repo=None, instructions=None,
+                   specialty_ids=None):
     """Create a new agent profile with a random name and avatar.
 
     Args:
         agent_id: primary key for the profile.
         display_name: optional; if omitted, a random unused name is picked.
         avatar: optional; random if omitted.
-        role: "coding" | "review" | "investigation" (default "coding").
+        role: "coding" | "review" | "investigation" | "cartographer".
         scope_repo: optional single-repo scope. null = global.
         instructions: optional markdown injected into every session.
+        specialty_ids: optional list of CustomSkill IDs attached to this
+            agent. A run can pick one of these to layer extra context
+            on top of the role protocol.
     """
     existing = db.session.get(AgentProfile, agent_id)
     if existing:
@@ -90,6 +94,7 @@ def create_profile(agent_id, display_name=None, avatar=None,
         role=role,
         scope_repo=scope_repo,
         instructions=instructions,
+        specialty_ids=list(specialty_ids or []),
     )
     db.session.add(profile)
     db.session.commit()

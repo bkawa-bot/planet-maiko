@@ -26,6 +26,13 @@ class AgentProfile(db.Model):
     # the agent. Analogous to AGENTS.md / CLAUDE.md but per-profile.
     instructions = db.Column(db.Text, nullable=True)
 
+    # Attached specialties (CustomSkill IDs). Specialties are optional
+    # domain-context chunks the agent can pick up per run. Role drives
+    # runtime behavior (dispatch, protocol template). Specialty picked
+    # for a given run adds extra prompt into CLAUDE.md on top of the
+    # role protocol. No specialty picked → base role context only.
+    specialty_ids = db.Column(db.JSON, default=list)
+
     # Stats
     tasks_completed = db.Column(db.Integer, default=0)
     tasks_failed = db.Column(db.Integer, default=0)
@@ -62,6 +69,7 @@ class AgentProfile(db.Model):
             "role": self.role or "coding",
             "scope_repo": self.scope_repo,
             "instructions": self.instructions or "",
+            "specialty_ids": self.specialty_ids or [],
             "tasks_completed": self.tasks_completed,
             "tasks_failed": self.tasks_failed,
             "prs_merged": self.prs_merged,

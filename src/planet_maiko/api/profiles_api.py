@@ -101,21 +101,42 @@ def get_profile(profile_id):
     return jsonify(profile.to_dict())
 
 
+VALID_ROLES = ("coding", "review", "investigation", "cartographer")
+
+
+def _sanitize_specialty_ids(raw):
+    """Drop anything that isn't a known CustomSkill ID so the list never
+    holds dead references. Returns a clean list (may be empty)."""
+    if not raw:
+        return []
+    if not isinstance(raw, (list, tuple)):
+        return []
+    from planet_maiko.models.custom_skill import CustomSkill
+    ids = [str(x).strip() for x in raw if str(x).strip()]
+    if not ids:
+        return []
+    existing = {s.id for s in CustomSkill.query.filter(CustomSkill.id.in_(ids)).all()}
+    return [i for i in ids if i in existing]
+
+
 @profiles_bp.route("/profiles", methods=["POST"])
 def create_agent_profile():
     """Create a new agent profile (the arrival experience).
 
     Body fields (all optional):
       agent_id, display_name, avatar — cosmetic identity
-      role          — "coding" (default) | "review" | "investigation"
+      role          — "coding" (default) | "review" | "investigation" |
+                      "cartographer". Drives runtime dispatch.
       scope_repo    — single-repo scope, e.g. "org/auth-service". Null
                       = global (e.g. a Detective for cross-repo work).
       instructions  — markdown, injected into every session this agent
                       runs. Equivalent to a per-agent AGENTS.md fragment.
+      specialty_ids — list of CustomSkill IDs attached to this agent.
+                      A run can pick one; no pick = base role only.
     """
     data = request.get_json(silent=True) or {}
     role = data.get("role") or "coding"
-    if role not in ("coding", "review", "investigation"):
+    if role not in VALID_ROLES:
         return jsonify({"error": f"invalid role: {role}"}), 400
     profile = create_profile(
         agent_id=data.get("agent_id", f"agent-{__import__('time').time_ns()}"),
@@ -124,13 +145,14 @@ def create_agent_profile():
         role=role,
         scope_repo=(data.get("scope_repo") or None),
         instructions=(data.get("instructions") or None),
+        specialty_ids=_sanitize_specialty_ids(data.get("specialty_ids")),
     )
     return jsonify(profile.to_dict()), 201
 
 
 @profiles_bp.route("/profiles/<profile_id>", methods=["PATCH"])
 def update_profile(profile_id):
-    """Update agent profile (rename, change avatar, role, scope, instructions)."""
+    """Update agent profile (rename, change avatar, role, scope, instructions, specialties)."""
     profile = db.get_or_404(AgentProfile, profile_id)
     data = request.get_json()
     if "display_name" in data:
@@ -139,13 +161,15 @@ def update_profile(profile_id):
         profile.avatar = data["avatar"]
     if "flavor_text" in data:
         profile.flavor_text = data["flavor_text"]
-    if "role" in data and data["role"] in ("coding", "review", "investigation"):
+    if "role" in data and data["role"] in VALID_ROLES:
         profile.role = data["role"]
     if "scope_repo" in data:
         # Empty string → null (global scope).
         profile.scope_repo = data["scope_repo"] or None
     if "instructions" in data:
         profile.instructions = data["instructions"] or None
+    if "specialty_ids" in data:
+        profile.specialty_ids = _sanitize_specialty_ids(data["specialty_ids"])
     db.session.commit()
     return jsonify(profile.to_dict())
 
