@@ -67,19 +67,47 @@ def update_project(project_id):
 
 @projects_bp.route("/projects/<project_id>/status", methods=["POST"])
 def update_status(project_id):
-    """Update project status (planning, approved, active, paused, done)."""
+    """Update project status (planning, approved, active, paused, done, cancelled).
+
+    Moving a project to a terminal state (done / cancelled) cascades:
+    any still-open task in the project is cancelled so it doesn't keep
+    showing up on the Tasks page after the parent project is closed.
+    Tasks already done are left alone.
+    """
+    from planet_maiko.models.task import Task
+
     project = db.get_or_404(Project, project_id)
     data = request.get_json()
 
-    valid_statuses = {"planning", "approved", "active", "paused", "done"}
+    valid_statuses = {"planning", "approved", "active", "paused", "done", "cancelled"}
     new_status = data.get("status")
     if new_status not in valid_statuses:
         return jsonify({"error": f"Invalid status. Must be one of: {', '.join(sorted(valid_statuses))}"}), 400
 
     project.status = new_status
     project.updated_at = datetime.now(timezone.utc)
+
+    # Cascade: tasks tied to a closed project shouldn't linger in the
+    # active list. Only reaches tasks that aren't already in a terminal
+    # status (done / cancelled stay as-is so history is preserved).
+    cascaded = 0
+    if new_status in ("done", "cancelled"):
+        open_tasks = (
+            Task.query
+            .filter(Task.project_id == project.id)
+            .filter(~Task.status.in_(("done", "cancelled")))
+            .all()
+        )
+        for t in open_tasks:
+            t.status = "cancelled"
+            t.updated_at = datetime.now(timezone.utc)
+            cascaded += 1
+
     db.session.commit()
-    return jsonify(project.to_dict())
+    result = project.to_dict()
+    if cascaded:
+        result["cascaded_tasks"] = cascaded
+    return jsonify(result)
 
 
 @projects_bp.route("/projects/<project_id>/generate-plan", methods=["POST"])

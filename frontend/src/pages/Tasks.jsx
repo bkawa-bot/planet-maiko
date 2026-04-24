@@ -237,8 +237,11 @@ export default function Tasks() {
         </div>
       ) : (
         <>
-          {/* Project groups */}
-          {projects.map((project) => {
+          {/* Project groups — skip terminal-state projects. Backend
+              cascades their tasks to cancelled when a project closes,
+              but we also hide the group itself so a quick "I marked
+              that project done" doesn't leave an empty card behind. */}
+          {projects.filter((p) => p.status !== "done" && p.status !== "cancelled").map((project) => {
             const pts = projectTasks[project.id] || [];
             const done = pts.filter((t) => t.status === "done").length;
             const collapsed = collapsedGroups[project.id];

@@ -152,16 +152,32 @@ def _memos_context():
 
 
 def _tasks_context():
-    """Active tasks (new / in_progress / blocked) for the overview."""
+    """Active tasks (new / in_progress / blocked) for the overview.
+
+    Skips tasks whose parent project is in a terminal state — the
+    cascade in projects.py already cancels their status, but a new
+    task created against an already-closed project would otherwise
+    still surface here.
+    """
     from planet_maiko.models.task import Task
+    from planet_maiko.models.project import Project
+
+    closed_project_ids = {
+        p.id for p in Project.query
+        .filter(Project.status.in_(("done", "cancelled")))
+        .all()
+    }
 
     rows = (
         Task.query
         .filter(Task.status.in_(("new", "in_progress", "blocked")))
         .order_by(Task.updated_at.desc())
-        .limit(MAX_TASKS)
+        .limit(MAX_TASKS * 2)  # overshoot; filter below may drop some
         .all()
     )
+    rows = [t for t in rows if not (t.project_id and t.project_id in closed_project_ids)]
+    rows = rows[:MAX_TASKS]
+
     return [
         {
             "id": t.id,
