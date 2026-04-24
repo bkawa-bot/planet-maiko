@@ -68,7 +68,7 @@
        'Geo'            — clean display sans, less pixel-y
      Keep a sensible serif fallback so missed font-loads still feel
      warm rather than collapsing to a system default. */
-  --font-greeting: 'Pixelify Sans', 'Fraunces', Georgia, serif;
+  --font-greeting: 'Geo', 'Fraunces', Georgia, serif;
   --radius: 12px;
   --radius-sm: 8px;
   --radius-xs: 6px;
