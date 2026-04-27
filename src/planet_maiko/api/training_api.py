@@ -53,17 +53,20 @@ def dataset_stats():
 def train_agent_endpoint():
     """Kick off a LoRA training job asynchronously.
 
-    Training runs 15-30 min of mlx-lm subprocess work; blocking the
-    HTTP request for that long always timed out. Now we validate
-    requirements + agent_id synchronously, pre-create the adapter
-    directory with `progress.json: {"status": "preparing"}` so the
-    UI can poll immediately, then hand off the heavy work to a
-    daemon thread. Returns 202 with the adapter_name so the client
-    confirms which job it started.
+    LoRAs are scoped per-repo (or "global" when no repo is given) —
+    there is no longer a 1:1 between agents and adapters. Body fields:
+      - repo: optional "org/name". Omitted → adapter name prefixed
+        "lora-global-…" and treated as the fallback for any repo
+        without a more specific adapter.
+      - dataset_path: optional explicit JSONL dataset. Omitted → the
+        trainer auto-picks a recent dataset (preferring repo-specific
+        files when `repo` is set).
+      - config: optional training hyperparameter overrides.
 
-    The existing /training/progress endpoint (which reads the latest
-    adapter's progress.json) is unchanged — this just decouples the
-    HTTP request lifecycle from the training run.
+    Training takes 15-30 min, so we seed progress.json synchronously
+    and hand the work to a daemon thread; the response is 202 with
+    the adapter_name so the client knows which job it started.
+    /training/progress reads the latest adapter's progress.json.
     """
     import os
     import threading as _threading
@@ -73,9 +76,8 @@ def train_agent_endpoint():
     from planet_maiko.paths import data_dir
 
     data = request.get_json(silent=True) or {}
-    agent_id = data.get("agent_profile_id")
-    if not agent_id:
-        return jsonify({"error": "agent_profile_id required"}), 400
+    repo = (data.get("repo") or "").strip() or None
+    safe_repo = repo.replace("/", "--") if repo else "global"
 
     reqs = check_requirements()
     if not reqs["ready"]:
@@ -85,13 +87,10 @@ def train_agent_endpoint():
             "details": reqs,
         }), 503
 
-    # Pre-create the adapter dir + initial progress.json so the poll
-    # picks up this specific job immediately (rather than a stale
-    # adapter from a previous run).
     models_dir = os.path.join(data_dir(), "models")
     os.makedirs(models_dir, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    adapter_name = f"{agent_id}-{timestamp}"
+    adapter_name = f"lora-{safe_repo}-{timestamp}"
     adapter_path = os.path.join(models_dir, adapter_name)
     os.makedirs(adapter_path, exist_ok=True)
     progress_path = os.path.join(adapter_path, "progress.json")
@@ -100,7 +99,8 @@ def train_agent_endpoint():
     with open(progress_path, "w", encoding="utf-8") as f:
         json.dump({
             "status": "preparing",
-            "agent_profile_id": agent_id,
+            "repo": repo,
+            "scope": safe_repo,
             "adapter_name": adapter_name,
             "started_at": started_at,
             "iteration": 0,
@@ -109,15 +109,17 @@ def train_agent_endpoint():
         }, f)
 
     app = current_app._get_current_object()
+    dataset_path = data.get("dataset_path")
+    config = data.get("config")
 
     def _run():
         with app.app_context():
             try:
                 result = train_agent(
-                    agent_profile_id=agent_id,
-                    dataset_path=data.get("dataset_path"),
-                    repo=data.get("repo"),
-                    config=data.get("config"),
+                    agent_profile_id=None,
+                    dataset_path=dataset_path,
+                    repo=repo,
+                    config=config,
                     adapter_path=adapter_path,
                 )
                 if not result.get("success"):
@@ -149,6 +151,7 @@ def train_agent_endpoint():
         "status": "started",
         "adapter_name": adapter_name,
         "adapter_path": adapter_path,
+        "scope": safe_repo,
     }), 202
 
 

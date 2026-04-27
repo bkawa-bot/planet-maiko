@@ -56,18 +56,24 @@ def get_backend():
     return None
 
 
-def train_agent(agent_profile_id, dataset_path=None, repo=None, config=None, adapter_path=None):
-    """Train a LoRA adapter for an agent.
+def train_agent(agent_profile_id=None, dataset_path=None, repo=None, config=None, adapter_path=None):
+    """Train a LoRA adapter scoped to a repo (or "global" by default).
 
     Args:
-        agent_profile_id: the agent to train
-        dataset_path: path to JSONL training data (auto-selects latest if None)
-        repo: optional repo filter for training data
-        config: training config overrides
-        adapter_path: override the output adapter directory. If provided,
-            the API layer has typically pre-created the dir and seeded
-            progress.json so the UI can poll immediately; if None, a
-            timestamped path under data_dir/models/ is generated.
+        agent_profile_id: optional. When provided, the adapter path is
+            also written to that AgentProfile.extra (legacy assign-on-
+            train flow used by the CLI). The HTTP API leaves this None
+            and assigns later via /training/assign-adapter.
+        dataset_path: explicit JSONL dataset (auto-selects latest if None,
+            preferring repo-specific files when `repo` is set).
+        repo: optional "org/name" — used for auto-selecting a
+            repo-specific dataset and for naming the output adapter
+            when adapter_path isn't provided.
+        config: training hyperparameter overrides.
+        adapter_path: caller-provided output dir. The HTTP API pre-
+            creates this and seeds progress.json so the UI can poll
+            immediately; CLI callers leave it None and we generate a
+            timestamped path under data_dir/models/.
 
     Returns:
         dict with {adapter_path, examples, epochs, loss, duration_seconds}
@@ -77,7 +83,8 @@ def train_agent(agent_profile_id, dataset_path=None, repo=None, config=None, ada
     train_config = {**DEFAULT_TRAINING_CONFIG, **(config or {})}
     backend = get_backend()
 
-    logger.info(f"[lora-train] Training agent {agent_profile_id}")
+    scope_label = agent_profile_id or (repo or "global")
+    logger.info(f"[lora-train] Training LoRA for {scope_label}")
     logger.info(f"[lora-train] Backend: {backend or 'NONE — install mlx or pytorch'}")
     logger.info(f"[lora-train] Config: rank={train_config['lora_rank']}, epochs={train_config['epochs']}")
 
@@ -126,7 +133,11 @@ def train_agent(agent_profile_id, dataset_path=None, repo=None, config=None, ada
         models_dir = os.path.join(data_dir(), "models")
         os.makedirs(models_dir, exist_ok=True)
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-        adapter_name = f"{agent_profile_id}-{timestamp}"
+        if agent_profile_id:
+            adapter_name = f"{agent_profile_id}-{timestamp}"
+        else:
+            safe_repo = repo.replace("/", "--") if repo else "global"
+            adapter_name = f"lora-{safe_repo}-{timestamp}"
         adapter_path = os.path.join(models_dir, adapter_name)
     else:
         os.makedirs(adapter_path, exist_ok=True)
@@ -146,25 +157,26 @@ def train_agent(agent_profile_id, dataset_path=None, repo=None, config=None, ada
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
 
     if result.get("success"):
-        # Update agent profile
-        try:
-            from planet_maiko.app import create_app
-            # Only update if we're in an app context
-            from flask import current_app
-            from planet_maiko.database import db
-            from planet_maiko.models.agent_profile import AgentProfile
-            profile = db.session.get(AgentProfile, agent_profile_id)
-            if profile:
-                profile.extra = {
-                    **(profile.extra or {}),
-                    "adapter_path": adapter_path,
-                    "trained_at": datetime.now(timezone.utc).isoformat(),
-                    "trained_on_examples": example_count,
-                }
-                db.session.commit()
-                logger.info(f"[lora-train] Updated profile {agent_profile_id} with adapter path")
-        except Exception as e:
-            logger.debug(f"[lora-train] Could not update profile: {e}")
+        # Legacy: when called with an explicit agent_profile_id (CLI),
+        # write the adapter path back to that profile so the agent
+        # picks it up. Repo-scoped HTTP training skips this — the UI
+        # assigns adapters separately via /training/assign-adapter.
+        if agent_profile_id:
+            try:
+                from planet_maiko.database import db
+                from planet_maiko.models.agent_profile import AgentProfile
+                profile = db.session.get(AgentProfile, agent_profile_id)
+                if profile:
+                    profile.extra = {
+                        **(profile.extra or {}),
+                        "adapter_path": adapter_path,
+                        "trained_at": datetime.now(timezone.utc).isoformat(),
+                        "trained_on_examples": example_count,
+                    }
+                    db.session.commit()
+                    logger.info(f"[lora-train] Updated profile {agent_profile_id} with adapter path")
+            except Exception as e:
+                logger.debug(f"[lora-train] Could not update profile: {e}")
 
         result["adapter_path"] = adapter_path
         result["examples"] = example_count

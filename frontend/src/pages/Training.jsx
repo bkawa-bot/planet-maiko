@@ -18,6 +18,7 @@ export default function Training() {
   const [ruleGenState, setRuleGenState] = useState(null);
   const [datasets, setDatasets] = useState([]);
   const [showDatasets, setShowDatasets] = useState(false);
+  const [selectedDataset, setSelectedDataset] = useState("");
   const [progress, setProgress] = useState(null);
   const [adapters, setAdapters] = useState([]);
   const [assignAgent, setAssignAgent] = useState("");
@@ -133,7 +134,10 @@ export default function Training() {
     setConfirmTraining(false);
     showToast("Training LoRA adapter — this runs in the background (~20-30 min).", "normal");
     try {
-      const result = await api.trainAgent({});
+      const result = await api.trainAgent({
+        repo: filterRepo || undefined,
+        dataset_path: selectedDataset || undefined,
+      });
       if (result?.status === "started") {
         // Async path — the polling effect above tracks completion.
         // Nothing else to do here; running stays true until progress
@@ -338,10 +342,41 @@ export default function Training() {
         )}
       </div>
 
-      {/* Step 2: Train LoRA Model (no agent selection needed) */}
+      {/* Step 2: Train LoRA Model (scoped to repo, or "global" by default) */}
       <div className="training-dataset-section">
         <div className="training-dataset-header">
           <GraduationCap size={14} /> Step 2 — Train LoRA Model
+        </div>
+
+        <div className="training-row">
+          <label className="training-label">Train LoRA for:</label>
+          <select
+            className="training-select"
+            value={filterRepo}
+            onChange={(e) => setFilterRepo(e.target.value)}
+          >
+            <option value="">Global (default fallback)</option>
+            {coverage?.available_repos?.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="training-row">
+          <label className="training-label">Dataset:</label>
+          <select
+            className="training-select"
+            value={selectedDataset}
+            onChange={(e) => setSelectedDataset(e.target.value)}
+            disabled={!datasets.length}
+          >
+            <option value="">Auto-pick (latest matching scope)</option>
+            {datasets.map((d) => (
+              <option key={d.path} value={d.path}>
+                {d.filename} — {d.examples} examples
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="training-row">
@@ -442,8 +477,18 @@ export default function Training() {
         title="Training is resource-intensive"
         body={<>
           <p>
-            This fine-tunes a LoRA adapter on the combined dataset
-            ({totalDatasetExamples.toLocaleString()} examples). Runs locally — expect heavy GPU/CPU use for <strong>20-30 minutes</strong> and no interruption.
+            This fine-tunes a LoRA adapter for{" "}
+            <strong>{filterRepo || "Global (default fallback)"}</strong>{" "}
+            on{" "}
+            <strong>
+              {selectedDataset
+                ? (datasets.find((d) => d.path === selectedDataset)?.filename || "the selected dataset")
+                : "the latest matching dataset"}
+            </strong>
+            {selectedDataset
+              ? ` (${(datasets.find((d) => d.path === selectedDataset)?.examples || 0).toLocaleString()} examples)`
+              : ""}
+            . Runs locally — expect heavy GPU/CPU use for <strong>20-30 minutes</strong> and no interruption.
           </p>
           <p>The server stays responsive, but your machine will get warm.</p>
           <span className="confirm-estimate">~20-30 min · local GPU/CPU · no API cost</span>

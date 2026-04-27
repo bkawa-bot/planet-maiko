@@ -17,13 +17,18 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_lora_for_repo(repo):
-    """Return the adapter path for a repo, or None if none configured.
+    """Return the adapter path for a repo, falling back to the global
+    LoRA when no repo-specific one exists.
 
-    Reads config.lora.models_by_repo — a flat dict of
-    "org/repo-name" → adapter path. Used by the lora_check endpoint so
-    the agent doesn't need to know or care which adapter to load;
-    it's implicit from the repo it's scoped to. The path is
-    os.path.expanduser-ed so ~ works in the config file.
+    Resolution order:
+      1. config.lora.models_by_repo[repo] — explicit YAML mapping.
+      2. data_dir/models/lora-{safe_repo}-* — most recent adapter
+         (with weights) trained for this repo via the training UI.
+      3. config.lora.models_by_repo["global"] — explicit global override.
+      4. data_dir/models/lora-global-* — most recent global adapter.
+
+    Returns None when none of the above exist. Paths from config are
+    os.path.expanduser-ed so ~ works in config files.
     """
     if not repo:
         return None
@@ -31,12 +36,47 @@ def resolve_lora_for_repo(repo):
         from planet_maiko.config import load_config
         mapping = (load_config().get("lora", {}) or {}).get("models_by_repo", {}) or {}
     except Exception:
+        mapping = {}
+
+    configured = mapping.get(repo)
+    if configured:
+        configured = os.path.expanduser(configured)
+        if os.path.exists(configured):
+            return configured
+
+    safe_repo = repo.replace("/", "--")
+    found = _find_latest_adapter(prefix=f"lora-{safe_repo}-")
+    if found:
+        return found
+
+    global_configured = mapping.get("global")
+    if global_configured:
+        global_configured = os.path.expanduser(global_configured)
+        if os.path.exists(global_configured):
+            return global_configured
+
+    return _find_latest_adapter(prefix="lora-global-")
+
+
+def _find_latest_adapter(prefix):
+    """Return the path of the most recent adapter directory matching
+    `prefix` that has trained weights, or None.
+
+    Adapters are timestamped (UTC, sortable), so a reverse alpha sort
+    gives us newest-first without parsing dates.
+    """
+    from planet_maiko.paths import data_dir
+
+    models_dir = os.path.join(data_dir(), "models")
+    if not os.path.isdir(models_dir):
         return None
-    path = mapping.get(repo)
-    if not path:
-        return None
-    path = os.path.expanduser(path)
-    return path if os.path.exists(path) else None
+    for name in sorted(os.listdir(models_dir), reverse=True):
+        if not name.startswith(prefix):
+            continue
+        path = os.path.join(models_dir, name)
+        if os.path.isfile(os.path.join(path, "adapters.safetensors")):
+            return path
+    return None
 
 
 SPLIT_SEED = 42
