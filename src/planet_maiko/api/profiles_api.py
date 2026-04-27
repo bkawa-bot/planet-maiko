@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 from planet_maiko.database import db, iso_utc
 from planet_maiko.models.agent_profile import AgentProfile
-from planet_maiko.agents.profiles import create_profile, AVATARS
+from planet_maiko.agents.profiles import create_profile
 
 profiles_bp = Blueprint("profiles", __name__)
 
@@ -195,7 +195,14 @@ def unarchive_profile(profile_id):
     return jsonify(profile.to_dict())
 
 
-@profiles_bp.route("/profiles/avatars", methods=["GET"])
-def list_avatars():
-    """List available avatars."""
-    return jsonify(AVATARS)
+@profiles_bp.route("/cards", methods=["GET"])
+def list_cards():
+    """Return all personality card archetypes.
+
+    Frontend uses this to resolve agent.avatar (= card_id) into the
+    full card metadata for rendering avatars and the baseball-card
+    profile modal. Cached in-process; restart to pick up changes to
+    cards.yaml.
+    """
+    from planet_maiko.agents.cards import load_cards
+    return jsonify(load_cards())

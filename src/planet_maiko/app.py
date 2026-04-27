@@ -413,6 +413,11 @@ def create_app(start_scheduler=False):
             ensure_plugin_default_automations()
         except Exception as e:
             logger.warning(f"[startup] Plugin automation seeding skipped: {e}")
+        try:
+            from planet_maiko.agents.cards import backfill_card_ids
+            backfill_card_ids()
+        except Exception as e:
+            logger.warning(f"[startup] Card-id backfill skipped: {e}")
 
         # Wake-registry cleanup: the previous run may have crashed with
         # agents flagged "working" and with session-registry entries

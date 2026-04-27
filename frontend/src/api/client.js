@@ -428,7 +428,7 @@ export const api = {
     request(`/profiles/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   archiveProfile: (id) => request(`/profiles/${id}/archive`, { method: "POST" }),
   unarchiveProfile: (id) => request(`/profiles/${id}/unarchive`, { method: "POST" }),
-  getAvatars: () => request("/profiles/avatars"),
+  getCards: () => request("/cards"),
 
   // Agent assignment
   assignAgent: (data) =>

@@ -21,13 +21,6 @@ NAMES = [
     "Xia", "Zero", "Jams", "Mazino",
 ]
 
-AVATARS = [
-    "shiba", "corgi", "husky", "poodle", "golden", "beagle",
-    "dalmatian", "samoyed", "akita", "pomeranian",
-    "calico_cat", "tabby_cat", "black_cat",
-    "bunny", "hamster", "fox",
-]
-
 TECH_SUFFIXES = [
     " Bot", ".flow", ".wave", ".exe", "core",
     ".io", " TV", " Drive", " Disk", ".computer",
@@ -38,22 +31,6 @@ TECH_SUFFIXES = [
 # user can tell at a glance that an agent is still arriving vs
 # fully settled. Frontend can style this text specially if it wants.
 ARRIVING_PLACEHOLDER = "Arriving…"
-
-
-FLAVOR_TEXTS = [
-    "Loves debugging. Afraid of CSS.",
-    "Is not afraid to test in prod.",
-    "Believes every problem is a data structure problem.",
-    "Writes tests first, asks questions later.",
-    "Has strong opinions about bracket placement.",
-    "Thinks documentation is a love language.",
-    "Happiest when all tests are green.",
-    "Secretly enjoys reading stack traces.",
-    "Believes in the power of a good variable name.",
-    "Will pair program with anyone who has snacks.",
-    "Thinks merge conflicts build character.",
-    "Dreams in binary.",
-]
 
 
 def create_profile(agent_id, display_name=None, avatar=None,
@@ -86,11 +63,24 @@ def create_profile(agent_id, display_name=None, avatar=None,
     if not display_name:
         display_name = ARRIVING_PLACEHOLDER
 
+    # Roll a personality card unless the caller pinned an avatar.
+    # The card's id becomes profile.avatar (so existing render paths
+    # keep working) and its tagline seeds flavor_text — the LLM
+    # bio-gen replaces the tagline with the agent's own self-chosen
+    # one a few seconds later, but the card tagline is a coherent
+    # fallback if bio-gen fails.
+    from planet_maiko.agents.cards import roll_card, get_card
+    card = get_card(avatar) if avatar else roll_card()
+    if not card:
+        card = roll_card()  # avatar unrecognized → still roll
+    card_id = card["id"] if card else (avatar or "wandering-fox")
+    flavor_text = card["tagline"] if card else ""
+
     profile = AgentProfile(
         id=agent_id,
         display_name=display_name,
-        avatar=avatar or random.choice(AVATARS),
-        flavor_text=random.choice(FLAVOR_TEXTS),
+        avatar=card_id,
+        flavor_text=flavor_text,
         role=role,
         scope_repo=scope_repo,
         instructions=instructions,
@@ -117,7 +107,7 @@ def create_profile(agent_id, display_name=None, avatar=None,
 # ---------------------------------------------------------------------------
 
 _BIO_PROMPT = """You are a new AI engineering agent joining someone's "pack" of specialists in a tool called Planet Maiko. Introduce yourself: name, a one-line tagline, and a short bio.
-
+{archetype_block}
 ## Pick your own name
 
 First name vibe: obscure, esoteric, funny, alien, sci-fi, mystic, supernatural. Think Earthbound enemy names, Ghibli spirits, fighting-game roster, old cyberpunk OS, anime dub side characters, Murakami cats. Cozy-weird. Banned: Helper, Assistant, Coder, Agent, AI, or anything that sounds like a productivity-startup mascot. Plain English adjectives (Clever, Swift, Nova) are also banned.
@@ -308,11 +298,27 @@ def _schedule_bio_generation(agent_id, can_rename=True):
                         pass
                 if role_description is None:
                     role_description = "you work on whatever comes in"
+
+                from planet_maiko.agents.cards import get_card
+                card = get_card(profile.avatar)
+                if card:
+                    archetype_block = (
+                        "\n## Your archetype\n\n"
+                        f"You're {card['display_name']} — {card['tagline']}.\n\n"
+                        f"{card['bio_seed'].strip()}\n\n"
+                        "Let this archetype guide your name palette, tone, "
+                        "and the small preferences you reveal. Don't name "
+                        "the archetype explicitly — let it shape the vibe.\n"
+                    )
+                else:
+                    archetype_block = ""
+
                 prompt = _BIO_PROMPT.format(
                     role=role,
                     role_description=role_description,
                     scope=scope,
                     existing_names=_existing_agent_names(),
+                    archetype_block=archetype_block,
                 )
                 # Claude Code needs real wall time to cold-start the
                 # subprocess, parse the prompt, and emit the JSON.
@@ -373,11 +379,11 @@ def _schedule_bio_generation(agent_id, can_rename=True):
                         renamed_to = name
 
                 profile.instructions = bio
-                # LLM-authored tagline replaces the random FLAVOR_TEXTS
-                # pool pick so the card matches the bio's voice instead
-                # of a generic "Dreams in binary." If the LLM didn't
-                # emit one (older payload or parse fallback), keep the
-                # pool pick that was set at create_profile time.
+                # LLM-authored tagline replaces the card's archetype
+                # tagline so the card surface matches the agent's own
+                # voice. If the LLM didn't emit one (older payload or
+                # parse fallback), the card tagline set at
+                # create_profile time stays put as a coherent fallback.
                 if tagline:
                     profile.flavor_text = tagline
                 db.session.commit()
