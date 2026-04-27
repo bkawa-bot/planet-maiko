@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import {
-  Bot, Brain, CheckSquare, ChevronDown, ChevronRight, Plus,
+  Brain, CheckSquare, ChevronDown, ChevronRight, Plus,
   Target, X, Pencil, Save, Code2, Eye, Search, Map, Loader, Compass, Pause, Play,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
 import { formatRepo, useDefaultOrg, useConfiguredRepos } from "../../utils/repo";
 import { relativeTime } from "../../utils/dates";
+import CardAvatar from "../CardAvatar";
+import CardArt from "../CardArt";
+import { useCards } from "../../hooks/useCards";
 
 const ROLE_META = {
   coding: { icon: Code2, label: "Coder", color: "var(--pink)" },
@@ -101,7 +104,7 @@ function ProfileCard({ profile, onOpen }) {
       className={`profile-card-mini ${profile.archived ? "archived" : ""}`}
       onClick={onOpen}
     >
-      <div className="profile-card-avatar"><Bot size={16} /></div>
+      <div className="profile-card-avatar"><CardAvatar agent={profile} size="md" /></div>
       <div className="profile-card-body">
         <div className="profile-card-name">
           <span
@@ -194,6 +197,8 @@ function ProfileDetailModal({
   const role = profile.role || "coding";
   const meta = ROLE_META[role] || ROLE_META.coding;
   const RoleIcon = meta.icon;
+  const cards = useCards();
+  const card = cards.find((c) => c.id === profile.avatar);
 
   // Profile card's Automations section shows rows tied to this profile
   // (agent_profile_id matches) plus role-wide ones (agent_profile_id null).
@@ -223,8 +228,21 @@ function ProfileDetailModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="profile-detail-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <div className="profile-modal-avatar"><Bot size={22} /></div>
+        <button className="btn btn-sm modal-close-btn profile-modal-close-floating" onClick={onClose}>
+          <X size={14} />
+        </button>
+
+        <div className="profile-modal-baseball">
+          <CardArt cardId={profile.avatar} className="profile-modal-card-art" />
+          {card && (
+            <div className="profile-modal-archetype">
+              <div className="profile-modal-archetype-name">{card.display_name}</div>
+              <div className="profile-modal-archetype-tagline">{card.tagline}</div>
+            </div>
+          )}
+        </div>
+
+        <div className="modal-header profile-modal-identity-row">
           <div className="profile-modal-title">
             <div className="profile-modal-name">
               <span className={`agent-state-dot state-${profile.state || "idle"}`} />
@@ -239,9 +257,6 @@ function ProfileDetailModal({
               {profile.archived && <span className="profile-modal-chip profile-modal-chip-archived">archived</span>}
             </div>
           </div>
-          <button className="btn btn-sm modal-close-btn" onClick={onClose}>
-            <X size={14} />
-          </button>
         </div>
 
         <div className="modal-body profile-modal-body">

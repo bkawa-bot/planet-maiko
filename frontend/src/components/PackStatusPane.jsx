@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Bot, ClipboardCheck, FileText, HelpCircle,
+  ClipboardCheck, FileText, HelpCircle,
   Lightbulb, Loader, Users,
 } from "lucide-react";
 import { api } from "../api/client";
 import { relativeTime } from "../utils/dates";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import PackAskBox from "./PackAskBox";
+import CardAvatar from "./CardAvatar";
 import "./PackStatusPane.css";
 
 /**
@@ -164,7 +165,7 @@ function PackRow({ row }) {
   return (
     <Link to={primaryTo} className={`pack-row ${request ? `has-request ${toneClass}` : ""}`}>
       <div className="pack-row-avatar">
-        <Bot size={16} />
+        <CardAvatar agent={profile || row} size="sm" />
       </div>
       <div className="pack-row-body">
         <div className="pack-row-title">

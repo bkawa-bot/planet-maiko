@@ -5,16 +5,8 @@ import {
 import { api } from "../api/client";
 import { relativeTime } from "../utils/dates";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
+import CardAvatar from "./CardAvatar";
 import "./TodayCard.css";
-
-
-// Mirror of Home.jsx / AgentsInsightsTab.jsx — keep in sync.
-const AVATAR_EMOJI = {
-  shiba: "🐕", corgi: "🐶", husky: "🐺", poodle: "🐩", golden: "🦮",
-  beagle: "🐕‍🦺", dalmatian: "🐾", samoyed: "☁️", akita: "🐕", pomeranian: "🧸",
-  calico_cat: "🐱", tabby_cat: "🐈", black_cat: "🐈‍⬛",
-  bunny: "🐰", hamster: "🐹", fox: "🦊",
-};
 
 
 /**
@@ -78,7 +70,7 @@ export default function TodayCard() {
               <div className="home-today-agents">
                 {(today.agents_active || []).map((a) => (
                   <span key={a.id} className="home-today-agent-chip" title={a.role}>
-                    {AVATAR_EMOJI[a.avatar] || "🐾"} {a.display_name}
+                    <CardAvatar agent={a} size="xs" /> {a.display_name}
                   </span>
                 ))}
               </div>

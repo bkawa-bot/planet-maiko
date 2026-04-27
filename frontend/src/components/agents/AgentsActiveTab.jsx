@@ -1,12 +1,13 @@
 import { useState } from "react";
 import {
-  Bot, CheckSquare, ExternalLink, GitBranch,
+  CheckSquare, ExternalLink, GitBranch,
   HeartPulse, Link2, MessageCircle, Play, Sparkles, X,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
 import { formatTime, relativeFromMinutes } from "../../utils/dates";
 import { formatRepo, useDefaultOrg } from "../../utils/repo";
+import CardAvatar from "../CardAvatar";
 
 /**
  * Active tab — pack awareness, queued tasks, ready-to-launch agents, live
@@ -238,7 +239,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                 </div>
                 <div className="agent-card-body">
                   <div className="agent-avatar-circle">
-                    <Bot size={18} />
+                    <CardAvatar agent={profiles.find((p) => p.id === a.agent_id) || a} size={40} />
                   </div>
                   <div className="agent-info">
                     <div className="agent-name-row">
@@ -335,7 +336,9 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                   </div>
                 </div>
                 <div className="agent-card-body">
-                  <div className="agent-avatar-circle">🐕</div>
+                  <div className="agent-avatar-circle">
+                    <CardAvatar agent={profile || prepared} size={40} />
+                  </div>
                   <div className="agent-info">
                     <div className="agent-name-row">
                       <span

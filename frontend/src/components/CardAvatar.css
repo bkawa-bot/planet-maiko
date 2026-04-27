@@ -1,0 +1,21 @@
+.card-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 28%;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-drag: none;
+  vertical-align: middle;
+}
+
+.card-avatar-fallback {
+  font-weight: 700;
+  font-family: var(--font-pixel, var(--font-greeting, system-ui));
+  letter-spacing: 0;
+  line-height: 1;
+  /* Inset border so the procedural fallback reads as "card-y" even
+     without art. Subtle so it doesn't compete with real images. */
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}

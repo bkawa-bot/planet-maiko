@@ -6,16 +6,8 @@ import {
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
 import PlaybookTab from "../PlaybookTab";
+import CardAvatar from "../CardAvatar";
 import "./CampfireTab.css";
-
-// Mirror of Home.jsx AVATAR_EMOJI + src/planet_maiko/agents/signature.py —
-// keep all three in sync.
-const AVATAR_EMOJI = {
-  shiba: "🐕", corgi: "🐶", husky: "🐺", poodle: "🐩", golden: "🦮",
-  beagle: "🐕‍🦺", dalmatian: "🐾", samoyed: "☁️", akita: "🐕", pomeranian: "🧸",
-  calico_cat: "🐱", tabby_cat: "🐈", black_cat: "🐈‍⬛",
-  bunny: "🐰", hamster: "🐹", fox: "🦊",
-};
 
 // Poll interval during the gather — fast enough that speech bubbles
 // feel alive as agents reply, slow enough not to hammer the server.
@@ -234,7 +226,6 @@ function CampfireScene({ agents, decisions, onOpenAgent, onWrapUp, onReset, wrap
 
 
 function AgentAtFire({ agent, decisions, onOpen }) {
-  const emoji = AVATAR_EMOJI[agent.avatar] || "🐾";
   const replyCount = agent.replies?.length || 0;
   const droppedCount = (agent.replies || []).filter((r) => decisions[r.id] === "drop").length;
 
@@ -285,7 +276,9 @@ function AgentAtFire({ agent, decisions, onOpen }) {
           </div>
         )}
       </div>
-      <div className="campfire-agent-avatar">{emoji}</div>
+      <div className="campfire-agent-avatar">
+        <CardAvatar agent={agent} size="lg" />
+      </div>
       <div className="campfire-agent-name">{agent.display_name}</div>
     </div>
   );
@@ -293,7 +286,6 @@ function AgentAtFire({ agent, decisions, onOpen }) {
 
 
 function AgentGatherModal({ agent, decisions, onDecision, onClose }) {
-  const emoji = AVATAR_EMOJI[agent.avatar] || "🐾";
   const feedback = (agent.replies || []).filter((r) => r.type === "feedback");
   const insights = (agent.replies || []).filter((r) => r.type === "insight");
 
@@ -303,7 +295,9 @@ function AgentGatherModal({ agent, decisions, onDecision, onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="campfire-modal" onClick={(e) => e.stopPropagation()}>
         <div className="campfire-modal-header">
-          <div className="campfire-modal-avatar">{emoji}</div>
+          <div className="campfire-modal-avatar">
+            <CardAvatar agent={agent} size="xl" />
+          </div>
           <div className="campfire-modal-identity">
             <div className="campfire-modal-name">{agent.display_name}</div>
             {agent.task_title && (

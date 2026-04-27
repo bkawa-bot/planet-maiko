@@ -3,14 +3,8 @@ import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { Bot, Plus, Rocket, Code2, Eye, Search } from "lucide-react";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
+import CardAvatar from "./CardAvatar";
 import "./AssignAgentModal.css";
-
-const AVATAR_EMOJI = {
-  shiba: "🐕", corgi: "🐶", husky: "🐺", poodle: "🐩", golden: "🦮", beagle: "🐕‍🦺",
-  dalmatian: "🐾", samoyed: "☁️", akita: "🐕", pomeranian: "🧸",
-  calico_cat: "🐱", tabby_cat: "🐈", black_cat: "🐈‍⬛",
-  bunny: "🐰", hamster: "🐹", fox: "🦊",
-};
 
 // Role chip metadata so the modal can show at-a-glance what each
 // listed agent actually does — a Reviewer shouldn't get picked for a
@@ -208,7 +202,9 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
                       className={`assign-agent-option ${selectedId === p.id ? "selected" : ""}`}
                       onClick={() => setSelectedId(p.id)}
                     >
-                      <span className="assign-avatar">{AVATAR_EMOJI[p.avatar] || "🐕"}</span>
+                      <span className="assign-avatar">
+                        <CardAvatar agent={p} size="md" />
+                      </span>
                       <div className="assign-agent-info">
                         <div className="assign-agent-name">
                           {p.display_name}

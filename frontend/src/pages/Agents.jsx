@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import {
-  Bot, Plus, Flame, Target, AlertTriangle, Code2, Eye, Search, X,
+  Plus, Flame, Target, AlertTriangle, Code2, Eye, Search, X,
 } from "lucide-react";
 import InfoButton from "../components/InfoButton";
 import AgentsActiveTab from "../components/agents/AgentsActiveTab";
 import AgentsProfilesTab from "../components/agents/AgentsProfilesTab";
 import AgentsInsightsTab from "../components/agents/AgentsInsightsTab";
 import ModalPortal from "../components/ModalPortal";
+import CardAvatar from "../components/CardAvatar";
 import { formatRepo, useDefaultOrg, useConfiguredRepos } from "../utils/repo";
 import "./Agents.css";
 
@@ -211,7 +212,7 @@ export default function Agents() {
         <div className="modal-overlay" onClick={() => setShowArrival(null)}>
           <div className="modal arrival-modal" onClick={(e) => e.stopPropagation()}>
             <div className="arrival-content">
-              <div className="arrival-avatar"><Bot size={32} /></div>
+              <div className="arrival-avatar"><CardAvatar agent={showArrival} size="xl" /></div>
               <h2 className="arrival-greeting">{showArrival.display_name}</h2>
               <p className="arrival-flavor">{showArrival.flavor_text}</p>
               <div className="arrival-role">
