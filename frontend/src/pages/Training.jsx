@@ -4,14 +4,13 @@ import { showToast } from "../components/Toast";
 import InfoButton from "../components/InfoButton";
 import ConfirmModal from "../components/ConfirmModal";
 import {
-  GraduationCap, Loader, Sparkles, Link2, ChevronDown, ChevronRight,
+  GraduationCap, Loader, Sparkles, ChevronDown, ChevronRight,
 } from "lucide-react";
 import "./Training.css";
 
 const PROGRESS_POLL_MS = 3000;
 
 export default function Training() {
-  const [profiles, setProfiles] = useState([]);
   const [running, setRunning] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generatingProgress, setGeneratingProgress] = useState("");
@@ -20,9 +19,6 @@ export default function Training() {
   const [showDatasets, setShowDatasets] = useState(false);
   const [selectedDataset, setSelectedDataset] = useState("");
   const [progress, setProgress] = useState(null);
-  const [adapters, setAdapters] = useState([]);
-  const [assignAgent, setAssignAgent] = useState("");
-  const [assignAdapter, setAssignAdapter] = useState("");
   const [coverage, setCoverage] = useState(null);
   const [filterRepo, setFilterRepo] = useState("");
   const [confirmTraining, setConfirmTraining] = useState(false);
@@ -37,8 +33,6 @@ export default function Training() {
   };
 
   useEffect(() => {
-    api.getProfiles().then(setProfiles).catch(() => {});
-    api.getAdapters().then(setAdapters).catch(() => {});
     fetchDatasets();
     // Resume progress displays if a job is already running when the
     // page mounts (user navigated away and came back, or refreshed).
@@ -78,8 +72,6 @@ export default function Training() {
             `Training complete! Adapter saved${p.adapter_name ? ` (${p.adapter_name})` : ""}`,
             "normal",
           );
-          api.getAdapters().then(setAdapters).catch(() => {});
-          api.getProfiles().then(setProfiles).catch(() => {});
           setRunning(false);
         } else if (p.status === "failed") {
           showToast(p.error || "Training failed", "high");
@@ -145,8 +137,6 @@ export default function Training() {
       } else if (result?.success) {
         // Defensive: if the endpoint reverts to sync later, handle it.
         showToast(`Training complete! Adapter saved`, "normal");
-        api.getAdapters().then(setAdapters).catch(() => {});
-        api.getProfiles().then(setProfiles).catch(() => {});
         setRunning(false);
       } else {
         showToast(result?.error || "Training failed to start", "high");
@@ -193,9 +183,9 @@ export default function Training() {
           <h4>The flow</h4>
           <ol>
             <li><strong>Generate from Rules</strong> (Step 1) — turns each active Learning into balanced training pairs via Claude Opus.</li>
-            <li><strong>Train Model</strong> (Step 2) — fine-tunes a LoRA adapter on the dataset.</li>
-            <li><strong>Assign</strong> (Step 3) — links the adapter to an agent profile.</li>
+            <li><strong>Train Model</strong> (Step 2) — fine-tunes a LoRA adapter scoped to a repo (or "global" by default).</li>
           </ol>
+          <p>Trained adapters are picked up automatically by inference — name-based discovery resolves <code>lora-&lt;repo&gt;-…</code> first, then falls back to <code>lora-global-…</code>.</p>
         </InfoButton>
       </div>
 
@@ -418,59 +408,6 @@ export default function Training() {
           Requires: <code>pip install mlx mlx-lm</code> (Mac) or <code>pip install torch unsloth</code> (NVIDIA)
         </p>
       </div>
-
-      {/* Step 3: Assign Adapter to Agent */}
-      {adapters.length > 0 && (
-        <div className="training-dataset-section">
-          <div className="training-dataset-header">
-            <Link2 size={14} /> Step 3 — Assign Adapter to Agent
-          </div>
-
-          <div className="training-row">
-            <select
-              className="training-select"
-              value={assignAgent}
-              onChange={(e) => setAssignAgent(e.target.value)}
-            >
-              <option value="">Choose an agent...</option>
-              {profiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.display_name} {p.extra?.adapter_path ? `(current: ${p.extra.adapter_path.split("/").pop()})` : "(no adapter)"}
-                </option>
-              ))}
-            </select>
-            <select
-              className="training-select"
-              value={assignAdapter}
-              onChange={(e) => setAssignAdapter(e.target.value)}
-            >
-              <option value="">Choose an adapter...</option>
-              {adapters.filter((a) => a.has_weights).map((a) => (
-                <option key={a.name} value={a.path}>{a.name}</option>
-              ))}
-            </select>
-            <button
-              className="btn btn-primary"
-              disabled={!assignAgent || !assignAdapter}
-              onClick={async () => {
-                try {
-                  await api.assignAdapter({ agent_profile_id: assignAgent, adapter_path: assignAdapter });
-                  showToast("Adapter assigned to agent", "normal");
-                  api.getProfiles().then(setProfiles).catch(() => {});
-                } catch (err) {
-                  showToast("Failed: " + err.message, "high");
-                }
-              }}
-            >
-              <Link2 size={12} /> Assign
-            </button>
-          </div>
-
-          <p className="training-hint" style={{ marginTop: 8 }}>
-            Link a trained adapter to an agent profile. The agent's pre-commit review will use this adapter.
-          </p>
-        </div>
-      )}
 
       <ConfirmModal
         open={confirmTraining}

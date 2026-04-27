@@ -383,8 +383,6 @@ export const api = {
   getRuleGenProgress: () => request("/training/generate-from-rules/progress"),
   getRuleCoverage: (repo) => request(`/training/rule-coverage${repo ? `?repo=${encodeURIComponent(repo)}` : ""}`),
   generateSynthetic: (data) => request("/training/generate-synthetic", { method: "POST", body: JSON.stringify(data || {}) }),
-  getAdapters: () => request("/training/adapters"),
-  assignAdapter: (data) => request("/training/assign-adapter", { method: "POST", body: JSON.stringify(data) }),
 
   // Chat
   chat: (message) => request("/chat", { method: "POST", body: JSON.stringify({ message }) }),
