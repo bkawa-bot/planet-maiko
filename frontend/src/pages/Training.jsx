@@ -10,6 +10,80 @@ import "./Training.css";
 
 const PROGRESS_POLL_MS = 3000;
 
+// Two-line sparkline showing train + val loss over iters. Hand-rolled
+// SVG (no chart lib) because the shape is trivial and we want to keep
+// the bundle lean. The val curve diverging upward from the train curve
+// is the textbook overfit signal.
+function LossSparkline({ history, totalIters }) {
+  if (!history || history.length < 2) return null;
+
+  const W = 280;
+  const H = 64;
+  const PAD = 4;
+
+  // Auto-scale Y to the highest observed loss; clamp the floor so a
+  // perfectly converged run still has visible amplitude.
+  const allLosses = history.flatMap((p) => [p.train, p.val].filter((v) => v != null));
+  if (!allLosses.length) return null;
+  const yMax = Math.max(...allLosses, 0.1) * 1.05;
+  const yMin = 0;
+
+  const xMax = totalIters || history[history.length - 1].iter || 1;
+  const xOf = (it) => PAD + (it / xMax) * (W - 2 * PAD);
+  const yOf = (loss) => H - PAD - ((loss - yMin) / (yMax - yMin)) * (H - 2 * PAD);
+
+  const buildPath = (key) => {
+    let d = "";
+    let started = false;
+    for (const point of history) {
+      const v = point[key];
+      if (v == null) continue;
+      const x = xOf(point.iter);
+      const y = yOf(v);
+      d += `${started ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)} `;
+      started = true;
+    }
+    return d.trim();
+  };
+
+  const trainPath = buildPath("train");
+  const valPath = buildPath("val");
+
+  return (
+    <svg
+      className="loss-sparkline"
+      width={W}
+      height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      role="img"
+      aria-label="Train and validation loss over training iterations"
+    >
+      {/* Y-axis baseline at 0 for visual anchor */}
+      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} className="loss-sparkline-axis" />
+      {trainPath && <path d={trainPath} className="loss-sparkline-line loss-sparkline-train" />}
+      {valPath && <path d={valPath} className="loss-sparkline-line loss-sparkline-val" />}
+    </svg>
+  );
+}
+
+// Hint surfaced beneath the sparkline. Keeps the read short — the
+// chart is the canonical signal; this just calls out a number when
+// it crosses an obvious threshold.
+function OverfitHint({ trainLoss, valLoss }) {
+  if (trainLoss == null || valLoss == null) return null;
+  const gap = valLoss - trainLoss;
+  let label, severity;
+  if (gap < 0.1) { label = "healthy"; severity = "ok"; }
+  else if (gap < 0.3) { label = "watching"; severity = "warn"; }
+  else { label = "overfit suspected"; severity = "high"; }
+  return (
+    <div className={`overfit-hint overfit-hint-${severity}`}>
+      val − train = {gap.toFixed(2)} · {label}
+    </div>
+  );
+}
+
 export default function Training() {
   const [running, setRunning] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -384,12 +458,26 @@ export default function Training() {
           <div className="training-live-progress">
             <div className="training-progress-stats">
               <span>Iteration {progress.iteration}/{progress.total_iters} ({progress.percent}%)</span>
-              <span>Loss: {progress.loss?.toFixed(3)}</span>
+              {progress.train_loss != null && (
+                <span>
+                  <span className="loss-dot loss-dot-train" /> train {progress.train_loss.toFixed(3)}
+                </span>
+              )}
+              {progress.val_loss != null && (
+                <span>
+                  <span className="loss-dot loss-dot-val" /> val {progress.val_loss.toFixed(3)}
+                </span>
+              )}
               {progress.tokens_sec && <span>{progress.tokens_sec.toFixed(0)} tok/s</span>}
             </div>
             <div className="training-score-track" style={{ height: 8 }}>
               <div className="training-score-fill" style={{ width: `${progress.percent}%`, background: "var(--pink)", transition: "width 0.5s" }} />
             </div>
+            <LossSparkline history={progress.loss_history || []} totalIters={progress.total_iters} />
+            <OverfitHint
+              trainLoss={progress.train_loss}
+              valLoss={progress.val_loss}
+            />
           </div>
         )}
 

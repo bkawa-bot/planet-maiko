@@ -349,28 +349,38 @@ def cmd_eval(args):
     from planet_maiko.brain.learning.lora_eval import evaluate_adapter
     from planet_maiko.app import create_app
 
+    eval_set = "train" if getattr(args, "on_training", False) else "holdout"
+
     # App context so evaluate_adapter can persist the row into the
     # adapter_evals table — /lora/adapters reads from that to surface
     # eval_score and trend.
     app = create_app(start_scheduler=False)
     with app.app_context():
-        print("Evaluating adapter...")
+        print(f"Evaluating adapter on {eval_set} set...")
         result = evaluate_adapter(
             adapter_path=args.adapter,
             repo=args.repo,
             holdout_fraction=args.holdout,
+            eval_set=eval_set,
         )
 
     if not result.get("success"):
         print(f"Error: {result.get('error')}")
         return
 
-    print(f"\n=== LoRA Evaluation ===")
+    label = "Training set" if eval_set == "train" else "Holdout set"
+    print(f"\n=== LoRA Evaluation ({label}) ===")
     print(f"Adapter: {result['adapter_path']}")
     print(f"Test examples: {result['test_count']}")
     print(f"Precision: {result['precision']:.1%}")
     print(f"Recall:    {result['recall']:.1%}")
     print(f"F1:        {result['f1']:.1%}")
+
+    if eval_set == "train":
+        print(
+            "\nThis is the training set — F1 here should be high. "
+            "Compare with `maiko eval` (holdout): a big gap is overfit."
+        )
 
     if args.per_category and result.get("per_category"):
         print(f"\nPer-category breakdown:")
@@ -658,6 +668,11 @@ def register(subparsers):
     p.add_argument("--repo", help="Filter test data to this repo")
     p.add_argument("--holdout", type=float, default=0.2, help="Fraction of data to hold out for testing (default 0.2)")
     p.add_argument("--per-category", action="store_true", help="Show per-category breakdown")
+    p.add_argument(
+        "--on-training", action="store_true",
+        help="Score the training set instead of holdout. Useful only as a "
+             "contrast: a big train-F1 vs holdout-F1 gap is the overfit signal.",
+    )
     p.set_defaults(func=cmd_eval)
 
     # maiko eval-prs (PR-level, against a fixture of real PRs)

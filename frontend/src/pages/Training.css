@@ -206,4 +206,51 @@
 .training-live-progress { margin-bottom: 12px; }
 .training-progress-stats {
   display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;
+  gap: 8px; flex-wrap: wrap;
 }
+
+/* Train/val loss legend dots inside the stats row */
+.loss-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.loss-dot-train { background: var(--pink); }
+.loss-dot-val   { background: var(--lemon, #f5d96b); }
+
+/* Two-line sparkline: train (pink) vs val (lemon). Strokes are
+   non-scaling so the lines stay crisp at any container width. */
+.loss-sparkline {
+  display: block;
+  width: 100%;
+  max-width: 280px;
+  margin-top: 8px;
+  background: var(--bg-card, transparent);
+  border-radius: var(--radius-xs);
+}
+.loss-sparkline-axis {
+  stroke: var(--border-subtle, rgba(0, 0, 0, 0.08));
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.loss-sparkline-line {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.loss-sparkline-train { stroke: var(--pink); }
+.loss-sparkline-val   { stroke: var(--lemon, #d4a017); }
+
+.overfit-hint {
+  font-size: 11px;
+  margin-top: 4px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--text-muted);
+}
+.overfit-hint-ok    { color: var(--green, #5a8c5a); }
+.overfit-hint-warn  { color: var(--amber, #b07a00); }
+.overfit-hint-high  { color: var(--pink); font-weight: 600; }

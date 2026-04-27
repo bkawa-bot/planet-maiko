@@ -201,9 +201,10 @@ def _prepare_training_file(dataset_path, output_dir, config):
       - Collect all pairs, shuffle deterministically (seeded), split 80/20.
       - Write train.jsonl + valid.jsonl in the backend's chat format. MLX
         and other backends pick up valid.jsonl automatically from --data.
-      - Write holdout.jsonl alongside, in the original {input,output}
-        format the evaluator reads. evaluate_adapter() loads this file
-        so eval uses exactly the pairs the trainer never saw.
+      - Write holdout.jsonl + train_pairs.jsonl alongside, in the
+        original {input,output} format. holdout.jsonl is the canonical
+        eval set; train_pairs.jsonl supports the train-vs-holdout F1
+        comparison (`maiko eval --on-training`) for spotting overfit.
     """
     import random as _random
 
@@ -211,6 +212,7 @@ def _prepare_training_file(dataset_path, output_dir, config):
     train_file = os.path.join(output_dir, "train.jsonl")
     valid_file = os.path.join(output_dir, "valid.jsonl")
     holdout_file = os.path.join(output_dir, "holdout.jsonl")
+    train_pairs_file = os.path.join(output_dir, "train_pairs.jsonl")
 
     system_prompt = "You are a code review assistant. Given a code change with its file path and PR context, identify violations of coding standards, missing edge cases, security issues, or other problems. Respond PASS if the code is clean."
 
@@ -279,6 +281,9 @@ def _prepare_training_file(dataset_path, output_dir, config):
     with open(holdout_file, "w", encoding="utf-8") as f_out:
         for pair in holdout_pairs:
             f_out.write(json.dumps(pair, ensure_ascii=False) + "\n")
+    with open(train_pairs_file, "w", encoding="utf-8") as f_out:
+        for pair in train_pairs:
+            f_out.write(json.dumps(pair, ensure_ascii=False) + "\n")
 
     logger.info(
         f"[lora-train] Split {len(all_pairs)} pairs → train={len(train_pairs)} "
@@ -290,10 +295,23 @@ def _prepare_training_file(dataset_path, output_dir, config):
 
 def _train_mlx(train_file, adapter_path, config):
     """Train using MLX (Apple Silicon)."""
+    import math as _math
+    import re as _re
+
     logger.info("[lora-train] Using MLX backend (Apple Silicon)")
 
     try:
         data_dir = os.path.dirname(train_file)
+
+        # Iters scaled to the actual dataset: ceil(N / batch) * epochs
+        # so each epoch is a full pass. The old hardcoded
+        # `epochs * 100` ran 300 iters regardless of data size, which
+        # silently under-trained anything bigger than that.
+        with open(train_file, "r", encoding="utf-8") as f:
+            train_count = sum(1 for _ in f)
+        batch_size = max(1, int(config["batch_size"]))
+        epochs = max(1, int(config["epochs"]))
+        total_iters = max(1, _math.ceil(train_count / batch_size)) * epochs
 
         cmd = [
             sys.executable, "-m", "mlx_lm.lora",
@@ -301,15 +319,18 @@ def _train_mlx(train_file, adapter_path, config):
             "--data", data_dir,
             "--adapter-path", adapter_path,
             "--train",
-            "--iters", str(config["epochs"] * 100),
-            "--batch-size", str(config["batch_size"]),
+            "--iters", str(total_iters),
+            "--batch-size", str(batch_size),
             "--learning-rate", str(config["learning_rate"]),
             "--max-seq-length", str(config["max_seq_length"]),
         ]
 
+        logger.info(
+            f"[lora-train] {train_count} train pairs × {epochs} epochs "
+            f"/ batch {batch_size} = {total_iters} iters"
+        )
         logger.info(f"[lora-train] Running: {' '.join(cmd)}")
 
-        total_iters = config["epochs"] * 100
         progress_path = os.path.join(adapter_path, "progress.json")
         os.makedirs(adapter_path, exist_ok=True)
 
@@ -319,7 +340,40 @@ def _train_mlx(train_file, adapter_path, config):
             text=True, encoding="utf-8", errors="replace",
         )
 
-        import re as _re
+        # mlx-lm prints separate "Train loss" and "Val loss" lines per
+        # iter; matching them separately is what makes overfit visible.
+        # We also keep loss_history (capped) so the UI can sparkline both.
+        train_re = _re.compile(r"Iter\s+(\d+):\s*Train loss\s+([\d.]+)", _re.IGNORECASE)
+        val_re = _re.compile(r"Iter\s+(\d+):\s*Val loss\s+([\d.]+)", _re.IGNORECASE)
+        tok_re = _re.compile(r"([\d.]+)\s*Tokens/sec", _re.IGNORECASE)
+
+        loss_history = []  # [{iter, train, val}]
+        latest_train = None
+        latest_val = None
+        latest_tokens_sec = None
+        latest_iter = 0
+
+        def _update_history(it, train=None, val=None):
+            nonlocal latest_train, latest_val
+            # mlx prints the train and val lines for the same iter
+            # separately — merge them into one entry so the chart's
+            # x-axis stays aligned.
+            if loss_history and loss_history[-1]["iter"] == it:
+                entry = loss_history[-1]
+            else:
+                entry = {"iter": it, "train": None, "val": None}
+                loss_history.append(entry)
+                if len(loss_history) > 500:
+                    # Halve when capped — preserves the curve shape
+                    # without unbounded file growth.
+                    loss_history[:] = loss_history[::2]
+            if train is not None:
+                entry["train"] = train
+                latest_train = train
+            if val is not None:
+                entry["val"] = val
+                latest_val = val
+
         for line in process.stdout:
             line = line.strip()
             if not line:
@@ -327,22 +381,32 @@ def _train_mlx(train_file, adapter_path, config):
             logger.info(f"[lora-train] {line}")
             output_lines.append(line)
 
-            # Parse progress from mlx-lm output (e.g. "Iter 50: Train loss 0.712, ...")
-            m = _re.search(r"Iter\s+(\d+).*?loss\s+([\d.]+)", line, _re.IGNORECASE)
-            if m:
-                iteration = int(m.group(1))
-                loss = float(m.group(2))
-                # Also look for tokens/sec
-                tok_m = _re.search(r"([\d.]+)\s*Tokens/sec", line, _re.IGNORECASE)
-                tokens_sec = float(tok_m.group(1)) if tok_m else None
+            mt = train_re.search(line)
+            mv = val_re.search(line)
+            tokm = tok_re.search(line)
+            if tokm:
+                latest_tokens_sec = float(tokm.group(1))
 
+            if mt:
+                latest_iter = int(mt.group(1))
+                _update_history(latest_iter, train=float(mt.group(2)))
+            if mv:
+                latest_iter = int(mv.group(1))
+                _update_history(latest_iter, val=float(mv.group(2)))
+
+            if mt or mv:
                 progress = {
-                    "iteration": iteration,
+                    "iteration": latest_iter,
                     "total_iters": total_iters,
-                    "loss": loss,
-                    "tokens_sec": tokens_sec,
-                    "percent": round(iteration / total_iters * 100, 1),
+                    "train_loss": latest_train,
+                    "val_loss": latest_val,
+                    # Keep `loss` populated so older UI bits don't
+                    # break — points at the most recent train loss.
+                    "loss": latest_train,
+                    "tokens_sec": latest_tokens_sec,
+                    "percent": round(latest_iter / total_iters * 100, 1) if total_iters else 0,
                     "status": "training",
+                    "loss_history": loss_history,
                 }
                 try:
                     with open(progress_path, "w") as pf:
@@ -352,9 +416,17 @@ def _train_mlx(train_file, adapter_path, config):
 
         process.wait()
 
-        # Write final status
         try:
-            final = {"status": "done" if process.returncode == 0 else "failed", "percent": 100}
+            final = {
+                "status": "done" if process.returncode == 0 else "failed",
+                "percent": 100,
+                "iteration": latest_iter,
+                "total_iters": total_iters,
+                "train_loss": latest_train,
+                "val_loss": latest_val,
+                "loss": latest_train,
+                "loss_history": loss_history,
+            }
             with open(progress_path, "w") as pf:
                 json.dump(final, pf)
         except Exception:

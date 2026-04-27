@@ -82,7 +82,7 @@ def _find_latest_adapter(prefix):
 SPLIT_SEED = 42
 
 
-def evaluate_adapter(adapter_path=None, repo=None, holdout_fraction=0.2):
+def evaluate_adapter(adapter_path=None, repo=None, holdout_fraction=0.2, eval_set="holdout"):
     """Evaluate a LoRA adapter on held-out training data.
 
     Args:
@@ -91,20 +91,26 @@ def evaluate_adapter(adapter_path=None, repo=None, holdout_fraction=0.2):
         holdout_fraction: fraction of data to hold out for testing (default 0.2).
             Only used for the fallback path; adapters trained with the new
             code persist their actual holdout in <adapter_path>/holdout.jsonl.
+        eval_set: "holdout" (default) scores the held-out 20% the trainer
+            never saw — this is the canonical generalization signal.
+            "train" scores the same eval logic against train_pairs.jsonl,
+            which is useful only as a contrast: a big train-F1 vs
+            holdout-F1 gap is the textbook overfit symptom. Returns an
+            error when called with eval_set="train" on adapters that
+            predate the train_pairs.jsonl write (no soft fallback —
+            comparing apples to oranges would mislead).
 
     Returns:
         dict with {success, precision, recall, f1, test_count, per_category, adapter_path}
 
     Sources of test pairs, in order:
-      1. <adapter_path>/holdout.jsonl — written by trainer._prepare_training_file.
-         This is the ONLY honest signal: these exact pairs were excluded from
-         train.jsonl, so eval measures generalization, not memorization.
-      2. Fallback: pairs collected from data_dir/training-data/rules-*.jsonl,
-         deterministically shuffled with SPLIT_SEED, top `holdout_fraction`
-         taken as the eval set. Used for adapters trained before the split
-         landed. Note: this is still contaminated for those adapters since
-         the trainer they ran fit to all of the data — numbers are best read
-         as "upper bound" not "held-out precision".
+      1. <adapter_path>/holdout.jsonl (or train_pairs.jsonl when
+         eval_set="train") — written by trainer._prepare_training_file.
+         This is the only honest signal: holdout pairs are exactly
+         what the trainer didn't see; train pairs are what it did.
+      2. Fallback (holdout only): pairs collected from data_dir/training-data/
+         rules-*.jsonl, deterministically shuffled with SPLIT_SEED. Used
+         for adapters trained before the split landed.
     """
     from planet_maiko.paths import data_dir
     from planet_maiko.brain.learning.trainer import review_code
@@ -121,8 +127,15 @@ def evaluate_adapter(adapter_path=None, repo=None, holdout_fraction=0.2):
         return {"success": False, "error": "No adapter found. Train one first."}
 
     # Primary path: the adapter was trained with the new split, so there's
-    # a real holdout file sitting next to it.
-    holdout_path = os.path.join(adapter_path, "holdout.jsonl")
+    # a real holdout (or train_pairs) file sitting next to it.
+    if eval_set == "train":
+        eval_filename = "train_pairs.jsonl"
+    elif eval_set == "holdout":
+        eval_filename = "holdout.jsonl"
+    else:
+        return {"success": False, "error": f"Unknown eval_set: {eval_set!r} (expected 'holdout' or 'train')"}
+
+    holdout_path = os.path.join(adapter_path, eval_filename)
     test_pairs = None
     source = None
     if os.path.isfile(holdout_path):
@@ -140,8 +153,19 @@ def evaluate_adapter(adapter_path=None, repo=None, holdout_fraction=0.2):
                 pairs.append(pair)
         if pairs:
             test_pairs = pairs
-            source = "adapter_holdout"
+            source = f"adapter_{eval_set}"
             logger.info(f"[lora-eval] Using {len(test_pairs)} pairs from {holdout_path}")
+    elif eval_set == "train":
+        # Don't soft-fallback to the rules-*.jsonl path for the train
+        # set — that file isn't what the adapter saw, so any "train F1"
+        # number from there is a lie.
+        return {
+            "success": False,
+            "error": (
+                f"This adapter has no train_pairs.jsonl ({holdout_path} missing). "
+                "Retrain after the train_pairs.jsonl change to use --on-training."
+            ),
+        }
 
     # Fallback: reconstruct the 20% with the same seed training would have used.
     if test_pairs is None:
@@ -245,11 +269,13 @@ def evaluate_adapter(adapter_path=None, repo=None, holdout_fraction=0.2):
         "test_count": len(test_pairs),
         "per_category": cat_metrics,
         "adapter_path": adapter_path,
-        # "adapter_holdout" means trainer persisted a real held-out set and
-        # we evaluated against it. "reconstructed" means we re-derived a 20%
-        # split from the source files — adapters pre-dating the split fix
-        # trained on everything, so those numbers are optimistic.
+        # "adapter_holdout" / "adapter_train" means trainer persisted a
+        # real {holdout,train} set and we evaluated against it.
+        # "reconstructed" means we re-derived a 20% split from the
+        # source files — adapters pre-dating the split fix trained on
+        # everything, so those numbers are optimistic.
         "test_source": source,
+        "eval_set": eval_set,
     }
 
     # Persist the eval so /lora/adapters can surface eval_score and the
