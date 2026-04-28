@@ -139,7 +139,9 @@ export default function Training() {
     // polling effects never kick in, so a live job is invisible.
     api.getTrainingProgress()
       .then((p) => {
-        if (p && p.status && p.status !== "done" && p.status !== "failed" && p.status !== "idle") {
+        // "done_early" is a terminal status from the early-stop path —
+        // treat it like "done" for the purposes of "is a run live."
+        if (p && p.status && !["done", "done_early", "failed", "idle"].includes(p.status)) {
           setProgress(p);
           setRunning(true);
         }
@@ -166,9 +168,12 @@ export default function Training() {
       try {
         const p = await api.getTrainingProgress();
         setProgress(p);
-        if (p.status === "done") {
+        if (p.status === "done" || p.status === "done_early") {
+          const earlyNote = p.status === "done_early"
+            ? " (early-stopped at val plateau)"
+            : "";
           showToast(
-            `Training complete! Adapter saved${p.adapter_name ? ` (${p.adapter_name})` : ""}`,
+            `Training complete${earlyNote}! Adapter saved${p.adapter_name ? ` (${p.adapter_name})` : ""}`,
             "normal",
           );
           setRunning(false);
