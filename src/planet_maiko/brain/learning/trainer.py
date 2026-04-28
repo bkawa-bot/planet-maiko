@@ -128,6 +128,12 @@ DEFAULT_TRAINING_CONFIG = {
     "max_seq_length": 1024,
     "grad_checkpoint": False,
     "early_stop_patience": 3,
+    # steps_per_eval: how often mlx-lm runs a validation pass (also
+    # how often we get a Val loss data point). Lower = tighter
+    # early-stop response, more granular sparkline, slightly slower
+    # wall-clock. mlx-lm's own default is 200; we expose this so
+    # long runs can save time by checking val less often.
+    "steps_per_eval": 200,
     # corrections_weight: how many times each pair from corrections.jsonl
     # gets repeated in the training file. 1 = current behavior (no
     # up-weighting). 3 lifts ~10 corrections in a 1500-pair dataset
@@ -513,6 +519,7 @@ def _train_mlx(train_file, adapter_path, config):
             "--batch-size", str(batch_size),
             "--learning-rate", str(config["learning_rate"]),
             "--max-seq-length", str(config["max_seq_length"]),
+            "--steps-per-eval", str(max(10, int(config.get("steps_per_eval", 200)))),
         ]
         if config.get("grad_checkpoint"):
             cmd.append("--grad-checkpoint")

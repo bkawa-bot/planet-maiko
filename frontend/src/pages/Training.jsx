@@ -107,6 +107,8 @@ export default function Training() {
   const [advEarlyStopPatience, setAdvEarlyStopPatience] = useState(3);
   const [advCorrectionsWeight, setAdvCorrectionsWeight] = useState(1);
   const [advLoraRank, setAdvLoraRank] = useState(16);
+  const [advBatchSize, setAdvBatchSize] = useState(1);
+  const [advStepsPerEval, setAdvStepsPerEval] = useState(200);
   const [advResumeFrom, setAdvResumeFrom] = useState("");
   const [advBaseModel, setAdvBaseModel] = useState("");
   const [adapters, setAdapters] = useState([]);
@@ -242,6 +244,8 @@ export default function Training() {
           corrections_weight: advCorrectionsWeight,
           lora_rank: advLoraRank,
           lora_alpha: advLoraRank,
+          batch_size: advBatchSize,
+          steps_per_eval: advStepsPerEval,
           ...(advBaseModel ? { base_model: advBaseModel } : {}),
           ...(advResumeFrom ? { resume_adapter_file: advResumeFrom } : {}),
         },
@@ -601,6 +605,39 @@ export default function Training() {
               </select>
               <span className="training-hint">
                 Width of the LoRA adapter. Higher = more nuanced patterns, larger file, slightly more training memory.
+              </span>
+            </div>
+
+            <div className="training-row">
+              <label className="training-label">Batch size:</label>
+              <select
+                className="training-select"
+                value={advBatchSize}
+                onChange={(e) => setAdvBatchSize(Number(e.target.value))}
+              >
+                <option value={1}>1 (default, minimum memory)</option>
+                <option value={2}>2 (≈ 2× faster, comfortable on 36GB+)</option>
+                <option value={4}>4 (≈ 4× faster, watch memory pressure)</option>
+                <option value={8}>8 (heavy — only safe for small models or 64GB+ Macs)</option>
+              </select>
+              <span className="training-hint">
+                Examples processed per gradient step. Direct speed multiplier (real, not just observability).
+              </span>
+            </div>
+
+            <div className="training-row">
+              <label className="training-label">Steps per eval:</label>
+              <input
+                className="training-input training-input-num"
+                type="number"
+                min="50"
+                max="2000"
+                step="50"
+                value={advStepsPerEval}
+                onChange={(e) => setAdvStepsPerEval(Math.max(50, Math.min(2000, Number(e.target.value) || 200)))}
+              />
+              <span className="training-hint">
+                How often mlx-lm runs a val pass. 200 default; 500 saves wall-clock for long runs but loosens early-stop precision.
               </span>
             </div>
 
