@@ -1,54 +1,55 @@
-/* Planet Maiko — Dog-themed sherbet design */
+/* Planet Maiko — Cosmic palette */
 
 :root {
-  /* Summer sherbet dark palette (default / night) */
-  --bg: #1e2529;
-  /* --bg-plain: the flat backdrop when the hill SVG is hidden. Matches
-     the top-of-gradient stop in the matching world-*.svg so turning
-     hills off still reads as the same sky palette — just without the
-     hill silhouette. */
-  --bg-plain: #040410;  /* top of world-night.svg */
-  --bg-card: #2d363c;
-  --bg-card-alt: #333d44;
-  --bg-hover: #3a454d;
-  --bg-selected: #435058;
-  --text: #e8ecf0;
-  --text-dim: #8b9da8;
-  --text-muted: #5f7280;
+  /* Dark mode — cosmic nighttime. Deep space backgrounds, neon accents.
+     Token names map to the previous sherbet system so all downstream
+     components keep working; only the values change. */
+  --bg: #0B0F2A;            /* Deep Space Navy */
+  /* --bg-plain: flat backdrop when the hill SVG is hidden. Same value
+     as --bg in the new palette — backgrounds are already cosmic-flat,
+     no per-time-of-day SVG sky to match. */
+  --bg-plain: #0B0F2A;
+  --bg-card: #1A1F4A;       /* Cosmic Indigo */
+  --bg-card-alt: #2A2250;   /* Midnight Purple */
+  --bg-hover: #2D2A60;
+  --bg-selected: #383270;
+  --text: #F4F7FF;          /* Soft White */
+  --text-dim: #A7B0C0;      /* Cool Gray */
+  --text-muted: #6E7A92;
 
-  --pink: #5EC4C8;
-  --pink-soft: rgba(94, 196, 200, 0.15);
-  --pink-glow: rgba(94, 196, 200, 0.08);
-  --blue: #89CFF0;
-  --blue-soft: rgba(137, 207, 240, 0.12);
-  --mint: #7DDBA3;
-  --orange: #FF975B;
-  --lavender: #C3A6E8;
-  --peach: #FFB89A;
+  --pink: #FF6FAF;          /* Neon Pink — primary accent */
+  --pink-soft: rgba(255, 111, 175, 0.15);
+  --pink-glow: rgba(255, 111, 175, 0.08);
+  --blue: #6FB6FF;          /* Sky Blue Spark */
+  --blue-soft: rgba(111, 182, 255, 0.14);
+  --mint: #A8F0D1;          /* Mint Pastel */
+  --orange: #FF9B6A;        /* Peach Orange */
+  --lavender: #C9A6FF;      /* Soft Lavender Glow */
+  --peach: #FF9B6A;         /* Peach Orange */
   --creamsicle: #FFCAA8;
-  --lemon: #F9E07F;
+  --lemon: #FFE66D;         /* Star Yellow */
 
-  --urgent: #ff6b7f;
-  --high: #FF975B;
-  --normal: #5EC4C8;
-  --low: #5f7280;
-  --green: #7DDBA3;
-  --border: #435058;
-  --border-subtle: #374148;
+  --urgent: #FF7A73;        /* Warm Coral */
+  --high: #FF9B6A;          /* Peach Orange */
+  --normal: #FF6FAF;        /* Neon Pink */
+  --low: #6E7A92;
+  --green: #7ED957;         /* Slime Green */
+  --border: #3F3D70;
+  --border-subtle: #2D2D60;
 
   /* Themed tint backgrounds — use these instead of hardcoded rgba so
      badges/tags/pills track the active theme. Pair with the matching
      --xxx color for foreground text. */
-  --urgent-soft: rgba(255, 107, 127, 0.15);
-  --urgent-faint: rgba(255, 107, 127, 0.08);
-  --high-soft: rgba(255, 151, 91, 0.15);
-  --high-faint: rgba(255, 151, 91, 0.08);
-  --lemon-soft: rgba(249, 224, 127, 0.15);
-  --lemon-faint: rgba(249, 224, 127, 0.06);
-  --green-soft: rgba(125, 219, 163, 0.15);
-  --green-faint: rgba(125, 219, 163, 0.08);
-  --lavender-soft: rgba(195, 166, 232, 0.15);
-  --lavender-faint: rgba(195, 166, 232, 0.08);
+  --urgent-soft: rgba(255, 122, 115, 0.15);
+  --urgent-faint: rgba(255, 122, 115, 0.08);
+  --high-soft: rgba(255, 155, 106, 0.15);
+  --high-faint: rgba(255, 155, 106, 0.08);
+  --lemon-soft: rgba(255, 230, 109, 0.15);
+  --lemon-faint: rgba(255, 230, 109, 0.06);
+  --green-soft: rgba(126, 217, 87, 0.15);
+  --green-faint: rgba(126, 217, 87, 0.08);
+  --lavender-soft: rgba(201, 166, 255, 0.15);
+  --lavender-faint: rgba(201, 166, 255, 0.08);
 
   /* Inter (loaded in index.html) for body; Inconsolata for anything
      that wants "terminal label" character — agent names, in-page
@@ -81,28 +82,46 @@
   /* Surface backgrounds — theme-controllable. Custom themes can
      override via `topbar_gradient` and `pane_bg` in their colors
      dict; otherwise they inherit these defaults (night look). */
-  --topbar-gradient: linear-gradient(135deg, #0a1628 0%, #162244 50%, #1a3a48 100%);
-  --pane-bg: rgba(45, 54, 60, 0.40);
+  --topbar-gradient: linear-gradient(135deg, #0B0F2A 0%, #1A1F4A 50%, #2A2250 100%);
+  --pane-bg: rgba(26, 31, 74, 0.45);
 }
 
-/* === Light theme === */
+/* === Light theme — bright daylight === */
 [data-theme="light"] {
-  --bg: #EAF0EA; --bg-plain: #6AAED0; --bg-card: #FAFCFA; --bg-card-alt: #F0F6F0;
-  --bg-hover: #DCE8DC; --bg-selected: #D2E0D2;
-  --text: #2c2420; --text-dim: #5C5448; --text-muted: #9A9080;
-  --pink: #E8A0B8; --pink-soft: rgba(232, 160, 184, 0.15); --pink-glow: rgba(232, 160, 184, 0.08);
-  --blue: #4a94be; --blue-soft: rgba(74, 148, 190, 0.12);
-  --mint: #8BC4A0; --orange: #d47a3a; --lavender: #8a68b8;
-  --peach: #d48a6e; --creamsicle: #e8a878; --lemon: #c4a834;
-  --urgent: #d44a5c; --high: #d47a3a; --normal: #E8A0B8; --low: #9A9080; --green: #8BC4A0;
-  --border: #C8D8C8; --border-subtle: #D8E4D8;
-  --urgent-soft: rgba(212, 74, 92, 0.14); --urgent-faint: rgba(212, 74, 92, 0.07);
-  --high-soft: rgba(212, 122, 58, 0.14); --high-faint: rgba(212, 122, 58, 0.07);
-  --lemon-soft: rgba(196, 168, 52, 0.16); --lemon-faint: rgba(196, 168, 52, 0.08);
-  --green-soft: rgba(139, 196, 160, 0.18); --green-faint: rgba(139, 196, 160, 0.10);
-  --lavender-soft: rgba(138, 104, 184, 0.14); --lavender-faint: rgba(138, 104, 184, 0.07);
-  --topbar-gradient: linear-gradient(135deg, #87CEEB 0%, #B0D8E8 50%, #B8D8B8 100%);
-  --pane-bg: rgba(242, 248, 242, 0.60);
+  --bg: #EAF4FF;            /* Soft Sky */
+  --bg-plain: #EAF4FF;
+  --bg-card: #FFFFFF;
+  --bg-card-alt: #F3EFFF;   /* Pastel Lavender Base */
+  --bg-hover: #DDEAFC;
+  --bg-selected: #C8DDF8;
+  --text: #2B2F42;          /* Dark Slate */
+  --text-dim: #6B7280;      /* Mid Gray */
+  --text-muted: #9CA3B5;
+  --pink: #FF7AB8;          /* Light Magenta */
+  --pink-soft: rgba(255, 122, 184, 0.14);
+  --pink-glow: rgba(255, 122, 184, 0.08);
+  --blue: #5EE7EB;          /* Bright Cyan */
+  --blue-soft: rgba(94, 231, 235, 0.14);
+  --mint: #CFF7E6;          /* Pale Mint */
+  --orange: #FFB38A;        /* Apricot */
+  --lavender: #C48BFF;      /* Lavender Purple */
+  --peach: #FFA3A0;         /* Soft Coral */
+  --creamsicle: #FFB38A;
+  --lemon: #FFC557;         /* Sunlit Gold */
+  --urgent: #FFA3A0;        /* Soft Coral */
+  --high: #FFB38A;          /* Apricot */
+  --normal: #FF7AB8;        /* Light Magenta */
+  --low: #9CA3B5;
+  --green: #9BE870;         /* Fresh Green */
+  --border: #C8D8EC;
+  --border-subtle: #DDE6F2;
+  --urgent-soft: rgba(255, 163, 160, 0.16); --urgent-faint: rgba(255, 163, 160, 0.08);
+  --high-soft: rgba(255, 179, 138, 0.16); --high-faint: rgba(255, 179, 138, 0.08);
+  --lemon-soft: rgba(255, 197, 87, 0.18); --lemon-faint: rgba(255, 197, 87, 0.10);
+  --green-soft: rgba(155, 232, 112, 0.18); --green-faint: rgba(155, 232, 112, 0.10);
+  --lavender-soft: rgba(196, 139, 255, 0.14); --lavender-faint: rgba(196, 139, 255, 0.07);
+  --topbar-gradient: linear-gradient(135deg, #EAF4FF 0%, #F3EFFF 50%, #E6FFF7 100%);
+  --pane-bg: rgba(255, 255, 255, 0.65);
 }
 
 /* === Morning theme === */
