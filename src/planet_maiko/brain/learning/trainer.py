@@ -482,11 +482,32 @@ def _train_mlx(train_file, adapter_path, config):
         epochs = max(1, int(config["epochs"]))
         total_iters = max(1, _math.ceil(train_count / batch_size)) * epochs
 
+        # mlx-lm reads LoRA hyperparameters (rank, scale, dropout) from
+        # a YAML config file, not CLI flags — so we write one alongside
+        # the adapter and pass it via --config. Without this step, our
+        # DEFAULT_TRAINING_CONFIG.lora_rank is a no-op and mlx-lm uses
+        # its own default (rank 8), which is why earlier runs felt
+        # capped regardless of what we set in Python.
+        lora_rank = max(1, int(config.get("lora_rank", 16)))
+        lora_alpha = max(1, int(config.get("lora_alpha", lora_rank)))
+        lora_yaml_path = os.path.join(adapter_path, "lora_config.yaml")
+        try:
+            with open(lora_yaml_path, "w", encoding="utf-8") as yf:
+                yf.write(
+                    "lora_parameters:\n"
+                    f"  rank: {lora_rank}\n"
+                    f"  scale: {float(lora_alpha)}\n"
+                    "  dropout: 0.0\n"
+                )
+        except Exception as e:
+            logger.warning(f"[lora-train] Could not write lora_config.yaml: {e}")
+
         cmd = [
             sys.executable, "-m", "mlx_lm.lora",
             "--model", config["base_model"],
             "--data", data_dir,
             "--adapter-path", adapter_path,
+            "--config", lora_yaml_path,
             "--train",
             "--iters", str(total_iters),
             "--batch-size", str(batch_size),

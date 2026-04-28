@@ -106,6 +106,7 @@ export default function Training() {
   const [advGradCheckpoint, setAdvGradCheckpoint] = useState(false);
   const [advEarlyStopPatience, setAdvEarlyStopPatience] = useState(3);
   const [advCorrectionsWeight, setAdvCorrectionsWeight] = useState(1);
+  const [advLoraRank, setAdvLoraRank] = useState(16);
   const [advResumeFrom, setAdvResumeFrom] = useState("");
   const [advBaseModel, setAdvBaseModel] = useState("");
   const [adapters, setAdapters] = useState([]);
@@ -239,6 +240,8 @@ export default function Training() {
           grad_checkpoint: advGradCheckpoint,
           early_stop_patience: advEarlyStopPatience,
           corrections_weight: advCorrectionsWeight,
+          lora_rank: advLoraRank,
+          lora_alpha: advLoraRank,
           ...(advBaseModel ? { base_model: advBaseModel } : {}),
           ...(advResumeFrom ? { resume_adapter_file: advResumeFrom } : {}),
         },
@@ -581,6 +584,23 @@ export default function Training() {
               />
               <span className="training-hint">
                 Each correction is repeated N× in train (1 = no up-weight, 3 = recommended for retrain runs, 5 = max).
+              </span>
+            </div>
+
+            <div className="training-row">
+              <label className="training-label">LoRA rank:</label>
+              <select
+                className="training-select"
+                value={advLoraRank}
+                onChange={(e) => setAdvLoraRank(Number(e.target.value))}
+              >
+                <option value={8}>8 (minimal capacity, smallest adapter)</option>
+                <option value={16}>16 (default, balanced)</option>
+                <option value={32}>32 (more capacity, recommended for plateaued runs)</option>
+                <option value={64}>64 (heavy — risk of overfit on small data)</option>
+              </select>
+              <span className="training-hint">
+                Width of the LoRA adapter. Higher = more nuanced patterns, larger file, slightly more training memory.
               </span>
             </div>
 
