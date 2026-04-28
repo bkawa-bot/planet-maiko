@@ -107,7 +107,9 @@ export default function Training() {
   const [advEarlyStopPatience, setAdvEarlyStopPatience] = useState(3);
   const [advCorrectionsWeight, setAdvCorrectionsWeight] = useState(1);
   const [advResumeFrom, setAdvResumeFrom] = useState("");
+  const [advBaseModel, setAdvBaseModel] = useState("");
   const [adapters, setAdapters] = useState([]);
+  const [baseModels, setBaseModels] = useState([]);
 
   const fetchDatasets = () => {
     api.getTrainingDatasets().then(setDatasets).catch(() => {});
@@ -123,6 +125,14 @@ export default function Training() {
   useEffect(() => {
     fetchDatasets();
     fetchAdapters();
+    api.getBaseModels()
+      .then((data) => {
+        setBaseModels(data?.models || []);
+        // Seed the dropdown with the backend's default so the empty
+        // string never hits trainAgent (which would mean "use whatever").
+        if (!advBaseModel && data?.default) setAdvBaseModel(data.default);
+      })
+      .catch(() => {});
     // Resume progress displays if a job is already running when the
     // page mounts (user navigated away and came back, or refreshed).
     // Without this, `running`/`generating` default to false and the
@@ -224,6 +234,7 @@ export default function Training() {
           grad_checkpoint: advGradCheckpoint,
           early_stop_patience: advEarlyStopPatience,
           corrections_weight: advCorrectionsWeight,
+          ...(advBaseModel ? { base_model: advBaseModel } : {}),
           ...(advResumeFrom ? { resume_adapter_file: advResumeFrom } : {}),
         },
       });
@@ -479,6 +490,25 @@ export default function Training() {
 
         {showAdvanced && (
           <div className="training-advanced">
+            <div className="training-row">
+              <label className="training-label">Base model:</label>
+              <select
+                className="training-select"
+                value={advBaseModel}
+                onChange={(e) => setAdvBaseModel(e.target.value)}
+                disabled={!baseModels.length}
+              >
+                {baseModels.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label} (~{m.approx_ram_gb}GB)
+                  </option>
+                ))}
+              </select>
+              <span className="training-hint">
+                Each adapter is bound to its base model — switching here means starting a fresh adapter (no resume across families).
+              </span>
+            </div>
+
             <div className="training-row">
               <label className="training-label">Epochs:</label>
               <input

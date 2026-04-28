@@ -35,6 +35,89 @@ logger = logging.getLogger(__name__)
 #   - early_stop_patience=3 means "kill the run if val loss hasn't
 #     improved for 3 evaluation rounds (~600 iters at default
 #     --steps-per-eval=200)." Set to 0 to disable early stopping.
+SYSTEM_PROMPT = (
+    "You are a code review assistant. Given a code change with its "
+    "file path and PR context, identify violations of coding standards, "
+    "missing edge cases, security issues, or other problems. Respond "
+    "PASS if the code is clean."
+)
+
+# Base models the trainer + inferer know how to handle. Adding a new
+# row requires (a) the mlx-community 4-bit weights existing on HF and
+# (b) family being one we have a chat-template for in
+# `_build_chat_prompt`. UI exposes the `label` to the user.
+SUPPORTED_BASE_MODELS = [
+    {
+        "id": "mlx-community/Meta-Llama-3.1-8B-Instruct-4bit",
+        "label": "Llama 3.1 8B (default, general-purpose)",
+        "family": "llama",
+        "approx_ram_gb": 7,
+    },
+    {
+        "id": "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit",
+        "label": "Qwen 2.5 Coder 7B (code-specialized)",
+        "family": "qwen",
+        "approx_ram_gb": 7,
+    },
+    {
+        "id": "mlx-community/Qwen2.5-Coder-14B-Instruct-4bit",
+        "label": "Qwen 2.5 Coder 14B (code-specialized, recommended)",
+        "family": "qwen",
+        "approx_ram_gb": 12,
+    },
+]
+
+
+def _model_family(base_model):
+    """Detect chat-template family from base_model name. Llama 3.x and
+    Qwen 2.x have different special tokens, and using the wrong wrapper
+    silently produces garbage output."""
+    name = (base_model or "").lower()
+    if "qwen" in name:
+        return "qwen"
+    return "llama"
+
+
+def _build_chat_prompt(base_model, system_prompt, user_prompt):
+    """Construct the chat-template string for mlx_lm.generate. mlx-lm
+    takes a raw prompt, not messages, so we wrap by hand. Each model
+    family has its own special-token format — Llama uses
+    `<|begin_of_text|>` + role headers, Qwen uses `<|im_start|>` /
+    `<|im_end|>`."""
+    family = _model_family(base_model)
+    if family == "qwen":
+        return (
+            f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
+            f"<|im_start|>user\n{user_prompt}<|im_end|>\n"
+            f"<|im_start|>assistant\n"
+        )
+    return (
+        "<|begin_of_text|>"
+        "<|start_header_id|>system<|end_header_id|>\n\n"
+        f"{system_prompt}<|eot_id|>"
+        "<|start_header_id|>user<|end_header_id|>\n\n"
+        f"{user_prompt}<|eot_id|>"
+        "<|start_header_id|>assistant<|end_header_id|>\n\n"
+    )
+
+
+def _resolve_base_model_for_adapter(adapter_path):
+    """Read adapter's metadata.json to get the base_model used during
+    training. Falls back to DEFAULT_TRAINING_CONFIG['base_model'] for
+    adapters that predate the metadata write."""
+    if not adapter_path:
+        return DEFAULT_TRAINING_CONFIG["base_model"]
+    metadata_path = os.path.join(adapter_path, "metadata.json")
+    if not os.path.isfile(metadata_path):
+        return DEFAULT_TRAINING_CONFIG["base_model"]
+    try:
+        with open(metadata_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+        return meta.get("base_model") or DEFAULT_TRAINING_CONFIG["base_model"]
+    except Exception:
+        return DEFAULT_TRAINING_CONFIG["base_model"]
+
+
 DEFAULT_TRAINING_CONFIG = {
     "base_model": "mlx-community/Meta-Llama-3.1-8B-Instruct-4bit",
     "lora_rank": 16,
@@ -175,6 +258,29 @@ def train_agent(agent_profile_id=None, dataset_path=None, repo=None, config=None
         result = {"success": False, "error": "Unknown backend"}
 
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+
+    # Persist adapter metadata so future inference loads the right
+    # base model + the right chat template. Must happen on both
+    # success and early-stop paths — the on-disk weights are usable
+    # in both cases. Skipped on outright failure.
+    if result.get("success"):
+        try:
+            metadata_path = os.path.join(adapter_path, "metadata.json")
+            with open(metadata_path, "w", encoding="utf-8") as mf:
+                json.dump({
+                    "base_model": train_config["base_model"],
+                    "trained_at": datetime.now(timezone.utc).isoformat(),
+                    "iters": result.get("iters_run"),
+                    "best_val_loss": result.get("best_val_loss"),
+                    "early_stopped": result.get("early_stopped", False),
+                    "examples": example_count,
+                    "epochs": train_config["epochs"],
+                    "max_seq_length": train_config["max_seq_length"],
+                    "lora_rank": train_config["lora_rank"],
+                    "repo": repo,
+                }, mf, indent=2)
+        except Exception as e:
+            logger.warning(f"[lora-train] Could not write adapter metadata: {e}")
 
     if result.get("success"):
         # Legacy: when called with an explicit agent_profile_id (CLI),
@@ -655,7 +761,13 @@ def review_code(code, agent_profile_id=None, adapter_path=None, file_path=None):
     context_parts.append(f"```\n{code}\n```")
     prompt_text = "\n".join(context_parts)
 
-    config = DEFAULT_TRAINING_CONFIG
+    # Use the base_model the adapter was trained against — Llama and
+    # Qwen weights aren't interchangeable; loading the wrong base
+    # silently produces garbage output.
+    config = {
+        **DEFAULT_TRAINING_CONFIG,
+        "base_model": _resolve_base_model_for_adapter(adapter_path),
+    }
 
     if backend == "mlx":
         return _infer_mlx(prompt_text, adapter_path, config)
@@ -718,18 +830,11 @@ def _infer_mlx(prompt_text, adapter_path, config):
     """Run inference with MLX."""
     try:
         # Format as chat using the same template the model was trained on.
-        # mlx_lm.generate expects a raw string, so we apply the Llama 3.1
-        # chat template manually to match the training data format.
-        chat_prompt = (
-            "<|begin_of_text|>"
-            "<|start_header_id|>system<|end_header_id|>\n\n"
-            "You are a code review assistant. Given a code change with its "
-            "file path and PR context, identify violations of coding standards, "
-            "missing edge cases, security issues, or other problems. Respond "
-            "PASS if the code is clean.<|eot_id|>"
-            "<|start_header_id|>user<|end_header_id|>\n\n"
-            f"{prompt_text}<|eot_id|>"
-            "<|start_header_id|>assistant<|end_header_id|>\n\n"
+        # mlx_lm.generate takes a raw string, so we wrap by hand —
+        # _build_chat_prompt picks the right family-specific template
+        # (Llama special tokens vs Qwen's <|im_start|>/<|im_end|>).
+        chat_prompt = _build_chat_prompt(
+            config["base_model"], SYSTEM_PROMPT, prompt_text
         )
 
         cmd = [

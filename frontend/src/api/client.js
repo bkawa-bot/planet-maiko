@@ -384,6 +384,7 @@ export const api = {
   getRuleCoverage: (repo) => request(`/training/rule-coverage${repo ? `?repo=${encodeURIComponent(repo)}` : ""}`),
   generateSynthetic: (data) => request("/training/generate-synthetic", { method: "POST", body: JSON.stringify(data || {}) }),
   getAdapters: () => request("/training/adapters"),
+  getBaseModels: () => request("/training/base-models"),
 
   // Chat
   chat: (message) => request("/chat", { method: "POST", body: JSON.stringify({ message }) }),

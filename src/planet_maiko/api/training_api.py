@@ -162,6 +162,18 @@ def check_training_requirements():
     return jsonify(check_requirements())
 
 
+@training_bp.route("/training/base-models", methods=["GET"])
+def list_base_models():
+    """Return the supported base models for the Train UI dropdown.
+    Each adapter records its base in metadata.json so inference loads
+    the matching weights + chat template — switching here is safe."""
+    from planet_maiko.brain.learning.trainer import SUPPORTED_BASE_MODELS, DEFAULT_TRAINING_CONFIG
+    return jsonify({
+        "models": SUPPORTED_BASE_MODELS,
+        "default": DEFAULT_TRAINING_CONFIG["base_model"],
+    })
+
+
 @training_bp.route("/training/progress", methods=["GET"])
 def training_progress():
     """Poll training progress from the most recent adapter's progress.json."""
