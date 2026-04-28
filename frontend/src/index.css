@@ -124,44 +124,86 @@
   --pane-bg: rgba(255, 255, 255, 0.65);
 }
 
-/* === Morning theme === */
+/* === Morning theme — sunrise warmth, lighter than Day === */
 [data-theme="morning"] {
-  --bg: #f5efe4; --bg-plain: #e8d8f0; --bg-card: #faf6ee; --bg-card-alt: #f2ece0;
-  --bg-hover: #f5ede0; --bg-selected: #ece4d5;
-  --text: #3a3028; --text-dim: #7a6a58; --text-muted: #a09080;
-  --pink: #B88CC8; --pink-soft: rgba(184, 140, 200, 0.12); --pink-glow: rgba(184, 140, 200, 0.06);
-  --blue: #5a9ec2; --blue-soft: rgba(90, 158, 194, 0.10);
-  --mint: #5ab87d; --orange: #e8944a; --lavender: #9578c2;
-  --peach: #e8a06a; --creamsicle: #f0b878; --lemon: #d4a838;
-  --urgent: #d44a5c; --high: #e8944a; --normal: #B88CC8; --low: #a09080; --green: #5ab87d;
-  --border: #e0d5c8; --border-subtle: #e8ddd0;
-  --urgent-soft: rgba(212, 74, 92, 0.14); --urgent-faint: rgba(212, 74, 92, 0.07);
-  --high-soft: rgba(232, 148, 74, 0.14); --high-faint: rgba(232, 148, 74, 0.07);
-  --lemon-soft: rgba(212, 168, 56, 0.16); --lemon-faint: rgba(212, 168, 56, 0.08);
-  --green-soft: rgba(90, 184, 125, 0.16); --green-faint: rgba(90, 184, 125, 0.08);
-  --lavender-soft: rgba(149, 120, 194, 0.14); --lavender-faint: rgba(149, 120, 194, 0.07);
-  --topbar-gradient: linear-gradient(135deg, #F5C6AA 0%, #F0D8C0 50%, #F8E8D0 100%);
-  --pane-bg: rgba(250, 246, 238, 0.62);
+  --bg: #FFF4E5;            /* warm cream */
+  --bg-plain: #FFF4E5;
+  --bg-card: #FFFFFF;
+  --bg-card-alt: #FFF3A3;   /* Butter Yellow */
+  --bg-hover: #FFEED0;
+  --bg-selected: #FFE0B5;
+  --text: #2B2F42;          /* Dark Slate */
+  --text-dim: #6B7280;      /* Mid Gray */
+  --text-muted: #9CA3B5;
+  --pink: #FF9CC4;          /* Soft Pink — softer than Day's Light Magenta */
+  --pink-soft: rgba(255, 156, 196, 0.14);
+  --pink-glow: rgba(255, 156, 196, 0.08);
+  --blue: #A8D4FF;          /* Soft Blue */
+  --blue-soft: rgba(168, 212, 255, 0.14);
+  --mint: #CFF7E6;          /* Pale Mint */
+  --orange: #FFB38A;        /* Apricot */
+  --lavender: #D8C7FF;      /* Light Periwinkle */
+  --peach: #FFB38A;
+  --creamsicle: #FFC9A8;
+  --lemon: #FFF3A3;         /* Butter Yellow */
+  --urgent: #FFA3A0;        /* Soft Coral */
+  --high: #FFB38A;          /* Apricot */
+  --normal: #FF9CC4;
+  --low: #9CA3B5;
+  --green: #9BE870;         /* Fresh Green */
+  --border: #F0E0C8;
+  --border-subtle: #F8E8D0;
+  --urgent-soft: rgba(255, 163, 160, 0.16); --urgent-faint: rgba(255, 163, 160, 0.08);
+  --high-soft: rgba(255, 179, 138, 0.16); --high-faint: rgba(255, 179, 138, 0.08);
+  --lemon-soft: rgba(255, 243, 163, 0.20); --lemon-faint: rgba(255, 243, 163, 0.10);
+  --green-soft: rgba(155, 232, 112, 0.18); --green-faint: rgba(155, 232, 112, 0.10);
+  --lavender-soft: rgba(216, 199, 255, 0.18); --lavender-faint: rgba(216, 199, 255, 0.08);
+  --topbar-gradient: linear-gradient(135deg, #FFF3A3 0%, #FF9CC4 50%, #D8C7FF 100%);
+  --pane-bg: rgba(255, 255, 255, 0.70);
 }
 
-/* === Sunset theme === */
+/* === Sunset theme — civil twilight: periwinkle sky + coral horizon ===
+   The 20-30 min window after the sun drops: the upper sky is still
+   indigo-blue, the horizon glows coral/gold, and the high clouds
+   catch a periwinkle wash. So bg leans periwinkle-indigo (not deep
+   purple), text-dim picks up the periwinkle so labels feel like
+   they're catching leftover sky-light, and the warm accents
+   (Coral, Peach, Cosmic Gold) carry the horizon. */
 [data-theme="sunset"] {
-  --bg: #1A1A2E; --bg-plain: #0C0E2A; --bg-card: #302248; --bg-card-alt: #382850;
-  --bg-hover: #3E2D50; --bg-selected: #483558;
-  --text: #F0E6E8; --text-dim: #C4A0AA; --text-muted: #8A6878;
-  --pink: #E8855A; --pink-soft: rgba(232, 133, 90, 0.15); --pink-glow: rgba(232, 133, 90, 0.08);
-  --blue: #7EB8D9; --blue-soft: rgba(126, 184, 217, 0.12);
-  --mint: #7dd4a0; --orange: #F0A060; --lavender: #A088D0;
-  --peach: #F0B090; --creamsicle: #FFD0A8; --lemon: #F0C850;
-  --urgent: #FF6B7F; --high: #F0A060; --normal: #E8855A; --low: #8A6878; --green: #7dd4a0;
-  --border: #483558; --border-subtle: #3E2D50;
-  --urgent-soft: rgba(255, 107, 127, 0.15); --urgent-faint: rgba(255, 107, 127, 0.08);
-  --high-soft: rgba(240, 160, 96, 0.15); --high-faint: rgba(240, 160, 96, 0.08);
-  --lemon-soft: rgba(240, 200, 80, 0.16); --lemon-faint: rgba(240, 200, 80, 0.08);
-  --green-soft: rgba(125, 212, 160, 0.16); --green-faint: rgba(125, 212, 160, 0.08);
-  --lavender-soft: rgba(160, 136, 208, 0.16); --lavender-faint: rgba(160, 136, 208, 0.08);
-  --topbar-gradient: linear-gradient(135deg, #1A1A2E 0%, #2D2040 35%, #6A3058 70%, #A04070 100%);
-  --pane-bg: rgba(58, 34, 72, 0.52);
+  --bg: #1F2D55;            /* twilight indigo */
+  --bg-plain: #1F2D55;
+  --bg-card: #2D3D6E;
+  --bg-card-alt: #3A4D85;   /* slight mauve lift */
+  --bg-hover: #455185;
+  --bg-selected: #515C95;
+  --text: #F4F7FF;          /* Soft White */
+  --text-dim: #B5C0E0;      /* periwinkle-tinted */
+  --text-muted: #7C89B5;
+  --pink: #FF7A73;          /* Warm Coral — primary, the horizon glow */
+  --pink-soft: rgba(255, 122, 115, 0.16);
+  --pink-glow: rgba(255, 122, 115, 0.08);
+  --blue: #6FB6FF;          /* Sky Blue Spark — the still-lit upper sky */
+  --blue-soft: rgba(111, 182, 255, 0.16);
+  --mint: #A8F0D1;
+  --orange: #FF9B6A;        /* Peach Orange */
+  --lavender: #C9A6FF;      /* Soft Lavender Glow — wispy clouds */
+  --peach: #FF9B6A;
+  --creamsicle: #FFCAA8;
+  --lemon: #FFD36B;         /* Cosmic Gold — last rays */
+  --urgent: #FF7A73;
+  --high: #FF9B6A;
+  --normal: #FF7A73;
+  --low: #7C89B5;
+  --green: #7ED957;         /* Slime Green */
+  --border: #455185;
+  --border-subtle: #2D3D6E;
+  --urgent-soft: rgba(255, 122, 115, 0.16); --urgent-faint: rgba(255, 122, 115, 0.08);
+  --high-soft: rgba(255, 155, 106, 0.16); --high-faint: rgba(255, 155, 106, 0.08);
+  --lemon-soft: rgba(255, 211, 107, 0.18); --lemon-faint: rgba(255, 211, 107, 0.09);
+  --green-soft: rgba(126, 217, 87, 0.16); --green-faint: rgba(126, 217, 87, 0.08);
+  --lavender-soft: rgba(201, 166, 255, 0.16); --lavender-faint: rgba(201, 166, 255, 0.08);
+  --topbar-gradient: linear-gradient(135deg, #1F2D55 0%, #3A4D85 40%, #FF7A73 80%, #FFD36B 100%);
+  --pane-bg: rgba(45, 61, 110, 0.55);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
