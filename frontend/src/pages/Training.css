@@ -203,6 +203,37 @@
   display: flex; gap: 8px; align-items: center; font-size: 12px;
   color: var(--text-dim); padding: 8px 0;
 }
+/* Advanced section: collapsible block of training knobs (epochs,
+   max_seq_length, grad_checkpoint, early_stop_patience, resume). */
+.training-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  margin: 6px 0 4px 0;
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-xs);
+  background: var(--bg-card-alt);
+}
+.training-advanced .training-row {
+  align-items: center;
+}
+.training-advanced .training-label {
+  min-width: 130px;
+  display: inline-flex;
+  align-items: center;
+}
+.training-input {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  background: var(--bg-card);
+  color: var(--text);
+}
+.training-input-num { width: 70px; }
+
 .training-live-progress { margin-bottom: 12px; }
 .training-progress-stats {
   display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;

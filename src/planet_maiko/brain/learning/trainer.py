@@ -23,14 +23,28 @@ from datetime import datetime, timezone
 logger = logging.getLogger(__name__)
 
 # Default training config
+#
+# Notes on the defaults below:
+#   - epochs=2 because LoRA on synthetic-rule data overfits fast past
+#     2 epochs (we've seen val plateau by ~iter 10k on 3-epoch runs of
+#     ~6k pairs). Raise per-run via the UI when a run is converging well.
+#   - max_seq_length=1024 fits comfortably on 32GB+ Apple Silicon for
+#     8B-4bit; on 16GB or with very long pairs, drop to 512.
+#   - grad_checkpoint=False (off) by default — it costs ~10% throughput
+#     for ~30% memory savings; flip it on per-run when OOM happens.
+#   - early_stop_patience=3 means "kill the run if val loss hasn't
+#     improved for 3 evaluation rounds (~600 iters at default
+#     --steps-per-eval=200)." Set to 0 to disable early stopping.
 DEFAULT_TRAINING_CONFIG = {
     "base_model": "mlx-community/Meta-Llama-3.1-8B-Instruct-4bit",
     "lora_rank": 16,
     "lora_alpha": 16,
-    "epochs": 3,
+    "epochs": 2,
     "batch_size": 1,
     "learning_rate": 1e-4,
     "max_seq_length": 1024,
+    "grad_checkpoint": False,
+    "early_stop_patience": 3,
 }
 
 
@@ -294,7 +308,26 @@ def _prepare_training_file(dataset_path, output_dir, config):
 
 
 def _train_mlx(train_file, adapter_path, config):
-    """Train using MLX (Apple Silicon)."""
+    """Train using MLX (Apple Silicon).
+
+    Three resilience features layered on top of the basic mlx-lm call:
+
+      1. Early stopping — we parse "Val loss" lines as they stream and
+         terminate the subprocess when val hasn't improved for
+         `early_stop_patience` consecutive eval rounds. This caps both
+         compute and overfit: the on-disk adapters.safetensors at
+         termination is from the most recent --save-every checkpoint.
+
+      2. grad_checkpoint — opt-in flag that recomputes activations
+         during the backward pass instead of caching them. ~30% memory
+         savings for ~10% slower iters; flip it on when the previous
+         run OOM'd.
+
+      3. resume_adapter_file — optional path to an existing adapters.
+         safetensors. mlx-lm's --resume-adapter-file picks up training
+         from those weights, so OOMs (or early-stops you regret) don't
+         throw away progress.
+    """
     import math as _math
     import re as _re
 
@@ -304,9 +337,7 @@ def _train_mlx(train_file, adapter_path, config):
         data_dir = os.path.dirname(train_file)
 
         # Iters scaled to the actual dataset: ceil(N / batch) * epochs
-        # so each epoch is a full pass. The old hardcoded
-        # `epochs * 100` ran 300 iters regardless of data size, which
-        # silently under-trained anything bigger than that.
+        # so each epoch is a full pass.
         with open(train_file, "r", encoding="utf-8") as f:
             train_count = sum(1 for _ in f)
         batch_size = max(1, int(config["batch_size"]))
@@ -324,10 +355,21 @@ def _train_mlx(train_file, adapter_path, config):
             "--learning-rate", str(config["learning_rate"]),
             "--max-seq-length", str(config["max_seq_length"]),
         ]
+        if config.get("grad_checkpoint"):
+            cmd.append("--grad-checkpoint")
+        resume_from = config.get("resume_adapter_file")
+        if resume_from:
+            cmd.extend(["--resume-adapter-file", resume_from])
+
+        patience = int(config.get("early_stop_patience") or 0)
+        IMPROVE_DELTA = 1e-3  # val must drop by this much to count
 
         logger.info(
             f"[lora-train] {train_count} train pairs × {epochs} epochs "
-            f"/ batch {batch_size} = {total_iters} iters"
+            f"/ batch {batch_size} = {total_iters} iters "
+            f"(early_stop_patience={patience}, "
+            f"grad_checkpoint={bool(config.get('grad_checkpoint'))}, "
+            f"resume={bool(resume_from)})"
         )
         logger.info(f"[lora-train] Running: {' '.join(cmd)}")
 
@@ -342,30 +384,27 @@ def _train_mlx(train_file, adapter_path, config):
 
         # mlx-lm prints separate "Train loss" and "Val loss" lines per
         # iter; matching them separately is what makes overfit visible.
-        # We also keep loss_history (capped) so the UI can sparkline both.
         train_re = _re.compile(r"Iter\s+(\d+):\s*Train loss\s+([\d.]+)", _re.IGNORECASE)
         val_re = _re.compile(r"Iter\s+(\d+):\s*Val loss\s+([\d.]+)", _re.IGNORECASE)
         tok_re = _re.compile(r"([\d.]+)\s*Tokens/sec", _re.IGNORECASE)
 
-        loss_history = []  # [{iter, train, val}]
+        loss_history = []
         latest_train = None
         latest_val = None
         latest_tokens_sec = None
         latest_iter = 0
+        best_val_loss = None
+        evals_since_improve = 0
+        early_stopped = False
 
         def _update_history(it, train=None, val=None):
             nonlocal latest_train, latest_val
-            # mlx prints the train and val lines for the same iter
-            # separately — merge them into one entry so the chart's
-            # x-axis stays aligned.
             if loss_history and loss_history[-1]["iter"] == it:
                 entry = loss_history[-1]
             else:
                 entry = {"iter": it, "train": None, "val": None}
                 loss_history.append(entry)
                 if len(loss_history) > 500:
-                    # Halve when capped — preserves the curve shape
-                    # without unbounded file growth.
                     loss_history[:] = loss_history[::2]
             if train is not None:
                 entry["train"] = train
@@ -392,7 +431,30 @@ def _train_mlx(train_file, adapter_path, config):
                 _update_history(latest_iter, train=float(mt.group(2)))
             if mv:
                 latest_iter = int(mv.group(1))
-                _update_history(latest_iter, val=float(mv.group(2)))
+                latest_val_value = float(mv.group(2))
+                _update_history(latest_iter, val=latest_val_value)
+
+                # Early-stop bookkeeping: each val-loss line is one
+                # "eval" — improvement resets the counter, plateau
+                # increments it. Only fires when patience > 0.
+                if patience > 0:
+                    if best_val_loss is None or latest_val_value < best_val_loss - IMPROVE_DELTA:
+                        best_val_loss = latest_val_value
+                        evals_since_improve = 0
+                    else:
+                        evals_since_improve += 1
+                        if evals_since_improve >= patience:
+                            logger.info(
+                                f"[lora-train] Early stop at iter {latest_iter}: "
+                                f"val plateau for {evals_since_improve} evals "
+                                f"(best={best_val_loss:.4f}, latest={latest_val_value:.4f})"
+                            )
+                            early_stopped = True
+                            try:
+                                process.terminate()
+                            except Exception:
+                                pass
+                            break
 
             if mt or mv:
                 progress = {
@@ -400,9 +462,8 @@ def _train_mlx(train_file, adapter_path, config):
                     "total_iters": total_iters,
                     "train_loss": latest_train,
                     "val_loss": latest_val,
-                    # Keep `loss` populated so older UI bits don't
-                    # break — points at the most recent train loss.
-                    "loss": latest_train,
+                    "best_val_loss": best_val_loss,
+                    "loss": latest_train,  # back-compat
                     "tokens_sec": latest_tokens_sec,
                     "percent": round(latest_iter / total_iters * 100, 1) if total_iters else 0,
                     "status": "training",
@@ -416,27 +477,47 @@ def _train_mlx(train_file, adapter_path, config):
 
         process.wait()
 
+        # Status semantics:
+        #   done       — full run completed cleanly (rc 0, no early stop)
+        #   done_early — we terminated due to val plateau; on-disk
+        #                weights are from the last --save-every
+        #                checkpoint, which is the right thing to keep.
+        #   failed     — non-zero exit and no early-stop flag
+        if early_stopped:
+            status = "done_early"
+        elif process.returncode == 0:
+            status = "done"
+        else:
+            status = "failed"
+
         try:
             final = {
-                "status": "done" if process.returncode == 0 else "failed",
-                "percent": 100,
+                "status": status,
+                "percent": 100 if status == "done" else round(latest_iter / total_iters * 100, 1) if total_iters else 0,
                 "iteration": latest_iter,
                 "total_iters": total_iters,
                 "train_loss": latest_train,
                 "val_loss": latest_val,
+                "best_val_loss": best_val_loss,
                 "loss": latest_train,
                 "loss_history": loss_history,
+                "early_stopped": early_stopped,
             }
             with open(progress_path, "w") as pf:
                 json.dump(final, pf)
         except Exception:
             pass
 
-        if process.returncode == 0:
-            return {"success": True, "backend": "mlx"}
-        else:
-            tail = "\n".join(output_lines[-5:]) if output_lines else "no output"
-            return {"success": False, "error": f"MLX training exited with code {process.returncode}:\n{tail}"}
+        if status in ("done", "done_early"):
+            return {
+                "success": True,
+                "backend": "mlx",
+                "early_stopped": early_stopped,
+                "best_val_loss": best_val_loss,
+                "iters_run": latest_iter,
+            }
+        tail = "\n".join(output_lines[-5:]) if output_lines else "no output"
+        return {"success": False, "error": f"MLX training exited with code {process.returncode}:\n{tail}"}
 
     except FileNotFoundError:
         return {

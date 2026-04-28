@@ -97,9 +97,22 @@ export default function Training() {
   const [filterRepo, setFilterRepo] = useState("");
   const [confirmTraining, setConfirmTraining] = useState(false);
   const [confirmRegenAll, setConfirmRegenAll] = useState(false);
+  // Advanced training knobs — collapsed by default. Defaults match
+  // the backend DEFAULT_TRAINING_CONFIG so an unopened section
+  // produces the same behavior as not sending anything.
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [advEpochs, setAdvEpochs] = useState(2);
+  const [advMaxSeqLength, setAdvMaxSeqLength] = useState(1024);
+  const [advGradCheckpoint, setAdvGradCheckpoint] = useState(false);
+  const [advEarlyStopPatience, setAdvEarlyStopPatience] = useState(3);
+  const [advResumeFrom, setAdvResumeFrom] = useState("");
+  const [adapters, setAdapters] = useState([]);
 
   const fetchDatasets = () => {
     api.getTrainingDatasets().then(setDatasets).catch(() => {});
+  };
+  const fetchAdapters = () => {
+    api.getAdapters().then(setAdapters).catch(() => {});
   };
 
   const fetchCoverage = (repo) => {
@@ -108,6 +121,7 @@ export default function Training() {
 
   useEffect(() => {
     fetchDatasets();
+    fetchAdapters();
     // Resume progress displays if a job is already running when the
     // page mounts (user navigated away and came back, or refreshed).
     // Without this, `running`/`generating` default to false and the
@@ -203,6 +217,13 @@ export default function Training() {
       const result = await api.trainAgent({
         repo: filterRepo || undefined,
         dataset_path: selectedDataset || undefined,
+        config: {
+          epochs: advEpochs,
+          max_seq_length: advMaxSeqLength,
+          grad_checkpoint: advGradCheckpoint,
+          early_stop_patience: advEarlyStopPatience,
+          ...(advResumeFrom ? { resume_adapter_file: advResumeFrom } : {}),
+        },
       });
       if (result?.status === "started") {
         // Async path — the polling effect above tracks completion.
@@ -442,6 +463,93 @@ export default function Training() {
             ))}
           </select>
         </div>
+
+        <div className="training-row">
+          <button
+            className="btn-collapse"
+            onClick={() => setShowAdvanced((v) => !v)}
+            type="button"
+          >
+            {showAdvanced ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            Advanced
+          </button>
+        </div>
+
+        {showAdvanced && (
+          <div className="training-advanced">
+            <div className="training-row">
+              <label className="training-label">Epochs:</label>
+              <input
+                className="training-input training-input-num"
+                type="number"
+                min="1"
+                max="10"
+                value={advEpochs}
+                onChange={(e) => setAdvEpochs(Math.max(1, Number(e.target.value) || 1))}
+              />
+              <span className="training-hint">Default 2. Higher = more passes; risk of overfit on synthetic data past 3.</span>
+            </div>
+
+            <div className="training-row">
+              <label className="training-label">Max seq length:</label>
+              <select
+                className="training-select"
+                value={advMaxSeqLength}
+                onChange={(e) => setAdvMaxSeqLength(Number(e.target.value))}
+              >
+                <option value={256}>256 (lightest, may truncate)</option>
+                <option value={512}>512 (recommended for OOM-prone runs)</option>
+                <option value={1024}>1024 (default)</option>
+                <option value={2048}>2048 (long pairs only, heavy memory)</option>
+              </select>
+            </div>
+
+            <div className="training-row">
+              <label className="training-label">
+                <input
+                  type="checkbox"
+                  checked={advGradCheckpoint}
+                  onChange={(e) => setAdvGradCheckpoint(e.target.checked)}
+                  style={{ marginRight: 6 }}
+                />
+                Grad checkpointing
+              </label>
+              <span className="training-hint">~30% less memory, ~10% slower. Flip on after an OOM.</span>
+            </div>
+
+            <div className="training-row">
+              <label className="training-label">Early stop patience:</label>
+              <input
+                className="training-input training-input-num"
+                type="number"
+                min="0"
+                max="20"
+                value={advEarlyStopPatience}
+                onChange={(e) => setAdvEarlyStopPatience(Math.max(0, Number(e.target.value) || 0))}
+              />
+              <span className="training-hint">
+                Kill the run after N evals without val improvement. 0 disables. Default 3 ≈ 600 iters.
+              </span>
+            </div>
+
+            <div className="training-row">
+              <label className="training-label">Resume from:</label>
+              <select
+                className="training-select"
+                value={advResumeFrom}
+                onChange={(e) => setAdvResumeFrom(e.target.value)}
+              >
+                <option value="">— start fresh —</option>
+                {adapters.filter((a) => a.has_weights).map((a) => (
+                  <option key={a.path} value={`${a.path}/adapters.safetensors`}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+              <span className="training-hint">Pick up where a previous run left off (e.g. after OOM).</span>
+            </div>
+          </div>
+        )}
 
         <div className="training-row">
           <button
