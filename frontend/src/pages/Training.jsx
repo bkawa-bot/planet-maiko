@@ -111,6 +111,7 @@ export default function Training() {
   const [advLoraRank, setAdvLoraRank] = useState(16);
   const [advBatchSize, setAdvBatchSize] = useState(1);
   const [advStepsPerEval, setAdvStepsPerEval] = useState(200);
+  const [advLearningRate, setAdvLearningRate] = useState(5e-5);
   const [advResumeFrom, setAdvResumeFrom] = useState("");
   const [advBaseModel, setAdvBaseModel] = useState("");
   const [adapters, setAdapters] = useState([]);
@@ -248,6 +249,7 @@ export default function Training() {
           lora_alpha: advLoraRank,
           batch_size: advBatchSize,
           steps_per_eval: advStepsPerEval,
+          learning_rate: advLearningRate,
           ...(advBaseModel ? { base_model: advBaseModel } : {}),
           ...(advResumeFrom ? { resume_adapter_file: advResumeFrom } : {}),
         },
@@ -668,6 +670,24 @@ export default function Training() {
               </select>
               <span className="training-hint">
                 Examples processed per gradient step. Direct speed multiplier (real, not just observability).
+              </span>
+            </div>
+
+            <div className="training-row">
+              <label className="training-label">Learning rate:</label>
+              <select
+                className="training-select"
+                value={advLearningRate}
+                onChange={(e) => setAdvLearningRate(Number(e.target.value))}
+              >
+                <option value={2e-4}>2e-4 (aggressive — risky at high rank/batch)</option>
+                <option value={1e-4}>1e-4 (previous default)</option>
+                <option value={5e-5}>5e-5 (recommended default — robust across configs)</option>
+                <option value={2e-5}>2e-5 (conservative — slower but very stable)</option>
+                <option value={1e-5}>1e-5 (very conservative)</option>
+              </select>
+              <span className="training-hint">
+                Step size in gradient descent. Lower if you see NaN train loss; raise if convergence is painfully slow.
               </span>
             </div>
 

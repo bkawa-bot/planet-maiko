@@ -124,7 +124,13 @@ DEFAULT_TRAINING_CONFIG = {
     "lora_alpha": 16,
     "epochs": 2,
     "batch_size": 1,
-    "learning_rate": 1e-4,
+    # learning_rate: peak LR for the cosine schedule mlx-lm applies.
+    # Lowered from 1e-4 to 5e-5 after a NaN incident at rank=32 +
+    # batch=4 + 1e-4 — the effective gradient step grew ~16× from the
+    # rank-8 baseline and overshot, blowing up to inf/NaN. 5e-5 is the
+    # safer starting point across rank/batch combos; bump per-run via
+    # the UI when convergence feels slow and the configs are modest.
+    "learning_rate": 5e-5,
     "max_seq_length": 1024,
     "grad_checkpoint": False,
     "early_stop_patience": 3,
