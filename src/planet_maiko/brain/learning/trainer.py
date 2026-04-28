@@ -45,6 +45,12 @@ DEFAULT_TRAINING_CONFIG = {
     "max_seq_length": 1024,
     "grad_checkpoint": False,
     "early_stop_patience": 3,
+    # corrections_weight: how many times each pair from corrections.jsonl
+    # gets repeated in the training file. 1 = current behavior (no
+    # up-weighting). 3 lifts ~10 corrections in a 1500-pair dataset
+    # from 0.7% of signal to ~2%. Capped at 5 in the UI; past that the
+    # corrections start dominating and you risk catastrophic forgetting.
+    "corrections_weight": 1,
 }
 
 
@@ -248,6 +254,7 @@ def _prepare_training_file(dataset_path, output_dir, config):
                 logger.info(f"[lora-train] Including rule-based training data from {fname}")
 
     all_pairs = []
+    corrections_pairs = []  # tracked separately so we can up-weight them post-split
     for source in source_files:
         with open(source) as f_in:
             for line in f_in:
@@ -258,6 +265,8 @@ def _prepare_training_file(dataset_path, output_dir, config):
                 if "input" not in pair or "output" not in pair:
                     continue
                 all_pairs.append(pair)
+                if source == corrections_path:
+                    corrections_pairs.append(pair)
 
     # Deterministic shuffle → same holdout every time the trainer runs on
     # the same data. If the evaluator can't find holdout.jsonl it'll fall
@@ -277,6 +286,29 @@ def _prepare_training_file(dataset_path, output_dir, config):
         split_idx = 1
     holdout_pairs = shuffled[:split_idx]
     train_pairs = shuffled[split_idx:]
+
+    # Up-weight corrections AFTER the split so duplicates only land
+    # in the train set — duplicating across both sides would inflate
+    # holdout F1 by giving the evaluator pairs the trainer memorized.
+    # Capped here too, in case a stale config sneaks past the UI cap.
+    corrections_weight = max(1, min(5, int(config.get("corrections_weight", 1) or 1)))
+    if corrections_weight > 1 and corrections_pairs:
+        # Match by (input, output) — corrections that landed in the
+        # holdout split don't get duplicated; the rest get N-1 extra
+        # copies stitched onto train.
+        correction_keys = {(p["input"], p["output"]) for p in corrections_pairs}
+        train_corrections = [
+            p for p in train_pairs
+            if (p["input"], p["output"]) in correction_keys
+        ]
+        extra_copies = corrections_weight - 1
+        for _ in range(extra_copies):
+            train_pairs.extend(train_corrections)
+        logger.info(
+            f"[lora-train] Up-weighted {len(train_corrections)} corrections "
+            f"by {corrections_weight}× (+{len(train_corrections) * extra_copies} "
+            f"duplicates added to train only)"
+        )
 
     def _write_chat(path, pairs):
         with open(path, "w", encoding="utf-8") as f_out:

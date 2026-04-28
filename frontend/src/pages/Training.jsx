@@ -105,6 +105,7 @@ export default function Training() {
   const [advMaxSeqLength, setAdvMaxSeqLength] = useState(1024);
   const [advGradCheckpoint, setAdvGradCheckpoint] = useState(false);
   const [advEarlyStopPatience, setAdvEarlyStopPatience] = useState(3);
+  const [advCorrectionsWeight, setAdvCorrectionsWeight] = useState(1);
   const [advResumeFrom, setAdvResumeFrom] = useState("");
   const [adapters, setAdapters] = useState([]);
 
@@ -222,6 +223,7 @@ export default function Training() {
           max_seq_length: advMaxSeqLength,
           grad_checkpoint: advGradCheckpoint,
           early_stop_patience: advEarlyStopPatience,
+          corrections_weight: advCorrectionsWeight,
           ...(advResumeFrom ? { resume_adapter_file: advResumeFrom } : {}),
         },
       });
@@ -529,6 +531,21 @@ export default function Training() {
               />
               <span className="training-hint">
                 Kill the run after N evals without val improvement. 0 disables. Default 3 ≈ 600 iters.
+              </span>
+            </div>
+
+            <div className="training-row">
+              <label className="training-label">Corrections weight:</label>
+              <input
+                className="training-input training-input-num"
+                type="number"
+                min="1"
+                max="5"
+                value={advCorrectionsWeight}
+                onChange={(e) => setAdvCorrectionsWeight(Math.max(1, Math.min(5, Number(e.target.value) || 1)))}
+              />
+              <span className="training-hint">
+                Each correction is repeated N× in train (1 = no up-weight, 3 = recommended for retrain runs, 5 = max).
               </span>
             </div>
 
