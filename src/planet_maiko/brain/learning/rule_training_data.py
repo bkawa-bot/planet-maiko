@@ -116,7 +116,7 @@ def get_covered_rule_ids(output_dir=None, repo=None):
 
 def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None,
                           rule_ids=None, repo=None, progress_cb=None,
-                          max_workers=3):
+                          max_workers=5):
     """Generate training data from active learnings.
 
     Args:
@@ -128,8 +128,10 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None,
         progress_cb: optional callable for the async rule-gen endpoint to
             stream per-rule progress. Kwargs: total_rules, rules_processed,
             current_rule, pairs, errors.
-        max_workers: concurrent LLM calls. Default 3. Higher risks
-            saturating the API or spawning too many claude subprocesses.
+        max_workers: concurrent LLM calls. Default 5 (was 3 originally; 5
+            is comfortable on most Anthropic paid tiers and ~1.7× faster
+            for large rule sets). Going higher risks rate-limit hits or
+            spawning too many claude subprocesses; cap at 10 in the UI.
 
     Pairs are written incrementally to `<path>.jsonl.partial` as each
     rule's LLM call returns, then the file is renamed to `<path>.jsonl`

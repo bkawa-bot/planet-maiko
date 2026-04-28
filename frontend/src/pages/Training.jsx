@@ -92,6 +92,7 @@ export default function Training() {
   const [datasets, setDatasets] = useState([]);
   const [showDatasets, setShowDatasets] = useState(false);
   const [selectedDataset, setSelectedDataset] = useState("");
+  const [genConcurrency, setGenConcurrency] = useState(5);
   const [progress, setProgress] = useState(null);
   const [coverage, setCoverage] = useState(null);
   const [filterRepo, setFilterRepo] = useState("");
@@ -274,7 +275,11 @@ export default function Training() {
     setGenerating(true);
     setGeneratingProgress(`Queuing ${coverage?.active_count} rules…`);
     try {
-      const result = await api.generateFromRules({ force: true, repo: filterRepo || undefined });
+      const result = await api.generateFromRules({
+        force: true,
+        repo: filterRepo || undefined,
+        max_workers: genConcurrency,
+      });
       if (result?.status === "started") {
         // Async — the polling effect above takes over from here.
         showToast("Rule generation running in the background.", "normal");
@@ -362,6 +367,23 @@ export default function Training() {
         )}
 
         <div className="training-row">
+          <label className="training-label" style={{ minWidth: "auto" }}>Concurrency:</label>
+          <input
+            className="training-input training-input-num"
+            type="number"
+            min="1"
+            max="10"
+            value={genConcurrency}
+            onChange={(e) => setGenConcurrency(Math.max(1, Math.min(10, Number(e.target.value) || 5)))}
+            disabled={generating}
+            title="Concurrent Opus calls. Higher = faster, but risks Anthropic rate-limit hits."
+          />
+          <span className="training-hint">
+            Parallel Opus calls. 5 default; up to 10 for large rule sets if your tier allows it.
+          </span>
+        </div>
+
+        <div className="training-row">
           <button
             className="btn btn-primary"
             disabled={generating || (coverage && coverage.uncovered_count === 0)}
@@ -370,7 +392,10 @@ export default function Training() {
               const count = coverage?.uncovered_count || 0;
               setGeneratingProgress(`Queuing ${count} rule(s)…`);
               try {
-                const result = await api.generateFromRules({ repo: filterRepo || undefined });
+                const result = await api.generateFromRules({
+                  repo: filterRepo || undefined,
+                  max_workers: genConcurrency,
+                });
                 if (result?.status === "started") {
                   // Async — polling effect handles completion.
                   showToast("Rule generation running in the background.", "normal");
