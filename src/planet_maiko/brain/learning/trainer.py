@@ -685,6 +685,63 @@ def _train_pytorch(train_file, adapter_path, config, device):
     }
 
 
+def reset_stale_training_progress():
+    """On app startup, mark any in-progress training runs as failed.
+
+    progress.json with status="training" or "preparing" survives a
+    server crash or laptop reboot because mlx-lm doesn't get to write
+    a final state — it was killed mid-run along with everything else.
+    The next server boot has no subprocess attached, so the UI would
+    poll /training/progress, see "training", and lock the spinner on
+    forever. Sweep them to a clean failed state with a clear reason.
+
+    Guard: skips entries whose progress.json was modified in the
+    last 30 seconds. In the rare case where Flask restarted but the
+    mlx-lm subprocess is still running (orphaned but alive), we don't
+    want to stomp its live progress.
+    """
+    from planet_maiko.paths import data_dir
+
+    models_dir = os.path.join(data_dir(), "models")
+    if not os.path.isdir(models_dir):
+        return 0
+
+    now = datetime.now(timezone.utc).timestamp()
+    cleaned = 0
+    for adapter_name in os.listdir(models_dir):
+        progress_path = os.path.join(models_dir, adapter_name, "progress.json")
+        if not os.path.isfile(progress_path):
+            continue
+        try:
+            mtime = os.path.getmtime(progress_path)
+        except Exception:
+            continue
+        # If updated in the last 30s, the subprocess might still be
+        # writing to it — leave it alone.
+        if now - mtime < 30:
+            continue
+        try:
+            with open(progress_path, "r", encoding="utf-8") as f:
+                progress = json.load(f)
+        except Exception:
+            continue
+        if progress.get("status") in ("training", "preparing"):
+            progress["status"] = "failed"
+            progress["error"] = (
+                "Training did not complete — server restarted or the "
+                "process was killed before the run finished."
+            )
+            try:
+                with open(progress_path, "w", encoding="utf-8") as f:
+                    json.dump(progress, f)
+                cleaned += 1
+            except Exception:
+                pass
+    if cleaned:
+        logger.info(f"[lora-train] Marked {cleaned} stale training run(s) as failed")
+    return cleaned
+
+
 def check_requirements():
     """Check what training backends are available."""
     backend = get_backend()

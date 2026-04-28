@@ -418,6 +418,11 @@ def create_app(start_scheduler=False):
             backfill_card_ids()
         except Exception as e:
             logger.warning(f"[startup] Card-id backfill skipped: {e}")
+        try:
+            from planet_maiko.brain.learning.trainer import reset_stale_training_progress
+            reset_stale_training_progress()
+        except Exception as e:
+            logger.warning(f"[startup] Stale training-progress cleanup skipped: {e}")
 
         # Wake-registry cleanup: the previous run may have crashed with
         # agents flagged "working" and with session-registry entries
