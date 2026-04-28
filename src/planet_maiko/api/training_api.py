@@ -360,6 +360,11 @@ def generate_from_rules_endpoint():
     examples = data.get("examples_per_rule", 50)
     force = data.get("force", False)
     repo = data.get("repo") or None
+    # Style anchor — which repo's patterns to inject into the synth
+    # prompt. Independent of `repo` (rule scope), so global rule runs
+    # can be styled like a representative codebase. Empty / null =
+    # fall back to `repo` (preserves prior behavior).
+    style_anchor_repo = data.get("style_anchor_repo") or None
     # Cap at 10 — past that, Anthropic rate limits start mattering more
     # than additional parallelism helps. Floor at 1 so the user can
     # always step back to sequential if they're getting throttled.
@@ -416,6 +421,7 @@ def generate_from_rules_endpoint():
                     repo=repo,
                     progress_cb=_rule_gen_update,
                     max_workers=max_workers,
+                    style_anchor_repo=style_anchor_repo,
                 )
                 if result.get("success"):
                     _rule_gen_update(

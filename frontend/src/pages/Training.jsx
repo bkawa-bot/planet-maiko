@@ -93,6 +93,7 @@ export default function Training() {
   const [showDatasets, setShowDatasets] = useState(false);
   const [selectedDataset, setSelectedDataset] = useState("");
   const [genConcurrency, setGenConcurrency] = useState(5);
+  const [styleAnchorRepo, setStyleAnchorRepo] = useState("");
   const [progress, setProgress] = useState(null);
   const [coverage, setCoverage] = useState(null);
   const [filterRepo, setFilterRepo] = useState("");
@@ -279,6 +280,7 @@ export default function Training() {
         force: true,
         repo: filterRepo || undefined,
         max_workers: genConcurrency,
+        style_anchor_repo: styleAnchorRepo || undefined,
       });
       if (result?.status === "started") {
         // Async — the polling effect above takes over from here.
@@ -367,6 +369,24 @@ export default function Training() {
         )}
 
         <div className="training-row">
+          <label className="training-label">Style anchor:</label>
+          <select
+            className="training-select"
+            value={styleAnchorRepo}
+            onChange={(e) => setStyleAnchorRepo(e.target.value)}
+            disabled={generating}
+          >
+            <option value="">— pure synthetic (no repo grounding) —</option>
+            {coverage?.available_repos?.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+          <span className="training-hint">
+            Optional. Picks a repo whose code style Opus will mimic. Leave empty for global rules to stay fully synthetic; pick a repo to ground synth in real conventions.
+          </span>
+        </div>
+
+        <div className="training-row">
           <label className="training-label" style={{ minWidth: "auto" }}>Concurrency:</label>
           <input
             className="training-input training-input-num"
@@ -395,6 +415,7 @@ export default function Training() {
                 const result = await api.generateFromRules({
                   repo: filterRepo || undefined,
                   max_workers: genConcurrency,
+                  style_anchor_repo: styleAnchorRepo || undefined,
                 });
                 if (result?.status === "started") {
                   // Async — polling effect handles completion.

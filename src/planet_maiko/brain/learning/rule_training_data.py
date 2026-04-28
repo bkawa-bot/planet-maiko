@@ -116,7 +116,7 @@ def get_covered_rule_ids(output_dir=None, repo=None):
 
 def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None,
                           rule_ids=None, repo=None, progress_cb=None,
-                          max_workers=5):
+                          max_workers=5, style_anchor_repo=None):
     """Generate training data from active learnings.
 
     Args:
@@ -132,6 +132,12 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None,
             is comfortable on most Anthropic paid tiers and ~1.7× faster
             for large rule sets). Going higher risks rate-limit hits or
             spawning too many claude subprocesses; cap at 10 in the UI.
+        style_anchor_repo: optional repo whose code patterns are injected
+            into the synth prompt — separate from `repo` (which filters
+            rules). Use this to ground the synthetic code style on a
+            representative repo even when generating data for global
+            rules. Falls back to `repo` when None, preserving the
+            previous behavior for repo-scoped runs.
 
     Pairs are written incrementally to `<path>.jsonl.partial` as each
     rule's LLM call returns, then the file is renamed to `<path>.jsonl`
@@ -184,13 +190,15 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None,
 
     model = resolve_model("synthetic_data")
 
-    # Fetch the repo's code patterns once up-front — cached for 30 days
-    # so this only actually runs the exploration agent on first use or
-    # after TTL expiry. Returns None for global runs or when the repo
-    # has no local checkout, which is fine — the prompt just skips the
-    # patterns section.
-    repo_patterns_md = get_repo_patterns(repo) if repo else None
+    # Style anchor: which repo's code patterns to inject into the synth
+    # prompt. Decoupled from `repo` (which filters rules) so a global
+    # rule run can still produce repo-styled synthetic code. Falls back
+    # to `repo` when no explicit anchor is set — preserves the previous
+    # behavior for repo-scoped runs.
+    patterns_repo = style_anchor_repo or repo
+    repo_patterns_md = get_repo_patterns(patterns_repo) if patterns_repo else None
     if repo_patterns_md:
+        logger.info(f"[rule-data] Using {patterns_repo} as style anchor")
         repo_patterns_section = (
             "## Repo code patterns\n\n"
             "Use these patterns to make generated code look like it came "
