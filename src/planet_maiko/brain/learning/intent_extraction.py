@@ -298,77 +298,192 @@ def generate_violation_description(learning):
     return text
 
 
-_DIFF_INTENT_PROMPT = """Describe what KIND of code change this diff represents — the situational context. The output will be matched against rule descriptions (also written in active voice — "Adding…", "Modifying…") to find which team rules might apply to this change.
+_DIFF_INTENT_PROMPT = """Break this code change down at TWO granularities. Both matter for matching against team rules:
 
-Use active voice: "Adding…", "Modifying…", "Refactoring…", "Removing…". The rule side uses the same voice; matching same-style text yields tighter cosine similarity than mixing voices.
+**Intent** (1-3 entries): the high-level purpose of the change. What is the engineer accomplishing? Strategic-level rules — "smoke-test new endpoints", "validate user input", "log all API errors" — match at this level.
 
-CRITICAL: do not judge whether the code is good or bad, do not flag risk signals, do not call out missing tests or any potential issues. Just describe what kind of work is being done — what the engineer is making, modifying, or removing. The system surfaces relevant rules separately, given this scenario description.
+**Operations** (3-15 entries depending on diff size): the specific code constructs being introduced or modified. These are the patterns reviewers would scrutinize line-by-line. Tactical-level rules — "prefer Optional.orElse over Optional.get", "use streams instead of for-loops", "use parameterized queries", "always close Connections" — match at this level.
+
+Both levels are needed. Many team coding rules are construct-specific (Java Optional handling, loop conventions, error-handling idioms) and would be missed if we only described the change at the strategic level.
 
 Diff:
 ```
 {diff}
 ```
 
-Cover:
-1. WHAT KIND of change (adding/removing/modifying/refactoring)
-2. WHAT KIND of code is being touched (endpoint, query, validation, test, config, dependency, business logic, etc.)
-3. The BROAD CATEGORY of work (data access, public API, auth, error handling, observability, etc.)
-4. The CHANGE INTENT (what the engineer is trying to accomplish — describe at the situational level, not the implementation level)
+For each entry, write an active-voice description ("Adding…", "Modifying…", "Replacing…", "Removing…", "Uses…", "Returns…").
 
-DO NOT include:
-- Whether the code looks good or bad
-- "Risk signals," "red flags," "potential issues," missing tests, etc.
-- Specific variable/function names or library calls
-- Editorial commentary on the change
+Operations should be SMALL — one line of behavior per entry. Examples:
+  - "Replaces a for-loop with stream().filter().map()"
+  - "Uses Optional.get() on a value that may be empty"
+  - "Adds a try-with-resources block around a Connection"
+  - "Concatenates a string into a SQL query"
+  - "Adds a new public method that returns a Map<String, Object>"
+  - "Catches a generic Exception without rethrowing"
 
-## Examples of GOOD diff descriptions
+DO NOT in either level:
+- Judge whether code is good or bad
+- Flag risk signals or potential issues
+- Reference specific variable/function names
+- Editorialize
 
-For a diff that adds a new POST endpoint with validation:
-> "Adding a new public API endpoint that accepts user input and creates a resource. Includes a route handler, a request schema, and a database write."
+## Example 1: small focused diff
 
-For a diff that modifies a SQL query:
-> "Modifying an existing database query to add additional filter conditions and return a new field. Changes both the query parameters and the result shape."
+Diff: a 30-line patch that adds a new POST endpoint validating user input and writing to a database via a parameterized query.
 
-For a diff that refactors error handling:
-> "Refactoring how errors are handled in an existing service module. Moves try/except blocks and changes how exceptions propagate to callers."
+Output:
+{{
+  "intent": [
+    {{"description": "Adding a new POST endpoint that accepts user input and creates a resource."}}
+  ],
+  "operations": [
+    {{"description": "Adds a route handler with a request body schema."}},
+    {{"description": "Validates incoming string fields against a length constraint."}},
+    {{"description": "Executes a parameterized INSERT query with bound parameters."}},
+    {{"description": "Returns a JSON response with the created resource."}}
+  ]
+}}
 
-Notice: none of these say "looks fine" or "missing tests" or "risky." They just describe what's happening.
+## Example 2: medium PR with refactor
 
-Length: 3-5 sentences. Generic enough to match any rule's scenario description. Don't reference specific identifiers from the diff.
+Diff: 200 lines — adds a new GET endpoint AND refactors a service class to use Java streams instead of for-loops.
 
-Output ONLY the description, no preamble.
+Output:
+{{
+  "intent": [
+    {{"description": "Adding a new GET endpoint that returns paginated results."}},
+    {{"description": "Refactoring an existing service class to use functional-style iteration."}}
+  ],
+  "operations": [
+    {{"description": "Adds a route handler with pagination parameters."}},
+    {{"description": "Constructs a SELECT query with LIMIT and OFFSET."}},
+    {{"description": "Replaces a for-loop with stream().filter().map()."}},
+    {{"description": "Uses Optional.map() to transform a value."}},
+    {{"description": "Replaces an explicit List<String> accumulator with Collectors.toList()."}},
+    {{"description": "Removes a temporary mutable variable used in the old loop."}}
+  ]
+}}
+
+## Example 3: large mixed PR
+
+Diff: 600 lines — dep bump + new endpoint + DAO refactor + tests.
+
+Output:
+{{
+  "intent": [
+    {{"description": "Updating an external dependency version."}},
+    {{"description": "Adding a new POST endpoint for user signup."}},
+    {{"description": "Refactoring the user data access layer."}},
+    {{"description": "Adding integration tests for the new endpoint."}}
+  ],
+  "operations": [
+    {{"description": "Updates the version of a third-party library in the build configuration."}},
+    {{"description": "Adjusts an import path to match the new library's package layout."}},
+    {{"description": "Adds a route handler for a signup endpoint."}},
+    {{"description": "Validates email and password fields against length and format constraints."}},
+    {{"description": "Executes a parameterized INSERT into the users table."}},
+    {{"description": "Consolidates duplicate query construction into a private helper method."}},
+    {{"description": "Replaces direct cursor iteration with a result-set mapper."}},
+    {{"description": "Adds @Test methods covering the new signup endpoint."}},
+    {{"description": "Adds setup/teardown fixtures for a test database."}}
+  ]
+}}
+
+PREFER FEWER INTENT ENTRIES when you're unsure (1-3 max). Operations can be more granular but stay focused — one fact per entry. Active voice everywhere. Don't reference specific identifiers from the diff.
+
+Output ONLY the JSON object, no preamble or commentary.
 """
 
 
-def generate_diff_description(diff_text):
-    """Ask Claude/Haiku to describe the intent of a diff in natural
-    language, suitable for embedding alongside rule violation
-    descriptions.
+# Cap on operations to prevent runaway embedding cost on pathological
+# diffs. If Claude over-splits despite the prompt, we trim to keep
+# retrieval cost bounded.
+MAX_INTENT_ENTRIES = 5
+MAX_OPERATION_ENTRIES = 20
 
-    Used as the optional `describe_diff=True` path in retrieval —
-    matches diff-intent against rule-violation-pattern in the same
-    natural-language space, which usually retrieves more accurately
-    than embedding raw code text. Costs one Haiku call (~$0.001) per
-    review when enabled.
 
-    Returns the description string on success, or None on any failure
-    (LLM unavailable, parse error). Caller falls back to embedding
-    the raw diff text when None.
+def _strip_json_fencing(text):
+    """Remove a ```json ... ``` wrapper that some Claude responses add
+    despite being told not to."""
+    text = text.strip()
+    if text.startswith("```"):
+        # Drop the opening fence + optional language tag.
+        text = text.lstrip("`")
+        if "\n" in text:
+            text = text.split("\n", 1)[1]
+        # Drop the closing fence.
+        if text.rstrip().endswith("```"):
+            text = text.rstrip().rstrip("`").rstrip()
+    return text.strip()
+
+
+def _extract_descriptions(parsed_obj):
+    """Pull the flat list of description strings out of a parsed JSON
+    object. Handles two shapes:
+      - {"intent": [{"description": "..."}], "operations": [...]}
+      - {"description": "..."}  (single-element fallback)
+    Returns a list of non-empty stripped strings."""
+    if not isinstance(parsed_obj, dict):
+        return []
+
+    descriptions = []
+
+    # Single-object fallback (rare — happens when Claude misreads the
+    # prompt and outputs one entry instead of the structured shape).
+    if "description" in parsed_obj and isinstance(parsed_obj["description"], str):
+        d = parsed_obj["description"].strip()
+        if d:
+            descriptions.append(d)
+
+    for key, cap in (("intent", MAX_INTENT_ENTRIES), ("operations", MAX_OPERATION_ENTRIES)):
+        entries = parsed_obj.get(key) or []
+        if not isinstance(entries, list):
+            continue
+        for entry in entries[:cap]:
+            if isinstance(entry, dict):
+                d = (entry.get("description") or "").strip()
+            elif isinstance(entry, str):
+                d = entry.strip()
+            else:
+                continue
+            if d:
+                descriptions.append(d)
+
+    return descriptions
+
+
+def generate_diff_descriptions(diff_text):
+    """Ask Claude to describe a diff at TWO granularities — high-level
+    intent (1-3 entries) and tactical operations (3-15 entries). Both
+    are returned as a flat list of natural-language strings, ready to
+    be embedded individually for retrieval.
+
+    Why two granularities: many team rules are construct-level
+    ("prefer Optional.orElse over Optional.get") and would never
+    surface against a high-level description like "refactoring the
+    user service." Operations capture the line-level patterns those
+    rules care about. Intent captures broader strategic rules that
+    apply to "the kind of change" being made.
+
+    Cost: one Haiku call (~$0.002 per review) + N+M local embeddings
+    (free under sentence-transformers).
+
+    Returns a list of strings on success, or empty list on any
+    failure. Caller is expected to fall back to embedding raw diff
+    text when the list is empty.
     """
     from planet_maiko.agents.brain_session import _get_runtime
     from planet_maiko.agents.routing import resolve_model
 
     if not diff_text or not diff_text.strip():
-        return None
+        return []
 
-    # Truncate the diff so the prompt stays within Haiku context.
-    # 12K chars is generous for most PR-sized diffs.
     truncated_diff = _truncate(diff_text, 12_000)
     prompt = _DIFF_INTENT_PROMPT.format(diff=truncated_diff)
 
     runtime = _get_runtime()
     if not runtime or not runtime.is_available():
-        return None
+        return []
 
     try:
         result = runtime.send(
@@ -377,21 +492,44 @@ def generate_diff_description(diff_text):
             model=resolve_model("classify"),
         )
     except Exception as e:
-        logger.debug(f"[intent] generate_diff_description: LLM call failed: {e}")
-        return None
+        logger.debug(f"[intent] generate_diff_descriptions: LLM call failed: {e}")
+        return []
 
     if not result or not result.get("success"):
-        return None
+        return []
 
-    text = (result.get("output") or "").strip()
-    if text.startswith("```"):
-        text = text.lstrip("`")
-        if "\n" in text:
-            text = text.split("\n", 1)[1]
-        if text.rstrip().endswith("```"):
-            text = text.rstrip().rstrip("`").rstrip()
-    text = text.strip().strip('"').strip("'").strip()
+    text = _strip_json_fencing(result.get("output") or "")
+    if not text:
+        return []
 
-    if len(text) < 30:
-        return None
-    return text
+    # Locate the first balanced JSON object — Claude sometimes adds
+    # preamble despite being told not to.
+    start = text.find("{")
+    end = text.rfind("}")
+    if start < 0 or end <= start:
+        logger.debug("[intent] generate_diff_descriptions: no JSON object found in response")
+        return []
+
+    import json as _json
+    try:
+        parsed = _json.loads(text[start:end + 1])
+    except _json.JSONDecodeError as e:
+        logger.debug(f"[intent] generate_diff_descriptions: JSON parse failed: {e}")
+        return []
+
+    descriptions = _extract_descriptions(parsed)
+    if descriptions:
+        logger.info(
+            f"[intent] diff broken into {len(descriptions)} units "
+            f"(intent + operations combined)"
+        )
+    return descriptions
+
+
+# Backwards-compat alias so existing imports keep working. Returns
+# the FIRST description (typically the high-level intent) joined as
+# a single string for callers that need string semantics. New callers
+# should use generate_diff_descriptions().
+def generate_diff_description(diff_text):
+    descriptions = generate_diff_descriptions(diff_text)
+    return descriptions[0] if descriptions else None

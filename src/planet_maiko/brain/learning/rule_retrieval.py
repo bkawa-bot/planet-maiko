@@ -44,42 +44,50 @@ def _learning_in_scope(learning, repo):
 
 
 def score_rules_for_diff(diff, repo=None):
-    """Score every active Learning's violation pattern against the
+    """Score every active Learning's scenario description against the
     diff. Returns a list of (learning, score) tuples sorted descending
     by score. Doesn't filter by score threshold — caller decides what
     to do with low scores.
 
-    Always runs the diff through Claude/Haiku first to extract a
-    natural-language intent description, then embeds THAT for the
-    cosine match. This puts both sides (rule violation descriptions
-    and diff intent description) in the same natural-language space —
-    retrieves dramatically better than embedding raw code. Costs
-    ~$0.001 + 1-2s per call.
+    Always runs the diff through Claude/Haiku first to extract
+    descriptions at two granularities — high-level intent (1-3
+    entries) and tactical operations (3-15 entries). Each description
+    gets embedded; the score for each rule is the MAX similarity
+    across all descriptions. This way, a tactical rule like
+    "prefer Optional.orElse over Optional.get" can surface from a
+    big PR whose intent-level description was about "refactoring
+    the user service" — because one of the per-operation descriptions
+    matches the rule's scenario directly.
 
     Falls back to embedding the raw diff text when the diff-description
     LLM call fails (runtime down, timeout, parse error). Retrieval
-    quality is lower in that fallback but the system stays functional
-    rather than returning empty results.
+    quality drops but the system stays functional.
     """
     from planet_maiko.models.learning import Learning
     from planet_maiko.brain.learning.embeddings import (
-        embed_text,
+        embed_batch,
         cosine_similarity,
     )
     from planet_maiko.brain.learning.intent_extraction import (
-        generate_diff_description,
+        generate_diff_descriptions,
     )
 
-    query_text = diff
+    # Get descriptions at multiple granularities. Empty list means
+    # the LLM call failed — fall back to raw diff text.
+    descriptions = []
     try:
-        described = generate_diff_description(diff)
-        if described:
-            query_text = described
+        descriptions = generate_diff_descriptions(diff)
     except Exception as e:
-        logger.debug(f"[retrieval] diff-description failed, falling back to raw diff: {e}")
+        logger.debug(f"[retrieval] diff-descriptions failed, falling back to raw diff: {e}")
+    if not descriptions:
+        descriptions = [diff]
 
-    query_vec = embed_text(query_text)
-    if query_vec is None:
+    # Batch-embed all descriptions in one call where the backend
+    # supports it (sentence-transformers does; API backends fall back
+    # to per-item).
+    query_vecs = embed_batch(descriptions)
+    query_vecs = [v for v in query_vecs if v is not None]
+    if not query_vecs:
         logger.warning("[retrieval] embedding backend unavailable — returning empty result")
         return []
 
@@ -96,8 +104,16 @@ def score_rules_for_diff(diff, repo=None):
             continue
         if not learning.violation_embedding:
             continue
-        sim = cosine_similarity(query_vec, learning.violation_embedding)
-        scored.append((learning, sim))
+        # MAX over query vectors: any single description matching this
+        # rule's scenario is enough to surface the rule. AVG would
+        # dilute strong matches; SUM would over-reward rules that
+        # match many descriptions weakly.
+        max_sim = 0.0
+        for qv in query_vecs:
+            s = cosine_similarity(qv, learning.violation_embedding)
+            if s > max_sim:
+                max_sim = s
+        scored.append((learning, max_sim))
 
     scored.sort(key=lambda x: x[1], reverse=True)
     return scored
