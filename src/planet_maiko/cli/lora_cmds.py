@@ -11,7 +11,6 @@ Commands:
 - add-rule — manually add a learning
 """
 
-import argparse
 import os
 import re
 import subprocess
@@ -454,7 +453,6 @@ def cmd_rules_relevant(args):
             repo=args.repo,
             k=args.k,
             min_similarity=args.min_similarity,
-            describe_diff=args.describe_diff,
         )
         rules_indexed = (
             Learning.query
@@ -821,14 +819,4 @@ def register(subparsers):
     p.add_argument("--k", type=int, default=5, help="Max rules to return (default 5)")
     p.add_argument("--min-similarity", type=float, default=0.40,
                    help="Cosine threshold below which rules are dropped (default 0.40)")
-    # describe-diff is on by default (sharper retrieval) — opt out
-    # with --no-describe-diff for hot paths where latency matters more
-    # than retrieval precision (e.g. pre-commit hooks).
-    p.add_argument(
-        "--describe-diff",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Generate an LLM intent description of the diff before "
-             "embedding (default on; pass --no-describe-diff to skip)",
-    )
     p.set_defaults(func=cmd_rules_relevant)

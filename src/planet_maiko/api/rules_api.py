@@ -31,13 +31,15 @@ def relevant_rules():
         repo (optional, string): "org/name" — filters to rules scoped
             to this repo plus globals. Omitted or null means no filter.
         k (optional, int, default 5): max rules to return.
-        describe_diff (optional, bool, default False): when True,
-            generates an LLM description of the diff first and embeds
-            that for retrieval (richer signal, adds an LLM call). When
-            False, embeds the diff text directly (faster, cheaper).
         min_similarity (optional, float, default 0.40): cutoff for the
             cosine score below which rules are considered irrelevant
             and not returned.
+
+    The diff is always run through Claude/Haiku first to extract a
+    natural-language intent description, which is what gets embedded
+    for the cosine match. Costs ~$0.001 + 1-2s per call but produces
+    dramatically better retrieval than embedding raw code text.
+    Falls back to raw-diff embedding if the LLM call fails.
 
     Response:
         {
@@ -79,11 +81,6 @@ def relevant_rules():
 
     repo = data.get("repo") or None
     k = max(1, min(50, int(data.get("k", 5) or 5)))
-    # describe_diff defaults to True — the natural-language-vs-natural-
-    # language cosine match is meaningfully sharper than embedding raw
-    # code. Set False explicitly on hot paths that need sub-second
-    # latency (pre-commit hooks, etc).
-    describe_diff = bool(data.get("describe_diff", True))
     min_sim = float(data.get("min_similarity", 0.40) or 0.40)
 
     matches = find_relevant_rules(
@@ -91,7 +88,6 @@ def relevant_rules():
         repo=repo,
         k=k,
         min_similarity=min_sim,
-        describe_diff=describe_diff,
     )
 
     rules_indexed = (
@@ -121,7 +117,6 @@ def relevant_rules():
         "model": embedding_model_name(),
         "rules_indexed": rules_indexed,
         "rules_total_active": rules_total_active,
-        "describe_diff": describe_diff,
     })
 
 

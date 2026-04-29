@@ -43,40 +43,40 @@ def _learning_in_scope(learning, repo):
     return learning.scope_repo == repo
 
 
-def score_rules_for_diff(diff, repo=None, describe_diff=True):
+def score_rules_for_diff(diff, repo=None):
     """Score every active Learning's violation pattern against the
     diff. Returns a list of (learning, score) tuples sorted descending
     by score. Doesn't filter by score threshold — caller decides what
     to do with low scores.
 
-    `describe_diff` defaults to True: we send the diff through Claude
-    first to extract a natural-language intent description, then embed
-    THAT. This puts both sides of the cosine match (rule violation
-    descriptions and diff intent description) in the same natural-
-    language space, which retrieves dramatically better than the
-    cross-domain rule-text-vs-raw-code path. Costs ~$0.001 + 1-2s
-    per call. Set False only on hot paths like pre-commit hooks
-    where the latency matters more than retrieval precision.
+    Always runs the diff through Claude/Haiku first to extract a
+    natural-language intent description, then embeds THAT for the
+    cosine match. This puts both sides (rule violation descriptions
+    and diff intent description) in the same natural-language space —
+    retrieves dramatically better than embedding raw code. Costs
+    ~$0.001 + 1-2s per call.
+
+    Falls back to embedding the raw diff text when the diff-description
+    LLM call fails (runtime down, timeout, parse error). Retrieval
+    quality is lower in that fallback but the system stays functional
+    rather than returning empty results.
     """
     from planet_maiko.models.learning import Learning
     from planet_maiko.brain.learning.embeddings import (
         embed_text,
         cosine_similarity,
     )
+    from planet_maiko.brain.learning.intent_extraction import (
+        generate_diff_description,
+    )
 
-    # Build the query vector. Two paths: direct embedding of the diff
-    # (cheap, fast) or describe-then-embed (richer signal).
     query_text = diff
-    if describe_diff:
-        try:
-            from planet_maiko.brain.learning.intent_extraction import (
-                generate_diff_description,
-            )
-            described = generate_diff_description(diff)
-            if described:
-                query_text = described
-        except Exception as e:
-            logger.debug(f"[retrieval] describe_diff failed, using raw diff: {e}")
+    try:
+        described = generate_diff_description(diff)
+        if described:
+            query_text = described
+    except Exception as e:
+        logger.debug(f"[retrieval] diff-description failed, falling back to raw diff: {e}")
 
     query_vec = embed_text(query_text)
     if query_vec is None:
@@ -104,8 +104,7 @@ def score_rules_for_diff(diff, repo=None, describe_diff=True):
 
 
 def find_relevant_rules(diff, repo=None, k=5,
-                        min_similarity=DEFAULT_MIN_SIMILARITY,
-                        describe_diff=True):
+                        min_similarity=DEFAULT_MIN_SIMILARITY):
     """Top-K rules whose violation patterns best match the diff.
 
     Returns a list of dicts (not Learning ORM objects) so callers can
@@ -117,7 +116,7 @@ def find_relevant_rules(diff, repo=None, k=5,
     fewer high-quality matches than to surface noise. If after filtering
     fewer than K remain, that's fine — just return what we have.
     """
-    scored = score_rules_for_diff(diff, repo=repo, describe_diff=describe_diff)
+    scored = score_rules_for_diff(diff, repo=repo)
     relevant = [(l, s) for l, s in scored if s >= min_similarity]
     top = relevant[:k]
     return [{"learning": l, "score": s} for l, s in top]
