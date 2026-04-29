@@ -354,6 +354,10 @@ class PRScore:
     # score so it ends up in the JSON artifact too.
     model_outputs_with: dict = field(default_factory=dict)
     model_outputs_without: dict = field(default_factory=dict)
+    # Human review comments per file — kept here so the markdown
+    # report can show "human said X, model said Y" side by side
+    # without re-fetching ground truth at render time.
+    human_comments_by_file: dict = field(default_factory=dict)
 
     def hits_with(self):
         return self.human_files & self.model_flagged_with
@@ -484,6 +488,10 @@ def score_pr(pr, ground_truth, with_results, without_results=None,
     # it because neither the model nor the file-level ground truth can
     # match a "whole-PR" note to a specific diff.
     s.human_files = {f for f in ground_truth.keys() if f != "__review_body__"}
+    s.human_comments_by_file = {
+        f: list(comments) for f, comments in ground_truth.items()
+        if f != "__review_body__"
+    }
 
     for file_path, result in with_results.items():
         if result["verdict"] == "ERROR":
@@ -934,16 +942,46 @@ def format_report(result, against=None):
         hits = sorted(s.hits_with())
         misses = sorted(s.human_files - s.model_flagged_with)
         extras = sorted(s.model_flagged_with - s.human_files)
+
+        def _short(text, n=200):
+            t = (text or "").replace("\n", " ").strip()
+            return t[:n] + ("…" if len(t) > n else "")
+
+        def _human_comment_for(fp):
+            comments = s.human_comments_by_file.get(fp) or []
+            if not comments:
+                return ""
+            # Show the first comment; surface a count if there were more.
+            first = comments[0]
+            extra = f" (+{len(comments)-1} more)" if len(comments) > 1 else ""
+            return _short(first) + extra
+
         if hits:
-            lines.append(f"- Hits: `{', '.join(hits)}`")
+            lines.append("- Hits (model and humans both flagged):")
+            for hpath in hits:
+                model = _short(s.model_outputs_with.get(hpath))
+                human = _human_comment_for(hpath)
+                lines.append(f"    - `{hpath}`")
+                if human:
+                    lines.append(f"      - human: _{human}_")
+                if model:
+                    lines.append(f"      - model: _{model}_")
         if misses:
-            lines.append("- Missed:")
+            lines.append("- Missed (humans flagged, model didn't):")
             for mpath in misses:
-                raw = (s.model_outputs_with.get(mpath) or "").replace("\n", " ")
-                short = raw[:140] + ("…" if len(raw) > 140 else "") if raw else "(not reviewed — no diff for this file)"
-                lines.append(f"    - `{mpath}` → model said: _{short}_")
+                model = _short(s.model_outputs_with.get(mpath))
+                human = _human_comment_for(mpath)
+                lines.append(f"    - `{mpath}`")
+                if human:
+                    lines.append(f"      - human: _{human}_")
+                lines.append(f"      - model: _{model or '(not reviewed — no diff)'}_")
         if extras:
-            lines.append(f"- Extras: `{', '.join(extras)}`")
+            lines.append("- Extras (model flagged, humans didn't):")
+            for epath in extras:
+                model = _short(s.model_outputs_with.get(epath))
+                lines.append(f"    - `{epath}`")
+                if model:
+                    lines.append(f"      - model: _{model}_")
 
         if judge_mode:
             detail = judge_detail.get(s.pr.url, {}).get("with") or {}
