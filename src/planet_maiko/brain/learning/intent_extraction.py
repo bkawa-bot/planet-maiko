@@ -263,3 +263,77 @@ def generate_violation_description(learning):
         f"{used_examples} examples ({len(text)} chars)"
     )
     return text
+
+
+_DIFF_INTENT_PROMPT = """Describe the intent of this code change at the level of structure and shape, not implementation details.
+
+Diff:
+```
+{diff}
+```
+
+Cover:
+- WHAT KIND of change (add / remove / modify / refactor / behavior change)
+- WHAT KIND of code is touched (validation / auth / data flow / API / test / config / etc.)
+- The STRUCTURAL pattern of the change (e.g. "removes input validation while leaving the call site", "adds a new function but no tests", "refactors error handling to swallow exceptions")
+- Any obvious risk signals visible in the diff (orphaned references, missing tests, new external dependencies, removed safety checks)
+
+Length: 3-5 sentences. Genericize variable/function names — describe the shape and intent, not the specifics. Output ONLY the description, no preamble.
+"""
+
+
+def generate_diff_description(diff_text):
+    """Ask Claude/Haiku to describe the intent of a diff in natural
+    language, suitable for embedding alongside rule violation
+    descriptions.
+
+    Used as the optional `describe_diff=True` path in retrieval —
+    matches diff-intent against rule-violation-pattern in the same
+    natural-language space, which usually retrieves more accurately
+    than embedding raw code text. Costs one Haiku call (~$0.001) per
+    review when enabled.
+
+    Returns the description string on success, or None on any failure
+    (LLM unavailable, parse error). Caller falls back to embedding
+    the raw diff text when None.
+    """
+    from planet_maiko.agents.brain_session import _get_runtime
+    from planet_maiko.agents.routing import resolve_model
+
+    if not diff_text or not diff_text.strip():
+        return None
+
+    # Truncate the diff so the prompt stays within Haiku context.
+    # 12K chars is generous for most PR-sized diffs.
+    truncated_diff = _truncate(diff_text, 12_000)
+    prompt = _DIFF_INTENT_PROMPT.format(diff=truncated_diff)
+
+    runtime = _get_runtime()
+    if not runtime or not runtime.is_available():
+        return None
+
+    try:
+        result = runtime.send(
+            prompt,
+            timeout=60,
+            model=resolve_model("classify"),
+        )
+    except Exception as e:
+        logger.debug(f"[intent] generate_diff_description: LLM call failed: {e}")
+        return None
+
+    if not result or not result.get("success"):
+        return None
+
+    text = (result.get("output") or "").strip()
+    if text.startswith("```"):
+        text = text.lstrip("`")
+        if "\n" in text:
+            text = text.split("\n", 1)[1]
+        if text.rstrip().endswith("```"):
+            text = text.rstrip().rstrip("`").rstrip()
+    text = text.strip().strip('"').strip("'").strip()
+
+    if len(text) < 30:
+        return None
+    return text
