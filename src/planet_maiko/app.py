@@ -295,6 +295,7 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.automations_api import automations_bp
     from planet_maiko.api.agent_jobs_api import agent_jobs_bp
     from planet_maiko.api.memos_api import memos_bp
+    from planet_maiko.api.rules_api import rules_bp
     app.register_blueprint(pupdates_bp, url_prefix="/api")
     app.register_blueprint(tasks_bp, url_prefix="/api")
     app.register_blueprint(projects_bp, url_prefix="/api")
@@ -322,6 +323,7 @@ def create_app(start_scheduler=False):
     app.register_blueprint(automations_bp, url_prefix="/api")
     app.register_blueprint(agent_jobs_bp, url_prefix="/api")
     app.register_blueprint(memos_bp, url_prefix="/api")
+    app.register_blueprint(rules_bp, url_prefix="/api")
 
     # Register kind-specific memo approve handlers (agent_proposal → task,
     # future: job_approval → AgentJob). Side-effect-only on import.

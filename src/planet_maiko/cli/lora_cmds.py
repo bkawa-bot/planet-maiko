@@ -425,6 +425,70 @@ def cmd_lora_feedback(args):
         sys.exit(1)
 
 
+def cmd_rules_relevant(args):
+    """Print the team's rules most relevant to the supplied diff/file.
+    Useful for validating the RAG retrieval setup end-to-end without
+    running a full review."""
+    from planet_maiko.app import create_app
+    from planet_maiko.brain.learning.rule_retrieval import find_relevant_rules
+    from planet_maiko.brain.learning.embeddings import embedding_model_name
+    from planet_maiko.models.learning import Learning
+
+    if args.file:
+        with open(args.file) as f:
+            diff = f.read()
+    else:
+        if sys.stdin.isatty():
+            print("Paste the diff or code (Ctrl+D when done):", file=sys.stderr)
+        diff = sys.stdin.read()
+
+    if not diff.strip():
+        print("Error: no input.", file=sys.stderr)
+        sys.exit(1)
+
+    app = create_app(start_scheduler=False)
+    with app.app_context():
+        matches = find_relevant_rules(
+            diff,
+            repo=args.repo,
+            k=args.k,
+            min_similarity=args.min_similarity,
+            describe_diff=args.describe_diff,
+        )
+        rules_indexed = (
+            Learning.query
+            .filter_by(status="active")
+            .filter(Learning.violation_embedding.isnot(None))
+            .count()
+        )
+        rules_total = Learning.query.filter_by(status="active").count()
+
+        print(f"\n=== Rule retrieval ===")
+        print(f"Embedding model: {embedding_model_name() or '(none — backend unavailable)'}")
+        print(f"Rules indexed: {rules_indexed} / {rules_total} active")
+        if args.repo:
+            print(f"Scope: {args.repo} (+ globals)")
+        else:
+            print("Scope: all rules")
+        print()
+
+        if not matches:
+            print("(no matches above similarity threshold)")
+            return
+
+        for i, item in enumerate(matches, 1):
+            l = item["learning"]
+            print(f"[{i}] {l.rule}")
+            print(f"     category: {l.category}   score: {item['score']:.3f}   signals: {l.signal_count or 0}")
+            if l.violation_description:
+                desc = l.violation_description
+                # Wrap long descriptions for readability.
+                if len(desc) > 200:
+                    desc = desc[:200] + "…"
+                print(f"     pattern: {desc}")
+            print()
+
+
 def cmd_lora_miss(args):
     """Report a LoRA false negative — records a corrective VIOLATION training pair."""
     from planet_maiko.brain.learning.feedback import add_corrective_violation
@@ -744,3 +808,19 @@ def register(subparsers):
     p.add_argument("--repo", help="Scope to a specific repo (omit for global)")
     p.add_argument("--language", help="Scope to a specific language")
     p.set_defaults(func=cmd_add_rule)
+
+    # maiko rules-relevant
+    p = subparsers.add_parser(
+        "rules-relevant",
+        help="Show the team's rules most relevant to a diff (RAG retrieval)",
+    )
+    p.add_argument("file", nargs="?",
+                   help="File or diff to retrieve against (reads stdin if omitted)")
+    p.add_argument("--repo", help="Filter to rules scoped to this repo + globals")
+    p.add_argument("--k", type=int, default=5, help="Max rules to return (default 5)")
+    p.add_argument("--min-similarity", type=float, default=0.40,
+                   help="Cosine threshold below which rules are dropped (default 0.40)")
+    p.add_argument("--describe-diff", action="store_true",
+                   help="Generate an LLM intent description of the diff before "
+                        "embedding (richer signal, costs an extra LLM call)")
+    p.set_defaults(func=cmd_rules_relevant)
