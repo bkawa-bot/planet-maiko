@@ -40,6 +40,19 @@ class Learning(db.Model):
                            onupdate=lambda: datetime.now(timezone.utc))
     last_signal_at = db.Column(db.DateTime, nullable=True)
 
+    # RAG retrieval fields. violation_description is a Claude-generated
+    # paragraph describing what code that VIOLATES this rule looks like
+    # in this team's actual codebase, grounded in historical signals.
+    # violation_embedding is the embedding of that description, used for
+    # cosine similarity against new diffs at review time.
+    # generated_at + signal_count_at_gen let us detect when to regenerate
+    # (rule text changed, or enough new signals have joined the cluster
+    # to warrant a refreshed description).
+    violation_description = db.Column(db.Text, nullable=True)
+    violation_embedding = db.Column(db.JSON, nullable=True)
+    violation_description_generated_at = db.Column(db.DateTime, nullable=True)
+    violation_description_signal_count = db.Column(db.Integer, nullable=True)
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -55,4 +68,6 @@ class Learning(db.Model):
             "created_at": iso_utc(self.created_at),
             "updated_at": iso_utc(self.updated_at),
             "last_signal_at": iso_utc(self.last_signal_at),
+            "has_violation_description": bool(self.violation_description),
+            "violation_description_generated_at": iso_utc(self.violation_description_generated_at),
         }

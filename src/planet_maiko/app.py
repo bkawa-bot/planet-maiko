@@ -34,6 +34,14 @@ def _ensure_columns():
         # signal.text to a cleaner rule. Used by the provenance UI.
         "ALTER TABLE signals ADD COLUMN original_text TEXT",
         "ALTER TABLE learnings ADD COLUMN is_global BOOLEAN DEFAULT 0",
+        # RAG-retrieval fields. violation_description is Claude-generated
+        # text describing what code violates this rule (grounded in
+        # historical signals); violation_embedding is its vector for
+        # cosine similarity at review time.
+        "ALTER TABLE learnings ADD COLUMN violation_description TEXT",
+        "ALTER TABLE learnings ADD COLUMN violation_embedding JSON",
+        "ALTER TABLE learnings ADD COLUMN violation_description_generated_at DATETIME",
+        "ALTER TABLE learnings ADD COLUMN violation_description_signal_count INTEGER",
         "ALTER TABLE custom_skills ADD COLUMN user_edited BOOLEAN DEFAULT 0",
         "ALTER TABLE agent_profiles ADD COLUMN extra JSON DEFAULT '{}'",
         # Stage-5 unification: rules folded into Automations. New
