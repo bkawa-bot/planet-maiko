@@ -169,10 +169,107 @@ def fetch_ground_truth(pr: HoldoutPR):
     return by_file
 
 
+def _get_pr_base_branch(repo, pr_number):
+    """Return the PR's base branch name (e.g., 'main'), or None."""
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "view", str(pr_number), "--repo", repo,
+             "--json", "baseRefName"],
+            capture_output=True, text=True, timeout=15,
+            encoding="utf-8", errors="replace",
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return json.loads(result.stdout).get("baseRefName")
+    except Exception as e:
+        logger.debug(f"[eval] gh pr view failed for {repo}#{pr_number}: {e}")
+    return None
+
+
+def _fetch_diff_at_sha(repo, base_branch, target_sha):
+    """Fetch the diff between the PR's base branch and a specific commit
+    SHA. Used to recover the version of the code the human was actually
+    reviewing when they left their comments — not the post-fix final
+    diff that `gh pr diff` returns."""
+    try:
+        result = subprocess.run(
+            ["gh", "api",
+             f"repos/{repo}/compare/{base_branch}...{target_sha}",
+             "--header", "Accept: application/vnd.github.v3.diff"],
+            capture_output=True, text=True, timeout=60,
+            encoding="utf-8", errors="replace",
+        )
+    except Exception as e:
+        logger.warning(f"[eval] compare-diff fetch failed for {repo} {base_branch}...{target_sha}: {e}")
+        return None
+    if result.returncode != 0:
+        logger.warning(f"[eval] compare-diff non-zero for {repo} {base_branch}...{target_sha}: {result.stderr.strip()}")
+        return None
+    return result.stdout
+
+
+def _split_and_filter(diff_text):
+    """Common logic: split a unified diff into per-file hunks, drop
+    binary / non-code files, drop trivially-short hunks."""
+    files = []
+    for file_path, hunk in _split_diff_by_file(diff_text or ""):
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext in _SKIP_EXTENSIONS:
+            continue
+        if len(hunk) < 30:
+            continue
+        files.append((file_path, hunk))
+    return files
+
+
 def fetch_pr_files(pr: HoldoutPR):
-    """Fetch per-file diffs for a PR. Returns `[(file_path, diff), ...]`
-    filtered to files the model might reasonably review (no .md, .json,
-    binaries)."""
+    """Fetch per-file diffs for a PR at the version humans actually
+    reviewed.
+
+    `gh pr diff` returns the *final* (merged) diff — for closed/merged
+    PRs that's already the post-fix code, which makes scoring a model
+    against the original review comments incoherent (the model would
+    be reviewing code that no longer contains the issues humans flagged).
+
+    Instead: pick the original_commit_id of the earliest review comment
+    on this PR — i.e., the SHA the first reviewer was looking at when
+    they wrote the first comment — and fetch the diff between the PR's
+    base branch and that SHA. That's the code the reviewer actually saw.
+
+    Falls back to the legacy `gh pr diff` behavior when the PR has no
+    inline review comments tied to a commit (common for PRs with only
+    review-body summaries).
+    """
+    inline = _get_review_comments(pr.repo, pr.number) or []
+    commit_ts_pairs = [
+        (c.get("original_commit_id"), c.get("created_at") or "")
+        for c in inline
+        if c.get("original_commit_id")
+    ]
+
+    if commit_ts_pairs:
+        # Earliest comment by created_at — ISO-8601 sorts lex correctly.
+        # If multiple commits got commented on, the first-reviewed SHA
+        # is usually where the most pre-fix code lives.
+        commit_ts_pairs.sort(key=lambda p: p[1])
+        target_sha = commit_ts_pairs[0][0]
+        base_branch = _get_pr_base_branch(pr.repo, pr.number)
+        if base_branch:
+            diff_text = _fetch_diff_at_sha(pr.repo, base_branch, target_sha)
+            if diff_text:
+                logger.info(
+                    f"[eval] {pr.url}: reviewing diff at SHA {target_sha[:8]} "
+                    f"(base={base_branch}) — pre-fix code humans actually saw"
+                )
+                files = _split_and_filter(diff_text)
+                if files:
+                    return files
+        logger.warning(
+            f"[eval] {pr.url}: couldn't fetch base...{target_sha[:8]} diff; "
+            f"falling back to final merged diff (eval will be incoherent for this PR)"
+        )
+
+    # Fallback: final diff. Used when there are no commit-tied comments,
+    # or when the compare API failed.
     try:
         result = subprocess.run(
             ["gh", "pr", "diff", str(pr.number), "--repo", pr.repo],
@@ -185,16 +282,7 @@ def fetch_pr_files(pr: HoldoutPR):
     if result.returncode != 0:
         logger.warning(f"[eval] gh pr diff non-zero for {pr.url}: {result.stderr.strip()}")
         return []
-
-    files = []
-    for file_path, hunk in _split_diff_by_file(result.stdout):
-        ext = os.path.splitext(file_path)[1].lower()
-        if ext in _SKIP_EXTENSIONS:
-            continue
-        if len(hunk) < 30:
-            continue
-        files.append((file_path, hunk))
-    return files
+    return _split_and_filter(result.stdout)
 
 
 # ---------------------------------------------------------------------------

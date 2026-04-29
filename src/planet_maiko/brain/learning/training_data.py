@@ -392,7 +392,13 @@ def _get_review_bodies(repo, pr_number):
 
 
 def _get_review_comments(repo, pr_number):
-    """Fetch inline review comments for a PR (with diff hunks)."""
+    """Fetch inline review comments for a PR (with diff hunks).
+
+    Includes original_commit_id (the SHA the comment was originally
+    made against, before any subsequent commits) and created_at so
+    callers can pick the right point-in-time view of the code rather
+    than the post-fix final diff.
+    """
     try:
         result = subprocess.run(
             ["gh", "api", f"repos/{repo}/pulls/{pr_number}/comments"],
@@ -406,6 +412,8 @@ def _get_review_comments(repo, pr_number):
                     "diff_hunk": c.get("diff_hunk", ""),
                     "path": c.get("path", ""),
                     "position": c.get("position"),
+                    "original_commit_id": c.get("original_commit_id") or c.get("commit_id"),
+                    "created_at": c.get("created_at"),
                 }
                 for c in raw
             ]
