@@ -43,16 +43,20 @@ def _learning_in_scope(learning, repo):
     return learning.scope_repo == repo
 
 
-def score_rules_for_diff(diff, repo=None, describe_diff=False):
+def score_rules_for_diff(diff, repo=None, describe_diff=True):
     """Score every active Learning's violation pattern against the
     diff. Returns a list of (learning, score) tuples sorted descending
     by score. Doesn't filter by score threshold — caller decides what
     to do with low scores.
 
-    When `describe_diff` is True, we generate an intent description of
-    the diff via Claude first, then embed THAT. Higher quality signal
-    but adds an LLM round-trip per call. When False, we embed the diff
-    text directly — much faster and cheaper, slightly noisier signal.
+    `describe_diff` defaults to True: we send the diff through Claude
+    first to extract a natural-language intent description, then embed
+    THAT. This puts both sides of the cosine match (rule violation
+    descriptions and diff intent description) in the same natural-
+    language space, which retrieves dramatically better than the
+    cross-domain rule-text-vs-raw-code path. Costs ~$0.001 + 1-2s
+    per call. Set False only on hot paths like pre-commit hooks
+    where the latency matters more than retrieval precision.
     """
     from planet_maiko.models.learning import Learning
     from planet_maiko.brain.learning.embeddings import (
@@ -101,7 +105,7 @@ def score_rules_for_diff(diff, repo=None, describe_diff=False):
 
 def find_relevant_rules(diff, repo=None, k=5,
                         min_similarity=DEFAULT_MIN_SIMILARITY,
-                        describe_diff=False):
+                        describe_diff=True):
     """Top-K rules whose violation patterns best match the diff.
 
     Returns a list of dicts (not Learning ORM objects) so callers can

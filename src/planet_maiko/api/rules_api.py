@@ -79,7 +79,11 @@ def relevant_rules():
 
     repo = data.get("repo") or None
     k = max(1, min(50, int(data.get("k", 5) or 5)))
-    describe_diff = bool(data.get("describe_diff", False))
+    # describe_diff defaults to True — the natural-language-vs-natural-
+    # language cosine match is meaningfully sharper than embedding raw
+    # code. Set False explicitly on hot paths that need sub-second
+    # latency (pre-commit hooks, etc).
+    describe_diff = bool(data.get("describe_diff", True))
     min_sim = float(data.get("min_similarity", 0.40) or 0.40)
 
     matches = find_relevant_rules(
