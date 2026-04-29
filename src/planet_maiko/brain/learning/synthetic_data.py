@@ -64,32 +64,69 @@ def generate_synthetic_dataset(input_dataset=None, output_dir=None, limit=None):
         output_dir = os.path.join(data_dir(), "training-data")
     os.makedirs(output_dir, exist_ok=True)
 
-    # Find input dataset
+    # Find input dataset. Excludes:
+    # - synthetic-*.jsonl: outputs of THIS function, would synth-on-synth
+    # - rules-*.jsonl: outputs of generate_rule_dataset; those already
+    #   contain synthetic pairs interleaved with real signals, so feeding
+    #   them in produces synth-of-synth (degraded variations of generated
+    #   examples, not of real comments).
     if not input_dataset:
-        files = sorted(
-            [f for f in os.listdir(output_dir) if f.endswith(".jsonl") and not f.startswith("synthetic-")],
-            reverse=True,
-        )
+        candidates = [
+            f for f in os.listdir(output_dir)
+            if f.endswith(".jsonl")
+            and not f.startswith("synthetic-")
+            and not f.startswith("rules-")
+        ]
+        files = sorted(candidates, reverse=True)
         if not files:
-            return {"success": False, "error": "No raw dataset found. Run extraction first."}
+            return {
+                "success": False,
+                "error": (
+                    "No raw dataset found. The new rule-based pipeline "
+                    "(rules-*.jsonl) already produces synthetic pairs — "
+                    "you usually don't need to run generate-synthetic. "
+                    "If you specifically want this older flow, "
+                    "run `maiko extract-training-data` first to produce "
+                    "an input file, then re-run."
+                ),
+            }
         input_dataset = os.path.join(output_dir, files[0])
 
-    # Load raw pairs
+    # Load raw pairs, filtering out anything already tagged as synthetic.
+    # Even when an explicit --input is passed, an unsuspecting user
+    # might point at a rules-*.jsonl; this guard keeps the synth from
+    # multiplying its own noise.
     raw_pairs = []
+    skipped_synth = 0
     with open(input_dataset) as f:
         for line in f:
             try:
-                raw_pairs.append(json.loads(line))
+                pair = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            if pair.get("source") == "synthetic":
+                skipped_synth += 1
+                continue
+            raw_pairs.append(pair)
 
     if not raw_pairs:
-        return {"success": False, "error": "Input dataset is empty."}
+        return {
+            "success": False,
+            "error": (
+                f"Input dataset has no real (non-synthetic) pairs"
+                f"{f' (skipped {skipped_synth} synthetic ones)' if skipped_synth else ''}. "
+                "Did you point at a rules-*.jsonl by mistake?"
+            ),
+        }
 
     if limit:
         raw_pairs = raw_pairs[:limit]
 
-    logger.info(f"[synthetic] Processing {len(raw_pairs)} pairs from {input_dataset}")
+    if skipped_synth:
+        logger.info(
+            f"[synthetic] Skipped {skipped_synth} pre-existing synthetic pairs from input"
+        )
+    logger.info(f"[synthetic] Processing {len(raw_pairs)} real pairs from {input_dataset}")
 
     # Get runtime
     runtime = _get_runtime()
