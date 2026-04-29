@@ -94,6 +94,7 @@ export default function Training() {
   const [selectedDataset, setSelectedDataset] = useState("");
   const [genConcurrency, setGenConcurrency] = useState(5);
   const [styleAnchorRepo, setStyleAnchorRepo] = useState("");
+  const [violationRatio, setViolationRatio] = useState(0.6);
   const [progress, setProgress] = useState(null);
   const [coverage, setCoverage] = useState(null);
   const [filterRepo, setFilterRepo] = useState("");
@@ -283,6 +284,7 @@ export default function Training() {
         repo: filterRepo || undefined,
         max_workers: genConcurrency,
         style_anchor_repo: styleAnchorRepo || undefined,
+        violation_ratio: violationRatio,
       });
       if (result?.status === "started") {
         // Async — the polling effect above takes over from here.
@@ -406,6 +408,24 @@ export default function Training() {
         </div>
 
         <div className="training-row">
+          <label className="training-label">Violations / Passes:</label>
+          <select
+            className="training-select"
+            value={violationRatio}
+            onChange={(e) => setViolationRatio(Number(e.target.value))}
+            disabled={generating}
+          >
+            <option value={0.5}>50% / 50% (balanced)</option>
+            <option value={0.6}>60% / 40% (recommended — counteracts PASS bias)</option>
+            <option value={0.7}>70% / 30% (heavy violation skew)</option>
+            <option value={0.8}>80% / 20% (very aggressive)</option>
+          </select>
+          <span className="training-hint">
+            Per-rule mix. Skewing toward violations reduces false negatives in the trained model — PASS is a 1-token output, so models tend to default to it when uncertain.
+          </span>
+        </div>
+
+        <div className="training-row">
           <button
             className="btn btn-primary"
             disabled={generating || (coverage && coverage.uncovered_count === 0)}
@@ -418,6 +438,7 @@ export default function Training() {
                   repo: filterRepo || undefined,
                   max_workers: genConcurrency,
                   style_anchor_repo: styleAnchorRepo || undefined,
+                  violation_ratio: violationRatio,
                 });
                 if (result?.status === "started") {
                   // Async — polling effect handles completion.

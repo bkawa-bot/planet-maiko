@@ -369,6 +369,10 @@ def generate_from_rules_endpoint():
     # than additional parallelism helps. Floor at 1 so the user can
     # always step back to sequential if they're getting throttled.
     max_workers = max(1, min(10, int(data.get("max_workers", 5) or 5)))
+    # Per-rule mix of violations vs passes. Default 0.6 = 60%
+    # violations, 40% passes — counteracts the PASS-bias from
+    # classification training. Clamped server-side too.
+    violation_ratio = max(0.3, min(0.85, float(data.get("violation_ratio", 0.6) or 0.6)))
 
     # Incremental path stays synchronous when there's nothing to do.
     if not force:
@@ -422,6 +426,7 @@ def generate_from_rules_endpoint():
                     progress_cb=_rule_gen_update,
                     max_workers=max_workers,
                     style_anchor_repo=style_anchor_repo,
+                    violation_ratio=violation_ratio,
                 )
                 if result.get("success"):
                     _rule_gen_update(

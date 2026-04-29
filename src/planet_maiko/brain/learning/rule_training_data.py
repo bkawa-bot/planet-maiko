@@ -118,7 +118,8 @@ def get_covered_rule_ids(output_dir=None, repo=None):
 
 def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None,
                           rule_ids=None, repo=None, progress_cb=None,
-                          max_workers=5, style_anchor_repo=None):
+                          max_workers=5, style_anchor_repo=None,
+                          violation_ratio=0.6):
     """Generate training data from active learnings.
 
     Args:
@@ -268,9 +269,19 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None,
                 "source": "signal",
             })
 
+        # Skew the per-rule mix toward violations to counteract the
+        # PASS-bias that classification training tends to develop:
+        # PASS is a 1-token output, VIOLATION is ~10-15 tokens, so
+        # the model is implicitly rewarded for emitting PASS when
+        # uncertain. Default violation_ratio=0.6 produces ~30 violations
+        # + ~20 passes per rule (vs the old 25/25 split). Real signals
+        # already count toward the violation budget.
+        ratio = max(0.3, min(0.85, float(violation_ratio)))
+        target_violations = int(round(examples_per_rule * ratio))
+        target_passes = examples_per_rule - target_violations
         real_violation_count = len(real_examples)
-        num_violations = max(0, (examples_per_rule // 2) - real_violation_count)
-        num_passes = examples_per_rule // 2
+        num_violations = max(0, target_violations - real_violation_count)
+        num_passes = target_passes
 
         prompt = None
         if num_violations > 0 or num_passes > 0:
