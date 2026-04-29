@@ -142,6 +142,48 @@ def regenerate_descriptions():
     return jsonify({"status": "started", "force": force}), 202
 
 
+@rules_bp.route("/rules/review", methods=["POST"])
+def review_rag():
+    """End-to-end RAG review: retrieve top-K rules for the diff, send
+    them to Claude alongside the diff, return Claude's review.
+
+    Body:
+        diff (required, string): the code change to review.
+        repo (optional, string): filter retrieved rules to this repo
+            plus globals.
+        k (optional, int, default 5): max rules to surface to Claude.
+        min_similarity (optional, float, default 0.45): cosine
+            threshold below which rules are filtered out before
+            being sent to Claude.
+
+    Response:
+        {
+          "success": true,
+          "review": "VIOLATION: ... OK: ... OVERALL: ...",
+          "rules": [{"id": 42, "rule": "...", "category": "security",
+                     "score": 0.78}, ...],
+          "num_rules": 5
+        }
+    """
+    from planet_maiko.brain.learning.rag_review import review_with_rag
+
+    data = request.get_json(silent=True) or {}
+    diff = (data.get("diff") or "").strip()
+    if not diff:
+        return jsonify({"success": False, "error": "diff is required"}), 400
+
+    repo = data.get("repo") or None
+    k = max(1, min(20, int(data.get("k", 5) or 5)))
+    min_sim = float(data.get("min_similarity", 0.45) or 0.45)
+
+    result = review_with_rag(
+        diff, repo=repo, k=k, min_similarity=min_sim,
+    )
+
+    status = 200 if result.get("success") else 500
+    return jsonify(result), status
+
+
 @rules_bp.route("/rules/embedding-status", methods=["GET"])
 def embedding_status():
     """Diagnostic: which embedding backend is active, and how many

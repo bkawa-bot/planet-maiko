@@ -425,6 +425,47 @@ def cmd_lora_feedback(args):
         sys.exit(1)
 
 
+def cmd_review_rag(args):
+    """Run the full RAG-backed review pipeline on a diff/file:
+    retrieve top-K rules → Claude reviews against them → print the
+    review. Useful for testing the end-to-end flow."""
+    from planet_maiko.app import create_app
+    from planet_maiko.brain.learning.rag_review import review_with_rag
+
+    if args.file:
+        with open(args.file) as f:
+            diff = f.read()
+    else:
+        if sys.stdin.isatty():
+            print("Paste the diff or code (Ctrl+D when done):", file=sys.stderr)
+        diff = sys.stdin.read()
+
+    if not diff.strip():
+        print("Error: no input.", file=sys.stderr)
+        sys.exit(1)
+
+    app = create_app(start_scheduler=False)
+    with app.app_context():
+        result = review_with_rag(
+            diff,
+            repo=args.repo,
+            k=args.k,
+            min_similarity=args.min_similarity,
+        )
+
+    if not result.get("success"):
+        print(f"Error: {result.get('error', 'unknown')}", file=sys.stderr)
+        sys.exit(1)
+
+    rules = result.get("rules") or []
+    print(f"=== Retrieved {len(rules)} rules for review ===")
+    for r in rules:
+        print(f"  [{r['category']}] {r['rule']}  (score: {r['score']:.3f})")
+    print()
+    print("=== Review ===")
+    print(result["review"])
+
+
 def cmd_rules_regen(args):
     """Manually trigger the violation-description backfill. Pass
     --force to regenerate every active rule (useful after a prompt
@@ -968,6 +1009,19 @@ def register(subparsers):
     p.add_argument("--missing-description", action="store_true",
                    help="Only show learnings without a violation_description")
     p.set_defaults(func=cmd_rules_list)
+
+    # maiko review-rag
+    p = subparsers.add_parser(
+        "review-rag",
+        help="Full RAG review: retrieve relevant rules + Claude reviews diff",
+    )
+    p.add_argument("file", nargs="?",
+                   help="File or diff to review (reads stdin if omitted)")
+    p.add_argument("--repo", help="Filter retrieved rules to this repo + globals")
+    p.add_argument("--k", type=int, default=5, help="Max rules to surface (default 5)")
+    p.add_argument("--min-similarity", type=float, default=0.45,
+                   help="Cosine threshold below which rules are dropped (default 0.45)")
+    p.set_defaults(func=cmd_review_rag)
 
     # maiko rules-relevant
     p = subparsers.add_parser(
