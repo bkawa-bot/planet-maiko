@@ -955,36 +955,128 @@ def review_batch(files, agent_profile_id=None, adapter_path=None):
     return {"success": True, "results": results, "adapter_path": result.get("adapter_path")}
 
 
-def _infer_mlx(prompt_text, adapter_path, config):
-    """Run inference with MLX."""
-    try:
-        # Format as chat using the same template the model was trained on.
-        # mlx_lm.generate takes a raw string, so we wrap by hand —
-        # _build_chat_prompt picks the right family-specific template
-        # (Llama special tokens vs Qwen's <|im_start|>/<|im_end|>).
-        chat_prompt = _build_chat_prompt(
-            config["base_model"], SYSTEM_PROMPT, prompt_text
-        )
+# Module-level cache for the persistent mlx-lm inference session.
+# Loading the base model + adapter is ~20-60s; per-inference cost
+# drops from ~30s (subprocess startup) to ~1-2s (just the forward
+# pass) when we keep the model resident. Used by _infer_mlx below.
+#
+# Cache shape: {"base_model": str, "adapter_path": str|None,
+#               "model": MLXModel, "tokenizer": MLXTokenizer}
+_mlx_session = None
 
+
+def _get_mlx_session(base_model, adapter_path):
+    """Return cached (model, tokenizer); load on miss.
+
+    Cache key is (base_model, adapter_path) — when either changes,
+    we replace the session. mlx-lm doesn't support hot-swapping
+    adapters, so an adapter change costs a full reload (still
+    cheap if you stay on one adapter for a whole eval run).
+
+    Returns None when mlx_lm isn't importable or load fails;
+    callers should fall back to the subprocess path.
+    """
+    global _mlx_session
+
+    if (
+        _mlx_session is not None
+        and _mlx_session["base_model"] == base_model
+        and _mlx_session["adapter_path"] == adapter_path
+    ):
+        return _mlx_session["model"], _mlx_session["tokenizer"]
+
+    try:
+        from mlx_lm import load
+    except ImportError:
+        return None
+
+    logger.info(
+        f"[mlx-infer] Loading {base_model}"
+        + (f" + adapter {adapter_path}" if adapter_path else "")
+    )
+    try:
+        if adapter_path:
+            model, tokenizer = load(base_model, adapter_path=adapter_path)
+        else:
+            model, tokenizer = load(base_model)
+    except Exception as e:
+        logger.warning(f"[mlx-infer] Could not load in-process session: {e}")
+        return None
+
+    _mlx_session = {
+        "base_model": base_model,
+        "adapter_path": adapter_path,
+        "model": model,
+        "tokenizer": tokenizer,
+    }
+    return model, tokenizer
+
+
+def _infer_mlx(prompt_text, adapter_path, config):
+    """Run inference with MLX.
+
+    Fast path: the persistent in-process session above. Loads the
+    base model + adapter once per (base, adapter) combo, then every
+    subsequent call is a single forward pass — turning per-call
+    cost from ~30s to ~1-2s. Critical for `maiko eval` and
+    `maiko eval-prs`, which loop through hundreds of inferences.
+
+    Slow path (fallback): subprocess `python -m mlx_lm.generate`.
+    Used when mlx_lm Python API isn't importable (different venv,
+    rare). One model load per call; ~30s per inference.
+    """
+    base_model = config["base_model"]
+    chat_prompt = _build_chat_prompt(base_model, SYSTEM_PROMPT, prompt_text)
+
+    # Fast path
+    session = _get_mlx_session(base_model, adapter_path)
+    if session is not None:
+        model, tokenizer = session
+        try:
+            from mlx_lm import generate
+            try:
+                output = generate(
+                    model, tokenizer,
+                    prompt=chat_prompt,
+                    max_tokens=512,
+                    verbose=False,
+                )
+            except TypeError:
+                # Older/newer mlx_lm versions have slightly different
+                # kwargs (e.g. `temp` was renamed; `verbose` not always
+                # accepted). Retry with the minimal signature.
+                output = generate(model, tokenizer, prompt=chat_prompt, max_tokens=512)
+            # Some versions return a GenerationResponse-like object
+            # rather than a raw string — coerce.
+            if not isinstance(output, str):
+                output = getattr(output, "text", None) or str(output)
+            # If the version returns prompt + completion concatenated,
+            # strip the prefix so the scorer only sees the model's reply.
+            if output.startswith(chat_prompt):
+                output = output[len(chat_prompt):]
+            return {"success": True, "output": output.strip(), "adapter_path": adapter_path}
+        except Exception as e:
+            logger.warning(
+                f"[mlx-infer] In-process generate failed ({e}); "
+                f"falling back to subprocess for this call"
+            )
+
+    # Slow path
+    try:
         cmd = [
             sys.executable, "-m", "mlx_lm.generate",
-            "--model", config["base_model"],
+            "--model", base_model,
             "--adapter-path", adapter_path,
             "--max-tokens", "512",
             "--prompt", chat_prompt,
         ]
-
         result = subprocess.run(
             cmd, capture_output=True, text=True,
             timeout=120, encoding="utf-8", errors="replace",
             env=_clean_subprocess_env(),
         )
-
         if result.returncode == 0:
-            output = result.stdout.strip()
-            return {"success": True, "output": output, "adapter_path": adapter_path}
-        else:
-            return {"success": False, "error": result.stderr[:500] or f"Exit code {result.returncode}"}
-
+            return {"success": True, "output": result.stdout.strip(), "adapter_path": adapter_path}
+        return {"success": False, "error": result.stderr[:500] or f"Exit code {result.returncode}"}
     except Exception as e:
         return {"success": False, "error": str(e)}
