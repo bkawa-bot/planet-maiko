@@ -42,6 +42,43 @@ SYSTEM_PROMPT = (
     "PASS if the code is clean."
 )
 
+
+def _clean_subprocess_env():
+    """Return os.environ minus IDE-injected debugger vars so spawned
+    mlx-lm subprocesses don't try to load pydevd inside themselves.
+
+    PyCharm and VS Code inject PYDEVD_* / PYCHARM_* env vars and
+    prepend the debugger's path to PYTHONPATH so any Python child
+    process auto-attaches to the debug session. For mlx_lm.lora and
+    mlx_lm.generate that's catastrophic — pydevd either fails to
+    connect from the subprocess and crashes, or it succeeds and
+    contaminates stdout/stderr with debugger noise that breaks the
+    line-by-line parsers we use to extract loss / Tokens-per-sec.
+
+    Symptom: `maiko eval` and `maiko train` work fine from a plain
+    terminal but return success=False when launched inside the IDE.
+    Stripping the env var leak fixes both.
+    """
+    env = dict(os.environ)
+    for key in list(env):
+        upper = key.upper()
+        if upper.startswith("PYDEV") or upper.startswith("PYCHARM"):
+            del env[key]
+    pythonpath = env.get("PYTHONPATH", "")
+    if pythonpath:
+        keep = [
+            part for part in pythonpath.split(os.pathsep)
+            if part and "pydev" not in part.lower()
+            and "pycharm" not in part.lower()
+            and "jetbrains" not in part.lower()
+            and ".vscode" not in part.lower()
+        ]
+        if keep:
+            env["PYTHONPATH"] = os.pathsep.join(keep)
+        else:
+            env.pop("PYTHONPATH", None)
+    return env
+
 # Base models the trainer + inferer know how to handle. Adding a new
 # row requires (a) the mlx-community 4-bit weights existing on HF and
 # (b) family being one we have a chat-template for in
@@ -552,6 +589,7 @@ def _train_mlx(train_file, adapter_path, config):
         process = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace",
+            env=_clean_subprocess_env(),
         )
 
         # mlx-lm prints separate "Train loss" and "Val loss" lines per
@@ -939,6 +977,7 @@ def _infer_mlx(prompt_text, adapter_path, config):
         result = subprocess.run(
             cmd, capture_output=True, text=True,
             timeout=120, encoding="utf-8", errors="replace",
+            env=_clean_subprocess_env(),
         )
 
         if result.returncode == 0:
