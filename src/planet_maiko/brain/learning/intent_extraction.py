@@ -47,9 +47,11 @@ MAX_COMMENT_CHARS = 600
 DEFAULT_EXAMPLES_PER_RULE = 6
 
 
-_VIOLATION_PROMPT = """You're describing the SCENARIOS where this rule applies — the kinds of code changes that should pull this rule into a reviewer's attention. The output will be embedded and matched against descriptions of new code changes; when a new diff falls into one of these scenarios, the rule gets surfaced for the reviewer to consider.
+_VIOLATION_PROMPT = """You're describing the kind of code change this rule applies to. The output will be embedded and matched against descriptions of new diffs at review time — same grammatical voice on both sides means tighter cosine matches, so frame your description AS IF YOU WERE DESCRIBING A TYPICAL DIFF that triggers the rule.
 
-CRITICAL: do NOT describe what a violation looks like. Do NOT describe red flags, anti-patterns, or "telltale signs of bad code." Describe the SITUATION an engineer is in when this rule becomes relevant — what kind of change they're making, what kind of code they're writing or modifying. Assume the engineer hasn't yet realized the rule applies; your description is what helps the system notice that the rule is relevant to their work.
+Use active voice: "Adding…", "Modifying…", "Refactoring…", "Removing…". DO NOT use abstract framings like "Any code change that…" or "Code changes which…". The diff-side description (what we'll match against) reads like "Adding a new POST endpoint that accepts user input"; your description should read in the same shape.
+
+CRITICAL: do NOT describe what a violation looks like. Do NOT describe red flags, anti-patterns, or "telltale signs of bad code." Describe the SITUATION an engineer is in when this rule becomes relevant — what kind of change they're making, what kind of code they're writing or modifying. Assume the engineer hasn't yet realized the rule applies; your description is what helps the system notice that the rule is relevant to their work. Claude reasons about whether the rule was actually violated separately, given the rule and the diff together.
 
 ## The rule
 
@@ -66,9 +68,9 @@ Below are real code changes from this team's PRs where this rule was applied. Lo
 
 ## Your task
 
-Describe the scenario(s) where this rule becomes relevant. Cover:
+Describe the kind of diff that triggers this rule. Cover:
 
-1. WHAT KIND of change typically triggers this rule
+1. WHAT KIND of change is happening
    (adding a new feature, modifying a query, refactoring, removing code, etc.)
 2. WHAT KIND of code is being created or modified
    (new endpoint, new database query, new public function, new test, new dependency, etc.)
@@ -82,20 +84,20 @@ DO NOT cover:
 - Specific anti-patterns or red flags
 - Implementation-specific details (variable names, exact function calls, library specifics)
 
-## Examples of GOOD scenario descriptions
+## Examples of GOOD descriptions (note the active voice)
 
 For "Add smoke tests for new endpoints":
-> "Any code change that introduces a new public-facing API endpoint, route handler, or web-accessible function — REST endpoints (GET/POST/PUT/DELETE), RPC procedures, GraphQL resolvers, or new URL routes. Also applies when an existing endpoint's public contract changes meaningfully (new path, new request shape, new response shape)."
+> "Adding a new public-facing API endpoint, route handler, or web-accessible function. Covers REST endpoints (GET/POST/PUT/DELETE), RPC procedures, GraphQL resolvers, and new URL routes. Also includes meaningful modifications to an existing endpoint's public contract — new path, new request shape, or new response shape."
 
 For "Always validate input on user-facing endpoints":
-> "Code changes that add or modify any function receiving external data — request bodies, query parameters, file uploads, form submissions, or message-queue payloads. Includes new endpoints AND modifications to existing ones that add or change input fields."
+> "Adding or modifying a function that receives external data — request bodies, query parameters, file uploads, form submissions, or message-queue payloads. Covers both new endpoints and changes to existing ones that introduce or alter input fields."
 
 For "Use parameterized queries":
-> "Any code change that writes or modifies a database query incorporating variable data — function parameters, request data, computed values, or values from other queries. Applies to INSERT, UPDATE, DELETE, and SELECT statements with WHERE clauses, equally regardless of database engine."
+> "Writing or modifying a database query that incorporates variable data — function parameters, request values, computed values, or results from other queries. Covers INSERT, UPDATE, DELETE, and SELECT-with-WHERE statements equally, regardless of database engine."
 
-Notice: none of these mention what bad code looks like. They describe SITUATIONS where the rule kicks in.
+Notice: every example starts with a verb ("Adding", "Writing", "Modifying"), reads like a description of a specific diff, and never mentions what bad code looks like.
 
-Length: 3-5 sentences. Generic enough to apply across languages, frameworks, and team conventions. Don't reference specific identifiers from the evidence — describe the situational pattern, not the implementation.
+Length: 2-4 sentences. Generic enough to apply across languages, frameworks, and team conventions. Don't reference specific identifiers from the evidence — describe the situational pattern, not the implementation.
 
 Output ONLY the description, no preamble or formatting.
 """
@@ -296,7 +298,9 @@ def generate_violation_description(learning):
     return text
 
 
-_DIFF_INTENT_PROMPT = """Describe what KIND of code change this diff represents — the situational context. The output will be matched against rule scenarios to find which team rules might apply to this change.
+_DIFF_INTENT_PROMPT = """Describe what KIND of code change this diff represents — the situational context. The output will be matched against rule descriptions (also written in active voice — "Adding…", "Modifying…") to find which team rules might apply to this change.
+
+Use active voice: "Adding…", "Modifying…", "Refactoring…", "Removing…". The rule side uses the same voice; matching same-style text yields tighter cosine similarity than mixing voices.
 
 CRITICAL: do not judge whether the code is good or bad, do not flag risk signals, do not call out missing tests or any potential issues. Just describe what kind of work is being done — what the engineer is making, modifying, or removing. The system surfaces relevant rules separately, given this scenario description.
 
