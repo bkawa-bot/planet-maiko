@@ -425,6 +425,36 @@ def cmd_lora_feedback(args):
         sys.exit(1)
 
 
+def cmd_rules_regen(args):
+    """Manually trigger the violation-description backfill. Pass
+    --force to regenerate every active rule (useful after a prompt
+    change). Runs in the background; logs progress to the Flask
+    server's stderr."""
+    from planet_maiko.app import create_app
+    from planet_maiko.brain.learning.violation_backfill import (
+        backfill_in_background,
+        backfill_violation_descriptions,
+    )
+
+    app = create_app(start_scheduler=False)
+    if args.foreground:
+        # Run synchronously in this CLI process — useful for testing
+        # / debugging since the output appears here, not in the Flask
+        # server log.
+        with app.app_context():
+            result = backfill_violation_descriptions(force=args.force)
+        print(
+            f"Done. Succeeded: {result['succeeded']}, "
+            f"Failed: {result['failed']}, Total: {result['total']}"
+        )
+    else:
+        backfill_in_background(app, force=args.force)
+        print(
+            "Backfill kicked off on background thread. "
+            "Watch the Flask server log for [violation-backfill] progress lines."
+        )
+
+
 def cmd_rule_show(args):
     """Print full metadata for one Learning, including the
     Claude-generated violation_description Maiko uses for RAG
@@ -914,6 +944,17 @@ def register(subparsers):
     )
     p.add_argument("id", type=int, help="Learning ID")
     p.set_defaults(func=cmd_rule_show)
+
+    # maiko rules-regen
+    p = subparsers.add_parser(
+        "rules-regen",
+        help="Trigger the rule-description backfill (use --force after prompt changes)",
+    )
+    p.add_argument("--force", action="store_true",
+                   help="Regenerate EVERY active rule's description (not just stale ones)")
+    p.add_argument("--foreground", action="store_true",
+                   help="Run in this CLI process instead of the Flask background thread")
+    p.set_defaults(func=cmd_rules_regen)
 
     # maiko rules-list
     p = subparsers.add_parser(

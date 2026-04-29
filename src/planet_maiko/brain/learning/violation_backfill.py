@@ -27,10 +27,20 @@ logger = logging.getLogger(__name__)
 SIGNAL_REGEN_THRESHOLD = 5
 
 
-def _learnings_needing_work():
+def _learnings_needing_work(force=False):
     """Return all active learnings that need their description
-    generated or refreshed."""
+    generated or refreshed.
+
+    When `force=True`, returns every active learning — useful when the
+    prompt has changed and existing descriptions are stale relative to
+    the new framing (e.g. switched from violation-pattern descriptions
+    to scenario descriptions). Costs N Haiku calls regardless of
+    current state, so use sparingly.
+    """
     from planet_maiko.models.learning import Learning
+
+    if force:
+        return list(Learning.query.filter_by(status="active").all())
 
     candidates = []
     for l in Learning.query.filter_by(status="active").all():
@@ -87,17 +97,25 @@ def _process_one(learning):
     return True
 
 
-def backfill_violation_descriptions():
+def backfill_violation_descriptions(force=False):
     """Process every active Learning that needs description work.
     Runs synchronously — call from a background thread for app startup.
-    Returns dict with counts."""
-    work = _learnings_needing_work()
+
+    When `force=True`, regenerates EVERY active learning's description,
+    even ones already populated. Use after a prompt change (or when
+    you want to refresh against richer evidence accumulated since the
+    last gen). Costs ~$0.001 per rule; for 300 rules that's ~$0.30.
+
+    Returns dict with counts.
+    """
+    work = _learnings_needing_work(force=force)
     total = len(work)
     if not total:
         logger.info("[violation-backfill] All active learnings already have current descriptions")
         return {"processed": 0, "succeeded": 0, "failed": 0, "total": 0}
 
-    logger.info(f"[violation-backfill] Processing {total} learnings")
+    mode = "force-regen" if force else "incremental"
+    logger.info(f"[violation-backfill] Processing {total} learnings ({mode})")
     succeeded = 0
     failed = 0
     for i, learning in enumerate(work, 1):
@@ -122,15 +140,18 @@ def backfill_violation_descriptions():
     return {"processed": total, "succeeded": succeeded, "failed": failed, "total": total}
 
 
-def backfill_in_background(app):
+def backfill_in_background(app, force=False):
     """Kick off backfill on a daemon thread so app startup isn't
     blocked. Each per-learning call is a Claude+embedding round-trip
     that can take 2-5 seconds; for 300 rules that's potentially
-    20+ minutes — way too long to gate boot on."""
+    20+ minutes — way too long to gate boot on.
+
+    Pass force=True to refresh every description, regardless of
+    current state — needed after a prompt change."""
     def _runner():
         with app.app_context():
             try:
-                backfill_violation_descriptions()
+                backfill_violation_descriptions(force=force)
             except Exception as e:
                 logger.warning(f"[violation-backfill] background runner crashed: {e}")
 
@@ -138,4 +159,7 @@ def backfill_in_background(app):
         target=_runner, daemon=True, name="violation-backfill"
     )
     thread.start()
-    logger.info("[violation-backfill] kicked off on background thread")
+    logger.info(
+        f"[violation-backfill] kicked off on background thread"
+        f"{' (force-regen)' if force else ''}"
+    )

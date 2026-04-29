@@ -1,16 +1,28 @@
-"""Generate Claude-authored "violation pattern" descriptions for each
-graduated rule, grounded in the team's actual PR-comment history.
+"""Generate "scenario" descriptions for each graduated rule, grounded
+in the team's actual PR-comment history.
 
-The output of this module — `Learning.violation_description` — is the
-text that gets embedded for RAG retrieval. The richer this description
-is (specific to the team's libraries, idioms, and code patterns), the
-better retrieval works.
+Despite the column name `violation_description` (kept for migration
+stability), the content these prompts produce is NOT a description of
+what violations look like — it's a description of the SCENARIOS where
+the rule applies. The kinds of code changes that should pull this rule
+into a reviewer's attention.
+
+Why this distinction matters: at review time, Claude describes the
+diff it's looking at. If we asked Claude to describe violations and
+matched on that, we'd only retrieve rules when Claude had ALREADY
+spotted something off — which defeats the purpose of retrieval.
+Instead, the diff description says "this adds a new public endpoint"
+and we want to surface every rule whose scenario is "applies to new
+endpoints." Claude reasons about whether the rule was actually
+violated separately, given the rule and the diff together.
 
 Pipeline per rule:
 
   1. Gather 5-8 representative signals tied to this Learning, with
      their diff_hunk and reviewer comment text.
-  2. Build a prompt that includes the rule + each piece of evidence.
+  2. Build a prompt that asks Claude to extract the SCENARIO — what
+     kind of code change typically triggers this rule's relevance,
+     not what a violation looks like.
   3. Send to Claude (Haiku is cheap and good enough for this task).
   4. Parse the response into a clean description string.
   5. Caller embeds it and stores both on the Learning.
@@ -35,7 +47,9 @@ MAX_COMMENT_CHARS = 600
 DEFAULT_EXAMPLES_PER_RULE = 6
 
 
-_VIOLATION_PROMPT = """You're describing the code-violation pattern for a team's coding rule, grounded in actual examples from their PR review history. The output will be embedded and used to retrieve this rule when reviewing similar new code, so the description should capture WHAT VIOLATIONS LOOK LIKE in this team's codebase.
+_VIOLATION_PROMPT = """You're describing the SCENARIOS where this rule applies — the kinds of code changes that should pull this rule into a reviewer's attention. The output will be embedded and matched against descriptions of new code changes; when a new diff falls into one of these scenarios, the rule gets surfaced for the reviewer to consider.
+
+CRITICAL: do NOT describe what a violation looks like. Do NOT describe red flags, anti-patterns, or "telltale signs of bad code." Describe the SITUATION an engineer is in when this rule becomes relevant — what kind of change they're making, what kind of code they're writing or modifying. Assume the engineer hasn't yet realized the rule applies; your description is what helps the system notice that the rule is relevant to their work.
 
 ## The rule
 
@@ -46,25 +60,42 @@ Signal count: {n_signals} graduated from PR comments
 
 ## Historical evidence
 
-Below are real code samples from this team's PRs that were flagged as violating this rule. Each includes the reviewer's actual comment so you can see what specifically caught their attention.
+Below are real code changes from this team's PRs where this rule was applied. Look at WHAT KIND OF CHANGE was being made — that's the scenario you're trying to capture. The reviewer's specific comment shows you the violation, but you're describing the *category of change* the rule applies to, not the violation itself.
 
 {evidence_blocks}
 
 ## Your task
 
-Synthesize a violation pattern description that captures what code looks like when it violates this rule in THIS team's codebase. The description should be:
+Describe the scenario(s) where this rule becomes relevant. Cover:
 
-1. GROUNDED in the historical examples — reference team-specific module paths, internal libraries, or framework idioms where they recur in the evidence
-2. GENERAL enough to recognize variations the team hasn't yet seen
-3. SPECIFIC enough that a reviewer reading the description could spot a violation in unfamiliar code
+1. WHAT KIND of change typically triggers this rule
+   (adding a new feature, modifying a query, refactoring, removing code, etc.)
+2. WHAT KIND of code is being created or modified
+   (new endpoint, new database query, new public function, new test, new dependency, etc.)
+3. The BROAD CATEGORY of work
+   (data access, public API, auth, error handling, configuration, testing, observability, etc.)
+4. VARIATIONS — different forms the relevant change can take
 
-Cover:
-- STRUCTURAL PATTERNS — code shapes that repeatedly trigger this rule
-- COMMON CONTEXTS — where in the codebase this typically happens
-- TELLTALE SIGNS — what's present (or notably absent) in violations
-- VARIATIONS — different forms the violation takes across the team's code
+DO NOT cover:
+- What a violation looks like
+- What's "wrong" with bad code
+- Specific anti-patterns or red flags
+- Implementation-specific details (variable names, exact function calls, library specifics)
 
-Length: 4-6 sentences. Genericize variable/function names, but DO reference team-specific module paths or library names if they show up consistently in the evidence.
+## Examples of GOOD scenario descriptions
+
+For "Add smoke tests for new endpoints":
+> "Any code change that introduces a new public-facing API endpoint, route handler, or web-accessible function — REST endpoints (GET/POST/PUT/DELETE), RPC procedures, GraphQL resolvers, or new URL routes. Also applies when an existing endpoint's public contract changes meaningfully (new path, new request shape, new response shape)."
+
+For "Always validate input on user-facing endpoints":
+> "Code changes that add or modify any function receiving external data — request bodies, query parameters, file uploads, form submissions, or message-queue payloads. Includes new endpoints AND modifications to existing ones that add or change input fields."
+
+For "Use parameterized queries":
+> "Any code change that writes or modifies a database query incorporating variable data — function parameters, request data, computed values, or values from other queries. Applies to INSERT, UPDATE, DELETE, and SELECT statements with WHERE clauses, equally regardless of database engine."
+
+Notice: none of these mention what bad code looks like. They describe SITUATIONS where the rule kicks in.
+
+Length: 3-5 sentences. Generic enough to apply across languages, frameworks, and team conventions. Don't reference specific identifiers from the evidence — describe the situational pattern, not the implementation.
 
 Output ONLY the description, no preamble or formatting.
 """
@@ -265,7 +296,9 @@ def generate_violation_description(learning):
     return text
 
 
-_DIFF_INTENT_PROMPT = """Describe the intent of this code change at the level of structure and shape, not implementation details.
+_DIFF_INTENT_PROMPT = """Describe what KIND of code change this diff represents — the situational context. The output will be matched against rule scenarios to find which team rules might apply to this change.
+
+CRITICAL: do not judge whether the code is good or bad, do not flag risk signals, do not call out missing tests or any potential issues. Just describe what kind of work is being done — what the engineer is making, modifying, or removing. The system surfaces relevant rules separately, given this scenario description.
 
 Diff:
 ```
@@ -273,12 +306,33 @@ Diff:
 ```
 
 Cover:
-- WHAT KIND of change (add / remove / modify / refactor / behavior change)
-- WHAT KIND of code is touched (validation / auth / data flow / API / test / config / etc.)
-- The STRUCTURAL pattern of the change (e.g. "removes input validation while leaving the call site", "adds a new function but no tests", "refactors error handling to swallow exceptions")
-- Any obvious risk signals visible in the diff (orphaned references, missing tests, new external dependencies, removed safety checks)
+1. WHAT KIND of change (adding/removing/modifying/refactoring)
+2. WHAT KIND of code is being touched (endpoint, query, validation, test, config, dependency, business logic, etc.)
+3. The BROAD CATEGORY of work (data access, public API, auth, error handling, observability, etc.)
+4. The CHANGE INTENT (what the engineer is trying to accomplish — describe at the situational level, not the implementation level)
 
-Length: 3-5 sentences. Genericize variable/function names — describe the shape and intent, not the specifics. Output ONLY the description, no preamble.
+DO NOT include:
+- Whether the code looks good or bad
+- "Risk signals," "red flags," "potential issues," missing tests, etc.
+- Specific variable/function names or library calls
+- Editorial commentary on the change
+
+## Examples of GOOD diff descriptions
+
+For a diff that adds a new POST endpoint with validation:
+> "Adding a new public API endpoint that accepts user input and creates a resource. Includes a route handler, a request schema, and a database write."
+
+For a diff that modifies a SQL query:
+> "Modifying an existing database query to add additional filter conditions and return a new field. Changes both the query parameters and the result shape."
+
+For a diff that refactors error handling:
+> "Refactoring how errors are handled in an existing service module. Moves try/except blocks and changes how exceptions propagate to callers."
+
+Notice: none of these say "looks fine" or "missing tests" or "risky." They just describe what's happening.
+
+Length: 3-5 sentences. Generic enough to match any rule's scenario description. Don't reference specific identifiers from the diff.
+
+Output ONLY the description, no preamble.
 """
 
 

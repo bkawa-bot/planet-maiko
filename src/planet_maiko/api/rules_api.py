@@ -124,11 +124,22 @@ def relevant_rules():
 def regenerate_descriptions():
     """Kick off the violation_description backfill manually. Useful
     after editing rules in bulk, or to recover from a failed startup
-    backfill. Runs in a background thread; returns immediately."""
+    backfill. Runs in a background thread; returns immediately.
+
+    Body:
+      force (optional, bool, default false): when true, regenerate
+        EVERY active learning's description — needed after prompt
+        changes that invalidate existing content (e.g. when the
+        prompt was reframed from violation patterns to scenarios).
+        Costs ~$0.001 per rule, so use intentionally.
+    """
     from flask import current_app
     from planet_maiko.brain.learning.violation_backfill import backfill_in_background
-    backfill_in_background(current_app._get_current_object())
-    return jsonify({"status": "started"}), 202
+
+    data = request.get_json(silent=True) or {}
+    force = bool(data.get("force", False))
+    backfill_in_background(current_app._get_current_object(), force=force)
+    return jsonify({"status": "started", "force": force}), 202
 
 
 @rules_bp.route("/rules/embedding-status", methods=["GET"])
