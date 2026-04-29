@@ -431,6 +431,16 @@ def create_app(start_scheduler=False):
             reset_stale_training_progress()
         except Exception as e:
             logger.warning(f"[startup] Stale training-progress cleanup skipped: {e}")
+        try:
+            # RAG retrieval substrate: ensure each active Learning has a
+            # current violation_description + embedding. Runs on a daemon
+            # thread because the per-rule LLM call adds up to many minutes
+            # for a 300-rule corpus, and we don't want to gate Flask
+            # readiness on it.
+            from planet_maiko.brain.learning.violation_backfill import backfill_in_background
+            backfill_in_background(app)
+        except Exception as e:
+            logger.warning(f"[startup] Violation-description backfill skipped: {e}")
 
         # Wake-registry cleanup: the previous run may have crashed with
         # agents flagged "working" and with session-registry entries
