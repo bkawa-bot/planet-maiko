@@ -37,14 +37,16 @@ PASS examples should follow the rule correctly — clean, idiomatic code.
 
 Vary the examples: different function names, different contexts, different languages if applicable. Make them look like real code from real projects.
 
+We don't need explanations from you — the model is being trained as a *classifier* that emits the verbatim rule text on a violation, not free-form prose. So just give us the code; we'll pair it with the rule text downstream.
+
 Respond with ONLY a JSON object:
 {{
   "violations": [
-    {{"code": "def foo():\\n    ...", "explanation": "brief explanation of what's wrong"}},
+    {{"code": "def foo():\\n    ..."}},
     ...
   ],
   "passes": [
-    {{"code": "def bar():\\n    ...", "explanation": "brief explanation of why this is correct"}},
+    {{"code": "def bar():\\n    ..."}},
     ...
   ]
 }}"""
@@ -251,7 +253,14 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None,
             context_parts.append(f"```\n{ex['diff_hunk']}\n```")
             real_pairs.append({
                 "input": "\n".join(context_parts),
-                "output": f"VIOLATION: [{learning.category}] {ex['text']}",
+                # Output is the verbatim rule text — turns the model's
+                # task into 300-way classification over the rule
+                # vocabulary instead of free-form generation. The
+                # original PR comment text (`ex['text']`) is dropped
+                # from the training output; we keep the rule text
+                # as the canonical label so every signal pointing at
+                # the same rule produces the same output string.
+                "output": f"VIOLATION: [{learning.category}] {learning.rule}",
                 "rule_id": learning.id,
                 "rule": learning.rule,
                 "category": learning.category,
@@ -378,12 +387,16 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None,
                 if parsed is not None:
                     for v in parsed.get("violations", []):
                         code = v.get("code", "")
-                        explanation = v.get("explanation", "")
                         if not code:
                             continue
+                        # Output uses the verbatim rule text instead of
+                        # the per-example explanation that older builds
+                        # asked Opus to author. With ~300 rules in the
+                        # vocabulary, classification is far more learnable
+                        # at 7B-4bit than open-ended generation was.
                         out_file.write(json.dumps({
                             "input": f"```\n{code}\n```",
-                            "output": f"VIOLATION: [{job['category']}] {explanation}",
+                            "output": f"VIOLATION: [{job['category']}] {job['rule']}",
                             "rule_id": job["learning_id"],
                             "rule": job["rule"],
                             "category": job["category"],

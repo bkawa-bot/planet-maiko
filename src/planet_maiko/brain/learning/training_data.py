@@ -224,11 +224,22 @@ def _extract_from_signals():
     """
     try:
         from planet_maiko.models.signal import Signal
+        from planet_maiko.models.learning import Learning
 
         # A signal is training-usable if it has ANY source of code
         # context — either a filled code_context (old rows / non-inline
         # sources) or at least one entry in examples (new rows).
         signals = Signal.query.filter(Signal.incorporated_at.is_(None)).all()
+
+        # Resolve learnings up-front so we can use their canonical rule
+        # text as the output label. Classification format requires every
+        # pair pointing at the same rule to produce the same output —
+        # the raw signal text varies per-comment, but learning.rule is
+        # the deduplicated authority.
+        learning_ids = {s.learning_id for s in signals if s.learning_id}
+        learnings_by_id = {
+            l.id: l for l in Learning.query.filter(Learning.id.in_(learning_ids)).all()
+        } if learning_ids else {}
 
         pairs = []
         signal_ids = []
@@ -252,7 +263,16 @@ def _extract_from_signals():
             if not examples:
                 continue
 
-            output = "PASS" if s.severity == "rejected" else f"VIOLATION: [{s.category}] {s.text}"
+            if s.severity == "rejected":
+                output = "PASS"
+            else:
+                # Prefer the graduated rule text if this signal is tied
+                # to a learning. Falls back to the raw signal text only
+                # for orphan signals (no learning_id) — those are mostly
+                # legacy rows from before the rule system existed.
+                learning = learnings_by_id.get(s.learning_id) if s.learning_id else None
+                label = learning.rule if learning else (s.text or "")
+                output = f"VIOLATION: [{s.category}] {label}"
 
             for ex in examples:
                 context_parts = []
