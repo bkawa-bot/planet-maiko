@@ -314,18 +314,23 @@ def review_pr_files(files, adapter_path):
 
         {file_path: {"verdict": "PASS"|"FLAG", "raw": "<model output>"}}
 
+    Uses per-hunk chunked inference under the hood (review_diff) — the
+    LoRA was trained on small focused chunks, so per-hunk inference
+    matches the training distribution and reduces attention dilution
+    on multi-hunk file diffs.
+
     adapter_path=None runs the base model for baseline comparison.
     """
-    from planet_maiko.brain.learning.trainer import review_code
+    from planet_maiko.brain.learning.trainer import review_diff
 
     out = {}
     for file_path, hunk in files:
-        r = review_code(code=hunk, adapter_path=adapter_path, file_path=file_path)
+        r = review_diff(diff_text=hunk, adapter_path=adapter_path, file_path=file_path)
         if not r.get("success"):
             out[file_path] = {"verdict": "ERROR", "raw": r.get("error", "")}
             continue
         cleaned = _clean_mlx_output(r.get("output", ""))
-        verdict = "PASS" if cleaned.upper().startswith("PASS") else "FLAG"
+        verdict = "PASS" if r.get("verdict") == "PASS" else "FLAG"
         out[file_path] = {"verdict": verdict, "raw": cleaned}
     return out
 

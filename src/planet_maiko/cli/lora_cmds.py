@@ -749,8 +749,10 @@ def cmd_add_rule(args):
 
 
 def cmd_review(args):
-    """Review code using a trained LoRA adapter."""
-    from planet_maiko.brain.learning.trainer import review_code
+    """Review code using a trained LoRA adapter. For multi-hunk diffs,
+    automatically chunks per hunk to match the LoRA's training
+    distribution (each rules-*.jsonl pair was a single small chunk)."""
+    from planet_maiko.brain.learning.trainer import review_diff
 
     if args.pr:
         _review_pr(args)
@@ -767,24 +769,38 @@ def cmd_review(args):
         code = sys.stdin.read()
         file_path = None
 
-    result = review_code(
-        code=code,
+    result = review_diff(
+        diff_text=code,
         agent_profile_id=args.agent,
         file_path=file_path,
     )
 
-    if result.get("success"):
-        print(f"\n{result['output']}")
-    else:
+    if not result.get("success"):
         print(f"Error: {result.get('error')}")
+        return
+
+    n = result.get("hunks_reviewed", 0)
+    flagged = result.get("hunks_flagged", 0)
+    if n > 1:
+        print(f"\n=== Reviewed {n} hunks ({flagged} flagged) ===\n")
+
+    violations = result.get("violations") or []
+    if violations:
+        for v in violations:
+            print(v["raw"])
+        return
+
+    print("PASS")
 
 
 from planet_maiko.utils import parse_pr_url as _parse_pr_url  # noqa: E402
 
 
 def _review_pr(args):
-    """Review each file in a GitHub PR individually through the LoRA model."""
-    from planet_maiko.brain.learning.trainer import review_code
+    """Review each file in a GitHub PR individually through the LoRA model.
+    Each per-file diff is further chunked per-hunk so the LoRA sees inputs
+    matching its training distribution."""
+    from planet_maiko.brain.learning.trainer import review_diff
 
     repo, pr_number = _parse_pr_url(args.pr)
     if not repo or not pr_number:
@@ -824,7 +840,7 @@ def _review_pr(args):
     flagged = 0
 
     for fp, fd in code_files:
-        r = review_code(code=fd, adapter_path=None, agent_profile_id=args.agent, file_path=fp)
+        r = review_diff(diff_text=fd, adapter_path=None, agent_profile_id=args.agent, file_path=fp)
 
         if not r.get("success"):
             short = fp.rsplit("/", 1)[-1]
