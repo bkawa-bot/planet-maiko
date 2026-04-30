@@ -408,6 +408,9 @@ def _act_run_agent_job(automation, config, pupdate=None, context=None):
     extra = {"from_automation": automation.id}
     if pupdate is not None:
         extra["triggered_by_pupdate"] = pupdate.id
+        snap = _pupdate_snapshot(pupdate)
+        if snap:
+            extra["pupdate_snapshot"] = snap
     chain_ids = ctx.get("pupdate_ids") or []
     if chain_ids:
         extra["triggered_by_pupdates"] = list(chain_ids)
@@ -432,9 +435,6 @@ def _act_run_agent_job(automation, config, pupdate=None, context=None):
                 "automation_id": automation.id,
             },
         }
-        snap = _pupdate_snapshot(pupdate)
-        if snap:
-            memo_extra["pupdate_snapshot"] = snap
         memo = create_memo(
             kind="job_approval",
             category="offer",
@@ -588,6 +588,9 @@ def _act_spawn_agent_job_from_pupdate(automation, config, pupdate=None, context=
         "from_automation": automation.id,
         "triggered_by_pupdate": pupdate.id,
     }
+    snap = _pupdate_snapshot(pupdate)
+    if snap:
+        extra["pupdate_snapshot"] = snap
     chain_ids = (context or {}).get("pupdate_ids") or []
     if chain_ids and chain_ids != [pupdate.id]:
         extra["triggered_by_pupdates"] = list(chain_ids)
@@ -610,9 +613,6 @@ def _act_spawn_agent_job_from_pupdate(automation, config, pupdate=None, context=
                 "automation_id": automation.id,
             },
         }
-        snap = _pupdate_snapshot(pupdate)
-        if snap:
-            memo_extra["pupdate_snapshot"] = snap
         memo = create_memo(
             kind="job_approval",
             category="offer",
@@ -740,6 +740,9 @@ def _act_create_task_from_pupdate(automation, config, pupdate=None, context=None
         "repo": repo,
         "from_automation": automation.id,
     }
+    snap = _pupdate_snapshot(pupdate)
+    if snap:
+        extra["pupdate_snapshot"] = snap
     # Carry integration-specific identifiers through so downstream
     # sync (e.g. Linear status mirroring) can find the task by its
     # source id. Narrow list — don't leak unrelated pupdate fields.
@@ -892,14 +895,12 @@ def _interpolate(template, pupdate=None, context=None):
 
 
 def _pupdate_snapshot(pupdate):
-    """Extract the useful surface of a pupdate for embedding in memo
-    extra. Gives the user-facing memo a complete "triggered by" view
-    later without having to re-fetch + re-render the original pupdate
-    on every open.
-
-    Kept narrow: no raw extra blob, no internal flags. Just the fields
-    a human would want back ("what was it", "where did it come from",
-    "when", "link out").
+    """Extract a pupdate's full surface for downstream consumers (memos,
+    agent jobs, task extras). Includes the raw `extra` blob — different
+    skills key off different metadata fields (pr-review needs `url`;
+    investigate wants `body`; correlator-style skills might key on tags
+    or extra.repo / extra.pr_number), so plumb it all and let the
+    consumer pick.
     """
     if pupdate is None:
         return None
@@ -921,7 +922,52 @@ def _pupdate_snapshot(pupdate):
             if getattr(pupdate, "timestamp", None) and hasattr(pupdate.timestamp, "isoformat")
             else None
         ),
+        "extra": dict(getattr(pupdate, "extra", None) or {}),
     }
+
+
+def format_pupdate_for_context(snapshot):
+    """Render a pupdate snapshot dict as a markdown block for skill
+    prompts. Ships every field — skills decide what to use. Returns
+    an empty string when snapshot is None / empty so callers can
+    unconditionally splice the result into a `{context}` placeholder.
+    """
+    if not snapshot:
+        return ""
+    lines = ["### Triggered by pupdate"]
+    for key, label in (
+        ("type", "Type"),
+        ("source", "Source"),
+        ("title", "Title"),
+        ("url", "URL"),
+        ("priority", "Priority"),
+        ("timestamp", "Created"),
+    ):
+        value = snapshot.get(key)
+        if value:
+            lines.append(f"{label}: {value}")
+    tags = snapshot.get("tags") or []
+    if tags:
+        lines.append(f"Tags: {', '.join(str(t) for t in tags)}")
+    extra = snapshot.get("extra") or {}
+    if extra:
+        # Flatten one level — pupdate.extra is mostly key/value scalars
+        # (repo, pr_number, head_sha, identifier, etc.). For nested
+        # values, fall back to JSON so the structure stays readable.
+        import json as _json
+        lines.append("Metadata:")
+        for k, v in extra.items():
+            if isinstance(v, (dict, list)):
+                v_str = _json.dumps(v, default=str)
+            else:
+                v_str = str(v)
+            lines.append(f"  {k}: {v_str}")
+    body = (snapshot.get("body") or "").strip()
+    if body:
+        lines.append("")
+        lines.append("Body:")
+        lines.append(body)
+    return "\n".join(lines)
 
 
 def _act_notify(automation, config, pupdate=None, context=None):

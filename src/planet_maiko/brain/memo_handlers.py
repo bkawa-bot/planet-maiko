@@ -96,6 +96,8 @@ def _approve_job_approval(memo):
         job_extra["triggered_by_pupdate"] = extra["triggered_by_pupdate"]
     if extra.get("triggered_by_pupdates"):
         job_extra["triggered_by_pupdates"] = extra["triggered_by_pupdates"]
+    if extra.get("pupdate_snapshot"):
+        job_extra["pupdate_snapshot"] = extra["pupdate_snapshot"]
     if extra.get("specialty_id"):
         job_extra["specialty_id"] = extra["specialty_id"]
 

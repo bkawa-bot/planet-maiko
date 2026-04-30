@@ -609,9 +609,16 @@ def _execute_lightweight_specialty(job, specialty):
         logger.warning(f"[cycle] specialty {specialty.id} ({job.id}): runtime unavailable")
         return False
 
+    from planet_maiko.brain.automations import format_pupdate_for_context
+    pupdate_block = format_pupdate_for_context(
+        (job.extra or {}).get("pupdate_snapshot")
+    )
+    context_parts = [pupdate_block, (job.description or "")]
+    if job.scope_repo:
+        context_parts.append(f"Repo: {job.scope_repo}")
     context = {
         "query": job.title,
-        "context": (job.description or "") + (f"\nRepo: {job.scope_repo}" if job.scope_repo else ""),
+        "context": "\n\n".join(p for p in context_parts if p),
         "pupdates": "[]",
         "tasks": "[]",
         "calendar": "[]",

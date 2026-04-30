@@ -268,9 +268,16 @@ def execute_one_shot_task(task, working_dir=None):
     db.session.commit()
 
     meta = task.extra or {}
+    from planet_maiko.brain.automations import format_pupdate_for_context
+    pupdate_block = format_pupdate_for_context(meta.get("pupdate_snapshot"))
+    context_parts = [pupdate_block]
+    if task.url:
+        context_parts.append(f"URL: {task.url}")
+    if meta.get("repo"):
+        context_parts.append(f"Repo: {meta['repo']}")
     context = {
         "query": task.title,
-        "context": f"URL: {task.url or ''}\nRepo: {meta.get('repo', '')}",
+        "context": "\n\n".join(p for p in context_parts if p),
         "pupdates": "[]", "tasks": "[]", "calendar": "[]",
     }
 
