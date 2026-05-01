@@ -36,6 +36,13 @@ def list_jobs():
     if scope_repo:
         q = q.filter(AgentJob.scope_repo == scope_repo)
 
+    # Filter to jobs linked to a specific task — used by the legacy
+    # /tasks/<id>/report redirect to find the unified /jobs/<id>
+    # destination.
+    source_task_id = request.args.get("source_task_id")
+    if source_task_id:
+        q = q.filter(AgentJob.source_task_id == source_task_id)
+
     limit = min(int(request.args.get("limit") or 100), 500)
     jobs = q.order_by(AgentJob.created_at.desc()).limit(limit).all()
     return jsonify([j.to_dict() for j in jobs])

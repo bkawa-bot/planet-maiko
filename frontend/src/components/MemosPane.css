@@ -233,6 +233,14 @@
   padding: 1px 4px;
   border-radius: var(--radius-xs);
 }
+/* Quick-peek toggle for ArtifactRow — chevron between the header
+   button and the dismiss X. Click expands the body inline without
+   leaving Home; click the header instead to navigate to the full
+   /jobs/<id> page with chat. */
+.memos-pane-peek {
+  flex: 0 0 auto;
+  align-self: center;
+}
 
 /* Inline message body for agent_ready / agent_stuck / agent_plan
    memos. Expand-on-click <details>; the row's main button still

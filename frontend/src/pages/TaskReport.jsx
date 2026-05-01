@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useParams, Navigate, useNavigate } from "react-router-dom";
 import { ArrowLeft, FileText } from "lucide-react";
 import { api } from "../api/client";
 import { renderMarkdown } from "../utils/markdown";
@@ -7,31 +7,44 @@ import PlanetSpinner from "../components/PlanetSpinner";
 import "./ReviewPlan.css";
 
 /**
- * Read-only artifact viewer for one-shot report tasks (investigation,
- * repo_analysis). They store their output on task.extra.artifact and
- * clean up their worktree on reply, so there's no diff to show —
- * just the markdown report.
+ * Legacy task-keyed report route. New memos route directly to
+ * /jobs/<id> (JobReport.jsx) — markdown render + chat in one place,
+ * works for jobs with or without a linked Task.
+ *
+ * This page exists to keep older memos and bookmarks working:
+ *   1. Look up the AgentJob linked to this task
+ *   2. If one exists, redirect to /jobs/<id>
+ *   3. If not, fall back to rendering task.extra.artifact
+ *      (covers tasks created before the AgentJob path existed)
  */
 export default function TaskReport() {
   const { taskId } = useParams();
   const navigate = useNavigate();
 
-  const [task, setTask] = useState(null);
+  const [resolved, setResolved] = useState(null);   // {redirectTo} | {task} | null
   const [loading, setLoading] = useState(true);
 
-  const fetchTask = useCallback(async () => {
-    setLoading(true);
-    try {
-      const t = await api.getTask(taskId);
-      setTask(t);
-    } catch {
-      setTask(null);
-    } finally {
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const [task, jobs] = await Promise.all([
+        api.getTask(taskId).catch(() => null),
+        api.getAgentJobs({ source_task_id: taskId, include_done: true }).catch(() => []),
+      ]);
+      if (cancelled) return;
+      if (jobs && jobs.length > 0) {
+        // Newest first by created_at desc — pick the most recent
+        // job linked to this task. Multiple jobs can exist if the
+        // user re-ran the task; the latest is what they want.
+        setResolved({ redirectTo: `/jobs/${jobs[0].id}` });
+      } else {
+        setResolved({ task });
+      }
       setLoading(false);
-    }
+    })();
+    return () => { cancelled = true; };
   }, [taskId]);
-
-  useEffect(() => { fetchTask(); }, [fetchTask]);
 
   if (loading) {
     return (
@@ -43,6 +56,11 @@ export default function TaskReport() {
     );
   }
 
+  if (resolved?.redirectTo) {
+    return <Navigate to={resolved.redirectTo} replace />;
+  }
+
+  const task = resolved?.task;
   const artifact = task?.extra?.artifact;
 
   return (

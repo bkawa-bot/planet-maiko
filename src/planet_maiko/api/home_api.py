@@ -203,16 +203,14 @@ def get_review_queue():
         # and can be flipped by the frontend via POST /agent-jobs/<id>/ack.
         if extra.get("reviewed"):
             continue
-        # Cartograph artifacts live on the Playbook tab; other kinds
-        # don't have a dedicated viewer yet — fall through to /agents
-        # so the click goes somewhere reasonable. Once an artifact-
-        # viewer route exists, swap to a /agents/jobs/<id>-style deep
-        # link. Until then, the artifact body is included on the row
-        # below for inline rendering in the Memos pane.
+        # Cartograph artifacts live on the Playbook tab. Everything
+        # else routes to /jobs/<id> — the unified report viewer with
+        # markdown render + chat for follow-ups. Replaces the old
+        # /agents fallback that dead-ended on the active-agents page.
         if j.kind == "cartograph":
             route = "/knowledge?tab=playbook"
         else:
-            route = "/agents"
+            route = f"/jobs/{j.id}"
         items.append({
             "kind": "job_artifact",
             "task_id": None,
@@ -446,17 +444,23 @@ def get_review_queue():
         skill_name = (m.extra or {}).get("skill_name")
         if skill_name in SELF_RENDERING_SKILLS:
             continue
+        from_job = (m.extra or {}).get("from_agent_job")
+        # Skill runs that came from an AgentJob get a deep-link to
+        # the unified /jobs/<id> viewer (full-page render + chat).
+        # Standalone skill runs (no job) keep route=None — the inline
+        # body expand on the Memos pane is the only surface, which is
+        # fine for short outputs.
         items.append({
             "kind": "skill_result",
             "task_id": None,
-            "job_id": (m.extra or {}).get("from_agent_job"),
+            "job_id": from_job,
             "memo_id": m.id,
             "title": m.title,
             "body": m.body,
             "body_truncated": bool(m.body and len(m.body) > 8000),
             "repo": None,
             "agent_name": m.source_agent_id,
-            "route": None,
+            "route": f"/jobs/{from_job}" if from_job else None,
             "age_seconds": _age(m.created_at),
             "timestamp": iso_utc(m.created_at),
             "priority": m.priority,

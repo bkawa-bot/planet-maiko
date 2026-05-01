@@ -501,20 +501,33 @@ export default function MemosPane() {
  *  on the job so the row falls out of the home_api filter. */
 function ArtifactRow({ it, meta, Icon, onDismiss, defaultOrg }) {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
   const hasBody = !!(it.body && it.body.trim());
+  // When the row has a route, the user has two ways in: click the
+  // header to navigate to /jobs/<id> (full page with markdown + chat
+  // for follow-ups), or click the chevron to expand inline for a
+  // quick peek without leaving Home. When there's no route, the
+  // header click expands inline as the primary interaction.
+  const hasRoute = !!it.route;
+  const handleHeaderClick = () => {
+    if (hasRoute) navigate(it.route);
+    else if (hasBody) setOpen((v) => !v);
+  };
+  const togglePeek = (e) => {
+    e.stopPropagation();
+    setOpen((v) => !v);
+  };
   return (
     <div className={`review-queue-row tone-${meta.tone} review-queue-row-artifact`}>
       <button
         type="button"
         className="review-queue-row-main"
-        onClick={() => hasBody && setOpen((v) => !v)}
-        disabled={!hasBody}
+        onClick={handleHeaderClick}
+        disabled={!hasBody && !hasRoute}
         aria-expanded={open}
       >
         <div className="review-queue-icon">
-          {hasBody
-            ? (open ? <ChevronDown size={14} /> : <ChevronRight size={14} />)
-            : <Icon size={14} />}
+          <Icon size={14} />
         </div>
         <div className="review-queue-body">
           <div className="review-queue-title">{it.title || "(untitled)"}</div>
@@ -538,12 +551,19 @@ function ArtifactRow({ it, meta, Icon, onDismiss, defaultOrg }) {
             )}
           </div>
         </div>
-        {hasBody && (
-          <span className="review-queue-cta">
-            {open ? "Hide" : "Open report"}
-          </span>
-        )}
+        {hasRoute && <span className="review-queue-cta">Open report →</span>}
       </button>
+      {hasBody && (
+        <button
+          type="button"
+          className="btn btn-sm btn-ghost memos-pane-peek"
+          onClick={togglePeek}
+          title={open ? "Hide preview" : "Quick peek without leaving Home"}
+          aria-expanded={open}
+        >
+          {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        </button>
+      )}
       {open && hasBody && (
         <div className="review-queue-artifact-body">
           <div
@@ -552,7 +572,7 @@ function ArtifactRow({ it, meta, Icon, onDismiss, defaultOrg }) {
           />
           {it.body_truncated && (
             <div className="review-queue-artifact-truncated">
-              Report truncated. Open <code>/agents</code> for the full output.
+              Report truncated.{hasRoute && " Click \"Open report\" for the full output and chat."}
             </div>
           )}
         </div>

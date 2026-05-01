@@ -958,8 +958,18 @@ def send_to_agent(task_id):
     woke_mode = "none"
     if msg.sender == "user":
         from planet_maiko.models.task import Task
+        from planet_maiko.models.agent_job import AgentJob as _AgentJob
+        # The path id can be either a task id or a job id — both
+        # share the inbox column. Look up both and pick whichever
+        # has a worktree, so wake-on-send works whether the agent
+        # is task-linked or a standalone job (cartograph,
+        # investigation, skill run).
         task = db.session.get(Task, task_id)
         working_path = (task.extra or {}).get("working_path") if task else None
+        if not working_path:
+            job = db.session.get(_AgentJob, task_id)
+            if job is not None:
+                working_path = job.worktree_path
         if working_path:
             from planet_maiko.agents.wake import wake_agent
             chat_prompt = (
@@ -1481,14 +1491,29 @@ def agent_sends_message(task_id):
 
         if memo_kind:
             from planet_maiko.brain.memos import create_memo
+            from planet_maiko.models.agent_job import AgentJob as _AgentJob
             # Report-producing one-shot roles (investigation, repo_analysis)
             # finish with no diff — worktree is wiped and the artifact
-            # lives on task.extra. Route those to the report viewer so
-            # the CTA doesn't dead-end at an empty diff page.
+            # lives on task.extra. Route those to the unified
+            # /jobs/<id> viewer (markdown + chat for follow-ups). If
+            # somehow there's no linked job, fall back to the legacy
+            # /tasks/<id>/report route which redirects when it can.
             task_type = task.type if task else None
             is_report_task = task_type in ("investigation", "repo_analysis")
+            linked_job = None
+            if is_report_task and memo_kind == "agent_ready":
+                linked_job = (
+                    _AgentJob.query
+                    .filter_by(source_task_id=task_id)
+                    .order_by(_AgentJob.created_at.desc())
+                    .first()
+                )
             if memo_kind == "agent_ready" and is_report_task:
-                cta = ("View report", "open", f"/tasks/{task_id}/report")
+                report_route = (
+                    f"/jobs/{linked_job.id}" if linked_job
+                    else f"/tasks/{task_id}/report"
+                )
+                cta = ("View report", "open", report_route)
             else:
                 # agent_stuck routes to /agents — there's no per-task
                 # detail page for non-review/non-coding tasks, and

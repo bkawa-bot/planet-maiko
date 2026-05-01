@@ -287,6 +287,7 @@ export const api = {
     const query = new URLSearchParams(params).toString();
     return request(`/agent-jobs${query ? `?${query}` : ""}`);
   },
+  getAgentJob: (id) => request(`/agent-jobs/${id}`),
   approveAgentJob: (id) => request(`/agent-jobs/${id}/approve`, { method: "POST" }),
   cancelAgentJob: (id) => request(`/agent-jobs/${id}/cancel`, { method: "POST" }),
   ackAgentJob: (id) => request(`/agent-jobs/${id}/ack`, { method: "POST" }),
