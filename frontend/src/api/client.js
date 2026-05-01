@@ -280,6 +280,7 @@ export const api = {
   },
   approveAgentJob: (id) => request(`/agent-jobs/${id}/approve`, { method: "POST" }),
   cancelAgentJob: (id) => request(`/agent-jobs/${id}/cancel`, { method: "POST" }),
+  ackAgentJob: (id) => request(`/agent-jobs/${id}/ack`, { method: "POST" }),
   deleteAgentJob: (id) => request(`/agent-jobs/${id}`, { method: "DELETE" }),
 
   // Insights (Team Playbook — tribal / operational notes injected into CLAUDE.md)

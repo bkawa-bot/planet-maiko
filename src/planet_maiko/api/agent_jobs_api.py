@@ -94,3 +94,22 @@ def delete_job(job_id):
     db.session.delete(j)
     db.session.commit()
     return jsonify({"deleted": job_id})
+
+
+@agent_jobs_bp.route("/agent-jobs/<job_id>/ack", methods=["POST"])
+def ack_job(job_id):
+    """Mark a finished job's artifact as seen. The home_api Memos pane
+    surfaces job_artifact rows for done jobs with no source_task and
+    a non-null artifact, filtering out rows with extra.reviewed=True.
+    Calling this on a job flips that bit so the row disappears from
+    the pane — the canonical "dismiss" for job_artifact memos.
+
+    No-op when the job isn't done — there's no point acknowledging an
+    artifact that doesn't exist yet.
+    """
+    j = db.get_or_404(AgentJob, job_id)
+    extra = dict(j.extra or {})
+    extra["reviewed"] = True
+    j.extra = extra
+    db.session.commit()
+    return jsonify({"job_id": job_id, "reviewed": True})

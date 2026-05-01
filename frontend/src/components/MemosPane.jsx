@@ -123,13 +123,17 @@ export default function MemosPane() {
   // legacy pupdate + AgentJob kinds have their own dismiss paths.
   // Review-diff rows are task-backed — "dismiss" for those means cancel
   // the task (stops any running agent, cleans the worktree, deletes
-  // the row). Destructive, so we confirm first.
+  // the row). Destructive, so we confirm first. Job-artifact rows are
+  // "I've seen this report" — flip extra.reviewed=true on the job so
+  // the home_api filter drops it from the pane.
   const dismissItem = async (it) => {
     try {
       if (it.memo_id) {
         await api.dismissMemo(it.memo_id);
       } else if (it.kind === "pending_job" && it.job_id) {
         await api.cancelAgentJob(it.job_id);
+      } else if (it.kind === "job_artifact" && it.job_id) {
+        await api.ackAgentJob(it.job_id);
       } else if (it.kind === "review" && it.task_id) {
         const ok = window.confirm(
           `Cancel "${it.title || "this task"}"? Stops any running agent and discards the diff.`
@@ -364,7 +368,7 @@ export default function MemosPane() {
                   <span className="review-queue-cta">{cta} →</span>
                 )}
               </button>
-              {(it.memo_id || (it.kind === "review" && it.task_id)) && (
+              {(it.memo_id || (it.kind === "review" && it.task_id) || (it.kind === "job_artifact" && it.job_id)) && (
                 <button
                   className="btn btn-sm btn-ghost memos-pane-dismiss"
                   onClick={() => dismissItem(it)}

@@ -204,9 +204,11 @@ def get_review_queue():
         if extra.get("reviewed"):
             continue
         # Cartograph artifacts live on the Playbook tab; other kinds
-        # land on the Pack page where the job row surfaces the report.
-        # Once a dedicated artifact-viewer route exists, swap in a
-        # /tasks/jobs/<id>-style deep link here.
+        # don't have a dedicated viewer yet — fall through to /agents
+        # so the click goes somewhere reasonable. Once an artifact-
+        # viewer route exists, swap to a /agents/jobs/<id>-style deep
+        # link. Until then, the artifact body is included on the row
+        # below for inline rendering in the Memos pane.
         if j.kind == "cartograph":
             route = "/knowledge?tab=playbook"
         else:
