@@ -41,7 +41,11 @@ function seasonPoem(season) {
 
 export default function Home() {
   const [scene, setScene] = useState(null);
-  const [shippedToday, setShippedToday] = useState([]);
+  // Currently-running AgentJobs. Lighter signal than "shipped today"
+  // (which surfaced 24h-old completions) — the widget is meant to
+  // answer "what's the pack actively chewing on right now" at a
+  // glance.
+  const [workingJobs, setWorkingJobs] = useState([]);
   const [brainStatus, setBrainStatus] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [homeConfig, setHomeConfig] = useState(null);
@@ -51,16 +55,16 @@ export default function Home() {
 
   const fetchSidebar = async () => {
     try {
-      const [sc, shipped, brain, cfg, pupdates] = await Promise.all([
+      const [sc, jobs, brain, cfg, pupdates] = await Promise.all([
         api.getScene(),
-        api.getShippedToday().catch(() => ({ items: [] })),
+        api.getAgentJobs({ status: "running" }).catch(() => []),
         api.getBrainStatus().catch(() => null),
         api.getConfig().catch(() => null),
         api.getPupdates(),
       ]);
       setScene(sc);
       setHomeConfig(cfg);
-      setShippedToday(shipped?.items || []);
+      setWorkingJobs(Array.isArray(jobs) ? jobs : []);
       setBrainStatus(brain);
       // Today's events only. Calendar pupdates use a YYYY-MM-DD date in
       // their source_id, so yesterday's events linger in the DB as
@@ -210,30 +214,34 @@ export default function Home() {
 
           <div className="home-widget shipped-today-widget">
             <div className="widget-header">
-              <CheckCircle2 size={12} /> Shipped today
-              {shippedToday.length > 0 && (
-                <span className="widget-count">{shippedToday.length}</span>
+              <CheckCircle2 size={12} /> Working agents
+              {workingJobs.length > 0 && (
+                <span className="widget-count">{workingJobs.length}</span>
               )}
             </div>
-            {shippedToday.length > 0 ? (
+            {workingJobs.length > 0 ? (
               <ul className="shipped-list">
-                {shippedToday.slice(0, 3).map((t) => (
+                {workingJobs.slice(0, 5).map((j) => (
                   <li
-                    key={t.id}
-                    className={`shipped-item shipped-${t.status}`}
-                    title={t.repo || t.type}
+                    key={j.id}
+                    className="shipped-item"
+                    title={j.scope_repo || j.kind}
+                    onClick={() => navigate(`/jobs/${j.id}`)}
+                    style={{ cursor: "pointer" }}
                   >
-                    <span className="shipped-title">{t.title}</span>
+                    <span className="shipped-title">
+                      [{j.kind}] {j.title}
+                    </span>
                   </li>
                 ))}
-                {shippedToday.length > 3 && (
+                {workingJobs.length > 5 && (
                   <li className="shipped-more">
-                    + {shippedToday.length - 3} more
+                    + {workingJobs.length - 5} more
                   </li>
                 )}
               </ul>
             ) : (
-              <div className="widget-empty">Nothing shipped yet. First one's the heaviest.</div>
+              <div className="widget-empty">No agents running right now.</div>
             )}
           </div>
 

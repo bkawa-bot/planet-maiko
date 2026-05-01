@@ -474,41 +474,6 @@ def get_review_queue():
     return jsonify({"items": items})
 
 
-@home_bp.route("/home/shipped-today", methods=["GET"])
-def get_shipped_today():
-    """Tasks closed (done or cancelled) in the last 24 hours.
-
-    Used by the Home sidebar's "Shipped today" widget — a light touch
-    of "arc of the day" context instead of a raw counts grid. Cap at
-    20 rows, newest first.
-    """
-    from datetime import datetime, timezone, timedelta
-    from planet_maiko.models.task import Task
-
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-    rows = (
-        Task.query
-        .filter(Task.status.in_(["done", "cancelled"]))
-        .filter(Task.updated_at >= cutoff)
-        .order_by(Task.updated_at.desc())
-        .limit(20)
-        .all()
-    )
-    return jsonify({
-        "items": [
-            {
-                "id": t.id,
-                "title": t.title,
-                "type": t.type,
-                "status": t.status,
-                "repo": (t.extra or {}).get("repo") or "",
-                "finished_at": iso_utc(t.updated_at),
-            }
-            for t in rows
-        ],
-    })
-
-
 @home_bp.route("/home/overview/refresh", methods=["POST"])
 def refresh_home_overview():
     """Force-regenerate the overview, bypassing the cache age check."""

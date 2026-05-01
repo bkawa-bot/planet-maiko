@@ -347,7 +347,6 @@ export const api = {
 
   // Home overview — the rolling LLM-generated pane
   getHomeOverview: () => request("/home/overview"),
-  getShippedToday: () => request("/home/shipped-today"),
 
   // Memos — canonical surface for persistent user-facing items
   // (skill results, notifications, agent asks, job approvals, etc.).
