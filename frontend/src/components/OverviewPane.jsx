@@ -103,6 +103,24 @@ export default function OverviewPane() {
     return m;
   }, [tasks]);
 
+  // Stale notifications: unactioned (pending OR seen) notification
+  // memos older than 24h. Computed up here with the other useMemo
+  // calls so it runs on every render — the early returns for
+  // loading / error / no-overview below would skip a useMemo
+  // declared after them and trip "rendered more hooks than during
+  // the previous render".
+  const STALE_HOURS = 24;
+  const staleNotificationCount = useMemo(() => {
+    const now = Date.now();
+    return memos.filter((m) => {
+      if (m.kind !== "notification") return false;
+      if (m.status && m.status !== "pending" && m.status !== "seen") return false;
+      const created = m.created_at ? new Date(m.created_at).getTime() : null;
+      if (!created) return false;
+      return (now - created) / 1000 / 3600 >= STALE_HOURS;
+    }).length;
+  }, [memos]);
+
   const fetchAll = async () => {
     setLoading(true);
     setError(null);
@@ -300,22 +318,6 @@ export default function OverviewPane() {
   const allNeeds = overview.needs || [];
   const needsToShow = showAllNeeds ? allNeeds : allNeeds.slice(0, 3);
   const hasMoreNeeds = allNeeds.length > 3;
-
-  // Stale notifications: unactioned (pending OR seen) notification
-  // memos older than 24h. Surfaced as a soft prod near the top of
-  // the overview so the user can clear them out before they
-  // accumulate further. Hidden when zero.
-  const STALE_HOURS = 24;
-  const staleNotificationCount = useMemo(() => {
-    const now = Date.now();
-    return memos.filter((m) => {
-      if (m.kind !== "notification") return false;
-      if (m.status && m.status !== "pending" && m.status !== "seen") return false;
-      const created = m.created_at ? new Date(m.created_at).getTime() : null;
-      if (!created) return false;
-      return (now - created) / 1000 / 3600 >= STALE_HOURS;
-    }).length;
-  }, [memos]);
 
   return (
     <div className={`overview-pane ${papyrusMode ? "papyrus-mode" : ""}`}>
