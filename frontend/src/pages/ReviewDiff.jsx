@@ -240,18 +240,31 @@ export default function ReviewDiff() {
   // working on this task — auto-recorded by the CLI. Dedupe across
   // queries (same rule may surface for several queries) and keep
   // each rule's best score so the highest-confidence match is what
-  // the user sees.
-  const rulesConsidered = useMemo(() => {
+  // the user sees. Also surface the queries themselves so the user
+  // can see what the agent was thinking about, not just what came
+  // back — the queries are usually more revealing of intent than
+  // the rules retrieved.
+  const { rulesConsidered, agentQueries } = useMemo(() => {
     const history = (task?.extra?.rules_considered || task?.metadata?.rules_considered || []);
     const byId = new Map();
+    const querySet = new Set();
     for (const entry of history) {
       for (const r of (entry?.rules || [])) {
         if (r?.id == null) continue;
         const prior = byId.get(r.id);
         if (!prior || (r.score || 0) > (prior.score || 0)) byId.set(r.id, r);
       }
+      for (const q of (entry?.queries || [])) {
+        // Skip the placeholder the CLI inserts when no agent queries
+        // were given (diff was decomposed by Haiku instead). Showing
+        // it would just be noise.
+        if (q && q !== "(diff-decomposed)") querySet.add(q);
+      }
     }
-    return Array.from(byId.values()).sort((a, b) => (b.score || 0) - (a.score || 0));
+    return {
+      rulesConsidered: Array.from(byId.values()).sort((a, b) => (b.score || 0) - (a.score || 0)),
+      agentQueries: Array.from(querySet),
+    };
   }, [task]);
 
   const handleCloseReview = async () => {
@@ -356,6 +369,22 @@ export default function ReviewDiff() {
               what the agent had in mind during this work
             </span>
           </summary>
+          {agentQueries.length > 0 && (
+            <div className="rules-considered-queries">
+              <div className="rules-considered-queries-label">
+                Agent searched for
+              </div>
+              <ul className="rules-considered-queries-list">
+                {agentQueries.map((q, i) => (
+                  <li key={i} className="rules-considered-queries-item">
+                    <span className="rules-considered-queries-quote">“</span>
+                    {q}
+                    <span className="rules-considered-queries-quote">”</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <ul className="rules-considered-list">
             {rulesConsidered.map((r) => (
               <li key={r.id} className="rules-considered-item">

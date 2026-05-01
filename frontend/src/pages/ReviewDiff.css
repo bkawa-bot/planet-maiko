@@ -680,3 +680,34 @@
   font-size: 11px;
   color: var(--text-dim);
 }
+.rules-considered-queries {
+  padding: 0 12px 8px;
+  border-bottom: 1px dashed var(--border-subtle);
+  margin-bottom: 4px;
+}
+.rules-considered-queries-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.rules-considered-queries-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rules-considered-queries-item {
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--text);
+  line-height: 1.45;
+}
+.rules-considered-queries-quote {
+  color: var(--text-dim);
+  margin: 0 1px;
+  font-style: normal;
+}
