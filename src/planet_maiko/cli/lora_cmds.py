@@ -596,34 +596,58 @@ def cmd_rules_list(args):
 
 
 def cmd_rules_relevant(args):
-    """Print the team's rules most relevant to the supplied diff/file.
-    Useful for validating the RAG retrieval setup end-to-end without
-    running a full review."""
+    """Print the team's rules most relevant to the supplied input.
+
+    Two modes:
+      - File / stdin: a code diff, decomposed via Haiku before
+        retrieval. Right for testing the end-to-end pipeline or
+        for callers with no opinion on what the diff is doing.
+      - One or more `--query` flags: free-text descriptions used
+        directly, no Haiku step. Right for agents that have full
+        repo context and have decomposed the change themselves.
+    """
     from planet_maiko.app import create_app
     from planet_maiko.brain.learning.rule_retrieval import find_relevant_rules
     from planet_maiko.brain.learning.embeddings import embedding_model_name
     from planet_maiko.models.learning import Learning
 
-    if args.file:
-        with open(args.file) as f:
-            diff = f.read()
-    else:
-        if sys.stdin.isatty():
-            print("Paste the diff or code (Ctrl+D when done):", file=sys.stderr)
-        diff = sys.stdin.read()
+    queries = [q for q in (args.query or []) if q and q.strip()]
+    diff = ""
 
-    if not diff.strip():
-        print("Error: no input.", file=sys.stderr)
-        sys.exit(1)
+    if not queries:
+        if args.file:
+            with open(args.file) as f:
+                diff = f.read()
+        else:
+            if sys.stdin.isatty():
+                print(
+                    "Paste the diff or code (Ctrl+D when done), "
+                    "or pass one or more --query \"...\" flags:",
+                    file=sys.stderr,
+                )
+            diff = sys.stdin.read()
+
+        if not diff.strip():
+            print("Error: no input. Pass a file, pipe a diff, or use --query.",
+                  file=sys.stderr)
+            sys.exit(1)
 
     app = create_app(start_scheduler=False)
     with app.app_context():
-        matches = find_relevant_rules(
-            diff,
-            repo=args.repo,
-            k=args.k,
-            min_similarity=args.min_similarity,
-        )
+        if queries:
+            matches = find_relevant_rules(
+                queries=queries,
+                repo=args.repo,
+                k=args.k,
+                min_similarity=args.min_similarity,
+            )
+        else:
+            matches = find_relevant_rules(
+                diff,
+                repo=args.repo,
+                k=args.k,
+                min_similarity=args.min_similarity,
+            )
         rules_indexed = (
             Learning.query
             .filter_by(status="active")
@@ -1042,10 +1066,14 @@ def register(subparsers):
     # maiko rules-relevant
     p = subparsers.add_parser(
         "rules-relevant",
-        help="Show the team's rules most relevant to a diff (RAG retrieval)",
+        help="Show the team's rules most relevant to a diff or query (RAG retrieval)",
     )
     p.add_argument("file", nargs="?",
-                   help="File or diff to retrieve against (reads stdin if omitted)")
+                   help="File or diff to retrieve against (reads stdin if omitted "
+                        "and no --query is supplied)")
+    p.add_argument("--query", action="append", default=[],
+                   help="Free-text description to retrieve against (skips diff "
+                        "decomposition). Repeat to pass multiple queries.")
     p.add_argument("--repo", help="Filter to rules scoped to this repo + globals")
     p.add_argument("--k", type=int, default=5, help="Max rules to return (default 5)")
     p.add_argument("--min-similarity", type=float, default=0.40,

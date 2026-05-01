@@ -25,21 +25,24 @@ def relevant_rules():
     """Return the team's graduated rules whose violation patterns are
     most relevant to the supplied diff.
 
-    Body:
-        diff (required, string): the code change to retrieve against.
-            Can be a unified diff, a single file, or a hunk.
+    Body (one of `diff` or `queries` is required):
+        diff (string): the code change to retrieve against. Can be a
+            unified diff, a single file, or a hunk. The diff is run
+            through Claude/Haiku to extract multi-granularity scenario
+            descriptions before embedding (~$0.001 + 1-2s per call).
+            Falls back to raw-diff embedding if the LLM call fails.
+        queries (list[string]): free-text descriptions used directly,
+            no Haiku step. For callers that have full context (e.g.
+            an agent in a worktree) and have decomposed the change
+            themselves. Each query is embedded; rules score against
+            the MAX similarity across all queries. Cheaper + sharper
+            than the diff path when applicable.
         repo (optional, string): "org/name" — filters to rules scoped
             to this repo plus globals. Omitted or null means no filter.
         k (optional, int, default 5): max rules to return.
         min_similarity (optional, float, default 0.40): cutoff for the
             cosine score below which rules are considered irrelevant
             and not returned.
-
-    The diff is always run through Claude/Haiku first to extract a
-    natural-language intent description, which is what gets embedded
-    for the cosine match. Costs ~$0.001 + 1-2s per call but produces
-    dramatically better retrieval than embedding raw code text.
-    Falls back to raw-diff embedding if the LLM call fails.
 
     Response:
         {
@@ -76,19 +79,31 @@ def relevant_rules():
 
     data = request.get_json(silent=True) or {}
     diff = (data.get("diff") or "").strip()
-    if not diff:
-        return jsonify({"error": "diff is required"}), 400
+    raw_queries = data.get("queries") or []
+    if not isinstance(raw_queries, list):
+        raw_queries = []
+    queries = [q.strip() for q in raw_queries if isinstance(q, str) and q.strip()]
+    if not diff and not queries:
+        return jsonify({"error": "diff or queries is required"}), 400
 
     repo = data.get("repo") or None
     k = max(1, min(50, int(data.get("k", 5) or 5)))
     min_sim = float(data.get("min_similarity", 0.40) or 0.40)
 
-    matches = find_relevant_rules(
-        diff,
-        repo=repo,
-        k=k,
-        min_similarity=min_sim,
-    )
+    if queries:
+        matches = find_relevant_rules(
+            queries=queries,
+            repo=repo,
+            k=k,
+            min_similarity=min_sim,
+        )
+    else:
+        matches = find_relevant_rules(
+            diff,
+            repo=repo,
+            k=k,
+            min_similarity=min_sim,
+        )
 
     rules_indexed = (
         Learning.query

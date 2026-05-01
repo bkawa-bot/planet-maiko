@@ -134,6 +134,32 @@ If anything is red, fix it before replying. Surface the result in your `ready_fo
 
 For any LoRA violation you disagree with, call `lora_false_positive({code, file, category, reason})` — records a corrective PASS for the next retrain. For a real issue the LoRA missed, call `lora_false_negative({code, violation, category, file})`. The standalone `lora_check` tool exists only for re-running just the LoRA (e.g. after you fix a violation and want to confirm before touching the slow mechanical suite again).
 
+### Team rules — retrieve what's relevant before / during your work
+
+Maiko maintains a knowledge layer of *graduated rules* — patterns the team has accumulated from past PR reviews ("validate input on user-facing endpoints", "use parameterized queries", "wrap external HTTP calls in try/except"). They live alongside the LoRA verifier but answer a different question:
+
+- **`maiko rules-relevant`** = retrieval — *"what should I be aware of?"* Returns the rules whose scenarios match what you're doing, with similarity scores.
+- **`check_code` / `lora_check`** = classifier — *"did I just write something the model thinks violates a rule?"* Returns structured violations on the actual diff.
+
+Run both. They're complementary.
+
+Once you understand what you're about to build (or have just built), pass one or more `--query` flags describing the change in active voice. The agent — you, with full repo context — does the semantic decomposition; the retrieval skips Haiku and embeds your descriptions directly.
+
+```bash
+maiko rules-relevant \
+  --query "Adding a new POST endpoint that accepts user input" \
+  --query "Writing a database query that incorporates request values" \
+  --repo acme/api
+```
+
+Returned rules are similarity-ranked; the closest match isn't always relevant. You decide which ones actually apply, then write code that respects them. If you find an applicable rule you weren't following, fix the code before `ready_for_review`.
+
+When to call:
+- **Planning** — once you've decided the approach, query per logical change. Folds team rules into your design instead of bolting them on later.
+- **Pre-`ready_for_review`** — re-query with what you actually built. Catches things you drifted on while iterating. Cheap (no Haiku call, just embeddings).
+
+If the embedding backend is unavailable (`Rules indexed: 0 / N` in the output), skip retrieval — the layer's offline. Don't block on it.
+
 ### Property-based tests for behavior changes
 
 When your change adds or alters behavior (not pure refactors, formatting, or config bumps), add **at least one property-based test** alongside the usual unit tests. Use whatever's idiomatic for the repo:

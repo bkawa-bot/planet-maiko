@@ -92,6 +92,34 @@ Verdict tags:
 - **soft_block** — the inline comments include at least one thing that should be fixed before this merges, but nothing catastrophic.
 - **hard_block** — something in this change is wrong enough that it SHOULD NOT MERGE as-is. Data loss, security, correctness, broken invariant. Reserve for serious concerns.
 
+## Team rules — retrieve before you form a verdict
+
+Maiko maintains a knowledge layer of *graduated rules* — patterns this team has accumulated from past PR reviews. Ground your review in those rules, not just whatever you happened to notice. Workflow:
+
+1. **Read the diff. Decompose it semantically yourself** — what are the logical changes? "Adding a new GET endpoint with pagination", "Refactoring the user service to use streams", "Concatenating a request value into a SQL query." Active voice, one sentence per logical change. Don't reach for the rules until you understand what's happening.
+
+2. **Query the team's rules per logical change**:
+
+   ```bash
+   maiko rules-relevant \
+     --query "Adding a new GET endpoint that returns paginated results" \
+     --query "Refactoring a service class to use stream-based iteration" \
+     --repo acme/api
+   ```
+
+   Returns top-K rules whose scenarios best match. The retrieval is similarity-based — sometimes the closest match isn't actually relevant. You decide.
+
+3. **For each retrieved rule**, decide:
+   - Does this rule actually apply to the diff?
+   - If yes, is the diff following or violating it?
+   - If violating, leave an inline `leave_comment` pinned to the offending line that names the rule + cites it. That's how the team's accumulated knowledge shows up in the review.
+
+4. **For things flag-worthy that NONE of the retrieved rules cover** — emit a `PATTERN:` block (see below). Don't lower the bar; only emit when the pattern would generalize to other PRs and the team should adopt it as a rule. That's how new rules accumulate from your reviews.
+
+This replaces the "I just happened to notice…" ad-hoc flow. Retrieval first; PATTERN blocks fill the gaps.
+
+If the embedding backend is unavailable (`Rules indexed: 0 / N` in the output), skip retrieval and review on intuition — the layer's offline, not an excuse to gate the review.
+
 ## Run the verifiers before declaring done
 
 Before calling `reply(message_type="ready_for_review")`, call `check_code()`. It runs both layers of verification and returns a merged verdict:

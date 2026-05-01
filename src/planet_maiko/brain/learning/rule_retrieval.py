@@ -43,48 +43,28 @@ def _learning_in_scope(learning, repo):
     return learning.scope_repo == repo
 
 
-def score_rules_for_diff(diff, repo=None):
-    """Score every active Learning's scenario description against the
-    diff. Returns a list of (learning, score) tuples sorted descending
-    by score. Doesn't filter by score threshold — caller decides what
-    to do with low scores.
+def _score_rules_for_descriptions(descriptions, repo=None):
+    """Embed `descriptions` and score them against every active
+    Learning's scenario embedding. Returns a list of
+    (learning, score) tuples sorted descending — no threshold filter.
 
-    Always runs the diff through Claude/Haiku first to extract
-    descriptions at two granularities — high-level intent (1-3
-    entries) and tactical operations (3-15 entries). Each description
-    gets embedded; the score for each rule is the MAX similarity
-    across all descriptions. This way, a tactical rule like
-    "prefer Optional.orElse over Optional.get" can surface from a
-    big PR whose intent-level description was about "refactoring
-    the user service" — because one of the per-operation descriptions
-    matches the rule's scenario directly.
+    The score for each rule is the MAX similarity across all the
+    supplied descriptions. AVG would dilute strong single-query hits;
+    SUM would over-reward rules that match many descriptions weakly.
 
-    Falls back to embedding the raw diff text when the diff-description
-    LLM call fails (runtime down, timeout, parse error). Retrieval
-    quality drops but the system stays functional.
+    Shared by both `score_rules_for_diff` (diff → Haiku decomposition
+    → here) and `score_rules_for_queries` (caller-supplied descriptions
+    → here, no Haiku).
     """
     from planet_maiko.models.learning import Learning
     from planet_maiko.brain.learning.embeddings import (
         embed_batch,
         cosine_similarity,
     )
-    from planet_maiko.brain.learning.intent_extraction import (
-        generate_diff_descriptions,
-    )
 
-    # Get descriptions at multiple granularities. Empty list means
-    # the LLM call failed — fall back to raw diff text.
-    descriptions = []
-    try:
-        descriptions = generate_diff_descriptions(diff)
-    except Exception as e:
-        logger.debug(f"[retrieval] diff-descriptions failed, falling back to raw diff: {e}")
     if not descriptions:
-        descriptions = [diff]
+        return []
 
-    # Batch-embed all descriptions in one call where the backend
-    # supports it (sentence-transformers does; API backends fall back
-    # to per-item).
     query_vecs = embed_batch(descriptions)
     query_vecs = [v for v in query_vecs if v is not None]
     if not query_vecs:
@@ -104,10 +84,6 @@ def score_rules_for_diff(diff, repo=None):
             continue
         if not learning.violation_embedding:
             continue
-        # MAX over query vectors: any single description matching this
-        # rule's scenario is enough to surface the rule. AVG would
-        # dilute strong matches; SUM would over-reward rules that
-        # match many descriptions weakly.
         max_sim = 0.0
         for qv in query_vecs:
             s = cosine_similarity(qv, learning.violation_embedding)
@@ -119,20 +95,78 @@ def score_rules_for_diff(diff, repo=None):
     return scored
 
 
-def find_relevant_rules(diff, repo=None, k=5,
+def score_rules_for_diff(diff, repo=None):
+    """Score every active Learning's scenario description against the
+    diff. Returns a list of (learning, score) tuples sorted descending.
+
+    Runs the diff through Claude/Haiku first to extract descriptions
+    at two granularities — high-level intent (1-3 entries) and tactical
+    operations (3-15 entries). This way, a tactical rule like
+    "prefer Optional.orElse over Optional.get" can surface from a big
+    PR whose intent-level description was "refactoring the user
+    service" — because one of the per-operation descriptions matches
+    the rule's scenario directly.
+
+    Falls back to embedding the raw diff text when the diff-description
+    LLM call fails (runtime down, timeout, parse error).
+    """
+    from planet_maiko.brain.learning.intent_extraction import (
+        generate_diff_descriptions,
+    )
+
+    descriptions = []
+    try:
+        descriptions = generate_diff_descriptions(diff)
+    except Exception as e:
+        logger.debug(f"[retrieval] diff-descriptions failed, falling back to raw diff: {e}")
+    if not descriptions:
+        descriptions = [diff]
+
+    return _score_rules_for_descriptions(descriptions, repo=repo)
+
+
+def score_rules_for_queries(queries, repo=None):
+    """Score rules against caller-supplied free-text descriptions —
+    no Haiku decomposition. For agent-side use: an agent with full
+    repo context decomposes the change in their head and queries
+    with one or more natural-language descriptions ("Adding a new
+    POST endpoint that accepts user input"). Cheaper (no LLM call)
+    and sharper (richer context than just the diff) when the caller
+    already understands what the change is doing.
+    """
+    descriptions = [q.strip() for q in (queries or []) if q and q.strip()]
+    if not descriptions:
+        return []
+    return _score_rules_for_descriptions(descriptions, repo=repo)
+
+
+def find_relevant_rules(diff=None, *, queries=None, repo=None, k=5,
                         min_similarity=DEFAULT_MIN_SIMILARITY):
-    """Top-K rules whose violation patterns best match the diff.
+    """Top-K rules whose scenarios best match the supplied input.
+
+    Pass either:
+      - `diff`: code change, decomposed via Haiku before retrieval.
+        Right when the caller is stateless (UI / API / cron) and
+        doesn't have an opinion on what the diff is doing.
+      - `queries`: list of natural-language descriptions, used
+        directly with no Haiku step. Right when the caller has full
+        context (an agent in a worktree) and can describe the change
+        more precisely than Haiku could from raw diff text.
 
     Returns a list of dicts (not Learning ORM objects) so callers can
     serialize freely:
 
         [{"learning": Learning, "score": 0.78}, ...]
 
-    Filters out anything below `min_similarity` first — better to return
-    fewer high-quality matches than to surface noise. If after filtering
-    fewer than K remain, that's fine — just return what we have.
+    Filters out anything below `min_similarity` first — better to
+    return fewer high-quality matches than to surface noise.
     """
-    scored = score_rules_for_diff(diff, repo=repo)
+    if queries:
+        scored = score_rules_for_queries(queries, repo=repo)
+    elif diff:
+        scored = score_rules_for_diff(diff, repo=repo)
+    else:
+        return []
     relevant = [(l, s) for l, s in scored if s >= min_similarity]
     top = relevant[:k]
     return [{"learning": l, "score": s} for l, s in top]
