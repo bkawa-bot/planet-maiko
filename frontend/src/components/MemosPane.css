@@ -287,6 +287,44 @@
   white-space: pre-wrap;
 }
 
+/* Inline reply box on agent_stuck memos. Sits below the body
+   markdown inside the same expand-block — read the question,
+   answer it, send. */
+.memos-stuck-reply {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-subtle);
+}
+.memos-stuck-reply-input {
+  width: 100%;
+  resize: vertical;
+  font-size: 12px;
+  font-family: inherit;
+  line-height: 1.45;
+  padding: 6px 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  box-sizing: border-box;
+}
+.memos-stuck-reply-input:focus {
+  outline: none;
+  border-color: var(--accent, var(--warm-coral, #c97a4a));
+}
+.memos-stuck-reply-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+.memos-stuck-reply-hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
 /* Notification staleness cues. Soft signal — meant to nudge, not
    alarm. 24h+ adds a small amber dot in front of the relative
    timestamp; 72h+ tints the row background a touch warmer so it
