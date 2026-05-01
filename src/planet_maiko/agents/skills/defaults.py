@@ -128,6 +128,11 @@ Focus on actionable findings, not style preferences.""",
         "description": "Review a pull request for bugs, design, testing, and code quality",
         "icon": "eye",
         "mcps": ["github"],
+        # PR review needs a worktree: the agent has to fetch the diff,
+        # read code in context, and post inline comments via MCP. The
+        # lightweight (no-worktree) skill path is a single LLM call
+        # with no Read/Bash/leave_comment — no way to actually review.
+        "needs_worktree": True,
         "prompt": "Review a pull request.",
     },
     {

@@ -85,6 +85,24 @@ def seed_defaults():
             )
             db.session.add(skill)
             logger.info(f"[skills] Seeded default skill: {s['name']}")
+            continue
+
+        # Sync structural flags for un-edited default skills so changes
+        # in defaults.py propagate to existing installs. needs_worktree
+        # in particular determines whether the skill runs as a real
+        # agent (worktree + MCP) or a single LLM call — wrong value
+        # silently breaks the skill (e.g. pr-review without a worktree
+        # has no way to fetch a diff or post comments). Only touched
+        # when is_default and not user_edited; user-modified skills are
+        # left alone.
+        if existing.is_default and not existing.user_edited:
+            target = bool(s.get("needs_worktree", False))
+            if bool(existing.needs_worktree) != target:
+                existing.needs_worktree = target
+                logger.info(
+                    f"[skills] Synced needs_worktree={target} on default "
+                    f"skill '{s['id']}'"
+                )
 
     db.session.commit()
 
