@@ -195,3 +195,41 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* Artifact rows: wrap the row body so the inline expand renders
+   below the header section, not as another grid cell. */
+.review-queue-row-artifact {
+  flex-wrap: wrap;
+}
+.review-queue-row-artifact .review-queue-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.review-queue-artifact-body {
+  flex: 1 0 100%;
+  padding: 8px 12px 12px 36px;
+  border-top: 1px dashed var(--border-subtle);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.review-queue-artifact-body .markdown pre {
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+.review-queue-artifact-truncated {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-subtle);
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.review-queue-artifact-truncated code {
+  font-style: normal;
+  background: var(--bg-card);
+  padding: 1px 4px;
+  border-radius: var(--radius-xs);
+}

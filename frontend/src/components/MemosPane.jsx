@@ -357,8 +357,26 @@ export default function MemosPane() {
             );
           }
 
+          // job_artifact rows render the artifact body inline on
+          // expand — no useful deep-link target exists yet, so the
+          // click flips the <details> open instead of navigating away.
+          // The other default-rendered kinds (plan, review,
+          // agent_ready, agent_stuck) keep click-to-navigate.
+          if (it.kind === "job_artifact") {
+            return (
+              <ArtifactRow
+                key={`${it.kind}:${it.job_id}`}
+                it={it}
+                meta={meta}
+                Icon={Icon}
+                onDismiss={() => dismissItem(it)}
+                defaultOrg={defaultOrg}
+              />
+            );
+          }
+
           // Default row: click-to-navigate + dismiss X. Covers plan,
-          // review, agent_ready, agent_stuck, job_artifact.
+          // review, agent_ready, agent_stuck.
           const cta = it.cta_label || meta.cta;
           const hasRoute = !!it.route;
           return (
@@ -415,6 +433,81 @@ export default function MemosPane() {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+
+/** Inline artifact row for done AgentJob reports (cartograph walks,
+ *  investigation findings, standalone skill runs). Click the row to
+ *  expand the artifact body in place — no navigation, since there's
+ *  no dedicated viewer page yet. Dismiss flips extra.reviewed=true
+ *  on the job so the row falls out of the home_api filter. */
+function ArtifactRow({ it, meta, Icon, onDismiss, defaultOrg }) {
+  const [open, setOpen] = useState(false);
+  const hasBody = !!(it.body && it.body.trim());
+  return (
+    <div className={`review-queue-row tone-${meta.tone} review-queue-row-artifact`}>
+      <button
+        type="button"
+        className="review-queue-row-main"
+        onClick={() => hasBody && setOpen((v) => !v)}
+        disabled={!hasBody}
+        aria-expanded={open}
+      >
+        <div className="review-queue-icon">
+          {hasBody
+            ? (open ? <ChevronDown size={14} /> : <ChevronRight size={14} />)
+            : <Icon size={14} />}
+        </div>
+        <div className="review-queue-body">
+          <div className="review-queue-title">{it.title || "(untitled)"}</div>
+          <div className="review-queue-meta">
+            <span className="review-queue-kind">{meta.label}</span>
+            {it.kind_label && it.kind_label !== it.kind && (
+              <span className="review-queue-subkind">{it.kind_label}</span>
+            )}
+            {it.repo && (
+              <span className="review-queue-repo" title={it.repo}>
+                {formatRepo(it.repo, defaultOrg)}
+              </span>
+            )}
+            {it.agent_name && (
+              <span className="review-queue-agent">by {it.agent_name}</span>
+            )}
+            {it.timestamp && (
+              <span className="review-queue-time">
+                {relativeTime(it.timestamp)}
+              </span>
+            )}
+          </div>
+        </div>
+        {hasBody && (
+          <span className="review-queue-cta">
+            {open ? "Hide" : "Open report"}
+          </span>
+        )}
+      </button>
+      {open && hasBody && (
+        <div className="review-queue-artifact-body">
+          <div
+            className="markdown"
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(it.body) }}
+          />
+          {it.body_truncated && (
+            <div className="review-queue-artifact-truncated">
+              Report truncated. Open <code>/agents</code> for the full output.
+            </div>
+          )}
+        </div>
+      )}
+      <button
+        className="btn btn-sm btn-ghost memos-pane-dismiss"
+        onClick={onDismiss}
+        title="Mark as seen"
+      >
+        <X size={12} />
+      </button>
     </div>
   );
 }

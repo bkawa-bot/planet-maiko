@@ -223,6 +223,14 @@ def get_review_queue():
             "route": route,
             "age_seconds": _age(j.finished_at),
             "timestamp": iso_utc(j.finished_at),
+            # Truncated artifact for inline rendering in MemosPane.
+            # 8K is enough for any realistic investigation / cartograph
+            # report's first screen — the user can still find the full
+            # output at /agents if they want it. Sending the whole
+            # artifact would balloon the home payload on busy days.
+            "body": (j.artifact or "")[:8000] if j.artifact else None,
+            "body_truncated": bool(j.artifact and len(j.artifact) > 8000),
+            "kind_label": j.kind,
         })
 
     # 4. job_approval Memos — "ask me first" automations that used to
