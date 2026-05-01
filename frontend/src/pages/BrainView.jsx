@@ -59,6 +59,11 @@ export default function BrainView() {
     setSearchParams(params, { replace: true });
   };
   const [synthesizing, setSynthesizing] = useState(false);
+  // Bulk-dismiss-thin flow: click Clean up → fetch dry_run preview →
+  // ConfirmModal opens with count + sample → user confirms → real dismiss.
+  // null = idle, object = preview loaded and modal open.
+  const [cleanupPreview, setCleanupPreview] = useState(null);
+  const [cleaningUp, setCleaningUp] = useState(false);
   // Scope filter: "all" / "global" / "scoped" / "unscoped". Purely a
   // view-layer filter — doesn't touch the learning rows themselves.
   const [scopeFilter, setScopeFilter] = useState("all");
@@ -379,6 +384,33 @@ export default function BrainView() {
               <button className="btn btn-sm" onClick={handleApproveAll} style={{ marginLeft: "auto" }}>
                 <Check size={10} /> Approve All ({pending.length})
               </button>
+              <button
+                className="btn btn-sm"
+                onClick={async () => {
+                  // Fetch the preview (dry_run) so the user sees how
+                  // many would be affected before confirming. Common
+                  // case: a clustering pass produced lots of one-
+                  // signal singletons that aren't real rules; this
+                  // drains them without touching anything substantive.
+                  try {
+                    const preview = await api.bulkDismissPendingLearnings({
+                      max_signal_count: 1,
+                      older_than_days: 14,
+                      dry_run: true,
+                    });
+                    if ((preview?.count || 0) === 0) {
+                      showToast("No thin pending learnings to clean up.", "normal");
+                      return;
+                    }
+                    setCleanupPreview(preview);
+                  } catch (err) {
+                    showToast("Couldn't load preview: " + (err.message || "unknown"), "high");
+                  }
+                }}
+                title="Dismiss pending learnings with one or zero signals that are older than 14 days. Usually noise from clustering."
+              >
+                <Sparkles size={10} /> Clean up thin
+              </button>
               <button className="btn btn-sm btn-danger" onClick={async () => {
                 const count = pending.length;
                 for (const l of pending) {
@@ -684,6 +716,53 @@ export default function BrainView() {
             showToast("Backfill failed to start: " + err.message, "high");
           }
           setStartingBackfill(false);
+        }}
+      />
+
+      <ConfirmModal
+        open={cleanupPreview != null}
+        title={`Dismiss ${cleanupPreview?.count || 0} thin pending learning${cleanupPreview?.count === 1 ? "" : "s"}?`}
+        severity="danger"
+        body={<>
+          <p>
+            These have <code>signal_count ≤ 1</code> and were created
+            more than 14 days ago — usually one-off PR comments that
+            auto-clustered into "rules" and never accumulated more
+            evidence. Active rules + recent / well-supported pending
+            ones are NOT touched.
+          </p>
+          {cleanupPreview?.sample?.length > 0 && (
+            <details style={{ marginTop: 8 }}>
+              <summary style={{ cursor: "pointer", fontSize: 11, color: "var(--text-dim)" }}>
+                Sample ({Math.min(10, cleanupPreview.sample.length)} of {cleanupPreview.count})
+              </summary>
+              <ul style={{ marginTop: 6, paddingLeft: 16, fontSize: 11, color: "var(--text)" }}>
+                {cleanupPreview.sample.map((l) => (
+                  <li key={l.id}>{l.rule}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </>}
+        confirmText={`Dismiss ${cleanupPreview?.count || 0}`}
+        busy={cleaningUp}
+        onCancel={() => setCleanupPreview(null)}
+        onConfirm={async () => {
+          setCleaningUp(true);
+          try {
+            const result = await api.bulkDismissPendingLearnings({
+              max_signal_count: 1,
+              older_than_days: 14,
+              dry_run: false,
+            });
+            showToast(`Dismissed ${result.dismissed} thin learnings.`, "normal");
+            setCleanupPreview(null);
+            fetchLearnings();
+          } catch (err) {
+            showToast("Cleanup failed: " + (err.message || "unknown"), "high");
+          } finally {
+            setCleaningUp(false);
+          }
         }}
       />
     </div>

@@ -268,6 +268,73 @@ def edit_learning(learning_id):
     return jsonify(learning.to_dict())
 
 
+@learning_bp.route("/learnings/bulk-dismiss", methods=["POST"])
+def bulk_dismiss_pending():
+    """Dismiss pending learnings in bulk by quality threshold.
+
+    Used to drain a backlog of thin / old pending learnings the user
+    isn't going to review individually. Acts only on status="pending"
+    rows (active rules are protected — the user already approved them)
+    and only on rows matching ALL provided filters.
+
+    Body:
+      max_signal_count: int (default 1) — only dismiss learnings with
+        signal_count <= this number. Default catches one-signal
+        singletons that are usually noise.
+      older_than_days: int (default 14) — only dismiss learnings
+        created more than N days ago, so anything fresh stays in the
+        queue for review.
+      dry_run: bool (default false) — when true, return the count of
+        matching rows without changing anything. Lets the UI show a
+        preview before the user confirms.
+
+    Returns:
+      {count: int, dismissed: int, sample: [{id, rule, signal_count,
+       created_at}, ...]}
+      `count` is always set; `dismissed` is 0 on dry runs.
+    """
+    from datetime import datetime, timezone, timedelta
+
+    data = request.get_json(silent=True) or {}
+    max_signal_count = max(0, int(data.get("max_signal_count", 1)))
+    older_than_days = max(0, int(data.get("older_than_days", 14)))
+    dry_run = bool(data.get("dry_run", False))
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+    q = (
+        Learning.query
+        .filter(Learning.status == "pending")
+        .filter(Learning.signal_count <= max_signal_count)
+        .filter(Learning.created_at < cutoff)
+    )
+    count = q.count()
+
+    sample = [
+        {
+            "id": l.id,
+            "rule": l.rule,
+            "signal_count": l.signal_count or 0,
+            "created_at": l.created_at.isoformat() if l.created_at else None,
+        }
+        for l in q.order_by(Learning.created_at.asc()).limit(10).all()
+    ]
+
+    if dry_run:
+        return jsonify({"count": count, "dismissed": 0, "sample": sample})
+
+    # Bulk update the status — much faster than iterating, and
+    # synchronize_session=False is fine because we don't read the rows
+    # in the same session afterwards.
+    dismissed = (
+        q.update(
+            {"status": "dismissed"},
+            synchronize_session=False,
+        )
+    )
+    db.session.commit()
+    return jsonify({"count": count, "dismissed": dismissed, "sample": sample})
+
+
 @learning_bp.route("/learnings/classify", methods=["POST"])
 def classify_pending():
     """Manually run synthesis + clustering on the current queue.

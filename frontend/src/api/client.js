@@ -268,6 +268,11 @@ export const api = {
   clusterLearnings: () => request("/learnings/cluster", { method: "POST" }),
   approveLearning: (id) => request(`/learnings/${id}/approve`, { method: "POST" }),
   dismissLearning: (id) => request(`/learnings/${id}/dismiss`, { method: "POST" }),
+  // Drain thin / old pending learnings in bulk. Body: {max_signal_count,
+  // older_than_days, dry_run}. With dry_run=true, returns count + sample
+  // for a preview before the user confirms.
+  bulkDismissPendingLearnings: (body) =>
+    request("/learnings/bulk-dismiss", { method: "POST", body: JSON.stringify(body) }),
   updateLearning: (id, data) =>
     request(`/learnings/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   getLearning: (id) => request(`/learnings/${id}`),
