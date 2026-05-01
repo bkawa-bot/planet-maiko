@@ -501,6 +501,24 @@ def _phase_spawn_jobs_for_tasks():
             Task.status.in_(["new", "blocked"]),
             Task.assigned_agent_id.isnot(None),
         ).limit(10).all()
+
+        # Diagnostic: surface review tasks the spawn phase is *missing*
+        # because they have no assigned agent. Without this log line
+        # a pupdate→task→(no job) gap is invisible from the outside.
+        # Capped at the same limit + cheap query; only logs when there
+        # actually are stranded review tasks.
+        stranded = Task.query.filter(
+            Task.type.in_(["review", "pr_review"]),
+            Task.status.in_(["new", "blocked"]),
+            Task.assigned_agent_id.is_(None),
+        ).limit(10).all()
+        for t in stranded:
+            logger.warning(
+                f"[cycle] review task {t.id} ({t.type}) has no assigned "
+                f"agent — spawn skipped. status={t.status}, "
+                f"repo={(t.extra or {}).get('repo')!r}"
+            )
+
         if not candidates:
             return {"spawned": 0}
 

@@ -691,6 +691,28 @@ def _act_create_task_from_pupdate(automation, config, pupdate=None, context=None
         if existing:
             existing.source_pupdate_id = pupdate.id
             existing.updated_at = datetime.now(timezone.utc)
+
+            # Refresh task.extra from the new pupdate's metadata. If
+            # the original pupdate had stale or missing fields (older
+            # poller version, GitHub API hiccup), the new pupdate is
+            # the more authoritative source and we want downstream
+            # consumers (scope_for_task, build_task_prompt) to read
+            # the current values. Only fill keys that are missing or
+            # empty on the existing task — don't clobber user edits.
+            new_pup_extra = pupdate.extra or {}
+            existing_extra = dict(existing.extra or {})
+            for key in ("repo", "linear_id", "identifier",
+                        "linear_cycle_id", "linear_cycle_number",
+                        "linear_cycle_name"):
+                if new_pup_extra.get(key) and not existing_extra.get(key):
+                    existing_extra[key] = new_pup_extra[key]
+                    logger.info(
+                        f"[automation {automation.id}] task {existing.id}: "
+                        f"backfilled extra.{key}={new_pup_extra[key]!r} "
+                        f"from pupdate {pupdate.id}"
+                    )
+            existing.extra = existing_extra
+
             # If the task was parked in "waiting" (user posted their
             # review, ball in author's court), a fresh re-request
             # means the author wants another look — flip back to
@@ -735,6 +757,16 @@ def _act_create_task_from_pupdate(automation, config, pupdate=None, context=None
     task_id = f"task-{_uuid.uuid4().hex[:10]}"
     pup_extra = pupdate.extra or {}
     repo = pup_extra.get("repo") or ""
+    if not repo and task_type in ("review", "pr_review"):
+        # Review tasks without a repo can't resolve a worktree later —
+        # surface this loudly at creation time rather than discovering
+        # it three cycles later when prepare() fails.
+        logger.warning(
+            f"[automation {automation.id}] "
+            f"creating {task_type} task from pupdate {pupdate.id} "
+            f"with NO repo — pupdate.extra keys: "
+            f"{sorted((pup_extra or {}).keys()) or '(empty)'}"
+        )
     extra = {
         "description": pupdate.body or "",
         "repo": repo,
@@ -765,7 +797,22 @@ def _act_create_task_from_pupdate(automation, config, pupdate=None, context=None
     )
     db.session.add(task)
     db.session.flush()
-    route(task)
+    try:
+        route(task)
+    except Exception as e:
+        # route() lazy-spawns an agent; if that fails the task is
+        # left without an assigned agent and the spawn-jobs phase
+        # will never pick it up — silently. Surface the failure so
+        # we can see why the chain stalled.
+        logger.warning(
+            f"[automation {automation.id}] route(task={task.id}) failed: {e}"
+        )
+    if not task.assigned_agent_id and task_type in ("review", "pr_review"):
+        logger.warning(
+            f"[automation {automation.id}] task {task.id} ({task_type}) "
+            f"created without an assigned agent — spawn_jobs_for_tasks "
+            f"will skip it. Check route()/maybe_spawn for repo={repo!r}."
+        )
     if not is_ready(task):
         task.status = "blocked"
     return {"kind": "create_task_from_pupdate", "task_id": task_id, "pupdate_id": pupdate.id}
