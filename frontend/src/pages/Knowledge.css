@@ -5,6 +5,7 @@
   background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-xs);
 }
 .kstat { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); }
+.kstat.kstat-warning { color: var(--warm-coral, #c97a4a); }
 
 /* Category sections */
 .category-sections { display: flex; flex-direction: column; gap: 6px; }

@@ -256,6 +256,15 @@ export const api = {
     return request("/learnings/backfill", { method: "POST", body: JSON.stringify(body) });
   },
   getBackfillStatus: () => request("/learnings/backfill/status"),
+  // RAG retrieval health — backend (none = offline), model name,
+  // and how many active rules have a current embedding ready for
+  // cosine matching. Drives the BrainView status pill.
+  getRagStatus: () => request("/rules/embedding-status"),
+  // Free-text or diff-based rule retrieval. Either `diff` (string)
+  // or `queries` (string[]) is required. Server runs Haiku
+  // decomposition on the diff path; queries skip it.
+  getRelevantRules: (body) =>
+    request("/rules/relevant", { method: "POST", body: JSON.stringify(body) }),
   clusterLearnings: () => request("/learnings/cluster", { method: "POST" }),
   approveLearning: (id) => request(`/learnings/${id}/approve`, { method: "POST" }),
   dismissLearning: (id) => request(`/learnings/${id}/dismiss`, { method: "POST" }),

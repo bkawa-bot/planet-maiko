@@ -62,6 +62,12 @@ export default function BrainView() {
   // Scope filter: "all" / "global" / "scoped" / "unscoped". Purely a
   // view-layer filter — doesn't touch the learning rows themselves.
   const [scopeFilter, setScopeFilter] = useState("all");
+  // RAG retrieval health. {backend, model, rules_indexed,
+  // rules_total_active, ready_pct} or null while loading. backend
+  // is null when no embedding library is installed / configured —
+  // retrieval silently returns [] in that state, so we surface it
+  // in the stats row so the user knows the layer's offline.
+  const [ragStatus, setRagStatus] = useState(null);
 
   const fetchLearnings = async () => {
     setKLoading(true);
@@ -90,6 +96,10 @@ export default function BrainView() {
         setBackfillProgress(s);
       }
     }).catch(() => {});
+    // RAG status. Quiet failure — the pill just hides if we couldn't
+    // reach the endpoint. Re-fetched after a backfill kickoff so the
+    // indexed-count reflects the new state.
+    api.getRagStatus().then(setRagStatus).catch(() => setRagStatus(null));
   }, []);
 
   // Refetch the queue whenever the Queue tab is active. Drains fast
@@ -324,6 +334,38 @@ export default function BrainView() {
           <span className="kstat"><Brain size={12} /> {active.length} active</span>
           <span className="kstat"><Clock size={12} /> {pending.length} pending</span>
           <span className="kstat"><Layers size={12} /> {Object.keys(byCategory).length} categories</span>
+          {ragStatus !== null && (() => {
+            // Three states: offline (no backend installed), partial
+            // (backfill in flight), ready (every active rule has an
+            // embedding). Title carries the model name + raw counts
+            // for the diagnostics-curious.
+            const offline = !ragStatus.backend;
+            const indexed = ragStatus.rules_indexed || 0;
+            const total = ragStatus.rules_total_active || 0;
+            const partial = !offline && total > 0 && indexed < total;
+            let label, title;
+            if (offline) {
+              label = "RAG offline";
+              title = "No embedding backend available. Install sentence-transformers (local) or set VOYAGE_API_KEY / OPENAI_API_KEY to enable rule retrieval.";
+            } else if (total === 0) {
+              label = "RAG: no rules";
+              title = `Backend: ${ragStatus.model || "(unknown)"}. No active rules yet — retrieval will be empty until rules graduate.`;
+            } else if (partial) {
+              label = `RAG: ${indexed}/${total} indexed`;
+              title = `Backend: ${ragStatus.model}. Backfill in progress — ${total - indexed} rules still need scenario descriptions before retrieval picks them up.`;
+            } else {
+              label = `RAG ready: ${indexed} indexed`;
+              title = `Backend: ${ragStatus.model}. All ${total} active rules indexed for retrieval.`;
+            }
+            return (
+              <span
+                className={`kstat${offline ? " kstat-warning" : ""}`}
+                title={title}
+              >
+                <Sparkles size={12} /> {label}
+              </span>
+            );
+          })()}
           {pending.length > 0 && (
             <>
               <button className="btn btn-sm" onClick={handleApproveAll} style={{ marginLeft: "auto" }}>
