@@ -6,12 +6,12 @@ import PlanetSpinner from "./PlanetSpinner";
 import "./PackAskBox.css";
 
 /**
- * Inline "Ask the pack" widget. Lives at the top of PackStatusPane
- * on Home. Dispatches directly to the pack and renders the answer
- * right here — no corner popup, no context-switch. Shares styling
- * with the AskMaiko floating panel (which handles Cmd/Ctrl+K from
- * other pages) via the ask-maiko-* / ask-pack-* classes and the
- * PackTurn component.
+ * Inline "Ask the pack" widget. Lives in the Home sidebar.
+ * Dispatches directly to the pack and renders the answer right
+ * here — no corner popup, no context-switch. Shares styling with
+ * the AskMaiko floating panel (which handles Cmd/Ctrl+K from other
+ * pages) via the ask-maiko-* / ask-pack-* classes and the PackTurn
+ * component.
  *
  * Pause-first gating (too-many-active) kicks in when the pack is
  * already chewing on a lot — a "sure?" step, not a hard block.

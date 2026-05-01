@@ -59,9 +59,10 @@ export default function AskMaiko() {
   }, [open]);
 
   // Cmd/Ctrl+K anywhere in the app pops the pack open. Embedded
-  // callers (PackStatusPane's inline ask input on Home) can hand off
-  // a prefilled query via event.detail.text — lets the inline box
-  // feel contextual without duplicating all the panel logic here.
+  // callers (the "Ask the pack" sidebar widget on Home, via
+  // PackAskBox) can hand off a prefilled query via event.detail.text
+  // — lets the inline box feel contextual without duplicating all
+  // the panel logic here.
   useEffect(() => {
     const onOpen = (e) => {
       setOpen(true);
@@ -147,8 +148,8 @@ export default function AskMaiko() {
     }
   };
 
-  // The floating bubble is gone — the inline "Ask the pack" input
-  // on Home (PackStatusPane) is the primary entry point. Cmd/Ctrl+K
+  // The floating bubble is gone — the "Ask the pack" sidebar widget
+  // on Home (PackAskBox) is the primary entry point. Cmd/Ctrl+K
   // opens this panel from anywhere without a prefilled query.
   return (
     <>

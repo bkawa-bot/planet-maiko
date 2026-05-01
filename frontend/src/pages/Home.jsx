@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import SetupWizard from "../components/SetupWizard";
 import OverviewPane from "../components/OverviewPane";
-import PackStatusPane from "../components/PackStatusPane";
 import MemosPane from "../components/MemosPane";
+import PackAskBox from "../components/PackAskBox";
 import { formatTime, formatClock } from "../utils/dates";
 import { Brain, Calendar, Palette, Video, Sparkles, CheckCircle2 } from "lucide-react";
 import { showToast } from "../components/Toast";
@@ -115,14 +115,15 @@ export default function Home() {
   return (
     <div className="home">
       <div className="home-grid">
-        {/* Main column: overview narrative + unified memos feed +
-            live pack status. Memos folds in what was separately
-            ReviewQueue (waiting-on-you items) and Notifications
-            (info-only asks). */}
+        {/* Main column: overview narrative + unified memos feed.
+            Memos folds in what was separately ReviewQueue (waiting-on
+            -you items) and Notifications (info-only asks). PackStatusPane
+            was retired here — its agent-status content overlapped with
+            the Agents page, the stuck/waiting rows are memos already,
+            and the "Ask the pack" surface moved to the sidebar widget. */}
         <div className="home-main">
           <OverviewPane />
           <MemosPane />
-          <PackStatusPane />
         </div>
 
         {/* Sidebar widgets: ambient context, not primary surface. */}
@@ -234,6 +235,13 @@ export default function Home() {
             ) : (
               <div className="widget-empty">Nothing shipped yet. First one's the heaviest.</div>
             )}
+          </div>
+
+          <div className="home-widget">
+            <div className="widget-header">
+              <Sparkles size={12} /> Ask the pack
+            </div>
+            <PackAskBox />
           </div>
 
           <div className="home-widget home-brain-widget">
