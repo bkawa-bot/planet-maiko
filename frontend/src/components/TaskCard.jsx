@@ -215,6 +215,22 @@ export default function TaskCard({
               {showArtifact ? "Hide" : "View"} {t.type === "review" || t.type === "pr_review" ? "review" : "report"}
               {t.extra?.patterns_emitted ? ` · ${t.extra.patterns_emitted} pattern(s)` : ""}
               {t.extra?.proposals_emitted ? ` · ${t.extra.proposals_emitted} proposal(s)` : ""}
+              {(() => {
+                // Unique rules across all queries the agent ran. The
+                // ReviewDiff page renders the full list; here we just
+                // show the count so users can scan their task list and
+                // see "yep, agent grounded against team rules" at a
+                // glance without opening the report.
+                const history = t.extra?.rules_considered || t.metadata?.rules_considered || [];
+                if (!history.length) return "";
+                const ids = new Set();
+                for (const entry of history) {
+                  for (const r of (entry?.rules || [])) {
+                    if (r?.id != null) ids.add(r.id);
+                  }
+                }
+                return ids.size ? ` · ${ids.size} rule${ids.size === 1 ? "" : "s"} considered` : "";
+              })()}
               {t.extra?.confidence && t.extra.confidence !== "high" ? ` · ${t.extra.confidence} confidence` : ""}
             </button>
             {showArtifact && (
