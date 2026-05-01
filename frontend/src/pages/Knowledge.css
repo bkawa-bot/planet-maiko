@@ -7,6 +7,45 @@
 .kstat { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); }
 .kstat.kstat-warning { color: var(--warm-coral, #c97a4a); }
 
+/* Expanded learning's scenario description — the natural-language
+   text retrieval embeds + cosine-matches against. Sits above the
+   provenance signals so the user can sanity-check "is this the
+   pattern I expected to be matched against?" before approving or
+   editing the rule. */
+.learning-scenario {
+  margin: 4px 0 8px 32px;
+  padding: 8px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  border-left: 2px solid var(--warm-coral, #c97a4a);
+}
+.learning-scenario-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.learning-scenario-hint {
+  margin-left: auto;
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: normal;
+  font-style: italic;
+  color: var(--text-dim);
+  cursor: help;
+}
+.learning-scenario-body {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
 /* Category sections */
 .category-sections { display: flex; flex-direction: column; gap: 6px; }
 

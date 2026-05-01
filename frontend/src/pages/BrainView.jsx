@@ -537,11 +537,29 @@ export default function BrainView() {
                           </div>
                         </div>
                         {expandedLearning === l.id && (
-                          <LearningProvenance
-                            loading={provenanceLoading[l.id]}
-                            signals={provenanceCache[l.id]}
-                            defaultOrg={defaultOrg}
-                          />
+                          <>
+                            {l.violation_description && (
+                              <div className="learning-scenario">
+                                <div className="learning-scenario-label">
+                                  <Sparkles size={10} /> Scenario this rule applies to
+                                  <span
+                                    className="learning-scenario-hint"
+                                    title="This is the natural-language description retrieval matches against. Edit the rule text and the description regenerates from the signals."
+                                  >
+                                    matched against new diffs at review time
+                                  </span>
+                                </div>
+                                <p className="learning-scenario-body">
+                                  {l.violation_description}
+                                </p>
+                              </div>
+                            )}
+                            <LearningProvenance
+                              loading={provenanceLoading[l.id]}
+                              signals={provenanceCache[l.id]}
+                              defaultOrg={defaultOrg}
+                            />
+                          </>
                         )}
                         </div>
                       ))}

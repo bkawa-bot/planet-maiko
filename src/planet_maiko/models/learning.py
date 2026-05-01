@@ -69,5 +69,6 @@ class Learning(db.Model):
             "updated_at": iso_utc(self.updated_at),
             "last_signal_at": iso_utc(self.last_signal_at),
             "has_violation_description": bool(self.violation_description),
+            "violation_description": self.violation_description,
             "violation_description_generated_at": iso_utc(self.violation_description_generated_at),
         }
