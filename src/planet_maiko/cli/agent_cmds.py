@@ -194,7 +194,15 @@ def register(subparsers):
     p.add_argument("--body", help="Detailed body text")
     p.add_argument("--task", help="Task ID (auto-detected from TASK.md if omitted)")
     p.add_argument("--priority", default="normal", choices=["low", "normal", "high", "urgent"])
-    p.add_argument("--type", default="agent_update", help="Pupdate type")
+    # Default to agent_status, NOT agent_update. agent_update is the
+    # type the post-tool-use hook emits on every git commit / bash /
+    # write — monitor.py treats those as noise so the activity feed's
+    # speech bubble doesn't read "agent git commit" forever. Agent-
+    # authored intentional status messages need a distinct type so
+    # they actually surface; otherwise they get filtered out alongside
+    # the tool spam and the dashboard shows the prepare-time "Agent
+    # ready: ..." pupdate as the most recent non-noise message.
+    p.add_argument("--type", default="agent_status", help="Pupdate type")
     p.set_defaults(func=cmd_report)
 
     # maiko task
