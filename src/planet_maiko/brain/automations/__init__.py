@@ -471,6 +471,30 @@ def _act_run_agent_job(automation, config, pupdate=None, context=None):
         extra=extra,
     )
     db.session.add(job)
+    # Flush early so DB errors surface here rather than getting
+    # silently rolled back at the cycle's final commit. Same
+    # rationale as _act_spawn_agent_job_from_pupdate.
+    try:
+        db.session.flush()
+    except Exception as e:
+        logger.warning(
+            f"[automation {automation.id}] AgentJob flush failed: {e}"
+        )
+        raise
+    pup_id = pupdate.id if pupdate is not None else "(no-pupdate)"
+    if not repo:
+        logger.warning(
+            f"[automation {automation.id}] run_agent_job created AgentJob "
+            f"{job_id} (kind={kind!r}) with NO scope_repo — pupdate={pup_id}, "
+            f"automation.scope_repo={automation.scope_repo!r}, "
+            f"pupdate.extra.repo="
+            f"{((pupdate.extra or {}).get('repo') if pupdate is not None else None)!r}"
+        )
+    else:
+        logger.info(
+            f"[automation {automation.id}] spawned AgentJob {job_id} "
+            f"(kind={kind!r}, scope_repo={repo!r}) pupdate={pup_id}"
+        )
     return {"job_id": job_id, "kind": "run_agent_job", "status": job.status}
 
 
@@ -688,6 +712,32 @@ def _act_spawn_agent_job_from_pupdate(automation, config, pupdate=None, context=
         extra=extra,
     )
     db.session.add(job)
+    # Flush early so any DB error surfaces here (with a stack we can
+    # see) rather than silently rolling back at the cycle's final
+    # commit. Without this, a SQLite lock or constraint violation
+    # downstream eats the AgentJob, the pupdate still gets marked
+    # processed, and we end up with a "pupdate processed but no job"
+    # mystery in the DB.
+    try:
+        db.session.flush()
+    except Exception as e:
+        logger.warning(
+            f"[automation {automation.id}] AgentJob flush failed for "
+            f"pupdate {pupdate.id}: {e}"
+        )
+        raise
+    if not repo:
+        logger.warning(
+            f"[automation {automation.id}] spawn_agent_job_from_pupdate "
+            f"created AgentJob {job_id} (kind={kind!r}) with NO scope_repo "
+            f"— pupdate {pupdate.id} extra keys: "
+            f"{sorted((pupdate.extra or {}).keys()) or '(empty)'}"
+        )
+    else:
+        logger.info(
+            f"[automation {automation.id}] spawned AgentJob {job_id} "
+            f"(kind={kind!r}, scope_repo={repo!r}) from pupdate {pupdate.id}"
+        )
     return {"job_id": job_id, "kind": "spawn_agent_job_from_pupdate", "status": job.status}
 
 
