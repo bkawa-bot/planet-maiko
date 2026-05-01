@@ -72,12 +72,20 @@ export default function BrainView() {
   const fetchLearnings = async () => {
     setKLoading(true);
     try {
-      const [ls, sigs, sigCount] = await Promise.all([
-        api.getLearnings(),
+      // Fetch active + pending separately. The /learnings endpoint
+      // sorts by confidence desc and caps at 500 — without splitting
+      // by status, active rules (which start at higher confidence)
+      // can crowd pending rules out of the page entirely. With ~600
+      // pending in the DB, the unfiltered list returned 0 of them
+      // and the Pending tab read as empty even though /brain/status
+      // showed 590 waiting.
+      const [active, pending, sigs, sigCount] = await Promise.all([
+        api.getLearnings({ status: "active", limit: 500 }),
+        api.getLearnings({ status: "pending", limit: 500 }),
         api.getSignals({ synthesized: false, limit: 500 }).catch(() => []),
         api.getSignalsCount({ synthesized: false }).catch(() => ({ count: 0 })),
       ]);
-      setLearnings(ls);
+      setLearnings([...(active || []), ...(pending || [])]);
       setRawSignals(sigs);
       setRawSignalsTotal(sigCount?.count ?? 0);
     } catch (err) { console.error(err); }
