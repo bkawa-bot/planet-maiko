@@ -210,11 +210,22 @@ def edit_learning(learning_id):
     conventions that apply everywhere even when only one repo has
     surfaced them. Accept is_global here; when true, clear scope_repo
     since the two contradict.
+
+    On rule-text edit: invalidate the cached scenario description +
+    embedding so the next backfill regenerates them. Without this, an
+    edited rule would keep retrieving against its OLD scenario text —
+    silently degrading retrieval quality. The 5-signal regen threshold
+    in violation_backfill won't catch text-only edits since they don't
+    change signal_count.
     """
     learning = db.get_or_404(Learning, learning_id)
     data = request.get_json()
+    rule_changed = False
     if "rule" in data:
-        learning.rule = data["rule"]
+        new_rule = (data["rule"] or "").strip()
+        if new_rule and new_rule != (learning.rule or "").strip():
+            learning.rule = new_rule
+            rule_changed = True
     if "category" in data:
         learning.category = data["category"]
     if "scope_repo" in data:
@@ -225,7 +236,35 @@ def edit_learning(learning_id):
         learning.is_global = bool(data["is_global"])
         if learning.is_global:
             learning.scope_repo = None
+
+    if rule_changed:
+        learning.violation_description = None
+        learning.violation_embedding = None
+        learning.violation_description_generated_at = None
+        learning.violation_description_signal_count = None
+
     db.session.commit()
+
+    # Kick the backfill on a daemon thread so the regen happens now
+    # rather than at next boot. Cheap (~$0.001 + a few seconds for one
+    # rule). The backfill itself only processes rules whose description
+    # is missing OR has accumulated +5 signals — so this is a no-op
+    # when nothing else is stale.
+    if rule_changed:
+        from flask import current_app
+        from planet_maiko.brain.learning.violation_backfill import (
+            backfill_in_background,
+        )
+        try:
+            backfill_in_background(current_app._get_current_object())
+        except Exception as e:
+            # Don't block the edit on a backfill kickoff failure — the
+            # next boot's startup backfill will pick it up regardless.
+            import logging
+            logging.getLogger(__name__).warning(
+                f"[learnings/edit] background backfill kickoff failed: {e}"
+            )
+
     return jsonify(learning.to_dict())
 
 
