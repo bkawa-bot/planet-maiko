@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, ExternalLink, GitPullRequest, Loader, MessageSquare, PanelRightClose, PanelRightOpen, X } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, GitPullRequest, Loader, MessageSquare, PanelRightClose, PanelRightOpen, Sparkles, X } from "lucide-react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import DiffView from "../components/diff/DiffView";
@@ -236,6 +236,24 @@ export default function ReviewDiff() {
   const summary = task?.metadata?.review_summary || task?.extra?.review_summary;
   const prUrl = task?.url || task?.metadata?.pr_url || task?.extra?.pr_url;
 
+  // Rules the agent retrieved via `maiko rules-relevant` while
+  // working on this task — auto-recorded by the CLI. Dedupe across
+  // queries (same rule may surface for several queries) and keep
+  // each rule's best score so the highest-confidence match is what
+  // the user sees.
+  const rulesConsidered = useMemo(() => {
+    const history = (task?.extra?.rules_considered || task?.metadata?.rules_considered || []);
+    const byId = new Map();
+    for (const entry of history) {
+      for (const r of (entry?.rules || [])) {
+        if (r?.id == null) continue;
+        const prior = byId.get(r.id);
+        if (!prior || (r.score || 0) > (prior.score || 0)) byId.set(r.id, r);
+      }
+    }
+    return Array.from(byId.values()).sort((a, b) => (b.score || 0) - (a.score || 0));
+  }, [task]);
+
   const handleCloseReview = async () => {
     if (!window.confirm("Close this review and clean up the worktree?")) return;
     try {
@@ -325,6 +343,34 @@ export default function ReviewDiff() {
             {summary && <div className="review-verdict-summary">{summary}</div>}
           </div>
         </div>
+      )}
+
+      {rulesConsidered.length > 0 && (
+        <details className="rules-considered-panel" open={isReviewTask}>
+          <summary className="rules-considered-summary">
+            <Sparkles size={12} />
+            <span>
+              {rulesConsidered.length} team rule{rulesConsidered.length === 1 ? "" : "s"} considered
+            </span>
+            <span className="rules-considered-hint">
+              what the agent had in mind during this work
+            </span>
+          </summary>
+          <ul className="rules-considered-list">
+            {rulesConsidered.map((r) => (
+              <li key={r.id} className="rules-considered-item">
+                <span className="rules-considered-cat">[{r.category}]</span>
+                <span className="rules-considered-rule">{r.rule}</span>
+                <span
+                  className="rules-considered-score"
+                  title="Best cosine similarity across the agent's queries"
+                >
+                  {Math.round((r.score || 0) * 100)}%
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
 
       <div className={`review-diff-layout${sidebarHidden ? " sidebar-hidden" : ""}`}>

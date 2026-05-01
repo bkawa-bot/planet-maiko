@@ -617,3 +617,66 @@
 
 .spin { animation: maikoSpin 1s linear infinite; }
 @keyframes maikoSpin { to { transform: rotate(360deg); } }
+
+/* Rules-considered panel: lists the team rules the agent retrieved
+   via `maiko rules-relevant` while doing this task. Sits between the
+   verdict banner and the diff/artifact body. Collapsed-by-default
+   for coding tasks (the diff is the primary surface), expanded for
+   review tasks (the agent's rule-grounding IS the review). */
+.rules-considered-panel {
+  margin: 0 0 12px;
+  padding: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+}
+.rules-considered-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  color: var(--text);
+}
+.rules-considered-summary::-webkit-details-marker { display: none; }
+.rules-considered-hint {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-style: italic;
+}
+.rules-considered-list {
+  margin: 0;
+  padding: 0 12px 8px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rules-considered-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px dashed var(--border-subtle);
+}
+.rules-considered-item:first-child { border-top: none; }
+.rules-considered-cat {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: lowercase;
+  flex-shrink: 0;
+}
+.rules-considered-rule {
+  flex: 1;
+  color: var(--text);
+}
+.rules-considered-score {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--text-dim);
+}
