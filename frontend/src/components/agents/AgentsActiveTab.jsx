@@ -329,12 +329,17 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
               // entry per task already, so this just stops React's
               // index-based key from churning on reorder.
               <div key={a.task_id} className="agent-card card">
-                <div className={`speech-bubble status-${a.status}`}>
+                <button
+                  type="button"
+                  className={`speech-bubble status-${a.status}`}
+                  onClick={() => loadThread(a.task_id)}
+                  title={a.last_message_body || "Open chat thread"}
+                >
                   {a.last_message || "Quiet for now — no messages yet"}
                   <div className="speech-time">
                     {formatTime(a.last_seen)}
                   </div>
-                </div>
+                </button>
                 <div className="agent-card-body">
                   <div className="agent-avatar-circle">
                     <CardAvatar agent={profile || prepared} size={40} />

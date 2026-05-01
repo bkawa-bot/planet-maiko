@@ -63,15 +63,15 @@ def get_agent_activity():
     now = datetime.now(timezone.utc)
     stale_cutoff = now - timedelta(days=STALE_AGENT_DAYS)
 
-    # `agent_update` is the type the post-tool-use hook emits on every
-    # git commit / bash / file-write. They're the right signal for
-    # "how active is this agent?" (pupdate_count) but terrible for
-    # "what did the agent say?" — the speech bubble ends up parroting
-    # "Agent git commit" almost always. Skip them when picking the
-    # displayed last_message; they still contribute to last_seen
-    # (activity freshness) and the count.
-    NOISE_TYPES = {"agent_update"}
-
+    # Pupdates drive activity tracking (last_seen, pupdate_count,
+    # idle/active status) — they include the post-tool-use hook
+    # which is the truest signal for "is this agent doing something
+    # right now". They do NOT drive the speech-bubble text; that
+    # used to read pupdate titles like "Agent ready: <task>" and
+    # filter out post-tool-use noise, but the result was a stale
+    # bubble parroting prepare-time state long after the agent had
+    # said real things via reply()/maiko report. The displayed
+    # message comes from AgentMessage below — the actual chat.
     for p in agent_pupdates:
         agent_key = (p.tags or [None])[0] or p.id
 
@@ -85,12 +85,11 @@ def get_agent_activity():
 
             agents[agent_key] = {
                 "task_id": agent_key,
-                # Seed the display fields from the most recent pupdate
-                # regardless of type; if a meaningful (non-noise) one
-                # exists further back, the loop below overwrites.
+                # Filled in below from the AgentMessage table — the
+                # canonical source for "what the agent said".
                 "last_message": None,
                 "last_message_body": None,
-                "last_meaningful_seen": None,
+                "last_message_type": None,
                 "last_seen": p.timestamp.isoformat(),
                 "type": p.type,
                 "pupdate_count": 0,
@@ -101,33 +100,32 @@ def get_agent_activity():
         a = agents[agent_key]
         a["pupdate_count"] += 1
 
-        # First non-noise pupdate we see for this agent wins as the
-        # displayed message. Because we're iterating timestamp-desc,
-        # that's the most recent meaningful thing the agent said.
-        if a["last_message"] is None and p.type not in NOISE_TYPES:
-            a["last_message"] = p.title
-            a["last_message_body"] = p.body
-            a["last_meaningful_seen"] = p.timestamp.isoformat()
-            a["type"] = p.type
-
-    # Fall back to the hook-noise title only if the agent has literally
-    # never said anything meaningful. Better "Agent git commit" than
-    # blank when that's all we've got.
-    for a in agents.values():
-        if a["last_message"] is None:
-            # Re-query would be wasteful; we already walked the pupdates
-            # but didn't stash a noise fallback. Do a tiny filter now.
-            fallback = (
-                Pupdate.query
-                .filter_by(source="agent")
-                .filter(Pupdate.tags.contains(a["task_id"]))
-                .order_by(Pupdate.timestamp.desc())
-                .first()
-            )
-            if fallback:
-                a["last_message"] = fallback.title
-                a["last_message_body"] = fallback.body
-        a.pop("last_meaningful_seen", None)
+    # Override the displayed last_message from the AgentMessage table.
+    # The speech bubble is conceptually "what the agent last said in
+    # chat" — the agent_messages table holds those (every reply()
+    # MCP call lands here, plus user messages going the other
+    # direction). Pupdates carry state-transition titles ("Agent
+    # ready: ...", "Mochi replied: ...") that aren't always what
+    # the user wants to see in the bubble.
+    LAST_MESSAGE_PREVIEW_CHARS = 140
+    from planet_maiko.models.agent_message import AgentMessage
+    for agent_key, a in agents.items():
+        last = (
+            AgentMessage.query
+            .filter_by(task_id=agent_key, direction="from_agent")
+            .order_by(AgentMessage.created_at.desc())
+            .first()
+        )
+        if last is None:
+            continue
+        body = (last.content or "").strip()
+        if len(body) > LAST_MESSAGE_PREVIEW_CHARS:
+            preview = body[:LAST_MESSAGE_PREVIEW_CHARS].rstrip() + "…"
+        else:
+            preview = body
+        a["last_message"] = preview
+        a["last_message_body"] = last.content
+        a["last_message_type"] = last.message_type
 
     # Drop tasks that are finished or no longer exist, and enrich
     # the rest with agent profile info + the task's title (the UI
