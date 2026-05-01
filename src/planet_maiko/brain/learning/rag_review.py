@@ -81,6 +81,30 @@ For each rule that doesn't actually apply to this diff:
 SKIPPED: [{{category}}] {{rule}}
   - Why: {{one sentence — why this rule's scenario doesn't apply here}}
 
+## Propose new rules (only when warranted)
+
+If — and ONLY if — you spot something genuinely flag-worthy that NONE of the retrieved rules above (even sort-of) cover, emit a PATTERN block per finding. These become proposed Signals that the team reviews before they graduate into rules. Be conservative — quality over quantity.
+
+Emit a PATTERN ONLY when ALL of:
+  1. It's worth flagging across PRs, not a one-off nit specific to this diff.
+  2. None of the retrieved rules above (applicable, OK, or skipped) covers it.
+  3. It generalizes to other changes — a rule, not a personal preference.
+
+When in doubt, don't emit. Skipping is the right default.
+
+PATTERN format (use exactly this shape, lowercase keys, --- fences for the code block):
+
+PATTERN: [category] Short, actionable rule (one sentence, imperative)
+file: path/to/file.py
+code:
+---
+<the diff hunk that exemplifies the issue — keep it tight, just the lines that show the pattern>
+---
+
+Valid categories: security, error_handling, testing, performance, api_design, architecture, null_safety, style, naming, docs, domain_knowledge, gotcha, team.
+
+## Overall
+
 End with a brief OVERALL summary (2-3 sentences) — the gist of what
 this diff is doing, plus how many violations were found.
 
@@ -205,9 +229,29 @@ def review_with_rag(diff, repo=None, k=DEFAULT_TOP_K,
             "num_rules": len(rule_items),
         }
 
+    # Parse PATTERN blocks Claude may have emitted for findings not
+    # covered by any retrieved rule. They become Signals (status =
+    # pending until the cluster pass + user approval) — same path as
+    # PR-comment signals and worktree-agent PATTERNs. Cleaned text
+    # is what we return to the caller; the raw text with blocks is
+    # gone after parsing.
+    from planet_maiko.brain.learning.agent_output import parse_and_apply_blocks
+    from planet_maiko.database import db
+    parsed = parse_and_apply_blocks(
+        review_text,
+        repo=repo,
+        reviewer_name="rag_review",
+    )
+    if parsed["patterns_emitted"]:
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.warning(f"[rag-review] commit failed for proposed signals: {e}")
+
     return {
         "success": True,
-        "review": review_text,
+        "review": parsed["cleaned_output"] or review_text,
         "rules": [
             {
                 "id": r["learning"].id,
@@ -218,4 +262,5 @@ def review_with_rag(diff, repo=None, k=DEFAULT_TOP_K,
             for r in rule_items
         ],
         "num_rules": len(rule_items),
+        "patterns_proposed": parsed["patterns_emitted"],
     }

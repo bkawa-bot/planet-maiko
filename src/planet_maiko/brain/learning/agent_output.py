@@ -106,16 +106,21 @@ def _extract_category_from_header(header):
     return "pattern", header.strip()
 
 
-def parse_and_apply_blocks(output, *, agent, task, repo=None):
-    """Scan the agent's output for structured blocks, create Signals /
+def parse_and_apply_blocks(output, *, agent=None, task=None, repo=None,
+                           reviewer_name=None):
+    """Scan output for structured blocks, create Signals /
     Proposal pupdates for each, and return the cleaned output with
     those blocks stripped.
 
     Args:
-        output: the raw text the agent returned.
-        agent: AgentProfile instance (for attribution).
-        task: Task instance (for linking).
+        output: the raw text the agent (or stateless reviewer) returned.
+        agent: AgentProfile instance (for attribution). Optional —
+            stateless callers like the RAG reviewer don't have one.
+        task: Task instance (for linking). Optional — same reason.
         repo: optional repo string to attach to emitted signals.
+        reviewer_name: fallback string to record on signals when
+            `agent` is None. Defaults to "agent". Ignored when an
+            agent is supplied.
 
     Returns:
         dict with keys:
@@ -130,6 +135,9 @@ def parse_and_apply_blocks(output, *, agent, task, repo=None):
 
     if not output:
         return {"cleaned_output": "", "patterns_emitted": 0, "proposals_emitted": 0, "confidence": None}
+
+    reviewer = agent.display_name if agent is not None else (reviewer_name or "agent")
+    fallback_repo = agent.scope_repo if agent is not None else None
 
     patterns_emitted = 0
     proposals_emitted = 0
@@ -149,15 +157,15 @@ def parse_and_apply_blocks(output, *, agent, task, repo=None):
                 category=category,
                 text=rule[:500],
                 source_type="pr_comment",  # same path as PR-scraped signals
-                reviewer=agent.display_name,
+                reviewer=reviewer,
                 severity="suggestion",
-                repo=repo or fields.get("repo") or agent.scope_repo,
+                repo=repo or fields.get("repo") or fallback_repo,
                 file_path=file_path,
                 code_context=code,
                 examples=[{
                     "path": file_path,
                     "diff_hunk": code,
-                    "author": agent.display_name,
+                    "author": reviewer,
                     "line": None,
                 }] if code else [],
                 # Review / investigation agents already wrote the rule
@@ -173,41 +181,47 @@ def parse_and_apply_blocks(output, *, agent, task, repo=None):
     # user approves to mint a routed Task, edits the draft in place,
     # or dismisses). Previously emitted pupdates; memos are the new
     # canonical surface for persistent user-owed items.
-    for m in _PROPOSAL_RE.finditer(output):
-        title = m.group("title").strip()
-        fields = _parse_kv_body(m.group("body"))
-        priority = fields.get("priority", "normal").lower()
-        if priority not in _VALID_PRIORITIES:
-            priority = "normal"
-        try:
-            draft = {
-                "title": title[:200],
-                "type": "todo",
-                "priority": priority,
-                "repo": fields.get("repo") or repo or agent.scope_repo or "",
-                "category": fields.get("category") or "",
-                "description": fields.get("description") or "",
-            }
-            create_memo(
-                kind="agent_proposal",
-                category="offer",
-                title=title[:200],
-                body=draft["description"] or None,
-                priority=priority,
-                cta_label="Approve",
-                cta_action="approve",
-                source_agent_id=agent.id,
-                source_task_id=task.id,
-                extra={
-                    "from_agent_id": agent.id,
-                    "from_agent_display_name": agent.display_name,
-                    "from_task_id": task.id,
-                    "draft": draft,
-                },
-            )
-            proposals_emitted += 1
-        except Exception as e:
-            logger.warning(f"[agent-output] Failed to persist PROPOSAL: {e}")
+    #
+    # Skipped when there's no agent or task to attribute to —
+    # proposals are accountable items that need a source agent and a
+    # parent task, neither of which a stateless reviewer (RAG flow)
+    # has. Stateless callers should only use PATTERN: blocks.
+    if agent is not None and task is not None:
+        for m in _PROPOSAL_RE.finditer(output):
+            title = m.group("title").strip()
+            fields = _parse_kv_body(m.group("body"))
+            priority = fields.get("priority", "normal").lower()
+            if priority not in _VALID_PRIORITIES:
+                priority = "normal"
+            try:
+                draft = {
+                    "title": title[:200],
+                    "type": "todo",
+                    "priority": priority,
+                    "repo": fields.get("repo") or repo or fallback_repo or "",
+                    "category": fields.get("category") or "",
+                    "description": fields.get("description") or "",
+                }
+                create_memo(
+                    kind="agent_proposal",
+                    category="offer",
+                    title=title[:200],
+                    body=draft["description"] or None,
+                    priority=priority,
+                    cta_label="Approve",
+                    cta_action="approve",
+                    source_agent_id=agent.id,
+                    source_task_id=task.id,
+                    extra={
+                        "from_agent_id": agent.id,
+                        "from_agent_display_name": agent.display_name,
+                        "from_task_id": task.id,
+                        "draft": draft,
+                    },
+                )
+                proposals_emitted += 1
+            except Exception as e:
+                logger.warning(f"[agent-output] Failed to persist PROPOSAL: {e}")
 
     # CONFIDENCE: hedges (investigation agents only usually)
     conf_match = _CONFIDENCE_RE.search(output)
@@ -225,8 +239,9 @@ def parse_and_apply_blocks(output, *, agent, task, repo=None):
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
 
     if patterns_emitted or proposals_emitted or confidence:
+        owner = task.id if task is not None else "stateless"
         logger.info(
-            f"[agent-output] {agent.display_name} ({task.id}): "
+            f"[agent-output] {reviewer} ({owner}): "
             f"{patterns_emitted} patterns, {proposals_emitted} proposals, "
             f"confidence={confidence}"
         )
