@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ClipboardCheck, FileText, GitPullRequest, Map, Inbox, Bot, Check, X,
   Bell, HelpCircle, ExternalLink, ChevronDown, ChevronRight, Plus, Rocket,
+  Sparkles,
 } from "lucide-react";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
@@ -45,6 +46,12 @@ const KIND_META = {
     Icon: FileText,
     cta: "Open report",
     label: "Report",
+    tone: "artifact",
+  },
+  skill_result: {
+    Icon: Sparkles,
+    cta: null,
+    label: "Skill",
     tone: "artifact",
   },
   proposal: {
@@ -369,15 +376,17 @@ export default function MemosPane() {
             );
           }
 
-          // job_artifact rows render the artifact body inline on
-          // expand — no useful deep-link target exists yet, so the
-          // click flips the <details> open instead of navigating away.
-          // The other default-rendered kinds (plan, review,
-          // agent_ready, agent_stuck) keep click-to-navigate.
-          if (it.kind === "job_artifact") {
+          // job_artifact and skill_result rows render their body
+          // inline on expand — no useful deep-link target exists yet,
+          // so the click flips the <details> open instead of
+          // navigating away. The other default-rendered kinds (plan,
+          // review, agent_ready, agent_stuck) keep click-to-navigate.
+          // Both kinds share ArtifactRow because they're conceptually
+          // the same thing ("agent did a thing, here's the output").
+          if (it.kind === "job_artifact" || it.kind === "skill_result") {
             return (
               <ArtifactRow
-                key={`${it.kind}:${it.job_id}`}
+                key={`${it.kind}:${it.memo_id || it.job_id}`}
                 it={it}
                 meta={meta}
                 Icon={Icon}

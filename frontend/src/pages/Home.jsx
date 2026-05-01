@@ -4,7 +4,6 @@ import SetupWizard from "../components/SetupWizard";
 import OverviewPane from "../components/OverviewPane";
 import PackStatusPane from "../components/PackStatusPane";
 import MemosPane from "../components/MemosPane";
-import RecentSkillsPane from "../components/RecentSkillsPane";
 import { formatTime, formatClock } from "../utils/dates";
 import { Brain, Calendar, Palette, Video, Sparkles, CheckCircle2 } from "lucide-react";
 import { showToast } from "../components/Toast";
@@ -236,8 +235,6 @@ export default function Home() {
               <div className="widget-empty">Nothing shipped yet. First one's the heaviest.</div>
             )}
           </div>
-
-          <RecentSkillsPane />
 
           <div className="home-widget home-brain-widget">
             <div className="widget-header">

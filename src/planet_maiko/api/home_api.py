@@ -399,7 +399,16 @@ def get_review_queue():
             # represents this user-owed work; a second row would just
             # clutter the pane.
             continue
-        route = (m.extra or {}).get("review_url") or m.url
+        # agent_stuck used to route to /tasks/<id> (a 404 — no React
+        # route exists for the bare task path). Newly-created memos
+        # set /agents in agents_api but legacy memos still point at
+        # the dead route. Defensive override at read time so old
+        # memos work too without a migration.
+        legacy_route = (m.extra or {}).get("review_url") or m.url
+        if m.kind == "agent_stuck":
+            route = "/agents"
+        else:
+            route = legacy_route
         items.append({
             "kind": m.kind,
             "task_id": m.source_task_id,
@@ -414,6 +423,45 @@ def get_review_queue():
             "timestamp": iso_utc(m.created_at),
             "priority": m.priority,
             "memo_id": m.id,
+        })
+
+    # 8. skill_result Memos — output from skills the user (or
+    #    automations) ran. Used to live in the dedicated Recent
+    #    Skills sidebar widget, but skill_result and job_artifact
+    #    are conceptually the same thing ("agent did a thing, here's
+    #    the output"). Folding into the unified Memos pane so there's
+    #    one surface for ambient agent output. Skips kinds that
+    #    self-render elsewhere (home-overview, scene, scene-mood —
+    #    they have their own surfaces and would just be noise here).
+    skill_result_memos = (
+        Memo.query
+        .filter(Memo.kind == "skill_result")
+        .filter(Memo.status.in_(("pending", "seen")))
+        .order_by(Memo.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    SELF_RENDERING_SKILLS = {"home-overview", "scene", "scene-mood"}
+    for m in skill_result_memos:
+        skill_name = (m.extra or {}).get("skill_name")
+        if skill_name in SELF_RENDERING_SKILLS:
+            continue
+        items.append({
+            "kind": "skill_result",
+            "task_id": None,
+            "job_id": (m.extra or {}).get("from_agent_job"),
+            "memo_id": m.id,
+            "title": m.title,
+            "body": m.body,
+            "body_truncated": bool(m.body and len(m.body) > 8000),
+            "repo": None,
+            "agent_name": m.source_agent_id,
+            "route": None,
+            "age_seconds": _age(m.created_at),
+            "timestamp": iso_utc(m.created_at),
+            "priority": m.priority,
+            "skill_name": skill_name,
+            "kind_label": (m.extra or {}).get("skill_title") or skill_name,
         })
 
     # Fresh items first — the user wants to see "what just landed",
