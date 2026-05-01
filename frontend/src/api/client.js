@@ -360,6 +360,13 @@ export const api = {
   markMemoSeen: (id) => request(`/memos/${id}/mark-seen`, { method: "POST" }),
   dismissMemo: (id) => request(`/memos/${id}/dismiss`, { method: "POST" }),
   approveMemo: (id) => request(`/memos/${id}/approve`, { method: "POST" }),
+  // Promote a memo (typically a notification) into actionable work.
+  // Both pull pupdate_snapshot from memo.extra for context. Marks
+  // the memo actioned on success so it disappears from the pane.
+  createTaskFromMemo: (id, body = {}) =>
+    request(`/memos/${id}/create-task`, { method: "POST", body: JSON.stringify(body) }),
+  launchAgentFromMemo: (id, body = {}) =>
+    request(`/memos/${id}/launch-agent`, { method: "POST", body: JSON.stringify(body) }),
   updateMemo: (id, data) =>
     request(`/memos/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   // Canonical "waiting on your review" list — plans to approve, diffs

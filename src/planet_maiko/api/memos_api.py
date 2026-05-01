@@ -129,6 +129,124 @@ def approve_route(memo_id):
     return jsonify({"memo": memo.to_dict(), "result": result})
 
 
+@memos_bp.route("/memos/<int:memo_id>/create-task", methods=["POST"])
+def create_task_from_memo(memo_id):
+    """Mint a Task from a memo (typically a notification) using its
+    pupdate_snapshot for context. Marks the memo actioned.
+
+    Body (all optional):
+        title:    str — defaults to memo.title
+        type:     str — task type ("todo", "bug", "feature", etc.).
+                  Defaults to "todo".
+        priority: str — "low" | "normal" | "high" | "urgent".
+                  Defaults to memo.priority or "normal".
+        description: str — defaults to memo.body or snapshot.body
+        repo:     str — "org/name". Defaults to snapshot.extra.repo
+                  if present.
+    """
+    from planet_maiko.models.task import Task
+    from planet_maiko.orchestration import route, is_ready
+    import uuid as _uuid
+
+    memo = db.get_or_404(Memo, memo_id)
+    data = request.get_json(silent=True) or {}
+    snapshot = (memo.extra or {}).get("pupdate_snapshot") or {}
+    snap_extra = snapshot.get("extra") or {}
+
+    title = (data.get("title") or memo.title or snapshot.get("title") or "Follow-up")[:300]
+    task_type = (data.get("type") or "todo").strip() or "todo"
+    priority = (data.get("priority") or memo.priority or "normal")
+    description = (
+        data.get("description")
+        or memo.body
+        or snapshot.get("body")
+        or ""
+    )
+    repo = data.get("repo") or snap_extra.get("repo") or ""
+    url = memo.url or snapshot.get("url") or None
+
+    task_id = f"task-{_uuid.uuid4().hex[:10]}"
+    task = Task(
+        id=task_id,
+        title=title,
+        type=task_type,
+        priority=priority,
+        status="new",
+        url=url,
+        tags=["from_memo"],
+        extra={
+            "description": description,
+            "repo": repo,
+            "from_memo": memo.id,
+            # Carry the snapshot so downstream surfaces (Assign modal,
+            # build_task_prompt) can render the original context.
+            "pupdate_snapshot": snapshot or None,
+        },
+    )
+    db.session.add(task)
+    db.session.flush()
+    route(task)
+    if not is_ready(task):
+        task.status = "blocked"
+
+    memo_svc.mark_actioned(memo)
+    db.session.commit()
+    return jsonify({"memo": memo.to_dict(), "task": task.to_dict()})
+
+
+@memos_bp.route("/memos/<int:memo_id>/launch-agent", methods=["POST"])
+def launch_agent_from_memo(memo_id):
+    """Mint an AgentJob from a memo using its pupdate_snapshot for
+    context. The job goes through the normal cycle execute phase —
+    same path as automation-fired jobs. Marks the memo actioned.
+
+    Body (all optional):
+        kind:     str — job kind. Defaults to "investigation". Accepts
+                  any registered specialty / one-shot role.
+        title:    str — defaults to memo.title
+        priority: str — defaults to memo.priority or "normal"
+        scope_repo: str — "org/name". Defaults to snapshot.extra.repo.
+    """
+    from planet_maiko.models.agent_job import AgentJob
+    from datetime import datetime, timezone
+    import uuid as _uuid
+
+    memo = db.get_or_404(Memo, memo_id)
+    data = request.get_json(silent=True) or {}
+    snapshot = (memo.extra or {}).get("pupdate_snapshot") or {}
+    snap_extra = snapshot.get("extra") or {}
+
+    kind = (data.get("kind") or "investigation").strip() or "investigation"
+    title = (data.get("title") or memo.title or "Investigate")[:300]
+    priority = data.get("priority") or memo.priority or "normal"
+    scope_repo = data.get("scope_repo") or snap_extra.get("repo") or None
+    description = memo.body or snapshot.get("body") or ""
+
+    extra = {"from_memo": memo.id}
+    if snapshot:
+        extra["pupdate_snapshot"] = snapshot
+
+    job_id = f"job-{_uuid.uuid4().hex[:10]}"
+    job = AgentJob(
+        id=job_id,
+        kind=kind,
+        title=title,
+        description=description,
+        scope_repo=scope_repo,
+        priority=priority,
+        created_by="user",
+        requires_approval=False,
+        status="queued",
+        approved_by="user",
+        approved_at=datetime.now(timezone.utc),
+        extra=extra,
+    )
+    db.session.add(job)
+    memo_svc.mark_actioned(memo)
+    db.session.commit()
+    return jsonify({"memo": memo.to_dict(), "job_id": job.id, "kind": kind})
+
+
 @memos_bp.route("/memos/<int:memo_id>", methods=["PATCH"])
 def patch_memo(memo_id):
     """Edit a memo's user-facing fields. Useful for proposal-shaped

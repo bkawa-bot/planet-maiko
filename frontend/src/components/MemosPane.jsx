@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ClipboardCheck, FileText, GitPullRequest, Map, Inbox, Bot, Check, X,
-  Bell, HelpCircle, ExternalLink, ChevronDown, ChevronRight,
+  Bell, HelpCircle, ExternalLink, ChevronDown, ChevronRight, Plus, Rocket,
 } from "lucide-react";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
@@ -315,6 +315,36 @@ export default function MemosPane() {
                       <ExternalLink size={10} />
                     </a>
                   )}
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={async () => {
+                      try {
+                        const res = await api.createTaskFromMemo(it.memo_id, {});
+                        showToast(`Task created: ${res.task?.title || "(untitled)"}`, "normal");
+                        fetchQueue();
+                      } catch (err) {
+                        showToast("Couldn't create task: " + (err.message || "unknown"), "high");
+                      }
+                    }}
+                    title="Create a task from this notification"
+                  >
+                    <Plus size={12} />
+                  </button>
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={async () => {
+                      try {
+                        await api.launchAgentFromMemo(it.memo_id, {});
+                        showToast("Agent queued — check Agents tab", "normal");
+                        fetchQueue();
+                      } catch (err) {
+                        showToast("Couldn't launch agent: " + (err.message || "unknown"), "high");
+                      }
+                    }}
+                    title="Launch an investigation agent on this"
+                  >
+                    <Rocket size={12} />
+                  </button>
                   <button
                     className="btn btn-sm btn-ghost"
                     onClick={() => dismissItem(it)}
