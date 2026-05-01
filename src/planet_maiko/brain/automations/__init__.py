@@ -500,28 +500,48 @@ def _act_create_task(automation, config, pupdate=None, context=None):
 
     ctx = context or {}
     task_id = f"task-{uuid.uuid4().hex[:10]}"
+    pup_extra = (pupdate.extra or {}) if pupdate is not None else {}
+    task_type = config.get("type") or "todo"
+    repo = (
+        config.get("repo")
+        or automation.scope_repo
+        or ctx.get("service")
+        or ctx.get("repo")
+        # Pupdate metadata is the authoritative source for review /
+        # pr_review tasks fired by per-PR pollers. Without this fallback
+        # the AgentJob's scope_repo lands as None and the cycle's
+        # execute phase can't resolve a worktree.
+        or pup_extra.get("repo")
+        or pup_extra.get("repository")
+        or ""
+    )
+    if not repo and task_type in ("review", "pr_review") and pupdate is not None:
+        logger.warning(
+            f"[automation {automation.id}] create_task fired for "
+            f"{task_type} from pupdate {pupdate.id} with NO repo — "
+            f"pupdate.extra keys: {sorted(pup_extra.keys()) or '(empty)'}"
+        )
     task = Task(
         id=task_id,
         title=config.get("title") or automation.name,
-        type=config.get("type") or "todo",
+        type=task_type,
         priority=config.get("priority") or "normal",
         status="new",
         extra={
             "description": config.get("description") or automation.description or "",
-            "repo": (
-                config.get("repo")
-                or automation.scope_repo
-                or ctx.get("service")
-                or ctx.get("repo")
-                or ""
-            ),
+            "repo": repo,
             "from_automation": automation.id,
         },
         tags=["from_automation"],
     )
     db.session.add(task)
     db.session.flush()
-    route(task)
+    try:
+        route(task)
+    except Exception as e:
+        logger.warning(
+            f"[automation {automation.id}] route(task={task.id}) failed: {e}"
+        )
     if not is_ready(task):
         task.status = "blocked"
 
@@ -531,6 +551,26 @@ def _act_create_task(automation, config, pupdate=None, context=None):
     # — just doing it inline here saves up to one cycle tick (~30s)
     # of latency when the user wants "create task and go."
     agent_runnable = {"review", "pr_review", "investigation", "repo_analysis", "cartograph"}
+    if bool(config.get("auto_launch")):
+        # Log the "auto_launch was on but I'm skipping" path explicitly
+        # so the user can tell *why* the AgentJob they expected didn't
+        # appear. Common causes:
+        #   - task_type is the skill id "pr-review" instead of the task
+        #     type "review" / "pr_review"
+        #   - route() failed silently and assigned_agent_id is None
+        if task.type not in agent_runnable:
+            logger.warning(
+                f"[automation {automation.id}] auto_launch skipped: "
+                f"task.type={task.type!r} not in {sorted(agent_runnable)} "
+                f"(use 'review' or 'pr_review' for PR review tasks; "
+                f"'pr-review' is the skill id, not the task type)"
+            )
+        elif not task.assigned_agent_id:
+            logger.warning(
+                f"[automation {automation.id}] auto_launch skipped: "
+                f"task {task.id} has no assigned agent — route() couldn't "
+                f"resolve one for repo={repo!r}, role={task.type!r}"
+            )
     if bool(config.get("auto_launch")) and task.type in agent_runnable and task.assigned_agent_id:
         from planet_maiko.models.agent_job import AgentJob
         job_extra = {
