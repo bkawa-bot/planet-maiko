@@ -73,6 +73,12 @@ export default function OverviewPane() {
   const [memos, setMemos] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [pendingLearnings, setPendingLearnings] = useState([]);
+  // Canonical count from /brain/status. The pendingLearnings list above
+  // is capped by the /learnings API's default limit (200) — using its
+  // length as a "how many" signal is wrong when the actual DB has more.
+  // The brain widget on Home uses the same source so the two surfaces
+  // can't disagree.
+  const [pendingLearningsCount, setPendingLearningsCount] = useState(0);
   const [showAllNeeds, setShowAllNeeds] = useState(false);
   const [artifactModal, setArtifactModal] = useState(null);
   // Which needs-card's action menu is open (memo_id), or null. Only
@@ -126,13 +132,14 @@ export default function OverviewPane() {
     setError(null);
     setPapyrusMode(Math.random() < 0.02);
     try {
-      const [overviewRes, memoRes, taskRes, pendingRes, projectRes, profileRes] = await Promise.all([
+      const [overviewRes, memoRes, taskRes, pendingRes, projectRes, profileRes, brainStatusRes] = await Promise.all([
         api.getHomeOverview(),
         api.getMemos({ limit: 200 }),
         api.getTasks(),
         api.getLearnings({ status: "pending" }).catch(() => []),
         api.getProjects().catch(() => []),
         api.getProfiles().catch(() => []),
+        api.getBrainStatus().catch(() => null),
       ]);
       setOverview(overviewRes.overview);
       setGeneratedAt(overviewRes.generated_at);
@@ -141,6 +148,9 @@ export default function OverviewPane() {
       setProjects(projectRes || []);
       setAgentNames(Object.fromEntries((profileRes || []).map((p) => [p.id, p.display_name])));
       setPendingLearnings(pendingRes || []);
+      setPendingLearningsCount(
+        brainStatusRes?.pending?.pending_learnings ?? (pendingRes?.length || 0)
+      );
     } catch (err) {
       setError(err.message || "Overview unavailable");
     }
@@ -273,8 +283,14 @@ export default function OverviewPane() {
   useEffect(() => {
     const refresh = async () => {
       try {
-        const list = await api.getLearnings({ status: "pending" });
+        const [list, brainStatus] = await Promise.all([
+          api.getLearnings({ status: "pending" }),
+          api.getBrainStatus().catch(() => null),
+        ]);
         setPendingLearnings(list || []);
+        setPendingLearningsCount(
+          brainStatus?.pending?.pending_learnings ?? (list?.length || 0)
+        );
       } catch {
         /* non-fatal */
       }
@@ -543,7 +559,7 @@ export default function OverviewPane() {
         </section>
       )}
 
-      {pendingLearnings.length > 0 && (
+      {pendingLearningsCount > 0 && (
         <section className="overview-section">
           <h2 className="overview-section-title">
             New learnings to review
@@ -552,15 +568,15 @@ export default function OverviewPane() {
             <div className="overview-learnings-icon"><Brain size={16} /></div>
             <div className="overview-learnings-body">
               <div className="overview-learnings-count">
-                {pendingLearnings.length} learning{pendingLearnings.length === 1 ? "" : "s"} waiting for your nod
+                {pendingLearningsCount} learning{pendingLearningsCount === 1 ? "" : "s"} waiting for your nod
               </div>
               <ul className="overview-learnings-preview">
                 {pendingLearnings.slice(0, 3).map((l) => (
                   <li key={l.id}>{l.rule}</li>
                 ))}
-                {pendingLearnings.length > 3 && (
+                {pendingLearningsCount > 3 && (
                   <li className="overview-learnings-more">
-                    + {pendingLearnings.length - 3} more
+                    + {pendingLearningsCount - 3} more
                   </li>
                 )}
               </ul>
