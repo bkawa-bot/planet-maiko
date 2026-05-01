@@ -234,6 +234,59 @@
   border-radius: var(--radius-xs);
 }
 
+/* Inline message body for agent_ready / agent_stuck / agent_plan
+   memos. Expand-on-click <details>; the row's main button still
+   navigates separately, the body just lets the user read content
+   without leaving Home. Same flex-wrap trick as ArtifactRow so the
+   body lands below the header in the same row container. */
+.review-queue-row-with-body {
+  flex-wrap: wrap;
+}
+.review-queue-row-with-body .review-queue-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.review-queue-message-body {
+  flex: 1 0 100%;
+  padding: 4px 12px 8px 36px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.review-queue-message-body summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 2px 0;
+}
+.review-queue-message-body summary::-webkit-details-marker { display: none; }
+.review-queue-message-body[open] .review-queue-message-chevron {
+  transform: rotate(90deg);
+}
+.review-queue-message-chevron {
+  transition: transform 120ms ease;
+}
+.review-queue-message-body[open] {
+  padding-bottom: 12px;
+}
+.review-queue-message-body[open] > .markdown {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.review-queue-message-body[open] > .markdown pre {
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
 /* Notification staleness cues. Soft signal — meant to nudge, not
    alarm. 24h+ adds a small amber dot in front of the relative
    timestamp; 72h+ tints the row background a touch warmer so it

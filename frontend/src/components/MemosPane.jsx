@@ -389,12 +389,25 @@ export default function MemosPane() {
 
           // Default row: click-to-navigate + dismiss X. Covers plan,
           // review, agent_ready, agent_stuck.
+          //
+          // Agent message rows (agent_ready / agent_stuck / agent_plan)
+          // additionally render the agent's message body inline as an
+          // expand-on-click <details>. The body is the actual content
+          // the user wants to read — without inline rendering they had
+          // to click through to a per-task page just to see "what did
+          // the agent say" — and stuck messages especially had no
+          // valid destination at all.
           const cta = it.cta_label || meta.cta;
           const hasRoute = !!it.route;
+          const isAgentMessage =
+            it.kind === "agent_ready" ||
+            it.kind === "agent_stuck" ||
+            it.kind === "agent_plan";
+          const showInlineBody = isAgentMessage && !!(it.body && it.body.trim());
           return (
             <div
               key={`${it.kind}:${it.task_id || it.job_id || it.memo_id}`}
-              className={`review-queue-row tone-${meta.tone}`}
+              className={`review-queue-row tone-${meta.tone}${showInlineBody ? " review-queue-row-with-body" : ""}`}
             >
               <button
                 type="button"
@@ -428,6 +441,21 @@ export default function MemosPane() {
                   <span className="review-queue-cta">{cta} →</span>
                 )}
               </button>
+              {showInlineBody && (
+                <details
+                  className="review-queue-message-body"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <summary>
+                    <ChevronRight size={10} className="review-queue-message-chevron" />
+                    Read message
+                  </summary>
+                  <div
+                    className="markdown"
+                    dangerouslySetInnerHTML={{ __html: renderMarkdown(it.body) }}
+                  />
+                </details>
+              )}
               {(it.memo_id || (it.kind === "review" && it.task_id) || (it.kind === "job_artifact" && it.job_id)) && (
                 <button
                   className="btn btn-sm btn-ghost memos-pane-dismiss"

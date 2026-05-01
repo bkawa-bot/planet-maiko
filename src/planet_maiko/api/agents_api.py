@@ -1490,9 +1490,13 @@ def agent_sends_message(task_id):
             if memo_kind == "agent_ready" and is_report_task:
                 cta = ("View report", "open", f"/tasks/{task_id}/report")
             else:
+                # agent_stuck routes to /agents — there's no per-task
+                # detail page for non-review/non-coding tasks, and
+                # /agents is where the message thread + reply surface
+                # already live. /tasks/<id> on its own is a 404.
                 cta = {
                     "agent_ready": ("Review diff", "review", f"/tasks/{task_id}/review"),
-                    "agent_stuck": ("Help out", "open", f"/tasks/{task_id}"),
+                    "agent_stuck": ("Help out", "open", "/agents"),
                     "agent_plan": ("Review plan", "review", f"/tasks/{task_id}/plan"),
                 }[memo_kind]
             create_memo(

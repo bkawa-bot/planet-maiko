@@ -404,12 +404,16 @@ export default function ReviewDiff() {
 
       <div className={`review-diff-layout${sidebarHidden ? " sidebar-hidden" : ""}`}>
         <div className="review-diff-main">
-          {/* Review tasks produce a markdown report (the review itself),
-              not a code diff — the agent reviewed someone else's PR
-              without making commits. Render the artifact as the primary
-              content; the diff viewer is for coding tasks that produce
-              actual changes. */}
-          {isReviewTask && task?.extra?.artifact ? (
+          {/* Tasks that produced a markdown artifact (review reviews,
+              investigation reports, repo_analysis findings) render the
+              artifact as the primary content. The diff viewer is for
+              coding tasks that produce actual code changes. Investigation
+              and repo_analysis tasks technically aren't "review tasks"
+              but they SHOULD land on TaskReport — this fallback catches
+              cases where a stale memo route brings the user here for
+              one of those, so the page shows the report instead of an
+              empty diff. */}
+          {task?.extra?.artifact ? (
             <div
               className="review-diff-artifact"
               dangerouslySetInnerHTML={{ __html: renderMarkdown(task.extra.artifact) }}
