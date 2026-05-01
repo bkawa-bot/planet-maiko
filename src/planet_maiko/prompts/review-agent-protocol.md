@@ -120,6 +120,8 @@ This replaces the "I just happened to notice…" ad-hoc flow. Retrieval first; P
 
 If the embedding backend is unavailable (`Rules indexed: 0 / N` in the output), skip retrieval and review on intuition — the layer's offline, not an excuse to gate the review.
 
+Every `maiko rules-relevant` call you run is auto-recorded on the task (task.extra.rules_considered) — the user sees the rules you considered on the diff page alongside your verdict. Treat this as a public log: query deliberately, name the change accurately. No flag needed; the CLI reads `.maiko-env.json` to find the task id.
+
 ## Run the verifiers before declaring done
 
 Before calling `reply(message_type="ready_for_review")`, call `check_code()`. It runs both layers of verification and returns a merged verdict:

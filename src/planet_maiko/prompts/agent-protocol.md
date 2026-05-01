@@ -160,6 +160,8 @@ When to call:
 
 If the embedding backend is unavailable (`Rules indexed: 0 / N` in the output), skip retrieval — the layer's offline. Don't block on it.
 
+Every `maiko rules-relevant` call you make from inside this worktree is recorded onto your task automatically (task.extra.rules_considered). The user sees the rules you considered on the diff page when they review your change — so the more deliberate your queries, the clearer the audit trail. No flag to remember; the CLI reads `.maiko-env.json` to find your task id.
+
 ### Property-based tests for behavior changes
 
 When your change adds or alters behavior (not pure refactors, formatting, or config bumps), add **at least one property-based test** alongside the usual unit tests. Use whatever's idiomatic for the repo:

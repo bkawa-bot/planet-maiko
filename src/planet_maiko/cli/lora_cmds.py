@@ -595,6 +595,22 @@ def cmd_rules_list(args):
         print(f"Total: {len(learnings)} learnings")
 
 
+def _detect_task_id_from_env():
+    """If we're running inside a Maiko agent worktree, the kickoff
+    wrote .maiko-env.json with the task_id. Read it transparently so
+    agents get rules-considered tracking without remembering a flag."""
+    import json as _json
+    env_path = os.path.join(os.getcwd(), ".maiko-env.json")
+    if not os.path.exists(env_path):
+        return None
+    try:
+        with open(env_path, encoding="utf-8") as f:
+            env = _json.load(f)
+        return (env.get("task_id") or "").strip() or None
+    except Exception:
+        return None
+
+
 def cmd_rules_relevant(args):
     """Print the team's rules most relevant to the supplied input.
 
@@ -605,7 +621,13 @@ def cmd_rules_relevant(args):
       - One or more `--query` flags: free-text descriptions used
         directly, no Haiku step. Right for agents that have full
         repo context and have decomposed the change themselves.
+
+    When run inside an agent worktree (.maiko-env.json present) or
+    with --task-id, the retrieval is also persisted to
+    task.extra.rules_considered so the diff page can show the user
+    which team rules the agent had in mind during this work.
     """
+    from datetime import datetime, timezone
     from planet_maiko.app import create_app
     from planet_maiko.brain.learning.rule_retrieval import find_relevant_rules
     from planet_maiko.brain.learning.embeddings import embedding_model_name
@@ -632,6 +654,8 @@ def cmd_rules_relevant(args):
                   file=sys.stderr)
             sys.exit(1)
 
+    task_id = (args.task_id or "").strip() or _detect_task_id_from_env()
+
     app = create_app(start_scheduler=False)
     with app.app_context():
         if queries:
@@ -648,6 +672,43 @@ def cmd_rules_relevant(args):
                 k=args.k,
                 min_similarity=args.min_similarity,
             )
+
+        # Persist to task.extra.rules_considered so the user can see
+        # what the agent had in mind on the diff/report page. Append-
+        # only — every retrieval the agent runs adds a record. No-op
+        # when no task_id (CLI used outside an agent worktree).
+        if task_id and matches:
+            from planet_maiko.database import db
+            from planet_maiko.models.task import Task
+            try:
+                task = db.session.get(Task, task_id)
+                if task is not None:
+                    extra = dict(task.extra or {})
+                    history = list(extra.get("rules_considered") or [])
+                    history.append({
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "queries": queries or ["(diff-decomposed)"],
+                        "rules": [
+                            {
+                                "id": item["learning"].id,
+                                "rule": item["learning"].rule,
+                                "category": item["learning"].category,
+                                "score": round(item["score"], 4),
+                            }
+                            for item in matches
+                        ],
+                    })
+                    extra["rules_considered"] = history
+                    task.extra = extra
+                    db.session.commit()
+            except Exception as e:
+                # Never fail the CLI on persistence — the retrieval
+                # output is what the agent actually needs. Log to
+                # stderr so the user notices if it's broken.
+                print(
+                    f"(rules-considered persistence skipped: {e})",
+                    file=sys.stderr,
+                )
         rules_indexed = (
             Learning.query
             .filter_by(status="active")
@@ -1078,4 +1139,8 @@ def register(subparsers):
     p.add_argument("--k", type=int, default=5, help="Max rules to return (default 5)")
     p.add_argument("--min-similarity", type=float, default=0.40,
                    help="Cosine threshold below which rules are dropped (default 0.40)")
+    p.add_argument("--task-id",
+                   help="Persist retrieval to task.extra.rules_considered. "
+                        "Auto-detected from .maiko-env.json when run inside "
+                        "an agent worktree, so agents normally don't pass it.")
     p.set_defaults(func=cmd_rules_relevant)
