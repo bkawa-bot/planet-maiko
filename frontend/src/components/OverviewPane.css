@@ -117,6 +117,17 @@
   margin: 0;
 }
 
+/* Soft prod for accumulating notifications. Italic + dimmed so it
+   reads as "by the way" rather than an alert. Same warm coral as
+   the row dot in MemosPane to tie the two surfaces visually. */
+.overview-stale-line {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--warm-coral, #c97a4a);
+  margin: 4px 0 0;
+  opacity: 0.85;
+}
+
 /* Sections (Focus, Needs) */
 .overview-section {
   display: flex;

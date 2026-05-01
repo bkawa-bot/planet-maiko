@@ -233,3 +233,27 @@
   padding: 1px 4px;
   border-radius: var(--radius-xs);
 }
+
+/* Notification staleness cues. Soft signal — meant to nudge, not
+   alarm. 24h+ adds a small amber dot in front of the relative
+   timestamp; 72h+ tints the row background a touch warmer so it
+   reads as "this has been hanging around" without screaming. */
+.review-queue-row-stale-soft .review-queue-time::before {
+  content: "•";
+  color: var(--warm-coral, #c97a4a);
+  margin-right: 4px;
+  font-size: 14px;
+  line-height: 0;
+  vertical-align: middle;
+}
+.review-queue-row-stale-warm {
+  background: color-mix(in srgb, var(--warm-coral, #c97a4a) 6%, transparent);
+}
+.review-queue-row-stale-warm .review-queue-time::before {
+  content: "•";
+  color: var(--warm-coral, #c97a4a);
+  margin-right: 4px;
+  font-size: 14px;
+  line-height: 0;
+  vertical-align: middle;
+}

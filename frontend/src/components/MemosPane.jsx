@@ -273,10 +273,22 @@ export default function MemosPane() {
                 : it.priority === "low"
                   ? "low"
                   : "info";
+            // Quiet age signal: dot at 24h+, soft tint at 72h+. Only
+            // applies to notifications since they're the kind that
+            // tends to get ignored — proposals and ready-for-reviews
+            // have stronger semantics that don't need staleness cues.
+            const ageHours = it.age_seconds != null
+              ? it.age_seconds / 3600
+              : 0;
+            const staleClass = ageHours >= 72
+              ? " review-queue-row-stale-warm"
+              : ageHours >= 24
+                ? " review-queue-row-stale-soft"
+                : "";
             return (
               <div
                 key={`notification:${it.memo_id}`}
-                className={`review-queue-row tone-${priorityTone} review-queue-row-notification`}
+                className={`review-queue-row tone-${priorityTone} review-queue-row-notification${staleClass}`}
               >
                 <div className="review-queue-icon"><Icon size={14} /></div>
                 <div className="review-queue-body">
