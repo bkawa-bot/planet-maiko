@@ -351,7 +351,6 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                         title={`Agent state: ${profile?.state || "idle"}`}
                       />
                       <span className="agent-name">{displayName}</span>
-                      <span className={`badge ${a.status}`}>{a.status}</span>
                     </div>
                     {a.task_title && (
                       <div className="agent-task-title" title={a.task_title}>
