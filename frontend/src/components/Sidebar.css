@@ -142,7 +142,11 @@
   box-shadow: 0 8px 24px rgba(0,0,0,0.3);
   padding: 4px;
   z-index: 200;
-  min-width: 120px;
+  min-width: 180px;
+  /* The theme dropdown holds 14 built-in themes + any custom themes,
+     so cap the height and scroll instead of running off the page. */
+  max-height: 70vh;
+  overflow-y: auto;
   animation: fadeIn 0.15s ease;
 }
 

@@ -67,14 +67,24 @@
   --font: 'DM Sans', -apple-system, 'Segoe UI', 'Inter', sans-serif;
   --font-mono: 'Inconsolata', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
   --font-display: 'Bitcount Prop Single', 'Inconsolata', monospace;
-  /* Greeting font — swap between these four by changing this one var:
-       'Pixelify Sans'  — pixel-era but legible at size (default)
+  /* Greeting font. Quicksand by default — rounded humanist sans, the
+     Animal-Crossing-y cousin of Inter: warm, friendly, very readable
+     at the 30px greeting size. The other faces are still loaded so
+     swapping is a one-line change here:
+       'Quicksand'      — rounded humanist, readable (default)
+       'Fraunces'       — warm variable serif, the prior default
+       'Pixelify Sans'  — pixel-era but legible at size
        'Jersey 15'      — blocky jersey-numeric, very game-y
        'Handjet'        — variable pixel, most stylized
-       'Geo'            — clean display sans, less pixel-y
-     Keep a sensible serif fallback so missed font-loads still feel
-     warm rather than collapsing to a system default. */
-  --font-greeting: 'Geo', 'Fraunces', Georgia, serif;
+       'Geo'            — condensed display sans, very pixel-y
+     Fraunces stays in the fallback chain so missed font-loads keep
+     the warm character instead of collapsing to a system default. */
+  --font-greeting: 'Quicksand', 'Fraunces', Georgia, serif;
+  /* Pixel-y display font for card art / avatar fallbacks where the
+     blocky character is the whole point — split out from --font-greeting
+     so the home H1 can be readable while the procedural card avatars
+     keep their game-y feel. */
+  --font-pixel: 'Pixelify Sans', 'Geo', 'Jersey 15', monospace;
   --radius: 12px;
   --radius-sm: 8px;
   --radius-xs: 6px;
@@ -206,6 +216,398 @@
   --pane-bg: rgba(45, 61, 110, 0.55);
 }
 
+/* ============================================================
+   Extended palette — 10 additional themes built from the
+   Cosmic palette image. Grouped by mood:
+     Night:    midnight, aurora, slime-garden, forest-night
+     Twilight: golden-hour
+     Morning:  dawn-mist, cherry-blossom
+     Day:      mint-meadow, coral-reef, lavender-dream
+   Each picks a primary accent that drives badges/buttons,
+   secondary hues that fill chips/links, and an appropriate
+   world hill SVG.
+   ============================================================ */
+
+/* === Midnight — violet-purple night, lavender-tinted text. */
+[data-theme="midnight"] {
+  --bg: #1A1F4A;
+  --bg-plain: #1A1F4A;
+  --bg-card: #2A2250;
+  --bg-card-alt: #383270;
+  --bg-hover: #3F3878;
+  --bg-selected: #4A4290;
+  --text: #F4F7FF;
+  --text-dim: #C9A6FF;
+  --text-muted: #8B83A8;
+  --pink: #B46BFF;
+  --pink-soft: rgba(180, 107, 255, 0.18);
+  --pink-glow: rgba(180, 107, 255, 0.10);
+  --blue: #6FB6FF;
+  --blue-soft: rgba(111, 182, 255, 0.14);
+  --mint: #A8F0D1;
+  --orange: #FF9B6A;
+  --lavender: #C9A6FF;
+  --peach: #FF9B6A;
+  --creamsicle: #FFCAA8;
+  --lemon: #FFE66D;
+  --urgent: #FF7A73;
+  --high: #FF9B6A;
+  --normal: #B46BFF;
+  --low: #8B83A8;
+  --green: #7ED957;
+  --border: #4A467E;
+  --border-subtle: #38326E;
+  --urgent-soft: rgba(255, 122, 115, 0.16); --urgent-faint: rgba(255, 122, 115, 0.08);
+  --high-soft: rgba(255, 155, 106, 0.16); --high-faint: rgba(255, 155, 106, 0.08);
+  --lemon-soft: rgba(255, 230, 109, 0.16); --lemon-faint: rgba(255, 230, 109, 0.08);
+  --green-soft: rgba(126, 217, 87, 0.16); --green-faint: rgba(126, 217, 87, 0.08);
+  --lavender-soft: rgba(201, 166, 255, 0.18); --lavender-faint: rgba(201, 166, 255, 0.10);
+  --topbar-gradient: linear-gradient(135deg, #1A1F4A 0%, #2A2250 50%, #B46BFF 100%);
+  --pane-bg: rgba(42, 34, 80, 0.50);
+}
+
+/* === Aurora — teal/lavender, northern-lights dark. */
+[data-theme="aurora"] {
+  --bg: #0E1230;
+  --bg-plain: #0E1230;
+  --bg-card: #1A2548;
+  --bg-card-alt: #1F3D5A;
+  --bg-hover: #2D4A70;
+  --bg-selected: #3D5A85;
+  --text: #F4F7FF;
+  --text-dim: #A8E4DC;
+  --text-muted: #6E8A92;
+  --pink: #31D4C6;
+  --pink-soft: rgba(49, 212, 198, 0.18);
+  --pink-glow: rgba(49, 212, 198, 0.10);
+  --blue: #6FB6FF;
+  --blue-soft: rgba(111, 182, 255, 0.16);
+  --mint: #A8F0D1;
+  --orange: #FF9B6A;
+  --lavender: #C9A6FF;
+  --peach: #64E3C7;
+  --creamsicle: #FFCAA8;
+  --lemon: #FFE66D;
+  --urgent: #FF7A73;
+  --high: #FF9B6A;
+  --normal: #31D4C6;
+  --low: #6E8A92;
+  --green: #7ED957;
+  --border: #2D4575;
+  --border-subtle: #1F3D5A;
+  --urgent-soft: rgba(255, 122, 115, 0.16); --urgent-faint: rgba(255, 122, 115, 0.08);
+  --high-soft: rgba(255, 155, 106, 0.16); --high-faint: rgba(255, 155, 106, 0.08);
+  --lemon-soft: rgba(255, 230, 109, 0.18); --lemon-faint: rgba(255, 230, 109, 0.09);
+  --green-soft: rgba(126, 217, 87, 0.16); --green-faint: rgba(126, 217, 87, 0.08);
+  --lavender-soft: rgba(201, 166, 255, 0.18); --lavender-faint: rgba(201, 166, 255, 0.10);
+  --topbar-gradient: linear-gradient(135deg, #0E1230 0%, #1F3D5A 30%, #31D4C6 65%, #C9A6FF 100%);
+  --pane-bg: rgba(31, 61, 90, 0.50);
+}
+
+/* === Slime Garden — Slime-green primary on a deep navy. */
+[data-theme="slime-garden"] {
+  --bg: #0B1A20;
+  --bg-plain: #0B1A20;
+  --bg-card: #1A2F35;
+  --bg-card-alt: #1F3F35;
+  --bg-hover: #2D4A45;
+  --bg-selected: #3A5A55;
+  --text: #F4F7FF;
+  --text-dim: #B5E5C8;
+  --text-muted: #6E8A82;
+  --pink: #7ED957;
+  --pink-soft: rgba(126, 217, 87, 0.18);
+  --pink-glow: rgba(126, 217, 87, 0.10);
+  --blue: #6FB6FF;
+  --blue-soft: rgba(111, 182, 255, 0.14);
+  --mint: #A8F0D1;
+  --orange: #FF9B6A;
+  --lavender: #C9A6FF;
+  --peach: #FF9B6A;
+  --creamsicle: #FFCAA8;
+  --lemon: #FFE66D;
+  --urgent: #FF7A73;
+  --high: #FF9B6A;
+  --normal: #7ED957;
+  --low: #6E8A82;
+  --green: #7ED957;
+  --border: #2D5048;
+  --border-subtle: #1F3F35;
+  --urgent-soft: rgba(255, 122, 115, 0.16); --urgent-faint: rgba(255, 122, 115, 0.08);
+  --high-soft: rgba(255, 155, 106, 0.16); --high-faint: rgba(255, 155, 106, 0.08);
+  --lemon-soft: rgba(255, 230, 109, 0.16); --lemon-faint: rgba(255, 230, 109, 0.08);
+  --green-soft: rgba(126, 217, 87, 0.18); --green-faint: rgba(126, 217, 87, 0.10);
+  --lavender-soft: rgba(201, 166, 255, 0.16); --lavender-faint: rgba(201, 166, 255, 0.08);
+  --topbar-gradient: linear-gradient(135deg, #0B1A20 0%, #1F3F35 50%, #7ED957 100%);
+  --pane-bg: rgba(31, 63, 53, 0.50);
+}
+
+/* === Forest Night — botanical dark, gold accents instead of pink. */
+[data-theme="forest-night"] {
+  --bg: #0F1B2A;
+  --bg-plain: #0F1B2A;
+  --bg-card: #1A2A3E;
+  --bg-card-alt: #1F3D38;
+  --bg-hover: #2D4D45;
+  --bg-selected: #3A5A52;
+  --text: #F4F7FF;
+  --text-dim: #A8E0D0;
+  --text-muted: #6E8E80;
+  --pink: #FFD36B;
+  --pink-soft: rgba(255, 211, 107, 0.18);
+  --pink-glow: rgba(255, 211, 107, 0.10);
+  --blue: #64E3C7;
+  --blue-soft: rgba(100, 227, 199, 0.14);
+  --mint: #A8F0D1;
+  --orange: #FF9B6A;
+  --lavender: #C9A6FF;
+  --peach: #FF9B6A;
+  --creamsicle: #FFCAA8;
+  --lemon: #FFD36B;
+  --urgent: #FF7A73;
+  --high: #FF9B6A;
+  --normal: #FFD36B;
+  --low: #6E8E80;
+  --green: #059E8A;
+  --border: #2D5048;
+  --border-subtle: #1F3D38;
+  --urgent-soft: rgba(255, 122, 115, 0.16); --urgent-faint: rgba(255, 122, 115, 0.08);
+  --high-soft: rgba(255, 155, 106, 0.16); --high-faint: rgba(255, 155, 106, 0.08);
+  --lemon-soft: rgba(255, 211, 107, 0.18); --lemon-faint: rgba(255, 211, 107, 0.10);
+  --green-soft: rgba(5, 158, 138, 0.20); --green-faint: rgba(5, 158, 138, 0.10);
+  --lavender-soft: rgba(201, 166, 255, 0.16); --lavender-faint: rgba(201, 166, 255, 0.08);
+  --topbar-gradient: linear-gradient(135deg, #0F1B2A 0%, #1F3D38 50%, #059E8A 100%);
+  --pane-bg: rgba(31, 61, 56, 0.50);
+}
+
+/* === Golden Hour — warm sunset variant, peach/gold heavy. */
+[data-theme="golden-hour"] {
+  --bg: #2D1F45;
+  --bg-plain: #2D1F45;
+  --bg-card: #4A3060;
+  --bg-card-alt: #5A4070;
+  --bg-hover: #6A4F80;
+  --bg-selected: #7A5990;
+  --text: #F4F7FF;
+  --text-dim: #FFCAA8;
+  --text-muted: #B58A75;
+  --pink: #FF9B6A;
+  --pink-soft: rgba(255, 155, 106, 0.18);
+  --pink-glow: rgba(255, 155, 106, 0.10);
+  --blue: #6FB6FF;
+  --blue-soft: rgba(111, 182, 255, 0.14);
+  --mint: #A8F0D1;
+  --orange: #FFD36B;
+  --lavender: #C9A6FF;
+  --peach: #FF7A73;
+  --creamsicle: #FFCAA8;
+  --lemon: #FFD36B;
+  --urgent: #FF7A73;
+  --high: #FF9B6A;
+  --normal: #FF9B6A;
+  --low: #B58A75;
+  --green: #7ED957;
+  --border: #6A4F80;
+  --border-subtle: #4A3060;
+  --urgent-soft: rgba(255, 122, 115, 0.18); --urgent-faint: rgba(255, 122, 115, 0.10);
+  --high-soft: rgba(255, 155, 106, 0.18); --high-faint: rgba(255, 155, 106, 0.10);
+  --lemon-soft: rgba(255, 211, 107, 0.20); --lemon-faint: rgba(255, 211, 107, 0.10);
+  --green-soft: rgba(126, 217, 87, 0.16); --green-faint: rgba(126, 217, 87, 0.08);
+  --lavender-soft: rgba(201, 166, 255, 0.16); --lavender-faint: rgba(201, 166, 255, 0.08);
+  --topbar-gradient: linear-gradient(135deg, #2D1F45 0%, #6A3060 30%, #FF9B6A 70%, #FFD36B 100%);
+  --pane-bg: rgba(74, 48, 96, 0.55);
+}
+
+/* === Dawn Mist — pastel lavender base + apricot warmth. */
+[data-theme="dawn-mist"] {
+  --bg: #F3EFFF;
+  --bg-plain: #F3EFFF;
+  --bg-card: #FFFFFF;
+  --bg-card-alt: #FFE8E0;
+  --bg-hover: #E8DFF8;
+  --bg-selected: #D8C7FF;
+  --text: #2B2F42;
+  --text-dim: #6B7280;
+  --text-muted: #9CA3B5;
+  --pink: #FFB38A;
+  --pink-soft: rgba(255, 179, 138, 0.18);
+  --pink-glow: rgba(255, 179, 138, 0.10);
+  --blue: #A8D4FF;
+  --blue-soft: rgba(168, 212, 255, 0.16);
+  --mint: #CFF7E6;
+  --orange: #FFA3A0;
+  --lavender: #D8C7FF;
+  --peach: #FFB38A;
+  --creamsicle: #FFCAA8;
+  --lemon: #FFC557;
+  --urgent: #FFA3A0;
+  --high: #FFB38A;
+  --normal: #FFB38A;
+  --low: #9CA3B5;
+  --green: #9BE870;
+  --border: #E5D5F0;
+  --border-subtle: #F0E5F8;
+  --urgent-soft: rgba(255, 163, 160, 0.16); --urgent-faint: rgba(255, 163, 160, 0.08);
+  --high-soft: rgba(255, 179, 138, 0.18); --high-faint: rgba(255, 179, 138, 0.10);
+  --lemon-soft: rgba(255, 197, 87, 0.20); --lemon-faint: rgba(255, 197, 87, 0.10);
+  --green-soft: rgba(155, 232, 112, 0.18); --green-faint: rgba(155, 232, 112, 0.10);
+  --lavender-soft: rgba(216, 199, 255, 0.20); --lavender-faint: rgba(216, 199, 255, 0.10);
+  --topbar-gradient: linear-gradient(135deg, #F3EFFF 0%, #D8C7FF 30%, #FFA3A0 70%, #FFC557 100%);
+  --pane-bg: rgba(255, 255, 255, 0.70);
+}
+
+/* === Cherry Blossom — spring soft pink, lavender mist. */
+[data-theme="cherry-blossom"] {
+  --bg: #FFF5FA;
+  --bg-plain: #FFF5FA;
+  --bg-card: #FFFFFF;
+  --bg-card-alt: #FFE8F0;
+  --bg-hover: #FCE5F0;
+  --bg-selected: #FFD0E0;
+  --text: #2B2F42;
+  --text-dim: #6B7280;
+  --text-muted: #B5A3C0;
+  --pink: #FF7AB8;
+  --pink-soft: rgba(255, 122, 184, 0.18);
+  --pink-glow: rgba(255, 122, 184, 0.10);
+  --blue: #A8D4FF;
+  --blue-soft: rgba(168, 212, 255, 0.14);
+  --mint: #CFF7E6;
+  --orange: #FFB38A;
+  --lavender: #D8C7FF;
+  --peach: #FF9CC4;
+  --creamsicle: #FFCAA8;
+  --lemon: #FFC557;
+  --urgent: #FFA3A0;
+  --high: #FFB38A;
+  --normal: #FF7AB8;
+  --low: #B5A3C0;
+  --green: #9BE870;
+  --border: #F0D5E5;
+  --border-subtle: #FFE8F0;
+  --urgent-soft: rgba(255, 163, 160, 0.16); --urgent-faint: rgba(255, 163, 160, 0.08);
+  --high-soft: rgba(255, 179, 138, 0.16); --high-faint: rgba(255, 179, 138, 0.08);
+  --lemon-soft: rgba(255, 197, 87, 0.18); --lemon-faint: rgba(255, 197, 87, 0.10);
+  --green-soft: rgba(155, 232, 112, 0.16); --green-faint: rgba(155, 232, 112, 0.08);
+  --lavender-soft: rgba(216, 199, 255, 0.16); --lavender-faint: rgba(216, 199, 255, 0.08);
+  --topbar-gradient: linear-gradient(135deg, #FFF5FA 0%, #FFE8F0 35%, #FF9CC4 70%, #FF7AB8 100%);
+  --pane-bg: rgba(255, 255, 255, 0.72);
+}
+
+/* === Mint Meadow — garden-green daylight, deep sage text. */
+[data-theme="mint-meadow"] {
+  --bg: #E6FFF7;
+  --bg-plain: #E6FFF7;
+  --bg-card: #FFFFFF;
+  --bg-card-alt: #DDF7E5;
+  --bg-hover: #D0F0DC;
+  --bg-selected: #B5E5C5;
+  --text: #1F3F35;
+  --text-dim: #4A6B5A;
+  --text-muted: #7C9A88;
+  --pink: #38BFA6;
+  --pink-soft: rgba(56, 191, 166, 0.18);
+  --pink-glow: rgba(56, 191, 166, 0.10);
+  --blue: #59E3D6;
+  --blue-soft: rgba(89, 227, 214, 0.16);
+  --mint: #7EE8C1;
+  --orange: #FFB38A;
+  --lavender: #C48BFF;
+  --peach: #FFB38A;
+  --creamsicle: #FFCAA8;
+  --lemon: #FFC557;
+  --urgent: #FFA3A0;
+  --high: #FFB38A;
+  --normal: #38BFA6;
+  --low: #7C9A88;
+  --green: #9BE870;
+  --border: #B5E5C5;
+  --border-subtle: #DDF7E5;
+  --urgent-soft: rgba(255, 163, 160, 0.16); --urgent-faint: rgba(255, 163, 160, 0.08);
+  --high-soft: rgba(255, 179, 138, 0.16); --high-faint: rgba(255, 179, 138, 0.08);
+  --lemon-soft: rgba(255, 197, 87, 0.18); --lemon-faint: rgba(255, 197, 87, 0.10);
+  --green-soft: rgba(155, 232, 112, 0.20); --green-faint: rgba(155, 232, 112, 0.10);
+  --lavender-soft: rgba(196, 139, 255, 0.16); --lavender-faint: rgba(196, 139, 255, 0.08);
+  --topbar-gradient: linear-gradient(135deg, #E6FFF7 0%, #CFF7E6 35%, #9BE870 70%, #38BFA6 100%);
+  --pane-bg: rgba(255, 255, 255, 0.65);
+}
+
+/* === Coral Reef — soft sky + warm coral, tropical-day balance. */
+[data-theme="coral-reef"] {
+  --bg: #EAF4FF;
+  --bg-plain: #EAF4FF;
+  --bg-card: #FFFFFF;
+  --bg-card-alt: #FFF0EC;
+  --bg-hover: #FFE0D8;
+  --bg-selected: #FFD4CD;
+  --text: #2B2F42;
+  --text-dim: #6B7280;
+  --text-muted: #9CA3B5;
+  --pink: #FFA3A0;
+  --pink-soft: rgba(255, 163, 160, 0.18);
+  --pink-glow: rgba(255, 163, 160, 0.10);
+  --blue: #59E3D6;
+  --blue-soft: rgba(89, 227, 214, 0.16);
+  --mint: #CFF7E6;
+  --orange: #FFB38A;
+  --lavender: #C48BFF;
+  --peach: #FFB38A;
+  --creamsicle: #FFCAA8;
+  --lemon: #FFC557;
+  --urgent: #FFA3A0;
+  --high: #FFB38A;
+  --normal: #FFA3A0;
+  --low: #9CA3B5;
+  --green: #38BFA6;
+  --border: #FFD4CD;
+  --border-subtle: #FFE5E0;
+  --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.10);
+  --high-soft: rgba(255, 179, 138, 0.18); --high-faint: rgba(255, 179, 138, 0.10);
+  --lemon-soft: rgba(255, 197, 87, 0.18); --lemon-faint: rgba(255, 197, 87, 0.10);
+  --green-soft: rgba(56, 191, 166, 0.18); --green-faint: rgba(56, 191, 166, 0.10);
+  --lavender-soft: rgba(196, 139, 255, 0.16); --lavender-faint: rgba(196, 139, 255, 0.08);
+  --topbar-gradient: linear-gradient(135deg, #EAF4FF 0%, #59E3D6 35%, #FFB38A 70%, #FFA3A0 100%);
+  --pane-bg: rgba(255, 255, 255, 0.65);
+}
+
+/* === Lavender Dream — purple monochrome, soft and quiet. */
+[data-theme="lavender-dream"] {
+  --bg: #F3EFFF;
+  --bg-plain: #F3EFFF;
+  --bg-card: #FFFFFF;
+  --bg-card-alt: #EDE7FF;
+  --bg-hover: #E0D5FF;
+  --bg-selected: #D8C7FF;
+  --text: #2B2F42;
+  --text-dim: #6B7280;
+  --text-muted: #A89BC0;
+  --pink: #C48BFF;
+  --pink-soft: rgba(196, 139, 255, 0.18);
+  --pink-glow: rgba(196, 139, 255, 0.10);
+  --blue: #A8D4FF;
+  --blue-soft: rgba(168, 212, 255, 0.16);
+  --mint: #CFF7E6;
+  --orange: #FFB38A;
+  --lavender: #D8C7FF;
+  --peach: #FFA3A0;
+  --creamsicle: #FFCAA8;
+  --lemon: #FFC557;
+  --urgent: #FFA3A0;
+  --high: #FFB38A;
+  --normal: #C48BFF;
+  --low: #A89BC0;
+  --green: #9BE870;
+  --border: #D8C7FF;
+  --border-subtle: #E8DFF8;
+  --urgent-soft: rgba(255, 163, 160, 0.16); --urgent-faint: rgba(255, 163, 160, 0.08);
+  --high-soft: rgba(255, 179, 138, 0.16); --high-faint: rgba(255, 179, 138, 0.08);
+  --lemon-soft: rgba(255, 197, 87, 0.18); --lemon-faint: rgba(255, 197, 87, 0.10);
+  --green-soft: rgba(155, 232, 112, 0.16); --green-faint: rgba(155, 232, 112, 0.08);
+  --lavender-soft: rgba(196, 139, 255, 0.20); --lavender-faint: rgba(196, 139, 255, 0.10);
+  --topbar-gradient: linear-gradient(135deg, #F3EFFF 0%, #D8C7FF 35%, #C48BFF 70%, #A8D4FF 100%);
+  --pane-bg: rgba(255, 255, 255, 0.65);
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 /* Label-y surfaces read as "callsigns" or "tab headers" — run them
@@ -271,6 +673,16 @@ body {
 [data-theme="light"] body { background-image: url('/world-day.svg'); }
 [data-theme="morning"] body { background-image: url('/world-morning.svg'); }
 [data-theme="sunset"] body { background-image: url('/world-sunset.svg'); }
+/* Extended themes inherit the appropriate world SVG. The night-toned
+   themes (midnight, aurora, slime-garden, forest-night) keep the
+   default world-night.svg, so they only need explicit rules when they
+   point somewhere else. */
+[data-theme="golden-hour"] body { background-image: url('/world-sunset.svg'); }
+[data-theme="dawn-mist"] body,
+[data-theme="cherry-blossom"] body,
+[data-theme="lavender-dream"] body { background-image: url('/world-morning.svg'); }
+[data-theme="mint-meadow"] body,
+[data-theme="coral-reef"] body { background-image: url('/world-day.svg'); }
 
 /* Toggle: let users fall back to a plain backdrop via Settings. Uses
    --bg-plain (a slightly darker, matte variant of --bg) so the page
@@ -416,6 +828,19 @@ a:hover { text-decoration: underline; }
 [data-theme="light"] .card { box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
 [data-theme="light"] .card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.08); border-color: var(--pink); }
 [data-theme="sunset"] .card { box-shadow: 0 1px 6px rgba(0,0,0,0.15); }
+/* Extended light themes get the same softer shadows as Day so cards
+   don't drop a hard navy shadow over a pastel page. */
+[data-theme="dawn-mist"] .card,
+[data-theme="cherry-blossom"] .card,
+[data-theme="mint-meadow"] .card,
+[data-theme="coral-reef"] .card,
+[data-theme="lavender-dream"] .card { box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+[data-theme="dawn-mist"] .card:hover,
+[data-theme="cherry-blossom"] .card:hover,
+[data-theme="mint-meadow"] .card:hover,
+[data-theme="coral-reef"] .card:hover,
+[data-theme="lavender-dream"] .card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.08); border-color: var(--pink); }
+[data-theme="golden-hour"] .card { box-shadow: 0 1px 6px rgba(0,0,0,0.15); }
 
 /* Extend hover glow to widgets */
 .home-widget { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -619,6 +1044,19 @@ a:hover { text-decoration: underline; }
 }
 [data-theme="sunset"] .card-list-container {
   background: rgba(58, 34, 72, 0.5);
+}
+/* Extended light themes use a near-white frosted backdrop so the
+   default rgba(45,54,60,…) (sized for dark mode) doesn't punch a
+   navy hole in a pastel page. */
+[data-theme="dawn-mist"] .card-list-container,
+[data-theme="cherry-blossom"] .card-list-container,
+[data-theme="mint-meadow"] .card-list-container,
+[data-theme="coral-reef"] .card-list-container,
+[data-theme="lavender-dream"] .card-list-container {
+  background: rgba(255, 255, 255, 0.55);
+}
+[data-theme="golden-hour"] .card-list-container {
+  background: rgba(74, 48, 96, 0.50);
 }
 
 /* Cards inside glass container get tighter margins */

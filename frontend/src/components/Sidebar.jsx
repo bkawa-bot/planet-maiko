@@ -15,12 +15,31 @@ const NAV_ITEMS = [
   { to: "/automations", icon: Zap, label: "Automations" },
 ];
 
+// Built-in theme palette. Each entry's `group` controls dropdown
+// section dividers — "auto" sits up top on its own, then the four
+// time-of-day groups in dawn → night order. Adding a new theme is a
+// matter of adding a row here and a [data-theme="<id>"] block in
+// index.css with the matching color tokens.
 const THEMES = [
-  { id: "dark", label: "Night", emoji: "🌙" },
-  { id: "light", label: "Day", emoji: "☀️" },
-  { id: "morning", label: "Morning", emoji: "🌅" },
-  { id: "sunset", label: "Sunset", emoji: "🌇" },
-  { id: "auto", label: "Auto", emoji: "🔄" },
+  { id: "auto", label: "Auto", emoji: "🔄", group: "auto" },
+  // Night
+  { id: "dark", label: "Cosmic Nighttime", emoji: "🌙", group: "night" },
+  { id: "midnight", label: "Midnight Violet", emoji: "🪐", group: "night" },
+  { id: "aurora", label: "Aurora", emoji: "🌌", group: "night" },
+  { id: "slime-garden", label: "Slime Garden", emoji: "🍀", group: "night" },
+  { id: "forest-night", label: "Forest Night", emoji: "🌲", group: "night" },
+  // Twilight (sunset + warm dusk)
+  { id: "sunset", label: "Civil Twilight", emoji: "🌇", group: "twilight" },
+  { id: "golden-hour", label: "Golden Hour", emoji: "🍯", group: "twilight" },
+  // Morning (dawn / pastel)
+  { id: "morning", label: "Sunrise", emoji: "🌅", group: "morning" },
+  { id: "dawn-mist", label: "Dawn Mist", emoji: "🌷", group: "morning" },
+  { id: "cherry-blossom", label: "Cherry Blossom", emoji: "🌸", group: "morning" },
+  // Day (bright)
+  { id: "light", label: "Bright Daylight", emoji: "☀️", group: "day" },
+  { id: "mint-meadow", label: "Mint Meadow", emoji: "🌿", group: "day" },
+  { id: "coral-reef", label: "Coral Reef", emoji: "🐚", group: "day" },
+  { id: "lavender-dream", label: "Lavender Dream", emoji: "💜", group: "day" },
 ];
 
 function getAutoTheme() {
@@ -200,15 +219,30 @@ export default function Sidebar({ onOpenShutdown }) {
             </button>
             {showThemeMenu && (
               <div className="topbar-dropdown">
-                {THEMES.map((t) => (
-                  <button
-                    key={t.id}
-                    className={`dropdown-item ${theme === t.id ? "active" : ""}`}
-                    onClick={() => { setTheme(t.id); setShowThemeMenu(false); }}
-                  >
-                    <span>{t.emoji}</span> {t.label}
-                  </button>
-                ))}
+                {(() => {
+                  // Render the built-in themes with a divider between
+                  // each `group` change, so the 14-item list reads as
+                  // four daypart sections under "Auto" instead of one
+                  // long blur.
+                  const out = [];
+                  let lastGroup = null;
+                  THEMES.forEach((t) => {
+                    if (lastGroup !== null && t.group !== lastGroup) {
+                      out.push(<div key={`div-${t.group}`} className="dropdown-divider" />);
+                    }
+                    out.push(
+                      <button
+                        key={t.id}
+                        className={`dropdown-item ${theme === t.id ? "active" : ""}`}
+                        onClick={() => { setTheme(t.id); setShowThemeMenu(false); }}
+                      >
+                        <span>{t.emoji}</span> {t.label}
+                      </button>,
+                    );
+                    lastGroup = t.group;
+                  });
+                  return out;
+                })()}
                 {customThemes.length > 0 && <div className="dropdown-divider" />}
                 {customThemes.map((t) => {
                   const id = `custom:${t.id}`;
