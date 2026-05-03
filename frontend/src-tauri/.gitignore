@@ -1,0 +1,4 @@
+# Cargo build output and Tauri-generated schemas. Both regenerate on
+# every build, neither belongs in version control.
+target/
+gen/
