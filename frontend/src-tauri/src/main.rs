@@ -63,7 +63,11 @@ fn main() {
         .manage(FlaskHandle(Mutex::new(Some(flask))))
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { .. } = event {
-                let state = window.app_handle().state::<FlaskHandle>();
+                // window.app_handle() returns &AppHandle — chaining
+                // .state() on that temporary drops the &AppHandle at
+                // end-of-statement and `state` ends up dangling. Window
+                // itself implements Manager, so just ask it directly.
+                let state = window.state::<FlaskHandle>();
                 if let Some(mut child) = state.0.lock().unwrap().take() {
                     let _ = child.kill();
                     let _ = child.wait();
