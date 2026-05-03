@@ -63,12 +63,15 @@ fn main() {
         .manage(FlaskHandle(Mutex::new(Some(flask))))
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { .. } = event {
-                // window.app_handle() returns &AppHandle — chaining
-                // .state() on that temporary drops the &AppHandle at
-                // end-of-statement and `state` ends up dangling. Window
-                // itself implements Manager, so just ask it directly.
-                let state = window.state::<FlaskHandle>();
-                if let Some(mut child) = state.0.lock().unwrap().take() {
+                // Clone the AppHandle so `state`'s lifetime is tied to
+                // an owned local instead of a chain of temporaries —
+                // the chained form (`window.app_handle().state()`)
+                // tripped "state does not live long enough" because
+                // the &AppHandle dropped at end-of-statement.
+                let app = window.app_handle().clone();
+                let state = app.state::<FlaskHandle>();
+                let mut guard = state.0.lock().unwrap();
+                if let Some(mut child) = guard.take() {
                     let _ = child.kill();
                     let _ = child.wait();
                 }
