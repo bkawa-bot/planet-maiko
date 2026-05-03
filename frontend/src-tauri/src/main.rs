@@ -9,8 +9,12 @@
 //     instead of silently opening an empty window.
 //   - stdout / stderr are piped into the Tauri shell's own stderr so
 //     a Flask crash isn't invisible to whoever is debugging.
-//   - On CloseRequested we kill + reap the Flask child so it doesn't
-//     dangle when the window disappears.
+//   - kill_flask runs from BOTH WindowEvent::CloseRequested (red X)
+//     AND RunEvent::ExitRequested (Cmd+Q on Mac, Quit menu, all
+//     windows closed). On Mac, Cmd+Q skips per-window events and
+//     goes straight to the app-level event — without ExitRequested
+//     handling Flask gets orphaned and port 8420 stays bound until
+//     the next reboot or manual `kill -9`.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -18,7 +22,7 @@ use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::thread;
-use tauri::{Manager, WindowEvent};
+use tauri::{Manager, RunEvent, Runtime, WindowEvent};
 
 struct FlaskHandle(Mutex<Option<Child>>);
 
@@ -49,13 +53,24 @@ fn spawn_flask() -> std::io::Result<Child> {
     Ok(child)
 }
 
+// Kill the Flask child if it's still alive. Generic over Manager so
+// we can call it from both window events (passing the &Window) and
+// the app-level run callback (passing the &AppHandle).
+fn kill_flask<R: Runtime, M: Manager<R>>(manager: &M) {
+    let state = manager.state::<FlaskHandle>();
+    if let Some(mut child) = state.0.lock().unwrap().take() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+}
+
 fn main() {
     let flask = spawn_flask().expect(
         "Failed to start `maiko serve`. Is the maiko CLI installed and on PATH? \
          From the repo root: `pip install -e .`",
     );
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|_, _, _| {
             // Second launch focuses the existing window — no-op here
             // because the default window manager already raises us.
@@ -63,20 +78,18 @@ fn main() {
         .manage(FlaskHandle(Mutex::new(Some(flask))))
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { .. } = event {
-                // Clone the AppHandle so `state`'s lifetime is tied to
-                // an owned local instead of a chain of temporaries —
-                // the chained form (`window.app_handle().state()`)
-                // tripped "state does not live long enough" because
-                // the &AppHandle dropped at end-of-statement.
-                let app = window.app_handle().clone();
-                let state = app.state::<FlaskHandle>();
-                let mut guard = state.0.lock().unwrap();
-                if let Some(mut child) = guard.take() {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                }
+                kill_flask(window);
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Maiko Tauri shell");
+        .build(tauri::generate_context!())
+        .expect("error building Maiko Tauri shell");
+
+    // ExitRequested catches Cmd+Q on Mac, Quit menu items, and the
+    // implicit "all windows closed → app exits" path. CloseRequested
+    // alone misses these and Flask gets orphaned.
+    app.run(|app_handle, event| {
+        if let RunEvent::ExitRequested { .. } = event {
+            kill_flask(app_handle);
+        }
+    });
 }
