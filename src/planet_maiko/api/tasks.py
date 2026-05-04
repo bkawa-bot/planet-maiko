@@ -296,7 +296,6 @@ def _launch_one_shot(task):
             prompt=full_prompt,
             repo_path=local_path,
             branch_prefix="maiko",
-            auto_kickoff=False,
             use_worktree=True,
             agent_profile_id=profile.id,
             role=role,

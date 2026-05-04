@@ -365,7 +365,7 @@ def create_app(start_scheduler=False):
         # seeded 'keep overview current' watch.
         from planet_maiko.brain.automations import (
             ensure_seed_automations,
-            ensure_seed_chain_automations, migrate_scheduled_skills,
+            migrate_scheduled_skills,
             ensure_seed_rule_automations, migrate_legacy_action_kinds,
             migrate_tasks_to_agent_jobs, ensure_plugin_default_automations,
             migrate_per_repo_overview_watches,
@@ -387,10 +387,6 @@ def create_app(start_scheduler=False):
             migrate_archive_retired_chain_seeds()
         except Exception as e:
             logger.warning(f"[startup] Retired-chain-seed archive skipped: {e}")
-        try:
-            ensure_seed_chain_automations()
-        except Exception as e:
-            logger.warning(f"[startup] Chain automation seeding skipped: {e}")
         try:
             ensure_seed_rule_automations()
         except Exception as e:

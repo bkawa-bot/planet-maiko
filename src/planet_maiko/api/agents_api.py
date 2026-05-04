@@ -212,9 +212,9 @@ def assign_agent():
     profile_id = data.get("profile_id")
     repo_path = data.get("repo_path", "")
     # Worktree is always on + kickoff is always deferred until after
-    # prepare() returns, so the old use_worktree / auto_kickoff body
-    # params don't do anything. Kept ignoring them here for back-compat
-    # with any UI client still sending them.
+    # prepare() returns. The old use_worktree body param is silently
+    # ignored — no UI client sends it now that the legacy non-worktree
+    # path was removed.
     plan_first = bool(data.get("plan_first", False))
     branch_name = data.get("branch_name")
     # Optional specialty chosen for this run. Only honored if the agent
@@ -278,7 +278,6 @@ def assign_agent():
             prompt=full_prompt,
             repo_path=repo_path,
             branch_prefix=branch_name or "maiko",
-            auto_kickoff=False,
             use_worktree=True,
             agent_profile_id=profile.id,
             role=role,
@@ -390,7 +389,6 @@ def _assign_review_via_agent_job(task, profile, data, specialty_id=None):
             prompt=full_prompt,
             repo_path=local_path,
             branch_prefix=branch_name or "maiko",
-            auto_kickoff=False,
             use_worktree=True,
             agent_profile_id=profile.id,
             role="review",
@@ -722,16 +720,6 @@ def open_terminal():
         return jsonify({"error": str(e)}), 500
 
 
-# Skills whose output lands on a purpose-built surface (the home
-# overview pane, the scene widget, the greeting line). Emitting a
-# generic "skill ran" pupdate for these would flood the Recent Skills
-# widget with auto-cadence noise that already has a better render path.
-# User can still find the raw output in /skill-results if needed.
-_SELF_RENDERING_SKILLS = {
-    "home-overview", "scene", "scene-mood",
-}
-
-
 @agents_bp.route("/skills/<skill_name>/run", methods=["POST"])
 def run_skill_endpoint(skill_name):
     """Invoke a specialty by creating a Task + AgentJob.
@@ -879,8 +867,9 @@ def process_agents():
 def prepare_agent():
     """Prepare a worktree for an agent task.
 
-    Does NOT launch the agent unless auto_kickoff is True - sets up the
-    worktree with TASK.md and CLAUDE.md, and notifies the user it's ready.
+    Sets up the worktree with TASK.md and CLAUDE.md and returns the
+    launch metadata. The agent is not started here — callers invoke
+    the headless kickoff separately when ready.
     """
     data = request.get_json()
     result = prepare(
@@ -889,7 +878,6 @@ def prepare_agent():
         prompt=data["prompt"],
         repo_path=data["repo_path"],
         branch_prefix=data.get("branch_prefix", "maiko"),
-        auto_kickoff=data.get("auto_kickoff", False),
     )
     if not result:
         return jsonify({"error": "Failed to prepare agent worktree"}), 500

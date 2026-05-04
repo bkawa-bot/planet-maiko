@@ -72,9 +72,7 @@ def list_automations():
                 Automation.agent_profile_id.is_(None),
             )
         )
-    rows = q.order_by(Automation.scope_repo.asc().nulls_last(), Automation.id.asc()).all() \
-        if hasattr(Automation.scope_repo.asc(), "nulls_last") \
-        else q.order_by(Automation.scope_repo.asc(), Automation.id.asc()).all()
+    rows = q.order_by(Automation.scope_repo.asc().nulls_last(), Automation.id.asc()).all()
     return jsonify([a.to_dict() for a in rows])
 
 

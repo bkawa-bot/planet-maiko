@@ -1427,16 +1427,6 @@ def evaluate():
 # Seeding
 # ---------------------------------------------------------------------------
 
-# No default chain seeds — the old ones all depended on Ops-y
-# pupdate types (incident / error_spike / deploy_rollback /
-# deploy_blocked / deploy_stuck / batch_job_failing) that no default
-# poller emits, so they were inert on every install. Plugins that
-# add an ops signal source ship their own chain starters via
-# `register_default_automations()`. Kept as a list (not deleted) so
-# ensure_seed_chain_automations stays import-compatible and a
-# future plugin-agnostic seed pattern has a spot to land.
-_CHAIN_SEEDS = []
-
 # Pupdate types the old Ops-chain seeds referenced. Used by the
 # migration to archive existing rows that still reference them, so
 # users don't see rows that can never fire.
@@ -1547,68 +1537,6 @@ def ensure_seed_rule_automations():
     if created:
         db.session.commit()
         logger.info(f"[automations] seeded {created} pupdate rule automation(s)")
-    return created
-
-
-def ensure_seed_chain_automations():
-    """Seed one Automation per incident chain (replacing correlator
-    CAUSE_CHAINS). Idempotent — matches on a marker in automation.extra
-    so reseeding doesn't duplicate.
-    """
-    from sqlalchemy import func  # noqa: F401
-
-    # Use the name as an identity shim; if the user renamed the row
-    # we leave their version alone.
-    created = 0
-    for seed in _CHAIN_SEEDS:
-        marker = seed["slug"]
-        existing = (
-            Automation.query
-            .filter(Automation.created_by == "seed")
-            .filter(Automation.name == seed["name"])
-            .first()
-        )
-        if existing is not None:
-            continue
-        a = Automation(
-            name=seed["name"],
-            description=seed["description"],
-            when=[{
-                "kind": "pupdate_chain",
-                "config": {
-                    "types": seed["types"],
-                    "within_minutes": 30,
-                    "group_by": "repo",
-                },
-            }],
-            when_logic="all",
-            within_minutes=30,
-            then=[{
-                "kind": "run_agent_job",
-                "config": {
-                    "ask_first": True,
-                    "kind": "investigation",
-                    "title": "Investigate incident on {service}",
-                    "priority": "high",
-                    "scope_repo": "{service}",
-                    "description": (
-                        "Correlated signals on {service}: {types}. "
-                        "Approving spawns an investigator that walks the "
-                        "worktree, assembles a timeline, and files a report."
-                    ),
-                },
-            }],
-            status="active",
-            created_by="seed",
-            scope_repo=None,
-            cooldown_days=1,  # short cooldown — incidents re-fire quickly
-        )
-        db.session.add(a)
-        created += 1
-
-    if created:
-        db.session.commit()
-        logger.info(f"[automations] seeded {created} incident chain automation(s)")
     return created
 
 

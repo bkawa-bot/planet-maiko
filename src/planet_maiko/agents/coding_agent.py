@@ -203,41 +203,6 @@ def _create_worktree(repo_path, branch_name):
     return None
 
 
-def _install_pre_commit_hook(working_path):
-    """Install git pre-commit hook that runs LoRA compliance review."""
-    import shutil
-    import stat
-
-    hooks_src = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__)
-    ))), "hooks", "pre_commit_review.py")
-
-    if not os.path.exists(hooks_src):
-        return
-
-    # Find the git hooks directory for this worktree
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--git-dir"],
-            capture_output=True, text=True, cwd=working_path, timeout=5,
-        )
-        git_dir = result.stdout.strip()
-        if not os.path.isabs(git_dir):
-            git_dir = os.path.join(working_path, git_dir)
-        hooks_dir = os.path.join(git_dir, "hooks")
-        os.makedirs(hooks_dir, exist_ok=True)
-
-        hook_path = os.path.join(hooks_dir, "pre-commit")
-        # Write a wrapper that calls our review script
-        with open(hook_path, "w", encoding="utf-8") as f:
-            f.write(f"#!/bin/sh\npython3 {hooks_src}\n")
-        os.chmod(hook_path, os.stat(hook_path).st_mode | stat.S_IEXEC)
-
-        logger.info(f"[agent] Installed pre-commit review hook in {hooks_dir}")
-    except Exception as e:
-        logger.debug(f"[agent] Could not install pre-commit hook: {e}")
-
-
 def _write_task_file(working_path, task_id, task_title, prompt):
     """Write TASK.md so the agent knows what to do."""
     # Human-readable file — show the user's local time, not UTC. Agents
@@ -884,74 +849,6 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
     }
 
 
-def _kickoff_agent(agent_id, worktree_path, task_id, branch_name=None):
-    """Start the agent in a detached tmux session. View with 'View Session'."""
-    import shutil
-    import sys
-
-    claude_path = shutil.which("claude")
-    if not claude_path:
-        return {"success": False, "error": "claude CLI not found"}
-
-    # branch_name and worktree_path are interpolated into shell commands across
-    # tmux/osascript/cmd/bash launchers below — validate to prevent injection
-    # from a hostile branch name like `main; rm -rf ~`.
-    if branch_name and not _SAFE_BRANCH_RE.match(branch_name):
-        return {"success": False, "error": f"Unsafe branch name: {branch_name!r}"}
-    if _UNSAFE_PATH_CHARS.search(worktree_path):
-        return {"success": False, "error": f"Unsafe worktree path: {worktree_path!r}"}
-
-    tmux_path = shutil.which("tmux")
-    initial_prompt = "Read TASK.md and CLAUDE.md in this directory. Begin working on the task following the protocol. Report your status as you go."
-    session_name = f"maiko-{task_id}"
-
-    # Generate a session ID upfront so we can resume later via "View Session"
-    session_id = str(uuid.uuid4())
-    from planet_maiko.api.agents_api import _set_session
-    _set_session(task_id, session_id, worktree_path)
-
-    # Pre-approve the MCP channel + user's configured tools
-    allowed_tools = ["mcp__maiko-channel"]
-    try:
-        from planet_maiko.config import load_config
-        user_tools = load_config().get("brain", {}).get("allowed_tools", [])
-        allowed_tools.extend(user_tools)
-    except Exception:
-        pass
-    tools_flags = " ".join(f'--allowedTools "{t}"' for t in allowed_tools)
-
-    # Build the launch command — checkout branch first if needed
-    checkout = f"git checkout {branch_name} && " if branch_name else ""
-    launch_cmd = f'{checkout}cd {worktree_path} && claude --session-id {session_id} {tools_flags} "{initial_prompt}"'
-
-    try:
-        if tmux_path:
-            subprocess.Popen([
-                tmux_path, "new-session", "-d", "-s", session_name,
-                "-c", worktree_path,
-                "bash", "-c", launch_cmd,
-            ])
-            logger.info(f"[agent] Launched in tmux session '{session_name}' for {agent_id}")
-            return {"success": True, "working_path": worktree_path, "tmux_session": session_name}
-        else:
-            if sys.platform == "darwin":
-                subprocess.Popen(["osascript", "-e", f'tell application "Terminal" to do script "{launch_cmd}"'])
-            elif sys.platform == "win32":
-                subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", launch_cmd], shell=True)
-            else:
-                for term in ["gnome-terminal", "xterm", "konsole"]:
-                    try:
-                        subprocess.Popen([term, "--", "bash", "-c", launch_cmd])
-                        break
-                    except FileNotFoundError:
-                        continue
-            logger.info(f"[agent] Launched in terminal for {agent_id}")
-            return {"success": True, "working_path": worktree_path}
-    except Exception as e:
-        logger.error(f"[agent] Kickoff failed for {agent_id}: {e}")
-        return {"success": False, "error": str(e)}
-
-
 def _create_branch_only(repo_path, branch_name):
     """Create a branch for agent work, then switch back to the original branch.
 
@@ -1014,7 +911,7 @@ def _finalize_branch(repo_path):
 
 
 def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
-            auto_kickoff=False, use_worktree=True, agent_profile_id=None,
+            use_worktree=True, agent_profile_id=None,
             role="coding", specialty_id=None):
     """Prepare for an agent to work on a task.
 
@@ -1024,8 +921,10 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     - use_worktree=False: creates a branch in the main repo. Agent works
       in the repo directory directly (simpler but not isolated).
 
-    If auto_kickoff=True, the agent is started via the configured runtime
-    after preparation.
+    The agent is not started — caller invokes _kickoff_agent_headless()
+    separately when ready. (The old auto_kickoff flag plus terminal-
+    launching path were removed; every modern caller goes through the
+    headless kickoff.)
 
     Args:
         task_id: the task this agent will work on
@@ -1033,7 +932,6 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
         prompt: full instructions for the agent
         repo_path: path to the git repository
         branch_prefix: prefix for the branch name
-        auto_kickoff: if True, immediately start the agent via the runtime
         use_worktree: if True, create a git worktree; if False, just create a branch
         role: "coding" | "review" | "investigation" | "cartographer" —
             picks the CLAUDE.md protocol template and role-scoped team
@@ -1180,11 +1078,6 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
         },
     }
 
-    if auto_kickoff:
-        kickoff_result = _kickoff_agent(agent_id, working_path, task_id, branch_name=branch_name if not use_worktree else None)
-        result["status"] = "running" if kickoff_result.get("success") else "ready"
-        result["kickoff_result"] = kickoff_result
-
     return result
 
 
@@ -1298,7 +1191,6 @@ def kickoff_coding_task(task, *, plan_first=False, use_worktree=True, branch_nam
             prompt=full_prompt,
             repo_path=repo_path,
             branch_prefix=branch_prefix,
-            auto_kickoff=False,
             use_worktree=use_worktree,
             agent_profile_id=agent.id,
             role="coding",
