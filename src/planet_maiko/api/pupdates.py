@@ -247,27 +247,6 @@ def approve_proposal_as_goal(pupdate_id):
             },
         }]
         name = f"Keep {scope_repo}'s overview current"
-    elif kind == "train_lora_when_ready":
-        when = [{
-            "kind": "lora_missing",
-            "config": {
-                "repo": scope_repo,
-                "min_learnings": int(trigger_config.get("min_learnings", 10)),
-            },
-        }]
-        then = [{
-            "kind": "nudge",
-            "config": {
-                "title": f"Ready to train a LoRA for {scope_repo}?",
-                "body": (
-                    f"{scope_repo} has enough active rules and no adapter yet."
-                ),
-                "url": "/knowledge?tab=training",
-                "action_hint": "Open Training",
-            },
-        }]
-        name = f"Nudge when {scope_repo} is ready to train"
-
     # Dedup: if an active Automation already watches this (scope_repo +
     # first-condition-kind) pair, dismiss the proposal and return it.
     cond_kind = when[0]["kind"] if when else None

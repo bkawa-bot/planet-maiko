@@ -158,22 +158,6 @@ DEFAULT_CONFIG = {
                 # time this runs against a large repo list.
                 "max_proposals_per_cycle": 2,
             },
-            # Gap-detection pass — notices coverage gaps (no LoRA for a
-            # repo with many rules, etc.) and proposes *standing goals*
-            # rather than one-shot tasks. Approval turns the proposal
-            # into an AgentGoal row that keeps watching the condition.
-            "gap_detection": {
-                "enabled": True,
-                # Longer cooldown than per-role nagging: a dismissed gap
-                # proposal says "no, don't watch this" so we wait 14d
-                # before asking about the same gap/repo.
-                "cooldown_days": 14,
-                "max_proposals_per_cycle": 2,
-                # Per-detector thresholds.
-                "lora_missing": {
-                    "min_active_learnings": 10,
-                },
-            },
         },
     },
     "scene": {

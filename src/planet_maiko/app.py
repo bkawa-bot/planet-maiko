@@ -343,40 +343,17 @@ def create_app(start_scheduler=False):
         # seeded 'keep overview current' watch.
         from planet_maiko.brain.automations import (
             ensure_seed_automations,
-            migrate_scheduled_skills,
-            ensure_seed_rule_automations, migrate_legacy_action_kinds,
-            migrate_tasks_to_agent_jobs, ensure_plugin_default_automations,
-            migrate_per_repo_overview_watches,
-            migrate_archive_retired_chain_seeds,
+            ensure_seed_rule_automations,
+            ensure_plugin_default_automations,
         )
-        try:
-            migrate_scheduled_skills()
-        except Exception as e:
-            logger.warning(f"[startup] Scheduled-skill migration skipped: {e}")
         try:
             ensure_seed_automations()
         except Exception as e:
             logger.warning(f"[startup] Automation seeding skipped: {e}")
         try:
-            migrate_per_repo_overview_watches()
-        except Exception as e:
-            logger.warning(f"[startup] Per-repo overview-watch migration skipped: {e}")
-        try:
-            migrate_archive_retired_chain_seeds()
-        except Exception as e:
-            logger.warning(f"[startup] Retired-chain-seed archive skipped: {e}")
-        try:
             ensure_seed_rule_automations()
         except Exception as e:
             logger.warning(f"[startup] Rule automation seeding skipped: {e}")
-        try:
-            migrate_legacy_action_kinds()
-        except Exception as e:
-            logger.warning(f"[startup] Legacy action-kind migration skipped: {e}")
-        try:
-            migrate_tasks_to_agent_jobs()
-        except Exception as e:
-            logger.warning(f"[startup] Task→AgentJob migration skipped: {e}")
         try:
             _reconcile_learning_signal_counts()
         except Exception as e:

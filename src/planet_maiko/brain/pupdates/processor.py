@@ -1,12 +1,5 @@
-"""Pupdate processor — handles the two responsibilities that didn't
-fold into the Automation engine:
-
-    1. Focus-mode gating: mark held pupdates during soft/deep focus
-       so they don't surface until the user is back on available.
-    2. pr_review_commented → agent wake: resume the Maiko-owned coding
-       agent whose PR just got new comments. Complex state logic
-       (session registry, inbox messaging) that doesn't fit the
-       declarative when/then dispatch.
+"""Pupdate processor — handles pr_review_commented → agent wake:
+resume the Maiko-owned coding agent whose PR just got new comments.
 
 Everything else — dismiss, create_task, complete_task — moved to the
 Automation engine as pupdate-scope automations. The engine runs

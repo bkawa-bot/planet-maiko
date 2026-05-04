@@ -6,7 +6,6 @@ import json
 
 from flask import Blueprint, jsonify, request
 from planet_maiko.brain.creativity.scene import generate
-from planet_maiko.brain.suggestions.scanner import quick_scan
 from planet_maiko.config import load_config
 
 logger = logging.getLogger(__name__)
@@ -148,14 +147,3 @@ def refresh_scene():
     """Clear the weather cache so next request fetches fresh data."""
     _weather_cache.clear()
     return jsonify({"status": "ok"})
-
-
-# --- Suggestions ---
-
-@scene_bp.route("/suggestions/scan", methods=["POST"])
-def run_scan():
-    """Run quick suggestion scan."""
-    data = request.get_json(silent=True) or {}
-    repos = data.get("repos", [])
-    result = quick_scan(repos=repos)
-    return jsonify(result)

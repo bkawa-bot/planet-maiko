@@ -10,10 +10,6 @@ Supported condition kinds (keep this comment + CONDITIONS dict in sync):
   - overview_stale:  {repo: str, stale_days: int}
                      Matches when the 'overview' Insight for this repo is
                      missing or older than stale_days.
-  - lora_missing:    {repo: str, min_learnings: int}
-                     Matches when the repo has >= min_learnings active
-                     Learning rows and no AgentProfile for that scope_repo
-                     has an extra.adapter_path set.
 
 Supported action kinds:
   - propose:         {draft: {title, type, priority, repo?, description?}}
@@ -320,12 +316,4 @@ from .seeding import (  # noqa: E402,F401
     ensure_seed_rule_automations,
     ensure_seed_automations,
     ensure_plugin_default_automations,
-)
-from .migrations import (  # noqa: E402,F401
-    _RETIRED_OPS_TYPES,
-    migrate_archive_retired_chain_seeds,
-    migrate_per_repo_overview_watches,
-    migrate_scheduled_skills,
-    migrate_legacy_action_kinds,
-    migrate_tasks_to_agent_jobs,
 )

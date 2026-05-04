@@ -240,7 +240,6 @@ export default function ProposalCard({ proposal, onAction }) {
 function formatGoalKind(kind) {
   const map = {
     keep_overview_current: "Keep overview current",
-    train_lora_when_ready: "Train LoRA when rules accumulate",
   };
   return map[kind] || kind.replace(/_/g, " ");
 }
@@ -249,9 +248,6 @@ function describeTrigger(proposedGoal) {
   const cfg = proposedGoal.trigger_config || {};
   if (proposedGoal.kind === "keep_overview_current") {
     return `refresh after ${cfg.stale_days || 30}d stale`;
-  }
-  if (proposedGoal.kind === "train_lora_when_ready") {
-    return `watch for ${cfg.min_learnings || 10}+ active learnings, no adapter yet`;
   }
   if (proposedGoal.trigger_kind === "cadence" && cfg.cadence_hours) {
     return `every ${cfg.cadence_hours}h`;

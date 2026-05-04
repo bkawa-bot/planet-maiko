@@ -63,8 +63,8 @@ def _act_run_agent_job(automation, config, pupdate=None, context=None):
     #   1. Explicit config.scope_repo (user overrode it)
     #   2. automation.scope_repo (hand-authored automations still work)
     #   3. Chain condition's `service` (shared repo across a pupdate chain)
-    #   4. Wildcard condition's `repo` (overview_stale / lora_missing
-    #      picked a specific repo this cycle)
+    #   4. Wildcard condition's `repo` (overview_stale picked a specific
+    #      repo this cycle)
     #   5. Pupdate's own repo when pupdate-scope fired
     # Without (4) and (5), a single "all repos" automation couldn't
     # route the job to the repo that actually triggered it.

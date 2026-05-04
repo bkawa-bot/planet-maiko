@@ -100,40 +100,6 @@ def _repo_overview_is_stale(repo, stale_days):
     return last_confirmed < (datetime.now(timezone.utc) - timedelta(days=stale_days))
 
 
-def _cond_lora_missing(automation, config, pupdate=None):
-    """Fires when a repo has enough active learnings to train on but no
-    agent profile for that scope has an adapter_path set. Same wildcard
-    semantics as overview_stale — empty/`"*"` repo iterates all
-    configured repos, returns the first match's repo in context.
-    """
-    from planet_maiko.models.learning import Learning
-    from planet_maiko.models.agent_profile import AgentProfile
-
-    min_learnings = int(config.get("min_learnings", 10))
-    explicit = config.get("repo") or automation.scope_repo
-    wildcard = not explicit or explicit == "*"
-
-    repos = _configured_repos() if wildcard else [explicit]
-
-    for repo in repos:
-        active_count = (
-            Learning.query
-            .filter(Learning.status == "active")
-            .filter(Learning.scope_repo == repo)
-            .count()
-        )
-        if active_count < min_learnings:
-            continue
-        has_adapter = any(
-            (p.extra or {}).get("adapter_path")
-            for p in AgentProfile.query.filter(AgentProfile.scope_repo == repo).all()
-        )
-        if has_adapter:
-            continue
-        return {"match": True, "context": {"repo": repo}}
-    return {"match": False}
-
-
 def _configured_repos():
     """Return the list of `org/repo` strings from config.github.repos,
     or [] if none configured. Used by wildcard conditions that need to
@@ -293,7 +259,6 @@ def _cond_pupdate_chain(automation, config, pupdate=None):
 CONDITIONS = {
     "cadence": _cond_cadence,
     "overview_stale": _cond_overview_stale,
-    "lora_missing": _cond_lora_missing,
     "pupdate_match": _cond_pupdate_match,
     "pupdate_chain": _cond_pupdate_chain,
 }
