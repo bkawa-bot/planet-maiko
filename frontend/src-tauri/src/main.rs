@@ -20,11 +20,15 @@
 
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread;
-use tauri::{Manager, RunEvent, Runtime, WindowEvent};
+use tauri::{RunEvent, WindowEvent};
 
-struct FlaskHandle(Mutex<Option<Child>>);
+// Shared handle on the Flask child. We share it across the two close
+// paths (window event + app-level RunEvent) by cloning the Arc into
+// each move closure — no Tauri state plumbing, no Manager-trait
+// generics, no lifetime jousting with the borrow checker.
+type FlaskHandle = Arc<Mutex<Option<Child>>>;
 
 // Build the command that launches Flask. On Mac/Linux we route
 // through the user's login shell so .zshrc/.bashrc PATH edits load
@@ -76,12 +80,8 @@ fn spawn_flask() -> std::io::Result<Child> {
     Ok(child)
 }
 
-// Kill the Flask child if it's still alive. Generic over Manager so
-// we can call it from both window events (passing the &Window) and
-// the app-level run callback (passing the &AppHandle).
-fn kill_flask<R: Runtime, M: Manager<R>>(manager: &M) {
-    let state = manager.state::<FlaskHandle>();
-    if let Some(mut child) = state.0.lock().unwrap().take() {
+fn kill_flask(handle: &FlaskHandle) {
+    if let Some(mut child) = handle.lock().unwrap().take() {
         let _ = child.kill();
         let _ = child.wait();
     }
@@ -93,15 +93,20 @@ fn main() {
          From the repo root: `pip install -e .`",
     );
 
+    // One canonical handle, two clones — one for each close path. The
+    // first call wins; the other finds None and no-ops.
+    let flask_handle: FlaskHandle = Arc::new(Mutex::new(Some(flask)));
+    let close_handle = flask_handle.clone();
+    let exit_handle = flask_handle.clone();
+
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|_, _, _| {
             // Second launch focuses the existing window — no-op here
             // because the default window manager already raises us.
         }))
-        .manage(FlaskHandle(Mutex::new(Some(flask))))
-        .on_window_event(|window, event| {
+        .on_window_event(move |_window, event| {
             if let WindowEvent::CloseRequested { .. } = event {
-                kill_flask(window);
+                kill_flask(&close_handle);
             }
         })
         .build(tauri::generate_context!())
@@ -110,9 +115,9 @@ fn main() {
     // ExitRequested catches Cmd+Q on Mac, Quit menu items, and the
     // implicit "all windows closed → app exits" path. CloseRequested
     // alone misses these and Flask gets orphaned.
-    app.run(|app_handle, event| {
+    app.run(move |_app_handle, event| {
         if let RunEvent::ExitRequested { .. } = event {
-            kill_flask(app_handle);
+            kill_flask(&exit_handle);
         }
     });
 }
