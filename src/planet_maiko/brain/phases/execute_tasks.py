@@ -5,51 +5,12 @@ a handful of Task types still spawn directly off Tasks. Kept on its
 own so cycle.py stays an orchestrator.
 """
 
-"""Brain cycle - the clock tick that drives all processors.
-
-Each cycle runs all phases in order, just like a CPU executes its
-pipeline on each clock tick. Each phase is its own function so failures
-are isolated and the orchestrator stays readable.
-
-Pipeline (phases run in this order):
-    1.  agents               â€” process agent pupdates (auto-complete tasks)
-    1.5 auto_complete_reviews â€” close review tasks for approved/merged PRs
-    2.  awareness            â€” A2A conflict detection + resolution
-    2.5 calendar_focus       â€” auto-focus from calendar events
-    3.2 automations          â€” evaluate user-editable when/then rows (replaced correlator)
-    3.5 pupdates             â€” match remaining pupdates against rules
-    3.6 llm_triage           â€” Tier 2 LLM triage for unmatched pupdates
-    4.  learning             â€” aggregate signals into learnings
-    5.  heartbeats           â€” nudge silent agents
-    6.  projects             â€” auto-advance project phases
-    7.  scheduled_skills     â€” run skills on their schedules
-    8.  orchestrate          â€” materialize investigation tasks + route
-                               unassigned tasks to agent profiles
-    8b. unblock              â€” cascade depends_on completion
-    8b2.spawn_jobs_for_tasks â€” turn assigned review tasks into AgentJobs
-    8c. execute_agent_jobs   â€” run queued AgentJobs (review + pack-owned)
-    8d. execute_agent_tasks  â€” safety net for investigation/repo_analysis
-
-Note: morning brief is user-triggered from the Home page (not a cycle
-phase â€” nobody wants a "morning" brief running at 3am when the first
-cycle happens to tick). Brainstorm can be set up as a scheduled skill
-via the Skills page if the user wants it recurring.
-"""
-
 import logging
-import time
 from datetime import datetime, timezone
 
+from ._helpers import _emit_missing_clone_pupdate
+
 logger = logging.getLogger(__name__)
-
-# Track cycle history for status reporting
-_last_cycle = None
-_cycle_count = 0
-
-_status_cache = None
-_status_cache_at = 0
-
-
 
 
 def _phase_execute_agent_tasks():
