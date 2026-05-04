@@ -308,19 +308,12 @@
 .plan-agent-select:hover { border-color: var(--pink); }
 .plan-agent-select:focus { outline: none; border-color: var(--pink); box-shadow: 0 0 0 2px rgba(255, 128, 165, 0.2); }
 
-/* Generated tasks modal (legacy / simple generation UI) */
+/* Generated tasks modal — shared by Tasks (revise plan) and BrainView. */
 .generated-tasks-modal {
   background: var(--bg-card); border-radius: 16px;
   max-width: 560px; width: 100%;
   display: flex; flex-direction: column; max-height: 80vh;
 }
-
-.generated-task-list { display: flex; flex-direction: column; gap: 6px; max-height: 400px; overflow-y: auto; }
-
-.generated-task-item { padding: 10px 14px; }
-.generated-task-top { display: flex; align-items: center; gap: 8px; }
-.generated-task-title { flex: 1; font-size: 13px; font-weight: 500; color: var(--text); }
-.generated-task-desc { font-size: 11px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
 
 .generated-tasks-footer {
   display: flex; align-items: center; justify-content: space-between;

@@ -5,7 +5,7 @@ import { showToast } from "../components/Toast";
 import {
   BookOpen, Brain, Clock, Layers, Check, X, Edit3,
   ChevronDown, ChevronRight, Plus, Shield, Download, Loader, Sparkles,
-  Flame, GraduationCap,
+  GraduationCap,
 } from "lucide-react";
 import { relativeTime } from "../utils/dates";
 import InfoButton from "../components/InfoButton";

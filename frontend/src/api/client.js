@@ -62,11 +62,6 @@ export const api = {
     const query = new URLSearchParams(params).toString();
     return request(`/pupdates${query ? `?${query}` : ""}`);
   },
-  getPupdate: (id) => request(`/pupdates/${id}`),
-  createPupdate: (data) =>
-    request("/pupdates", { method: "POST", body: JSON.stringify(data) }),
-  dismissPupdate: (id) =>
-    request(`/pupdates/${id}/dismiss`, { method: "POST" }),
 
   // Tasks
   getTasks: (params = {}) => {
@@ -93,19 +88,8 @@ export const api = {
     const query = new URLSearchParams(params).toString();
     return request(`/projects${query ? `?${query}` : ""}`);
   },
-  getProject: (id) => request(`/projects/${id}`),
   createProject: (data) =>
     request("/projects", { method: "POST", body: JSON.stringify(data) }),
-  updateProject: (id, data) =>
-    request(`/projects/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    }),
-  updateProjectStatus: (id, status) =>
-    request(`/projects/${id}/status`, {
-      method: "POST",
-      body: JSON.stringify({ status }),
-    }),
   generatePlan: (id) =>
     request(`/projects/${id}/generate-plan`, { method: "POST" }),
   generateTasks: (id) =>
@@ -135,12 +119,7 @@ export const api = {
 
   // Brain
   getBrainStatus: () => request("/brain/status"),
-  getBrainRules: () => request("/brain/rules"),
   runBrainCycle: () => request("/brain/cycle", { method: "POST" }),
-  getSchedule: () => request("/brain/schedule"),
-  regenerateSchedule: (instructions) =>
-    request("/brain/schedule/regenerate", { method: "POST", body: JSON.stringify({ instructions }) }),
-  clearScheduleOverride: () => request("/brain/schedule/override", { method: "DELETE" }),
 
   // Scene
   getScene: (params = {}) => {
@@ -153,10 +132,6 @@ export const api = {
   getLearnings: (params = {}) => {
     const query = new URLSearchParams(params).toString();
     return request(`/learnings${query ? `?${query}` : ""}`);
-  },
-  getLearningBrief: (params = {}) => {
-    const query = new URLSearchParams(params).toString();
-    return request(`/learnings/brief${query ? `?${query}` : ""}`);
   },
   getSignals: (params = {}) => {
     const query = new URLSearchParams(params).toString();
@@ -194,12 +169,6 @@ export const api = {
   // Pack Insights
   getPackInsightsState: () => request("/pack-insights"),
   startPackInsights: () => request("/pack-insights/start", { method: "POST" }),
-  collectPackInsights: () => request("/pack-insights/collect", { method: "POST" }),
-  synthesizePackInsights: () => request("/pack-insights/synthesize", { method: "POST" }),
-  addPackInsightsLearning: (text, category) =>
-    request("/pack-insights/add", { method: "POST", body: JSON.stringify({ text, category }) }),
-  finalizePackInsights: (decisions) =>
-    request("/pack-insights/finalize", { method: "POST", body: JSON.stringify({ decisions }) }),
   getPackInsightsGatheringReplies: () => request("/pack-insights/gathering-replies"),
   resetPackInsights: () => request("/pack-insights/reset", { method: "POST" }),
   wrapUpPackInsights: (droppedMessageIds) =>
@@ -211,13 +180,10 @@ export const api = {
   // Agents
   getAgents: () => request("/agents"),
   getAgentActivity: () => request("/agents/activity"),
-  getPackRequests: () => request("/agents/requests"),
   getQueuedAgentTasks: () => request("/agents/queued"),
   getAgentMessages: (taskId) => request(`/agents/${taskId}/messages`),
   sendToAgent: (taskId, data) =>
     request(`/agents/${taskId}/inbox`, { method: "POST", body: JSON.stringify(data) }),
-  nudgeAgent: (taskId) =>
-    request(`/agents/${taskId}/nudge`, { method: "POST" }),
   rerunAgent: (taskId) =>
     request(`/agents/${taskId}/rerun`, { method: "POST" }),
   getConflicts: () => request("/agents/conflicts"),
@@ -237,14 +203,6 @@ export const api = {
   runSkill: (name, data) =>
     request(`/skills/${name}/run`, { method: "POST", body: JSON.stringify(data) }),
 
-  // Suggestions
-  runScan: (repos) =>
-    request("/suggestions/scan", { method: "POST", body: JSON.stringify({ repos }) }),
-
-  // Expertise
-  getExpertise: () => request("/expertise"),
-  getExperts: (repo) => request(`/expertise/experts?repo=${encodeURIComponent(repo)}`),
-
   // Learnings management
   createLearning: (data) => request("/learnings", { method: "POST", body: JSON.stringify(data) }),
   backfillKnowledge: (limit = null, repo = null) => {
@@ -260,12 +218,6 @@ export const api = {
   // and how many active rules have a current embedding ready for
   // cosine matching. Drives the BrainView status pill.
   getRagStatus: () => request("/rules/embedding-status"),
-  // Free-text or diff-based rule retrieval. Either `diff` (string)
-  // or `queries` (string[]) is required. Server runs Haiku
-  // decomposition on the diff path; queries skip it.
-  getRelevantRules: (body) =>
-    request("/rules/relevant", { method: "POST", body: JSON.stringify(body) }),
-  clusterLearnings: () => request("/learnings/cluster", { method: "POST" }),
   approveLearning: (id) => request(`/learnings/${id}/approve`, { method: "POST" }),
   dismissLearning: (id) => request(`/learnings/${id}/dismiss`, { method: "POST" }),
   // Drain thin / old pending learnings in bulk. Body: {max_signal_count,
@@ -296,7 +248,6 @@ export const api = {
   approveAgentJob: (id) => request(`/agent-jobs/${id}/approve`, { method: "POST" }),
   cancelAgentJob: (id) => request(`/agent-jobs/${id}/cancel`, { method: "POST" }),
   ackAgentJob: (id) => request(`/agent-jobs/${id}/ack`, { method: "POST" }),
-  deleteAgentJob: (id) => request(`/agent-jobs/${id}`, { method: "DELETE" }),
 
   // Insights (Team Playbook — tribal / operational notes injected into CLAUDE.md)
   getInsights: (params = {}) => {
@@ -313,8 +264,6 @@ export const api = {
     request(`/insights/${id}/dismiss`, { method: "POST" }),
   confirmInsight: (id) =>
     request(`/insights/${id}/confirm`, { method: "POST" }),
-  deleteInsight: (id) =>
-    request(`/insights/${id}`, { method: "DELETE" }),
   cartographRepo: (repo) =>
     request("/insights/cartograph", { method: "POST", body: JSON.stringify({ repo }) }),
 
@@ -333,7 +282,6 @@ export const api = {
     request(`/projects/${projectId}/approve-plan`, { method: "POST", body: JSON.stringify({ tasks }) }),
 
   // Agent proposals (From Maiko approval queue)
-  createProposal: (data) => request("/proposals", { method: "POST", body: JSON.stringify(data) }),
   approveProposal: (id, draft) => request(`/proposals/${id}/approve`, { method: "POST", body: JSON.stringify(draft ? { draft } : {}) }),
   approveProposalAsGoal: (id) => request(`/proposals/${id}/approve-as-goal`, { method: "POST" }),
   dismissProposal: (id) => request(`/proposals/${id}/dismiss`, { method: "POST" }),
@@ -361,8 +309,6 @@ export const api = {
     const q = qs.toString();
     return request(`/memos${q ? `?${q}` : ""}`);
   },
-  getMemo: (id) => request(`/memos/${id}`),
-  markMemoSeen: (id) => request(`/memos/${id}/mark-seen`, { method: "POST" }),
   dismissMemo: (id) => request(`/memos/${id}/dismiss`, { method: "POST" }),
   approveMemo: (id) => request(`/memos/${id}/approve`, { method: "POST" }),
   // Promote a memo (typically a notification) into actionable work.
@@ -380,9 +326,7 @@ export const api = {
   refreshHomeOverview: () => request("/home/overview/refresh", { method: "POST" }),
 
   // System
-  shutdown: () => request("/system/shutdown", { method: "POST" }),
   getSystemHealth: () => request("/system/health"),
-  getToday: () => request("/today"),
 
   // Shutdown / cleanup ritual (power button on the nav)
   getShutdownPreview: () => request("/shutdown/preview"),
@@ -391,29 +335,17 @@ export const api = {
 
   // Agent terminal & sessions
   openTerminal: (path, taskId, branch) => request("/agents/open-terminal", { method: "POST", body: JSON.stringify({ path, task_id: taskId, branch }) }),
-  getAgentSession: (taskId) => request(`/agents/${taskId}/session`),
   resumeAgentSession: (taskId) => request("/agents/resume-session", { method: "POST", body: JSON.stringify({ task_id: taskId }) }),
 
   // Training
-  exportTrainingDataset: (data) => request("/training/export-dataset", { method: "POST", body: JSON.stringify(data || {}) }),
   getTrainingDatasets: () => request("/training/datasets"),
-  getTrainingDatasetStats: () => request("/training/dataset-stats"),
   trainAgent: (data) => request("/training/train-agent", { method: "POST", body: JSON.stringify(data) }),
-  checkTrainingRequirements: () => request("/training/check-requirements"),
   getTrainingProgress: () => request("/training/progress"),
   generateFromRules: (data) => request("/training/generate-from-rules", { method: "POST", body: JSON.stringify(data || {}) }),
   getRuleGenProgress: () => request("/training/generate-from-rules/progress"),
   getRuleCoverage: (repo) => request(`/training/rule-coverage${repo ? `?repo=${encodeURIComponent(repo)}` : ""}`),
-  generateSynthetic: (data) => request("/training/generate-synthetic", { method: "POST", body: JSON.stringify(data || {}) }),
   getAdapters: () => request("/training/adapters"),
   getBaseModels: () => request("/training/base-models"),
-
-  // Chat
-  chat: (message) => request("/chat", { method: "POST", body: JSON.stringify({ message }) }),
-
-  // Repo checkers — auto-detect + run
-  detectChecks: (repo_path) => request(`/checks?repo_path=${encodeURIComponent(repo_path)}`),
-  runChecks: (data) => request("/checks/run", { method: "POST", body: JSON.stringify(data) }),
 
   // Pet Maiko — community counter + owner log
   petMaiko: (note) =>
@@ -445,7 +377,6 @@ export const api = {
     const query = new URLSearchParams(params).toString();
     return request(`/profiles${query ? `?${query}` : ""}`);
   },
-  getProfile: (id) => request(`/profiles/${id}`),
   createProfile: (data) =>
     request("/profiles", { method: "POST", body: JSON.stringify(data) }),
   updateProfile: (id, data) =>
