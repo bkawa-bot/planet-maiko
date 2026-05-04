@@ -5,26 +5,26 @@ pipeline on each clock tick. Each phase is its own function so failures
 are isolated and the orchestrator stays readable.
 
 Pipeline (phases run in this order):
-    1.  agents               — process agent pupdates (auto-complete tasks)
-    1.5 auto_complete_reviews — close review tasks for approved/merged PRs
-    2.  awareness            — A2A conflict detection + resolution
-    2.5 calendar_focus       — auto-focus from calendar events
-    3.2 automations          — evaluate user-editable when/then rows (replaced correlator)
-    3.5 pupdates             — match remaining pupdates against rules
-    3.6 llm_triage           — Tier 2 LLM triage for unmatched pupdates
-    4.  learning             — aggregate signals into learnings
-    5.  heartbeats           — nudge silent agents
-    6.  projects             — auto-advance project phases
-    7.  scheduled_skills     — run skills on their schedules
-    8.  orchestrate          — materialize investigation tasks + route
+    1.  agents               â€” process agent pupdates (auto-complete tasks)
+    1.5 auto_complete_reviews â€” close review tasks for approved/merged PRs
+    2.  awareness            â€” A2A conflict detection + resolution
+    2.5 calendar_focus       â€” auto-focus from calendar events
+    3.2 automations          â€” evaluate user-editable when/then rows (replaced correlator)
+    3.5 pupdates             â€” match remaining pupdates against rules
+    3.6 llm_triage           â€” Tier 2 LLM triage for unmatched pupdates
+    4.  learning             â€” aggregate signals into learnings
+    5.  heartbeats           â€” nudge silent agents
+    6.  projects             â€” auto-advance project phases
+    7.  scheduled_skills     â€” run skills on their schedules
+    8.  orchestrate          â€” materialize investigation tasks + route
                                unassigned tasks to agent profiles
-    8b. unblock              — cascade depends_on completion
-    8b2.spawn_jobs_for_tasks — turn assigned review tasks into AgentJobs
-    8c. execute_agent_jobs   — run queued AgentJobs (review + pack-owned)
-    8d. execute_agent_tasks  — safety net for investigation/repo_analysis
+    8b. unblock              â€” cascade depends_on completion
+    8b2.spawn_jobs_for_tasks â€” turn assigned review tasks into AgentJobs
+    8c. execute_agent_jobs   â€” run queued AgentJobs (review + pack-owned)
+    8d. execute_agent_tasks  â€” safety net for investigation/repo_analysis
 
 Note: morning brief is user-triggered from the Home page (not a cycle
-phase — nobody wants a "morning" brief running at 3am when the first
+phase â€” nobody wants a "morning" brief running at 3am when the first
 cycle happens to tick). Brainstorm can be set up as a scheduled skill
 via the Skills page if the user wants it recurring.
 """
@@ -44,7 +44,7 @@ _status_cache_at = 0
 
 
 # ---------------------------------------------------------------------------
-# Phase functions — each returns its result dict (never raises)
+# Phase functions â€” each returns its result dict (never raises)
 # ---------------------------------------------------------------------------
 
 def _phase_agents():
@@ -98,7 +98,7 @@ def _phase_awareness():
     Population is the union of Maiko-prepared worktrees (from
     list_prepared()) and active external sessions registered via
     /api/sessions/register. External sessions use session_id as the
-    task_id in the worktree dict — that shows up as the agent label in
+    task_id in the worktree dict â€” that shows up as the agent label in
     conflict messages, which is fine for Phase A (consumers pass short
     IDs or we generate uuid4 hex).
     """
@@ -140,7 +140,7 @@ def _phase_awareness():
 
 
 def _phase_automations():
-    """Phase 3.2: Unified Automation engine — evaluates every active
+    """Phase 3.2: Unified Automation engine â€” evaluates every active
     when/then row and fires actions.
 
     Replaced the old role_autonomy phase (AgentGoal-based). The engine
@@ -167,7 +167,7 @@ def _phase_synthesis():
 
     Drains the queue of synthesized=False pr_comment signals one small
     batch at a time. Transient LLM failures during a backfill (timeout,
-    malformed JSON) used to leave signals orphaned — stuck forever
+    malformed JSON) used to leave signals orphaned â€” stuck forever
     because nothing else re-synthesized them. This phase retries them
     on every cycle tick until the queue is empty.
 
@@ -210,7 +210,7 @@ def _phase_learning():
 
 
 def _phase_heartbeats():
-    """Phase 5: Heartbeats — auto-wake silent agents on in-progress tasks."""
+    """Phase 5: Heartbeats â€” auto-wake silent agents on in-progress tasks."""
     try:
         from planet_maiko.agents.monitor import check_heartbeats
         return {"woken": check_heartbeats()}
@@ -220,7 +220,7 @@ def _phase_heartbeats():
 
 
 def _phase_projects():
-    """Phase 6: Project driver — auto-advance project phases."""
+    """Phase 6: Project driver â€” auto-advance project phases."""
     try:
         from planet_maiko.brain.projects.driver import drive_projects
         return drive_projects()
@@ -245,7 +245,7 @@ def _phase_orchestrate():
     3. Keep review tasks pointed at a review-role agent even if the
        original task_from_review_request rule assigned them generically.
 
-    Idempotent — repeated runs are no-ops once everything is routed.
+    Idempotent â€” repeated runs are no-ops once everything is routed.
     """
     from planet_maiko.models.pupdate import Pupdate
     from planet_maiko.models.task import Task
@@ -297,7 +297,7 @@ def _phase_orchestrate():
                 routed += 1
                 logger.info(f"[cycle] Routed task {t.id} ({t.type}) -> {agent_id}")
             except Exception as e:
-                # Used to be debug — but if routing silently fails, the
+                # Used to be debug â€” but if routing silently fails, the
                 # task sits forever with no agent and the user has no
                 # signal anything's wrong. Bump to warning.
                 logger.warning(f"[cycle] route() failed for {t.id}: {e}")
@@ -306,14 +306,14 @@ def _phase_orchestrate():
             db.session.commit()
         return {"investigation_tasks_created": created, "routed": routed}
     except Exception as e:
-        # Same reasoning — orchestrate failures left tasks unrouted
+        # Same reasoning â€” orchestrate failures left tasks unrouted
         # silently. Warn so it actually shows up in logs.
         logger.warning(f"[cycle] Orchestrate skipped: {e}")
         return {"investigation_tasks_created": 0, "routed": 0, "error": str(e)}
 
 
 def _phase_unblock_tasks():
-    """Phase 8b: Cascade dep completion — any blocked task whose deps are
+    """Phase 8b: Cascade dep completion â€” any blocked task whose deps are
     all done flips to "new" so its agent can pick it up."""
     from planet_maiko.models.task import Task
     from planet_maiko.database import db
@@ -369,7 +369,7 @@ def _phase_stuck_escalation():
             source_id = f"stuck-task/{t.id}"
             existing = Pupdate.query.filter_by(source_id=source_id).first()
             if existing:
-                # Already surfaced once — respect the user's dismissal.
+                # Already surfaced once â€” respect the user's dismissal.
                 # If they've decided they know about it, don't keep
                 # reminding them every cycle. (And the pupdate ID is
                 # fixed at `stuck-{task_id[:32]}`, so a second insert
@@ -405,7 +405,7 @@ def _phase_stuck_escalation():
                 continue
             task = db.session.get(Task, task_id)
             if not task or task.status != "in_progress":
-                # Task completed / cancelled / gone — close the escalation.
+                # Task completed / cancelled / gone â€” close the escalation.
                 p.dismissed = True
                 p.dismissed_at = now
                 dismissed += 1
@@ -424,7 +424,7 @@ def _emit_missing_clone_pupdate(task, repo):
     per missing repo, not one per stuck task per cycle.
 
     Without this, review tasks for repos missing from
-    config.github.repo_roots silently sit unrouted forever — agent is
+    config.github.repo_roots silently sit unrouted forever â€” agent is
     assigned, no worktree ever appears, AgentsActiveTab stays empty,
     and the user has no signal anything is wrong.
     """
@@ -441,14 +441,14 @@ def _emit_missing_clone_pupdate(task, repo):
         return
 
     if existing and existing.dismissed:
-        # User dismissed but the problem is back — resurrect.
+        # User dismissed but the problem is back â€” resurrect.
         existing.dismissed = False
         existing.dismissed_at = None
         existing.timestamp = datetime.now(timezone.utc)
         existing.body = (
             f"Maiko routed a {task.type} task ({task.id}) to an agent but "
             f"can't find a local clone of {repo} on disk. Add the parent "
-            f"directory to Settings → GitHub → Repo Roots so worktrees "
+            f"directory to Settings â†’ GitHub â†’ Repo Roots so worktrees "
             f"can be created."
         )
         existing.tags = list(set((existing.tags or []) + [repo, task.id]))
@@ -465,7 +465,7 @@ def _emit_missing_clone_pupdate(task, repo):
         body=(
             f"Maiko routed a {task.type} task ({task.id}) to an agent but "
             f"can't find a local clone of {repo} on disk. Add the parent "
-            f"directory to Settings → GitHub → Repo Roots so worktrees "
+            f"directory to Settings â†’ GitHub â†’ Repo Roots so worktrees "
             f"can be created."
         ),
         actionable=True,
@@ -477,612 +477,13 @@ def _emit_missing_clone_pupdate(task, repo):
     db.session.flush()
 
 
-def _phase_spawn_jobs_for_tasks():
-    """Phase 8b: Turn assigned review/pr_review Tasks into AgentJobs.
-
-    User-owed review Tasks stay in the Tasks page (they represent the
-    *request* — "please review this PR"). The execution of the review
-    is a pack-owned AgentJob that carries the worktree, session, and
-    artifact. This phase is the bridge.
-
-    Picks up any review/pr_review Task with an assigned agent and no
-    linked AgentJob yet, and queues a job. The execute_agent_jobs
-    phase picks it up next tick.
-    """
-    from planet_maiko.models.task import Task
-    from planet_maiko.models.agent_job import AgentJob
-    from planet_maiko.database import db
-    from planet_maiko.orchestration import scope_for_task
-    import uuid as _uuid
-
-    try:
-        candidates = Task.query.filter(
-            Task.type.in_(["review", "pr_review"]),
-            Task.status.in_(["new", "blocked"]),
-            Task.assigned_agent_id.isnot(None),
-        ).limit(10).all()
-
-        # Diagnostic: surface review tasks the spawn phase is *missing*
-        # because they have no assigned agent. Without this log line
-        # a pupdate→task→(no job) gap is invisible from the outside.
-        # Capped at the same limit + cheap query; only logs when there
-        # actually are stranded review tasks.
-        stranded = Task.query.filter(
-            Task.type.in_(["review", "pr_review"]),
-            Task.status.in_(["new", "blocked"]),
-            Task.assigned_agent_id.is_(None),
-        ).limit(10).all()
-        for t in stranded:
-            logger.warning(
-                f"[cycle] review task {t.id} ({t.type}) has no assigned "
-                f"agent — spawn skipped. status={t.status}, "
-                f"repo={(t.extra or {}).get('repo')!r}"
-            )
-
-        if not candidates:
-            return {"spawned": 0}
-
-        spawned = 0
-        for task in candidates:
-            # Skip if an ACTIVE job already exists for this task. A
-            # previous review round that's done/cancelled/failed
-            # shouldn't block a fresh spawn — e.g. the PR author
-            # re-requested review after pushing new commits, the task
-            # went "waiting" → "new", and we want another review pass
-            # against the updated diff.
-            existing = (
-                AgentJob.query
-                .filter_by(source_task_id=task.id)
-                .filter(AgentJob.status.in_([
-                    "pending_approval", "queued", "running",
-                ]))
-                .first()
-            )
-            if existing:
-                continue
-
-            extra = task.extra or {}
-            job = AgentJob(
-                id=_uuid.uuid4().hex[:24],
-                kind=task.type,
-                title=task.title,
-                description=extra.get("description") or extra.get("body"),
-                scope_repo=scope_for_task(task),
-                priority=task.priority or "normal",
-                created_by="system",
-                source_task_id=task.id,
-                agent_profile_id=task.assigned_agent_id,
-                status="queued",
-                extra={},
-            )
-            db.session.add(job)
-            spawned += 1
-            logger.info(f"[cycle] spawned AgentJob for {task.type} task {task.id}")
-
-        if spawned:
-            db.session.commit()
-        return {"spawned": spawned}
-    except Exception as e:
-        logger.warning(f"[cycle] Spawn jobs for tasks skipped: {e}")
-        return {"spawned": 0, "error": str(e)}
+# Heavy phases — extracted to brain/phases/ for size. Imported here
+# so the _PHASES list below resolves them as before.
+from .phases.spawn_jobs import _phase_spawn_jobs_for_tasks  # noqa: E402
+from .phases.execute_jobs import _phase_execute_agent_jobs  # noqa: E402
+from .phases.execute_tasks import _phase_execute_agent_tasks  # noqa: E402
 
 
-def _bump_agent_failed(agent_profile_id):
-    """Increment the agent profile's tasks_failed counter. No-op when
-    the profile id is unknown (stray job with no assigned agent).
-    Caller is responsible for committing the session."""
-    if not agent_profile_id:
-        return
-    from planet_maiko.models.agent_profile import AgentProfile as _AP
-    from planet_maiko.database import db as _db
-    prof = _db.session.get(_AP, agent_profile_id)
-    if prof is not None:
-        prof.tasks_failed = (prof.tasks_failed or 0) + 1
-
-
-def _execute_lightweight_specialty(job, specialty):
-    """Run a no-worktree specialty as a single synchronous LLM call.
-
-    The full prepare + _kickoff_agent_headless machinery exists for
-    long-running agents that need a worktree + MCP reply channel.
-    Specialties like brainstorm / plan / verify just compose a prompt
-    from DB state and call the LLM once — that overhead is pure waste
-    for them. This path:
-
-      1. Lazy-spawn an agent for role=specialty.id / scope=job.scope_repo
-         (if not already assigned).
-      2. Compose the specialty's prompt via get_skill_prompt, which
-         handles context injection + voice + user-edit overrides.
-      3. Call runtime.send synchronously (bounded by timeout).
-      4. Parse PATTERN / PROPOSAL / TASK blocks if the job is linked
-         to a Task (same mechanism investigation agents use).
-      5. Write a skill_result Memo so the output lands in Recent Skills.
-      6. Mark job done; if linked to a Task, mark that done too.
-
-    Returns True on success, False on failure. Failures update the job
-    with status=failed + error so the caller's committed.
-    """
-    from planet_maiko.models.agent_profile import AgentProfile
-    from planet_maiko.models.task import Task
-    from planet_maiko.database import db
-    from planet_maiko.agents.brain_session import _get_runtime
-    from planet_maiko.agents.routing import resolve_model
-    from planet_maiko.agents.skills import get_skill_prompt
-    from planet_maiko.brain.memos import create_memo
-    from planet_maiko.brain.learning.agent_output import parse_and_apply_blocks
-    from planet_maiko.orchestration import maybe_spawn
-
-    # Ensure we have an agent for this specialty + scope.
-    if job.agent_profile_id:
-        agent = db.session.get(AgentProfile, job.agent_profile_id)
-    else:
-        agent = maybe_spawn(specialty.id, job.scope_repo)
-        job.agent_profile_id = agent.id
-
-    runtime = _get_runtime()
-    if not runtime or not runtime.is_available():
-        job.status = "failed"
-        job.error = "LLM runtime unavailable"
-        job.finished_at = datetime.now(timezone.utc)
-        logger.warning(f"[cycle] specialty {specialty.id} ({job.id}): runtime unavailable")
-        return False
-
-    from planet_maiko.brain.automations import format_pupdate_for_context
-    pupdate_block = format_pupdate_for_context(
-        (job.extra or {}).get("pupdate_snapshot")
-    )
-    context_parts = [pupdate_block, (job.description or "")]
-    if job.scope_repo:
-        context_parts.append(f"Repo: {job.scope_repo}")
-    context = {
-        "query": job.title,
-        "context": "\n\n".join(p for p in context_parts if p),
-        "pupdates": "[]",
-        "tasks": "[]",
-        "calendar": "[]",
-    }
-    prompt = get_skill_prompt(specialty.id, context) or specialty.prompt
-
-    model = resolve_model(f"skill:{specialty.id}") or resolve_model("skill")
-    try:
-        result = runtime.send(prompt, timeout=300, model=model)
-    except Exception as e:
-        job.status = "failed"
-        job.error = str(e)[:500]
-        job.finished_at = datetime.now(timezone.utc)
-        logger.warning(f"[cycle] specialty {specialty.id} ({job.id}): send failed: {e}")
-        return False
-
-    if not result or not result.get("success"):
-        err = (result or {}).get("error") or "LLM call failed"
-        job.status = "failed"
-        job.error = str(err)[:500]
-        job.finished_at = datetime.now(timezone.utc)
-        logger.warning(f"[cycle] specialty {specialty.id} ({job.id}): {err}")
-        return False
-
-    output = (result.get("output") or "").strip()
-
-    # Parse structured blocks. Needs a task for attribution — without
-    # one, specialty runs don't feed signals / proposals into the
-    # pool. Standalone specialty jobs still produce a readable memo.
-    linked_task = db.session.get(Task, job.source_task_id) if job.source_task_id else None
-    cleaned = output
-    if agent is not None and linked_task is not None:
-        try:
-            parsed = parse_and_apply_blocks(
-                output, agent=agent, task=linked_task, repo=job.scope_repo,
-            )
-            cleaned = parsed.get("cleaned_output", output)
-        except Exception as e:
-            logger.debug(f"[cycle] block parse failed for {specialty.id}: {e}")
-
-    # Write the user-facing memo.
-    first_line = ""
-    for line in cleaned.splitlines():
-        stripped = line.strip().lstrip("# ").strip()
-        if stripped:
-            first_line = stripped
-            break
-    preview = first_line[:80] if first_line else specialty.name
-    create_memo(
-        kind="skill_result",
-        category="info",
-        title=f"{specialty.id}: {preview}",
-        body=cleaned[:16000],
-        priority=job.priority or "normal",
-        source_agent_id=job.agent_profile_id,
-        source_task_id=job.source_task_id,
-        extra={
-            "skill_name": specialty.id,
-            "skill_title": specialty.name,
-            "from_agent_job": job.id,
-        },
-    )
-
-    job.status = "done"
-    job.finished_at = datetime.now(timezone.utc)
-    job.artifact = cleaned[:16000] or None
-    if linked_task is not None:
-        linked_task.status = "done"
-        task_extra = dict(linked_task.extra or {})
-        if cleaned:
-            task_extra["artifact"] = cleaned[:16000]
-        linked_task.extra = task_extra
-    db.session.commit()
-
-    logger.info(
-        f"[cycle] specialty {specialty.id} ({job.id}) done by {agent.display_name if agent else 'unknown'}: "
-        f"{len(cleaned)} chars"
-    )
-    return True
-
-
-def _phase_execute_agent_jobs():
-    """Phase 8c: run queued AgentJobs. Sibling of _phase_execute_agent_tasks
-    — same prepare+headless-kickoff machinery, reading from the AgentJob
-    table instead of Task.
-
-    Skips pending_approval (user hasn't approved yet) and running / done /
-    failed / cancelled. Capped at 2 per cycle to bound token spend.
-
-    Three execution shapes:
-      - Specialty with needs_worktree=False: direct LLM call via
-        runtime.send. Output lands as a skill_result memo, no worktree,
-        no MCP round-trip. Runs synchronously inside the cycle.
-      - Specialty with needs_worktree=True: the existing prepare +
-        _kickoff_agent_headless path, with the specialty's protocol
-        embedded into the prompt.
-      - Built-in roles (review / investigation / cartograph): unchanged
-        — same path, same prompt composition as before.
-    """
-    from planet_maiko.models.agent_job import AgentJob
-    from planet_maiko.models.agent_profile import AgentProfile
-    from planet_maiko.models.task import Task
-    from planet_maiko.models.custom_skill import CustomSkill
-    from planet_maiko.database import db
-    from planet_maiko.agents.brain_session import ONE_SHOT_ROLE_FOR_TYPE
-    from planet_maiko.agents.coding_agent import prepare, _kickoff_agent_headless
-    from planet_maiko.orchestration import resolve_repo_path, maybe_spawn, build_task_prompt
-
-    try:
-        candidates = (
-            AgentJob.query
-            .filter(AgentJob.status == "queued")
-            .order_by(AgentJob.created_at.asc())
-            .limit(2)
-            .all()
-        )
-        if not candidates:
-            return {"executed": 0}
-
-        executed = 0
-        for job in candidates:
-            # Specialty fast path: no-worktree specialties run as a
-            # direct LLM call, not the full prepare+kickoff dance.
-            specialty = db.session.get(CustomSkill, job.kind)
-            if specialty is not None and not specialty.needs_worktree:
-                if _execute_lightweight_specialty(job, specialty):
-                    executed += 1
-                continue
-
-            role = (ONE_SHOT_ROLE_FOR_TYPE.get(job.kind) or (None, None))[0]
-            if role is None and specialty is not None:
-                # needs_worktree=True specialty: role IS the specialty
-                # id so maybe_spawn creates an agent with the specialty
-                # role, and the skill-prompt embed below picks up the
-                # specialty's protocol.
-                role = specialty.id
-            if role is None:
-                role = {
-                    "cartograph": "cartographer",
-                    "review": "review",
-                    "pr_review": "review",
-                }.get(job.kind, "investigation")
-
-            local_path = resolve_repo_path(job.scope_repo) if job.scope_repo else None
-            if job.scope_repo and not local_path:
-                logger.warning(
-                    f"[cycle] agent_job {job.id}: no local clone for "
-                    f"{job.scope_repo}, marking failed"
-                )
-                job.status = "failed"
-                job.error = f"No local clone found for {job.scope_repo}"
-                job.finished_at = datetime.now(timezone.utc)
-                _bump_agent_failed(job.agent_profile_id)
-                db.session.commit()
-                continue
-
-            # Find or spawn an agent profile for this role+scope.
-            if job.agent_profile_id:
-                profile = db.session.get(AgentProfile, job.agent_profile_id)
-            else:
-                profile = maybe_spawn(role, job.scope_repo)
-                job.agent_profile_id = profile.id
-
-            # If this job is linked to a Task, use the shared prompt
-            # composer so the agent sees the full Task context
-            # (source pupdate, project, url, tags, skill recipe).
-            linked_task = (
-                db.session.get(Task, job.source_task_id)
-                if job.source_task_id else None
-            )
-            if linked_task is not None:
-                full_prompt = build_task_prompt(linked_task, role)
-            else:
-                # Lightweight prompt for standalone AgentJobs.
-                prompt_parts = [job.title]
-                if job.description:
-                    prompt_parts.append(f"\n## Description\n\n{job.description}")
-
-                # Fold in the triggering pupdate(s) so a chain-fired agent
-                # can see the incident / CI failure / error-spike bodies
-                # that made this automation fire. Without this, the agent
-                # only sees a templated title + static description and has
-                # to go fish for context.
-                try:
-                    from planet_maiko.models.pupdate import Pupdate as _Pup
-                    job_extra = job.extra or {}
-                    pupdate_ids = []
-                    single_id = job_extra.get("triggered_by_pupdate")
-                    if single_id:
-                        pupdate_ids.append(single_id)
-                    for pid in (job_extra.get("triggered_by_pupdates") or []):
-                        if pid not in pupdate_ids:
-                            pupdate_ids.append(pid)
-                    if pupdate_ids:
-                        triggering = (
-                            _Pup.query
-                            .filter(_Pup.id.in_(pupdate_ids))
-                            .order_by(_Pup.timestamp.asc())
-                            .all()
-                        )
-                        if triggering:
-                            heading = (
-                                "Triggering event" if len(triggering) == 1
-                                else f"Triggering events ({len(triggering)})"
-                            )
-                            lines = [f"\n## {heading}\n"]
-                            for p in triggering:
-                                lines.append(f"### {p.type}: {p.title or '(no title)'}")
-                                if p.source:
-                                    lines.append(f"Source: {p.source}")
-                                if p.url:
-                                    lines.append(f"URL: {p.url}")
-                                if p.tags:
-                                    lines.append(f"Tags: {', '.join(p.tags)}")
-                                if p.body:
-                                    lines.append(f"\n{p.body}")
-                                lines.append("")
-                            prompt_parts.append("\n".join(lines))
-                except Exception as e:
-                    logger.debug(f"[cycle] pupdate-context enrich skipped for {job.id}: {e}")
-
-                # Embed the skill/specialty protocol into the prompt
-                # for roles whose work is guided by one. Specialties
-                # use job.kind directly (it's the CustomSkill.id);
-                # built-in review/investigation roles pick up from
-                # ONE_SHOT_ROLE_FOR_TYPE's skill mapping.
-                skill_name = None
-                if specialty is not None:
-                    skill_name = specialty.id
-                elif role in ("review", "investigation"):
-                    skill_name = (ONE_SHOT_ROLE_FOR_TYPE.get(job.kind) or (None, None))[1]
-                if skill_name:
-                    try:
-                        from planet_maiko.agents.skills import get_skill_prompt
-                        skill_prompt = get_skill_prompt(skill_name, {
-                            "query": job.title,
-                            "context": f"Repo: {job.scope_repo or ''}",
-                            "pupdates": "[]", "tasks": "[]", "calendar": "[]",
-                        }) or ""
-                        if skill_prompt.strip():
-                            prompt_parts.append(f"\n## Skill: {skill_name}\n\n{skill_prompt}")
-                    except Exception as e:
-                        logger.debug(f"[cycle] skill prompt embed skipped: {e}")
-                full_prompt = "\n".join(prompt_parts)
-
-            if not job.worktree_path:
-                if not local_path:
-                    # Cartograph + some skill runs can work without a
-                    # repo clone (read-only on current working dir), but
-                    # agent runs without a real repo are unusual. Mark
-                    # failed if we can't resolve a path.
-                    logger.warning(f"[cycle] agent_job {job.id}: no repo path, skipping")
-                    continue
-                # Specialty picked at automation-config time or via ask-
-                # first approval lives on job.extra. prepare() safety-
-                # checks it against the agent's attached pool; runner
-                # silently drops unattached ids.
-                specialty_id = (job.extra or {}).get("specialty_id") or None
-                try:
-                    prep = prepare(
-                        task_id=job.id,
-                        task_title=job.title,
-                        prompt=full_prompt,
-                        repo_path=local_path,
-                        branch_prefix="cartographer" if role == "cartographer" else "maiko",
-                        use_worktree=True,
-                        agent_profile_id=job.agent_profile_id,
-                        role=role,
-                        specialty_id=specialty_id,
-                    )
-                except Exception as e:
-                    logger.warning(f"[cycle] prepare failed for agent_job {job.id}: {e}")
-                    job.status = "failed"
-                    job.error = str(e)[:500]
-                    job.finished_at = datetime.now(timezone.utc)
-                    _bump_agent_failed(job.agent_profile_id)
-                    db.session.commit()
-                    continue
-                if not prep:
-                    continue
-                job.worktree_path = prep["working_path"]
-                job.branch = prep.get("branch")
-                db.session.commit()
-
-            kickoff = _kickoff_agent_headless(
-                job.agent_profile_id, job.worktree_path, job.id,
-                branch_name=None, plan_first=False, role=role,
-            )
-            if kickoff.get("success"):
-                job.status = "running"
-                job.started_at = datetime.now(timezone.utc)
-                job.session_id = kickoff.get("session_id")
-                # Sync the linked Task: status → in_progress, and
-                # surface the worktree path on task.extra so UI code
-                # (diff view, relaunch) that still reads from Task
-                # doesn't break.
-                if linked_task is not None:
-                    linked_task.status = "in_progress"
-                    task_extra = dict(linked_task.extra or {})
-                    if job.worktree_path:
-                        task_extra["working_path"] = job.worktree_path
-                    if job.branch:
-                        task_extra["branch"] = job.branch
-                    linked_task.extra = task_extra
-                executed += 1
-            else:
-                job.status = "failed"
-                job.error = kickoff.get("error") or "kickoff failed"
-                job.finished_at = datetime.now(timezone.utc)
-                _bump_agent_failed(job.agent_profile_id)
-                logger.warning(
-                    f"[cycle] kickoff failed for agent_job {job.id}: {kickoff.get('error')}"
-                )
-
-        if executed:
-            db.session.commit()
-        return {"executed": executed}
-    except Exception as e:
-        logger.warning(f"[cycle] execute agent jobs skipped: {e}")
-        return {"executed": 0, "error": str(e)}
-
-
-def _phase_execute_agent_tasks():
-    """Phase 8d: Safety net for non-review one-shot tasks that have been
-    assigned but haven't started yet.
-
-    Post-Stage D this only handles investigation / repo_analysis /
-    cartograph. Review / pr_review Tasks now route through
-    _phase_spawn_jobs_for_tasks → _phase_execute_agent_jobs so the
-    AgentJob owns the worktree + artifact.
-
-    Every non-review role shares the same autonomous flow —
-    claude --print in a worktree, agent uses the channel MCP to reply
-    ready_for_review. /agents/assign fires this inline; this phase is
-    the catch-all for tasks routed by _phase_orchestrate (which only
-    writes assigned_agent_id, no kickoff) or whose inline kickoff
-    thread died silently.
-
-    Coding tasks are excluded because their kickoff is owned by
-    coding_agent.kickoff_coding_task (called from the project
-    plan-approve path) and re-firing them here would step on user
-    intent. One-shot tasks are idempotent enough — the agent
-    re-reads TASK.md and produces the same artifact.
-
-    Capped at 2 per cycle to bound token spend.
-    """
-    from planet_maiko.models.task import Task
-    from planet_maiko.models.agent_profile import AgentProfile
-    from planet_maiko.database import db
-    from planet_maiko.agents.brain_session import ONE_SHOT_ROLE_FOR_TYPE
-    from planet_maiko.agents.coding_agent import prepare, _kickoff_agent_headless
-    from planet_maiko.orchestration import resolve_repo_path
-
-    _NON_REVIEW_ONE_SHOT = [
-        k for k in ONE_SHOT_ROLE_FOR_TYPE.keys()
-        if k not in ("review", "pr_review")
-    ]
-
-    try:
-        candidates = Task.query.filter(
-            Task.status == "new",
-            Task.assigned_agent_id.isnot(None),
-            Task.type.in_(_NON_REVIEW_ONE_SHOT),
-        ).limit(2).all()
-
-        if not candidates:
-            return {"executed": 0}
-
-        executed = 0
-        for task in candidates:
-            meta = task.extra or {}
-            working_dir = meta.get("working_path")
-            profile = db.session.get(AgentProfile, task.assigned_agent_id)
-            role = (profile.role if profile else None) or {
-                "review": "review", "pr_review": "review",
-                "investigation": "investigation",
-                "repo_analysis": "investigation",
-            }.get(task.type, "investigation")
-
-            # First time through for this task — set up the worktree.
-            if not working_dir:
-                from planet_maiko.orchestration import scope_for_task
-                repo = scope_for_task(task)
-                local_path = resolve_repo_path(repo)
-                if not local_path:
-                    _emit_missing_clone_pupdate(task, repo)
-                    logger.warning(
-                        f"[cycle] task {task.id}: no local clone for "
-                        f"{repo}, skipping (added pupdate)"
-                    )
-                    continue
-                try:
-                    from planet_maiko.orchestration import build_task_prompt
-                    # Same composer the assign API and pack dispatcher use,
-                    # so a task entering via the cycle's safety net gets the
-                    # full description + source context + project + skill
-                    # prompt the other entry points include. The earlier
-                    # inline version was missing several of these, so a
-                    # task retried via the cycle arrived with less context
-                    # than the same task via the API.
-                    full_prompt = build_task_prompt(task, role)
-                    # Specialty picked at assign time lives on
-                    # task.extra — pass through so the retry-via-cycle
-                    # path builds the same CLAUDE.md the fresh assign
-                    # would have.
-                    specialty_id = (task.extra or {}).get("specialty_id") or None
-                    prep = prepare(
-                        task_id=task.id,
-                        task_title=task.title,
-                        prompt=full_prompt,
-                        repo_path=local_path,
-                        use_worktree=True,
-                        agent_profile_id=task.assigned_agent_id,
-                        role=role,
-                        specialty_id=specialty_id,
-                    )
-                except Exception as e:
-                    logger.warning(f"[cycle] prepare failed for {task.id}: {e}")
-                    continue
-                if not prep:
-                    continue
-                working_dir = prep["working_path"]
-                task.extra = {**meta, "working_path": working_dir, "branch": prep["branch"]}
-                db.session.commit()
-
-            # Same headless flow coding agents use — claude --print,
-            # daemon thread, channel MCP for replies. Returns
-            # immediately after spawning.
-            kickoff = _kickoff_agent_headless(
-                task.assigned_agent_id, working_dir, task.id,
-                branch_name=None, plan_first=False, role=role,
-            )
-            if kickoff.get("success"):
-                task.status = "in_progress"
-                executed += 1
-            else:
-                logger.warning(
-                    f"[cycle] kickoff failed for {task.id}: {kickoff.get('error')}"
-                )
-
-        if executed:
-            db.session.commit()
-        return {"executed": executed}
-    except Exception as e:
-        logger.warning(f"[cycle] Execute agent tasks skipped: {e}")
-        return {"executed": 0, "error": str(e)}
 
 
 # ---------------------------------------------------------------------------
@@ -1118,7 +519,7 @@ def run(app):
         app: Flask app (needed for app context)
 
     Returns:
-        dict mapping phase name → result dict
+        dict mapping phase name â†’ result dict
     """
     global _last_cycle, _cycle_count
 
