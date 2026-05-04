@@ -4,12 +4,14 @@
 // gets a single-icon launch instead of two terminals.
 //
 // Lifecycle:
-//   - main() resolves the absolute path to `maiko` via the user's
-//     login shell, then spawns it directly. Finder-launched apps
-//     inherit a minimal /usr/bin:/bin PATH that doesn't include
-//     ~/.local/bin / homebrew / pyenv shims / venvs — running through
-//     the login shell once to get the path lets every standard pip
-//     install location work without us hardcoding any of them.
+//   - main() spawns Flask via `$SHELL -l -c "exec maiko serve"` on
+//     Mac/Linux. Going through the login shell means the child
+//     inherits PATH + env from .zprofile / .zshenv (homebrew gh,
+//     pyenv shims, venv bins, ANTHROPIC_API_KEY, etc.) instead of
+//     Tauri's minimal Finder-inherited env. `exec` drops the shell
+//     out of the parent–child chain so kill() still terminates Flask
+//     directly. On Windows the registry-level user PATH is already
+//     inherited by Finder/Explorer launches, so we spawn maiko directly.
 //   - If maiko isn't found we log a clear error and let Tauri open
 //     anyway. Better to show the user a window with broken API
 //     calls than to crash silently before the window appears.
@@ -61,50 +63,49 @@ fn log_line(msg: &str) {
     eprintln!("{}", msg);
 }
 
-// Resolve the absolute path to `maiko` by asking the user's login
-// shell (Mac/Linux) — this loads .zshrc/.zshenv/.bashrc so any PATH
-// edits the user has (~/.local/bin, /opt/homebrew/bin, pyenv shims,
-// venv bins) get picked up. On Windows we trust the registry-level
-// user PATH that Finder/Explorer launches inherit by default.
+// Spawn `maiko serve` through the user's login shell on Mac/Linux so
+// the Flask child inherits the full PATH + env (homebrew gh, pyenv
+// shims, venv bins, ANTHROPIC_API_KEY, etc.) from .zprofile / .zshenv.
+//
+// `Command::new("maiko")` directly would inherit Tauri's own env, which
+// from a Finder launch is the minimal /usr/bin:/bin set — so things
+// like `gh` (typically /opt/homebrew/bin/gh) show up as missing in
+// system_health even when `which gh` works in a terminal.
+//
+// `exec` replaces the shell with the maiko process so the parent–child
+// chain is still Tauri → maiko (the shell drops out), keeping kill()
+// behavior intact.
+//
+// `-l` makes it a login shell, which sources .zprofile/.zshenv but
+// NOT .zshrc (zsh only reads .zshrc for interactive shells). Users who
+// want PATH visible to Tauri must put their exports in .zprofile.
+//
+// On Windows we trust the registry-level user PATH that Finder/
+// Explorer launches inherit by default.
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-fn resolve_maiko_path() -> std::io::Result<PathBuf> {
+fn spawn_maiko_serve() -> std::io::Result<Child> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-    let output = Command::new(&shell)
-        .args(["-l", "-c", "command -v maiko"])
-        .output()?;
-    if !output.status.success() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            format!(
-                "`maiko` not found in {}'s login PATH. Install with `pip install --user -e .` from the planet-maiko repo, or make sure your venv's bin dir is on PATH in ~/.zshrc.",
-                shell
-            ),
-        ));
-    }
-    let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if path_str.is_empty() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "`command -v maiko` returned empty in login shell".to_string(),
-        ));
-    }
-    Ok(PathBuf::from(path_str))
+    log_line(&format!("[maiko] Spawning `maiko serve` via {} -l", shell));
+
+    Command::new(&shell)
+        .args(["-l", "-c", "exec maiko serve"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
 }
 
 #[cfg(target_os = "windows")]
-fn resolve_maiko_path() -> std::io::Result<PathBuf> {
-    Ok(PathBuf::from("maiko"))
-}
-
-fn spawn_flask() -> std::io::Result<Child> {
-    let maiko = resolve_maiko_path()?;
-    log_line(&format!("[maiko] Resolved maiko binary: {}", maiko.display()));
-
-    let mut child = Command::new(&maiko)
+fn spawn_maiko_serve() -> std::io::Result<Child> {
+    log_line("[maiko] Spawning `maiko serve` (using inherited PATH)");
+    Command::new("maiko")
         .arg("serve")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn()?;
+        .spawn()
+}
+
+fn spawn_flask() -> std::io::Result<Child> {
+    let mut child = spawn_maiko_serve()?;
 
     // Drain stdout / stderr to the log file so a Flask crash isn't
     // invisible to a Finder-launched user. Detached threads — they
