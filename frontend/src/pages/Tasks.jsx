@@ -293,12 +293,12 @@ export default function Tasks() {
                   }} disabled={generating === project.id}>
                     <Sparkles size={10} /> {generating === project.id ? "..." : "Generate Tasks"}
                   </button>
-                  {(project.metadata?.generated_tasks || project.extra?.generated_tasks)?.length > 0 && (
+                  {(project.metadata?.generated_tasks)?.length > 0 && (
                     <button className="btn btn-sm btn-approve" onClick={(e) => {
                       e.stopPropagation();
-                      setGeneratedTasks({ project_id: project.id, tasks: project.metadata?.generated_tasks || project.extra?.generated_tasks });
+                      setGeneratedTasks({ project_id: project.id, tasks: project.metadata?.generated_tasks });
                     }}>
-                      <Sparkles size={10} /> Review ({(project.metadata?.generated_tasks || project.extra?.generated_tasks).length} ideas)
+                      <Sparkles size={10} /> Review ({(project.metadata?.generated_tasks).length} ideas)
                     </button>
                   )}
                   {project.source_url && (
@@ -632,7 +632,7 @@ export default function Tasks() {
               e.preventDefault();
               const { description, repo, ...rest } = editForm;
               const payload = { ...rest };
-              const existingMeta = editingTask.extra || editingTask.metadata || {};
+              const existingMeta = editingTask.metadata || {};
               const trimmedRepo = (repo || "").trim();
               payload.metadata = {
                 ...existingMeta,
@@ -762,9 +762,9 @@ export default function Tasks() {
               <button className="btn btn-sm" onClick={() => setDetailTask(null)} style={{ border: "none", padding: 4 }}><X size={14} /></button>
             </div>
             <div className="modal-body" style={{ fontSize: 13, lineHeight: 1.6, color: "var(--text-dim)" }}>
-              {(detailTask.extra?.description || detailTask.metadata?.description) && (
+              {(detailTask.metadata?.description) && (
                 <div style={{ whiteSpace: "pre-wrap", marginBottom: 12 }}>
-                  {detailTask.extra?.description || detailTask.metadata?.description}
+                  {detailTask.metadata?.description}
                 </div>
               )}
               {detailTask.url && (

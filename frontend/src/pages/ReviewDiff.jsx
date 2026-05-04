@@ -133,7 +133,7 @@ export default function ReviewDiff() {
   // runs on every render — must NOT live below the loading early
   // return below or React trips Rules of Hooks.
   const { rulesConsidered, agentQueries } = useMemo(() => {
-    const history = (task?.extra?.rules_considered || task?.metadata?.rules_considered || []);
+    const history = (task?.metadata?.rules_considered || []);
     const byId = new Map();
     const querySet = new Set();
     for (const entry of history) {
@@ -263,10 +263,10 @@ export default function ReviewDiff() {
   // - Coding task = agent wrote code on their own branch. User
   //   approves/requests changes, and an Approve pushes + opens a PR.
   const isReviewTask = task && (task.type === "review" || task.type === "pr_review");
-  const verdict = task?.metadata?.review_verdict || task?.extra?.review_verdict;
+  const verdict = task?.metadata?.review_verdict;
   const verdictMeta = verdict ? VERDICT_META[verdict] : null;
-  const summary = task?.metadata?.review_summary || task?.extra?.review_summary;
-  const prUrl = task?.url || task?.metadata?.pr_url || task?.extra?.pr_url;
+  const summary = task?.metadata?.review_summary;
+  const prUrl = task?.url || task?.metadata?.pr_url;
 
 
   const handleCloseReview = async () => {
@@ -415,10 +415,10 @@ export default function ReviewDiff() {
               cases where a stale memo route brings the user here for
               one of those, so the page shows the report instead of an
               empty diff. */}
-          {task?.extra?.artifact ? (
+          {task?.metadata?.artifact ? (
             <div
               className="review-diff-artifact"
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(task.extra.artifact) }}
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(task.metadata.artifact) }}
             />
           ) : isReviewTask ? (
             <div className="review-diff-empty">

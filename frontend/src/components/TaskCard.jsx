@@ -58,7 +58,7 @@ export default function TaskCard({
   const StatusIcon = STATUS_ICONS[t.status] || Circle;
   const priorityClass = t.priority || "normal";
   const isDone = t.status === "done" || t.status === "cancelled";
-  const isPinned = !!(t.extra?.pinned || t.metadata?.pinned);
+  const isPinned = !!(t.metadata?.pinned);
 
   const handleSourceIconClick = (e) => {
     e.stopPropagation();
@@ -67,7 +67,7 @@ export default function TaskCard({
   };
 
   const handleTogglePin = async () => {
-    const extra = { ...(t.extra || t.metadata || {}), pinned: !isPinned };
+    const extra = { ...(t.metadata || {}), pinned: !isPinned };
     await api.updateTask(t.id, { extra });
     showToast(extra.pinned ? "Pinned to focus" : "Unpinned", "normal");
     onRefresh();
@@ -85,10 +85,10 @@ export default function TaskCard({
     onRefresh();
   };
 
-  const linearIdentifier = t.extra?.linear_identifier || t.extra?.identifier || t.metadata?.linear_identifier || t.metadata?.identifier;
-  const linearUrl = t.extra?.linear_url || t.metadata?.linear_url || (t.url?.includes("linear.app") ? t.url : null);
-  const linearCycleNumber = t.extra?.linear_cycle_number ?? t.metadata?.linear_cycle_number;
-  const linearCycleName = t.extra?.linear_cycle_name || t.metadata?.linear_cycle_name;
+  const linearIdentifier = t.metadata?.linear_identifier || t.metadata?.identifier;
+  const linearUrl = t.metadata?.linear_url || (t.url?.includes("linear.app") ? t.url : null);
+  const linearCycleNumber = t.metadata?.linear_cycle_number;
+  const linearCycleName = t.metadata?.linear_cycle_name;
   const [showLinearModal, setShowLinearModal] = useState(false);
 
   // One-shot agent work (review / investigation / cartograph) runs
@@ -100,7 +100,7 @@ export default function TaskCard({
   const ONE_SHOT_TYPES = new Set(["review", "pr_review", "investigation", "repo_analysis", "cartograph"]);
   const isOneShotTask = ONE_SHOT_TYPES.has(t.type);
   const isCartographTask = t.type === "cartograph";
-  const hasArtifact = !!(t.extra?.artifact);
+  const hasArtifact = !!(t.metadata?.artifact);
   const agentName = agentNames?.[t.assigned_agent_id] || t.assigned_agent_id?.replace(/^agent-/, "");
   const [showArtifact, setShowArtifact] = useState(false);
 
@@ -113,14 +113,14 @@ export default function TaskCard({
   const handleEditClick = () => {
     onEdit(t, {
       title: t.title || "",
-      description: t.extra?.description || t.metadata?.description || "",
+      description: t.metadata?.description || "",
       type: t.type || "coding",
       priority: t.priority || "normal",
       status: t.status || "new",
       project_id: t.project_id || "",
       url: t.url || "",
       due_date: t.due_date || "",
-      repo: t.extra?.repo || t.metadata?.repo || "",
+      repo: t.metadata?.repo || "",
     });
   };
 
@@ -149,12 +149,12 @@ export default function TaskCard({
         </div>
         <div className="card-meta">
           <span className="card-type">{t.type}</span>
-          {(t.extra?.auto_spawned || t.metadata?.auto_spawned) && (
+          {(t.metadata?.auto_spawned) && (
             <span
               className="tag tag-auto-spawned"
               title={
-                (t.extra?.pattern || t.metadata?.pattern || []).length
-                  ? `Auto-spawned from incident: ${(t.extra?.pattern || t.metadata?.pattern || []).join(" + ")}`
+                (t.metadata?.pattern || []).length
+                  ? `Auto-spawned from incident: ${(t.metadata?.pattern || []).join(" + ")}`
                   : "Auto-spawned by Maiko"
               }
             >
@@ -162,8 +162,8 @@ export default function TaskCard({
             </span>
           )}
           {t.project_id && <span className="tag tag-project">{t.project_id}</span>}
-          {(t.metadata?.repo || t.extra?.repo) && (
-            <span className="tag" title={t.metadata?.repo || t.extra?.repo}><GitBranch size={9} /> {formatRepo(t.metadata?.repo || t.extra?.repo, defaultOrg)}</span>
+          {(t.metadata?.repo) && (
+            <span className="tag" title={t.metadata?.repo}><GitBranch size={9} /> {formatRepo(t.metadata?.repo, defaultOrg)}</span>
           )}
           {t.status === "blocked" && (t.depends_on || []).length > 0 && (
             <span className="tag" style={{ color: "var(--orange)", background: "var(--high-soft)" }}>
@@ -213,15 +213,15 @@ export default function TaskCard({
               onClick={() => setShowArtifact((v) => !v)}
             >
               {showArtifact ? "Hide" : "View"} {t.type === "review" || t.type === "pr_review" ? "review" : "report"}
-              {t.extra?.patterns_emitted ? ` · ${t.extra.patterns_emitted} pattern(s)` : ""}
-              {t.extra?.proposals_emitted ? ` · ${t.extra.proposals_emitted} proposal(s)` : ""}
+              {t.metadata?.patterns_emitted ? ` · ${t.metadata.patterns_emitted} pattern(s)` : ""}
+              {t.metadata?.proposals_emitted ? ` · ${t.metadata.proposals_emitted} proposal(s)` : ""}
               {(() => {
                 // Unique rules across all queries the agent ran. The
                 // ReviewDiff page renders the full list; here we just
                 // show the count so users can scan their task list and
                 // see "yep, agent grounded against team rules" at a
                 // glance without opening the report.
-                const history = t.extra?.rules_considered || t.metadata?.rules_considered || [];
+                const history = t.metadata?.rules_considered || [];
                 if (!history.length) return "";
                 const ids = new Set();
                 for (const entry of history) {
@@ -231,12 +231,12 @@ export default function TaskCard({
                 }
                 return ids.size ? ` · ${ids.size} rule${ids.size === 1 ? "" : "s"} considered` : "";
               })()}
-              {t.extra?.confidence && t.extra.confidence !== "high" ? ` · ${t.extra.confidence} confidence` : ""}
+              {t.metadata?.confidence && t.metadata.confidence !== "high" ? ` · ${t.metadata.confidence} confidence` : ""}
             </button>
             {showArtifact && (
               <div
                 className="agent-artifact-body"
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(t.extra.artifact) }}
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(t.metadata.artifact) }}
               />
             )}
           </div>
@@ -280,7 +280,7 @@ export default function TaskCard({
                   <Eye size={10} /> Review PR
                 </a>
               )}
-              {(t.extra?.description || t.metadata?.description || t.body) && (
+              {(t.metadata?.description || t.body) && (
                 <button className="btn btn-sm btn-action" onClick={() => onShowDetail(t)}>
                   <FolderOpen size={10} /> Details
                 </button>
@@ -341,7 +341,7 @@ export default function TaskCard({
                   skipped kickoff) and one-shot (initial assign kickoff
                   failed, or user reassigned — reassign clears the
                   worktree, and the backend routes launch by task type). */}
-              {!isDone && t.assigned_agent_id && t.status !== "in_progress" && !t.extra?.working_path && (
+              {!isDone && t.assigned_agent_id && t.status !== "in_progress" && !t.metadata?.working_path && (
                 <button
                   className="btn btn-sm btn-primary"
                   onClick={(e) => onAction(e, t.id, "launch")}
@@ -355,7 +355,7 @@ export default function TaskCard({
                   mid-run) gets a direct "Review diff" link — even if
                   the agent never explicitly sent ready_for_review, the
                   user can always find the diff. */}
-              {!isDone && t.assigned_agent_id && t.extra?.working_path && (
+              {!isDone && t.assigned_agent_id && t.metadata?.working_path && (
                 <Link
                   to={`/tasks/${t.id}/review`}
                   className="btn btn-sm btn-primary"

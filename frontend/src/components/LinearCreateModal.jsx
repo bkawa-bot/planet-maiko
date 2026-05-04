@@ -29,7 +29,7 @@ export default function LinearCreateModal({ task, onClose, onCreated }) {
 
   const [title, setTitle] = useState(task.title || "");
   const [description, setDescription] = useState(
-    task.extra?.description || task.metadata?.description || "",
+    task.metadata?.description || "",
   );
   const [stateId, setStateId] = useState("");
   const [priority, setPriority] = useState("");
@@ -81,7 +81,7 @@ export default function LinearCreateModal({ task, onClose, onCreated }) {
     }
     setSubmitting(true);
     // Resolve cycle number + name client-side so the backend can
-    // store them on task.extra without a second roundtrip. The poll
+    // store them on task.metadata without a second roundtrip. The poll
     // will overwrite if the issue later moves.
     const allCycles = [meta.activeCycle, ...(meta.upcomingCycles || [])].filter(Boolean);
     const pickedCycle = cycleId ? allCycles.find((c) => c.id === cycleId) : null;

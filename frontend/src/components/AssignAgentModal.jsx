@@ -37,14 +37,14 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
   const [customPrompt, setCustomPrompt] = useState("");
   const [branchName, setBranchName] = useState("");
   // One-sentence ritual: capture the user's intent explicitly before
-  // the agent gets the task. Prefilled from task.extra.description or
-  // body if present; the user can amend. Saved onto task.extra on
+  // the agent gets the task. Prefilled from task.metadata.description or
+  // body if present; the user can amend. Saved onto task.metadata on
   // assign so build_task_prompt renders it in TASK.md.
-  const initialIntent = (task.metadata?.description || task.metadata?.body || task.extra?.description || task.extra?.body || "").trim();
+  const initialIntent = (task.metadata?.description || task.metadata?.body || task.metadata?.description || task.metadata?.body || "").trim();
   const [intent, setIntent] = useState(initialIntent);
-  const [nonGoals, setNonGoals] = useState((task.metadata?.non_goals || task.extra?.non_goals || "").trim());
+  const [nonGoals, setNonGoals] = useState((task.metadata?.non_goals || "").trim());
 
-  const repo = task.metadata?.repo || task.extra?.repo || "";
+  const repo = task.metadata?.repo || "";
   const expectedRole = TYPE_TO_ROLE[task.type] || "coding";
 
   useEffect(() => {
@@ -135,18 +135,18 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
     }
     setAssigning(true);
     try {
-      // Persist the captured intent + boundaries onto task.extra so
+      // Persist the captured intent + boundaries onto task.metadata so
       // build_task_prompt picks them up for every future run of this
       // task (retry via cycle, resume, reassign).
       const intentTrimmed = intent.trim();
       const nonGoalsTrimmed = nonGoals.trim();
       const nextMeta = {
-        ...(task.metadata || task.extra || {}),
+        ...(task.metadata || {}),
         description: intentTrimmed,
       };
       if (nonGoalsTrimmed) nextMeta.non_goals = nonGoalsTrimmed;
       else delete nextMeta.non_goals;
-      if (intentTrimmed !== initialIntent || nonGoalsTrimmed !== (task.metadata?.non_goals || task.extra?.non_goals || "")) {
+      if (intentTrimmed !== initialIntent || nonGoalsTrimmed !== (task.metadata?.non_goals || "")) {
         await api.updateTask(task.id, { metadata: nextMeta });
       }
       await api.assignAgent({
