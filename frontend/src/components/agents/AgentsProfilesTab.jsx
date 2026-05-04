@@ -114,14 +114,9 @@ function ProfileCard({ profile, onOpen }) {
           />
           <span className="profile-card-name-text">{profile.display_name}</span>
         </div>
-        {(profile.scope_repo || profile.extra?.adapter_path) && (
+        {profile.scope_repo && (
           <div className="profile-card-chips">
-            {profile.scope_repo && (
-              <span className="profile-card-chip" title={profile.scope_repo}>{formatRepo(profile.scope_repo, defaultOrg)}</span>
-            )}
-            {profile.extra?.adapter_path && (
-              <span className="profile-card-chip profile-card-chip-lora">LoRA</span>
-            )}
+            <span className="profile-card-chip" title={profile.scope_repo}>{formatRepo(profile.scope_repo, defaultOrg)}</span>
           </div>
         )}
         {preview && (

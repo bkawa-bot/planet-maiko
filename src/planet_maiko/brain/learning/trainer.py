@@ -1,16 +1,9 @@
-"""LoRA trainer for per-agent models using MLX (Apple Silicon) or Unsloth (NVIDIA).
+"""LoRA trainer for per-repo models using MLX (Apple Silicon) or Unsloth (NVIDIA).
 
-Trains a small LoRA adapter on the agent's training data (extracted from PR
-review history). The adapter encodes the team's coding patterns so the agent
-can check compliance without calling an external API.
-
-Usage:
-    from planet_maiko.brain.learning.trainer import train_agent
-    result = train_agent("agent-blitzflow", repo="acme/backend")
-
-Or via CLI:
-    maiko train blitzflow
-    maiko train --all
+Trains a small LoRA adapter on the repo's training data (extracted from PR
+review history). The adapter encodes the team's coding patterns for that
+repo so any agent working there can check compliance without calling an
+external API. Adapters are per-repo, never per-agent.
 """
 
 import json
@@ -208,19 +201,20 @@ def get_backend():
     return None
 
 
-def train_agent(agent_profile_id=None, dataset_path=None, repo=None, config=None, adapter_path=None):
+def train_lora(repo=None, dataset_path=None, config=None, adapter_path=None):
     """Train a LoRA adapter scoped to a repo (or "global" by default).
 
+    On success, the adapter path is registered in
+    `config.lora.models_by_repo[repo]` so future inference for that repo
+    picks it up. Adapters are per-repo, never per-agent — agents look up
+    their adapter via their scope_repo.
+
     Args:
-        agent_profile_id: optional. When provided, the adapter path is
-            also written to that AgentProfile.extra (legacy assign-on-
-            train flow used by the CLI). The HTTP API leaves this None
-            and assigns later via /training/assign-adapter.
+        repo: optional "org/name" — used for auto-selecting a
+            repo-specific dataset, naming the output adapter, and
+            registering the trained path in config.lora.models_by_repo.
         dataset_path: explicit JSONL dataset (auto-selects latest if None,
             preferring repo-specific files when `repo` is set).
-        repo: optional "org/name" — used for auto-selecting a
-            repo-specific dataset and for naming the output adapter
-            when adapter_path isn't provided.
         config: training hyperparameter overrides.
         adapter_path: caller-provided output dir. The HTTP API pre-
             creates this and seeds progress.json so the UI can poll
@@ -235,7 +229,7 @@ def train_agent(agent_profile_id=None, dataset_path=None, repo=None, config=None
     train_config = {**DEFAULT_TRAINING_CONFIG, **(config or {})}
     backend = get_backend()
 
-    scope_label = agent_profile_id or (repo or "global")
+    scope_label = repo or "global"
     logger.info(f"[lora-train] Training LoRA for {scope_label}")
     logger.info(f"[lora-train] Backend: {backend or 'NONE — install mlx or pytorch'}")
     logger.info(f"[lora-train] Config: rank={train_config['lora_rank']}, epochs={train_config['epochs']}")
@@ -285,11 +279,8 @@ def train_agent(agent_profile_id=None, dataset_path=None, repo=None, config=None
         models_dir = os.path.join(data_dir(), "models")
         os.makedirs(models_dir, exist_ok=True)
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-        if agent_profile_id:
-            adapter_name = f"{agent_profile_id}-{timestamp}"
-        else:
-            safe_repo = repo.replace("/", "--") if repo else "global"
-            adapter_name = f"lora-{safe_repo}-{timestamp}"
+        safe_repo = repo.replace("/", "--") if repo else "global"
+        adapter_name = f"lora-{safe_repo}-{timestamp}"
         adapter_path = os.path.join(models_dir, adapter_name)
     else:
         os.makedirs(adapter_path, exist_ok=True)
@@ -332,26 +323,17 @@ def train_agent(agent_profile_id=None, dataset_path=None, repo=None, config=None
             logger.warning(f"[lora-train] Could not write adapter metadata: {e}")
 
     if result.get("success"):
-        # Legacy: when called with an explicit agent_profile_id (CLI),
-        # write the adapter path back to that profile so the agent
-        # picks it up. Repo-scoped HTTP training skips this — the UI
-        # assigns adapters separately via /training/assign-adapter.
-        if agent_profile_id:
+        # Register the trained adapter under config.lora.models_by_repo so
+        # inference (and the lora_check MCP tool) finds it next time.
+        if repo:
             try:
-                from planet_maiko.database import db
-                from planet_maiko.models.agent_profile import AgentProfile
-                profile = db.session.get(AgentProfile, agent_profile_id)
-                if profile:
-                    profile.extra = {
-                        **(profile.extra or {}),
-                        "adapter_path": adapter_path,
-                        "trained_at": datetime.now(timezone.utc).isoformat(),
-                        "trained_on_examples": example_count,
-                    }
-                    db.session.commit()
-                    logger.info(f"[lora-train] Updated profile {agent_profile_id} with adapter path")
+                from planet_maiko.config import load_config, save_config
+                cfg = load_config()
+                cfg.setdefault("lora", {}).setdefault("models_by_repo", {})[repo] = adapter_path
+                save_config(cfg)
+                logger.info(f"[lora-train] Registered adapter for {repo}")
             except Exception as e:
-                logger.debug(f"[lora-train] Could not update profile: {e}")
+                logger.warning(f"[lora-train] Could not update config: {e}")
 
         result["adapter_path"] = adapter_path
         result["examples"] = example_count

@@ -33,13 +33,13 @@ logger = logging.getLogger(__name__)
 
 
 
-def review_code(code, agent_profile_id=None, adapter_path=None, file_path=None):
+def review_code(code, repo=None, adapter_path=None, file_path=None):
     """Run code through a trained LoRA adapter and return the review.
 
     Args:
         code: the code to review
-        agent_profile_id: look up adapter from agent profile
-        adapter_path: explicit adapter path (overrides profile lookup)
+        repo: look up adapter from config.lora.models_by_repo[repo]
+        adapter_path: explicit adapter path (overrides repo lookup)
         file_path: optional file path for context
 
     Returns:
@@ -49,15 +49,10 @@ def review_code(code, agent_profile_id=None, adapter_path=None, file_path=None):
     if not backend:
         return {"success": False, "error": "No backend available"}
 
-    # Find adapter
-    if not adapter_path and agent_profile_id:
+    if not adapter_path and repo:
         try:
-            from flask import current_app
-            from planet_maiko.database import db
-            from planet_maiko.models.agent_profile import AgentProfile
-            profile = db.session.get(AgentProfile, agent_profile_id)
-            if profile and profile.extra:
-                adapter_path = profile.extra.get("adapter_path")
+            from planet_maiko.config import load_config
+            adapter_path = (load_config().get("lora") or {}).get("models_by_repo", {}).get(repo)
         except Exception:
             pass
 
@@ -94,12 +89,12 @@ def review_code(code, agent_profile_id=None, adapter_path=None, file_path=None):
         return {"success": False, "error": f"Inference not yet supported on {backend}"}
 
 
-def review_batch(files, agent_profile_id=None, adapter_path=None):
+def review_batch(files, repo=None, adapter_path=None):
     """Review multiple files in a single model load.
 
     Args:
         files: list of {"code": str, "file_path": str} dicts
-        agent_profile_id: look up adapter from agent profile
+        repo: look up adapter via config.lora.models_by_repo
         adapter_path: explicit adapter path
 
     Returns:
@@ -119,7 +114,7 @@ def review_batch(files, agent_profile_id=None, adapter_path=None):
 
     result = review_code(
         code=combined,
-        agent_profile_id=agent_profile_id,
+        repo=repo,
         adapter_path=adapter_path,
     )
 
@@ -236,7 +231,7 @@ def _parse_violation_output(output):
     return output.strip(), ""
 
 
-def review_diff(diff_text, agent_profile_id=None, adapter_path=None, file_path=None):
+def review_diff(diff_text, repo=None, adapter_path=None, file_path=None):
     """Review a (potentially multi-hunk) diff by chunking per hunk
     and aggregating the verdicts.
 
@@ -291,7 +286,7 @@ def review_diff(diff_text, agent_profile_id=None, adapter_path=None, file_path=N
 
         result = review_code(
             code=hunk_body,
-            agent_profile_id=agent_profile_id,
+            repo=repo,
             adapter_path=adapter_path,
             file_path=chunk_file,
         )

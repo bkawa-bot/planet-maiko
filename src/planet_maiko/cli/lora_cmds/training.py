@@ -15,8 +15,8 @@ SKIP_EXTENSIONS = {".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".lock",
 
 
 def cmd_train(args):
-    """Train a LoRA adapter for an agent."""
-    from planet_maiko.brain.learning.trainer import train_agent, check_requirements
+    """Train a LoRA adapter for a repo."""
+    from planet_maiko.brain.learning.trainer import train_lora, check_requirements
 
     if args.check:
         reqs = check_requirements()
@@ -30,19 +30,20 @@ def cmd_train(args):
     app = create_app(start_scheduler=False)
     with app.app_context():
         if args.all:
-            from planet_maiko.models.agent_profile import AgentProfile
-            profiles = AgentProfile.query.filter(
-                (AgentProfile.archived == False) | (AgentProfile.archived == None)  # noqa: E711, E712
-            ).all()
-            for p in profiles:
-                print(f"\nTraining {p.display_name}...")
-                result = train_agent(p.id)
+            from planet_maiko.config import load_config
+            repos = (load_config().get("github") or {}).get("repos") or []
+            if not repos:
+                print("No repos configured. Set them in Settings > GitHub.")
+                return
+            for repo in repos:
+                print(f"\nTraining {repo}...")
+                result = train_lora(repo=repo)
                 if result.get("success"):
                     print(f"  Done: {result['adapter_path']} ({result['duration_seconds']}s)")
                 else:
                     print(f"  Failed: {result.get('error')}")
-        elif args.agent:
-            result = train_agent(args.agent)
+        elif args.repo:
+            result = train_lora(repo=args.repo)
             if result.get("success"):
                 print(f"Done: {result['adapter_path']} ({result['examples']} examples, {result['duration_seconds']}s)")
             else:
@@ -50,7 +51,7 @@ def cmd_train(args):
                 if result.get("install_hint"):
                     print(f"Install: {result['install_hint']}")
         else:
-            print("Specify an agent ID or --all. Use --check to verify requirements.")
+            print("Specify a repo (e.g. maiko train org/repo) or --all. Use --check to verify requirements.")
 
 
 def cmd_extract_training_data(args):
@@ -144,8 +145,6 @@ def cmd_retrain(args):
     app = create_app(start_scheduler=False)
     with app.app_context():
         repo = args.repo
-        safe_repo = repo.replace("/", "--") if repo else "default"
-        agent_id = f"lora-{safe_repo}"
 
         # Step 1: Resolve & sync feedback
         if not args.skip_feedback:
@@ -220,9 +219,9 @@ def cmd_retrain(args):
             print("\nStep 2/3: Skipping data generation")
 
         # Step 3: Train LoRA
-        print(f"\nStep 3/3: Training LoRA adapter ({agent_id})...")
-        from planet_maiko.brain.learning.trainer import train_agent
-        result = train_agent(agent_profile_id=agent_id, repo=repo)
+        print(f"\nStep 3/3: Training LoRA adapter for {repo or 'global'}...")
+        from planet_maiko.brain.learning.trainer import train_lora
+        result = train_lora(repo=repo)
 
         if result.get("success"):
             print(f"  Done: {result['adapter_path']}")

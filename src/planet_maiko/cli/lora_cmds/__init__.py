@@ -45,10 +45,10 @@ from .rules import (  # noqa: F401
 def register(subparsers):
     """Register LoRA training/eval/feedback subcommands."""
     # maiko train
-    p = subparsers.add_parser("train", help="Train a LoRA adapter for an agent")
-    p.add_argument("agent", nargs="?", help="Agent ID or display name (omit for --check)")
+    p = subparsers.add_parser("train", help="Train a LoRA adapter for a repo")
+    p.add_argument("repo", nargs="?", help="Repo name like org/repo (omit for --check or --all)")
     p.add_argument("--check", action="store_true", help="Check if training is available")
-    p.add_argument("--all", action="store_true", help="Train all agents")
+    p.add_argument("--all", action="store_true", help="Train every configured repo")
     p.set_defaults(func=cmd_train)
 
     # maiko extract-training-data
@@ -127,7 +127,7 @@ def register(subparsers):
     p = subparsers.add_parser("review", help="Review code using a trained LoRA adapter")
     p.add_argument("file", nargs="?", help="File to review (reads stdin if omitted)")
     p.add_argument("--pr", help="GitHub PR URL or Org/Repo#123 — reviews each file individually")
-    p.add_argument("--agent", help="Agent ID (uses most recent adapter if omitted)")
+    p.add_argument("--repo", help="Repo name to look up adapter via config.lora.models_by_repo (uses most recent if omitted)")
     p.set_defaults(func=cmd_review)
 
     # maiko lora-feedback

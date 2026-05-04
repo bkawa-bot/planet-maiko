@@ -221,7 +221,7 @@ def cmd_review(args):
 
     result = review_diff(
         diff_text=code,
-        agent_profile_id=args.agent,
+        repo=args.repo,
         file_path=file_path,
     )
 
@@ -290,7 +290,7 @@ def _review_pr(args):
     flagged = 0
 
     for fp, fd in code_files:
-        r = review_diff(diff_text=fd, adapter_path=None, agent_profile_id=args.agent, file_path=fp)
+        r = review_diff(diff_text=fd, adapter_path=None, repo=repo, file_path=fp)
 
         if not r.get("success"):
             short = fp.rsplit("/", 1)[-1]

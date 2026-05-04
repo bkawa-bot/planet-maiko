@@ -56,16 +56,6 @@ const CONDITION_SCHEMAS = {
       { name: "stale_days", type: "number", label: "Days before stale", default: 30, min: 1 },
     ],
   },
-  lora_missing: {
-    label: "Enough rules pile up without a LoRA",
-    group: "Coverage state",
-    scopes: ["cycle"],
-    help: "Fires when a repo has N+ active Learnings and no AgentProfile for that scope has an adapter_path set.",
-    fields: [
-      { name: "repo", type: "string", label: "Repo (org/name)", placeholder: "org/repo", datalist: "repos" },
-      { name: "min_learnings", type: "number", label: "Min active learnings", default: 10, min: 1 },
-    ],
-  },
   pupdate_chain: {
     label: "A chain of pupdate types lands together",
     group: "Events",

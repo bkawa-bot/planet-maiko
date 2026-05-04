@@ -91,7 +91,6 @@ export default function ProfileDetailModal({
   const [automationsLoading, setAutomationsLoading] = useState(true);
   const defaultOrg = useDefaultOrg();
   const hasContextSet = profile.context_set?.length > 0;
-  const hasAdapter = !!profile.extra?.adapter_path;
   const role = profile.role || "coding";
   const meta = ROLE_META[role] || ROLE_META.coding;
   const RoleIcon = meta.icon;
@@ -151,7 +150,6 @@ export default function ProfileDetailModal({
                 <RoleIcon size={10} /> {meta.label}
               </span>
               <span className="profile-modal-chip" title={profile.scope_repo || ""}>{profile.scope_repo ? formatRepo(profile.scope_repo, defaultOrg) : "global"}</span>
-              {hasAdapter && <span className="profile-modal-chip profile-modal-chip-lora">LoRA</span>}
               {profile.archived && <span className="profile-modal-chip profile-modal-chip-archived">archived</span>}
             </div>
           </div>

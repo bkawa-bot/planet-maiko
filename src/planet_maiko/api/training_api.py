@@ -50,7 +50,7 @@ def dataset_stats():
 
 
 @training_bp.route("/training/train-agent", methods=["POST"])
-def train_agent_endpoint():
+def train_lora_endpoint():
     """Kick off a LoRA training job asynchronously.
 
     LoRAs are scoped per-repo (or "global" when no repo is given) —
@@ -72,7 +72,7 @@ def train_agent_endpoint():
     import threading as _threading
     from datetime import datetime, timezone
     from flask import current_app
-    from planet_maiko.brain.learning.trainer import train_agent, check_requirements
+    from planet_maiko.brain.learning.trainer import train_lora, check_requirements
     from planet_maiko.paths import data_dir
 
     data = request.get_json(silent=True) or {}
@@ -115,15 +115,14 @@ def train_agent_endpoint():
     def _run():
         with app.app_context():
             try:
-                result = train_agent(
-                    agent_profile_id=None,
-                    dataset_path=dataset_path,
+                result = train_lora(
                     repo=repo,
+                    dataset_path=dataset_path,
                     config=config,
                     adapter_path=adapter_path,
                 )
                 if not result.get("success"):
-                    # train_agent early-exits (no dataset, no backend)
+                    # train_lora early-exits (no dataset, no backend)
                     # don't touch progress.json — write a failure state
                     # so the poller doesn't sit on "preparing" forever.
                     with open(progress_path, "w", encoding="utf-8") as pf:
@@ -134,7 +133,7 @@ def train_agent_endpoint():
                             "percent": 0,
                         }, pf)
             except Exception as e:
-                logger.exception("[training] Async train_agent crashed")
+                logger.exception("[training] Async train_lora crashed")
                 try:
                     with open(progress_path, "w", encoding="utf-8") as pf:
                         json.dump({
@@ -145,7 +144,7 @@ def train_agent_endpoint():
                 except Exception:
                     pass
 
-    _threading.Thread(target=_run, daemon=True, name="train-agent").start()
+    _threading.Thread(target=_run, daemon=True, name="train-lora").start()
 
     return jsonify({
         "status": "started",
@@ -505,7 +504,7 @@ def review_code_endpoint():
 
     result = review_code(
         code=code,
-        agent_profile_id=data.get("agent_profile_id"),
+        repo=data.get("repo"),
         adapter_path=data.get("adapter_path"),
         file_path=data.get("file_path"),
     )
