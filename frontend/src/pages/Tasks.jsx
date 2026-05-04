@@ -3,6 +3,8 @@ import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import AssignAgentModal from "../components/AssignAgentModal";
 import TaskCard from "../components/TaskCard";
+import ViewPlanModal from "./tasks/ViewPlanModal";
+import TaskDetailModal from "./tasks/TaskDetailModal";
 import { formatRepo, useDefaultOrg, useConfiguredRepos } from "../utils/repo";
 import {
   CheckSquare, Plus, FolderPlus, FolderOpen, ExternalLink,
@@ -736,51 +738,8 @@ export default function Tasks() {
         </div>
       )}
 
-      {viewingPlan && (
-        <div className="modal-overlay" onClick={() => setViewingPlan(null)}>
-          <div className="info-modal" style={{ maxWidth: 650, maxHeight: "80vh" }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <Brain size={14} /> Plan: {viewingPlan.title}
-              <span style={{ flex: 1 }} />
-              <button className="btn btn-sm" onClick={() => setViewingPlan(null)} style={{ border: "none", padding: 4 }}><X size={14} /></button>
-            </div>
-            <div className="modal-body" style={{ overflow: "auto" }}>
-              <div className="md-content" style={{ fontSize: 13, lineHeight: 1.7, color: "var(--text-dim)", whiteSpace: "pre-wrap" }}>
-                {viewingPlan.description || "No plan generated yet. Click 'Plan' on the project header to generate one."}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {detailTask && (
-        <div className="modal-overlay" onClick={() => setDetailTask(null)}>
-          <div className="info-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <FolderOpen size={14} /> {detailTask.title}
-              <span style={{ flex: 1 }} />
-              <button className="btn btn-sm" onClick={() => setDetailTask(null)} style={{ border: "none", padding: 4 }}><X size={14} /></button>
-            </div>
-            <div className="modal-body" style={{ fontSize: 13, lineHeight: 1.6, color: "var(--text-dim)" }}>
-              {(detailTask.metadata?.description) && (
-                <div style={{ whiteSpace: "pre-wrap", marginBottom: 12 }}>
-                  {detailTask.metadata?.description}
-                </div>
-              )}
-              {detailTask.url && (
-                <a href={detailTask.url} target="_blank" rel="noreferrer" style={{ display: "block", marginBottom: 8 }}>
-                  <ExternalLink size={10} /> {detailTask.url}
-                </a>
-              )}
-              {detailTask.tags?.length > 0 && (
-                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                  {detailTask.tags.map((tag) => <span key={tag} className="tag">{tag}</span>)}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <ViewPlanModal plan={viewingPlan} onClose={() => setViewingPlan(null)} />
+      <TaskDetailModal task={detailTask} onClose={() => setDetailTask(null)} />
     </div>
   );
 }
