@@ -178,9 +178,13 @@ def discover_github_repos():
         }), 400
 
     try:
-        # Get repos the user recently pushed to (last 30 days)
+        # Get repos the user recently pushed to (last 60 days). Computed
+        # relative to today so this doesn't silently degrade to "no
+        # results" once the hardcoded date drifts past relevance.
+        from datetime import datetime, timezone, timedelta
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=60)).strftime("%Y-%m-%d")
         result = subprocess.run(
-            ["gh", "api", f"/search/commits?q=author:{username}+committer-date:>2026-03-01&sort=committer-date&per_page=30"],
+            ["gh", "api", f"/search/commits?q=author:{username}+committer-date:>{cutoff}&sort=committer-date&per_page=30"],
             capture_output=True, text=True, timeout=15,
         )
         if result.returncode != 0:

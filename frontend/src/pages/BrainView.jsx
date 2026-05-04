@@ -255,9 +255,10 @@ export default function BrainView() {
   };
   const handleApproveAll = async () => {
     const count = pending.length;
-    for (const l of pending) {
-      await api.approveLearning(l.id);
-    }
+    // Parallel — sequential await on 50+ pending was one HTTP per
+    // round-trip and made the UI hang for ~30s. Server endpoints are
+    // independent per-id so order doesn't matter.
+    await Promise.all(pending.map((l) => api.approveLearning(l.id)));
     showToast(`Approved ${count} learnings`, "normal");
     fetchLearnings();
   };
@@ -414,9 +415,8 @@ export default function BrainView() {
               </button>
               <button className="btn btn-sm btn-danger" onClick={async () => {
                 const count = pending.length;
-                for (const l of pending) {
-                  await api.dismissLearning(l.id);
-                }
+                // Parallel — sequential await on 50+ pending hung the UI.
+                await Promise.all(pending.map((l) => api.dismissLearning(l.id)));
                 showToast(`Dismissed ${count} learnings`, "normal");
                 fetchLearnings();
               }}>

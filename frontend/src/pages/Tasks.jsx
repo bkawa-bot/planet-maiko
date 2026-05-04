@@ -14,6 +14,25 @@ import {
 import "./Tasks.css";
 import "./cards.css";
 
+// Type / priority enums duplicated across forms used to drift —
+// hoisted here so the create form, edit form, and the generated-tasks
+// review modal all read the same source of truth. Keep in sync with
+// the backend's task type validator (Task model).
+const TASK_TYPES = [
+  "coding", "bug", "feature", "review", "investigation", "repo_analysis", "todo", "follow_up",
+];
+const TASK_PRIORITIES = ["urgent", "high", "normal", "low"];
+const ONE_SHOT_TASK_TYPES = new Set(["review", "investigation", "repo_analysis"]);
+
+const INITIAL_TASK_FORM = {
+  title: "", description: "", type: "coding", priority: "normal",
+  url: "", project_id: "", due_date: "",
+};
+const INITIAL_EDIT_FORM = {
+  title: "", description: "", type: "coding", priority: "normal",
+  status: "new", project_id: "", url: "", due_date: "", repo: "",
+};
+
 export default function Tasks() {
   const defaultOrg = useDefaultOrg();
   const configuredRepos = useConfiguredRepos();
@@ -31,10 +50,10 @@ export default function Tasks() {
   const [revising, setRevising] = useState(false); // true while LLM is rewriting the draft
   const [planning, setPlanning] = useState(null); // project_id being planned
   const [viewingPlan, setViewingPlan] = useState(null); // project object to view plan
-  const [taskForm, setTaskForm] = useState({ title: "", description: "", type: "coding", priority: "normal", url: "", project_id: "", due_date: "" });
+  const [taskForm, setTaskForm] = useState({ ...INITIAL_TASK_FORM });
   const [projectForm, setProjectForm] = useState({ title: "", description: "", priority: "normal" });
   const [editingTask, setEditingTask] = useState(null);
-  const [editForm, setEditForm] = useState({ title: "", description: "", type: "coding", priority: "normal", status: "new", project_id: "", url: "", due_date: "", repo: "" });
+  const [editForm, setEditForm] = useState({ ...INITIAL_EDIT_FORM });
   const [detailTask, setDetailTask] = useState(null);
 
   const [config, setConfig] = useState(null);
@@ -79,7 +98,7 @@ export default function Tasks() {
     const payload = { id: `task-${Date.now()}`, ...rest };
     if (description) payload.metadata = { description };
     await api.createTask(payload);
-    setTaskForm({ title: "", description: "", type: "coding", priority: "normal", url: "", project_id: "", due_date: "" });
+    setTaskForm({ ...INITIAL_TASK_FORM });
     setShowTaskForm(false);
     fetchData();
   };
@@ -417,7 +436,7 @@ export default function Tasks() {
                           ...p, tasks: p.tasks.map((t, j) => j === i ? { ...t, type: e.target.value } : t),
                         }))}
                       >
-                        {["coding", "bug", "feature", "review", "investigation", "repo_analysis", "todo"].map((x) => <option key={x} value={x}>{x}</option>)}
+                        {TASK_TYPES.filter((x) => x !== "follow_up").map((x) => <option key={x} value={x}>{x}</option>)}
                       </select>
                       <input
                         className="plan-task-input"
@@ -435,7 +454,7 @@ export default function Tasks() {
                           ...p, tasks: p.tasks.map((t, j) => j === i ? { ...t, category: e.target.value } : t),
                         }))}
                       />
-                      {!["review", "investigation", "repo_analysis"].includes(gt.type || "todo") && (
+                      {!ONE_SHOT_TASK_TYPES.has(gt.type || "todo") && (
                         <label
                           className="plan-task-plan-first"
                           title="Start the agent in plan mode — it produces a markdown plan first, waits for your approval, then implements. Good for bigger or fuzzier tasks."
