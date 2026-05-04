@@ -26,7 +26,12 @@ const ICON_MAP = {
 //   - checkin / plan / team: legacy digest prompts (same family
 //     as the retired morning-brief / evening-wrap); kept in the
 //     registry for now but not surfaced as specialties.
-const HIDDEN_SKILL_IDS = new Set([
+//
+// The API methods are still named api.getSkills / api.runSkill / etc.
+// because the backend routes (/skills/*) haven't been renamed yet —
+// that's a follow-up. Internal state, callbacks, and CSS classes here
+// use "specialty" to match what the user sees on screen.
+const HIDDEN_SPECIALTY_IDS = new Set([
   "theme-designer",
   "pr-review",
   "agent-protocol",
@@ -36,7 +41,7 @@ const HIDDEN_SKILL_IDS = new Set([
 ]);
 
 export default function Automations() {
-  const [skills, setSkills] = useState([]);
+  const [specialties, setSpecialties] = useState([]);
   const [selected, setSelected] = useState(null);
   const [editing, setEditing] = useState(false);
   const [editPrompt, setEditPrompt] = useState("");
@@ -47,14 +52,14 @@ export default function Automations() {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [newSkill, setNewSkill] = useState({ id: "", name: "", description: "", prompt: "", mcps: "", schedule_interval_minutes: "", creates_pupdates: false, needs_worktree: false });
+  const [newSpecialty, setNewSpecialty] = useState({ id: "", name: "", description: "", prompt: "", mcps: "", schedule_interval_minutes: "", creates_pupdates: false, needs_worktree: false });
 
-  const fetchSkills = () => api.getSkills()
-    .then((list) => setSkills(list.filter((s) => !HIDDEN_SKILL_IDS.has(s.id))))
+  const fetchSpecialties = () => api.getSkills()
+    .then((list) => setSpecialties(list.filter((s) => !HIDDEN_SPECIALTY_IDS.has(s.id))))
     .catch(console.error);
-  useEffect(() => { fetchSkills(); }, []);
+  useEffect(() => { fetchSpecialties(); }, []);
 
-  const openSkill = async (s) => {
+  const openSpecialty = async (s) => {
     try {
       const detail = await api.getSkill(s.id);
       setSelected(detail);
@@ -80,12 +85,12 @@ export default function Automations() {
     });
     showToast("Specialty updated! ✏️", "normal");
     setEditing(false);
-    fetchSkills();
+    fetchSpecialties();
     const updated = await api.getSkill(selected.id);
     setSelected(updated);
   };
 
-  const runSkill = async (name) => {
+  const runSpecialty = async (name) => {
     setRunning(true);
     setResult(null);
     showToast("Running specialty... 🐕", "normal");
@@ -130,20 +135,20 @@ export default function Automations() {
   };
 
   const handleCreate = async () => {
-    if (!newSkill.id || !newSkill.name || !newSkill.prompt) {
+    if (!newSpecialty.id || !newSpecialty.name || !newSpecialty.prompt) {
       showToast("Need at least an ID, name, and prompt", "high");
       return;
     }
     try {
       await api.createSkill({
-        ...newSkill,
-        mcps: newSkill.mcps.split(",").map(s => s.trim()).filter(Boolean),
-        schedule_interval_minutes: newSkill.schedule_interval_minutes ? parseInt(newSkill.schedule_interval_minutes) : null,
+        ...newSpecialty,
+        mcps: newSpecialty.mcps.split(",").map(s => s.trim()).filter(Boolean),
+        schedule_interval_minutes: newSpecialty.schedule_interval_minutes ? parseInt(newSpecialty.schedule_interval_minutes) : null,
       });
-      showToast(`Specialty "${newSkill.name}" created! 🎉`, "normal");
+      showToast(`Specialty "${newSpecialty.name}" created! 🎉`, "normal");
       setShowCreate(false);
-      setNewSkill({ id: "", name: "", description: "", prompt: "", mcps: "", schedule_interval_minutes: "", creates_pupdates: false, needs_worktree: false });
-      fetchSkills();
+      setNewSpecialty({ id: "", name: "", description: "", prompt: "", mcps: "", schedule_interval_minutes: "", creates_pupdates: false, needs_worktree: false });
+      fetchSpecialties();
     } catch (err) {
       showToast(err.message || "Couldn't create specialty", "high");
     }
@@ -154,20 +159,20 @@ export default function Automations() {
       await api.deleteSkill(id);
       showToast("Specialty deleted", "normal");
       setSelected(null);
-      fetchSkills();
+      fetchSpecialties();
     } catch (err) {
       showToast(err.message || "Can't delete this specialty", "high");
     }
   };
 
   const openCreate = () => {
-    setNewSkill({ id: "", name: "", description: "", prompt: "# My Specialty\n\nUse {pupdates} and {tasks} for context.\n\n## Instructions\n1. ...", mcps: "", needs_worktree: false, schedule_interval_minutes: "", creates_pupdates: false });
+    setNewSpecialty({ id: "", name: "", description: "", prompt: "# My Specialty\n\nUse {pupdates} and {tasks} for context.\n\n## Instructions\n1. ...", mcps: "", needs_worktree: false, schedule_interval_minutes: "", creates_pupdates: false });
     setShowCreate(true);
   };
 
   return (
-    <div className="skills-page frost-pane">
-      <div className="skills-header">
+    <div className="specialties-page frost-pane">
+      <div className="specialties-header">
         <Zap size={18} />
         <h2>Automations</h2>
       </div>
@@ -185,34 +190,34 @@ export default function Automations() {
       {/* Create modal */}
       {showCreate && (
         <div className="modal-overlay" onClick={() => setShowCreate(false)}>
-          <div className="skill-modal" onClick={e => e.stopPropagation()}>
+          <div className="specialty-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <Zap size={14} />
               <span>New Specialty</span>
               <button className="btn btn-sm" onClick={() => setShowCreate(false)} style={{ marginLeft: "auto" }}><X size={10} /></button>
             </div>
             <div className="modal-body">
-              <div className="skill-editor">
-                <div className="skill-form-row">
-                  <label>ID <input type="text" value={newSkill.id} onChange={e => setNewSkill(s => ({ ...s, id: e.target.value }))} placeholder="error-triage" /></label>
-                  <label>Name <input type="text" value={newSkill.name} onChange={e => setNewSkill(s => ({ ...s, name: e.target.value }))} placeholder="Error triage" /></label>
+              <div className="specialty-editor">
+                <div className="specialty-form-row">
+                  <label>ID <input type="text" value={newSpecialty.id} onChange={e => setNewSpecialty(s => ({ ...s, id: e.target.value }))} placeholder="error-triage" /></label>
+                  <label>Name <input type="text" value={newSpecialty.name} onChange={e => setNewSpecialty(s => ({ ...s, name: e.target.value }))} placeholder="Error triage" /></label>
                 </div>
-                <label>Description <input type="text" value={newSkill.description} onChange={e => setNewSkill(s => ({ ...s, description: e.target.value }))} placeholder="What agents doing this specialty produce" /></label>
+                <label>Description <input type="text" value={newSpecialty.description} onChange={e => setNewSpecialty(s => ({ ...s, description: e.target.value }))} placeholder="What agents doing this specialty produce" /></label>
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
-                    checked={!!newSkill.needs_worktree}
-                    onChange={e => setNewSkill(s => ({ ...s, needs_worktree: e.target.checked }))}
+                    checked={!!newSpecialty.needs_worktree}
+                    onChange={e => setNewSpecialty(s => ({ ...s, needs_worktree: e.target.checked }))}
                   />
                   Needs a repo worktree
                   <small style={{ display: "block", marginTop: "2px", fontStyle: "italic", color: "var(--text-muted)" }}>
                     On for specialties that read actual code (investigation-style). Off for ones that just compose a prompt from DB state (brainstorm / planning / analysis).
                   </small>
                 </label>
-                <label>MCPs (comma-separated) <input type="text" value={newSkill.mcps} onChange={e => setNewSkill(s => ({ ...s, mcps: e.target.value }))} placeholder="slack, linear, figma" /></label>
-                <div className="skill-form-row">
+                <label>MCPs (comma-separated) <input type="text" value={newSpecialty.mcps} onChange={e => setNewSpecialty(s => ({ ...s, mcps: e.target.value }))} placeholder="slack, linear, figma" /></label>
+                <div className="specialty-form-row">
                   <label>Schedule
-                    <select value={newSkill.schedule_interval_minutes} onChange={e => setNewSkill(s => ({ ...s, schedule_interval_minutes: e.target.value }))}>
+                    <select value={newSpecialty.schedule_interval_minutes} onChange={e => setNewSpecialty(s => ({ ...s, schedule_interval_minutes: e.target.value }))}>
                       <option value="">Manual only</option>
                       <option value="15">Every 15 min</option>
                       <option value="30">Every 30 min</option>
@@ -222,17 +227,17 @@ export default function Automations() {
                       <option value="1440">Daily</option>
                     </select>
                   </label>
-                  {newSkill.schedule_interval_minutes && (
+                  {newSpecialty.schedule_interval_minutes && (
                     <label className="checkbox-label">
-                      <input type="checkbox" checked={newSkill.creates_pupdates} onChange={e => setNewSkill(s => ({ ...s, creates_pupdates: e.target.checked }))} />
+                      <input type="checkbox" checked={newSpecialty.creates_pupdates} onChange={e => setNewSpecialty(s => ({ ...s, creates_pupdates: e.target.checked }))} />
                       Creates pupdates from output
                     </label>
                   )}
                 </div>
                 <label>Prompt
-                  <textarea value={newSkill.prompt} onChange={e => setNewSkill(s => ({ ...s, prompt: e.target.value }))} rows={12} />
+                  <textarea value={newSpecialty.prompt} onChange={e => setNewSpecialty(s => ({ ...s, prompt: e.target.value }))} rows={12} />
                 </label>
-                <div className="skill-form-actions">
+                <div className="specialty-form-actions">
                   <button className="btn" onClick={() => setShowCreate(false)}>Cancel</button>
                   <button className="btn btn-primary" onClick={handleCreate}><Plus size={12} /> Create Specialty</button>
                 </div>
@@ -242,15 +247,15 @@ export default function Automations() {
         </div>
       )}
 
-      <div className="skills-grid">
-        {skills.map((s) => {
+      <div className="specialties-grid">
+        {specialties.map((s) => {
           const Icon = ICON_MAP[s.icon] || Wand2;
           return (
-            <div key={s.id} className="skill-card card" onClick={() => openSkill(s)}>
-              <Icon size={28} className="skill-icon" />
-              <div className="skill-name">{s.name}</div>
-              <div className="skill-desc">{s.description}</div>
-              <div className="skill-mcps">
+            <div key={s.id} className="specialty-card card" onClick={() => openSpecialty(s)}>
+              <Icon size={28} className="specialty-icon" />
+              <div className="specialty-name">{s.name}</div>
+              <div className="specialty-desc">{s.description}</div>
+              <div className="specialty-mcps">
                 {s.mcps?.map(m => <span key={m} className="tag">{m}</span>)}
                 {s.schedule_interval_minutes && (
                   <span className="tag schedule-tag"><Clock size={8} /> {s.schedule_interval_minutes}m</span>
@@ -263,7 +268,7 @@ export default function Automations() {
 
       {selected && (
         <div className="modal-overlay" onClick={() => { setSelected(null); setResult(null); }}>
-          <div className="skill-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="specialty-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <span>{selected.name}</span>
               {selected.is_default && <span className="badge">default</span>}
@@ -284,14 +289,14 @@ export default function Automations() {
 
             <div className="modal-body">
               {editing ? (
-                <div className="skill-editor">
+                <div className="specialty-editor">
                   <label>Description
                     <input type="text" value={editDesc} onChange={e => setEditDesc(e.target.value)} />
                   </label>
                   <label>MCPs (comma-separated)
                     <input type="text" value={editMcps} onChange={e => setEditMcps(e.target.value)} />
                   </label>
-                  <div className="skill-form-row">
+                  <div className="specialty-form-row">
                     <label>Schedule
                       <select value={editSchedule} onChange={e => setEditSchedule(e.target.value)}>
                         <option value="">Manual only</option>
@@ -317,18 +322,18 @@ export default function Automations() {
                 </div>
               ) : (
                 <>
-                  <p className="skill-modal-desc">{selected.description}</p>
+                  <p className="specialty-modal-desc">{selected.description}</p>
                   {selected.mcps?.length > 0 && (
-                    <div className="skill-modal-mcps">
+                    <div className="specialty-modal-mcps">
                       MCPs: {selected.mcps.map(m => <span key={m} className="tag">{m}</span>)}
                     </div>
                   )}
-                  <div className="skill-prompt-preview">
+                  <div className="specialty-prompt-preview">
                     <div className="prompt-label">Prompt</div>
                     <pre className="prompt-text">{selected.prompt}</pre>
                   </div>
                   <div className="modal-actions">
-                    <button className="btn btn-primary" onClick={() => runSkill(selected.id)} disabled={running}>
+                    <button className="btn btn-primary" onClick={() => runSpecialty(selected.id)} disabled={running}>
                       {running ? <><Loader size={12} className="spin" /> Running...</> : <><Rocket size={12} /> Run</>}
                     </button>
                     <button className="btn" onClick={() => { navigator.clipboard.writeText(selected.prompt); showToast("Prompt copied!", "normal"); }}>
@@ -339,11 +344,11 @@ export default function Automations() {
               )}
 
               {result && (
-                <div className={`skill-result ${result.success ? "" : "error"}`}>
+                <div className={`specialty-result ${result.success ? "" : "error"}`}>
                   {result.success ? (
-                    <pre className="skill-output">{result.output}</pre>
+                    <pre className="specialty-output">{result.output}</pre>
                   ) : (
-                    <div className="skill-error">{result.error}</div>
+                    <div className="specialty-error">{result.error}</div>
                   )}
                 </div>
               )}
