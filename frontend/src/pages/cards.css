@@ -32,6 +32,10 @@
 .proposal-goal-value { color: var(--text); }
 .proposal-header { display: flex; align-items: center; gap: 6px; }
 .proposal-icon { color: var(--pink); flex-shrink: 0; }
+/* Agent-authored proposals swap the lucide icon for the agent's
+   CardAvatar. line-height: 0 so it sits flush with the title. */
+.proposal-icon-avatar { display: inline-flex; line-height: 0; }
+.proposal-icon-avatar .card-avatar { display: block; }
 .proposal-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); }
 .proposal-expand { background: none; border: none; padding: 2px; color: var(--text-muted); cursor: pointer; }
 .proposal-from { font-size: 10px; color: var(--text-muted); margin-top: 2px; }

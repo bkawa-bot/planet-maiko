@@ -3,6 +3,7 @@ import { Check, X, Pencil, Sparkles, Loader, ChevronDown, ChevronRight, Compass 
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
+import CardAvatar from "./CardAvatar";
 // ProposalCard can be rendered anywhere (Home ReviewQueue, Tasks
 // page, etc.) — pull in the card styles here so callers don't
 // have to remember to import cards.css separately.
@@ -24,10 +25,14 @@ import "../pages/cards.css";
  *
  * Props:
  *   proposal  — memo dict (new) or pupdate dict (legacy).
+ *   profile   — optional AgentProfile dict for the proposing agent.
+ *               When set + non-goal proposal, the header icon swaps to
+ *               the agent's CardAvatar and the "Proposed by" line uses
+ *               the resolved display_name.
  *   onAction  — () => void called after approve or dismiss so the parent
  *               list can refresh.
  */
-export default function ProposalCard({ proposal, onAction }) {
+export default function ProposalCard({ proposal, profile, onAction }) {
   const defaultOrg = useDefaultOrg();
   const [editing, setEditing] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -48,7 +53,9 @@ export default function ProposalCard({ proposal, onAction }) {
     description: initialDraft.description || "",
   });
   const fromAgentId = extra.from_agent_id;
-  const fromAgentName = extra.from_agent_display_name || fromAgentId;
+  // Display name preference order: resolved profile > extra hint > raw id.
+  const fromAgentName = profile?.display_name || extra.from_agent_display_name || fromAgentId;
+  const showAvatar = !!profile && !isGoalProposal;
 
   const approve = async () => {
     setBusy(true);
@@ -106,7 +113,11 @@ export default function ProposalCard({ proposal, onAction }) {
   return (
     <div className={`proposal-card card${isGoalProposal ? " proposal-card-goal" : ""}`}>
       <div className="proposal-header">
-        {isGoalProposal ? (
+        {showAvatar ? (
+          <span className="proposal-icon proposal-icon-avatar">
+            <CardAvatar agent={profile} size={20} />
+          </span>
+        ) : isGoalProposal ? (
           <Compass size={12} className="proposal-icon" />
         ) : (
           <Sparkles size={12} className="proposal-icon" />

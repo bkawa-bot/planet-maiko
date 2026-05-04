@@ -210,6 +210,7 @@ export default function MemosPane() {
               >
                 <ProposalCard
                   proposal={it.proposal}
+                  profile={it.agent_id ? profilesById[it.agent_id] : null}
                   onAction={fetchQueue}
                 />
               </div>
