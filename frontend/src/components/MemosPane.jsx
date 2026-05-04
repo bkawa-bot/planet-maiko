@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ClipboardCheck, FileText, GitPullRequest, Map, Inbox, Bot, Check, X,
@@ -11,6 +11,7 @@ import { relativeTime } from "../utils/dates";
 import { renderMarkdown } from "../utils/markdown";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import ProposalCard from "./ProposalCard";
+import CardAvatar from "./CardAvatar";
 import "./ReviewQueue.css";
 import "./MemosPane.css";
 import ArtifactRow from "./memos/ArtifactRow";
@@ -95,6 +96,15 @@ export default function MemosPane() {
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Profiles by id so memo rows owned by an agent render the agent's
+  // CardAvatar in place of the generic kind icon. Fetched once on
+  // mount; profile changes are rare, and an unresolvable id falls
+  // back to the kind icon, so a stale map degrades gracefully.
+  const [profiles, setProfiles] = useState([]);
+  const profilesById = useMemo(
+    () => Object.fromEntries(profiles.map((p) => [p.id, p])),
+    [profiles],
+  );
 
   const fetchQueue = async () => {
     try {
@@ -108,6 +118,7 @@ export default function MemosPane() {
 
   useEffect(() => {
     fetchQueue();
+    api.getProfiles().then(setProfiles).catch(() => {});
     const id = setInterval(fetchQueue, POLL_MS);
     const onFocus = () => fetchQueue();
     window.addEventListener("focus", onFocus);
@@ -116,6 +127,25 @@ export default function MemosPane() {
       window.removeEventListener("focus", onFocus);
     };
   }, []);
+
+  // Avatar in the icon slot when an agent owns the memo; kind icon
+  // otherwise. Numeric size keeps the avatar visually aligned with the
+  // 14px lucide icons that share the slot.
+  const renderRowIcon = (it, FallbackIcon) => {
+    const profile = it.agent_id ? profilesById[it.agent_id] : null;
+    if (profile) {
+      return (
+        <div className="review-queue-icon review-queue-icon-avatar">
+          <CardAvatar agent={profile} size={20} />
+        </div>
+      );
+    }
+    return (
+      <div className="review-queue-icon">
+        <FallbackIcon size={14} />
+      </div>
+    );
+  };
 
   if (loading) return null;
   if (items.length === 0) return null;
@@ -222,7 +252,7 @@ export default function MemosPane() {
                 key={`pending_job:${it.memo_id || it.job_id}`}
                 className={`review-queue-row tone-${meta.tone} review-queue-row-pending`}
               >
-                <div className="review-queue-icon"><Icon size={14} /></div>
+                {renderRowIcon(it, Icon)}
                 <div className="review-queue-body">
                   <div className="review-queue-title">
                     {it.title || "(untitled)"}
@@ -300,7 +330,7 @@ export default function MemosPane() {
                 key={`notification:${it.memo_id}`}
                 className={`review-queue-row tone-${priorityTone} review-queue-row-notification${staleClass}`}
               >
-                <div className="review-queue-icon"><Icon size={14} /></div>
+                {renderRowIcon(it, Icon)}
                 <div className="review-queue-body">
                   <div className="review-queue-title">
                     {it.title || "(notification)"}
@@ -393,6 +423,7 @@ export default function MemosPane() {
                 it={it}
                 meta={meta}
                 Icon={Icon}
+                profile={it.agent_id ? profilesById[it.agent_id] : null}
                 onDismiss={() => dismissItem(it)}
                 defaultOrg={defaultOrg}
               />
@@ -427,7 +458,7 @@ export default function MemosPane() {
                 onClick={() => hasRoute && navigate(it.route)}
                 disabled={!hasRoute}
               >
-                <div className="review-queue-icon"><Icon size={14} /></div>
+                {renderRowIcon(it, Icon)}
                 <div className="review-queue-body">
                   <div className="review-queue-title">
                     {it.title || "(untitled)"}

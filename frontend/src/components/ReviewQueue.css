@@ -80,6 +80,18 @@
 .review-queue-row.tone-plan .review-queue-icon { color: var(--lavender, #b59dd8); }
 .review-queue-row.tone-artifact .review-queue-icon { color: var(--mint, var(--blue)); }
 
+/* Agent-owned memos render the agent's CardAvatar instead of the
+   kind-tinted lucide icon. The avatar carries its own visual, so
+   strip the bg-tint and tone-coloring that the kind path uses. */
+.review-queue-icon-avatar {
+  background: transparent;
+  padding: 0;
+  overflow: hidden;
+}
+.review-queue-icon-avatar .card-avatar {
+  display: block;
+}
+
 .review-queue-body {
   flex: 1;
   min-width: 0;

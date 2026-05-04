@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronRight, X } from "lucide-react";
+import CardAvatar from "../CardAvatar";
 import { renderMarkdown } from "../../utils/markdown";
 import { formatRepo } from "../../utils/repo";
 import { relativeTime } from "../../utils/dates";
@@ -12,7 +13,7 @@ import { relativeTime } from "../../utils/dates";
  *  expand the artifact body in place — no navigation, since there's
  *  no dedicated viewer page yet. Dismiss flips extra.reviewed=true
  *  on the job so the row falls out of the home_api filter. */
-export default function ArtifactRow({ it, meta, Icon, onDismiss, defaultOrg }) {
+export default function ArtifactRow({ it, meta, Icon, profile, onDismiss, defaultOrg }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const hasBody = !!(it.body && it.body.trim());
@@ -39,9 +40,15 @@ export default function ArtifactRow({ it, meta, Icon, onDismiss, defaultOrg }) {
         disabled={!hasBody && !hasRoute}
         aria-expanded={open}
       >
-        <div className="review-queue-icon">
-          <Icon size={14} />
-        </div>
+        {profile ? (
+          <div className="review-queue-icon review-queue-icon-avatar">
+            <CardAvatar agent={profile} size={20} />
+          </div>
+        ) : (
+          <div className="review-queue-icon">
+            <Icon size={14} />
+          </div>
+        )}
         <div className="review-queue-body">
           <div className="review-queue-title">{it.title || "(untitled)"}</div>
           <div className="review-queue-meta">
