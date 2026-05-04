@@ -1731,9 +1731,6 @@ def pack_requests():
     already spawns a review Task for those, and the Task flows through
     the review-queue memo, so surfacing them here too would just be
     duplicate noise.
-
-    Held pupdates (from focus mode) are hidden here too, matching the
-    main /api/pupdates behavior.
     """
     from planet_maiko.models.pupdate import Pupdate
     from planet_maiko.models.agent_profile import AgentProfile
