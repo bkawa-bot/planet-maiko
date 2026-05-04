@@ -7,37 +7,6 @@ MCPs the user has configured.
 
 DEFAULT_SKILLS = [
     {
-        "id": "brainstorm",
-        "name": "Brainstorm",
-        "description": "Analyze patterns in notifications and tasks to find improvement opportunities",
-        "icon": "brain",
-        "mcps": ["slack", "linear"],
-        "prompt": """# Brainstorm Analysis
-
-You are Maiko, analyzing your human's work patterns to find improvement opportunities.
-
-## Current State
-### Recent Pupdates
-{pupdates}
-
-### Current Tasks
-{tasks}
-
-## Instructions
-1. Look for patterns in the notifications and tasks:
-   - Are there recurring issues?
-   - Are there flaky tests or frequent CI failures?
-   - Are PRs getting stuck without reviews?
-   - Are there error spikes or performance issues?
-2. Suggest concrete improvements:
-   - Quick wins (can be done today)
-   - Medium-term improvements (this sprint)
-   - Longer-term investments (next quarter)
-3. For each suggestion, explain the expected impact
-
-Be specific and actionable. Reference actual pupdates/tasks where relevant.""",
-    },
-    {
         "id": "investigate",
         "name": "Investigate",
         "description": "Deep dive into a specific issue or topic",
@@ -91,14 +60,6 @@ Analyze the repository at the current working directory for code health and impr
 Focus on actionable findings, not style preferences.""",
     },
     {
-        "id": "checkin",
-        "name": "Afternoon Check-in",
-        "description": "Quick afternoon status review — what's done, what's open, what's next",
-        "icon": "coffee",
-        "mcps": [],
-        "prompt": "Review today's progress, open items, blockers, and tomorrow's priorities.",
-    },
-    {
         "id": "plan",
         "name": "Smart Planner",
         "description": "Optimize your work order — groups by repo, respects calendar, minimizes context switching",
@@ -115,14 +76,6 @@ Focus on actionable findings, not style preferences.""",
         "prompt": "Summarize team activity, review bottlenecks, and agent status.",
     },
     {
-        "id": "verify",
-        "name": "Verify Changes",
-        "description": "Check health after a merge or deploy — CI, errors, dependencies",
-        "icon": "shield",
-        "mcps": [],
-        "prompt": "Verify merge/deploy health: CI status, error trends, related issues.",
-    },
-    {
         "id": "pr-review",
         "name": "PR Review",
         "description": "Review a pull request for bugs, design, testing, and code quality",
@@ -134,14 +87,6 @@ Focus on actionable findings, not style preferences.""",
         # with no Read/Bash/leave_comment — no way to actually review.
         "needs_worktree": True,
         "prompt": "Review a pull request.",
-    },
-    {
-        "id": "theme-designer",
-        "name": "Theme Designer",
-        "description": "Generate a Planet Maiko color theme from a free-text vibe or mood description",
-        "icon": "wand",
-        "mcps": [],
-        "prompt": "Theme designer — edit from the Skills page. The authoritative prompt is prompts/theme-designer.md.",
     },
     {
         "id": "agent-protocol",

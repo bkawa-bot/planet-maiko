@@ -164,10 +164,6 @@ def assign_agent():
     task_id = data.get("task_id")
     profile_id = data.get("profile_id")
     repo_path = data.get("repo_path", "")
-    # Worktree is always on + kickoff is always deferred until after
-    # prepare() returns. The old use_worktree body param is silently
-    # ignored — no UI client sends it now that the legacy non-worktree
-    # path was removed.
     plan_first = bool(data.get("plan_first", False))
     branch_name = data.get("branch_name")
     # Optional specialty chosen for this run. Only honored if the agent
@@ -231,7 +227,6 @@ def assign_agent():
             prompt=full_prompt,
             repo_path=repo_path,
             branch_prefix=branch_name or "maiko",
-            use_worktree=True,
             agent_profile_id=profile.id,
             role=role,
             specialty_id=specialty_id,
@@ -342,7 +337,6 @@ def _assign_review_via_agent_job(task, profile, data, specialty_id=None):
             prompt=full_prompt,
             repo_path=local_path,
             branch_prefix=branch_name or "maiko",
-            use_worktree=True,
             agent_profile_id=profile.id,
             role="review",
             specialty_id=specialty_id,

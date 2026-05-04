@@ -398,11 +398,6 @@ def create_app(start_scheduler=False):
         except Exception as e:
             logger.warning(f"[startup] Plugin automation seeding skipped: {e}")
         try:
-            from planet_maiko.agents.cards import backfill_card_ids
-            backfill_card_ids()
-        except Exception as e:
-            logger.warning(f"[startup] Card-id backfill skipped: {e}")
-        try:
             from planet_maiko.brain.learning.trainer import reset_stale_training_progress
             reset_stale_training_progress()
         except Exception as e:

@@ -18,14 +18,10 @@ _PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent / "prompts"
 # isn't advertised as a runnable skill in the registry or Specialties
 # UI. morning-brief + evening-wrap were retired entirely.
 _SKILL_IDS = [
-    "brainstorm",
     "investigate",
     "repo-analysis",
-    "checkin",
     "plan",
     "team",
-    "verify",
-    "theme-designer",
 ]
 
 

@@ -11,21 +11,7 @@ from planet_maiko.database import db
 from planet_maiko.models.agent_profile import AgentProfile
 
 
-# Mirrors frontend/src/components/AssignAgentModal.jsx AVATAR_EMOJI.
-# Keep the two in sync whenever a new avatar lands.
-AVATAR_EMOJI = {
-    "shiba": "🐕", "corgi": "🐶", "husky": "🐺", "poodle": "🐩", "golden": "🦮",
-    "beagle": "🐕‍🦺", "dalmatian": "🐾", "samoyed": "☁️", "akita": "🐕",
-    "pomeranian": "🧸",
-    "calico_cat": "🐱", "tabby_cat": "🐈", "black_cat": "🐈‍⬛",
-    "bunny": "🐰", "hamster": "🐹", "fox": "🦊",
-}
-DEFAULT_EMOJI = "🐾"
 PLANET_EMOJI = "🪐"
-
-
-def emoji_for_avatar(avatar):
-    return AVATAR_EMOJI.get((avatar or "").lower(), DEFAULT_EMOJI)
 
 
 def _resolve_profile(profile_or_id):
@@ -50,24 +36,18 @@ def format_agent_signature(profile_or_id):
     name = (profile.display_name or "").strip()
     if not name:
         return None
-    return (
-        f"— from agent {name} {emoji_for_avatar(profile.avatar)}, "
-        f"resident of Planet Maiko {PLANET_EMOJI}"
-    )
+    return f"— from agent {name}, resident of Planet Maiko {PLANET_EMOJI}"
 
 
 def format_agent_identity(profile_or_id):
-    """Return the bare "Name Emoji" identity string for an agent, used
-    when they self-refer. Returns "" if the profile can't be resolved
-    — agents are instructed to fall back to "the agent" in that case.
+    """Return the bare display name for an agent, used when they
+    self-refer. Returns "" if the profile can't be resolved — agents
+    are instructed to fall back to "the agent" in that case.
     """
     profile = _resolve_profile(profile_or_id)
     if not profile:
         return ""
-    name = (profile.display_name or "").strip()
-    if not name:
-        return ""
-    return f"{name} {emoji_for_avatar(profile.avatar)}"
+    return (profile.display_name or "").strip()
 
 
 def sign_external_message(body, profile_or_id):

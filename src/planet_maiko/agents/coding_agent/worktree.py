@@ -132,67 +132,6 @@ def _create_worktree(repo_path, branch_name):
     return None
 
 
-def _create_branch_only(repo_path, branch_name):
-    """Create a branch for agent work, then switch back to the original branch.
-
-    The task files get committed to the new branch, but the repo is left
-    on its original branch so it doesn't block the user's workflow.
-    """
-    try:
-        # Remember current branch
-        current = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=repo_path, capture_output=True, text=True,
-        ).stdout.strip()
-
-        result = subprocess.run(
-            ["git", "checkout", "-b", branch_name],
-            cwd=repo_path, capture_output=True, text=True,
-        )
-        if result.returncode != 0:
-            result = subprocess.run(
-                ["git", "checkout", branch_name],
-                cwd=repo_path, capture_output=True, text=True,
-            )
-            if result.returncode != 0:
-                logger.error(f"[agent] Could not create or checkout branch {branch_name}")
-                return None
-
-        # Store original branch so we can switch back after file writing
-        _branch_return_to[repo_path] = current
-        return repo_path
-    except Exception as e:
-        logger.error(f"[agent] Failed to create branch {branch_name}: {e}")
-        return None
-
-
-# Track which branch to return to after preparing files
-_branch_return_to = {}
-
-
-def _finalize_branch(repo_path):
-    """Commit task files and switch back to the original branch."""
-    original = _branch_return_to.pop(repo_path, None)
-    if not original:
-        return
-    try:
-        subprocess.run(
-            ["git", "add", "-f", "TASK.md", "CLAUDE.md", ".mcp.json", ".maiko-env.json", ".claude/"],
-            cwd=repo_path, capture_output=True, text=True,
-        )
-        subprocess.run(
-            ["git", "commit", "-m", "Maiko: prepare agent task files", "--no-verify"],
-            cwd=repo_path, capture_output=True, text=True,
-        )
-        subprocess.run(
-            ["git", "checkout", original],
-            cwd=repo_path, capture_output=True, text=True,
-        )
-        logger.info(f"[agent] Task files committed, switched back to {original}")
-    except Exception as e:
-        logger.warning(f"[agent] Could not switch back to {original}: {e}")
-
-
 def cleanup(repo_path, branch_name):
     """Remove a worktree and its branch after agent is done."""
     worktree_path = os.path.join(repo_path, ".maiko-worktrees", branch_name)

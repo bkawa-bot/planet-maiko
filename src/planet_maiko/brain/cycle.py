@@ -13,7 +13,7 @@ Pipeline (phases run in this order):
     3.5 pupdates             â€” match remaining pupdates against rules
     3.6 llm_triage           â€” Tier 2 LLM triage for unmatched pupdates
     4.  learning             â€” aggregate signals into learnings
-    5.  heartbeats           â€” nudge silent agents
+    5.  stuck_check          â€” flag agents whose claude process exited silently
     6.  projects             â€” auto-advance project phases
     7.  scheduled_skills     â€” run skills on their schedules
     8.  orchestrate          â€” materialize investigation tasks + route
@@ -193,14 +193,21 @@ def _phase_learning():
     return result
 
 
-def _phase_heartbeats():
-    """Phase 5: Heartbeats â€” auto-wake silent agents on in-progress tasks."""
+def _phase_stuck_check():
+    """Phase 5: Flag agents whose claude process exited silently.
+
+    Surfaces an `agent_stuck` pupdate so the user sees it in Pack Requests
+    and can decide whether to nudge or abandon. No auto-wake — the wake-
+    on-message path handles the case where the user actually wants to
+    re-engage.
+    """
     try:
-        from planet_maiko.agents.monitor import check_heartbeats
-        return {"woken": check_heartbeats()}
+        from flask import current_app
+        from planet_maiko.agents.wake import check_stuck_agents
+        return {"flagged": check_stuck_agents(current_app._get_current_object())}
     except Exception as e:
-        logger.warning(f"[cycle] Heartbeat check error: {e}")
-        return {"woken": 0, "error": str(e)}
+        logger.warning(f"[cycle] Stuck-agent check error: {e}")
+        return {"flagged": 0, "error": str(e)}
 
 
 def _phase_projects():
@@ -485,7 +492,7 @@ _PHASES = [
     ("pupdates", _phase_pupdates),
     ("synthesis", _phase_synthesis),
     ("learning", _phase_learning),
-    ("heartbeats", _phase_heartbeats),
+    ("stuck_check", _phase_stuck_check),
     ("projects", _phase_projects),
     ("orchestrate", _phase_orchestrate),
     ("unblock", _phase_unblock_tasks),

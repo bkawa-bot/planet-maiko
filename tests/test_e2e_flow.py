@@ -732,50 +732,6 @@ class TestAgentMonitor:
 
 
 # ---------------------------------------------------------------------------
-# Test 12: Prepare() with real git repo
-# ---------------------------------------------------------------------------
-
-
-class TestPrepareIntegration:
-
-    def test_prepare_branch_mode(self, app, db, tmp_path):
-        """prepare() in branch mode creates branch, writes files, creates pupdate."""
-        repo_path = _make_temp_git_repo(tmp_path)
-
-        from planet_maiko.agents.coding_agent import prepare
-        result = prepare(
-            task_id="task-prep-1",
-            task_title="Prep integration test",
-            prompt="Implement the widget feature",
-            repo_path=repo_path,
-            use_worktree=False,
-        )
-
-        assert result is not None
-        assert result["status"] == "ready"
-        assert result["mode"] == "branch"
-        assert result["branch"].startswith("maiko/")
-
-        # Verify TASK.md exists
-        task_md = os.path.join(result["working_path"], "TASK.md")
-        assert os.path.exists(task_md)
-        with open(task_md, encoding="utf-8") as f:
-            assert "task-prep-1" in f.read()
-
-        # Verify CLAUDE.md exists
-        claude_md = os.path.join(result["working_path"], "CLAUDE.md")
-        assert os.path.exists(claude_md)
-        with open(claude_md, encoding="utf-8") as f:
-            content = f.read()
-        assert "Planet Maiko" in content
-        assert "maiko report" in content
-
-        # Verify notification pupdate was created
-        notify = Pupdate.query.filter_by(type="agent_ready").first()
-        assert notify is not None
-        assert "Prep integration test" in notify.title
-
-
 # ---------------------------------------------------------------------------
 # Test 13: Specialization scoring in recommendations
 # ---------------------------------------------------------------------------

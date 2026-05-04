@@ -108,7 +108,6 @@ DEFAULT_CONFIG = {
         },
     },
     "brain": {
-        "runtime": "claude-code",  # or a custom runtime
         # Tools pre-approved for Claude Code sessions (avoids permission prompts)
         "allowed_tools": ["Bash", "Read", "Edit", "Write", "Glob", "Grep", "mcp__maiko-channel"],
         "correlation_window_minutes": 30,

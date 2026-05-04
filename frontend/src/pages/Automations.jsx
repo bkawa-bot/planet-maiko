@@ -20,22 +20,17 @@ const ICON_MAP = {
 // the top, and the Specialties list (role protocol prompts an agent
 // adopts when doing a specific kind of work) below. Things that
 // don't fit the specialty model are hidden from the grid:
-//   - theme-designer: driven from the Theme menu
 //   - pr-review: invoked internally by the review agent
 //   - agent-protocol: global CLAUDE.md template, not a role
-//   - checkin / plan / team: legacy digest prompts (same family
-//     as the retired morning-brief / evening-wrap); kept in the
-//     registry for now but not surfaced as specialties.
+//   - plan / team: digest prompts surfaced on Scheduled Briefings.
 //
 // The API methods are still named api.getSkills / api.runSkill / etc.
 // because the backend routes (/skills/*) haven't been renamed yet —
 // that's a follow-up. Internal state, callbacks, and CSS classes here
 // use "specialty" to match what the user sees on screen.
 const HIDDEN_SPECIALTY_IDS = new Set([
-  "theme-designer",
   "pr-review",
   "agent-protocol",
-  "checkin",
   "plan",
   "team",
 ]);

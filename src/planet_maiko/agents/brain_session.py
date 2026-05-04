@@ -26,30 +26,13 @@ _runtime = None
 
 
 def _get_runtime():
-    """Get the configured agent runtime via entry_points plugin discovery."""
+    """Get the Claude Code runtime singleton."""
     global _runtime
-    if _runtime is not None:
-        return _runtime
-
-    from importlib.metadata import entry_points
-
-    config = load_config()
-    brain_config = config.get("brain", {})
-    runtime_name = brain_config.get("runtime", "claude-code")
-
-    eps = entry_points(group="planet_maiko.runtimes")
-    for ep in eps:
-        if ep.name == runtime_name:
-            runtime_cls = ep.load()
-            _runtime = runtime_cls()
-            break
-    else:
-        available = [ep.name for ep in eps]
-        raise ValueError(f"Unknown runtime: '{runtime_name}'. Available: {available}")
-
-    if not _runtime.is_available():
-        logger.warning(f"[brain] Runtime '{runtime_name}' is not available")
-
+    if _runtime is None:
+        from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
+        _runtime = ClaudeCodeRuntime()
+        if not _runtime.is_available():
+            logger.warning("[brain] Claude Code runtime is not available")
     return _runtime
 
 
@@ -78,7 +61,7 @@ def run_skill(skill_name, context=None, working_dir=None):
         return {"output": "", "success": False, "error": f"Unknown skill: {skill_name}"}
 
     # Skills can take longer - give them more time
-    timeout = 600 if skill_name in ("investigate", "brainstorm", "repo-analysis") else 120
+    timeout = 600 if skill_name in ("investigate", "repo-analysis") else 120
 
     from planet_maiko.agents.routing import resolve_model
     # Release DB before long LLM call to avoid SQLite locks
@@ -114,12 +97,6 @@ def run_skill_as_agent(agent_profile_id, skill_name, context=None, working_dir=N
     prompt so the model adopts the agent's persona / rules for this
     session. If the profile has no instructions, this is equivalent to
     calling run_skill directly.
-
-    The agent's LoRA adapter path (profile.extra.adapter_path) is noted
-    in the context for future inference-time wiring — today it's not
-    actually loaded for skill runs (that's only used by the pre-commit
-    hook). This preserves the hook semantics while letting us attribute
-    work to a profile.
     """
     from planet_maiko.models.agent_profile import AgentProfile
     profile = db.session.get(AgentProfile, agent_profile_id) if agent_profile_id else None
@@ -190,7 +167,7 @@ def run_skill_as_agent(agent_profile_id, skill_name, context=None, working_dir=N
 
     full_prompt = preamble + protocol + team_role + prompt
 
-    timeout = 600 if skill_name in ("investigate", "brainstorm", "repo-analysis") else 120
+    timeout = 600 if skill_name in ("investigate", "repo-analysis") else 120
     from planet_maiko.agents.routing import resolve_model
     db.session.close()
     result = runtime.send(full_prompt, working_dir=working_dir, timeout=timeout,

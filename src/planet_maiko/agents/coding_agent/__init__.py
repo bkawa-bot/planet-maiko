@@ -45,8 +45,6 @@ from .worktree import (
     _slugify,
     _fetch_latest_base,
     _create_worktree,
-    _create_branch_only,
-    _finalize_branch,
     cleanup,
     cleanup_task_worktree,
 )
@@ -66,20 +64,11 @@ logger = logging.getLogger(__name__)
 
 
 def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
-            use_worktree=True, agent_profile_id=None,
-            role="coding", specialty_id=None):
-    """Prepare for an agent to work on a task.
-
-    Two modes:
-    - use_worktree=True (default): creates a git worktree on a new branch.
-      Agent works in an isolated directory.
-    - use_worktree=False: creates a branch in the main repo. Agent works
-      in the repo directory directly (simpler but not isolated).
+            agent_profile_id=None, role="coding", specialty_id=None):
+    """Prepare a git worktree on a new branch for an agent to work on a task.
 
     The agent is not started — caller invokes _kickoff_agent_headless()
-    separately when ready. (The old auto_kickoff flag plus terminal-
-    launching path were removed; every modern caller goes through the
-    headless kickoff.)
+    separately when ready.
 
     Args:
         task_id: the task this agent will work on
@@ -87,7 +76,6 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
         prompt: full instructions for the agent
         repo_path: path to the git repository
         branch_prefix: prefix for the branch name
-        use_worktree: if True, create a git worktree; if False, just create a branch
         role: "coding" | "review" | "investigation" | "cartographer" —
             picks the CLAUDE.md protocol template and role-scoped team
             instructions.
@@ -125,11 +113,7 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
                 pass
         branch_name = f"{branch_prefix}/{slug}"
 
-    if use_worktree:
-        working_path = _create_worktree(repo_path, branch_name)
-    else:
-        working_path = _create_branch_only(repo_path, branch_name)
-
+    working_path = _create_worktree(repo_path, branch_name)
     if not working_path:
         return None
 
@@ -178,11 +162,6 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     except Exception as e:
         logger.warning(f"[agent] Could not compile brief for {agent_id}: {e}")
 
-    # If branch-only mode, commit task files and switch back to original branch
-    if not use_worktree:
-        _finalize_branch(working_path)
-
-    mode = "worktree" if use_worktree else "branch"
     # Review/investigation agents run autonomously after prepare, so the
     # "ready to launch" framing doesn't fit — their action is "dig deeper"
     # once the result pupdate arrives. Coding agents still need a manual
@@ -200,7 +179,7 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
         type="agent_ready",
         priority="normal",
         title=ready_title,
-        body=f"Prepared on branch `{branch_name}` ({mode}).\n\n{'Working in: ' + working_path if use_worktree else 'Checkout: git checkout ' + branch_name}",
+        body=f"Prepared on branch `{branch_name}`.\n\nWorking in: {working_path}",
         actionable=True,
         action_hint=ready_hint,
         tags=[task_id, "agent", role],
@@ -208,7 +187,6 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
             "agent_id": agent_id,
             "branch": branch_name,
             "working_path": working_path,
-            "mode": mode,
             "task_id": task_id,
             "role": role,
         },
@@ -216,27 +194,23 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     db.session.add(notify)
     db.session.commit()
 
-    logger.info(f"[orchestrator] Prepared agent {agent_id} at {working_path} ({mode})")
+    logger.info(f"[orchestrator] Prepared agent {agent_id} at {working_path}")
 
-    result = {
+    return {
         "agent_id": agent_id,
         "task_id": task_id,
         "branch": branch_name,
         "working_path": working_path,
-        "mode": mode,
         "status": "ready",
         "prepared_at": datetime.now(timezone.utc).isoformat(),
         "launch_instructions": {
             "claude_code": f'cd {working_path} && claude "Read TASK.md and CLAUDE.md. Begin working on the task."',
-            "aider": f"cd {working_path} && aider",
             "manual": f"cd {working_path} && cat TASK.md",
         },
     }
 
-    return result
 
-
-def kickoff_coding_task(task, *, plan_first=False, use_worktree=True, branch_name=None):
+def kickoff_coding_task(task, *, plan_first=False, branch_name=None):
     """Prepare a worktree and fire the headless agent for a coding task.
 
     Resolves repo_path from the task's scope, builds a rich prompt (task
@@ -304,7 +278,6 @@ def kickoff_coding_task(task, *, plan_first=False, use_worktree=True, branch_nam
             prompt=full_prompt,
             repo_path=repo_path,
             branch_prefix=branch_prefix,
-            use_worktree=use_worktree,
             agent_profile_id=agent.id,
             role="coding",
         )
@@ -318,7 +291,6 @@ def kickoff_coding_task(task, *, plan_first=False, use_worktree=True, branch_nam
 
     kickoff = _kickoff_agent_headless(
         agent.id, working_path, task.id,
-        branch_name=branch if not use_worktree else None,
         plan_first=plan_first,
     )
 

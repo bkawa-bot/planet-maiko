@@ -187,8 +187,7 @@ PACK_OWNED_KINDS = {
     # at one of these types really means "spawn an AgentJob" — migration
     # rewrites accordingly. Add new skills here as they're registered.
     "cartograph", "investigation", "repo_analysis",
-    "brainstorm", "checkin",
-    "plan", "team", "verify", "home-overview", "theme-designer", "pr-review",
+    "plan", "team", "home-overview", "pr-review",
     "investigate",
 }
 

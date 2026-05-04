@@ -285,7 +285,6 @@ export const api = {
   getTheme: (id) => request(`/themes/${id}`),
   saveTheme: (data) => request("/themes", { method: "POST", body: JSON.stringify(data) }),
   deleteTheme: (id) => request(`/themes/${id}`, { method: "DELETE" }),
-  generateTheme: (query) => request("/themes/generate", { method: "POST", body: JSON.stringify({ query }) }),
 
   // Home overview — the rolling LLM-generated pane
   getHomeOverview: () => request("/home/overview"),

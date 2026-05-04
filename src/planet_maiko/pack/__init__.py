@@ -327,7 +327,6 @@ def _launch_one_shot(task_id, role):
                     prompt=full_prompt,
                     repo_path=local_path,
                     branch_prefix="maiko",
-                    use_worktree=True,
                     agent_profile_id=t.assigned_agent_id,
                     role=role,
                 )

@@ -128,29 +128,3 @@ def roll_card(weights=None):
         # to uniform so we never return None when cards exist.
         return random.choice(cards)
     return random.choices(flat_cards, weights=flat_weights, k=1)[0]
-
-
-def backfill_card_ids():
-    """One-shot startup pass: any AgentProfile whose `avatar` is not
-    a known card id (e.g. legacy "shiba", "corgi") gets a freshly
-    rolled card. Existing display_name / flavor_text / instructions
-    are left alone — this is a soft migration, not a personality
-    rewrite. Idempotent.
-    """
-    known = known_card_ids()
-    if not known:
-        logger.warning("[cards] backfill skipped — no cards loaded")
-        return 0
-    updated = 0
-    for profile in AgentProfile.query.all():
-        if profile.avatar in known:
-            continue
-        card = roll_card()
-        if not card:
-            break
-        profile.avatar = card["id"]
-        updated += 1
-    if updated:
-        db.session.commit()
-        logger.info(f"[cards] backfilled card_id on {updated} profile(s)")
-    return updated

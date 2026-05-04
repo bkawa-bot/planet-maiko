@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import { applyCustomTheme, clearCustomTheme } from "../utils/themes";
 import {
-  Palette, Plus, Trash2, Save, X, Eye, Sparkles, Loader,
+  Palette, Plus, Trash2, Save, X, Eye,
 } from "lucide-react";
 import "./Themes.css";
 
@@ -67,9 +67,6 @@ export default function Themes() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [previewing, setPreviewing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [showGenerate, setShowGenerate] = useState(false);
-  const [genQuery, setGenQuery] = useState("");
-  const [generating, setGenerating] = useState(false);
 
   const fetchThemes = () => api.getThemes().then(setThemes).catch(console.error);
   useEffect(() => { fetchThemes(); }, []);
@@ -157,34 +154,6 @@ export default function Themes() {
     setSaving(false);
   };
 
-  const handleGenerate = async () => {
-    const q = genQuery.trim();
-    if (!q) return;
-    setGenerating(true);
-    try {
-      const res = await api.generateTheme(q);
-      const theme = res?.theme;
-      if (!theme) throw new Error(res?.error || "no theme returned");
-      setSelected(null);
-      setForm({
-        id: theme.id || "",
-        name: theme.name || "",
-        emoji: theme.emoji || "🎨",
-        description: theme.description || "",
-        world_background: theme.world_background || "night",
-        colors: { ...(theme.colors || {}) },
-      });
-      applyCustomTheme(theme);
-      setPreviewing(true);
-      setShowGenerate(false);
-      setGenQuery("");
-      showToast("Theme generated — tweak and save when you're happy", "normal");
-    } catch (err) {
-      showToast(err.message || "Generation failed", "high");
-    }
-    setGenerating(false);
-  };
-
   const handleDelete = async (t) => {
     if (!confirm(`Delete "${t.name}"?`)) return;
     try {
@@ -207,12 +176,7 @@ export default function Themes() {
   return (
     <div className="themes-page">
       <div className="themes-header">
-        <div className="themes-header-row">
-          <h2><Palette size={18} /> Themes</h2>
-          <button className="btn btn-primary" onClick={() => setShowGenerate(true)}>
-            <Sparkles size={12} /> Design with Maiko
-          </button>
-        </div>
+        <h2><Palette size={18} /> Themes</h2>
         <p className="themes-sub">
           Craft your own color palette for Maiko. Saved themes appear in the theme menu at the top right.
         </p>
@@ -363,54 +327,6 @@ export default function Themes() {
         </section>
       </div>
 
-      {showGenerate && (
-        <div className="modal-overlay" onClick={() => !generating && setShowGenerate(false)}>
-          <div className="generate-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <Sparkles size={16} /> Design a theme
-              <button
-                className="btn btn-sm"
-                onClick={() => setShowGenerate(false)}
-                disabled={generating}
-                style={{ marginLeft: "auto" }}
-              >
-                <X size={12} />
-              </button>
-            </div>
-            <div className="generate-modal-body">
-              <p className="themes-sub" style={{ marginBottom: 8 }}>
-                Describe the vibe and Maiko will generate a palette.
-              </p>
-              <textarea
-                className="generate-textarea"
-                value={genQuery}
-                onChange={(e) => setGenQuery(e.target.value)}
-                placeholder={'e.g. "ocean at dusk, warm and moody, like a Studio Ghibli film"'}
-                rows={4}
-                autoFocus
-                disabled={generating}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleGenerate();
-                }}
-              />
-              <div className="themes-actions" style={{ borderTop: "none", paddingTop: 4 }}>
-                <button className="btn" onClick={() => setShowGenerate(false)} disabled={generating}>
-                  Cancel
-                </button>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleGenerate}
-                  disabled={generating || !genQuery.trim()}
-                >
-                  {generating
-                    ? <><Loader size={12} className="spin" /> Designing...</>
-                    : <><Sparkles size={12} /> Generate</>}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

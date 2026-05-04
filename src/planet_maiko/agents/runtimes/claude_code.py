@@ -14,16 +14,15 @@ import os as _os
 import shutil
 import subprocess
 
-from planet_maiko.agents.runtimes.base import AgentRuntime
-
 logger = logging.getLogger(__name__)
 
 
-class ClaudeCodeRuntime(AgentRuntime):
+class ClaudeCodeRuntime:
 
-    @property
-    def name(self):
-        return "claude-code"
+    name = "claude-code"
+
+    def get_info(self):
+        return {"name": self.name, "available": self.is_available()}
 
     def _find_claude(self):
         """Find the claude CLI, checking common install locations."""
