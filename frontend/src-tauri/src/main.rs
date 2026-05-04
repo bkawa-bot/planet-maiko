@@ -4,76 +4,140 @@
 // gets a single-icon launch instead of two terminals.
 //
 // Lifecycle:
-//   - main() spawns Flask before the Tauri builder runs. If the
-//     spawn fails (maiko CLI missing), we panic with a clear message
-//     instead of silently opening an empty window.
-//   - stdout / stderr are piped into the Tauri shell's own stderr so
-//     a Flask crash isn't invisible to whoever is debugging.
+//   - main() resolves the absolute path to `maiko` via the user's
+//     login shell, then spawns it directly. Finder-launched apps
+//     inherit a minimal /usr/bin:/bin PATH that doesn't include
+//     ~/.local/bin / homebrew / pyenv shims / venvs — running through
+//     the login shell once to get the path lets every standard pip
+//     install location work without us hardcoding any of them.
+//   - If maiko isn't found we log a clear error and let Tauri open
+//     anyway. Better to show the user a window with broken API
+//     calls than to crash silently before the window appears.
+//   - stdout / stderr from Flask are piped to a logfile in
+//     ~/Library/Logs (Mac) or ~/.cache (Linux) so Finder launches
+//     leave a trace — Finder apps have no terminal stderr.
 //   - kill_flask runs from BOTH WindowEvent::CloseRequested (red X)
 //     AND RunEvent::ExitRequested (Cmd+Q on Mac, Quit menu, all
 //     windows closed). On Mac, Cmd+Q skips per-window events and
-//     goes straight to the app-level event — without ExitRequested
-//     handling Flask gets orphaned and port 8420 stays bound until
-//     the next reboot or manual `kill -9`.
+//     goes straight to the app-level event.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::io::{BufRead, BufReader};
+use std::fs::OpenOptions;
+use std::io::{BufRead, BufReader, Write};
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tauri::{RunEvent, WindowEvent};
 
-// Shared handle on the Flask child. We share it across the two close
-// paths (window event + app-level RunEvent) by cloning the Arc into
-// each move closure — no Tauri state plumbing, no Manager-trait
-// generics, no lifetime jousting with the borrow checker.
+// Shared handle on the Flask child. Cloned into each close closure —
+// no Tauri state plumbing or Manager-trait generics needed.
 type FlaskHandle = Arc<Mutex<Option<Child>>>;
 
-// Build the command that launches Flask. On Mac/Linux we route
-// through the user's login shell so .zshrc/.bashrc PATH edits load
-// — Finder-launched apps inherit a minimal /usr/bin:/bin PATH that
-// doesn't include ~/.local/bin or /opt/homebrew/bin (where pip
-// typically drops the `maiko` script). Windows inherits the user
-// PATH directly from the registry, so the simple form is enough.
+// Where to write Flask stdout / stderr so Finder-launched failures
+// leave a trace. ~/Library/Logs is Apple's blessed log dir; on
+// Linux ~/.cache/planet-maiko serves the same role.
+fn log_path() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    if cfg!(target_os = "macos") {
+        PathBuf::from(format!("{}/Library/Logs/planet-maiko-tauri.log", home))
+    } else if cfg!(target_os = "windows") {
+        let appdata = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| home.clone());
+        PathBuf::from(format!("{}\\planet-maiko\\tauri.log", appdata))
+    } else {
+        PathBuf::from(format!("{}/.cache/planet-maiko-tauri.log", home))
+    }
+}
+
+fn log_line(msg: &str) {
+    let path = log_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&path) {
+        let _ = writeln!(f, "{}", msg);
+    }
+    eprintln!("{}", msg);
+}
+
+// Resolve the absolute path to `maiko` by asking the user's login
+// shell (Mac/Linux) — this loads .zshrc/.zshenv/.bashrc so any PATH
+// edits the user has (~/.local/bin, /opt/homebrew/bin, pyenv shims,
+// venv bins) get picked up. On Windows we trust the registry-level
+// user PATH that Finder/Explorer launches inherit by default.
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-fn build_maiko_command() -> Command {
-    // $SHELL is set by the OS login session. Falling back to /bin/zsh
-    // covers the Catalina+ default; users on bash/fish inherit their
-    // own login shell via the env var.
+fn resolve_maiko_path() -> std::io::Result<PathBuf> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-    let mut cmd = Command::new(shell);
-    cmd.args(["-l", "-c", "maiko serve"]);
-    cmd
+    let output = Command::new(&shell)
+        .args(["-l", "-c", "command -v maiko"])
+        .output()?;
+    if !output.status.success() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!(
+                "`maiko` not found in {}'s login PATH. Install with `pip install --user -e .` from the planet-maiko repo, or make sure your venv's bin dir is on PATH in ~/.zshrc.",
+                shell
+            ),
+        ));
+    }
+    let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if path_str.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "`command -v maiko` returned empty in login shell".to_string(),
+        ));
+    }
+    Ok(PathBuf::from(path_str))
 }
 
 #[cfg(target_os = "windows")]
-fn build_maiko_command() -> Command {
-    let mut cmd = Command::new("maiko");
-    cmd.arg("serve");
-    cmd
+fn resolve_maiko_path() -> std::io::Result<PathBuf> {
+    Ok(PathBuf::from("maiko"))
 }
 
 fn spawn_flask() -> std::io::Result<Child> {
-    let mut child = build_maiko_command()
+    let maiko = resolve_maiko_path()?;
+    log_line(&format!("[maiko] Resolved maiko binary: {}", maiko.display()));
+
+    let mut child = Command::new(&maiko)
+        .arg("serve")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
 
-    // Drain stdout / stderr so a Flask crash leaves a trace in the
-    // shell logs. Detached threads — they exit when the pipes close
-    // on Flask exit.
+    // Drain stdout / stderr to the log file so a Flask crash isn't
+    // invisible to a Finder-launched user. Detached threads — they
+    // exit when the pipes close on Flask exit.
+    let log_for_stdout = log_path();
     if let Some(stdout) = child.stdout.take() {
         thread::spawn(move || {
+            let mut log = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_for_stdout)
+                .ok();
             for line in BufReader::new(stdout).lines().map_while(Result::ok) {
                 eprintln!("[flask] {}", line);
+                if let Some(f) = log.as_mut() {
+                    let _ = writeln!(f, "[flask] {}", line);
+                }
             }
         });
     }
+    let log_for_stderr = log_path();
     if let Some(stderr) = child.stderr.take() {
         thread::spawn(move || {
+            let mut log = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_for_stderr)
+                .ok();
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
                 eprintln!("[flask] {}", line);
+                if let Some(f) = log.as_mut() {
+                    let _ = writeln!(f, "[flask] {}", line);
+                }
             }
         });
     }
@@ -88,14 +152,24 @@ fn kill_flask(handle: &FlaskHandle) {
 }
 
 fn main() {
-    let flask = spawn_flask().expect(
-        "Failed to start `maiko serve`. Is the maiko CLI installed and on PATH? \
-         From the repo root: `pip install -e .`",
-    );
+    log_line(&format!(
+        "[maiko] Starting Tauri shell, log file: {}",
+        log_path().display()
+    ));
 
-    // One canonical handle, two clones — one for each close path. The
-    // first call wins; the other finds None and no-ops.
-    let flask_handle: FlaskHandle = Arc::new(Mutex::new(Some(flask)));
+    // Try to spawn Flask. On failure, log the error and let Tauri
+    // open the window anyway — the user sees a clear "API down"
+    // state instead of a silent crash before the window appears,
+    // and the log path is in our startup line for them to tail.
+    let flask = match spawn_flask() {
+        Ok(child) => Some(child),
+        Err(e) => {
+            log_line(&format!("[maiko] Failed to start Flask: {}", e));
+            None
+        }
+    };
+
+    let flask_handle: FlaskHandle = Arc::new(Mutex::new(flask));
     let close_handle = flask_handle.clone();
     let exit_handle = flask_handle.clone();
 
@@ -112,9 +186,6 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("error building Maiko Tauri shell");
 
-    // ExitRequested catches Cmd+Q on Mac, Quit menu items, and the
-    // implicit "all windows closed → app exits" path. CloseRequested
-    // alone misses these and Flask gets orphaned.
     app.run(move |_app_handle, event| {
         if let RunEvent::ExitRequested { .. } = event {
             kill_flask(&exit_handle);
