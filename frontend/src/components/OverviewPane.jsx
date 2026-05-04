@@ -5,11 +5,13 @@ import { showToast } from "./Toast";
 import { renderMarkdown } from "../utils/markdown";
 import { relativeTime } from "../utils/dates";
 import {
-  Sunrise, RefreshCw, FileText, X, Brain,
+  Sunrise, RefreshCw, FileText, X,
   MoreHorizontal, ListTodo, Search, ExternalLink,
 } from "lucide-react";
 import TaskCard from "./TaskCard";
 import PlanetSpinner from "./PlanetSpinner";
+import ClosingCard from "./overview/ClosingCard";
+import LearningsCard from "./overview/LearningsCard";
 import "./OverviewPane.css";
 
 /**
@@ -559,64 +561,13 @@ export default function OverviewPane() {
         </section>
       )}
 
-      {pendingLearningsCount > 0 && (
-        <section className="overview-section">
-          <h2 className="overview-section-title">
-            New learnings to review
-          </h2>
-          <div className="overview-learnings-card" onClick={() => navigate("/knowledge?tab=pending")}>
-            <div className="overview-learnings-icon"><Brain size={16} /></div>
-            <div className="overview-learnings-body">
-              <div className="overview-learnings-count">
-                {pendingLearningsCount} learning{pendingLearningsCount === 1 ? "" : "s"} waiting for your nod
-              </div>
-              <ul className="overview-learnings-preview">
-                {pendingLearnings.slice(0, 3).map((l) => (
-                  <li key={l.id}>{l.rule}</li>
-                ))}
-                {pendingLearningsCount > 3 && (
-                  <li className="overview-learnings-more">
-                    + {pendingLearningsCount - 3} more
-                  </li>
-                )}
-              </ul>
-            </div>
-          </div>
-        </section>
-      )}
+      <LearningsCard count={pendingLearningsCount} preview={pendingLearnings} />
 
       {overview.alive && (
         <p className="overview-alive">{overview.alive}</p>
       )}
 
-      {overview.closing && (
-        <section className="overview-closing">
-          <div className="overview-closing-label">Enough for today</div>
-          <p className="overview-closing-body">{overview.closing}</p>
-          {overview.overnight?.length > 0 && (
-            <div className="overview-overnight">
-              <div className="overview-overnight-label">Continuing overnight</div>
-              <ul className="overview-overnight-list">
-                {overview.overnight.map((t) => (
-                  <li key={t.task_id} className="overview-overnight-item">
-                    <span className="overview-overnight-title">{t.title}</span>
-                    {t.agent_name && (
-                      <span className="overview-overnight-agent">— {t.agent_name}</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-              <a
-                className="overview-overnight-link"
-                onClick={(e) => { e.preventDefault(); navigate("/tasks"); }}
-                href="/tasks"
-              >
-                open Tasks to amend
-              </a>
-            </div>
-          )}
-        </section>
-      )}
+      <ClosingCard closing={overview.closing} overnight={overview.overnight} />
 
       {overview.custom_section && (
         <section className="overview-custom">
