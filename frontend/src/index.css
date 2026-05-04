@@ -101,17 +101,17 @@
   --bg: #EAF4FF;            /* Soft Sky */
   --bg-plain: #EAF4FF;
   --bg-card: #FFFFFF;
-  --bg-card-alt: #F3EFFF;   /* Pastel Lavender Base */
+  --bg-card-alt: #E6FFF7;   /* Light Mint Wash — distinct from bg, not just a lavender tint */
   --bg-hover: #DDEAFC;
   --bg-selected: #C8DDF8;
   --text: #2B2F42;          /* Dark Slate */
   --text-dim: #6B7280;      /* Mid Gray */
   --text-muted: #9CA3B5;
   --pink: #FF7AB8;          /* Light Magenta */
-  --pink-soft: rgba(255, 122, 184, 0.14);
+  --pink-soft: rgba(255, 122, 184, 0.16);
   --pink-glow: rgba(255, 122, 184, 0.08);
   --blue: #5EE7EB;          /* Bright Cyan */
-  --blue-soft: rgba(94, 231, 235, 0.14);
+  --blue-soft: rgba(94, 231, 235, 0.18);
   --mint: #CFF7E6;          /* Pale Mint */
   --orange: #FFB38A;        /* Apricot */
   --lavender: #C48BFF;      /* Lavender Purple */
@@ -125,12 +125,12 @@
   --green: #9BE870;         /* Fresh Green */
   --border: #C8D8EC;
   --border-subtle: #DDE6F2;
-  --urgent-soft: rgba(255, 163, 160, 0.16); --urgent-faint: rgba(255, 163, 160, 0.08);
-  --high-soft: rgba(255, 179, 138, 0.16); --high-faint: rgba(255, 179, 138, 0.08);
-  --lemon-soft: rgba(255, 197, 87, 0.18); --lemon-faint: rgba(255, 197, 87, 0.10);
-  --green-soft: rgba(155, 232, 112, 0.18); --green-faint: rgba(155, 232, 112, 0.10);
-  --lavender-soft: rgba(196, 139, 255, 0.14); --lavender-faint: rgba(196, 139, 255, 0.07);
-  --topbar-gradient: linear-gradient(135deg, #EAF4FF 0%, #F3EFFF 50%, #E6FFF7 100%);
+  --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.08);
+  --high-soft: rgba(255, 179, 138, 0.18); --high-faint: rgba(255, 179, 138, 0.08);
+  --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
+  --green-soft: rgba(155, 232, 112, 0.20); --green-faint: rgba(155, 232, 112, 0.10);
+  --lavender-soft: rgba(196, 139, 255, 0.18); --lavender-faint: rgba(196, 139, 255, 0.08);
+  --topbar-gradient: linear-gradient(135deg, #EAF4FF 0%, #FF7AB8 35%, #5EE7EB 65%, #FFC557 100%);
   --pane-bg: rgba(255, 255, 255, 0.65);
 }
 
@@ -145,17 +145,17 @@
   --text: #2B2F42;          /* Dark Slate */
   --text-dim: #6B7280;      /* Mid Gray */
   --text-muted: #9CA3B5;
-  --pink: #FF9CC4;          /* Soft Pink — softer than Day's Light Magenta */
-  --pink-soft: rgba(255, 156, 196, 0.14);
+  --pink: #FF9CC4;          /* Soft Pink — sunrise blush, softer than Day's magenta */
+  --pink-soft: rgba(255, 156, 196, 0.18);
   --pink-glow: rgba(255, 156, 196, 0.08);
-  --blue: #A8D4FF;          /* Soft Blue */
-  --blue-soft: rgba(168, 212, 255, 0.14);
+  --blue: #59E3D6;          /* Bright Aqua — actual contrast against the warm cream */
+  --blue-soft: rgba(89, 227, 214, 0.18);
   --mint: #CFF7E6;          /* Pale Mint */
   --orange: #FFB38A;        /* Apricot */
-  --lavender: #D8C7FF;      /* Light Periwinkle */
+  --lavender: #C48BFF;      /* Lavender Purple — distinct from periwinkle bg */
   --peach: #FFB38A;
   --creamsicle: #FFC9A8;
-  --lemon: #FFF3A3;         /* Butter Yellow */
+  --lemon: #FFC557;         /* Sunlit Gold — punchier than Butter Yellow which is already in BG */
   --urgent: #FFA3A0;        /* Soft Coral */
   --high: #FFB38A;          /* Apricot */
   --normal: #FF9CC4;
@@ -163,12 +163,12 @@
   --green: #9BE870;         /* Fresh Green */
   --border: #F0E0C8;
   --border-subtle: #F8E8D0;
-  --urgent-soft: rgba(255, 163, 160, 0.16); --urgent-faint: rgba(255, 163, 160, 0.08);
-  --high-soft: rgba(255, 179, 138, 0.16); --high-faint: rgba(255, 179, 138, 0.08);
-  --lemon-soft: rgba(255, 243, 163, 0.20); --lemon-faint: rgba(255, 243, 163, 0.10);
-  --green-soft: rgba(155, 232, 112, 0.18); --green-faint: rgba(155, 232, 112, 0.10);
-  --lavender-soft: rgba(216, 199, 255, 0.18); --lavender-faint: rgba(216, 199, 255, 0.08);
-  --topbar-gradient: linear-gradient(135deg, #FFF3A3 0%, #FF9CC4 50%, #D8C7FF 100%);
+  --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.08);
+  --high-soft: rgba(255, 179, 138, 0.18); --high-faint: rgba(255, 179, 138, 0.08);
+  --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
+  --green-soft: rgba(155, 232, 112, 0.20); --green-faint: rgba(155, 232, 112, 0.10);
+  --lavender-soft: rgba(196, 139, 255, 0.20); --lavender-faint: rgba(196, 139, 255, 0.10);
+  --topbar-gradient: linear-gradient(135deg, #FFF4E5 0%, #FFC557 25%, #FF9CC4 60%, #59E3D6 100%);
   --pane-bg: rgba(255, 255, 255, 0.70);
 }
 
@@ -427,7 +427,9 @@
   --pane-bg: rgba(74, 48, 104, 0.55);
 }
 
-/* === Dawn Mist — pastel lavender base + apricot warmth. */
+/* === Dawn Mist — early morning haze on an alien valley. Pastel
+   Lavender base, Apricot primary, Bright Aqua + Lavender Purple +
+   Sunlit Gold so the haze feels prismatic, not single-tone. */
 [data-theme="dawn-mist"] {
   --bg: #F3EFFF;
   --bg-plain: #F3EFFF;
@@ -439,14 +441,14 @@
   --text-dim: #6B7280;
   --text-muted: #9CA3B5;
   --pink: #FFB38A;
-  --pink-soft: rgba(255, 179, 138, 0.18);
+  --pink-soft: rgba(255, 179, 138, 0.20);
   --pink-glow: rgba(255, 179, 138, 0.10);
-  --blue: #A8D4FF;
-  --blue-soft: rgba(168, 212, 255, 0.16);
+  --blue: #59E3D6;
+  --blue-soft: rgba(89, 227, 214, 0.18);
   --mint: #CFF7E6;
   --orange: #FFA3A0;
-  --lavender: #D8C7FF;
-  --peach: #FFB38A;
+  --lavender: #C48BFF;
+  --peach: #FFA3A0;
   --creamsicle: #FFCAA8;
   --lemon: #FFC557;
   --urgent: #FFA3A0;
@@ -456,16 +458,19 @@
   --green: #9BE870;
   --border: #E5D5F0;
   --border-subtle: #F0E5F8;
-  --urgent-soft: rgba(255, 163, 160, 0.16); --urgent-faint: rgba(255, 163, 160, 0.08);
-  --high-soft: rgba(255, 179, 138, 0.18); --high-faint: rgba(255, 179, 138, 0.10);
-  --lemon-soft: rgba(255, 197, 87, 0.20); --lemon-faint: rgba(255, 197, 87, 0.10);
+  --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.08);
+  --high-soft: rgba(255, 179, 138, 0.20); --high-faint: rgba(255, 179, 138, 0.10);
+  --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
   --green-soft: rgba(155, 232, 112, 0.18); --green-faint: rgba(155, 232, 112, 0.10);
-  --lavender-soft: rgba(216, 199, 255, 0.20); --lavender-faint: rgba(216, 199, 255, 0.10);
-  --topbar-gradient: linear-gradient(135deg, #F3EFFF 0%, #D8C7FF 30%, #FFA3A0 70%, #FFC557 100%);
+  --lavender-soft: rgba(196, 139, 255, 0.22); --lavender-faint: rgba(196, 139, 255, 0.10);
+  --topbar-gradient: linear-gradient(135deg, #F3EFFF 0%, #C48BFF 25%, #FFB38A 55%, #59E3D6 80%, #FFC557 100%);
   --pane-bg: rgba(255, 255, 255, 0.70);
 }
 
-/* === Cherry Blossom — spring soft pink, lavender mist. */
+/* === Cherry Blossom — petal storm. Pink bg, Light Magenta primary,
+   Lavender Purple + Bright Cyan + Sunlit Gold + Fresh Green so the
+   wind through the trees feels like multiple bloom colors swirling,
+   not just pink-on-pink. */
 [data-theme="cherry-blossom"] {
   --bg: #FFF5FA;
   --bg-plain: #FFF5FA;
@@ -477,13 +482,13 @@
   --text-dim: #6B7280;
   --text-muted: #B5A3C0;
   --pink: #FF7AB8;
-  --pink-soft: rgba(255, 122, 184, 0.18);
+  --pink-soft: rgba(255, 122, 184, 0.20);
   --pink-glow: rgba(255, 122, 184, 0.10);
-  --blue: #A8D4FF;
-  --blue-soft: rgba(168, 212, 255, 0.14);
+  --blue: #5EE7EB;
+  --blue-soft: rgba(94, 231, 235, 0.18);
   --mint: #CFF7E6;
   --orange: #FFB38A;
-  --lavender: #D8C7FF;
+  --lavender: #C48BFF;
   --peach: #FF9CC4;
   --creamsicle: #FFCAA8;
   --lemon: #FFC557;
@@ -494,16 +499,18 @@
   --green: #9BE870;
   --border: #F0D5E5;
   --border-subtle: #FFE8F0;
-  --urgent-soft: rgba(255, 163, 160, 0.16); --urgent-faint: rgba(255, 163, 160, 0.08);
-  --high-soft: rgba(255, 179, 138, 0.16); --high-faint: rgba(255, 179, 138, 0.08);
-  --lemon-soft: rgba(255, 197, 87, 0.18); --lemon-faint: rgba(255, 197, 87, 0.10);
-  --green-soft: rgba(155, 232, 112, 0.16); --green-faint: rgba(155, 232, 112, 0.08);
-  --lavender-soft: rgba(216, 199, 255, 0.16); --lavender-faint: rgba(216, 199, 255, 0.08);
-  --topbar-gradient: linear-gradient(135deg, #FFF5FA 0%, #FFE8F0 35%, #FF9CC4 70%, #FF7AB8 100%);
+  --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.08);
+  --high-soft: rgba(255, 179, 138, 0.18); --high-faint: rgba(255, 179, 138, 0.08);
+  --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
+  --green-soft: rgba(155, 232, 112, 0.20); --green-faint: rgba(155, 232, 112, 0.10);
+  --lavender-soft: rgba(196, 139, 255, 0.22); --lavender-faint: rgba(196, 139, 255, 0.10);
+  --topbar-gradient: linear-gradient(135deg, #FFF5FA 0%, #FF7AB8 30%, #C48BFF 55%, #5EE7EB 80%, #FFC557 100%);
   --pane-bg: rgba(255, 255, 255, 0.72);
 }
 
-/* === Mint Meadow — garden-green daylight, deep sage text. */
+/* === Mint Meadow — alien meadow at noon. Mint bg, Sea Teal primary,
+   Lavender Purple + Soft Coral + Sunlit Gold so the field has wildflowers,
+   not just grass. Sage-text grounds it. */
 [data-theme="mint-meadow"] {
   --bg: #E6FFF7;
   --bg-plain: #E6FFF7;
@@ -515,14 +522,14 @@
   --text-dim: #4A6B5A;
   --text-muted: #7C9A88;
   --pink: #38BFA6;
-  --pink-soft: rgba(56, 191, 166, 0.18);
+  --pink-soft: rgba(56, 191, 166, 0.20);
   --pink-glow: rgba(56, 191, 166, 0.10);
   --blue: #59E3D6;
-  --blue-soft: rgba(89, 227, 214, 0.16);
+  --blue-soft: rgba(89, 227, 214, 0.18);
   --mint: #7EE8C1;
   --orange: #FFB38A;
   --lavender: #C48BFF;
-  --peach: #FFB38A;
+  --peach: #FFA3A0;
   --creamsicle: #FFCAA8;
   --lemon: #FFC557;
   --urgent: #FFA3A0;
@@ -532,16 +539,19 @@
   --green: #9BE870;
   --border: #B5E5C5;
   --border-subtle: #DDF7E5;
-  --urgent-soft: rgba(255, 163, 160, 0.16); --urgent-faint: rgba(255, 163, 160, 0.08);
-  --high-soft: rgba(255, 179, 138, 0.16); --high-faint: rgba(255, 179, 138, 0.08);
-  --lemon-soft: rgba(255, 197, 87, 0.18); --lemon-faint: rgba(255, 197, 87, 0.10);
-  --green-soft: rgba(155, 232, 112, 0.20); --green-faint: rgba(155, 232, 112, 0.10);
-  --lavender-soft: rgba(196, 139, 255, 0.16); --lavender-faint: rgba(196, 139, 255, 0.08);
-  --topbar-gradient: linear-gradient(135deg, #E6FFF7 0%, #CFF7E6 35%, #9BE870 70%, #38BFA6 100%);
+  --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.08);
+  --high-soft: rgba(255, 179, 138, 0.18); --high-faint: rgba(255, 179, 138, 0.08);
+  --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
+  --green-soft: rgba(155, 232, 112, 0.22); --green-faint: rgba(155, 232, 112, 0.10);
+  --lavender-soft: rgba(196, 139, 255, 0.20); --lavender-faint: rgba(196, 139, 255, 0.10);
+  --topbar-gradient: linear-gradient(135deg, #E6FFF7 0%, #38BFA6 30%, #C48BFF 60%, #FFC557 80%, #FFA3A0 100%);
   --pane-bg: rgba(255, 255, 255, 0.65);
 }
 
-/* === Coral Reef — soft sky + warm coral, tropical-day balance. */
+/* === Coral Reef — alien reef in shallow sun. Sky bg, Soft Coral
+   primary, Bright Aqua + Lavender Purple + Sunlit Gold + Light
+   Magenta so it feels like a school of mismatched fish, not a
+   single coral. */
 [data-theme="coral-reef"] {
   --bg: #EAF4FF;
   --bg-plain: #EAF4FF;
@@ -553,14 +563,14 @@
   --text-dim: #6B7280;
   --text-muted: #9CA3B5;
   --pink: #FFA3A0;
-  --pink-soft: rgba(255, 163, 160, 0.18);
+  --pink-soft: rgba(255, 163, 160, 0.20);
   --pink-glow: rgba(255, 163, 160, 0.10);
-  --blue: #59E3D6;
-  --blue-soft: rgba(89, 227, 214, 0.16);
+  --blue: #5EE7EB;
+  --blue-soft: rgba(94, 231, 235, 0.20);
   --mint: #CFF7E6;
   --orange: #FFB38A;
   --lavender: #C48BFF;
-  --peach: #FFB38A;
+  --peach: #FF7AB8;
   --creamsicle: #FFCAA8;
   --lemon: #FFC557;
   --urgent: #FFA3A0;
@@ -570,16 +580,19 @@
   --green: #38BFA6;
   --border: #FFD4CD;
   --border-subtle: #FFE5E0;
-  --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.10);
-  --high-soft: rgba(255, 179, 138, 0.18); --high-faint: rgba(255, 179, 138, 0.10);
-  --lemon-soft: rgba(255, 197, 87, 0.18); --lemon-faint: rgba(255, 197, 87, 0.10);
-  --green-soft: rgba(56, 191, 166, 0.18); --green-faint: rgba(56, 191, 166, 0.10);
-  --lavender-soft: rgba(196, 139, 255, 0.16); --lavender-faint: rgba(196, 139, 255, 0.08);
-  --topbar-gradient: linear-gradient(135deg, #EAF4FF 0%, #59E3D6 35%, #FFB38A 70%, #FFA3A0 100%);
+  --urgent-soft: rgba(255, 163, 160, 0.20); --urgent-faint: rgba(255, 163, 160, 0.10);
+  --high-soft: rgba(255, 179, 138, 0.20); --high-faint: rgba(255, 179, 138, 0.10);
+  --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
+  --green-soft: rgba(56, 191, 166, 0.20); --green-faint: rgba(56, 191, 166, 0.10);
+  --lavender-soft: rgba(196, 139, 255, 0.20); --lavender-faint: rgba(196, 139, 255, 0.10);
+  --topbar-gradient: linear-gradient(135deg, #EAF4FF 0%, #5EE7EB 30%, #FFA3A0 55%, #FFC557 80%, #C48BFF 100%);
   --pane-bg: rgba(255, 255, 255, 0.65);
 }
 
-/* === Lavender Dream — purple monochrome, soft and quiet. */
+/* === Lavender Dream — lilac field with strange weather. Lavender bg,
+   Lavender Purple primary, Bright Cyan + Sunlit Gold + Apricot +
+   Soft Coral so the field has prismatic light playing across it,
+   not just shades of purple. */
 [data-theme="lavender-dream"] {
   --bg: #F3EFFF;
   --bg-plain: #F3EFFF;
@@ -591,10 +604,10 @@
   --text-dim: #6B7280;
   --text-muted: #A89BC0;
   --pink: #C48BFF;
-  --pink-soft: rgba(196, 139, 255, 0.18);
+  --pink-soft: rgba(196, 139, 255, 0.20);
   --pink-glow: rgba(196, 139, 255, 0.10);
-  --blue: #A8D4FF;
-  --blue-soft: rgba(168, 212, 255, 0.16);
+  --blue: #5EE7EB;
+  --blue-soft: rgba(94, 231, 235, 0.20);
   --mint: #CFF7E6;
   --orange: #FFB38A;
   --lavender: #D8C7FF;
@@ -608,12 +621,12 @@
   --green: #9BE870;
   --border: #D8C7FF;
   --border-subtle: #E8DFF8;
-  --urgent-soft: rgba(255, 163, 160, 0.16); --urgent-faint: rgba(255, 163, 160, 0.08);
-  --high-soft: rgba(255, 179, 138, 0.16); --high-faint: rgba(255, 179, 138, 0.08);
-  --lemon-soft: rgba(255, 197, 87, 0.18); --lemon-faint: rgba(255, 197, 87, 0.10);
-  --green-soft: rgba(155, 232, 112, 0.16); --green-faint: rgba(155, 232, 112, 0.08);
-  --lavender-soft: rgba(196, 139, 255, 0.20); --lavender-faint: rgba(196, 139, 255, 0.10);
-  --topbar-gradient: linear-gradient(135deg, #F3EFFF 0%, #D8C7FF 35%, #C48BFF 70%, #A8D4FF 100%);
+  --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.08);
+  --high-soft: rgba(255, 179, 138, 0.20); --high-faint: rgba(255, 179, 138, 0.10);
+  --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
+  --green-soft: rgba(155, 232, 112, 0.20); --green-faint: rgba(155, 232, 112, 0.10);
+  --lavender-soft: rgba(196, 139, 255, 0.22); --lavender-faint: rgba(196, 139, 255, 0.10);
+  --topbar-gradient: linear-gradient(135deg, #F3EFFF 0%, #C48BFF 25%, #5EE7EB 55%, #FFC557 80%, #FFA3A0 100%);
   --pane-bg: rgba(255, 255, 255, 0.65);
 }
 
