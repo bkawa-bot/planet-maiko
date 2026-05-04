@@ -1,15 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { api } from "../api/client";
-import { Send, X, Loader, ChevronDown, ChevronUp, Leaf } from "lucide-react";
+import { Send, X, Loader, ChevronDown, ChevronUp } from "lucide-react";
 import PackTurn from "./PackTurn";
 import "./AskMaiko.css";
-
-// Soft cap on how many agents should already be running before we
-// ask the user "sure about another?" before dispatching. Not a hard
-// block — friction, not prevention. Higher than the typical single-
-// thread workflow (~2 running at once) so the pause only appears
-// when there's real parallel load.
-const PAUSE_FIRST_THRESHOLD = 3;
 
 // Persist dispatch history for the tab's lifetime — closing the panel
 // or nav'ing between pages shouldn't erase "what did the pack say 20
@@ -34,10 +27,6 @@ export default function AskMaiko() {
   const [nonGoals, setNonGoals] = useState("");
   const [showDetails, setShowDetails] = useState(false);
   const [loading, setLoading] = useState(false);
-  // Pause-first state: when a send would push past the active-agent
-  // threshold, we stash the intended payload here and render a
-  // confirmation step instead of dispatching immediately.
-  const [pendingSend, setPendingSend] = useState(null);
   const messagesEnd = useRef(null);
   const inputRef = useRef(null);
 
@@ -107,38 +96,10 @@ export default function AskMaiko() {
     setLoading(false);
   };
 
-  const send = async () => {
+  const send = () => {
     const ask = input.trim();
-    if (!ask || loading || pendingSend) return;
-
-    const ctx = context.trim();
-    const ng = nonGoals.trim();
-
-    // Pause-first: surface a "sure?" step when the pack is already
-    // chewing on a lot. Best-effort — a failed GET never blocks send.
-    try {
-      const tasks = await api.getTasks({ status: "in_progress" }).catch(() => []);
-      const active = (tasks || []).filter((t) => t.assigned_agent_id).length;
-      if (active >= PAUSE_FIRST_THRESHOLD) {
-        setPendingSend({ ask, ctx, ng, active, reason: "load" });
-        return;
-      }
-    } catch {
-      // No-op; fall through to dispatch.
-    }
-
-    dispatchNow(ask, ctx, ng);
-  };
-
-  const confirmPending = () => {
-    if (!pendingSend) return;
-    const { ask, ctx, ng } = pendingSend;
-    setPendingSend(null);
-    dispatchNow(ask, ctx, ng);
-  };
-
-  const cancelPending = () => {
-    setPendingSend(null);
+    if (!ask || loading) return;
+    dispatchNow(ask, context.trim(), nonGoals.trim());
   };
 
   const handleKeyDown = (e) => {
@@ -178,22 +139,6 @@ export default function AskMaiko() {
                 <span className="ask-maiko-avatar">M</span>
                 <div className="ask-maiko-msg-text ask-maiko-typing">
                   <Loader size={12} className="spin" /> Finding the right agent…
-                </div>
-              </div>
-            )}
-
-            {pendingSend && (
-              <div className="ask-pack-pause">
-                <div className="ask-pack-pause-head">
-                  <Leaf size={12} />
-                  <span>{pendingSend.active} agents already working</span>
-                </div>
-                <div className="ask-pack-pause-body">
-                  A lot's already in motion. Want to hold this one until your next check-in, or send it now?
-                </div>
-                <div className="ask-pack-pause-actions">
-                  <button className="ask-pack-pause-secondary" onClick={cancelPending}>Hold it</button>
-                  <button className="ask-pack-pause-primary" onClick={confirmPending}>Send anyway</button>
                 </div>
               </div>
             )}

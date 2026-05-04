@@ -12,13 +12,7 @@ import "./PackAskBox.css";
  * the AskMaiko floating panel (which handles Cmd/Ctrl+K from other
  * pages) via the ask-maiko-* / ask-pack-* classes and the PackTurn
  * component.
- *
- * Pause-first gating (too-many-active) kicks in when the pack is
- * already chewing on a lot — a "sure?" step, not a hard block.
  */
-
-const PAUSE_FIRST_THRESHOLD = 3;
-
 
 export default function PackAskBox() {
   const [text, setText] = useState("");
@@ -28,7 +22,6 @@ export default function PackAskBox() {
   const [turns, setTurns] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadSeconds, setLoadSeconds] = useState(0);
-  const [pendingSend, setPendingSend] = useState(null);
 
   // Tick up while dispatch is in flight so the spinner can show a
   // "still thinking" hint past the point where instant responses stop.
@@ -72,34 +65,11 @@ export default function PackAskBox() {
     setLoading(false);
   };
 
-  const submit = async () => {
+  const submit = () => {
     const ask = text.trim();
-    if (!ask || loading || pendingSend) return;
-    const ctx = context.trim();
-    const ng = nonGoals.trim();
-
-    // Pause-first: surface too-many-active as a "sure?" step rather
-    // than silently piling another agent on top.
-    try {
-      const tasks = await api.getTasks({ status: "in_progress" }).catch(() => []);
-      const active = (tasks || []).filter((t) => t.assigned_agent_id).length;
-      if (active >= PAUSE_FIRST_THRESHOLD) {
-        setPendingSend({ ask, ctx, ng, active, reason: "load" });
-        return;
-      }
-    } catch {
-      /* lookups are best-effort — never block dispatch on a GET fail. */
-    }
-    dispatchNow(ask, ctx, ng);
+    if (!ask || loading) return;
+    dispatchNow(ask, context.trim(), nonGoals.trim());
   };
-
-  const confirmPending = () => {
-    if (!pendingSend) return;
-    const { ask, ctx, ng } = pendingSend;
-    setPendingSend(null);
-    dispatchNow(ask, ctx, ng);
-  };
-  const cancelPending = () => setPendingSend(null);
 
   const onKey = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -110,7 +80,6 @@ export default function PackAskBox() {
 
   const clearThread = () => {
     setTurns([]);
-    setPendingSend(null);
   };
 
   return (
@@ -129,7 +98,7 @@ export default function PackAskBox() {
           type="button"
           className="pack-ask-send"
           onClick={submit}
-          disabled={!text.trim() || loading || pendingSend}
+          disabled={!text.trim() || loading}
           title="Hand off to an agent"
         >
           {loading ? <Loader size={12} className="spin" /> : <Send size={12} />}
@@ -164,7 +133,7 @@ export default function PackAskBox() {
         </div>
       )}
 
-      {(turns.length > 0 || loading || pendingSend) && (
+      {(turns.length > 0 || loading) && (
         <div className="pack-ask-thread">
           {turns.map((turn, i) => (
             <PackTurn key={i} turn={turn} />
@@ -180,21 +149,6 @@ export default function PackAskBox() {
                   : loadSeconds < 30
                     ? " Still thinking — router runs an LLM, usually settles in under 30s."
                     : " Almost there — router has a 45s ceiling before it gives up."}
-              </div>
-            </div>
-          )}
-
-          {pendingSend && (
-            <div className="ask-pack-pause">
-              <div className="ask-pack-pause-head">
-                <span>{pendingSend.active} agents already working</span>
-              </div>
-              <div className="ask-pack-pause-body">
-                A lot's already in motion. Want to hold this one until your next check-in, or send it now?
-              </div>
-              <div className="ask-pack-pause-actions">
-                <button className="ask-pack-pause-secondary" onClick={cancelPending}>Hold it</button>
-                <button className="ask-pack-pause-primary" onClick={confirmPending}>Send anyway</button>
               </div>
             </div>
           )}
