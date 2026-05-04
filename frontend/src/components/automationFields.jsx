@@ -1,4 +1,5 @@
-import { Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { X } from "lucide-react";
 
 /**
  * Row + form-builder primitives extracted from AutomationEditor.
@@ -17,7 +18,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { CONDITION_SCHEMAS, ACTION_SCHEMAS } from "./automationSchemas";
 
 
-function GroupedOptions({ options }) {
+export function GroupedOptions({ options }) {
   // Stable-order the groups as they first appear in the list so "Time"
   // stays above "Coverage state" etc. without alphabetizing unexpectedly.
   const groupOrder = [];
@@ -41,7 +42,7 @@ function GroupedOptions({ options }) {
 }
 
 
-function ConditionRow({ condition, options, pupdateTypes, datalists, optionsMap, onChange, onRemove }) {
+export function ConditionRow({ condition, options, pupdateTypes, datalists, optionsMap, onChange, onRemove }) {
   let schema = CONDITION_SCHEMAS[condition.kind];
   // pupdate_match's `type` field needs the live list (built-ins plus
   // anything plugins registered). Override the field's options when
@@ -80,7 +81,7 @@ function ConditionRow({ condition, options, pupdateTypes, datalists, optionsMap,
 }
 
 
-function ActionRow({ action, options, datalists, optionsMap, onChange, onRemove }) {
+export function ActionRow({ action, options, datalists, optionsMap, onChange, onRemove }) {
   const schema = ACTION_SCHEMAS[action.kind];
   return (
     <div className="automation-entry-row">
@@ -106,7 +107,7 @@ function ActionRow({ action, options, datalists, optionsMap, onChange, onRemove 
 
 
 
-function DynamicFields({ schema, config, datalists, optionsMap, onChange }) {
+export function DynamicFields({ schema, config, datalists, optionsMap, onChange }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   if (!schema || !schema.fields?.length) return null;
 
@@ -280,7 +281,7 @@ function FieldInput({ field, value, datalists, optionsMap, onChange }) {
 
 
 
-function defaultConfigFor(schema) {
+export function defaultConfigFor(schema) {
   if (!schema || !schema.fields) return {};
   const out = {};
   for (const f of schema.fields) {
@@ -300,16 +301,3 @@ function defaultConfigFor(schema) {
   }
   return out;
 }
-
-
-// --------------------------------------------------------------------------
-// Schemas — source of truth for the form builder. Adding a new
-// condition/action kind means registering its backend handler in
-// brain/automations/__init__.py AND adding an entry here.
-// --------------------------------------------------------------------------
-
-// Fallback pupdate-type list used only when /api/pupdate-types is
-// unreachable (first render before the fetch resolves, or API down).
-// The authoritative list lives in src/planet_maiko/pupdate_types.py
-// and is augmented at runtime by any plugin that implements
-// register_pupdate_types().
