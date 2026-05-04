@@ -66,13 +66,33 @@ def create_task():
 
 @tasks_bp.route("/tasks/<task_id>", methods=["PATCH"])
 def update_task(task_id):
-    """Update task fields (title, priority, tags, metadata)."""
+    """Update task fields (title, priority, tags, metadata).
+
+    Foreign-key-shaped columns (project_id, source_pupdate_id) get
+    empty-string-to-None coercion so a cleared dropdown writes NULL
+    instead of failing the FK constraint with a literal "" id.
+    assigned_agent_id isn't FK at the DB level but follows the same
+    convention so "Unassigned" works the same way.
+    """
     task = db.get_or_404(Task, task_id)
     data = request.get_json()
 
+    # Validate project_id exists when set, so the user gets a useful
+    # error instead of a generic SQLite FK message.
+    if data.get("project_id"):
+        from planet_maiko.models.project import Project
+        if not db.session.get(Project, data["project_id"]):
+            return jsonify({"error": f"Project not found: {data['project_id']}"}), 400
+
+    NULLABLE_ID_FIELDS = {"project_id", "source_pupdate_id", "assigned_agent_id"}
+
     for field in ["title", "type", "status", "priority", "url", "tags", "project_id", "assigned_agent_id", "due_date"]:
-        if field in data:
-            setattr(task, field, data[field])
+        if field not in data:
+            continue
+        value = data[field]
+        if field in NULLABLE_ID_FIELDS and value == "":
+            value = None
+        setattr(task, field, value)
     if "metadata" in data:
         task.extra = data["metadata"]
 
