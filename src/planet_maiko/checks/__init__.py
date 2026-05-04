@@ -251,3 +251,29 @@ def _tail(s: str) -> str:
     if len(s) <= _OUTPUT_TAIL_CHARS:
         return s
     return "…\n" + s[-_OUTPUT_TAIL_CHARS:]
+
+
+class Checker:
+    """Repo-scoped façade over the check helpers above.
+
+    Wraps the `repo_path` parameter that `detect_checks` and
+    `run_checks` thread through manually — useful for tests
+    (instantiate with a temp repo dir) and for code that wants to
+    call both without re-passing the path each time:
+
+        c = Checker("/path/to/repo")
+        result = c.run()           # auto-detect + execute
+        spec = c.detect()          # just the checker list
+
+    The module-level functions still work for one-off calls; new
+    code should prefer the class.
+    """
+
+    def __init__(self, repo_path: str):
+        self.repo_path = repo_path
+
+    def detect(self) -> list[dict]:
+        return detect_checks(self.repo_path)
+
+    def run(self, checks: list[dict] | None = None, timeout: int = _DEFAULT_TIMEOUT) -> dict:
+        return run_checks(self.repo_path, checks, timeout)
