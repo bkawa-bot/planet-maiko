@@ -1,12 +1,11 @@
 """Admin / server lifecycle CLI commands.
 
-Commands: status, setup, serve, seed, bootstrap.
-These mostly do local file/database work and don't need the API to be up.
-"""
+Commands: serve, status, backup, backup-list, restore.
 
-import json
-import urllib.parse
-import urllib.request
+These are the things that genuinely need a terminal. Setup and
+bootstrap-from-PRs moved to the in-app SetupWizard and Knowledge
+page; backup ops stay here because there's no DB-snapshot UI.
+"""
 
 from planet_maiko.cli._helpers import api_request
 from planet_maiko.config import MAIKO_PORT
@@ -43,7 +42,7 @@ def cmd_status(args):
         username = config.get("github", {}).get("username", "")
         repos = config.get("github", {}).get("repos", [])
         location = config.get("scene", {}).get("location_name", "")
-        print(f"Config: {'configured' if username else 'needs setup (run: maiko setup)'}")
+        print(f"Config: {'configured' if username else 'needs setup (open the dashboard)'}")
         if username:
             print(f"  GitHub: {username} ({len(repos)} repo(s))")
         if location:
@@ -67,99 +66,12 @@ def cmd_status(args):
     print()
 
 
-def cmd_setup(args):
-    """Interactive first-time setup."""
-    from planet_maiko.config import load_config, save_config
-    import subprocess
-
-    print("=== Planet Maiko Setup ===\n")
-
-    config = load_config()
-
-    # GitHub username
-    current_user = config.get("github", {}).get("username", "")
-    username = input(f"GitHub username [{current_user}]: ").strip() or current_user
-    config.setdefault("github", {})["username"] = username
-    config["github"]["enabled"] = True
-
-    # Test gh CLI
-    try:
-        result = subprocess.run(["gh", "auth", "status"], capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
-            print("  gh CLI: authenticated")
-        else:
-            print("  gh CLI: not authenticated. Run 'gh auth login' first.")
-    except FileNotFoundError:
-        print("  gh CLI: not installed. Install from https://cli.github.com/")
-
-    # Repos
-    current_repos = config.get("github", {}).get("repos", [])
-    repos_input = input(f"Repos (comma-separated) [{', '.join(current_repos)}]: ").strip()
-    if repos_input:
-        config["github"]["repos"] = [r.strip() for r in repos_input.split(",") if r.strip()]
-
-    # Repo roots
-    current_roots = config.get("github", {}).get("repo_roots", [])
-    roots_input = input(f"Repo roots (local paths) [{', '.join(current_roots)}]: ").strip()
-    if roots_input:
-        config["github"]["repo_roots"] = [r.strip() for r in roots_input.split(",") if r.strip()]
-
-    # Location
-    location = input("City/zipcode for weather (or Enter to skip): ").strip()
-    if location:
-        try:
-            url = f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(location)}&count=1&language=en&format=json"
-            with urllib.request.urlopen(url, timeout=10) as resp:
-                data = json.loads(resp.read())
-                if data.get("results"):
-                    r = data["results"][0]
-                    name = f"{r['name']}, {r.get('admin1', '')}"
-                    config.setdefault("scene", {})["latitude"] = r["latitude"]
-                    config["scene"]["longitude"] = r["longitude"]
-                    config["scene"]["location_name"] = name
-                    print(f"  Location: {name} ({r['latitude']}, {r['longitude']})")
-        except Exception as e:
-            print(f"  Could not resolve location: {e}")
-
-    config["setup_complete"] = True
-    save_config(config)
-    print(f"\nConfig saved. Start with: maiko serve")
-
-
 def cmd_serve(args):
     """Start the Planet Maiko server."""
     from planet_maiko.app import create_app
     print(f"Starting Planet Maiko on http://{args.host}:{args.port}")
     app = create_app(start_scheduler=True)
     app.run(host=args.host, port=args.port, debug=args.debug, use_reloader=False)
-
-
-def cmd_seed(args):
-    """Populate the database with realistic test data."""
-    from planet_maiko.app import create_app
-    from planet_maiko.seed import seed_data, seed_screenshot_demo
-    app = create_app(start_scheduler=False)
-    if getattr(args, "demo_only", False):
-        seed_screenshot_demo(app)
-        print("Screenshot demo data loaded.")
-    else:
-        seed_data(app)
-        print("Seed data loaded.")
-
-
-def cmd_bootstrap(args):
-    """Bootstrap learnings from past PR reviews."""
-    from planet_maiko.app import create_app
-    app = create_app(start_scheduler=False)
-    with app.app_context():
-        from planet_maiko.brain.learning.bootstrap import bootstrap_from_prs
-        result = bootstrap_from_prs(limit=args.limit)
-        print(f"\nCreated {result['total_created']} signals total.\n")
-        for r in result["per_repo"]:
-            if r["error"]:
-                print(f"  {r['repo']:50s}  ERROR: {r['error']}")
-            else:
-                print(f"  {r['repo']:50s}  {r['prs_scanned']} PRs scanned, {r['signals_created']} signals")
 
 
 def cmd_backup(args):
@@ -213,10 +125,6 @@ def cmd_restore(args):
 
 def register(subparsers):
     """Register admin/server lifecycle subcommands."""
-    # maiko setup
-    p = subparsers.add_parser("setup", help="Interactive first-time setup")
-    p.set_defaults(func=cmd_setup)
-
     # maiko status
     p = subparsers.add_parser("status", help="Check Planet Maiko status")
     p.set_defaults(func=cmd_status)
@@ -227,20 +135,6 @@ def register(subparsers):
     p.add_argument("--port", type=int, default=MAIKO_PORT, help="Port to listen on")
     p.add_argument("--debug", action="store_true", help="Enable debug mode")
     p.set_defaults(func=cmd_serve)
-
-    # maiko seed
-    p = subparsers.add_parser("seed", help="Populate database with test data")
-    p.add_argument(
-        "--demo-only",
-        action="store_true",
-        help="Only add screenshot-ready demo data (pack requests, diff comments, insights, pre-baked overview). Idempotent — safe on an existing DB.",
-    )
-    p.set_defaults(func=cmd_seed)
-
-    # maiko bootstrap
-    p = subparsers.add_parser("bootstrap", help="Seed learnings from past PR reviews")
-    p.add_argument("--limit", type=int, default=20, help="Max PRs to scan")
-    p.set_defaults(func=cmd_bootstrap)
 
     # maiko backup
     p = subparsers.add_parser("backup", help="Take a DB snapshot now")
