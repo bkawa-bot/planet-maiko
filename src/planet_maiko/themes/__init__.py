@@ -8,6 +8,12 @@ emoji, world_background).
 The frontend fetches them from /api/themes, injects a <style> tag with
 the CSS var overrides when one is selected, and flips data-theme on the
 document to "custom:<id>".
+
+The implementation is wrapped in a `ThemeStore` class so tests can
+spin up a temporary directory (`ThemeStore("/tmp/test-themes")`)
+without monkey-patching paths. Module-level functions delegate to a
+lazy-initialized singleton — every existing call site
+(`list_themes()`, `get_theme(id)`, etc.) keeps working unchanged.
 """
 
 import json
@@ -90,22 +96,11 @@ _COLOR_RE = re.compile(
 _ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,48}$")
 
 
-def themes_dir():
-    return os.path.join(data_dir(), "themes")
-
-
-def _ensure_dir():
-    os.makedirs(themes_dir(), exist_ok=True)
-
-
-def _theme_path(theme_id):
-    return os.path.join(themes_dir(), f"{theme_id}.json")
-
-
 def validate_theme(data):
     """Return (cleaned_theme_dict, None) or (None, error_message).
 
-    Does not touch the filesystem — useful for previews too.
+    Does not touch the filesystem — useful for previews too. Static
+    helper since validation has no per-store state.
     """
     if not isinstance(data, dict):
         return None, "theme must be a JSON object"
@@ -160,55 +155,115 @@ def validate_theme(data):
     return cleaned, None
 
 
+class ThemeStore:
+    """Theme persistence over a directory of JSON files.
+
+    Each theme is one file: <directory>/<id>.json. The store handles
+    listing, reading, writing, and deletion; validation is delegated
+    to the module-level `validate_theme` (it has no per-store state).
+
+    Pass `directory=None` to use the default `data_dir()/themes`. Pass
+    a real path to scope the store to a temp dir in tests.
+    """
+
+    def __init__(self, directory=None):
+        self._directory = directory  # None → resolve lazily via data_dir()
+
+    @property
+    def directory(self):
+        if self._directory is not None:
+            return self._directory
+        return os.path.join(data_dir(), "themes")
+
+    def _ensure_dir(self):
+        os.makedirs(self.directory, exist_ok=True)
+
+    def _path(self, theme_id):
+        return os.path.join(self.directory, f"{theme_id}.json")
+
+    def list(self):
+        """Return every saved theme as a list of dicts, sorted by name."""
+        self._ensure_dir()
+        out = []
+        for fname in os.listdir(self.directory):
+            if not fname.endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(self.directory, fname), encoding="utf-8") as f:
+                    data = json.load(f)
+                # Filename is authoritative if id got out of sync somehow.
+                data["id"] = fname[:-5]
+                out.append(data)
+            except Exception as e:
+                logger.warning(f"[themes] Skipping unreadable theme {fname}: {e}")
+        out.sort(key=lambda t: t.get("name", "").lower())
+        return out
+
+    def get(self, theme_id):
+        """Return the theme by id, or None if missing / id is invalid."""
+        if not _ID_RE.match(theme_id or ""):
+            return None
+        path = self._path(theme_id)
+        if not os.path.isfile(path):
+            return None
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        data["id"] = theme_id
+        return data
+
+    def save(self, data):
+        """Validate and write a theme. Returns (theme, None) or (None, error)."""
+        cleaned, err = validate_theme(data)
+        if err:
+            return None, err
+        self._ensure_dir()
+        with open(self._path(cleaned["id"]), "w", encoding="utf-8") as f:
+            json.dump(cleaned, f, indent=2)
+        return cleaned, None
+
+    def delete(self, theme_id):
+        """Remove a theme file. True if removed, False if missing / invalid id."""
+        if not _ID_RE.match(theme_id or ""):
+            return False
+        path = self._path(theme_id)
+        if not os.path.isfile(path):
+            return False
+        os.remove(path)
+        return True
+
+
+# ---------------------------------------------------------------------------
+# Module-level facade — every existing call site routes through a lazy
+# singleton so tests that need an isolated dir can do
+#    ThemeStore("/tmp/test").list()
+# without affecting the global store. New code should prefer the class.
+# ---------------------------------------------------------------------------
+
+_default_store = None
+
+
+def _store():
+    global _default_store
+    if _default_store is None:
+        _default_store = ThemeStore()
+    return _default_store
+
+
+def themes_dir():
+    return _store().directory
+
+
 def list_themes():
-    """Return every saved theme as a list of dicts, sorted by name."""
-    _ensure_dir()
-    out = []
-    for fname in os.listdir(themes_dir()):
-        if not fname.endswith(".json"):
-            continue
-        try:
-            with open(os.path.join(themes_dir(), fname), encoding="utf-8") as f:
-                data = json.load(f)
-            # Filename is authoritative if id got out of sync somehow
-            data["id"] = fname[:-5]
-            out.append(data)
-        except Exception as e:
-            logger.warning(f"[themes] Skipping unreadable theme {fname}: {e}")
-    out.sort(key=lambda t: t.get("name", "").lower())
-    return out
+    return _store().list()
 
 
 def get_theme(theme_id):
-    """Return the theme by id, or None if missing."""
-    if not _ID_RE.match(theme_id or ""):
-        return None
-    path = _theme_path(theme_id)
-    if not os.path.isfile(path):
-        return None
-    with open(path, encoding="utf-8") as f:
-        data = json.load(f)
-    data["id"] = theme_id
-    return data
+    return _store().get(theme_id)
 
 
 def save_theme(data):
-    """Validate and write a theme. Returns (theme, None) or (None, error)."""
-    cleaned, err = validate_theme(data)
-    if err:
-        return None, err
-    _ensure_dir()
-    with open(_theme_path(cleaned["id"]), "w", encoding="utf-8") as f:
-        json.dump(cleaned, f, indent=2)
-    return cleaned, None
+    return _store().save(data)
 
 
 def delete_theme(theme_id):
-    """Delete a theme file. Returns True if removed, False if it didn't exist."""
-    if not _ID_RE.match(theme_id or ""):
-        return False
-    path = _theme_path(theme_id)
-    if not os.path.isfile(path):
-        return False
-    os.remove(path)
-    return True
+    return _store().delete(theme_id)
