@@ -15,7 +15,7 @@ for the screenshots / GIFs we still want to record.
 
 ## Tagline
 
-> **strange world, strange agents.**
+> **strange agents, strange world.**
 
 Three words. Lowercase. The full stop is part of the punchline — it
 makes the line land like a closing thought rather than a slogan.
@@ -27,7 +27,7 @@ makes the line land like a closing thought rather than a slogan.
 - Opening line of a tweet or a post
 
 **Don't:**
-- Title-case it (`Strange World, Strange Agents` reads like a blockbuster).
+- Title-case it (`Strange Agents, Strange World` reads like a blockbuster).
 - Pair with corporate adjacency (*"a strange new way to ship faster"*
   defeats the point).
 - Translate without a native ear — the parallel rhythm is the whole
@@ -50,7 +50,7 @@ makes the line land like a closing thought rather than a slogan.
 > laptop, learns your team's taste from every merged PR, and treats
 > your workday like something worth coming home from. No swarms, no
 > streaks, no leaderboards. Cozy on the surface, AGPL underneath.
-> Strange world, strange agents.
+> Strange agents, strange world.
 
 ### HN-style intro (submission body)
 
@@ -72,7 +72,7 @@ Title options:
 
 > Planet Maiko is out. self-hosted ai agent pack that learns your
 > team's taste from every merged PR. runs on your laptop, no
-> telemetry, AGPL. strange world, strange agents 🐾
+> telemetry, AGPL. strange agents, strange world 🐾
 
 ### Tweet — thread opener
 
@@ -89,12 +89,12 @@ the install one-liner, the AGPL stance, a closing screenshot or GIF.)
 
 > A self-hosted pack of AI agents that learns from your team's PR
 > reviews. Runs locally, no telemetry, AGPL. Cozy UI, kaomoji not
-> emoji, weather and a dog. Strange world, strange agents.
+> emoji, weather and a dog. Strange agents, strange world.
 
 ### Closing line / sign-off (for posts, blog, anywhere a single line)
 
 > Built with Claude. Named for a real dog. AGPL forever. Strange
-> world, strange agents 🐾
+> agents, strange world 🐾
 
 ---
 
