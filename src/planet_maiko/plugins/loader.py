@@ -22,6 +22,53 @@ _plugins = None
 # All discovered plugins (including disabled/errored) for the /api/plugins endpoint
 _discovered = []
 
+# Field-name substrings that should mask the input when we auto-infer a
+# string field's schema. Errs on the side of masking — a user who
+# wanted plaintext can override by declaring an explicit get_config_schema.
+_SECRET_HINTS = ("api_key", "token", "secret", "password", "webhook")
+
+
+def _humanize(snake):
+    """Snake_case → "Sentence case" for an auto-inferred field label.
+
+    Falls back to the raw key when humanizing produces an empty string
+    (e.g. a key that's all underscores).
+    """
+    pretty = snake.replace("_", " ").strip().capitalize()
+    return pretty or snake
+
+
+def _infer_schema_from_defaults(defaults_section):
+    """Build a config_schema dict from a plugin's default values.
+
+    Only used when the plugin didn't override get_config_schema().
+    Each default's Python type drives the field type:
+        bool         -> bool
+        int / float  -> number
+        list         -> list (CSV input that saves as a JSON array)
+        str / other  -> string
+
+    String fields whose name looks like a credential get `secret: True`
+    so they render as masked inputs by default. Plugin authors who want
+    different behavior should declare get_config_schema() explicitly.
+    """
+    schema = {}
+    for key, val in defaults_section.items():
+        label = _humanize(key)
+        if isinstance(val, bool):
+            schema[key] = {"type": "bool", "label": label}
+        elif isinstance(val, (int, float)):
+            schema[key] = {"type": "number", "label": label}
+        elif isinstance(val, list):
+            schema[key] = {"type": "list", "label": label}
+        else:
+            field = {"type": "string", "label": label}
+            lk = key.lower()
+            if any(hint in lk for hint in _SECRET_HINTS):
+                field["secret"] = True
+            schema[key] = field
+    return schema
+
 
 def _local_plugins_dir():
     """Get the local plugins directory (~/.maiko/plugins/)."""
@@ -185,14 +232,28 @@ def load_plugins(app):
         save_config(config)
 
     # Capture per-plugin config schemas so /api/plugins can surface them
-    # to Settings. Schema method is optional; plugins that skip it still
-    # appear with just the on/off toggle (legacy behavior).
+    # to Settings. Schema method is optional; plugins that ship defaults
+    # but skip get_config_schema() get a schema auto-inferred from the
+    # default values' Python types — so any plugin with config gets a
+    # working settings form for free.
     for plugin in _plugins:
         try:
             schema = plugin.get_config_schema() or {}
         except Exception as e:
             logger.warning(f"[plugins] Config schema failed for '{plugin.name}': {e}")
             schema = {}
+        defaults = {}
+        try:
+            defaults = plugin.get_config_defaults() or {}
+        except Exception:
+            pass
+
+        # Auto-infer schema from defaults when the plugin didn't declare one.
+        if not schema and defaults:
+            plugin_section = next(iter(defaults.values()), {})
+            if isinstance(plugin_section, dict):
+                schema = _infer_schema_from_defaults(plugin_section)
+
         for d in _discovered:
             if d["name"] == plugin.name:
                 d["config_schema"] = schema
@@ -201,11 +262,6 @@ def load_plugins(app):
                 # get_config_defaults() with a single top-level key
                 # (their plugin name or similar); surface that here so
                 # the frontend knows where to write user edits.
-                defaults = {}
-                try:
-                    defaults = plugin.get_config_defaults() or {}
-                except Exception:
-                    pass
                 d["config_key"] = next(iter(defaults.keys())) if defaults else plugin.name
                 break
 
