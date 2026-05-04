@@ -65,28 +65,9 @@ def _ensure_columns():
         # can undo them cleanly.
         "ALTER TABLE signals ADD COLUMN source_message_id INTEGER",
         "ALTER TABLE insights ADD COLUMN source_message_id INTEGER",
-        # Phase A of the external-orchestrator surface — A2A awareness
-        # for sessions Maiko didn't spawn. db.create_all() already makes
-        # this from the model on fresh installs; the explicit CREATE
-        # covers existing DBs that predate the model import.
-        (
-            "CREATE TABLE IF NOT EXISTS external_sessions ("
-            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-            "session_id VARCHAR(128) NOT NULL UNIQUE, "
-            "consumer VARCHAR(64), "
-            "repo VARCHAR(256) NOT NULL, "
-            "worktree_path VARCHAR(1024) NOT NULL, "
-            "hint TEXT, "
-            "registered_at DATETIME NOT NULL, "
-            "completed_at DATETIME, "
-            "status VARCHAR(32) NOT NULL DEFAULT 'active', "
-            "extra JSON DEFAULT '{}'"
-            ")"
-        ),
-        (
-            "CREATE INDEX IF NOT EXISTS ix_external_sessions_session_id "
-            "ON external_sessions(session_id)"
-        ),
+        # External-orchestrator session registration was removed —
+        # Maiko's own pack is the only thing it tracks now.
+        "DROP TABLE IF EXISTS external_sessions",
         # Tournament system removed — drop legacy tables if present
         "DROP TABLE IF EXISTS tournament_entries",
         "DROP TABLE IF EXISTS tournaments",
@@ -287,7 +268,6 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.diff_api import diff_bp
     from planet_maiko.api.lora_api import lora_bp
     from planet_maiko.api.shutdown_api import shutdown_bp
-    from planet_maiko.api.sessions_api import sessions_bp
     from planet_maiko.api.home_api import home_bp
     from planet_maiko.api.pack_api import pack_bp
     from planet_maiko.api.checks_api import checks_bp
@@ -315,7 +295,6 @@ def create_app(start_scheduler=False):
     app.register_blueprint(diff_bp, url_prefix="/api")
     app.register_blueprint(lora_bp, url_prefix="/api")
     app.register_blueprint(shutdown_bp, url_prefix="/api")
-    app.register_blueprint(sessions_bp, url_prefix="/api")
     app.register_blueprint(home_bp, url_prefix="/api")
     app.register_blueprint(pack_bp, url_prefix="/api")
     app.register_blueprint(checks_bp, url_prefix="/api")
@@ -346,7 +325,6 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.custom_skill import CustomSkill  # noqa: F401
         from planet_maiko.models.diff_comment import DiffComment  # noqa: F401
         from planet_maiko.models.insight import Insight  # noqa: F401
-        from planet_maiko.models.external_session import ExternalSession  # noqa: F401
         from planet_maiko.models.pet import Pet  # noqa: F401
         from planet_maiko.models.automation import Automation  # noqa: F401
         from planet_maiko.models.agent_job import AgentJob  # noqa: F401

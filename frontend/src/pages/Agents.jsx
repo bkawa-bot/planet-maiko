@@ -23,7 +23,6 @@ export default function Agents() {
   const [queued, setQueued] = useState([]);
   const [conflicts, setConflicts] = useState([]);
   const [allLearnings, setAllLearnings] = useState({});
-  const [externalSessions, setExternalSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showArrival, setShowArrival] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -37,14 +36,13 @@ export default function Agents() {
 
   const fetchData = async () => {
     try {
-      const [p, a, act, q, conf, learnings, ext] = await Promise.all([
+      const [p, a, act, q, conf, learnings] = await Promise.all([
         api.getProfiles(),
         api.getAgents(),
         api.getAgentActivity(),
         api.getQueuedAgentTasks().catch(() => []),
         api.getConflicts().catch(() => []),
         api.getLearnings().catch(() => []),
-        api.getExternalSessions().catch(() => []),
       ]);
       setProfiles(p);
       setAgents(a);
@@ -52,7 +50,6 @@ export default function Agents() {
       setQueued(q);
       setConflicts(conf);
       setAllLearnings(Object.fromEntries(learnings.map((l) => [l.id, l])));
-      setExternalSessions(ext);
     } catch (err) {
       console.error(err);
     }
@@ -292,7 +289,6 @@ export default function Agents() {
           queued={queued}
           conflicts={conflicts}
           profiles={profiles}
-          externalSessions={externalSessions}
           onRefresh={fetchData}
         />
       )}

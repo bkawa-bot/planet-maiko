@@ -91,47 +91,6 @@
 }
 .queued-link:hover { color: var(--lavender); }
 
-/* === External sessions (registered via the maiko-brain MCP) === */
-.external-sessions-section {
-  margin-bottom: 12px;
-  border-left: 3px solid var(--mint);
-  padding: 12px 14px;
-}
-.external-sessions-header {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 13px; font-weight: 600; color: var(--mint);
-  margin-bottom: 10px;
-}
-.external-sessions-list { display: flex; flex-direction: column; gap: 6px; }
-.external-session-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px;
-  background: var(--mint-soft);
-  border-radius: var(--radius-xs);
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.external-session-consumer {
-  background: var(--bg-card); color: var(--mint);
-  padding: 2px 7px; border-radius: var(--radius-xs);
-  font-family: var(--font-mono); font-size: 10px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.04em;
-  flex-shrink: 0;
-}
-.external-session-repo {
-  color: var(--text); font-weight: 500;
-  white-space: nowrap; flex-shrink: 0;
-  font-family: var(--font-mono); font-size: 11px;
-}
-.external-session-hint {
-  flex: 1; color: var(--text-muted);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  min-width: 0;
-}
-.external-session-age {
-  font-size: 10.5px; color: var(--text-muted); flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
 
 /* === Agent Grid === */
 .agent-card { padding: 0; overflow: hidden; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }

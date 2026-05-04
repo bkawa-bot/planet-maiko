@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   CheckSquare, ExternalLink, GitBranch,
-  HeartPulse, Link2, MessageCircle, Play, Sparkles, X,
+  HeartPulse, MessageCircle, Play, Sparkles, X,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
@@ -21,7 +21,7 @@ import CardAvatar from "../CardAvatar";
  *   profiles   — for resolving display names
  *   onRefresh  — () => void; refetch agents/activity/queued after actions
  */
-export default function AgentsActiveTab({ agents, activity, queued = [], conflicts, profiles, externalSessions = [], onRefresh }) {
+export default function AgentsActiveTab({ agents, activity, queued = [], conflicts, profiles, onRefresh }) {
   const [triggeringCycle, setTriggeringCycle] = useState(false);
   const defaultOrg = useDefaultOrg();
 
@@ -156,43 +156,6 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
 
   return (
     <div className="agents-active-main">
-        {/* External sessions: registered by external orchestrators via
-            the maiko-brain MCP. These are LLM coding sessions running
-            outside Maiko's own worktrees — their work participates in
-            the A2A conflict detector but Maiko didn't spawn them. */}
-        {externalSessions.length > 0 && (
-          <div className="external-sessions-section card">
-            <div className="external-sessions-header">
-              <Link2 size={14} /> External sessions
-              <span className="badge">{externalSessions.length}</span>
-            </div>
-            <div className="external-sessions-list">
-              {externalSessions.map((s) => {
-                const regMs = s.registered_at ? Date.parse(s.registered_at) : null;
-                const ageMin = regMs ? Math.max(0, Math.round((Date.now() - regMs) / 60000)) : 0;
-                return (
-                  <div
-                    key={s.session_id}
-                    className="external-session-item"
-                    title={s.worktree_path || ""}
-                  >
-                    {s.consumer && (
-                      <span className="external-session-consumer">{s.consumer}</span>
-                    )}
-                    <span className="external-session-repo" title={s.repo}>{formatRepo(s.repo, defaultOrg)}</span>
-                    {s.hint && (
-                      <span className="external-session-hint">— {s.hint}</span>
-                    )}
-                    <span className="external-session-age">
-                      {relativeFromMinutes(ageMin)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {dormantAgents.length === 0 && activity.length === 0 ? (
           <div className="empty-state">
             <span style={{ fontSize: 48 }}>🐾</span>

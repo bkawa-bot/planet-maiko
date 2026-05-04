@@ -5,8 +5,7 @@
   "type": "module",
   "main": "index.mjs",
   "scripts": {
-    "start": "node index.js",
-    "brain": "node brain.mjs"
+    "start": "node index.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0"
