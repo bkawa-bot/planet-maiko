@@ -9,7 +9,9 @@ from planet_maiko.models.agent_message import AgentMessage
 from planet_maiko.agents.brain_session import run_skill, get_status as brain_status, ONE_SHOT_ROLE_FOR_TYPE
 from planet_maiko.agents.coding_agent import prepare, list_prepared, cleanup
 from planet_maiko.agents.monitor import get_agent_activity, get_queued_agent_tasks, process_agent_pupdates, get_stuck_agents
+from planet_maiko.agents.sessions import _get_sessions, _save_sessions, _set_session
 from planet_maiko.agents.skills import list_skills
+from planet_maiko.agents.terminal import _find_claude_session_file, _launch_terminal
 
 logger = logging.getLogger(__name__)
 
@@ -441,100 +443,6 @@ def _assign_review_via_agent_job(task, profile, data, specialty_id=None):
 
 # _build_task_prompt moved to planet_maiko.orchestration.build_task_prompt
 # so the pack dispatcher + brain cycle can use the same composer.
-
-
-def _launch_terminal(cmd):
-    # Open a new terminal window that runs `cmd` and stays open.
-    #
-    # All three platforms route through a temp script file (.sh on
-    # macOS / Linux, .bat on Windows). When `cmd` contains double
-    # quotes -- and ours always does, because we pass an initial
-    # prompt to claude in quotes -- the platform-native incantations
-    # all break in different ways:
-    #   * macOS: osascript's `do script "..."` collapses on the
-    #     first inner quote, emitting AppleScript's "an identifier
-    #     can't go after this" error before anything runs.
-    #   * Windows: `cmd /c start cmd /k "..."` mispairs the inner
-    #     quotes with start's title arg.
-    #   * Linux: bash -c handles quotes ok but is inconsistent across
-    #     terminals.
-    # A script file's contents are plain text -- no shell or
-    # AppleScript parser sees the quotes. We just hand the launcher
-    # a path.
-    import sys as _sys
-    import subprocess as _subprocess
-    import tempfile as _tempfile
-    import os as _os
-
-    if _sys.platform == "darwin":
-        with _tempfile.NamedTemporaryFile(
-            "w", suffix=".sh", delete=False, encoding="utf-8",
-        ) as f:
-            f.write("#!/bin/bash\n")
-            f.write(cmd + "\n")
-            sh_path = f.name
-        _os.chmod(sh_path, 0o755)
-        # Telling Terminal to "do script <path>" runs the file; no
-        # quotes inside the script body to worry about. If the user
-        # closes the window the .sh stays in /tmp and is reaped by
-        # the OS's normal temp-file cleanup.
-        _subprocess.Popen([
-            "osascript", "-e",
-            f'tell application "Terminal" to do script "{sh_path}"',
-        ])
-        return
-
-    if _sys.platform == "win32":
-        with _tempfile.NamedTemporaryFile(
-            "w", suffix=".bat", delete=False, encoding="utf-8",
-        ) as f:
-            f.write("@echo off\r\n")
-            f.write(cmd + "\r\n")
-            bat_path = f.name
-        # `start "" cmd /k <bat>` — the empty "" is required as the
-        # window-title placeholder, otherwise start treats the next
-        # quoted thing as the title and the actual command never runs.
-        _subprocess.Popen(
-            ["cmd", "/c", "start", "", "cmd", "/k", bat_path],
-            shell=False,
-        )
-        return
-
-    # Linux: same approach for consistency.
-    with _tempfile.NamedTemporaryFile(
-        "w", suffix=".sh", delete=False, encoding="utf-8",
-    ) as f:
-        f.write("#!/bin/bash\n")
-        f.write(cmd + "\n")
-        sh_path = f.name
-    _os.chmod(sh_path, 0o755)
-    for term in ["gnome-terminal", "xterm", "konsole"]:
-        try:
-            _subprocess.Popen([term, "--", "bash", sh_path])
-            return
-        except FileNotFoundError:
-            continue
-
-
-def _find_claude_session_file(working_path, session_id):
-    """Find the Claude Code session JSONL file for a given worktree + session ID.
-
-    Claude stores sessions at ~/.claude/projects/{escaped-path}/{session_id}.jsonl
-    where escaped-path replaces /, \\, and : each independently with -.
-    On Windows, "C:\\Users\\foo" becomes "C--Users-foo" (double dash from : + \\).
-    """
-    if not working_path or not session_id:
-        return None
-    abs_path = os.path.abspath(working_path)
-    escaped = abs_path.replace(":", "-").replace("\\", "-").replace("/", "-")
-    candidates = [
-        os.path.expanduser(f"~/.claude/projects/{escaped}/{session_id}.jsonl"),
-        os.path.expanduser(f"~/.config/claude/projects/{escaped}/{session_id}.jsonl"),
-    ]
-    for path in candidates:
-        if os.path.isfile(path):
-            return path
-    return None
 
 
 @agents_bp.route("/agents/resume-session", methods=["POST"])
@@ -1637,54 +1545,9 @@ def get_all_messages(task_id):
     return jsonify([m.to_dict() for m in messages])
 
 
-# ---------------------------------------------------------------------------
-# Persistent session store: task_id -> {session_id, working_path}
-#
-# Backed by a JSON file in the Maiko data dir so mappings survive server
-# restarts. Lazy-loaded on first read, flushed on every write.
-# ---------------------------------------------------------------------------
-
-_agent_sessions = None  # loaded lazily by _get_sessions()
-_SESSIONS_FILENAME = "agent-sessions.json"
-
-
-def _sessions_path():
-    from planet_maiko.paths import data_dir
-    return os.path.join(data_dir(), _SESSIONS_FILENAME)
-
-
-def _get_sessions():
-    """Return the sessions dict, loading from disk on first access."""
-    global _agent_sessions
-    if _agent_sessions is None:
-        path = _sessions_path()
-        if os.path.exists(path):
-            try:
-                import json as _json
-                with open(path, "r", encoding="utf-8") as f:
-                    _agent_sessions = _json.load(f)
-            except Exception:
-                _agent_sessions = {}
-        else:
-            _agent_sessions = {}
-    return _agent_sessions
-
-
-def _save_sessions():
-    """Flush the sessions dict to disk."""
-    import json as _json
-    path = _sessions_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        _json.dump(_agent_sessions, f, indent=2)
-
-
-def _set_session(task_id, session_id, working_path=""):
-    """Store a session mapping and persist to disk."""
-    sessions = _get_sessions()
-    sessions[task_id] = {"session_id": session_id, "working_path": working_path}
-    _save_sessions()
-
+# Persistent session store: task_id → {session_id, working_path}.
+# Helpers live in planet_maiko.agents.sessions; routes stay here so
+# they can decorate against agents_bp.
 
 @agents_bp.route("/agents/<task_id>/session", methods=["POST"])
 def register_session(task_id):
