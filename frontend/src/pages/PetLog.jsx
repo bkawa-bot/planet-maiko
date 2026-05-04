@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
+import ConfirmModal from "../components/ConfirmModal";
 import { relativeTime } from "../utils/dates";
 import { Check, Heart, RefreshCw } from "lucide-react";
 import "./PetLog.css";
@@ -24,6 +25,7 @@ export default function PetLog() {
   const [loading, setLoading] = useState(true);
   const [showAcked, setShowAcked] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirmingMarkAll, setConfirmingMarkAll] = useState(false);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -54,13 +56,17 @@ export default function PetLog() {
     setBusy(false);
   };
 
-  const markAll = async () => {
+  const markAll = () => {
     if (busy || pets.length === 0) return;
-    if (!window.confirm(`Mark all ${pets.length} pending pets as delivered IRL?`)) return;
+    setConfirmingMarkAll(true);
+  };
+
+  const confirmMarkAll = async () => {
     setBusy(true);
     try {
       const r = await api.markAllPetsIrl();
       showToast(`Marked ${r.marked} as delivered — go give Maiko some love.`, "normal");
+      setConfirmingMarkAll(false);
       fetchAll();
     } catch (err) {
       showToast(err.message || "Couldn't mark all", "high");
@@ -161,6 +167,16 @@ export default function PetLog() {
           ))}
         </ul>
       )}
+
+      <ConfirmModal
+        open={confirmingMarkAll}
+        title={`Mark all ${pets.length} pending pets as delivered IRL?`}
+        body={"Bulk-marks every unacked pet as delivered. Use after a real-life pet session."}
+        confirmText="Mark all delivered"
+        busy={busy}
+        onCancel={() => setConfirmingMarkAll(false)}
+        onConfirm={confirmMarkAll}
+      />
     </div>
   );
 }
