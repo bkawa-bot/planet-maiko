@@ -1,4 +1,13 @@
-const API_BASE = import.meta.env.DEV ? "http://localhost:8420/api" : "/api";
+// Flask serves the bundled frontend at :8420, so when window.origin is
+// that, a relative `/api` is right. In Tauri (window.origin is
+// `tauri://localhost` or similar) and in Vite dev (`http://localhost:5173`)
+// we cross origins to hit Flask, so we need the absolute URL. CORS is
+// enabled on the backend (see CORS(app) in app.py).
+const FLASK_ORIGIN = "http://localhost:8420";
+const API_BASE =
+  typeof window !== "undefined" && window.location.origin === FLASK_ORIGIN
+    ? "/api"
+    : `${FLASK_ORIGIN}/api`;
 
 // Simple GET cache — avoids re-fetching when switching tabs
 const _cache = {};
