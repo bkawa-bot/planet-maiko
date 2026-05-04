@@ -34,11 +34,18 @@ import json
 import logging
 import os
 import re
+import threading
 from datetime import datetime, timezone, timedelta
 
 from planet_maiko.database import db, iso_utc
 
 logger = logging.getLogger(__name__)
+
+# Serialize regeneration so concurrent /api/home/overview requests
+# (frontend re-mount, Tauri lifecycle, manual refresh-while-in-flight)
+# don't fire two LLM runs against the same stale cache. Module-global
+# so every Flask request thread shares it.
+_overview_lock = threading.Lock()
 
 # Absolute cap on cache age — regenerate once we pass this. The Pack
 # Requests widget handles real-time actionable signals (agent plans,
@@ -823,10 +830,21 @@ def generate_overview():
     `home-overview` skill through Claude Code, parse JSON, stamp it
     onto data/overview.json.
 
+    Serialized via `_overview_lock` so two concurrent regen requests
+    don't fire two LLM runs. Refresh callers that arrive while a
+    generation is in flight wait for it to finish; this is acceptable
+    because the work they wanted (a fresh overview) is already happening.
+
     Raises RuntimeError if the runtime is unavailable or the LLM call
     fails; raises ValueError if the response can't be parsed as JSON.
     The caller is responsible for turning those into HTTP responses.
     """
+    with _overview_lock:
+        return _generate_overview_locked()
+
+
+def _generate_overview_locked():
+    """Actual generation. Caller must hold `_overview_lock`."""
     from flask import current_app
     from planet_maiko.agents.skills import get_skill_prompt
 
@@ -897,6 +915,13 @@ def get_latest_overview(max_age_hours=DEFAULT_MAX_AGE_HOURS):
     signals, so the overview doesn't regen early on incoming pupdates
     — it's a rolling narrative, not an alert surface.
 
+    Double-checked locking: if two requests both find the cache stale,
+    they race to acquire `_overview_lock`. The winner regenerates; the
+    loser wakes up to a fresh cache and returns it without a second LLM
+    run. Without this, the first overview of the day used to generate
+    twice when the page mount + a follow-up nav both fired during the
+    first 1-2 minute regen.
+
     Returns:
         dict with:
             overview: the parsed JSON the LLM produced
@@ -904,18 +929,16 @@ def get_latest_overview(max_age_hours=DEFAULT_MAX_AGE_HOURS):
             stale: True iff we had to regenerate on this call
     """
     generated_at, overview = _read_cached_overview()
+    if overview is not None and not _iso_is_stale(generated_at, max_age_hours):
+        return {"overview": overview, "generated_at": generated_at, "stale": False}
 
-    if overview is None or _iso_is_stale(generated_at, max_age_hours):
-        parsed = generate_overview()
+    with _overview_lock:
+        # Re-read after the lock: another thread may have regenerated
+        # while we were waiting on it.
+        generated_at, overview = _read_cached_overview()
+        if overview is not None and not _iso_is_stale(generated_at, max_age_hours):
+            return {"overview": overview, "generated_at": generated_at, "stale": False}
+
+        parsed = _generate_overview_locked()
         fresh_at, _ = _read_cached_overview()
-        return {
-            "overview": parsed,
-            "generated_at": fresh_at,
-            "stale": True,
-        }
-
-    return {
-        "overview": overview,
-        "generated_at": generated_at,
-        "stale": False,
-    }
+        return {"overview": parsed, "generated_at": fresh_at, "stale": True}
