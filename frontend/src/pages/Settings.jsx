@@ -1,27 +1,40 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
-import { ChevronDown, ChevronRight, MapPin, Search, Plug, AlertTriangle, BookOpen } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import ScheduledBriefings from "../components/ScheduledBriefings";
 import ConceptsModal from "../components/ConceptsModal";
 import IntegrationsSection from "../components/settings/IntegrationsSection";
+import AutopilotSection from "../components/settings/AutopilotSection";
+import HomeOverviewSection from "../components/settings/HomeOverviewSection";
+import RepoChecksSection from "../components/settings/RepoChecksSection";
+import AgentPreferencesSection from "../components/settings/AgentPreferencesSection";
+import ModelRoutingSection from "../components/settings/ModelRoutingSection";
+import SceneSection from "../components/settings/SceneSection";
+import PluginsSection from "../components/settings/PluginsSection";
 import { invalidateDefaultOrg } from "../utils/repo";
 import "./Settings.css";
 
+/**
+ * Settings page — composition root for ten sections (Your Name,
+ * Autopilot, Home Overview, Repo Checks, Scheduled Briefings,
+ * Integrations, Agent Preferences, Model Routing, Scene & Weather,
+ * Plugins). Each big section is its own file under
+ * components/settings/; only the trivial "Your Name" stays inline.
+ */
 export default function Settings() {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pollerStatus, setPollerStatus] = useState({});
   const [message, setMessage] = useState("");
-
-  const [openSections, setOpenSections] = useState({ overview: false, checks: false, briefings: true, integrations: false, agents: false, routing: false, scene: false, plugins: false });
-  const toggleSection = (key) => setOpenSections(s => ({ ...s, [key]: !s[key] }));
-
   const [showConcepts, setShowConcepts] = useState(false);
-  const [locationQuery, setLocationQuery] = useState("");
-  const [locationResolved, setLocationResolved] = useState("");
-  const [lookingUp, setLookingUp] = useState(false);
   const [plugins, setPlugins] = useState([]);
+  const [briefingsOpen, setBriefingsOpen] = useState(true);
+
+  // Persistent location-resolved hint, derived from saved config so a
+  // returning user sees their previously-resolved name even before
+  // they re-run the lookup.
+  const [initialResolved, setInitialResolved] = useState("");
 
   useEffect(() => {
     Promise.all([
@@ -32,10 +45,9 @@ export default function Settings() {
       setConfig(cfg);
       setPollerStatus(status);
       setPlugins(pluginList);
-      // Restore resolved location display from config
       if (cfg?.scene?.location_name && cfg?.scene?.latitude && cfg?.scene?.longitude) {
-        setLocationResolved(
-          `${cfg.scene.location_name} (${cfg.scene.latitude}, ${cfg.scene.longitude})`
+        setInitialResolved(
+          `${cfg.scene.location_name} (${cfg.scene.latitude}, ${cfg.scene.longitude})`,
         );
       }
       setLoading(false);
@@ -50,14 +62,12 @@ export default function Settings() {
     try {
       await api.updateConfig(config);
       invalidateDefaultOrg();
-      // Clear weather cache if location is set
       if (config?.scene?.latitude && config?.scene?.longitude) {
         await api.refreshScene().catch(() => {});
       }
-      setMessage("Settings saved! Restart the server to apply poller changes.");
-      setTimeout(() => setMessage(""), 5000);
+      flash("Settings saved! Restart the server to apply poller changes.");
     } catch (err) {
-      setMessage("Failed to save: " + err.message);
+      flash("Failed to save: " + err.message);
     }
     setSaving(false);
   };
@@ -65,41 +75,15 @@ export default function Settings() {
   const handleRunPoller = async (name) => {
     try {
       const result = await api.runPoller(name);
-      setMessage(`${name} poller ran: ${result.created} new pupdate(s)`);
-      setTimeout(() => setMessage(""), 5000);
+      flash(`${name} poller ran: ${result.created} new pupdate(s)`);
     } catch (err) {
-      setMessage(`Failed to run ${name}: ${err.message}`);
+      flash(`Failed to run ${name}: ${err.message}`);
     }
   };
 
-  const handleLocationLookup = async () => {
-    if (!locationQuery.trim()) return;
-    setLookingUp(true);
-    try {
-      const resp = await fetch(
-        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(locationQuery.trim())}&count=1&language=en&format=json`
-      );
-      const data = await resp.json();
-      if (data.results && data.results.length > 0) {
-        const r = data.results[0];
-        const displayName = r.admin1 ? `${r.name}, ${r.admin1}` : r.name;
-        setConfig((c) => ({
-          ...c,
-          scene: {
-            ...c?.scene,
-            latitude: r.latitude,
-            longitude: r.longitude,
-            location_name: displayName,
-          },
-        }));
-        setLocationResolved(`${displayName} (${r.latitude}, ${r.longitude})`);
-      } else {
-        setLocationResolved("No results found");
-      }
-    } catch (err) {
-      setLocationResolved("Lookup failed: " + err.message);
-    }
-    setLookingUp(false);
+  const flash = (m) => {
+    setMessage(m);
+    setTimeout(() => setMessage(""), 5000);
   };
 
   const updateField = (integration, field, value) => {
@@ -130,7 +114,7 @@ export default function Settings() {
       <h2>Settings</h2>
       {message && <div className="settings-message">{message}</div>}
 
-      {/* Your Name */}
+      {/* Your Name — small enough to stay inline. */}
       <section className="settings-collapsible">
         <div className="collapsible-header" style={{ cursor: "default" }}>
           <span>Your Name</span>
@@ -163,650 +147,60 @@ export default function Settings() {
 
       {showConcepts && <ConceptsModal onClose={() => setShowConcepts(false)} />}
 
-      {/* Autopilot — master switch for auto-investigating incidents */}
+      <AutopilotSection config={config} setConfig={setConfig} />
+      <HomeOverviewSection config={config} updateField={updateField} />
+      <RepoChecksSection />
+
+      {/* Scheduled Briefings — light wrapper around the existing component. */}
       <section className="settings-collapsible">
-        <div className="collapsible-header" style={{ cursor: "default" }}>
-          <span>Autopilot</span>
+        <div className="collapsible-header" onClick={() => setBriefingsOpen((v) => !v)}>
+          <span>{briefingsOpen ? "▼" : "▶"} Scheduled Briefings</span>
         </div>
-        <div className="collapsible-body">
-          <div className="integration-section">
-            <div className="setup-hint">
-              When the correlator detects an incident (CI fail + deploy rollback,
-              error spike chain, etc.), Maiko can auto-create an investigation
-              task and kick off an investigation agent on it. Turn this off to
-              require manual triage of every incident.
-            </div>
-            <div className="integration-fields">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={config.brain?.auto_investigate?.enabled ?? true}
-                  onChange={(e) => setConfig((c) => ({
-                    ...c,
-                    brain: {
-                      ...(c.brain || {}),
-                      auto_investigate: {
-                        ...((c.brain && c.brain.auto_investigate) || {}),
-                        enabled: e.target.checked,
-                      },
-                    },
-                  }))}
-                />
-                Auto-investigate incidents
-              </label>
-              <label style={{ opacity: (config.brain?.auto_investigate?.enabled ?? true) ? 1 : 0.5 }}>
-                <input
-                  type="checkbox"
-                  checked={config.brain?.auto_investigate?.dry_run ?? false}
-                  disabled={!(config.brain?.auto_investigate?.enabled ?? true)}
-                  onChange={(e) => setConfig((c) => ({
-                    ...c,
-                    brain: {
-                      ...(c.brain || {}),
-                      auto_investigate: {
-                        ...((c.brain && c.brain.auto_investigate) || {}),
-                        dry_run: e.target.checked,
-                      },
-                    },
-                  }))}
-                />
-                Dry-run only (create the task so you can see what would've fired, skip the agent kickoff)
-              </label>
-              <label>
-                Daily budget — hard stop after N auto-investigations per day
-                <input
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={config.brain?.auto_investigate?.daily_budget ?? 5}
-                  onChange={(e) => setConfig((c) => ({
-                    ...c,
-                    brain: {
-                      ...(c.brain || {}),
-                      auto_investigate: {
-                        ...((c.brain && c.brain.auto_investigate) || {}),
-                        daily_budget: parseInt(e.target.value) || 5,
-                      },
-                    },
-                  }))}
-                />
-              </label>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Home Overview — user-configurable add-on for the rolling LLM-generated overview pane */}
-      <section className="settings-collapsible">
-        <div className="collapsible-header" onClick={() => toggleSection("overview")}>
-          {openSections.overview ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          <span>Home Overview</span>
-        </div>
-        {openSections.overview && (
-          <div className="collapsible-body">
-            <div className="setup-hint">
-              Maiko generates a warm daily overview for your Home page. You can give
-              her an optional add-on instruction — anything you want her to also do
-              when writing it. She has full tool access (Bash, WebFetch, your
-              configured MCP servers), so she can actually go do these things.
-            </div>
-            <label style={{ display: "block", marginTop: 12 }}>
-              <div style={{ marginBottom: 6, fontSize: 12, color: "var(--text-muted)" }}>
-                Custom add-on instruction (optional)
-              </div>
-              <textarea
-                style={{
-                  width: "100%", minHeight: 100, padding: 8,
-                  fontFamily: "inherit", fontSize: 13,
-                  background: "var(--bg-card)", color: "var(--text)",
-                  border: "1px solid var(--border)", borderRadius: "var(--radius-xs)",
-                  resize: "vertical",
-                }}
-                value={config.overview?.custom_prompt || ""}
-                onChange={(e) => updateField("overview", "custom_prompt", e.target.value)}
-                placeholder={`e.g. "please also search my Slack for overnight mentions in #core-team" or "remind me which PRs have been sitting for more than 48 hours"`}
-              />
-            </label>
-            <div className="setup-hint" style={{ marginTop: 8 }}>
-              Overview regenerates roughly every 4 hours, or you can click Refresh
-              on the pane itself. Changes here take effect on the next generation.
-            </div>
-
-            <label style={{ display: "block", marginTop: 16 }}>
-              <div style={{ marginBottom: 6, fontSize: 12, color: "var(--text-muted)" }}>
-                Workday ends around — for the "enough for today" card
-              </div>
-              <select
-                value={config.user?.workday_end_hour ?? 17}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  updateField("user", "workday_end_hour", v === "off" ? null : parseInt(v, 10));
-                }}
-                style={{
-                  padding: 6, fontFamily: "inherit", fontSize: 13,
-                  background: "var(--bg-card)", color: "var(--text)",
-                  border: "1px solid var(--border)", borderRadius: "var(--radius-xs)",
-                }}
-              >
-                <option value="off">Off — don't show the closing card</option>
-                {Array.from({ length: 24 }, (_, h) => (
-                  <option key={h} value={h}>
-                    {h.toString().padStart(2, "0")}:00 local
-                  </option>
-                ))}
-              </select>
-              <div className="setup-hint" style={{ marginTop: 6 }}>
-                Maiko shows a warm "that's enough for today" card in the overview
-                around this hour — 30 minutes before and for 2 hours after. Meant
-                as permission to stop, not a cheer.
-              </div>
-            </label>
-
-            <label style={{ display: "block", marginTop: 16 }}>
-              <div style={{ marginBottom: 6, fontSize: 12, color: "var(--text-muted)" }}>
-                Interruption budget — loud pupdates per day before Maiko softens the voice
-              </div>
-              <select
-                value={config.user?.interruption_budget ?? 3}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  updateField("user", "interruption_budget", v === "off" ? null : parseInt(v, 10));
-                }}
-                style={{
-                  padding: 6, fontFamily: "inherit", fontSize: 13,
-                  background: "var(--bg-card)", color: "var(--text)",
-                  border: "1px solid var(--border)", borderRadius: "var(--radius-xs)",
-                }}
-              >
-                <option value="off">Off — don't track interruptions</option>
-                {[1, 2, 3, 4, 5, 7, 10].map((n) => (
-                  <option key={n} value={n}>{n} per day</option>
-                ))}
-              </select>
-              <div className="setup-hint" style={{ marginTop: 6 }}>
-                Once the count exceeds this budget, the overview leans toward
-                "a lot piled up today — knock these out in one sitting" instead
-                of surfacing each one as a fresh fire. Soft cap, not enforcement.
-              </div>
-            </label>
-          </div>
-        )}
-      </section>
-
-      {/* Repo checks — informational, points users at the file-in-repo pattern */}
-      <section className="settings-collapsible">
-        <div className="collapsible-header" onClick={() => toggleSection("checks")}>
-          {openSections.checks ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          <span>Repo checks (check_code)</span>
-        </div>
-        {openSections.checks && (
-          <div className="collapsible-body">
-            <div className="setup-hint">
-              Before an agent says they're done, they call <code>check_code()</code>. It runs two verifier layers in one pass:
-            </div>
-            <ul style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.6, paddingLeft: 20, margin: "8px 0" }}>
-              <li>
-                <strong>Mechanical checks</strong> — your repo's tests, linter, typechecker. Auto-detected from <code>pyproject.toml</code> / <code>package.json</code> / <code>Cargo.toml</code> / <code>go.mod</code>, or configured by you.
-              </li>
-              <li>
-                <strong>LoRA verifier</strong> — your team's trained code-review model (if an adapter exists for the repo). The rule layer. Learns from approved Learnings in the Knowledge tab.
-              </li>
-            </ul>
-            <div className="setup-hint" style={{ marginTop: 12 }}>
-              To override auto-detect or add custom checks, commit a <code>.maiko/checks.json</code> to your repo root. It replaces auto-detect entirely — list everything you want. Team-visible, version-controlled, reviewed in the same PR as the checks themselves.
-            </div>
-            <pre style={{
-              marginTop: 12, padding: 10, fontSize: 11, lineHeight: 1.5,
-              background: "var(--bg)", border: "1px solid var(--border)",
-              borderRadius: "var(--radius-xs)", overflow: "auto",
-              color: "var(--text-dim)", fontFamily: "monospace",
-            }}>{`{
-  "checks": [
-    { "name": "unit tests", "command": "pytest -x --tb=short" },
-    { "name": "lint",       "command": "ruff check ." },
-    { "name": "typecheck",  "command": "pyright src/" },
-    { "name": "no console.log", "command": "! grep -rn console.log src/" },
-    { "name": "secrets",    "command": "trufflehog filesystem ." }
-  ]
-}`}</pre>
-            <div className="setup-hint" style={{ marginTop: 8 }}>
-              Exit code 0 is a pass; anything else is a failure. Negate greps with <code>!</code> so "found the anti-pattern" means "check failed."
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* Scheduled Briefings (morning brief, pack insights, etc.) */}
-      <section className="settings-collapsible">
-        <div className="collapsible-header" onClick={() => toggleSection("briefings")}>
-          {openSections.briefings ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          <span>Scheduled Briefings</span>
-        </div>
-        {openSections.briefings && (
+        {briefingsOpen && (
           <div className="collapsible-body">
             <ScheduledBriefings />
           </div>
         )}
       </section>
 
-      {/* NOTE on refactor pattern: big sections get their own file under
-          components/settings/ (see IntegrationsSection below). Each
-          takes the slice of config it needs plus shared helpers. Smaller
-          sections (Your Name, Autopilot, Scene, Plugins) stay inline
-          since extracting them would be more ceremony than payoff.
-          Follow this pattern when adding new settings sections. */}
       <IntegrationsSection
         config={config}
         updateField={updateField}
         pollerStatus={pollerStatus}
         onRunPoller={handleRunPoller}
-        onMessage={(m) => { setMessage(m); setTimeout(() => setMessage(""), 5000); }}
+        onMessage={flash}
       />
 
+      <AgentPreferencesSection
+        config={config}
+        setConfig={setConfig}
+        updateField={updateField}
+        updateRoleInstructions={updateRoleInstructions}
+      />
 
-      {/* Agent Preferences */}
-      <section className="settings-collapsible">
-        <div className="collapsible-header" onClick={() => toggleSection("agents")}>
-          {openSections.agents ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          <span>Agent Preferences</span>
-        </div>
-        {openSections.agents && (
-          <div className="collapsible-body">
-            <div className="integration-section">
-              <div className="setup-hint">
-                <strong>Role instructions</strong> apply team-wide to every agent of a given role.
-                They get injected after the built-in role protocol and before each agent's own
-                personality, so you can say "every reviewer cares about accessibility" once instead
-                of editing every agent. Markdown is fine.
-              </div>
-              <div className="integration-fields">
-                <label>
-                  Coder instructions
-                  <textarea
-                    rows={4}
-                    value={config.agents?.role_instructions?.coding || ""}
-                    onChange={(e) => updateRoleInstructions("coding", e.target.value)}
-                    placeholder={"e.g.\nAlways run tests before opening a PR.\nPrefer existing utilities in src/utils/ over adding new deps.\nNever commit TODO comments without an issue link."}
-                    style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}
-                  />
-                </label>
-                <label>
-                  Reviewer instructions
-                  <textarea
-                    rows={4}
-                    value={config.agents?.role_instructions?.review || ""}
-                    onChange={(e) => updateRoleInstructions("review", e.target.value)}
-                    placeholder={"e.g.\nAlways call out missing tests for new code paths.\nFlag any new dependency additions for discussion.\nCheck that error messages are user-facing-safe."}
-                    style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}
-                  />
-                </label>
-                <label>
-                  Investigator instructions
-                  <textarea
-                    rows={4}
-                    value={config.agents?.role_instructions?.investigation || ""}
-                    onChange={(e) => updateRoleInstructions("investigation", e.target.value)}
-                    placeholder={"e.g.\nCross-reference incidents with the on-call runbook.\nAlways propose a rollback path as the first mitigation.\nIf the stack trace crosses services, list each service involved."}
-                    style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}
-                  />
-                </label>
-              </div>
+      <ModelRoutingSection
+        config={config}
+        setConfig={setConfig}
+        updateField={updateField}
+      />
 
-              <div className="setup-hint" style={{ marginTop: 16 }}>
-                <strong>Legacy:</strong> the field below is the pre-roles global instruction string.
-                Still honored — appended to every coding agent's CLAUDE.md alongside the role-specific
-                block above. Safe to leave blank if you've moved to the per-role fields.
-              </div>
-              <div className="integration-fields">
-                <label>
-                  Global coding custom instructions (legacy)
-                  <textarea
-                    rows={3}
-                    value={config.agents?.custom_instructions || ""}
-                    onChange={(e) => updateField("agents", "custom_instructions", e.target.value)}
-                    placeholder="e.g. Always write tests first. Use conventional commits."
-                    style={{ fontFamily: "var(--font)", fontSize: 12 }}
-                  />
-                </label>
-                <label>
-                  Branch Prefix
-                  <input
-                    type="text"
-                    value={config.agents?.branch_prefix || "maiko"}
-                    onChange={(e) => updateField("agents", "branch_prefix", e.target.value)}
-                    placeholder="maiko"
-                  />
-                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                    Auto-generated branches will be: prefix/task-title-slug
-                  </span>
-                </label>
-                <label>
-                  Allowed Tools (pre-approved for Claude Code sessions)
-                  <div className="repo-list">
-                    {(config.brain?.allowed_tools || []).map((tool, i) => (
-                      <div key={i} className="repo-list-item">
-                        <span>{tool}</span>
-                        <button className="btn-ghost" onClick={() => {
-                          const updated = (config.brain?.allowed_tools || []).filter((_, j) => j !== i);
-                          setConfig((c) => ({ ...c, brain: { ...c?.brain, allowed_tools: updated } }));
-                        }} title="Remove"><span style={{ fontSize: 14, color: "var(--urgent)" }}>&times;</span></button>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                    <input
-                      type="text"
-                      style={{ flex: 1 }}
-                      placeholder="Tool name (e.g. Bash, Edit, mcp__github)"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && e.target.value.trim()) {
-                          const val = e.target.value.trim();
-                          const tools = config.brain?.allowed_tools || [];
-                          if (!tools.includes(val)) setConfig((c) => ({ ...c, brain: { ...c?.brain, allowed_tools: [...tools, val] } }));
-                          e.target.value = "";
-                        }
-                      }}
-                    />
-                    <span style={{ fontSize: 10, color: "var(--text-muted)", alignSelf: "center" }}>Press Enter to add</span>
-                  </div>
-                </label>
-              </div>
-            </div>
-          </div>
-        )}
-      </section>
+      <SceneSection
+        config={config}
+        setConfig={setConfig}
+        initialResolved={initialResolved}
+      />
 
-      {/* Model Routing */}
-      <section className="settings-collapsible">
-        <div className="collapsible-header" onClick={() => toggleSection("routing")}>
-          {openSections.routing ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          <span>Model Routing</span>
-        </div>
-        {openSections.routing && (
-          <div className="collapsible-body">
-            <div className="integration-section">
-              <div className="setup-hint">
-                Route tasks to different models to balance cost and quality.
-                Haiku is cheapest for simple classifications, Sonnet is balanced for skills,
-                Opus is best for coding and judging.
-              </div>
-              <div className="integration-fields">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={config.routing?.enabled ?? true}
-                    onChange={(e) => updateField("routing", "enabled", e.target.checked)}
-                  />
-                  Enable cost-aware routing
-                </label>
-                <label>
-                  Default model
-                  <select value={config.routing?.default_model || "sonnet"} onChange={(e) => updateField("routing", "default_model", e.target.value)} className="routing-select">
-                    <option value="haiku">Haiku</option>
-                    <option value="sonnet">Sonnet</option>
-                    <option value="opus">Opus</option>
-                  </select>
-                </label>
-                <label title="Controls Claude's reasoning depth for every LLM call — triage, clustering, skill runs, AND the autonomous coding/review/investigation agents. Max burns more tokens but produces noticeably better agent output.">
-                  Effort
-                  <select value={config.routing?.thinking_budget || "medium"} onChange={(e) => updateField("routing", "thinking_budget", e.target.value)} className="routing-select">
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="max">Max</option>
-                  </select>
-                </label>
-              </div>
-              <div className="routing-rules-table">
-                <div className="routing-rules-header">
-                  <span>Task Type</span>
-                  <span>Model</span>
-                </div>
-                {[
-                  { key: "triage", label: "Triage (pupdate classification)", tier: "haiku" },
-                  { key: "classify", label: "Signal classification", tier: "haiku" },
-                  { key: "scene", label: "Scene creative note", tier: "haiku" },
-                  { key: "conflict_query", label: "Conflict detection", tier: "haiku" },
-                  { key: "skill", label: "Skills (default)", tier: "sonnet" },
-                  { key: "skill:pr-review", label: "PR Review", tier: "sonnet" },
-                  { key: "project_plan", label: "Project planning", tier: "sonnet" },
-                  { key: "profile_judge", label: "Task outcome judging", tier: "sonnet" },
-                  { key: "training:entry", label: "Training entries", tier: "opus" },
-                  { key: "training:judge", label: "Training judging", tier: "opus" },
-                  { key: "coding_agent", label: "Coding agents", tier: "opus" },
-                ].map(({ key, label, tier }) => (
-                  <div key={key} className="routing-rule-row">
-                    <span className="routing-rule-label">{label}</span>
-                    <select
-                      className="routing-select"
-                      value={(config.routing?.rules || {})[key] || tier}
-                      onChange={(e) => {
-                        const rules = { ...(config.routing?.rules || {}), [key]: e.target.value };
-                        setConfig((c) => ({ ...c, routing: { ...c?.routing, rules } }));
-                      }}
-                    >
-                      <option value="haiku">Haiku</option>
-                      <option value="sonnet">Sonnet</option>
-                      <option value="opus">Opus</option>
-                    </select>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* Scene & Weather (open by default) */}
-      <section className="settings-collapsible">
-        <div className="collapsible-header" onClick={() => toggleSection("scene")}>
-          {openSections.scene ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          <span>Scene & Weather</span>
-        </div>
-        {openSections.scene && (
-          <div className="collapsible-body">
-            <p className="integration-note">
-              Enter your location to enable real weather data on the homepage. Uses the free Open-Meteo API (no key needed).
-            </p>
-            <div className="location-lookup">
-              <label>
-                <MapPin size={12} /> Location
-              </label>
-              <div className="location-lookup-row">
-                <input
-                  type="text"
-                  value={locationQuery}
-                  onChange={(e) => setLocationQuery(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleLocationLookup(); }}
-                  placeholder="Zipcode or city name (e.g. 02101 or Boston)"
-                  className="location-input"
-                />
-                <button
-                  className="btn-lookup"
-                  onClick={handleLocationLookup}
-                  disabled={lookingUp || !locationQuery.trim()}
-                >
-                  <Search size={12} /> {lookingUp ? "Looking up..." : "Lookup"}
-                </button>
-              </div>
-              {locationResolved && (
-                <div className="location-resolved">{locationResolved}</div>
-              )}
-            </div>
-
-            <div className="integration-fields" style={{ marginTop: 16 }}>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={config.scene?.show_weather_overlay !== false}
-                  onChange={(e) =>
-                    setConfig((c) => ({ ...c, scene: { ...(c.scene || {}), show_weather_overlay: e.target.checked } }))
-                  }
-                />
-                Show weather overlay (clouds, rain, snow, stars)
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={config.scene?.show_hill_background !== false}
-                  onChange={(e) =>
-                    setConfig((c) => ({ ...c, scene: { ...(c.scene || {}), show_hill_background: e.target.checked } }))
-                  }
-                />
-                Show hill background
-              </label>
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* Plugins */}
-      <section className="settings-collapsible">
-        <div className="collapsible-header" onClick={() => toggleSection("plugins")}>
-          {openSections.plugins ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          <span>Plugins</span>
-          {plugins.length > 0 && <span className="section-count">{plugins.length}</span>}
-        </div>
-        {openSections.plugins && (
-          <div className="collapsible-body">
-            {plugins.length === 0 ? (
-              <p className="integration-note">
-                No plugins detected. Drop <code>.py</code> files into <code>~/.maiko/plugins/</code> or install a pip package
-                with the <code>planet_maiko.plugins</code> entry point.
-              </p>
-            ) : (
-              <div className="plugins-list">
-                {plugins.map((p) => (
-                  <div key={p.name} className={`plugin-card ${p.status}`}>
-                    <div className="plugin-card-header">
-                      <Plug size={14} className={`plugin-icon status-${p.status}`} />
-                      <div className="plugin-info">
-                        <span className="plugin-name">{p.name}</span>
-                        <span className="plugin-source">
-                          {p.source === "local" ? p.file : `entry_point: ${p.entry_point}`}
-                        </span>
-                      </div>
-                      <div className="plugin-status-area">
-                        <span className={`badge ${p.status === "loaded" ? "active" : p.status === "disabled" ? "cancelled" : p.status === "pending_restart" ? "in_progress" : "urgent"}`}>
-                          {p.status === "pending_restart" ? "restart needed" : p.status}
-                        </span>
-                        <label className="plugin-toggle">
-                          <input
-                            type="checkbox"
-                            checked={p.status !== "disabled"}
-                            onChange={async () => {
-                              try {
-                                const result = await api.togglePlugin(p.name);
-                                setMessage(`Plugin "${p.name}" ${result.status}. Restart the server to apply.`);
-                                setTimeout(() => setMessage(""), 8000);
-                                // Refresh plugin list
-                                const updated = await api.getPlugins();
-                                setPlugins(updated);
-                              } catch (err) {
-                                setMessage("Failed to toggle plugin: " + err.message);
-                              }
-                            }}
-                          />
-                          <span className="toggle-slider" />
-                        </label>
-                      </div>
-                    </div>
-                    {p.status === "error" && p.error && (
-                      <div className="plugin-error">
-                        <AlertTriangle size={10} /> {p.error.split("\n").pop() || p.error}
-                      </div>
-                    )}
-                    {p.config_schema && Object.keys(p.config_schema).length > 0 && (
-                      <PluginConfigForm
-                        plugin={p}
-                        config={config}
-                        onChange={(field, value) => {
-                          const key = p.config_key || p.name;
-                          const section = { ...(config[key] || {}) };
-                          section[field] = value;
-                          setConfig({ ...config, [key]: section });
-                        }}
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </section>
+      <PluginsSection
+        config={config}
+        setConfig={setConfig}
+        plugins={plugins}
+        setPlugins={setPlugins}
+        onMessage={flash}
+      />
 
       <button className="btn-save" onClick={handleSave} disabled={saving}>
         {saving ? "Saving..." : "Save Settings"}
       </button>
-    </div>
-  );
-}
-
-
-/**
- * Renders a plugin's declared config_schema as editable fields. Reads
- * the current values from config[plugin.config_key] and writes through
- * onChange(field, value). Supports string, bool, number, and list (CSV).
- * Intentionally thin — more complex shapes (nested, dependent fields)
- * can be added as plugins request them.
- */
-function PluginConfigForm({ plugin, config, onChange }) {
-  const key = plugin.config_key || plugin.name;
-  const section = config?.[key] || {};
-  const schema = plugin.config_schema || {};
-  return (
-    <div className="plugin-config-form">
-      {Object.entries(schema).map(([field, meta]) => {
-        const value = section[field];
-        const type = meta.type || "string";
-        const label = meta.label || field;
-        if (type === "bool") {
-          return (
-            <label key={field} className="plugin-config-field plugin-config-bool">
-              <input
-                type="checkbox"
-                checked={!!value}
-                onChange={(e) => onChange(field, e.target.checked)}
-              />
-              <span>{label}</span>
-              {meta.help && <span className="plugin-config-help">— {meta.help}</span>}
-            </label>
-          );
-        }
-        if (type === "list") {
-          const csv = Array.isArray(value) ? value.join(", ") : (value || "");
-          return (
-            <label key={field} className="plugin-config-field">
-              <span>{label}{meta.help && <span className="plugin-config-help"> — {meta.help}</span>}</span>
-              <input
-                type="text"
-                value={csv}
-                placeholder={meta.placeholder || "comma, separated"}
-                onChange={(e) => onChange(
-                  field,
-                  e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
-                )}
-              />
-            </label>
-          );
-        }
-        // string / number fallthrough
-        return (
-          <label key={field} className="plugin-config-field">
-            <span>{label}{meta.help && <span className="plugin-config-help"> — {meta.help}</span>}</span>
-            <input
-              type={meta.secret ? "password" : (type === "number" ? "number" : "text")}
-              value={value ?? ""}
-              placeholder={meta.placeholder || ""}
-              onChange={(e) => {
-                const raw = e.target.value;
-                onChange(field, type === "number" && raw !== "" ? Number(raw) : raw);
-              }}
-            />
-          </label>
-        );
-      })}
     </div>
   );
 }
