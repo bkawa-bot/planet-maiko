@@ -121,6 +121,7 @@ def cmd_setup(args):
         except Exception as e:
             print(f"  Could not resolve location: {e}")
 
+    config["setup_complete"] = True
     save_config(config)
     print(f"\nConfig saved. Start with: maiko serve")
 

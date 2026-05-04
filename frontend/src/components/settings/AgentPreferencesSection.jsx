@@ -59,22 +59,7 @@ export default function AgentPreferencesSection({
               </label>
             </div>
 
-            <div className="setup-hint" style={{ marginTop: 16 }}>
-              <strong>Legacy:</strong> the field below is the pre-roles global instruction string.
-              Still honored — appended to every coding agent's CLAUDE.md alongside the role-specific
-              block above. Safe to leave blank if you've moved to the per-role fields.
-            </div>
-            <div className="integration-fields">
-              <label>
-                Global coding custom instructions (legacy)
-                <textarea
-                  rows={3}
-                  value={config.agents?.custom_instructions || ""}
-                  onChange={(e) => updateField("agents", "custom_instructions", e.target.value)}
-                  placeholder="e.g. Always write tests first. Use conventional commits."
-                  style={{ fontFamily: "var(--font)", fontSize: 12 }}
-                />
-              </label>
+            <div className="integration-fields" style={{ marginTop: 16 }}>
               <label>
                 Branch Prefix
                 <input

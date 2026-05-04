@@ -59,12 +59,10 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
         from planet_maiko.config import MAIKO_PORT
         maiko_port = MAIKO_PORT
 
-    custom_instructions = ""
     role_instructions_for_role = ""
     try:
         from planet_maiko.config import load_config
         agents_cfg = load_config().get("agents", {}) or {}
-        custom_instructions = agents_cfg.get("custom_instructions", "") or ""
         role_instructions_for_role = (agents_cfg.get("role_instructions") or {}).get(role, "") or ""
     except Exception:
         pass
@@ -127,8 +125,6 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
 
     if role_instructions_for_role:
         content += f"\n\n## Team instructions for {role} agents\n\n{role_instructions_for_role.strip()}\n"
-    if custom_instructions and role == "coding":
-        content += f"\n\n## Owner's Workflow Preferences\n\n{custom_instructions}\n"
 
     # Active Insights for this repo (and globals). Unlike Learnings,
     # Insights aren't confidence-gated or trainable — they're the

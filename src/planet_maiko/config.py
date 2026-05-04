@@ -95,14 +95,7 @@ DEFAULT_CONFIG = {
         "ical_urls": [],
         "poll_interval_minutes": 15,
     },
-    "slack": {
-        "enabled": False,
-        "token": "",
-        "channels": [],
-        "poll_interval_minutes": 120,
-    },
     "agents": {
-        "custom_instructions": "",  # Legacy: appended to every coding agent's CLAUDE.md (still honored)
         "branch_prefix": "maiko",   # Prefix for auto-generated branch names (e.g. maiko/fix-auth-bug)
         # Team-wide instructions per agent role. Concatenated into the
         # prompt for every agent of that role, after the built-in

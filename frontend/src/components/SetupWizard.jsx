@@ -20,6 +20,7 @@ export default function SetupWizard({ onComplete }) {
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [repos, setRepos] = useState([]);
+  const [repoRoots, setRepoRoots] = useState([]);
   const [discovering, setDiscovering] = useState(false);
   const [discoverError, setDiscoverError] = useState(null);
   const [location, setLocation] = useState("");
@@ -29,7 +30,10 @@ export default function SetupWizard({ onComplete }) {
   const finishSetup = async () => {
     const config = {};
     if (name.trim()) config.user = { name: name.trim() };
-    if (username) config.github = { username, enabled: true, repos };
+    if (username) {
+      config.github = { username, enabled: true, repos };
+      if (repoRoots.length) config.github.repo_roots = repoRoots;
+    }
     if (latLon) config.scene = { latitude: latLon.lat, longitude: latLon.lon, location_name: locationResolved };
     config.setup_complete = true;
     await api.updateConfig(config);
@@ -168,6 +172,13 @@ export default function SetupWizard({ onComplete }) {
                 {discoverError.hint && <div className="setup-hint-warn-sub">{discoverError.hint}</div>}
               </div>
             )}
+            <p style={{ marginTop: 16 }}>Where do these repos live on disk? Coding agents make worktrees from your local clones.</p>
+            <input
+              type="text"
+              value={repoRoots.join(", ")}
+              onChange={(e) => setRepoRoots(e.target.value.split(",").map(s => s.trim()).filter(Boolean))}
+              placeholder="~/src, ~/projects"
+            />
             <div className="setup-actions">
               <button className="setup-skip" onClick={() => setStep(2)}>Back</button>
               <button className="btn btn-primary" onClick={() => setStep(4)}>Next</button>
