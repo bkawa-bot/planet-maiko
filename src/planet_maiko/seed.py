@@ -388,7 +388,6 @@ def seed_data(app):
                 actionable=True,
                 action_hint="Review PR",
                 tags=["auth", "oauth"],
-                read=False,
             ),
             Pupdate(
                 id="pup-gh-pr-approved-1",
@@ -402,7 +401,6 @@ def seed_data(app):
                 url="https://github.com/org/auth-service/pull/85",
                 actionable=False,
                 tags=["auth", "security"],
-                read=True,
             ),
             Pupdate(
                 id="pup-gh-pr-review-2",
@@ -417,7 +415,6 @@ def seed_data(app):
                 actionable=True,
                 action_hint="Review PR",
                 tags=["api", "config"],
-                read=False,
             ),
             Pupdate(
                 id="pup-gh-push-1",
@@ -431,7 +428,6 @@ def seed_data(app):
                 url="https://github.com/org/auth-service/commits/main",
                 actionable=False,
                 tags=["auth"],
-                read=True,
             ),
             # Linear - task assignments
             Pupdate(
@@ -447,7 +443,6 @@ def seed_data(app):
                 actionable=True,
                 action_hint="Create task",
                 tags=["auth", "migration"],
-                read=False,
             ),
             Pupdate(
                 id="pup-lin-assigned-2",
@@ -462,7 +457,6 @@ def seed_data(app):
                 actionable=True,
                 action_hint="Create task",
                 tags=["auth", "bug"],
-                read=True,
             ),
             Pupdate(
                 id="pup-lin-comment-1",
@@ -476,7 +470,6 @@ def seed_data(app):
                 url="https://linear.app/team/LIN-401",
                 actionable=False,
                 tags=["auth"],
-                read=False,
             ),
             # Calendar events
             Pupdate(
@@ -490,7 +483,6 @@ def seed_data(app):
                 body="Daily standup — Zoom link in calendar.",
                 actionable=False,
                 tags=["meeting"],
-                read=True,
                 expires_at=_ago(hours=3),
                 extra={"start": (_NOW - timedelta(hours=3, minutes=30)).isoformat(), "end": (_NOW - timedelta(hours=3)).isoformat()},
             ),
@@ -507,7 +499,6 @@ def seed_data(app):
                 actionable=True,
                 action_hint="Join meeting",
                 tags=["ui", "design", "meeting"],
-                read=False,
                 extra={"start": (_NOW + timedelta(hours=1)).isoformat(), "end": (_NOW + timedelta(hours=2)).isoformat()},
             ),
             Pupdate(
@@ -521,7 +512,6 @@ def seed_data(app):
                 body="You're primary on-call Mon-Fri this week.",
                 actionable=False,
                 tags=["oncall"],
-                read=True,
                 extra={"start": (_NOW + timedelta(days=1, hours=9)).isoformat()},
             ),
             # Agent updates
@@ -535,7 +525,6 @@ def seed_data(app):
                 title="[Mochi] Completed: JWT signing module",
                 body="All tests passing. Key rotation tested with 3 algorithm types.",
                 tags=["auth", "security"],
-                read=True,
             ),
             Pupdate(
                 id="pup-agent-biscuit-progress",
@@ -547,7 +536,6 @@ def seed_data(app):
                 title="[Biscuit] Progress: Integration tests for token refresh",
                 body="4 of 7 test cases written. The concurrent refresh scenario is tricky.",
                 tags=["auth", "testing"],
-                read=False,
             ),
             Pupdate(
                 id="pup-agent-hazel-stuck",
@@ -560,7 +548,6 @@ def seed_data(app):
                 body="Not sure how to handle orgs with multiple API keys. "
                      "Should limits be per-key or per-org?",
                 tags=["api", "config"],
-                read=False,
                 actionable=True,
                 action_hint="Reply to agent",
             ),
@@ -578,7 +565,6 @@ def seed_data(app):
                 actionable=True,
                 action_hint="Delete branch",
                 tags=["cleanup"],
-                read=True,
             ),
             Pupdate(
                 id="pup-suggestion-test-coverage",
@@ -593,7 +579,6 @@ def seed_data(app):
                 actionable=True,
                 action_hint="Create task",
                 tags=["testing", "auth"],
-                read=False,
             ),
         ]
         db.session.add_all(pupdates)
@@ -819,7 +804,6 @@ def seed_screenshot_demo(app):
                 action_hint="Review plan",
                 tags=["agent-hazel", "task-rate-tiers"],
                 extra={"task_id": "task-rate-tiers", "agent_id": "agent-hazel"},
-                read=False,
             ),
             Pupdate(
                 id="pup-demo-review-ready",
@@ -834,7 +818,6 @@ def seed_screenshot_demo(app):
                 action_hint="Review diff",
                 tags=["agent-mochi", "task-auth-pkce"],
                 extra={"task_id": "task-auth-pkce", "agent_id": "agent-mochi"},
-                read=False,
             ),
             Pupdate(
                 id="pup-demo-stuck",
@@ -849,7 +832,6 @@ def seed_screenshot_demo(app):
                 action_hint="Help out",
                 tags=["agent-hazel", "task-rate-tiers"],
                 extra={"task_id": "task-rate-tiers", "agent_id": "agent-hazel"},
-                read=False,
             ),
         ]
         for p in pack_request_pupdates:

@@ -63,7 +63,6 @@ export default function Sidebar({ onOpenShutdown }) {
   });
   const [customThemes, setCustomThemes] = useState([]);
   const [showThemeMenu, setShowThemeMenu] = useState(false);
-  const [badges, setBadges] = useState({});
   const [weekendMode, setWeekendMode] = useState(false);
   const [weekendBusy, setWeekendBusy] = useState(false);
   const themeRef = useRef(null);
@@ -132,26 +131,6 @@ export default function Sidebar({ onOpenShutdown }) {
   }, []);
 
   useEffect(() => {
-    const fetchBadges = async () => {
-      try {
-        const [tasks, learnings] = await Promise.all([
-          api.getTasks({ status: "new" }),
-          api.getLearnings({ status: "pending" }).catch(() => []),
-        ]);
-        setBadges({
-          tasks: tasks.length,
-          learnings: learnings.length,
-        });
-      } catch (err) { /* ignore */ }
-    };
-    fetchBadges();
-    // 30s poll — fresh enough that newly-arrived items show up quickly,
-    // slow enough that we're not hammering the backend from every page.
-    const interval = setInterval(fetchBadges, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
     const handleClick = (e) => {
       if (themeRef.current && !themeRef.current.contains(e.target)) setShowThemeMenu(false);
     };
@@ -180,7 +159,7 @@ export default function Sidebar({ onOpenShutdown }) {
           </NavLink>
 
           <nav className="topbar-nav">
-            {NAV_ITEMS.map(({ to, icon: Icon, label, end, badgeKey }) => (
+            {NAV_ITEMS.map(({ to, icon: Icon, label, end }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -189,9 +168,6 @@ export default function Sidebar({ onOpenShutdown }) {
               >
                 <Icon size={15} className="nav-pill-icon" />
                 <span className="nav-pill-label">{label}</span>
-                {badgeKey && badges[badgeKey] > 0 && (
-                  <span className="nav-pill-badge">{badges[badgeKey]}</span>
-                )}
               </NavLink>
             ))}
           </nav>
