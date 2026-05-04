@@ -19,7 +19,6 @@ dependencies = [
     "icalendar>=5.0",
     "tree-sitter>=0.22",
     "tree-sitter-java>=0.23",
-    "pywebview>=5.0",
 ]
 
 [project.optional-dependencies]
@@ -30,7 +29,6 @@ dev = [
 
 [project.scripts]
 maiko = "planet_maiko.cli.main:main"
-maiko-desktop = "planet_maiko.desktop:main"
 
 [project.entry-points."planet_maiko.pollers"]
 github = "planet_maiko.pollers.github_poller:GitHubPoller"

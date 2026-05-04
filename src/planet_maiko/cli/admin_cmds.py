@@ -1,6 +1,6 @@
 """Admin / server lifecycle CLI commands.
 
-Commands: status, setup, serve, desktop, seed, bootstrap.
+Commands: status, setup, serve, seed, bootstrap.
 These mostly do local file/database work and don't need the API to be up.
 """
 
@@ -133,13 +133,6 @@ def cmd_serve(args):
     app.run(host=args.host, port=args.port, debug=args.debug, use_reloader=False)
 
 
-def cmd_desktop(args):
-    """Launch Planet Maiko as a desktop application."""
-    from planet_maiko.desktop import main as desktop_main
-    print(f"Launching Planet Maiko desktop on http://{args.host}:{args.port}")
-    desktop_main(host=args.host, port=args.port)
-
-
 def cmd_seed(args):
     """Populate the database with realistic test data."""
     from planet_maiko.app import create_app
@@ -233,12 +226,6 @@ def register(subparsers):
     p.add_argument("--port", type=int, default=MAIKO_PORT, help="Port to listen on")
     p.add_argument("--debug", action="store_true", help="Enable debug mode")
     p.set_defaults(func=cmd_serve)
-
-    # maiko desktop
-    p = subparsers.add_parser("desktop", help="Launch Planet Maiko as a desktop app")
-    p.add_argument("--host", default="127.0.0.1", help="Host to bind to")
-    p.add_argument("--port", type=int, default=MAIKO_PORT, help="Port to listen on")
-    p.set_defaults(func=cmd_desktop)
 
     # maiko seed
     p = subparsers.add_parser("seed", help="Populate database with test data")
