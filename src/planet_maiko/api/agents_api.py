@@ -18,55 +18,6 @@ logger = logging.getLogger(__name__)
 agents_bp = Blueprint("agents", __name__)
 
 
-_VALID_REVIEW_VERDICTS = {"approve", "approve_with_comments", "soft_block", "hard_block"}
-
-
-def _parse_verdict_and_summary(content):
-    """Pull the required `VERDICT:` + `SUMMARY:` lines out of a review
-    agent's ready_for_review body.
-
-    Protocol says the first two non-blank lines of the content are:
-
-        VERDICT: approve | approve_with_comments | soft_block | hard_block
-        SUMMARY: <one or two sentences>
-
-    Case-insensitive on the label; tolerates extra whitespace. Returns
-    (verdict, summary) — either value can be None when the tag was
-    absent or malformed. An unknown verdict keyword is dropped too, so
-    the stored value is always one of the enum or None.
-
-    We don't fail the ready_for_review on missing verdict — old-shape
-    reviews that only produce a long prose body still succeed (the
-    artifact is preserved); the banner just won't have anything to
-    show until the agent produces a new one in the new shape.
-    """
-    import re as _re
-    verdict = None
-    summary = None
-    if not content:
-        return verdict, summary
-    for line in content.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        m = _re.match(r"^verdict\s*:\s*(\S+)", stripped, _re.IGNORECASE)
-        if m and verdict is None:
-            candidate = m.group(1).strip().lower()
-            if candidate in _VALID_REVIEW_VERDICTS:
-                verdict = candidate
-            continue
-        m = _re.match(r"^summary\s*:\s*(.+)$", stripped, _re.IGNORECASE)
-        if m and summary is None:
-            summary = m.group(1).strip()[:500]
-            continue
-        # Stop once we've passed the header and hit a line that isn't
-        # a known tag — SUMMARY can be continued on the next line but
-        # anything else ends the search.
-        if verdict is not None and summary is not None:
-            break
-    return verdict, summary
-
-
 def _spawn_one_shot_thread(task_id, working_path):
     """Re-fire the autonomous run for a one-shot task on the unified
     headless flow (same as a fresh assign would do — claude --print
@@ -976,153 +927,29 @@ def nudge_agent(task_id):
     }), 201
 
 
-def _handle_agent_job_reply(job, msg, data, message_type):
-    """Reply-handling for AgentJob runs. Mirrors the Task-shaped
-    branches below but operates on AgentJob fields.
-
-    Sync rule: if the job has a source_task_id, the linked Task's
-    status moves in step (running → in_progress, done → done for
-    non-review kinds, review for review kinds so the user sees the
-    artifact first).
-    """
-    from planet_maiko.models.agent_job import AgentJob as _AgentJob  # noqa: F401
-    from planet_maiko.models.task import Task as _Task
-    from planet_maiko.models.agent_profile import AgentProfile as _AP
-    from planet_maiko.brain.learning.agent_output import parse_and_apply_blocks
-
-    content = data.get("content") or ""
-
-    if message_type == "ready_for_review":
-        verdict, summary = _parse_verdict_and_summary(content)
-        extra = dict(job.extra or {})
-        if verdict:
-            extra["review_verdict"] = verdict
-        if summary:
-            extra["review_summary"] = summary
-
-        ag = db.session.get(_AP, job.agent_profile_id) if job.agent_profile_id else None
-        try:
-            parsed = parse_and_apply_blocks(
-                content, agent=ag, task=None, repo=job.scope_repo,
-            )
-            cleaned = parsed.get("cleaned_output", content)
-            job.artifact = cleaned[:16000]
-            extra["patterns_emitted"] = parsed.get("patterns_emitted", 0)
-            extra["proposals_emitted"] = parsed.get("proposals_emitted", 0)
-            if parsed.get("confidence"):
-                extra["confidence"] = parsed["confidence"]
-        except Exception as e:
-            logger.warning(f"[outbox/job] artifact save failed for {job.id}: {e}")
-            job.artifact = content[:16000]
-
-        is_review = job.kind in ("review", "pr_review")
-        # Reviews keep their worktree so the user can still load the
-        # diff+comments; job status moves to done either way.
-        job.status = "done"
-        job.finished_at = datetime.now(timezone.utc)
-        job.extra = extra
-        if ag:
-            ag.last_active_at = datetime.now(timezone.utc)
-            # Post-Stage D, most work finishes as an AgentJob (not a
-            # Task), so AgentProfile.tasks_completed stopped moving —
-            # the number in the profile modal was frozen wherever the
-            # legacy one-shot Task path last left it. Bump here so the
-            # "done" stat reflects reality.
-            ag.tasks_completed = (ag.tasks_completed or 0) + 1
-
-        # Sync the linked Task (Stage D: review tasks have a linked job).
-        if job.source_task_id:
-            t = db.session.get(_Task, job.source_task_id)
-            if t:
-                task_extra = dict(t.extra or {})
-                if verdict:
-                    task_extra["review_verdict"] = verdict
-                if summary:
-                    task_extra["review_summary"] = summary
-                task_extra["artifact"] = job.artifact
-                task_extra["completed_at"] = datetime.now(timezone.utc).isoformat()
-                t.extra = task_extra
-                t.status = "review" if is_review else "done"
-
-        if not is_review and job.worktree_path and job.branch:
-            try:
-                from planet_maiko.agents.coding_agent import cleanup
-                cleanup(job.worktree_path, job.branch)
-            except Exception as e:
-                logger.debug(f"[outbox/job] worktree cleanup skipped for {job.id}: {e}")
-
-        logger.info(f"[outbox/job] {job.kind} job {job.id} done")
-        return
-
-    if message_type == "insight":
-        try:
-            from planet_maiko.models.insight import Insight, find_duplicate
-            ag = db.session.get(_AP, job.agent_profile_id) if job.agent_profile_id else None
-            author_role = ag.role if ag else None
-            is_cartographer = author_role == "cartographer" or job.kind == "cartograph"
-            tags = list(data.get("tags") or [])
-            if is_cartographer:
-                for t_ in ("overview", "cartographer"):
-                    if t_ not in tags:
-                        tags.append(t_)
-            max_len = 8000 if is_cartographer else 2000
-            text = content.strip()[:max_len]
-            existing = find_duplicate(text, job.scope_repo, tags)
-            if existing is not None:
-                # Refresh the timestamp + source pointer so the UI
-                # sorts this one to the top of the "recently reconfirmed"
-                # list. Merge tags so any new ones the agent attached
-                # this round get kept.
-                existing.last_confirmed_at = datetime.now(timezone.utc)
-                existing.source_message_id = msg.id
-                merged_tags = list(existing.tags or [])
-                for t_ in tags:
-                    if t_ not in merged_tags:
-                        merged_tags.append(t_)
-                existing.tags = merged_tags
-                logger.info(
-                    f"[outbox/job] insight dedup match on #{existing.id} "
-                    f"(repo={job.scope_repo or 'global'}) — refreshed"
-                )
-            else:
-                ins = Insight(
-                    text=text,
-                    repo_scope=job.scope_repo,
-                    tags=tags,
-                    author_agent_id=job.agent_profile_id,
-                    status="pending",
-                    source_message_id=msg.id,
-                )
-                db.session.add(ins)
-                logger.info(
-                    f"[outbox/job] insight from {job.id} "
-                    f"(repo={job.scope_repo or 'global'}, tags={tags})"
-                )
-        except Exception as e:
-            logger.warning(f"[outbox/job] insight save failed for {job.id}: {e}")
-        return
-
-    if message_type == "stuck":
-        # Same log-only treatment as the Task path — the AgentMessage
-        # row is enough to surface the stuck status in the UI.
-        logger.info(f"[outbox/job] {job.id} stuck: {content[:100]}")
-        return
-
-    # Anything else (status / feedback / summary / message) — just
-    # records the AgentMessage row we already added, nothing further.
-
-
+# Outbox dispatcher — per-message-type handlers live in
+# planet_maiko.api.agent_outbox so this stays a thin route.
 @agents_bp.route("/agents/<task_id>/outbox", methods=["POST"])
 def agent_sends_message(task_id):
     """Agent sends a message back (alternative to pupdate-based reporting).
 
     `task_id` is historical — post Stage D the incoming id may be an
     AgentJob id (for cartograph / investigation / review runs) rather
-    than a Task id. We check AgentJob first, and if it resolves,
-    route through the job-aware handler. Otherwise fall through to
-    the legacy Task path (coding tasks + anything else still Task-
-    driven).
+    than a Task id. We check AgentJob first, and if it resolves, route
+    through the job-aware handler. Otherwise fall through to the legacy
+    Task path (coding tasks + anything else still Task-driven).
     """
+    from planet_maiko.api.agent_outbox import (
+        emit_user_facing_signal,
+        handle_agent_job_reply,
+        handle_pr_opened,
+        handle_session_feedback,
+        handle_task_insight,
+        handle_task_ready_for_review,
+    )
+    from planet_maiko.models.agent_job import AgentJob as _AgentJob
+    from planet_maiko.models.task import Task as _Task
+
     data = request.get_json()
     msg = AgentMessage(
         task_id=task_id,
@@ -1134,394 +961,35 @@ def agent_sends_message(task_id):
     db.session.add(msg)
     message_type = data.get("message_type", "message")
 
-    # AgentJob path — claim the reply if this id belongs to a job.
+    # AgentJob path first — claim the reply if this id belongs to a job.
+    job = None
     try:
-        from planet_maiko.models.agent_job import AgentJob as _AgentJob
         job = db.session.get(_AgentJob, task_id)
     except Exception:
         job = None
     if job is not None:
-        _handle_agent_job_reply(job, msg, data, message_type)
+        handle_agent_job_reply(job, msg, data, message_type)
         db.session.commit()
         return jsonify({"ok": True, "message_id": msg.id, "target": "agent_job"})
+
+    # Task path — order matters: ready_for_review parses the artifact +
+    # sets verdict before the user-facing signal fires, so the memo's
+    # cta_label can read the right field.
+    task = db.session.get(_Task, task_id)
     if message_type == "ready_for_review":
-        from planet_maiko.models.task import Task as _Task
-        from planet_maiko.models.agent_profile import AgentProfile as _AgentProfile
-        from planet_maiko.agents.brain_session import ONE_SHOT_ROLE_FOR_TYPE
-        from planet_maiko.brain.learning.agent_output import parse_and_apply_blocks
-        t = db.session.get(_Task, task_id)
-
-        # Parse VERDICT + SUMMARY for any ready_for_review, not just
-        # review tasks. Coding agents self-assess the same way — the
-        # banner shows the self-verdict (approve / approve_with_comments
-        # / soft_block / hard_block) at the top of their diff page.
-        # If the agent omitted the header, both parse to None and
-        # nothing is stored; everything else still works.
-        if t:
-            verdict, summary = _parse_verdict_and_summary(data.get("content") or "")
-            if verdict or summary:
-                extra = dict(t.extra or {})
-                if verdict:
-                    extra["review_verdict"] = verdict
-                if summary:
-                    extra["review_summary"] = summary
-                t.extra = extra
-
-        if t and t.type in ONE_SHOT_ROLE_FOR_TYPE:
-            ag = db.session.get(_AgentProfile, t.assigned_agent_id) if t.assigned_agent_id else None
-            try:
-                parsed = parse_and_apply_blocks(
-                    data["content"], agent=ag, task=t,
-                    repo=(t.extra or {}).get("repo"),
-                )
-                cleaned = parsed.get("cleaned_output", data["content"])
-                extra = dict(t.extra or {})
-                extra["artifact"] = cleaned[:16000]
-                extra["patterns_emitted"] = parsed.get("patterns_emitted", 0)
-                extra["proposals_emitted"] = parsed.get("proposals_emitted", 0)
-                if parsed.get("confidence"):
-                    extra["confidence"] = parsed["confidence"]
-
-                # review / pr_review task types get their verdict + summary
-                # from the outer parse above (applies to all ready_for_review
-                # regardless of task type). Here we just branch on role for
-                # status + worktree-cleanup semantics.
-                is_review_task = t.type in ("review", "pr_review")
-                extra["completed_at"] = datetime.now(timezone.utc).isoformat()
-                t.extra = extra
-
-                # Reviews keep their worktree around so the user can
-                # load the diff + inline comments at /tasks/:id/review.
-                # The task also stays in an awaiting-user state rather
-                # than jumping straight to "done" — the user closes it
-                # explicitly via the diff page. Investigations and
-                # other one-shots clean up immediately as before.
-                if is_review_task:
-                    t.status = "review"
-                else:
-                    t.status = "done"
-
-                if ag:
-                    ag.last_active_at = datetime.now(timezone.utc)
-                logger.info(
-                    f"[outbox] {t.type} task {task_id} done — "
-                    f"{parsed.get('patterns_emitted', 0)} patterns, "
-                    f"{parsed.get('proposals_emitted', 0)} proposals"
-                )
-
-                if not is_review_task:
-                    # Non-review one-shots tear down immediately — the
-                    # artifact is saved, the scratch dir's not doing
-                    # anything for them anymore. Reviews keep it.
-                    try:
-                        from planet_maiko.agents.coding_agent import cleanup_task_worktree
-                        cleanup_task_worktree(t)
-                    except Exception as e:
-                        logger.warning(f"[outbox] worktree cleanup failed for {task_id}: {e}")
-            except Exception as e:
-                logger.warning(f"[outbox] artifact save failed for {task_id}: {e}")
-
-    # Agent-reported insight: tribal / operational knowledge (tooling
-    # tips, migration state, team conventions) that should be injected
-    # into future agents' CLAUDE.md. Lands as a pending Insight so the
-    # user reviews before it goes into every new session's prompt.
-    # Intentionally separate from Learnings — no LoRA training, no
-    # confidence scoring, just a note.
+        handle_task_ready_for_review(task_id, task, data)
     if message_type == "insight":
-        try:
-            from planet_maiko.models.insight import Insight, find_duplicate
-            from planet_maiko.models.task import Task as _Task
-            from planet_maiko.models.agent_profile import AgentProfile as _AP
-            t = db.session.get(_Task, task_id)
-            repo_scope = None
-            if t:
-                extra = t.extra or {}
-                repo_scope = extra.get("repo") or extra.get("repository")
-
-            # Cartographer replies are Repo Overview docs — auto-tag so
-            # _build_playbook_section promotes them on approve, and
-            # give them more room since the overview format is a
-            # structured multi-section markdown doc.
-            author_role = None
-            if t and t.assigned_agent_id:
-                author = db.session.get(_AP, t.assigned_agent_id)
-                if author:
-                    author_role = author.role
-            is_cartographer = author_role == "cartographer"
-
-            tags = list(data.get("tags") or [])
-            if is_cartographer:
-                for t_ in ("overview", "cartographer"):
-                    if t_ not in tags:
-                        tags.append(t_)
-
-            max_len = 8000 if is_cartographer else 2000
-            text = (data["content"] or "").strip()[:max_len]
-            existing = find_duplicate(text, repo_scope, tags)
-            if existing is not None:
-                existing.last_confirmed_at = datetime.now(timezone.utc)
-                existing.source_message_id = msg.id
-                merged_tags = list(existing.tags or [])
-                for t_ in tags:
-                    if t_ not in merged_tags:
-                        merged_tags.append(t_)
-                existing.tags = merged_tags
-                logger.info(
-                    f"[outbox] insight dedup match on #{existing.id} "
-                    f"(task={task_id}, repo={repo_scope or 'global'}) — refreshed"
-                )
-            else:
-                ins = Insight(
-                    text=text,
-                    repo_scope=repo_scope,
-                    tags=tags,
-                    author_agent_id=(t.assigned_agent_id if t else None),
-                    status="pending",
-                    source_message_id=msg.id,
-                )
-                db.session.add(ins)
-                logger.info(
-                    f"[outbox] Agent insight recorded (task={task_id}, "
-                    f"repo={repo_scope or 'global'}, tags={tags}): {ins.text[:80]}"
-                )
-        except Exception as e:
-            logger.warning(f"[outbox] insight save failed for {task_id}: {e}")
-
-    if message_type not in ("status", "feedback", "insight", "summary"):
-        from planet_maiko.models.task import Task
-        from planet_maiko.models.agent_profile import AgentProfile
-        task = db.session.get(Task, task_id)
-        agent_name = None
-        if task and task.assigned_agent_id:
-            agent = db.session.get(AgentProfile, task.assigned_agent_id)
-            if agent:
-                agent_name = agent.display_name
-        agent_name = agent_name or "Agent"
-
-        content = data["content"]
-        preview = content.replace("\n", " ").strip()
-        if len(preview) > 80:
-            preview = preview[:77] + "…"
-
-        # Priority: stuck is high (blocked, needs help);
-        # ready_for_review / plan_for_approval are high (user needs to act);
-        # plain messages are normal.
-        priority = "high" if message_type in ("stuck", "ready_for_review", "plan_for_approval") else "normal"
-        type_label = {
-            "done": "completed",
-            "stuck": "is stuck",
-            "ready_for_review": "ready for review",
-            "plan_for_approval": "has a plan",
-            "pr_opened": "opened PR",
-            "message": "replied",
-        }.get(message_type, "replied")
-
-        # Distinct pupdate types so the UI can route them to different
-        # actions: ready_for_review → "Review diff" button, others →
-        # generic "Open task".
-        pupdate_type = {
-            "ready_for_review": "agent_ready_for_review",
-            "plan_for_approval": "agent_plan_for_approval",
-            "pr_opened": "agent_pr_opened",
-            "done": "agent_done",
-            "stuck": "agent_stuck",
-        }.get(message_type, "agent_message")
-
-        action_hint = {
-            "ready_for_review": "Review diff",
-            "plan_for_approval": "Review plan",
-            "pr_opened": "Open PR",
-            "stuck": "Help the agent",
-            "done": "Open task",
-        }.get(message_type, "Open task")
-
-        # Pull the PR URL off the task (if the agent has opened one)
-        # so the pupdate card can link straight to GitHub. Covers both
-        # storage locations: task.url (set by approve / auto-open flows)
-        # and task.extra.pr_url (set by the agent MCP reply path).
-        pr_url = None
-        if task:
-            candidate = task.url or (task.extra or {}).get("pr_url")
-            if candidate and "github.com" in candidate:
-                pr_url = candidate
-
-        # Carry forward the original ask + boundary + when it was asked
-        # so the user can reload context in one glance — "you asked 3
-        # hours ago: 'look at the auth bug' (must not: touch billing)".
-        # The single biggest cost of parallel agents is the reload-tax
-        # when one returns 3h after you kicked it off and you've since
-        # swapped context five times. Store on pupdate.extra so the
-        # frontend can render without an extra task fetch.
-        original_ask = ""
-        original_non_goals = ""
-        asked_at_iso = None
-        if task is not None:
-            t_extra = task.extra or {}
-            original_ask = (
-                t_extra.get("user_request")
-                or t_extra.get("description")
-                or t_extra.get("body")
-                or task.title
-                or ""
-            ).strip()
-            raw_ng = t_extra.get("non_goals") or ""
-            if isinstance(raw_ng, list):
-                original_non_goals = "; ".join(str(g).strip() for g in raw_ng if str(g).strip())
-            else:
-                original_non_goals = str(raw_ng).strip()
-            if task.created_at:
-                asked_at_iso = task.created_at.isoformat() if hasattr(task.created_at, "isoformat") else str(task.created_at)
-
-        # User-gated signals (ready_for_review / stuck / plan_for_approval)
-        # become Memos instead of pupdates. Memo is the canonical
-        # surface for "this is waiting on you" — lives in the Memos
-        # pane, has a clear CTA, dismisses on action.
-        # Other message_types (pr_opened, done, message) stay as
-        # pupdates for now; they're informational flow signals rather
-        # than state the user needs to act on.
-        memo_kind = {
-            "ready_for_review": "agent_ready",
-            "stuck": "agent_stuck",
-            "plan_for_approval": "agent_plan",
-        }.get(message_type)
-
-        if memo_kind:
-            from planet_maiko.brain.memos import create_memo
-            from planet_maiko.models.agent_job import AgentJob as _AgentJob
-            # Report-producing one-shot roles (investigation, repo_analysis)
-            # finish with no diff — worktree is wiped and the artifact
-            # lives on task.extra. Route those to the unified
-            # /jobs/<id> viewer (markdown + chat for follow-ups). If
-            # somehow there's no linked job, fall back to the legacy
-            # /tasks/<id>/report route which redirects when it can.
-            task_type = task.type if task else None
-            is_report_task = task_type in ("investigation", "repo_analysis")
-            linked_job = None
-            if is_report_task and memo_kind == "agent_ready":
-                linked_job = (
-                    _AgentJob.query
-                    .filter_by(source_task_id=task_id)
-                    .order_by(_AgentJob.created_at.desc())
-                    .first()
-                )
-            if memo_kind == "agent_ready" and is_report_task:
-                report_route = (
-                    f"/jobs/{linked_job.id}" if linked_job
-                    else f"/tasks/{task_id}/report"
-                )
-                cta = ("View report", "open", report_route)
-            else:
-                # agent_stuck routes to /agents — there's no per-task
-                # detail page for non-review/non-coding tasks, and
-                # /agents is where the message thread + reply surface
-                # already live. /tasks/<id> on its own is a 404.
-                cta = {
-                    "agent_ready": ("Review diff", "review", f"/tasks/{task_id}/review"),
-                    "agent_stuck": ("Help out", "open", "/agents"),
-                    "agent_plan": ("Review plan", "review", f"/tasks/{task_id}/plan"),
-                }[memo_kind]
-            create_memo(
-                kind=memo_kind,
-                category="waiting",
-                title=f"{agent_name} {type_label}: {preview}",
-                body=content,
-                url=pr_url or cta[2],
-                cta_label=cta[0],
-                cta_action=cta[1],
-                priority=priority,
-                source_agent_id=task.assigned_agent_id if task else None,
-                source_task_id=task_id,
-                extra={
-                    "task_id": task_id,
-                    "agent_id": task.assigned_agent_id if task else None,
-                    "message_type": message_type,
-                    "pr_url": pr_url,
-                    "original_ask": original_ask[:500],
-                    "original_non_goals": original_non_goals[:500] if original_non_goals else "",
-                    "asked_at": asked_at_iso,
-                    "review_url": cta[2],
-                },
-            )
-        else:
-            from planet_maiko.models.pupdate import Pupdate
-            pupdate = Pupdate(
-                id=f"agent-msg-{task_id}-{uuid.uuid4().hex[:8]}",
-                source="maiko",
-                source_id=f"agent-msg/{task_id}/{msg.id or uuid.uuid4().hex[:8]}",
-                type=pupdate_type,
-                priority=priority,
-                title=f"{agent_name} {type_label}: {preview}",
-                body=content,
-                actionable=True,
-                action_hint=action_hint,
-                url=pr_url,
-                tags=[task_id, "agent-message"],
-                extra={
-                    "task_id": task_id,
-                    "agent_id": task.assigned_agent_id if task else None,
-                    "message_type": message_type,
-                    "pr_url": pr_url,
-                    "original_ask": original_ask[:500],
-                    "original_non_goals": original_non_goals[:500] if original_non_goals else "",
-                    "asked_at": asked_at_iso,
-                },
-                brain_processed=True,
-            )
-            db.session.add(pupdate)
-
-    # Agent reporting it just opened a PR (in response to an
-    # approved message from the user). Parse the URL out of the
-    # content and pin it onto the task so the rest of the pipeline
-    # (pr_review_commented, _complete_review_task on merge) can
-    # match comments / merges back to this task.
-    if data.get("message_type") == "pr_opened":
-        import re as _re
-        from planet_maiko.models.task import Task as _Task
-        content = data.get("content", "")
-        match = _re.search(r"https?://[^\s]+", content or "")
-        if match:
-            pr_url = match.group(0).rstrip(".,;")
-            _task = db.session.get(_Task, task_id)
-            if _task:
-                _extra = dict(_task.extra or {})
-                _extra["pr_url"] = pr_url
-                _task.url = pr_url
-                _task.extra = _extra
-                logger.info(f"[outbox] Stored pr_url for {task_id}: {pr_url}")
-
-    # If feedback message, create a training signal with code context
-    if data.get("message_type") == "feedback":
-        metadata = data.get("metadata", {})
-        category = metadata.get("feedback_category", "pattern")
-        severity = metadata.get("feedback_severity", "suggestion")
-
-        # Grab the most recent agent output as code context
-        recent_agent_msg = (
-            AgentMessage.query
-            .filter_by(task_id=task_id, direction="from_agent")
-            .order_by(AgentMessage.created_at.desc())
-            .first()
-        )
-        code_context = recent_agent_msg.content[:3000] if recent_agent_msg else None
-
-        from planet_maiko.models.signal import Signal
-        signal = Signal(
-            category=category,
-            text=data["content"],
-            source_type="session_feedback",
-            severity=severity,
-            repo=_get_repo_for_task(task_id),
-            file_path=metadata.get("file_path"),
-            code_context=code_context,
-            # Session feedback carries an explicit category from the
-            # agent — skip re-synthesis.
-            synthesized=True,
-            source_message_id=msg.id,
-        )
-        db.session.add(signal)
+        handle_task_insight(task_id, task, msg, data)
+    emit_user_facing_signal(task_id, task, msg, data, message_type)
+    if message_type == "pr_opened":
+        handle_pr_opened(task_id, data)
+    if message_type == "feedback":
+        handle_session_feedback(task_id, msg, data, _get_repo_for_task)
 
     db.session.commit()
     return jsonify(msg.to_dict()), 201
+
+
 
 
 def _get_repo_for_task(task_id):
