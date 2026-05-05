@@ -47,6 +47,12 @@ logger = logging.getLogger(__name__)
 # so every Flask request thread shares it.
 _overview_lock = threading.Lock()
 
+# Tracks whether a background regen is currently in flight. Module-
+# global so a stale-cache GET on Home doesn't queue a second regen
+# behind the first one — the user just gets the stale cache while
+# the running thread finishes.
+_regen_in_flight = threading.Event()
+
 # Absolute cap on cache age — regenerate once we pass this. The Pack
 # Requests widget handles real-time actionable signals (agent plans,
 # reviews, stuck agents, PR re-requests) directly, so the overview
@@ -909,38 +915,91 @@ def _generate_overview_locked():
     return parsed
 
 
+def _placeholder_overview():
+    """Minimal overview shape for the no-cache-yet case. Frontend
+    renders this without crashing while the first real generation
+    catches up on a daemon thread."""
+    return {
+        "greeting": "Hi 🐾",
+        "summary": "Maiko is preparing your overview — refresh in a minute.",
+        "focus": [],
+        "needs": [],
+        "alive": "",
+        "custom_section": "",
+        "closing": "",
+        "sprite": None,
+        "overnight": [],
+    }
+
+
+def _regen_in_background(app):
+    """Spawn the (slow) overview regeneration on a daemon thread so
+    GET /api/home/overview never blocks on it. Idempotent — returns
+    fast if a regen is already in flight, so a flurry of stale-cache
+    requests can't queue up parallel LLM runs."""
+    if _regen_in_flight.is_set():
+        return
+    _regen_in_flight.set()
+
+    def _runner():
+        try:
+            with app.app_context():
+                with _overview_lock:
+                    _generate_overview_locked()
+        except Exception as e:
+            logger.warning("[overview] background regen failed: %s", e)
+        finally:
+            _regen_in_flight.clear()
+
+    threading.Thread(
+        target=_runner, daemon=True, name="overview-regen"
+    ).start()
+
+
 def get_latest_overview(max_age_hours=DEFAULT_MAX_AGE_HOURS):
-    """Return the most recent overview, regenerating if stale / missing.
+    """Return the most recent overview without ever blocking on regen.
+
+    Three cases:
+      - Fresh cache: return as-is, stale=False.
+      - Stale cache: return the stale data immediately (stale=True)
+        and kick a background regen so the next read sees the fresh
+        version. Better to let the user keep working with yesterday's
+        narrative than to hang the request for ~1-2 minutes on a
+        full pre-poll + cycle + LLM round-trip.
+      - No cache (first load on a fresh install): return a
+        placeholder shape, kick regen, and let the frontend poll.
 
     Single staleness trigger: cache older than ``max_age_hours``
-    (default 4). The Pack Requests widget handles real-time actionable
-    signals, so the overview doesn't regen early on incoming pupdates
-    — it's a rolling narrative, not an alert surface.
-
-    Double-checked locking: if two requests both find the cache stale,
-    they race to acquire `_overview_lock`. The winner regenerates; the
-    loser wakes up to a fresh cache and returns it without a second LLM
-    run. Without this, the first overview of the day used to generate
-    twice when the page mount + a follow-up nav both fired during the
-    first 1-2 minute regen.
+    (default 4). The Pack Requests widget handles real-time
+    actionable signals, so the overview doesn't regen early on
+    incoming pupdates — it's a rolling narrative, not an alert surface.
 
     Returns:
-        dict with:
-            overview: the parsed JSON the LLM produced
-            generated_at: ISO timestamp the cache file was written
-            stale: True iff we had to regenerate on this call
+        dict with overview / generated_at / stale.
     """
+    from flask import current_app
+
     generated_at, overview = _read_cached_overview()
     if overview is not None and not _iso_is_stale(generated_at, max_age_hours):
         return {"overview": overview, "generated_at": generated_at, "stale": False}
 
-    with _overview_lock:
-        # Re-read after the lock: another thread may have regenerated
-        # while we were waiting on it.
-        generated_at, overview = _read_cached_overview()
-        if overview is not None and not _iso_is_stale(generated_at, max_age_hours):
-            return {"overview": overview, "generated_at": generated_at, "stale": False}
+    # Stale or missing — fire regen async and serve what we have now.
+    try:
+        _regen_in_background(current_app._get_current_object())
+    except Exception as e:
+        # No app context (e.g. CLI invocation). Fall through to the
+        # synchronous path below; nothing else can run the regen.
+        logger.debug("[overview] async regen unavailable: %s", e)
+        with _overview_lock:
+            parsed = _generate_overview_locked()
+            fresh_at, _ = _read_cached_overview()
+            return {"overview": parsed, "generated_at": fresh_at, "stale": True}
 
-        parsed = _generate_overview_locked()
-        fresh_at, _ = _read_cached_overview()
-        return {"overview": parsed, "generated_at": fresh_at, "stale": True}
+    if overview is not None:
+        return {"overview": overview, "generated_at": generated_at, "stale": True}
+
+    return {
+        "overview": _placeholder_overview(),
+        "generated_at": None,
+        "stale": True,
+    }

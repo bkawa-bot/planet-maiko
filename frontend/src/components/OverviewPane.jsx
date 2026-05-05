@@ -125,6 +125,11 @@ export default function OverviewPane() {
     }).length;
   }, [memos]);
 
+  // Tracks whether the overview we're currently rendering is stale —
+  // backend now serves stale-or-placeholder immediately and regens on
+  // a daemon thread, so the frontend should poll until it lands fresh.
+  const [overviewStale, setOverviewStale] = useState(false);
+
   const fetchAll = async () => {
     setLoading(true);
     setError(null);
@@ -140,6 +145,7 @@ export default function OverviewPane() {
       ]);
       setOverview(overviewRes.overview);
       setGeneratedAt(overviewRes.generated_at);
+      setOverviewStale(!!overviewRes.stale_triggered_regen);
       setMemos(memoRes || []);
       setTasks(taskRes);
       setProjects(projectRes || []);
@@ -153,6 +159,37 @@ export default function OverviewPane() {
     }
     setLoading(false);
   };
+
+  // Background regen poll: when the cached overview comes back stale,
+  // the backend kicks a regen thread. Poll the GET endpoint on a soft
+  // cadence until it responds with stale=false (regen landed), then
+  // stop. Frontend doesn't need to wait synchronously for the LLM.
+  useEffect(() => {
+    if (!overviewStale) return;
+    let cancelled = false;
+    const POLL_MS = 30_000;
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        const res = await api.getHomeOverview();
+        if (cancelled) return;
+        if (res?.overview) {
+          setOverview(res.overview);
+          setGeneratedAt(res.generated_at);
+        }
+        if (!res?.stale_triggered_regen) {
+          setOverviewStale(false);
+          return;
+        }
+      } catch { /* try again next tick */ }
+      if (!cancelled) setTimeout(tick, POLL_MS);
+    };
+    const timer = setTimeout(tick, POLL_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [overviewStale]);
 
   const refresh = async () => {
     setRefreshing(true);
