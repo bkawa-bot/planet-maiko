@@ -68,13 +68,21 @@
   font-weight: 900;
   letter-spacing: 3px;
   font-family: var(--font-mono);
-  /* Solid contrast color instead of the previous pink/orange gradient
-     text-fill — that gradient blended into the topbar on every theme
-     whose gradient included pink (cherry-blossom, light, sunset, etc).
-     Soft drop-shadow keeps the brand readable even when a gradient
-     stop happens to match var(--text). */
-  color: var(--text);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  /* Restored shimmer — gradient text-fill that animates across the
+     letters. The previous solid-color attempt was readable but lost
+     the personality. Two safeguards keep it legible against any
+     topbar gradient: (a) a drop-shadow filter wraps the text shape
+     itself (works with text-fill: transparent, unlike text-shadow),
+     and (b) light themes flip the shadow to a warm halo so it
+     doesn't sit as a dark blob on pastels. */
+  background: linear-gradient(90deg, var(--pink), var(--orange), var(--peach), var(--pink));
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: shimmer 3s ease-in-out infinite;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
 }
 
 [data-theme="light"] .topbar-planet,
@@ -83,7 +91,12 @@
 [data-theme="cherry-blossom"] .topbar-planet,
 [data-theme="mint-meadow"] .topbar-planet,
 [data-theme="coral-reef"] .topbar-planet,
-[data-theme="lavender-dream"] .topbar-planet,
+[data-theme="lavender-dream"] .topbar-planet {
+  /* Light themes get a softer halo — a heavy dark drop-shadow on a
+     pastel background reads as a smudge. */
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.55);
+}
+
 [data-theme="light"] .topbar-maiko,
 [data-theme="morning"] .topbar-maiko,
 [data-theme="dawn-mist"] .topbar-maiko,
@@ -91,10 +104,9 @@
 [data-theme="mint-meadow"] .topbar-maiko,
 [data-theme="coral-reef"] .topbar-maiko,
 [data-theme="lavender-dream"] .topbar-maiko {
-  /* Light themes need a white-ish glow under the dark text, not a
-     dark drop-shadow — otherwise the shadow sits as a dark halo on
-     a pastel background. */
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.55);
+  /* Light themes: soft warm halo under the gradient text instead of
+     a hard dark shadow, so the brand glows rather than smudges. */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
 }
 
 .topbar-right {
