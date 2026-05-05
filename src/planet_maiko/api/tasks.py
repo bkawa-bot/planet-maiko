@@ -232,118 +232,113 @@ def cancel_task(task_id):
 
 @tasks_bp.route("/tasks/<task_id>/launch", methods=["POST"])
 def launch_task(task_id):
-    """Start the assigned agent's work on this task NOW.
+    """Enqueue an AgentJob for an already-assigned task.
 
-    Kicks off the same headless agent flow as /agents/assign, but
-    against the existing assignment — used by the "Launch" button on
-    tasks that were assigned (e.g. via project plan approval) without
-    a kickoff, or where the initial kickoff failed or the agent was
-    reassigned.
-
-    Branches on task type:
-      - Coding tasks → kickoff_coding_task (prep worktree if needed,
-        start claude --print in it)
-      - One-shot tasks (investigation / cartograph / repo_analysis /
-        review) → prep worktree + _kickoff_agent_headless with the
-        role's protocol
+    Used by the Launch button on tasks that were assigned (e.g. via
+    project plan approval) without a kickoff, or where the initial
+    kickoff failed and the user wants another go. Same unified
+    AgentJob → execute_jobs path as /agents/assign — no inline
+    kickoff. The brain cycle prepares the worktree and fires the
+    agent on the next tick.
 
     Optional body: `{ plan_first: bool }` — only honored for coding
-    tasks (one-shot agents don't have a plan step).
+    tasks (one-shot agents don't have a plan step). Persisted on
+    job.extra so execute_jobs reads it back.
     """
     task = db.get_or_404(Task, task_id)
     data = request.get_json(silent=True) or {}
+
+    if not task.assigned_agent_id:
+        return jsonify({"error": "no agent assigned"}), 400
+
     plan_first = data.get("plan_first")
     if plan_first is None:
         plan_first = bool((task.extra or {}).get("plan_first"))
+    plan_first = bool(plan_first)
 
-    result = _launch_task(task, plan_first=bool(plan_first))
+    result = _enqueue_task_job(task, plan_first=plan_first)
     if not result.get("success"):
         return jsonify({"error": result.get("error", "Launch failed")}), 400
-    return jsonify({"mode": result.get("mode", "coding"), "launch_result": result}), 200
+    return jsonify({"mode": result.get("mode"), "job_id": result.get("job_id")}), 200
 
 
-def _launch_task(task, plan_first=False):
-    """Route a launch to the right kickoff path based on task type.
+def _enqueue_task_job(task, plan_first=False):
+    """Find or create an AgentJob for `task` and queue it for the cycle.
 
-    Returns {"success": bool, "error": str?, "mode": str, ...}.
-    Commits the session on success — caller doesn't need to.
+    Shared helper for the launch endpoint and the projects plan-approve
+    flow. Returns {success, mode (=role), job_id, error?}.
     """
-    from planet_maiko.agents.brain_session import ONE_SHOT_ROLE_FOR_TYPE
+    import uuid as _uuid
+    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.models.agent_job import AgentJob
+    from planet_maiko.orchestration import resolve_repo_path, scope_for_task
 
     if not task.assigned_agent_id:
         return {"success": False, "error": "no agent assigned"}
-
-    if task.type in ONE_SHOT_ROLE_FOR_TYPE:
-        return _launch_one_shot(task)
-
-    from planet_maiko.agents.coding_agent import kickoff_coding_task
-    result = kickoff_coding_task(task, plan_first=plan_first)
-    result = dict(result or {})
-    result.setdefault("mode", "coding")
-    return result
-
-
-def _launch_one_shot(task):
-    """Prep worktree if missing, then kickoff the one-shot headless run.
-
-    Mirrors the investigation/cartographer path in /agents/assign — the
-    difference is we already have an assigned agent (so no profile
-    lookup from the request) and we re-prep a fresh worktree if the
-    previous one was cleared (e.g. after reassign).
-    """
-    import os
-    from planet_maiko.models.agent_profile import AgentProfile
-    from planet_maiko.orchestration import resolve_repo_path, scope_for_task, build_task_prompt
-    from planet_maiko.agents.coding_agent import prepare, _kickoff_agent_headless
 
     profile = db.session.get(AgentProfile, task.assigned_agent_id)
     if not profile:
         return {"success": False, "error": "assigned agent not found"}
 
-    role = profile.role or "investigation"
-    working_path = (task.extra or {}).get("working_path")
+    role = profile.role or "coding"
+    scope_repo = scope_for_task(task)
+    # Coding tasks may have a user-picked repo_path baked into
+    # task.extra from the original assign. One-shot roles resolve
+    # from scope.
+    repo_path = (task.extra or {}).get("repo_path")
+    if not repo_path:
+        repo_path = resolve_repo_path(scope_repo)
+    if role != "coding" and not repo_path:
+        return {"success": False, "error": f"no local clone found for {scope_repo or 'this task'}"}
 
-    if not working_path or not os.path.isdir(working_path):
-        repo = scope_for_task(task)
-        local_path = resolve_repo_path(repo)
-        if not local_path:
-            return {"success": False, "error": f"no local clone found for {repo or 'this task'}"}
+    job_extra_seed = {
+        "repo_path": repo_path,
+        "plan_first": plan_first if role == "coding" else False,
+    }
+    if (task.extra or {}).get("specialty_id"):
+        job_extra_seed["specialty_id"] = task.extra["specialty_id"]
+    job_extra_seed = {k: v for k, v in job_extra_seed.items() if v}
 
-        full_prompt = build_task_prompt(task, role, "")
-        prep_result = prepare(
-            task_id=task.id,
-            task_title=task.title,
-            prompt=full_prompt,
-            repo_path=local_path,
-            branch_prefix="maiko",
+    existing = AgentJob.query.filter_by(source_task_id=task.id).first()
+    if existing and existing.status in ("queued", "pending_approval", "failed"):
+        job = existing
+        job.status = "queued"
+        job.error = None
+        job.finished_at = None
+        if not job.agent_profile_id:
+            job.agent_profile_id = profile.id
+        merged = dict(job.extra or {})
+        merged.update(job_extra_seed)
+        job.extra = merged
+    else:
+        job = AgentJob(
+            id=f"job-{_uuid.uuid4().hex[:10]}",
+            kind=task.type,
+            title=task.title,
+            description=(task.extra or {}).get("description") or (task.extra or {}).get("body"),
+            scope_repo=scope_repo,
+            priority=task.priority or "normal",
+            created_by="user",
+            source_task_id=task.id,
             agent_profile_id=profile.id,
-            role=role,
+            requires_approval=False,
+            approved_at=datetime.now(timezone.utc),
+            approved_by="user",
+            status="queued",
+            extra=job_extra_seed,
         )
-        if not prep_result:
-            return {"success": False, "error": "failed to prepare worktree"}
-        working_path = prep_result.get("working_path")
-        extra = dict(task.extra or {})
-        if working_path:
-            extra["working_path"] = working_path
-        if prep_result.get("branch"):
-            extra["branch"] = prep_result.get("branch")
-        task.extra = extra
+        db.session.add(job)
 
+    db.session.flush()
+    extra = dict(task.extra or {})
+    extra["agent_job_id"] = job.id
+    task.extra = extra
     if task.status in ("new", "blocked"):
         task.status = "in_progress"
     task.updated_at = datetime.now(timezone.utc)
     db.session.commit()
 
-    kickoff = _kickoff_agent_headless(
-        profile.id, working_path, task.id,
-        branch_name=None, plan_first=False, role=role,
-    )
-    return {
-        "success": True,
-        "mode": role,
-        "kickoff": kickoff,
-        "working_path": working_path,
-    }
+    return {"success": True, "mode": role, "job_id": job.id}
 
 
 @tasks_bp.route("/tasks/<task_id>/reassign", methods=["POST"])

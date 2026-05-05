@@ -20,10 +20,10 @@ This package was split out of the original 1300-line coding_agent.py:
     .scaffold   — TASK.md / CLAUDE.md / .mcp.json authoring
     .kickoff    — `_kickoff_agent_headless`
 
-The high-level orchestrators (`prepare`, `kickoff_coding_task`,
-`list_prepared`) live here, plus re-exports of the public API so
-existing `from planet_maiko.agents.coding_agent import X` calls
-keep working without churn at every call site.
+The high-level orchestrators (`prepare`, `list_prepared`) live
+here, plus re-exports of the public API so existing
+`from planet_maiko.agents.coding_agent import X` calls keep
+working without churn at every call site.
 """
 
 import logging
@@ -207,106 +207,6 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
             "claude_code": f'cd {working_path} && claude "Read TASK.md and CLAUDE.md. Begin working on the task."',
             "manual": f"cd {working_path} && cat TASK.md",
         },
-    }
-
-
-def kickoff_coding_task(task, *, plan_first=False, branch_name=None):
-    """Prepare a worktree and fire the headless agent for a coding task.
-
-    Resolves repo_path from the task's scope, builds a rich prompt (task
-    title + source pupdate body + project description + task detail),
-    sets up the worktree via `prepare()`, then calls
-    `_kickoff_agent_headless()`. Stores working_path + branch on
-    task.extra so the UI can tell a task has been launched and the
-    "Launch" button can hide itself.
-
-    Returns a dict: {success: bool, error?: str, working_path?: str,
-    branch?: str, kickoff?: dict}. Never raises — callers get a stable
-    shape so batch callers (approve_plan) don't have to wrap each call
-    in try/except.
-    """
-    from planet_maiko.database import db
-    from planet_maiko.models.agent_profile import AgentProfile
-    from planet_maiko.models.pupdate import Pupdate
-    from planet_maiko.models.project import Project
-    from planet_maiko.orchestration import resolve_repo_path, scope_for_task
-    from planet_maiko.config import load_config
-
-    if not task.assigned_agent_id:
-        return {"success": False, "error": "No agent assigned"}
-    agent = db.session.get(AgentProfile, task.assigned_agent_id)
-    if not agent:
-        return {"success": False, "error": "Assigned agent no longer exists"}
-    if agent.role != "coding":
-        return {"success": False, "error": f"{agent.role} agents run autonomously — no manual launch"}
-
-    repo = scope_for_task(task)
-    repo_path = (task.extra or {}).get("repo_path") or resolve_repo_path(repo)
-    if not repo_path:
-        return {"success": False, "error": f"No local clone found for {repo or 'this task'}. Set agents.repo_roots in Settings."}
-    if not os.path.isdir(repo_path):
-        return {"success": False, "error": f"Repository path not found: {repo_path}"}
-    if not os.path.isdir(os.path.join(repo_path, ".git")):
-        return {"success": False, "error": f"Not a git repository: {repo_path}"}
-
-    prompt_parts = [task.title]
-    if task.source_pupdate_id:
-        source = db.session.get(Pupdate, task.source_pupdate_id)
-        if source and source.body:
-            prompt_parts.append(f"\n## Source Context\n\n{source.body}")
-        if source and source.url:
-            prompt_parts.append(f"\nSource URL: {source.url}")
-    if task.project_id:
-        project = db.session.get(Project, task.project_id)
-        if project and project.description:
-            prompt_parts.append(f"\n## Project: {project.title}\n\n{project.description}")
-    extra_desc = (task.extra or {}).get("description")
-    if extra_desc:
-        prompt_parts.append(f"\n## Task details\n\n{extra_desc}")
-    if task.url:
-        prompt_parts.append(f"\nTask URL: {task.url}")
-    if task.tags:
-        prompt_parts.append(f"\nTags: {', '.join(task.tags)}")
-    full_prompt = "\n".join(prompt_parts)
-
-    branch_prefix = branch_name or (load_config().get("agents", {}) or {}).get("branch_prefix", "maiko")
-
-    try:
-        prep_result = prepare(
-            task_id=task.id,
-            task_title=task.title,
-            prompt=full_prompt,
-            repo_path=repo_path,
-            branch_prefix=branch_prefix,
-            agent_profile_id=agent.id,
-            role="coding",
-        )
-    except Exception as e:
-        return {"success": False, "error": f"Prepare failed: {e}"}
-    if not prep_result:
-        return {"success": False, "error": "Prepare failed"}
-
-    branch = prep_result.get("branch")
-    working_path = prep_result.get("working_path")
-
-    kickoff = _kickoff_agent_headless(
-        agent.id, working_path, task.id,
-        plan_first=plan_first,
-    )
-
-    new_extra = dict(task.extra or {})
-    new_extra["working_path"] = working_path
-    new_extra["branch"] = branch
-    if plan_first:
-        new_extra["plan_first"] = True
-    task.extra = new_extra
-    db.session.commit()
-
-    return {
-        "success": True,
-        "working_path": working_path,
-        "branch": branch,
-        "kickoff": kickoff,
     }
 
 
