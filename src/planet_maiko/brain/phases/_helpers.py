@@ -10,6 +10,27 @@ from datetime import datetime, timezone
 logger = logging.getLogger(__name__)
 
 
+def _bump_agent_failed(agent_profile_id):
+    """Increment the agent profile's tasks_failed counter. No-op when
+    the profile id is unknown (stray job with no assigned agent).
+    Caller is responsible for committing the session.
+
+    Both _phase_spawn_jobs_for_tasks and _phase_execute_agent_jobs
+    need this — it lives here rather than in either of those so
+    execute_jobs doesn't have to reach into spawn_jobs (which used
+    to cause a NameError on every kickoff failure path because
+    execute_jobs called the function without importing it; the
+    cycle's outer except swallowed it and the job stayed queued).
+    """
+    if not agent_profile_id:
+        return
+    from planet_maiko.models.agent_profile import AgentProfile as _AP
+    from planet_maiko.database import db as _db
+    prof = _db.session.get(_AP, agent_profile_id)
+    if prof is not None:
+        prof.tasks_failed = (prof.tasks_failed or 0) + 1
+
+
 def _emit_missing_clone_pupdate(task, repo):
     """Surface "I can't find a local clone for this repo" as an
     actionable pupdate, dedup'd by repo so the user gets one entry

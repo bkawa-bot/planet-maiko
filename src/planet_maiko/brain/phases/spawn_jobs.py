@@ -111,17 +111,10 @@ def _phase_spawn_jobs_for_tasks():
         return {"spawned": 0, "error": str(e)}
 
 
-def _bump_agent_failed(agent_profile_id):
-    """Increment the agent profile's tasks_failed counter. No-op when
-    the profile id is unknown (stray job with no assigned agent).
-    Caller is responsible for committing the session."""
-    if not agent_profile_id:
-        return
-    from planet_maiko.models.agent_profile import AgentProfile as _AP
-    from planet_maiko.database import db as _db
-    prof = _db.session.get(_AP, agent_profile_id)
-    if prof is not None:
-        prof.tasks_failed = (prof.tasks_failed or 0) + 1
+# _bump_agent_failed moved to phases/_helpers.py since execute_jobs
+# also needs it. Re-exported here for backwards compat with any
+# import that landed before the move.
+from ._helpers import _bump_agent_failed  # noqa: F401
 
 
 def _execute_lightweight_specialty(job, specialty):

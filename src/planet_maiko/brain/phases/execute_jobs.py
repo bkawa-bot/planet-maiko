@@ -9,6 +9,8 @@ import logging
 import re
 from datetime import datetime, timezone
 
+from ._helpers import _bump_agent_failed
+
 logger = logging.getLogger(__name__)
 
 # https://github.com/<org>/<repo>/pull/<number> — capture the trailing
