@@ -12,216 +12,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _ensure_columns():
-    """Add columns and drop dead tables that db.create_all() won't manage."""
-    migrations = [
-        "ALTER TABLE tasks ADD COLUMN assigned_agent_id VARCHAR(128)",
-        "ALTER TABLE tasks ADD COLUMN due_date VARCHAR(20)",
-        "ALTER TABLE tasks ADD COLUMN depends_on JSON DEFAULT '[]'",
-        "ALTER TABLE custom_skills ADD COLUMN schedule_interval_minutes INTEGER",
-        "ALTER TABLE custom_skills ADD COLUMN creates_pupdates BOOLEAN DEFAULT 0",
-        "ALTER TABLE custom_skills ADD COLUMN needs_worktree BOOLEAN DEFAULT 0",
-        "ALTER TABLE custom_skills ADD COLUMN last_run_at DATETIME",
-        "ALTER TABLE signals ADD COLUMN code_context TEXT",
-        "ALTER TABLE signals ADD COLUMN incorporated_at DATETIME",
-        "ALTER TABLE signals ADD COLUMN examples JSON DEFAULT '[]'",
-        "ALTER TABLE signals ADD COLUMN synthesized BOOLEAN DEFAULT 0",
-        # Stable source-system id for dedup. Synthesis mutates signal.text,
-        # so the older text-based dedup silently failed on re-scrape.
-        "ALTER TABLE signals ADD COLUMN external_id VARCHAR(64)",
-        "CREATE INDEX IF NOT EXISTS ix_signals_external_id ON signals(external_id)",
-        # Preserve the raw comment body before synthesis rewrites
-        # signal.text to a cleaner rule. Used by the provenance UI.
-        "ALTER TABLE signals ADD COLUMN original_text TEXT",
-        "ALTER TABLE learnings ADD COLUMN is_global BOOLEAN DEFAULT 0",
-        # RAG-retrieval fields. violation_description is Claude-generated
-        # text describing what code violates this rule (grounded in
-        # historical signals); violation_embedding is its vector for
-        # cosine similarity at review time.
-        "ALTER TABLE learnings ADD COLUMN violation_description TEXT",
-        "ALTER TABLE learnings ADD COLUMN violation_embedding JSON",
-        "ALTER TABLE learnings ADD COLUMN violation_description_generated_at DATETIME",
-        "ALTER TABLE learnings ADD COLUMN violation_description_signal_count INTEGER",
-        "ALTER TABLE custom_skills ADD COLUMN user_edited BOOLEAN DEFAULT 0",
-        "ALTER TABLE agent_profiles ADD COLUMN extra JSON DEFAULT '{}'",
-        # Stage-5 unification: rules folded into Automations. New
-        # column distinguishes cycle-level watches from per-pupdate
-        # rules.
-        "ALTER TABLE automations ADD COLUMN execution_scope VARCHAR(20) DEFAULT 'cycle'",
-        # Pupdate.read retired — no inbox, no mark-as-read concept.
-        # SQLite supports DROP COLUMN since 3.35 (2021). Wrap in try/
-        # except upstream in case the runtime is older.
-        "ALTER TABLE pupdates DROP COLUMN read",
-        "ALTER TABLE agent_profiles ADD COLUMN role VARCHAR(32) DEFAULT 'coding'",
-        "ALTER TABLE agent_profiles ADD COLUMN scope_repo VARCHAR(256)",
-        "ALTER TABLE agent_profiles ADD COLUMN instructions TEXT",
-        "ALTER TABLE agent_profiles ADD COLUMN state VARCHAR(16) DEFAULT 'idle'",
-        # Attached specialties — list of CustomSkill IDs. A run picks one
-        # to layer on top of the role protocol; no pick = base role only.
-        "ALTER TABLE agent_profiles ADD COLUMN specialty_ids JSON DEFAULT '[]'",
-        "ALTER TABLE pupdates ADD COLUMN category VARCHAR(16) DEFAULT 'activity'",
-        # Pack Insights ritual: link signals / insights back to the
-        # agent reply they came from so "drop this during review"
-        # can undo them cleanly.
-        "ALTER TABLE signals ADD COLUMN source_message_id INTEGER",
-        "ALTER TABLE insights ADD COLUMN source_message_id INTEGER",
-        # External-orchestrator session registration was removed —
-        # Maiko's own pack is the only thing it tracks now.
-        "DROP TABLE IF EXISTS external_sessions",
-        # Tournament system removed — drop legacy tables if present
-        "DROP TABLE IF EXISTS tournament_entries",
-        "DROP TABLE IF EXISTS tournaments",
-        # Self-specialization scoring removed in favor of LoRA-per-repo;
-        # ContextSelection was only ever read by the now-gone
-        # record_task_outcome / record_session_feedback functions.
-        "DROP TABLE IF EXISTS context_selections",
-        # Legacy autonomy — AgentGoal rows were migrated into
-        # Automations in a previous release. Table is inert; drop
-        # explicitly so fresh installs never materialize it.
-        "DROP TABLE IF EXISTS agent_goals",
-        # SkillResult was the old DB-backed cache for skill output.
-        # Graduated out during the Memo refactor (skill_result memos
-        # + home-overview file cache). Nothing reads it anymore.
-        "DROP TABLE IF EXISTS skill_results",
-        # LoRA eval persistence — one row per evaluate_adapter() call.
-        # db.create_all() handles fresh installs; explicit CREATE
-        # covers existing DBs where the model was registered after
-        # first boot.
-        (
-            "CREATE TABLE IF NOT EXISTS adapter_evals ("
-            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-            "adapter_path VARCHAR(1024) NOT NULL, "
-            "adapter_version VARCHAR(256), "
-            "repo VARCHAR(256), "
-            "precision FLOAT NOT NULL DEFAULT 0, "
-            "recall FLOAT NOT NULL DEFAULT 0, "
-            "f1 FLOAT NOT NULL DEFAULT 0, "
-            "tp INTEGER NOT NULL DEFAULT 0, "
-            "fp INTEGER NOT NULL DEFAULT 0, "
-            "fn INTEGER NOT NULL DEFAULT 0, "
-            "tn INTEGER NOT NULL DEFAULT 0, "
-            "test_count INTEGER NOT NULL DEFAULT 0, "
-            "holdout_fraction FLOAT, "
-            "per_category JSON DEFAULT '{}', "
-            "extra JSON DEFAULT '{}', "
-            "created_at DATETIME NOT NULL"
-            ")"
-        ),
-        "CREATE INDEX IF NOT EXISTS ix_adapter_evals_adapter_path ON adapter_evals(adapter_path)",
-        "CREATE INDEX IF NOT EXISTS ix_adapter_evals_repo ON adapter_evals(repo)",
-        "CREATE INDEX IF NOT EXISTS ix_adapter_evals_f1 ON adapter_evals(f1)",
-        "CREATE INDEX IF NOT EXISTS ix_adapter_evals_created_at ON adapter_evals(created_at)",
-    ]
-    for sql in migrations:
-        try:
-            db.session.execute(db.text(sql))
-        except Exception:
-            pass
-
-    # Backfill category for rows that pre-date the column. ACTION_TYPES
-    # lives on the model so this list doesn't drift.
-    try:
-        from planet_maiko.models.pupdate import ACTION_TYPES
-        action_list = ",".join(f"'{t}'" for t in sorted(ACTION_TYPES))
-        db.session.execute(db.text(
-            f"UPDATE pupdates SET category = 'action' "
-            f"WHERE category IS NULL OR category = '' OR "
-            f"(category = 'activity' AND type IN ({action_list}))"
-        ))
-        db.session.execute(db.text(
-            f"UPDATE pupdates SET category = 'activity' "
-            f"WHERE (category IS NULL OR category = '') AND type NOT IN ({action_list})"
-        ))
-    except Exception:
-        pass
-
-    db.session.commit()
-
-
-def _reconcile_agent_profile_counts():
-    """Backfill AgentProfile.tasks_completed / tasks_failed from the
-    actual Task + AgentJob history. The counters only moved via the
-    legacy one-shot Task path historically, so post-Stage D profiles
-    showed stale numbers (most "done" work is on AgentJobs now).
-    Runs once per boot; idempotent since it sets the counters to the
-    computed truth every time.
-    """
-    from planet_maiko.models.agent_profile import AgentProfile
-    from planet_maiko.models.agent_job import AgentJob
-    from planet_maiko.models.task import Task
-    from sqlalchemy import func
-
-    # Done tasks per profile.
-    done_tasks = dict(
-        Task.query
-        .with_entities(Task.assigned_agent_id, func.count(Task.id))
-        .filter(Task.status == "done")
-        .filter(Task.assigned_agent_id.isnot(None))
-        .group_by(Task.assigned_agent_id)
-        .all()
-    )
-    # Done + failed AgentJobs per profile.
-    done_jobs = dict(
-        AgentJob.query
-        .with_entities(AgentJob.agent_profile_id, func.count(AgentJob.id))
-        .filter(AgentJob.status == "done")
-        .filter(AgentJob.agent_profile_id.isnot(None))
-        .group_by(AgentJob.agent_profile_id)
-        .all()
-    )
-    failed_jobs = dict(
-        AgentJob.query
-        .with_entities(AgentJob.agent_profile_id, func.count(AgentJob.id))
-        .filter(AgentJob.status.in_(("failed", "cancelled")))
-        .filter(AgentJob.agent_profile_id.isnot(None))
-        .group_by(AgentJob.agent_profile_id)
-        .all()
-    )
-
-    fixed = 0
-    for p in AgentProfile.query.all():
-        total_done = done_tasks.get(p.id, 0) + done_jobs.get(p.id, 0)
-        total_failed = failed_jobs.get(p.id, 0)
-        if p.tasks_completed != total_done or p.tasks_failed != total_failed:
-            p.tasks_completed = total_done
-            p.tasks_failed = total_failed
-            fixed += 1
-    if fixed:
-        db.session.commit()
-        logger.info(
-            f"[startup] Reconciled done/failed counts on {fixed} agent profile(s)"
-        )
-
-
-def _reconcile_learning_signal_counts():
-    """Backfill Learning.signal_count from the actual Signal rows.
-
-    Historical cluster merges and dismissals left many learnings with a
-    cached signal_count that no longer matched reality — users saw
-    "2 signals" on a card but got an empty list on drill-down.
-    Re-sync on startup so the row count and the expansion agree.
-    """
-    from planet_maiko.models.learning import Learning
-    from planet_maiko.models.signal import Signal
-    from sqlalchemy import func
-
-    actual = dict(
-        Signal.query
-        .with_entities(Signal.learning_id, func.count(Signal.id))
-        .filter(Signal.learning_id.isnot(None))
-        .group_by(Signal.learning_id)
-        .all()
-    )
-
-    fixed = 0
-    for l in Learning.query.all():
-        real = actual.get(l.id, 0)
-        if l.signal_count != real:
-            l.signal_count = real
-            fixed += 1
-    if fixed:
-        db.session.commit()
-        logger.info(f"[startup] Reconciled signal_count on {fixed} learning(s)")
 
 
 def create_app(start_scheduler=False):
@@ -327,10 +117,11 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.agent_job import AgentJob  # noqa: F401
         from planet_maiko.models.memo import Memo  # noqa: F401
         from planet_maiko.models.adapter_eval import AdapterEval  # noqa: F401
+        # Fresh-DB shape: every model registered above gets its table
+        # via SQLAlchemy. No schema migrations — Maiko targets new
+        # installs only, and the legacy ALTER TABLE / DROP TABLE
+        # cleanup it used to do is gone.
         db.create_all()
-
-        # Schema migrations for existing DBs (SQLite ALTER TABLE is safe)
-        _ensure_columns()
 
         # Seed default skills on first run
         from planet_maiko.agents.skills import seed_defaults
@@ -351,14 +142,6 @@ def create_app(start_scheduler=False):
             ensure_seed_rule_automations()
         except Exception as e:
             logger.warning(f"[startup] Rule automation seeding skipped: {e}")
-        try:
-            _reconcile_learning_signal_counts()
-        except Exception as e:
-            logger.warning(f"[startup] Learning signal-count reconcile skipped: {e}")
-        try:
-            _reconcile_agent_profile_counts()
-        except Exception as e:
-            logger.warning(f"[startup] Agent profile count reconcile skipped: {e}")
         try:
             ensure_plugin_default_automations()
         except Exception as e:
