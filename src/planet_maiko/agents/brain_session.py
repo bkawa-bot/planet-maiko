@@ -63,10 +63,14 @@ def run_skill(skill_name, context=None, working_dir=None):
     # Skills can take longer - give them more time
     timeout = 600 if skill_name in ("investigate", "repo-analysis") else 120
 
-    from planet_maiko.agents.routing import resolve_model
+    from planet_maiko.agents.routing import resolve_model, resolve_effort
     # Release DB before long LLM call to avoid SQLite locks
     db.session.close()
-    result = runtime.send(prompt, working_dir=working_dir, timeout=timeout, model=resolve_model(f"skill:{skill_name}"))
+    task_type = f"skill:{skill_name}"
+    result = runtime.send(
+        prompt, working_dir=working_dir, timeout=timeout,
+        model=resolve_model(task_type), effort=resolve_effort(task_type),
+    )
 
     # Auto-save investigation results as pupdates for easy review
     if skill_name == "investigate" and result.get("success"):
@@ -168,10 +172,12 @@ def run_skill_as_agent(agent_profile_id, skill_name, context=None, working_dir=N
     full_prompt = preamble + protocol + team_role + prompt
 
     timeout = 600 if skill_name in ("investigate", "repo-analysis") else 120
-    from planet_maiko.agents.routing import resolve_model
+    from planet_maiko.agents.routing import resolve_model, resolve_effort
     db.session.close()
+    task_type = f"skill:{skill_name}"
     result = runtime.send(full_prompt, working_dir=working_dir, timeout=timeout,
-                          model=resolve_model(f"skill:{skill_name}"),
+                          model=resolve_model(task_type),
+                          effort=resolve_effort(task_type),
                           session_id=session_id,
                           skip_permissions=skip_permissions)
     # Refresh the profile since session closed — update last_active_at.
@@ -377,9 +383,12 @@ def reorder_tasks_with_hint(tasks, instructions):
         "Include every task ID exactly once. No other keys, no commentary."
     )
 
-    from planet_maiko.agents.routing import resolve_model
+    from planet_maiko.agents.routing import resolve_model, resolve_effort
     db.session.close()
-    result = runtime.send_json(prompt, timeout=90, model=resolve_model("skill"))
+    result = runtime.send_json(
+        prompt, timeout=90,
+        model=resolve_model("skill"), effort=resolve_effort("skill"),
+    )
 
     if not result.get("success"):
         return {"success": False, "ordered_ids": [], "error": result.get("error")}

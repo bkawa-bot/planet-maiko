@@ -78,7 +78,7 @@ def dispatch(request: str, context: str = "", non_goals: str = "") -> dict:
             }
     """
     from planet_maiko.agents.brain_session import _get_runtime
-    from planet_maiko.agents.routing import resolve_model
+    from planet_maiko.agents.routing import resolve_model, resolve_effort
     from planet_maiko.agents.skills import get_skill_prompt
     from planet_maiko.models.agent_profile import AgentProfile
 
@@ -110,7 +110,10 @@ def dispatch(request: str, context: str = "", non_goals: str = "") -> dict:
 
     db.session.close()
 
-    result = runtime.send_json(prompt, timeout=45, model=resolve_model("triage"))
+    result = runtime.send_json(
+        prompt, timeout=45,
+        model=resolve_model("triage"), effort=resolve_effort("triage"),
+    )
     if not result.get("success"):
         return {"status": "error", "error": result.get("error", "router call failed")}
 

@@ -191,13 +191,16 @@ def _refresh_creative_note(weather, season, time_bucket, mood):
             _creative_note_cache["next_retry"] = time.time() + 300
             return
 
-        from planet_maiko.agents.routing import resolve_model
+        from planet_maiko.agents.routing import resolve_model, resolve_effort
         prompt = (
             f"Write a single atmospheric sentence (max 20 words) describing this scene: "
             f"{weather} weather, {season}, {time_bucket}, mood: {mood}. "
             f"Be poetic and cozy, like a Studio Ghibli film narrator."
         )
-        result = runtime.send(prompt, timeout=15, model=resolve_model("scene"))
+        result = runtime.send(
+            prompt, timeout=15,
+            model=resolve_model("scene"), effort=resolve_effort("scene"),
+        )
         if result and result.get("success") and result.get("output"):
             text = result["output"].strip().strip('"')
             _creative_note_cache["text"] = text

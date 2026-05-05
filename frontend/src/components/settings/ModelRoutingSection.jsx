@@ -1,18 +1,23 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
+// Each row picks a model tier (haiku/sonnet/opus) and a reasoning
+// effort (low/medium/high/max). Defaults track agents/routing.py:
+// classification + creative work get low effort to save tokens;
+// real engineering work gets high. Users override either column.
 const ROUTING_RULES = [
-  { key: "triage", label: "Triage (pupdate classification)", tier: "haiku" },
-  { key: "classify", label: "Signal classification", tier: "haiku" },
-  { key: "scene", label: "Scene creative note", tier: "haiku" },
-  { key: "conflict_query", label: "Conflict detection", tier: "haiku" },
-  { key: "skill", label: "Skills (default)", tier: "sonnet" },
-  { key: "skill:pr-review", label: "PR Review", tier: "sonnet" },
-  { key: "project_plan", label: "Project planning", tier: "sonnet" },
-  { key: "profile_judge", label: "Task outcome judging", tier: "sonnet" },
-  { key: "training:entry", label: "Training entries", tier: "opus" },
-  { key: "training:judge", label: "Training judging", tier: "opus" },
-  { key: "coding_agent", label: "Coding agents", tier: "opus" },
+  { key: "triage", label: "Triage (pupdate classification)", tier: "haiku", effort: "low" },
+  { key: "classify", label: "Signal classification", tier: "haiku", effort: "low" },
+  { key: "scene", label: "Scene creative note", tier: "haiku", effort: "low" },
+  { key: "conflict_query", label: "Conflict detection", tier: "haiku", effort: "low" },
+  { key: "skill", label: "Skills (default)", tier: "sonnet", effort: "medium" },
+  { key: "skill:pr-review", label: "PR Review", tier: "sonnet", effort: "medium" },
+  { key: "skill:home-overview", label: "Home overview", tier: "opus", effort: "high" },
+  { key: "project_plan", label: "Project planning", tier: "sonnet", effort: "medium" },
+  { key: "profile_judge", label: "Task outcome judging", tier: "sonnet", effort: "medium" },
+  { key: "training:entry", label: "Training entries", tier: "opus", effort: "high" },
+  { key: "training:judge", label: "Training judging", tier: "opus", effort: "high" },
+  { key: "coding_agent", label: "Coding agents", tier: "opus", effort: "high" },
 ];
 
 /**
@@ -53,8 +58,8 @@ export default function ModelRoutingSection({ config, setConfig, updateField }) 
                   <option value="opus">Opus</option>
                 </select>
               </label>
-              <label title="Controls Claude's reasoning depth for every LLM call — triage, clustering, skill runs, AND the autonomous coding/review/investigation agents. Max burns more tokens but produces noticeably better agent output.">
-                Effort
+              <label title="Catch-all effort — applies when a task has no per-rule override below. Tune per-task in the table for finer cost control.">
+                Default effort
                 <select value={config.routing?.thinking_budget || "medium"} onChange={(e) => updateField("routing", "thinking_budget", e.target.value)} className="routing-select">
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
@@ -64,12 +69,13 @@ export default function ModelRoutingSection({ config, setConfig, updateField }) 
               </label>
             </div>
             <div className="routing-rules-table">
-              <div className="routing-rules-header">
+              <div className="routing-rules-header routing-rules-header-3col">
                 <span>Task Type</span>
                 <span>Model</span>
+                <span>Effort</span>
               </div>
-              {ROUTING_RULES.map(({ key, label, tier }) => (
-                <div key={key} className="routing-rule-row">
+              {ROUTING_RULES.map(({ key, label, tier, effort }) => (
+                <div key={key} className="routing-rule-row routing-rule-row-3col">
                   <span className="routing-rule-label">{label}</span>
                   <select
                     className="routing-select"
@@ -82,6 +88,19 @@ export default function ModelRoutingSection({ config, setConfig, updateField }) 
                     <option value="haiku">Haiku</option>
                     <option value="sonnet">Sonnet</option>
                     <option value="opus">Opus</option>
+                  </select>
+                  <select
+                    className="routing-select"
+                    value={(config.routing?.effort_rules || {})[key] || effort}
+                    onChange={(e) => {
+                      const effort_rules = { ...(config.routing?.effort_rules || {}), [key]: e.target.value };
+                      setConfig((c) => ({ ...c, routing: { ...c?.routing, effort_rules } }));
+                    }}
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="max">Max</option>
                   </select>
                 </div>
               ))}

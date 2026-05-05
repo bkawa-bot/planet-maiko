@@ -267,7 +267,7 @@ def _schedule_bio_generation(agent_id, can_rename=True):
         with app.app_context():
             try:
                 from planet_maiko.agents.brain_session import _get_runtime
-                from planet_maiko.agents.routing import resolve_model
+                from planet_maiko.agents.routing import resolve_model, resolve_effort
 
                 runtime = _get_runtime()
                 if not runtime or not runtime.is_available():
@@ -327,6 +327,7 @@ def _schedule_bio_generation(agent_id, can_rename=True):
                     prompt,
                     timeout=240,
                     model=resolve_model("triage"),
+                    effort=resolve_effort("triage"),
                 )
                 success = bool(result and result.get("success"))
                 name, tagline, bio = (None, None, None)

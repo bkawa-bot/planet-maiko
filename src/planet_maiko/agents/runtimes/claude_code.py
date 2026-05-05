@@ -132,7 +132,7 @@ class ClaudeCodeRuntime:
         env["ENABLE_PROMPT_CACHING_1H"] = "1"
         return env
 
-    def send(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None, session_id=None, skip_permissions=False, permission_mode=None):
+    def send(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None, session_id=None, skip_permissions=False, permission_mode=None, effort=None):
         """Send a prompt to claude CLI in print mode.
 
         Uses --print for single prompt/response (no interactive session).
@@ -182,8 +182,11 @@ class ClaudeCodeRuntime:
         if model:
             cmd.extend(["--model", model])
 
-        # Effort level (controls Claude's reasoning depth)
-        budget = self._get_thinking_budget()
+        # Effort level (controls Claude's reasoning depth). Per-call
+        # effort wins over the global thinking_budget default — that's
+        # how cheap classification calls (triage, scene) avoid paying
+        # for deep reasoning while coding agents still get it.
+        budget = effort or self._get_thinking_budget()
         if budget in ("low", "medium", "high", "max"):
             cmd.extend(["--effort", budget])
 
@@ -246,7 +249,7 @@ class ClaudeCodeRuntime:
                 "error": "claude CLI not found. Install Claude Code first.",
             }
 
-    def send_json(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None, permission_mode=None):
+    def send_json(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None, permission_mode=None, effort=None):
         """Send a prompt and parse the response as JSON.
 
         Wraps the prompt with instructions to return JSON.
@@ -257,7 +260,7 @@ class ClaudeCodeRuntime:
             "Respond with ONLY valid JSON, no markdown fencing, no explanation."
         )
 
-        result = self.send(json_prompt, working_dir=working_dir, timeout=timeout, model=model, allowed_tools=allowed_tools, permission_mode=permission_mode)
+        result = self.send(json_prompt, working_dir=working_dir, timeout=timeout, model=model, allowed_tools=allowed_tools, permission_mode=permission_mode, effort=effort)
 
         if not result["success"]:
             return result

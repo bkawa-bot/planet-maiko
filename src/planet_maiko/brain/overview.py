@@ -686,13 +686,14 @@ def _run_home_overview_skill(prompt, working_dir):
     specialised agent).
     """
     from planet_maiko.agents.brain_session import _get_runtime
-    from planet_maiko.agents.routing import resolve_model
+    from planet_maiko.agents.routing import resolve_model, resolve_effort
 
     runtime = _get_runtime()
     if not runtime.is_available():
         raise RuntimeError("Brain runtime not available")
 
     model = resolve_model("skill:home-overview") or resolve_model("skill")
+    effort = resolve_effort("skill:home-overview") or resolve_effort("skill")
 
     # Release DB before the long call so SQLite writers aren't blocked
     # while Claude Code is working.
@@ -702,6 +703,7 @@ def _run_home_overview_skill(prompt, working_dir):
         working_dir=working_dir,
         timeout=OVERVIEW_TIMEOUT_SECONDS,
         model=model,
+        effort=effort,
         skip_permissions=True,
     )
 

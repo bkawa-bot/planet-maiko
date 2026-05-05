@@ -236,7 +236,7 @@ def generate_violation_description(learning):
     persisting; this function is pure compute.
     """
     from planet_maiko.agents.brain_session import _get_runtime
-    from planet_maiko.agents.routing import resolve_model
+    from planet_maiko.agents.routing import resolve_model, resolve_effort
 
     evidence = gather_evidence_for_learning(learning)
     if not evidence:
@@ -261,6 +261,7 @@ def generate_violation_description(learning):
             prompt,
             timeout=90,
             model=resolve_model("classify"),  # Haiku-tier; cheap and good enough
+            effort=resolve_effort("classify"),
         )
     except Exception as e:
         logger.warning(f"[intent] LLM call failed for Learning #{learning.id}: {e}")
@@ -414,7 +415,7 @@ def generate_diff_descriptions(diff_text):
     text when the list is empty.
     """
     from planet_maiko.agents.brain_session import _get_runtime
-    from planet_maiko.agents.routing import resolve_model
+    from planet_maiko.agents.routing import resolve_model, resolve_effort
 
     if not diff_text or not diff_text.strip():
         return []
@@ -431,6 +432,7 @@ def generate_diff_descriptions(diff_text):
             prompt,
             timeout=60,
             model=resolve_model("classify"),
+            effort=resolve_effort("classify"),
         )
     except Exception as e:
         logger.debug(f"[intent] generate_diff_descriptions: LLM call failed: {e}")

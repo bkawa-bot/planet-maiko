@@ -148,14 +148,15 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
         "--dangerously-skip-permissions",
     ]
 
-    # Effort level: autonomous agents used to silently run at Claude
-    # Code's default because this path built its own cmd and never
-    # passed --effort. Read the same routing.thinking_budget setting
-    # the short runtime.send() calls honor so a single Settings knob
-    # controls every LLM call Maiko makes.
+    # Effort level: route through resolve_effort so the per-task rule
+    # in routing.effort_rules wins over the global thinking_budget.
+    # Coding agents default to "high" — they benefit visibly from
+    # deeper reasoning. Cartographers / investigators use the same
+    # role key for now (they're long-running too); the user can
+    # split them in Settings if they want.
     try:
-        from planet_maiko.config import load_config
-        budget = (load_config().get("routing", {}) or {}).get("thinking_budget", "medium")
+        from planet_maiko.agents.routing import resolve_effort
+        budget = resolve_effort("coding_agent") or "medium"
     except Exception:
         budget = "medium"
     if budget in ("low", "medium", "high", "max"):

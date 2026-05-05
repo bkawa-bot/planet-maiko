@@ -417,7 +417,7 @@ def _judge_match(file_path, human_comment, model_output, runtime):
     {"match": False, "why": "judge unavailable"} on any runtime
     failure so the harness never crashes on a transient Haiku blip.
     """
-    from planet_maiko.agents.routing import resolve_model
+    from planet_maiko.agents.routing import resolve_model, resolve_effort
 
     prompt = _JUDGE_PROMPT.format(
         file_path=file_path,
@@ -425,7 +425,10 @@ def _judge_match(file_path, human_comment, model_output, runtime):
         model_output=model_output[:1200],
     )
     try:
-        r = runtime.send_json(prompt, timeout=20, model=resolve_model("triage"))
+        r = runtime.send_json(
+            prompt, timeout=20,
+            model=resolve_model("triage"), effort=resolve_effort("triage"),
+        )
     except Exception as e:
         return {"match": False, "why": f"judge error: {e}"}
     if not r.get("success"):

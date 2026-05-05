@@ -25,6 +25,10 @@
 }
 .routing-rule-row:hover { background: var(--bg-hover); }
 .routing-rule-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 3-column variant (Model + Effort columns). The plain 2-col rule
+   above stays for any callers that still want model-only. */
+.routing-rules-header-3col { grid-template-columns: 1fr 90px 90px; }
+.routing-rule-row-3col { grid-template-columns: 1fr 90px 90px; }
 .settings-loading { color: var(--text-muted); text-align: center; margin-top: 60px; }
 
 .settings-message {

@@ -141,7 +141,7 @@ def _execute_lightweight_specialty(job, specialty):
     from planet_maiko.models.task import Task
     from planet_maiko.database import db
     from planet_maiko.agents.brain_session import _get_runtime
-    from planet_maiko.agents.routing import resolve_model
+    from planet_maiko.agents.routing import resolve_model, resolve_effort
     from planet_maiko.agents.skills import get_skill_prompt
     from planet_maiko.brain.memos import create_memo
     from planet_maiko.brain.learning.agent_output import parse_and_apply_blocks
@@ -179,8 +179,9 @@ def _execute_lightweight_specialty(job, specialty):
     prompt = get_skill_prompt(specialty.id, context) or specialty.prompt
 
     model = resolve_model(f"skill:{specialty.id}") or resolve_model("skill")
+    effort = resolve_effort(f"skill:{specialty.id}") or resolve_effort("skill")
     try:
-        result = runtime.send(prompt, timeout=300, model=model)
+        result = runtime.send(prompt, timeout=300, model=model, effort=effort)
     except Exception as e:
         job.status = "failed"
         job.error = str(e)[:500]

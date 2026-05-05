@@ -111,7 +111,7 @@ def _call_cluster_llm(rules):
     "leave things alone", which is the safe default.
     """
     from planet_maiko.agents.brain_session import _get_runtime
-    from planet_maiko.agents.routing import resolve_model
+    from planet_maiko.agents.routing import resolve_model, resolve_effort
 
     runtime = _get_runtime()
     if not runtime.is_available():
@@ -132,7 +132,10 @@ def _call_cluster_llm(rules):
     # commit (learnings landed, their signals never got linked). This
     # is a drift-collector pass on a short queue, connection hold is
     # fine. Keep the session live.
-    result = runtime.send_json(prompt, timeout=120, model=resolve_model("classify"))
+    result = runtime.send_json(
+        prompt, timeout=120,
+        model=resolve_model("classify"), effort=resolve_effort("classify"),
+    )
     parsed = result.get("parsed") if isinstance(result, dict) else None
     if not isinstance(parsed, dict):
         logger.warning(f"[clustering] LLM did not return a JSON object: {result.get('error') if isinstance(result, dict) else 'no response'}")
@@ -366,7 +369,7 @@ def _call_attach_llm(category, existing, signals, rejected=None):
     should fall back to prefix-based aggregation for this batch.
     """
     from planet_maiko.agents.brain_session import _get_runtime
-    from planet_maiko.agents.routing import resolve_model
+    from planet_maiko.agents.routing import resolve_model, resolve_effort
 
     runtime = _get_runtime()
     if not runtime.is_available():
@@ -396,7 +399,10 @@ def _call_attach_llm(category, existing, signals, rejected=None):
     # never hit the database, which is why backfilled learnings
     # historically landed with zero linked signals. Connection hold
     # during the 120s LLM call is acceptable; integrity isn't.
-    result = runtime.send_json(prompt, timeout=120, model=resolve_model("classify"))
+    result = runtime.send_json(
+        prompt, timeout=120,
+        model=resolve_model("classify"), effort=resolve_effort("classify"),
+    )
     parsed = result.get("parsed") if isinstance(result, dict) else None
     if not isinstance(parsed, dict):
         return [], False

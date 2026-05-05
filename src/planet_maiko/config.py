@@ -161,11 +161,16 @@ DEFAULT_CONFIG = {
     "routing": {
         "enabled": True,
         "default_model": "sonnet",
-        # low | medium | high | max — passed as `claude --effort <budget>`
-        # to every LLM call: triage, clustering, skill runs, and the
-        # autonomous coding / review / investigation agents. Max costs
-        # more tokens but noticeably better for agent work.
+        # Global default `--effort` budget — applies when no per-task
+        # effort_rule is set. low | medium | high | max. The user-facing
+        # tuning surface is the per-rule effort column in Settings →
+        # Model Routing; this is just the catch-all.
         "thinking_budget": "medium",
+        # Per-task model + effort overrides. Empty means "use the
+        # baked-in DEFAULT_ROUTING / DEFAULT_EFFORT in agents/routing.py."
+        # Settings → Model Routing writes to these.
+        "rules": {},
+        "effort_rules": {},
     },
     "hooks": {
         "enabled": True,

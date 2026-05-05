@@ -155,18 +155,15 @@ def wake_agent(task_id, prompt, source, working_path=None, session_id=None, app=
                 "--resume", session_id,
                 "--dangerously-skip-permissions",
             ]
-            # Propagate the configured thinking budget to every resume.
-            # Without this, only the first kickoff gets --effort and
-            # every subsequent wake (heartbeat, nudge, user message,
-            # check_inbox) silently drops to Claude Code's default —
-            # which is where multi-turn coding work actually lives, so
-            # the agent spends most of its life at a lower budget than
-            # the user configured.
+            # Propagate per-task effort to every resume. Without this,
+            # only the first kickoff gets --effort and every subsequent
+            # wake (nudge, user message, check_inbox) silently drops to
+            # Claude Code's default — which is where multi-turn coding
+            # work actually lives, so the agent would spend most of its
+            # life at a lower budget than the user configured.
             try:
-                from planet_maiko.config import load_config
-                budget = (load_config().get("routing", {}) or {}).get(
-                    "thinking_budget", "medium",
-                )
+                from planet_maiko.agents.routing import resolve_effort
+                budget = resolve_effort("coding_agent") or "medium"
             except Exception:
                 budget = "medium"
             if budget in ("low", "medium", "high", "max"):
