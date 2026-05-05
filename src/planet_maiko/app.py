@@ -151,30 +151,41 @@ def create_app(start_scheduler=False):
             reset_stale_training_progress()
         except Exception as e:
             logger.warning(f"[startup] Stale training-progress cleanup skipped: {e}")
-        try:
-            # RAG retrieval substrate: ensure each active Learning has a
-            # current violation_description + embedding. Runs on a daemon
-            # thread because the per-rule LLM call adds up to many minutes
-            # for a 300-rule corpus, and we don't want to gate Flask
-            # readiness on it.
-            from planet_maiko.brain.learning.violation_backfill import backfill_in_background
-            backfill_in_background(app)
-        except Exception as e:
-            logger.warning(f"[startup] Violation-description backfill skipped: {e}")
 
         # Wake-registry cleanup: the previous run may have crashed with
         # agents flagged "working" and with session-registry entries
         # pointing at tasks that have since been cancelled or merged.
         # Neither survives a crash, so clear them before we start
-        # accepting new triggers.
-        from planet_maiko.agents.wake import validate_registry, reset_stale_working
-        validate_registry()
-        reset_stale_working()
+        # accepting new triggers. Wrapped in try/except so a transient
+        # SQLite lock (e.g. another maiko process still holding the DB)
+        # can't crash boot — the next cycle's stuck-check will catch up.
+        try:
+            from planet_maiko.agents.wake import validate_registry, reset_stale_working
+            validate_registry()
+            reset_stale_working()
+        except Exception as e:
+            logger.warning(f"[startup] Wake-registry cleanup skipped: {e}")
 
         # Rescue any profiles still stuck on the Arriving placeholder
         # from a previous-run LLM call that didn't complete.
-        from planet_maiko.agents.profiles import recover_stale_arrivals
-        recover_stale_arrivals()
+        try:
+            from planet_maiko.agents.profiles import recover_stale_arrivals
+            recover_stale_arrivals()
+        except Exception as e:
+            logger.warning(f"[startup] Stale arrival rescue skipped: {e}")
+
+        # Kick off the violation-description backfill LAST. It runs on
+        # a daemon thread that commits per learning — placed after all
+        # main-thread startup writes complete so the bulk UPDATE in
+        # reset_stale_working never races the backfill for SQLite's
+        # write lock. (Even with WAL + 30s busy_timeout, the previous
+        # interleaving could deadlock when the backfill held the lock
+        # right when reset_stale_working tried to acquire it.)
+        try:
+            from planet_maiko.brain.learning.violation_backfill import backfill_in_background
+            backfill_in_background(app)
+        except Exception as e:
+            logger.warning(f"[startup] Violation-description backfill skipped: {e}")
 
     # Serve pre-built frontend static files
     frontend_dir = static_dir()
