@@ -406,26 +406,51 @@ export default function ReviewDiff() {
 
       <div className={`review-diff-layout${sidebarHidden ? " sidebar-hidden" : ""}`}>
         <div className="review-diff-main">
-          {/* Tasks that produced a markdown artifact (review reviews,
-              investigation reports, repo_analysis findings) render the
-              artifact as the primary content. The diff viewer is for
-              coding tasks that produce actual code changes. Investigation
-              and repo_analysis tasks technically aren't "review tasks"
-              but they SHOULD land on TaskReport — this fallback catches
-              cases where a stale memo route brings the user here for
-              one of those, so the page shows the report instead of an
-              empty diff. */}
-          {task?.metadata?.artifact ? (
+          {/* For review tasks: render the agent's notes (when present)
+              as a collapsible "Agent's notes" section ABOVE the diff,
+              and always render the diff itself as the primary
+              content — the inline leave_comment calls anchor to lines
+              in this view, so hiding the diff would erase most of the
+              agent's actual review output.
+
+              For coding tasks: just render the diff. The verdict
+              banner above already carries the agent's summary.
+
+              Investigation / repo_analysis fall through here too if a
+              stale memo route lands the user on this page; they
+              render their artifact as the page body since they have
+              no diff to show. */}
+          {isReviewTask ? (
+            <>
+              {task?.metadata?.artifact && (
+                <details className="review-diff-agent-notes" open>
+                  <summary>Agent's notes</summary>
+                  <div
+                    className="review-diff-artifact"
+                    dangerouslySetInnerHTML={{ __html: renderMarkdown(task.metadata.artifact) }}
+                  />
+                </details>
+              )}
+              {diff?.raw_diff ? (
+                <DiffView
+                  rawDiff={diff.raw_diff}
+                  anchors={anchors}
+                  onLineClick={handleLineClick}
+                  viewType="unified"
+                />
+              ) : (
+                <div className="review-diff-empty">
+                  {task && task.status === "review"
+                    ? "No diff resolved for this PR yet. The agent may still be checking out the PR's branch."
+                    : "Agent is still working on the review. Come back in a bit."}
+                </div>
+              )}
+            </>
+          ) : task?.metadata?.artifact ? (
             <div
               className="review-diff-artifact"
               dangerouslySetInnerHTML={{ __html: renderMarkdown(task.metadata.artifact) }}
             />
-          ) : isReviewTask ? (
-            <div className="review-diff-empty">
-              {task && task.status === "review"
-                ? "Review complete, but no artifact was saved. Check the agent's session log if you need the notes."
-                : "Agent is still working on the review. Come back in a bit."}
-            </div>
           ) : (
             <DiffView
               rawDiff={diff?.raw_diff}

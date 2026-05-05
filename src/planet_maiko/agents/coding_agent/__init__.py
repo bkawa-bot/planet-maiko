@@ -64,7 +64,8 @@ logger = logging.getLogger(__name__)
 
 
 def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
-            agent_profile_id=None, role="coding", specialty_id=None):
+            agent_profile_id=None, role="coding", specialty_id=None,
+            pr_number=None):
     """Prepare a git worktree on a new branch for an agent to work on a task.
 
     The agent is not started — caller invokes _kickoff_agent_headless()
@@ -113,7 +114,11 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
                 pass
         branch_name = f"{branch_prefix}/{slug}"
 
-    working_path = _create_worktree(repo_path, branch_name)
+    # Review jobs pass pr_number so the worktree is built from the PR's
+    # head ref instead of origin/main — the agent needs to see the
+    # actual code under review for `git diff origin/main...HEAD` and
+    # leave_comment to pin to real lines.
+    working_path = _create_worktree(repo_path, branch_name, pr_number=pr_number)
     if not working_path:
         return None
 

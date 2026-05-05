@@ -6,9 +6,30 @@ spawns the runner for each.
 """
 
 import logging
+import re
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
+
+# https://github.com/<org>/<repo>/pull/<number> — capture the trailing
+# number. Tolerant of anchors / query strings since pollers sometimes
+# append #pullrequestreview or ?... on the URL.
+_PR_NUMBER_RE = re.compile(r"github\.com/[^/]+/[^/]+/pull/(\d+)")
+
+
+def _extract_pr_number(url):
+    """Pull the PR number out of a GitHub PR url. None when the url
+    is empty or doesn't match the pull-request shape (issues, blob
+    URLs, non-github links, etc)."""
+    if not url:
+        return None
+    m = _PR_NUMBER_RE.search(url)
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except (TypeError, ValueError):
+        return None
 
 
 def _phase_execute_agent_jobs():
@@ -227,6 +248,19 @@ def _phase_execute_agent_jobs():
                     job_extra_for_prep.get("branch_prefix")
                     or ("cartographer" if role == "cartographer" else "maiko")
                 )
+                # For review jobs, derive the PR number from the linked
+                # task's URL so the worktree is built from the PR's head
+                # instead of main. Without this the agent reviewed an
+                # empty diff. Falls back to None on non-review roles or
+                # when the URL doesn't match a github PR pattern; the
+                # worktree then behaves as before.
+                pr_number = None
+                if role == "review" and linked_task is not None:
+                    pr_number = _extract_pr_number(linked_task.url)
+                    if pr_number is None:
+                        pr_number = _extract_pr_number(
+                            (linked_task.extra or {}).get("pr_url")
+                        )
                 try:
                     prep = prepare(
                         task_id=job.id,
@@ -237,6 +271,7 @@ def _phase_execute_agent_jobs():
                         agent_profile_id=job.agent_profile_id,
                         role=role,
                         specialty_id=specialty_id,
+                        pr_number=pr_number,
                     )
                 except Exception as e:
                     logger.warning(f"[cycle] prepare failed for agent_job {job.id}: {e}")

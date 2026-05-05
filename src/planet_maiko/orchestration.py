@@ -106,6 +106,29 @@ def build_task_prompt(task, role, custom_prompt=""):
     if task.tags:
         parts.append(f"\nTags: {', '.join(task.tags)}")
 
+    # For review tasks, tell the agent up front that they're standing
+    # on the PR's HEAD — `git diff origin/<base>...HEAD` shows the
+    # changes under review. Without this the agent kept assuming
+    # they had to fetch the diff themselves or ask the user where it
+    # was; pointing them at the right git command is enough.
+    if role == "review":
+        parts.append(
+            "\n## Your worktree\n\n"
+            "This worktree is checked out at the PR's HEAD ref. To see "
+            "the diff under review, run:\n\n"
+            "```\n"
+            "git diff origin/<default>...HEAD\n"
+            "```\n\n"
+            "Use the local default branch name in place of `<default>` — "
+            "usually `main` or `master`. Pin every inline observation to "
+            "a specific line via `leave_comment(file_path, line_number, "
+            "body, side?)`; those render in Maiko's review UI for the "
+            "user. Your final `reply(... message_type=\"ready_for_review\")` "
+            "should be a short verdict + one-paragraph summary plus any "
+            "PATTERN: / PROPOSAL: blocks — NOT a long file-by-file "
+            "narrative; the inline comments ARE the narrative."
+        )
+
     if role in ("review", "investigation"):
         try:
             from planet_maiko.agents.skills import get_skill_prompt

@@ -198,6 +198,35 @@
   border-radius: var(--radius);
 }
 
+/* Collapsible "Agent's notes" panel that sits above the diff on
+   review tasks. Open by default — the user usually wants to see
+   the verdict context next to the inline comments. Distinct from
+   the diff blocks below by a soft tinted background. */
+.review-diff-agent-notes {
+  margin-bottom: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--card-border, var(--border));
+  border-radius: var(--radius);
+  padding: 0;
+}
+.review-diff-agent-notes > summary {
+  cursor: pointer;
+  padding: 10px 16px;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--card-title, var(--text));
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+.review-diff-agent-notes[open] > summary {
+  border-bottom: 1px solid var(--border-subtle);
+}
+.review-diff-agent-notes .review-diff-artifact {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
 .diff-view-empty {
   padding: 32px;
   text-align: center;

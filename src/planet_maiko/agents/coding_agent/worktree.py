@@ -72,21 +72,51 @@ def _fetch_latest_base(repo_path):
     return default_branch
 
 
-def _create_worktree(repo_path, branch_name):
+def _fetch_pr_head(repo_path, pr_number):
+    """Fetch a PR's head ref into a local branch and return the ref name.
+
+    Uses GitHub's ``pull/<n>/head`` virtual ref so this works for
+    forks and same-repo PRs alike — `gh pr checkout` does the same
+    under the hood but pulls in the gh CLI which we don't strictly
+    need here. Returns the local branch name on success, None on
+    failure (network blip, PR not found, repo not on GitHub).
+    """
+    local_ref = f"maiko-pr-{pr_number}"
+    try:
+        # Force-update so a re-review against new commits picks up the
+        # latest head. The :+ syntax is git's "fast-forward or replace".
+        result = subprocess.run(
+            ["git", "fetch", "origin",
+             f"+pull/{pr_number}/head:{local_ref}"],
+            cwd=repo_path, capture_output=True, text=True, timeout=60,
+        )
+        if result.returncode == 0:
+            return local_ref
+        logger.warning(
+            f"[worktree] git fetch pull/{pr_number}/head failed: "
+            f"{(result.stderr or '').strip()[:200]}"
+        )
+    except Exception as e:
+        logger.warning(f"[worktree] PR head fetch threw: {e}")
+    return None
+
+
+def _create_worktree(repo_path, branch_name, pr_number=None):
     """Create a git worktree on a *new* branch for an agent to work in.
 
-    Always fetches origin and cuts the new branch from the latest
-    origin/<default_branch> tip — an agent that starts from a stale
-    local base produces conflict-prone diffs by the time the user gets
-    back to them. Falls back to a local-only branch when the remote
-    can't be resolved.
+    Coding agents start from the latest origin/<default_branch> tip so
+    their work is layered on fresh upstream. Review agents need the
+    PR's actual code instead — pass ``pr_number`` and the worktree's
+    base ref becomes the PR's head ref (fetched into FETCH_HEAD), so
+    `git diff origin/<default>...HEAD` inside the worktree shows the
+    PR's full diff and `leave_comment` calls can pin to real lines.
 
-    Uses ``git worktree add -b <branch> <path> [<base>]`` so the branch
+    Uses ``git worktree add -b <branch> <path> <base>`` so the branch
     is always fresh. Without ``-b``, ``git worktree add <path> <branch>``
     will silently reuse an existing branch — and any TASK.md / PLAN.md
     / NOTES.md that a previous agent left behind on that branch leaks
     straight into the next task. If the branch name happens to collide,
-    retry once with a uuid suffix instead of stomping the old branch.
+    retry once with a uuid suffix.
 
     Returns the absolute worktree path on success, or None on failure.
     """
@@ -95,6 +125,20 @@ def _create_worktree(repo_path, branch_name):
 
     default_branch = _fetch_latest_base(repo_path)
     base_ref = f"origin/{default_branch}" if default_branch else None
+
+    # Review path: fetch the PR's head ref into FETCH_HEAD and use it
+    # as the worktree base. The new branch points at the PR's head SHA
+    # so the agent reviews the actual code under review, not main.
+    if pr_number:
+        pr_ref = _fetch_pr_head(repo_path, pr_number)
+        if pr_ref:
+            base_ref = pr_ref
+        else:
+            logger.warning(
+                f"[worktree] Couldn't fetch PR #{pr_number} head — "
+                f"falling back to {base_ref}; the agent will see main, "
+                f"not the PR's diff"
+            )
 
     candidates = [branch_name, f"{branch_name}-{uuid.uuid4().hex[:6]}"]
     for candidate in candidates:
