@@ -231,6 +231,14 @@ def get_agent_activity():
             if profile:
                 entry["agent_name"] = profile.display_name
                 entry["agent_id"] = profile.id
+        else:
+            # Queued job that hasn't been picked up by the executor
+            # yet (so no agent_profile_id assigned). Without an
+            # explicit agent_name the frontend falls back to the raw
+            # task_id ("job-abc1234"); set a readable placeholder so
+            # the row reads "Spawning <kind> agent…" until the
+            # executor lands and assigns a real profile.
+            entry["agent_name"] = f"Spawning {job.kind} agent…"
         keep[job.id] = entry
 
     return list(keep.values())

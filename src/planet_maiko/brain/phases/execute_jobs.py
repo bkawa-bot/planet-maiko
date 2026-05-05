@@ -261,9 +261,15 @@ def _phase_execute_agent_jobs():
                 logger.warning(
                     f"[cycle] kickoff failed for agent_job {job.id}: {kickoff.get('error')}"
                 )
-
-        if executed:
+            # Commit per-iteration so a failed kickoff persists. The
+            # earlier end-of-loop commit only fired when executed > 0,
+            # so a job whose kickoff returned {success: False} (e.g.
+            # claude CLI missing on PATH, branch-name guard, lock held)
+            # would silently revert from failed → queued on the next
+            # cycle and loop forever. Per-iteration commit also
+            # isolates one job's failure from the next.
             db.session.commit()
+
         return {"executed": executed}
     except Exception as e:
         logger.warning(f"[cycle] execute agent jobs skipped: {e}")

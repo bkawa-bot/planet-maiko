@@ -294,7 +294,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
               const prepared = agents.find((ag) => ag.task_id === a.task_id);
               const profileId = a.agent_id || prepared?.agent_id;
               const profile = profileId ? profiles.find((p) => p.id === profileId) : null;
-              const displayName = a.agent_name || profile?.display_name || a.task_id.replace(/^(task-|agent-report-|agent-)/, "");
+              const displayName = a.agent_name || profile?.display_name || a.task_id.replace(/^(task-|agent-report-|agent-|job-)/, "");
 
               return (
               // Same per-(agent, task) keying — task_id is the unique
