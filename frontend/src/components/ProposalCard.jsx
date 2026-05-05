@@ -115,7 +115,7 @@ export default function ProposalCard({ proposal, profile, onAction }) {
       <div className="proposal-header">
         {showAvatar ? (
           <span className="proposal-icon proposal-icon-avatar">
-            <CardAvatar agent={profile} size={20} />
+            <CardAvatar agent={profile} size={32} />
           </span>
         ) : isGoalProposal ? (
           <Compass size={12} className="proposal-icon" />

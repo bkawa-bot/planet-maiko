@@ -42,7 +42,7 @@ export default function ArtifactRow({ it, meta, Icon, profile, onDismiss, defaul
       >
         {profile ? (
           <div className="review-queue-icon review-queue-icon-avatar">
-            <CardAvatar agent={profile} size={20} />
+            <CardAvatar agent={profile} size={32} />
           </div>
         ) : (
           <div className="review-queue-icon">

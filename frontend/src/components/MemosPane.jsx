@@ -136,7 +136,7 @@ export default function MemosPane() {
     if (profile) {
       return (
         <div className="review-queue-icon review-queue-icon-avatar">
-          <CardAvatar agent={profile} size={20} />
+          <CardAvatar agent={profile} size={32} />
         </div>
       );
     }
