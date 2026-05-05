@@ -8,6 +8,18 @@ Review a pull request and provide constructive, specific feedback.
 ## Context
 {context}
 
+## Consult team rules first
+
+Before forming opinions on the diff, query Maiko's accumulated team rules for each logical change. This is how the team's tribal knowledge actually shows up in the review — not "what would I notice," but "what has the team already decided matters here?"
+
+```
+maiko rules-relevant --query "<short description of the change>"
+```
+
+Run it once per logical change cluster (rough rule: one query per file or per coherent functional area, not per line). Output is a ranked list of rules with a similarity score; treat the top 3–5 as the rule set this change is being graded against. If a returned rule fits the change, anchor your `leave_comment` to the violating line and cite the rule by id + category. If nothing returned applies, that's signal too — the team hasn't codified this area yet, and you can emit a `PATTERN:` block to add coverage.
+
+The CLI records each query on the task's `rules_considered` field automatically; the review UI shows the user which rules you actually consulted, so they can see the reasoning chain.
+
 ## Instructions
 
 Review this PR focusing on:

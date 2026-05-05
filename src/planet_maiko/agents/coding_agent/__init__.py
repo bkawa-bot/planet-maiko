@@ -145,25 +145,33 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     # LoRA compliance review is now handled by Claude Code PostToolUse hook
     # (lora_review_hook.py), registered in _write_claude_settings above.
 
-    # Compile learning brief for this agent
+    # Compile learning brief for this agent — but ONLY for coding /
+    # cartographer / investigation agents. Review agents are explicitly
+    # trained to query RAG (`maiko rules-relevant --query "..."`) per
+    # logical change in the diff, which is more precise than the static
+    # top-15 confidence-ranked snapshot the brief injects. Doubling up
+    # adds prompt weight without targeted value — and risks the agent
+    # leaning on the (sometimes-stale) brief instead of the live RAG
+    # retrieval that the review protocol asks for.
     try:
-        from planet_maiko.brain.learning.processor import compile_brief
         from planet_maiko.agents.profiles import create_profile
-
         # Only create a profile if one wasn't provided
         if not agent_profile_id:
             create_profile(agent_id)
-        brief = compile_brief(
-            repo=repo_path,
-            task_id=task_id,
-            agent_profile_id=agent_id,
-        )
 
-        if brief and brief != "No active learnings yet.":
-            claude_path = os.path.join(working_path, "CLAUDE.md")
-            with open(claude_path, "a") as f:
-                f.write("\n\n" + brief)
-            logger.info(f"[agent] Injected learning brief ({len(brief)} chars) for {agent_id}")
+        if role != "review":
+            from planet_maiko.brain.learning.processor import compile_brief
+            brief = compile_brief(
+                repo=repo_path,
+                task_id=task_id,
+                agent_profile_id=agent_id,
+            )
+
+            if brief and brief != "No active learnings yet.":
+                claude_path = os.path.join(working_path, "CLAUDE.md")
+                with open(claude_path, "a") as f:
+                    f.write("\n\n" + brief)
+                logger.info(f"[agent] Injected learning brief ({len(brief)} chars) for {agent_id}")
     except Exception as e:
         logger.warning(f"[agent] Could not compile brief for {agent_id}: {e}")
 
