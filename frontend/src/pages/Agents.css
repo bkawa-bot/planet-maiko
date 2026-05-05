@@ -793,6 +793,103 @@
 /* === Active tab === */
 .agents-active-main { min-width: 0; }
 
+/* Queue + recent failures — sits below the live grid. Reads as a
+   secondary list, not a card grid. Each row carries job status,
+   kind, agent (when assigned), repo, age, and the failure reason
+   when the job ended on error. Click-through goes to /jobs/<id>. */
+.agent-queue-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border-subtle);
+}
+.agent-queue-header {
+  display: flex; align-items: center; gap: 6px;
+  background: none; border: none; cursor: pointer;
+  padding: 4px 0;
+  font-family: var(--font-mono);
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.agent-queue-header:hover { color: var(--text); }
+.agent-queue-count {
+  margin-left: 4px;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+.agent-queue-list {
+  display: flex; flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.agent-queue-row {
+  display: flex; gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--card-border, var(--border-subtle));
+  border-radius: var(--radius-sm);
+}
+.agent-queue-row.status-failed {
+  border-color: rgba(255, 122, 115, 0.45);
+  background: rgba(255, 122, 115, 0.06);
+}
+.agent-queue-avatar {
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+}
+.agent-queue-pending-dot {
+  font-size: 18px;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+.agent-queue-body {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.agent-queue-title { font-size: 12px; font-weight: 500; }
+.agent-queue-link {
+  color: var(--text);
+  text-decoration: none;
+}
+.agent-queue-link:hover { color: var(--pink); text-decoration: underline; }
+.agent-queue-meta {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  font-size: 10px; color: var(--text-muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  align-items: center;
+}
+.agent-queue-status {
+  display: inline-flex; align-items: center; gap: 3px;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+}
+.agent-queue-status.status-failed {
+  background: rgba(255, 122, 115, 0.18);
+  color: var(--urgent);
+}
+.agent-queue-spawning { font-style: italic; }
+.agent-queue-repo { color: var(--text-dim); }
+.agent-queue-error {
+  font-size: 11px;
+  color: var(--urgent);
+  margin-top: 4px;
+  line-height: 1.4;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Shared */
 .empty-state { text-align: center; padding: 48px 20px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius); }
 .empty-icon { color: var(--pink); margin-bottom: 12px; opacity: 0.6; }

@@ -30,27 +30,36 @@ def _phase_spawn_jobs_for_tasks():
     from planet_maiko.orchestration import scope_for_task
     import uuid as _uuid
 
+    # Task types that need an AgentJob to actually run. Single source
+    # of truth — keep aligned with ONE_SHOT_ROLE_FOR_TYPE plus the
+    # review pair plus coding. The /agents/assign endpoint creates
+    # jobs directly; this phase is the safety net for any task that
+    # ended up assigned without one (older flows, project plan
+    # approval, manual API patch, etc).
+    SPAWNABLE_TYPES = (
+        "review", "pr_review",
+        "investigation", "cartograph",
+        "coding",
+    )
     try:
         candidates = Task.query.filter(
-            Task.type.in_(["review", "pr_review"]),
+            Task.type.in_(SPAWNABLE_TYPES),
             Task.status.in_(["new", "blocked"]),
             Task.assigned_agent_id.isnot(None),
         ).limit(10).all()
 
-        # Diagnostic: surface review tasks the spawn phase is *missing*
+        # Diagnostic: surface tasks the spawn phase is *missing*
         # because they have no assigned agent. Without this log line
-        # a pupdateâ†’taskâ†’(no job) gap is invisible from the outside.
-        # Capped at the same limit + cheap query; only logs when there
-        # actually are stranded review tasks.
+        # a pupdate→task→(no job) gap is invisible from the outside.
         stranded = Task.query.filter(
-            Task.type.in_(["review", "pr_review"]),
+            Task.type.in_(SPAWNABLE_TYPES),
             Task.status.in_(["new", "blocked"]),
             Task.assigned_agent_id.is_(None),
         ).limit(10).all()
         for t in stranded:
             logger.warning(
-                f"[cycle] review task {t.id} ({t.type}) has no assigned "
-                f"agent â€” spawn skipped. status={t.status}, "
+                f"[cycle] task {t.id} ({t.type}) has no assigned agent "
+                f"— spawn skipped. status={t.status}, "
                 f"repo={(t.extra or {}).get('repo')!r}"
             )
 

@@ -22,7 +22,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-import threading
 import uuid
 from datetime import datetime, timezone
 
@@ -288,16 +287,19 @@ def _create_dispatched_task(*, title, description, task_type, priority, scope_re
 # ---------------------------------------------------------------------------
 
 def _launch_one_shot(task_id, role):
-    """Prepare a worktree + fire the agent in a background thread so
-    the HTTP response doesn't block on claude startup. Mirrors what
-    /agents/assign does for review/investigation/cartographer roles.
+    """Enqueue an AgentJob for the dispatched task. Brain cycle's
+    execute_jobs phase prepares the worktree and fires the agent on
+    the next tick. Replaces the earlier "spawn daemon thread + direct
+    kickoff" path so dispatch lives on the same audit trail as every
+    other agent run.
 
-    Returns "kicked_off" if we started the thread, "queued" if we
-    couldn't (no repo clone on disk, etc.) — the task still exists and
-    the user can retry from the Agents tab.
+    Returns "kicked_off" when the job was enqueued, "queued" when we
+    couldn't enqueue (no clone on disk, missing task, etc.) — same
+    semantic as before so callers don't need to change.
     """
-    from flask import current_app
+    import uuid as _uuid
     from planet_maiko.models.task import Task
+    from planet_maiko.models.agent_job import AgentJob
     from planet_maiko.orchestration import resolve_repo_path, scope_for_task
 
     task = db.session.get(Task, task_id)
@@ -313,49 +315,43 @@ def _launch_one_shot(task_id, role):
         logger.info(f"[pack] queued {task_id} — no local clone for {repo!r}")
         return "queued"
 
-    app = current_app._get_current_object()
+    # Reuse a still-pending job if one already exists; otherwise mint
+    # a fresh queued one. The execute_jobs phase will pick it up.
+    existing = AgentJob.query.filter_by(source_task_id=task.id).first()
+    if existing and existing.status in ("queued", "pending_approval", "failed"):
+        job = existing
+        job.status = "queued"
+        job.error = None
+        job.finished_at = None
+        if task.assigned_agent_id and not job.agent_profile_id:
+            job.agent_profile_id = task.assigned_agent_id
+    else:
+        job = AgentJob(
+            id=f"job-{_uuid.uuid4().hex[:10]}",
+            kind=task.type,
+            title=task.title,
+            description=(task.extra or {}).get("description") or (task.extra or {}).get("body"),
+            scope_repo=repo,
+            priority=task.priority or "normal",
+            created_by="pack-dispatch",
+            source_task_id=task.id,
+            agent_profile_id=task.assigned_agent_id,
+            requires_approval=False,
+            approved_at=datetime.now(timezone.utc),
+            approved_by="user",
+            status="queued",
+            extra={"repo_path": local_path},
+        )
+        db.session.add(job)
 
-    def _run():
-        with app.app_context():
-            try:
-                from planet_maiko.agents.coding_agent import prepare, _kickoff_agent_headless
-                from planet_maiko.orchestration import build_task_prompt
-                t = db.session.get(Task, task_id)
-                if not t:
-                    return
-                full_prompt = build_task_prompt(t, role)
-                result = prepare(
-                    task_id=t.id,
-                    task_title=t.title,
-                    prompt=full_prompt,
-                    repo_path=local_path,
-                    branch_prefix="maiko",
-                    agent_profile_id=t.assigned_agent_id,
-                    role=role,
-                )
-                if not result:
-                    logger.warning(f"[pack] worktree prep failed for {task_id}")
-                    return
-                working_path = result.get("working_path")
-                branch = result.get("branch")
-                _kickoff_agent_headless(
-                    t.assigned_agent_id, working_path, t.id,
-                    branch_name=None, plan_first=False, role=role,
-                )
-                extra = dict(t.extra or {})
-                if working_path:
-                    extra["working_path"] = working_path
-                if branch:
-                    extra["branch"] = branch
-                t.extra = extra
-                if t.status == "new":
-                    t.status = "in_progress"
-                t.updated_at = datetime.now(timezone.utc)
-                db.session.commit()
-            except Exception as e:
-                logger.exception(f"[pack] dispatch launch failed for {task_id}: {e}")
-
-    threading.Thread(target=_run, daemon=True, name=f"pack-dispatch-{task_id}").start()
+    db.session.flush()
+    extra = dict(task.extra or {})
+    extra["agent_job_id"] = job.id
+    task.extra = extra
+    if task.status == "new":
+        task.status = "in_progress"
+    task.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
     return "kicked_off"
 
 

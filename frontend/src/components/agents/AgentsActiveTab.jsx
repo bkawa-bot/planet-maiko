@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  CheckSquare, ExternalLink, GitBranch,
-  HeartPulse, MessageCircle, Play, Sparkles, X,
+  AlertTriangle, CheckSquare, ChevronDown, ChevronRight, Clock,
+  ExternalLink, GitBranch, HeartPulse, MessageCircle, Play, Sparkles, X,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
-import { formatTime, relativeFromMinutes } from "../../utils/dates";
+import { formatTime, relativeFromMinutes, relativeTime } from "../../utils/dates";
 import { formatRepo, useDefaultOrg } from "../../utils/repo";
 import CardAvatar from "../CardAvatar";
 
@@ -51,6 +52,20 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
   const [selectedThread, setSelectedThread] = useState(null);
   const [messages, setMessages] = useState([]);
   const [msgInput, setMsgInput] = useState("");
+  // Queue + recent failures — separate fetch so the live grid stays
+  // pupdate-driven and this section reflects pure AgentJob state.
+  // Pulled on mount + whenever onRefresh fires upstream (the parent
+  // already refetches on relevant actions; we piggyback by keying the
+  // effect on activity to rerun when something changes).
+  const [queueJobs, setQueueJobs] = useState([]);
+  const [queueOpen, setQueueOpen] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    api.getAgentJobs({ status: "queued,failed", limit: 20 })
+      .then((rows) => { if (!cancelled) setQueueJobs(Array.isArray(rows) ? rows : []); })
+      .catch(() => { if (!cancelled) setQueueJobs([]); });
+    return () => { cancelled = true; };
+  }, [activity.length, agents.length]);
 
   const loadThread = async (taskId) => {
     setSelectedThread(taskId);
@@ -166,7 +181,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
 
   return (
     <div className="agents-active-main">
-        {dormantAgents.length === 0 && activity.length === 0 ? (
+        {dormantAgents.length === 0 && activity.length === 0 && queueJobs.length === 0 ? (
           <div className="empty-state">
             <span style={{ fontSize: 48 }}>🐾</span>
             <div className="empty-title">Quiet right now</div>
@@ -367,6 +382,71 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
               </div>
               );
             })}
+          </div>
+        )}
+
+        {queueJobs.length > 0 && (
+          <div className="agent-queue-section">
+            <button
+              type="button"
+              className="agent-queue-header"
+              onClick={() => setQueueOpen((v) => !v)}
+            >
+              {queueOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+              <Clock size={11} /> Queue + recent failures
+              <span className="agent-queue-count">{queueJobs.length}</span>
+            </button>
+            {queueOpen && (
+              <div className="agent-queue-list">
+                {queueJobs.map((j) => {
+                  const profile = j.agent_profile_id
+                    ? profiles.find((p) => p.id === j.agent_profile_id)
+                    : null;
+                  const ageRef = j.status === "failed"
+                    ? (j.finished_at || j.updated_at)
+                    : (j.created_at);
+                  return (
+                    <div key={j.id} className={`agent-queue-row status-${j.status}`}>
+                      <div className="agent-queue-avatar">
+                        {profile
+                          ? <CardAvatar agent={profile} size={28} />
+                          : <span className="agent-queue-pending-dot" title="No agent assigned yet">·</span>}
+                      </div>
+                      <div className="agent-queue-body">
+                        <div className="agent-queue-title">
+                          <Link to={`/jobs/${j.id}`} className="agent-queue-link">
+                            {j.title || `${j.kind} job`}
+                          </Link>
+                        </div>
+                        <div className="agent-queue-meta">
+                          <span className={`agent-queue-status status-${j.status}`}>
+                            {j.status === "failed" && <AlertTriangle size={9} />}
+                            {j.status}
+                          </span>
+                          {profile && <span className="agent-queue-agent">{profile.display_name}</span>}
+                          {!profile && j.status === "queued" && (
+                            <span className="agent-queue-agent agent-queue-spawning">
+                              spawning {j.kind} agent…
+                            </span>
+                          )}
+                          {j.scope_repo && (
+                            <span className="agent-queue-repo" title={j.scope_repo}>
+                              {formatRepo(j.scope_repo, defaultOrg)}
+                            </span>
+                          )}
+                          <span className="agent-queue-age">{relativeTime(ageRef)}</span>
+                        </div>
+                        {j.status === "failed" && j.error && (
+                          <div className="agent-queue-error" title={j.error}>
+                            {j.error.length > 140 ? j.error.slice(0, 138) + "…" : j.error}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

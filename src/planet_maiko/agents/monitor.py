@@ -197,21 +197,34 @@ def get_agent_activity():
                 a["agent_id"] = profile.id
         keep[key] = a
 
-    # Surface running / queued standalone jobs that don't yet have any
-    # agent pupdate or message — so the user sees a fresh job in the
-    # feed before the agent emits its first heartbeat. Jobs with a
-    # linked task fall through to the existing task-keyed path.
-    standalone = (
+    # Surface running / queued AgentJobs that don't yet have any
+    # agent pupdate or message. Without this, a freshly-queued job
+    # is invisible until its agent emits the first heartbeat (or
+    # never, if the kickoff fails). For task-linked jobs we key on
+    # the task_id (so the row merges with later pupdate-driven
+    # entries) and for standalone jobs we key on job.id.
+    pending_jobs = (
         AgentJob.query
         .filter(AgentJob.status.in_(["queued", "running"]))
-        .filter(AgentJob.source_task_id.is_(None))
         .all()
     )
-    for job in standalone:
-        if job.id in keep:
+    for job in pending_jobs:
+        bucket_key = job.source_task_id or job.id
+        if bucket_key in keep:
+            # Already represented (either by pupdates above or by an
+            # earlier loop iteration). Don't clobber its richer state.
             continue
+        # Resolve title from linked task when present so the row reads
+        # as the user-facing intent ("Review PR #42") rather than the
+        # internal job kind.
+        linked = (
+            db.session.get(Task, job.source_task_id)
+            if job.source_task_id else None
+        )
+        if linked is not None and linked.status in ("done", "cancelled"):
+            continue  # task closed out — don't keep its job around in active
         entry = {
-            "task_id": job.id,
+            "task_id": bucket_key,
             "kind": "job",
             "job_id": job.id,
             "last_message": None,
@@ -222,7 +235,7 @@ def get_agent_activity():
             "pupdate_count": 0,
             "status": "active" if job.status == "running" else "idle",
             "idle_minutes": 0,
-            "task_title": job.title,
+            "task_title": (linked.title if linked else job.title),
             "task_status": job.status,
             "task_type": job.kind,
         }
@@ -235,11 +248,9 @@ def get_agent_activity():
             # Queued job that hasn't been picked up by the executor
             # yet (so no agent_profile_id assigned). Without an
             # explicit agent_name the frontend falls back to the raw
-            # task_id ("job-abc1234"); set a readable placeholder so
-            # the row reads "Spawning <kind> agent…" until the
-            # executor lands and assigns a real profile.
+            # bucket key, which on a job-only row reads as "job-abc…".
             entry["agent_name"] = f"Spawning {job.kind} agent…"
-        keep[job.id] = entry
+        keep[bucket_key] = entry
 
     return list(keep.values())
 

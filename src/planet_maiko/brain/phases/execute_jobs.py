@@ -73,7 +73,13 @@ def _phase_execute_agent_jobs():
                     "pr_review": "review",
                 }.get(job.kind, "investigation")
 
-            local_path = resolve_repo_path(job.scope_repo) if job.scope_repo else None
+            # Prefer an explicit repo_path the user picked at assign
+            # time (coding tasks let them point at any local clone, not
+            # just the configured ones). Fall back to resolving from
+            # scope_repo + repo_roots when no explicit path is set.
+            local_path = (job.extra or {}).get("repo_path") or (
+                resolve_repo_path(job.scope_repo) if job.scope_repo else None
+            )
             if job.scope_repo and not local_path:
                 logger.warning(
                     f"[cycle] agent_job {job.id}: no local clone for "
@@ -101,7 +107,12 @@ def _phase_execute_agent_jobs():
                 if job.source_task_id else None
             )
             if linked_task is not None:
-                full_prompt = build_task_prompt(linked_task, role)
+                # custom_prompt comes from the assign endpoint when the
+                # user typed a one-off intent override into the modal.
+                # Persisted on job.extra so a queued job retains it
+                # across the cycle delay.
+                custom_prompt = (job.extra or {}).get("custom_prompt", "")
+                full_prompt = build_task_prompt(linked_task, role, custom_prompt)
             else:
                 # Lightweight prompt for standalone AgentJobs.
                 prompt_parts = [job.title]
@@ -206,14 +217,23 @@ def _phase_execute_agent_jobs():
                 # first approval lives on job.extra. prepare() safety-
                 # checks it against the agent's attached pool; runner
                 # silently drops unattached ids.
-                specialty_id = (job.extra or {}).get("specialty_id") or None
+                job_extra_for_prep = job.extra or {}
+                specialty_id = job_extra_for_prep.get("specialty_id") or None
+                # Branch prefix preference: explicit user choice from the
+                # assign endpoint > role default. cartographer keeps its
+                # own prefix so its scratch branches read as "cartographer
+                # mapping <repo>" instead of generic "maiko/...".
+                branch_prefix = (
+                    job_extra_for_prep.get("branch_prefix")
+                    or ("cartographer" if role == "cartographer" else "maiko")
+                )
                 try:
                     prep = prepare(
                         task_id=job.id,
                         task_title=job.title,
                         prompt=full_prompt,
                         repo_path=local_path,
-                        branch_prefix="cartographer" if role == "cartographer" else "maiko",
+                        branch_prefix=branch_prefix,
                         agent_profile_id=job.agent_profile_id,
                         role=role,
                         specialty_id=specialty_id,
@@ -232,9 +252,16 @@ def _phase_execute_agent_jobs():
                 job.branch = prep.get("branch")
                 db.session.commit()
 
+            # Carry plan_first / branch_name from job.extra so coding
+            # tasks queued via the assign endpoint keep their plan-first
+            # flag and any user-picked branch prefix. branch_name on
+            # _kickoff_agent_headless is unused at runtime (worktree
+            # mode), but plan_first changes the initial prompt.
+            job_extra = job.extra or {}
+            kickoff_plan_first = bool(job_extra.get("plan_first")) and role == "coding"
             kickoff = _kickoff_agent_headless(
                 job.agent_profile_id, job.worktree_path, job.id,
-                branch_name=None, plan_first=False, role=role,
+                branch_name=None, plan_first=kickoff_plan_first, role=role,
             )
             if kickoff.get("success"):
                 job.status = "running"

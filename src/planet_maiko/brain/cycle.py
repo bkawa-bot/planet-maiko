@@ -55,7 +55,6 @@ from .phases.orchestrate import (  # noqa: E402
 )
 from .phases.spawn_jobs import _phase_spawn_jobs_for_tasks  # noqa: E402
 from .phases.execute_jobs import _phase_execute_agent_jobs  # noqa: E402
-from .phases.execute_tasks import _phase_execute_agent_tasks  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +78,6 @@ _PHASES = [
     ("unblock", _phase_unblock_tasks),
     ("spawn_jobs_for_tasks", _phase_spawn_jobs_for_tasks),
     ("execute_agent_jobs", _phase_execute_agent_jobs),
-    ("execute_agent_tasks", _phase_execute_agent_tasks),
     ("stuck_escalation", _phase_stuck_escalation),
 ]
 

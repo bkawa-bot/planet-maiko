@@ -18,44 +18,6 @@ logger = logging.getLogger(__name__)
 agents_bp = Blueprint("agents", __name__)
 
 
-def _spawn_one_shot_thread(task_id, working_path):
-    """Re-fire the autonomous run for a one-shot task on the unified
-    headless flow (same as a fresh assign would do — claude --print
-    in the worktree, agent uses the channel MCP to reply
-    ready_for_review with the report content).
-
-    Used by the rerun endpoint and by the cycle's safety-net
-    execute phase. No-op if the task or its agent has gone away.
-    """
-    app = current_app._get_current_object()
-
-    def _run():
-        with app.app_context():
-            try:
-                from planet_maiko.models.task import Task
-                from planet_maiko.models.agent_profile import AgentProfile
-                from planet_maiko.agents.coding_agent import _kickoff_agent_headless
-                task = db.session.get(Task, task_id)
-                if not task:
-                    logger.warning(f"[one-shot] Task {task_id} vanished before run")
-                    return
-                if task.status not in ("new", "blocked"):
-                    return  # Already running or done — let the cycle handle it
-                if not task.assigned_agent_id:
-                    logger.warning(f"[one-shot] Task {task_id} has no assigned agent")
-                    return
-                profile = db.session.get(AgentProfile, task.assigned_agent_id)
-                role = (profile.role if profile else None) or "investigation"
-                _kickoff_agent_headless(
-                    task.assigned_agent_id, working_path, task_id,
-                    branch_name=None, plan_first=False, role=role,
-                )
-            except Exception as e:
-                logger.exception(f"[one-shot] kickoff failed for {task_id}: {e}")
-
-    threading.Thread(target=_run, daemon=True, name=f"one-shot-{task_id}").start()
-
-
 @agents_bp.route("/brain/session", methods=["GET"])
 def get_brain_session():
     """Get brain session status (runtime info)."""
@@ -139,37 +101,37 @@ def delete_skill(skill_id):
 
 @agents_bp.route("/agents/assign", methods=["POST"])
 def assign_agent():
-    """Assign an agent to a task.
+    """Assign an agent to a task by enqueuing an AgentJob.
 
-    Coding agents: prepares a worktree + CLAUDE.md as before. Requires
-    repo_path.
+    Single unified path for every role (coding / review / investigation
+    / cartographer): create an AgentJob with status="queued" and let
+    the brain cycle's _phase_execute_agent_jobs handle the worktree
+    prep + headless kickoff. Same entry point, same audit trail, same
+    Active Agents UI for every kind of work.
 
-    Investigation / cartographer agents: also prepares a worktree (so
-    the user can "dig deeper" later by attaching to it), then fires a
-    background thread that runs the one-shot skill immediately. No
-    repo_path needed — resolved from config.github.repo_roots using
-    the task's repo. Returns 201 right away; the thread writes the
-    result pupdate when it completes.
-
-    Review / pr_review agents (Stage D): the Task gets assigned and a
-    linked AgentJob is spawned + kicked off. Replies route through the
-    AgentJob reply handler; the job holds the worktree + artifact.
+    Inputs (JSON body):
+        task_id, profile_id   — required
+        repo_path             — required for coding (user-picked clone);
+                                resolved from scope for the others
+        plan_first            — coding only; persisted on job.extra
+        branch_name           — optional branch prefix override
+        custom_prompt         — optional one-off intent override
+        specialty_id          — optional specialty to layer onto the run
     """
     from planet_maiko.models.task import Task
     from planet_maiko.models.agent_profile import AgentProfile
-    from planet_maiko.agents.coding_agent import prepare
+    from planet_maiko.models.agent_job import AgentJob
     from planet_maiko.agents.brain_session import ONE_SHOT_ROLE_FOR_TYPE
+    from planet_maiko.orchestration import resolve_repo_path, scope_for_task
+    import uuid as _uuid
 
     data = request.get_json()
     task_id = data.get("task_id")
     profile_id = data.get("profile_id")
     repo_path = data.get("repo_path", "")
     plan_first = bool(data.get("plan_first", False))
-    branch_name = data.get("branch_name")
-    # Optional specialty chosen for this run. Only honored if the agent
-    # has this specialty in their attached pool; runner double-checks
-    # before injecting, but we also persist the choice on task.extra so
-    # a retry / cycle rerun picks the same specialty.
+    branch_name = (data.get("branch_name") or "").strip() or None
+    custom_prompt = data.get("custom_prompt", "")
     specialty_id = (data.get("specialty_id") or "").strip() or None
 
     if not task_id or not profile_id:
@@ -181,140 +143,66 @@ def assign_agent():
     if specialty_id and specialty_id not in (profile.specialty_ids or []):
         specialty_id = None  # silently drop — agent doesn't have it attached
 
-    # Stage D: review / pr_review go through AgentJob. The job owns the
-    # worktree + session + artifact; the Task stays as the user-owed
-    # "please review this PR" entry.
-    if role == "review":
-        return _assign_review_via_agent_job(task, profile, data, specialty_id)
-
-    # Resolve repo_path. For coding the user picks one in the modal;
-    # for investigation/cartographer the task's scope plus repo_roots
-    # determines it (no UI input needed).
-    if role in ("investigation", "cartographer"):
-        from planet_maiko.orchestration import resolve_repo_path, scope_for_task
-        repo = scope_for_task(task)
-        local_path = resolve_repo_path(repo)
-        if not local_path:
-            return jsonify({"error": f"No local clone found for {repo or 'this task'}"}), 400
-        repo_path = local_path
-        # Coerce task.type so the cycle's "find one-shot tasks" query
-        # picks this up if the kickoff thread dies and we need a retry.
-        if task.type not in ONE_SHOT_ROLE_FOR_TYPE:
-            task.type = {
-                "investigation": "investigation",
-                "cartographer": "cartograph",
-            }[role]
-        if task.status not in ("blocked", "done"):
-            task.status = "new"
-    else:
+    # Resolve scope_repo + local_path. Coding lets the user pick any
+    # clone via repo_path; review / investigation / cartographer derive
+    # the path from the task's scope. We need a local clone before
+    # queueing — surfacing "no clone" at queue time keeps the failure
+    # legible (vs. discovering it inside the cycle a tick later).
+    if role == "coding":
         if not repo_path:
             return jsonify({"error": "repo_path is required. Select a repo in the assign modal."}), 400
         if not os.path.isdir(repo_path):
             return jsonify({"error": f"Repository path not found: {repo_path}"}), 400
         if not os.path.isdir(os.path.join(repo_path, ".git")):
             return jsonify({"error": f"Not a git repository: {repo_path}"}), 400
-
-    # Build the prompt that lands in TASK.md. Shared with the pack
-    # dispatcher and the brain cycle's safety-net executor so every
-    # entry point composes the same context.
-    from planet_maiko.orchestration import build_task_prompt
-    full_prompt = build_task_prompt(task, role, data.get("custom_prompt", ""))
-
-    try:
-        result = prepare(
-            task_id=task_id,
-            task_title=task.title,
-            prompt=full_prompt,
-            repo_path=repo_path,
-            branch_prefix=branch_name or "maiko",
-            agent_profile_id=profile.id,
-            role=role,
-            specialty_id=specialty_id,
-        )
-    except Exception as e:
-        return jsonify({"error": f"Agent preparation failed: {str(e)}"}), 500
-    if not result:
-        return jsonify({"error": "Failed to prepare agent"}), 500
-
-    branch = result.get("branch")
-    working_path = result.get("working_path")
-
-    from planet_maiko.agents.coding_agent import _kickoff_agent_headless
-    kickoff = _kickoff_agent_headless(
-        profile.id, working_path, task_id,
-        branch_name=None,  # always worktree mode
-        plan_first=plan_first if role == "coding" else False,
-        role=role,
-    )
-    result["kickoff_result"] = kickoff
+        scope_repo = scope_for_task(task)  # may be None for coding
+    else:
+        scope_repo = scope_for_task(task)
+        local_path = resolve_repo_path(scope_repo)
+        if not local_path:
+            return jsonify({"error": f"No local clone found for {scope_repo or 'this task'}"}), 400
+        repo_path = local_path
+        # Normalize task.type so monitor + cycle phases recognize the
+        # one-shot kinds. Cartographer task type is "cartograph" by
+        # convention; everything else maps 1:1 with the role.
+        type_map = {"investigation": "investigation", "cartographer": "cartograph", "review": "review"}
+        if task.type not in ONE_SHOT_ROLE_FOR_TYPE and task.type not in ("review", "pr_review"):
+            task.type = type_map.get(role, task.type)
 
     task.assigned_agent_id = profile.id
     if task.status == "new":
         task.status = "in_progress"
-    extra = dict(task.extra or {})
-    if working_path:
-        extra["working_path"] = working_path
-    if branch:
-        extra["branch"] = branch
-    if plan_first and role == "coding":
-        extra["plan_first"] = True
-    if specialty_id:
-        extra["specialty_id"] = specialty_id
-    task.extra = extra
-    db.session.commit()
 
-    return jsonify({
-        "task": task.to_dict(),
-        "agent": profile.to_dict(),
-        "mode": role,
-        "worktree": result,
-    }), 201
+    # Reuse a queued / pending_approval job if one exists for this task
+    # (e.g. user clicked Assign twice, or the spawn-jobs phase beat us
+    # to it). Otherwise mint a fresh one.
+    job_extra = {
+        "repo_path": repo_path,
+        "branch_prefix": branch_name,
+        "plan_first": plan_first if role == "coding" else False,
+        "custom_prompt": custom_prompt,
+        "specialty_id": specialty_id,
+    }
+    # Drop None / empty values so we don't litter the row with junk.
+    job_extra = {k: v for k, v in job_extra.items() if v}
 
-
-def _assign_review_via_agent_job(task, profile, data, specialty_id=None):
-    """Review/pr_review assignment path. Spawns a linked AgentJob,
-    prepares the worktree under the job id, and kicks off headless.
-
-    The agent reports with task_id == job.id so outbox replies land
-    in _handle_agent_job_reply. On ready_for_review the job stores
-    the artifact and the linked Task moves to status=review.
-
-    specialty_id (optional) flows through to prepare() so the review
-    agent's CLAUDE.md gets the specialty prompt layered on top.
-    """
-    from planet_maiko.models.agent_job import AgentJob
-    from planet_maiko.agents.coding_agent import prepare, _kickoff_agent_headless
-    from planet_maiko.orchestration import resolve_repo_path, scope_for_task, build_task_prompt
-    import uuid as _uuid
-
-    repo = scope_for_task(task)
-    local_path = resolve_repo_path(repo)
-    if not local_path:
-        return jsonify({"error": f"No local clone found for {repo or 'this task'}"}), 400
-
-    if task.type not in ("review", "pr_review"):
-        task.type = "review"
-    task.assigned_agent_id = profile.id
-
-    # Skip if a job already exists — could happen if the user clicks
-    # Assign twice, or the spawn phase already created one between
-    # the UI fetch and this call. Reuse it.
     existing = AgentJob.query.filter_by(source_task_id=task.id).first()
-    if existing and existing.status in ("queued", "pending_approval"):
+    if existing and existing.status in ("queued", "pending_approval", "failed"):
         job = existing
         job.agent_profile_id = profile.id
-        if specialty_id:
-            j_extra = dict(job.extra or {})
-            j_extra["specialty_id"] = specialty_id
-            job.extra = j_extra
+        job.status = "queued"
+        job.error = None
+        job.finished_at = None
+        merged_extra = dict(job.extra or {})
+        merged_extra.update(job_extra)
+        job.extra = merged_extra
     else:
-        job_id = f"job-{_uuid.uuid4().hex[:10]}"
         job = AgentJob(
-            id=job_id,
+            id=f"job-{_uuid.uuid4().hex[:10]}",
             kind=task.type,
             title=task.title,
             description=(task.extra or {}).get("description") or (task.extra or {}).get("body"),
-            scope_repo=repo,
+            scope_repo=scope_repo,
             priority=task.priority or "normal",
             created_by="user",
             source_task_id=task.id,
@@ -323,66 +211,27 @@ def _assign_review_via_agent_job(task, profile, data, specialty_id=None):
             approved_at=datetime.now(timezone.utc),
             approved_by="user",
             status="queued",
-            extra={"specialty_id": specialty_id} if specialty_id else {},
+            extra=job_extra,
         )
         db.session.add(job)
+
+    # Stamp agent_job_id onto task.extra so the diff / relaunch / report
+    # UIs can find the job before the cycle has run. worktree_path /
+    # branch get filled in by execute_jobs once prepare succeeds.
     db.session.flush()
-
-    full_prompt = build_task_prompt(task, "review", data.get("custom_prompt", ""))
-    branch_name = data.get("branch_name")
-    try:
-        result = prepare(
-            task_id=job.id,  # agent reports with this id → AgentJob reply path
-            task_title=task.title,
-            prompt=full_prompt,
-            repo_path=local_path,
-            branch_prefix=branch_name or "maiko",
-            agent_profile_id=profile.id,
-            role="review",
-            specialty_id=specialty_id,
-        )
-    except Exception as e:
-        return jsonify({"error": f"Agent preparation failed: {str(e)}"}), 500
-    if not result:
-        return jsonify({"error": "Failed to prepare agent"}), 500
-
-    job.worktree_path = result.get("working_path")
-    job.branch = result.get("branch")
-
-    kickoff = _kickoff_agent_headless(
-        profile.id, job.worktree_path, job.id,
-        branch_name=None, plan_first=False, role="review",
-    )
-    result["kickoff_result"] = kickoff
-
-    if kickoff.get("success"):
-        job.status = "running"
-        job.started_at = datetime.now(timezone.utc)
-        job.session_id = kickoff.get("session_id")
-        task.status = "in_progress"
-    else:
-        job.status = "failed"
-        job.error = kickoff.get("error") or "kickoff failed"
-        job.finished_at = datetime.now(timezone.utc)
-        profile.tasks_failed = (profile.tasks_failed or 0) + 1
-
-    # Mirror worktree onto task.extra so the existing diff / relaunch
-    # UI (which still reads task.extra.working_path) keeps working.
     task_extra = dict(task.extra or {})
-    if job.worktree_path:
-        task_extra["working_path"] = job.worktree_path
-    if job.branch:
-        task_extra["branch"] = job.branch
     task_extra["agent_job_id"] = job.id
+    if specialty_id:
+        task_extra["specialty_id"] = specialty_id
     task.extra = task_extra
+
     db.session.commit()
 
     return jsonify({
         "task": task.to_dict(),
         "agent": profile.to_dict(),
-        "mode": "review",
-        "worktree": result,
-        "agent_job_id": job.id,
+        "job": job.to_dict(),
+        "mode": role,
     }), 201
 
 
@@ -829,41 +678,45 @@ def send_to_agent(task_id):
 
 @agents_bp.route("/agents/<task_id>/rerun", methods=["POST"])
 def rerun_agent(task_id):
-    """Re-fire the autonomous one-shot run for a review/investigation
-    task that's stuck on "Starting up" — the original headless run
+    """Re-fire the autonomous run for a task whose original kickoff
     silently died (claude crashed, MCP failed to load, network blip)
-    and the agent never sent its first pupdate, so the UI has no
-    way to know what went wrong. This kicks a fresh thread that
-    re-uses the same worktree and session_id so the user's View
-    Session is still valid afterwards.
+    and the agent never sent its first pupdate.
 
-    No-op for coding tasks — those don't have a single "skill" to
-    re-run; the user should use Relaunch to open a terminal.
+    Re-queues the linked AgentJob — same row, status flipped back to
+    "queued" so the next brain cycle picks it up via the unified
+    execute path. Worktree + session_id are preserved on the job so
+    "View Session" stays valid.
     """
     from planet_maiko.models.task import Task
-    from planet_maiko.agents.brain_session import ONE_SHOT_ROLE_FOR_TYPE
+    from planet_maiko.models.agent_job import AgentJob
 
     task = db.session.get(Task, task_id)
     if not task:
         return jsonify({"error": "task not found"}), 404
-    if task.type not in ONE_SHOT_ROLE_FOR_TYPE:
-        return jsonify({"error": f"task type '{task.type}' isn't a one-shot role"}), 400
     if not task.assigned_agent_id:
         return jsonify({"error": "task has no assigned agent"}), 400
 
-    working_path = (task.extra or {}).get("working_path")
-    if not working_path or not os.path.isdir(working_path):
-        return jsonify({"error": "no worktree on disk for this task — re-assign the agent"}), 400
+    job = AgentJob.query.filter_by(source_task_id=task.id).first()
+    if not job:
+        return jsonify({"error": "no AgentJob linked to this task — re-assign the agent to spawn one"}), 400
 
-    # Reset to "new" so _spawn_one_shot_thread doesn't bail on the
-    # "already running / done" guard. The unified kickoff inside
-    # that helper re-fires the same headless flow assign uses.
+    # Re-queue: clear terminal state so execute_jobs picks it up next
+    # cycle. Worktree path stays so the existing prep doesn't redo
+    # itself; kickoff loop will re-fire against it.
+    job.status = "queued"
+    job.error = None
+    job.started_at = None
+    job.finished_at = None
     if task.status == "in_progress":
         task.status = "new"
     db.session.commit()
 
-    _spawn_one_shot_thread(task.id, working_path)
-    return jsonify({"status": "rerunning", "task_id": task.id, "working_path": working_path}), 202
+    return jsonify({
+        "status": "rerunning",
+        "task_id": task.id,
+        "job_id": job.id,
+        "working_path": job.worktree_path,
+    }), 202
 
 
 @agents_bp.route("/agents/<task_id>/nudge", methods=["POST"])
