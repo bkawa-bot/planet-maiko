@@ -24,6 +24,68 @@ _SAFE_BRANCH_RE = re.compile(r"^[A-Za-z0-9_./-]+$")
 _UNSAFE_PATH_CHARS = re.compile(r'[;&|`$<>!"*?\n\r]')
 
 
+def _tail_log(path, max_chars=400):
+    """Read the last ~max_chars of a log file. Used to capture a useful
+    excerpt of why claude exited so the AgentJob row carries context
+    instead of a bare exit code."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            data = f.read()
+        snippet = data[-max_chars:].strip()
+        # Strip blank leading lines so the tail reads clean.
+        return snippet or "(empty log)"
+    except Exception as e:
+        return f"(could not read log: {e})"
+
+
+def _mark_kickoff_failed(app, kickoff_id, error):
+    """Mark the AgentJob (or Task) tied to this kickoff as failed.
+
+    `kickoff_id` is what the caller passed as task_id — for the
+    unified path it's an AgentJob.id (`job-...`). For older Task-keyed
+    runs it's a Task.id. We try AgentJob first since that's the
+    canonical post-unification target.
+    """
+    if app is None:
+        return
+    try:
+        with app.app_context():
+            from planet_maiko.database import db
+            from planet_maiko.models.agent_job import AgentJob
+            from planet_maiko.models.task import Task
+            from datetime import datetime, timezone
+
+            job = db.session.get(AgentJob, kickoff_id)
+            if job and job.status in ("queued", "running"):
+                job.status = "failed"
+                job.error = error[:500]
+                job.finished_at = datetime.now(timezone.utc)
+                # Keep the linked Task in sync so the user sees the
+                # failure on whichever surface they're looking at.
+                if job.source_task_id:
+                    t = db.session.get(Task, job.source_task_id)
+                    if t and t.status == "in_progress":
+                        t.status = "blocked"
+                        t.updated_at = datetime.now(timezone.utc)
+                        extra = dict(t.extra or {})
+                        extra["kickoff_error"] = error[:500]
+                        t.extra = extra
+                db.session.commit()
+                return
+
+            # Legacy Task-keyed kickoff path.
+            task = db.session.get(Task, kickoff_id)
+            if task and task.status == "in_progress":
+                task.status = "blocked"
+                task.updated_at = datetime.now(timezone.utc)
+                extra = dict(task.extra or {})
+                extra["kickoff_error"] = error[:500]
+                task.extra = extra
+                db.session.commit()
+    except Exception as e:
+        logger.warning(f"[agent] Couldn't surface kickoff failure for {kickoff_id}: {e}")
+
+
 def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, plan_first=False, role="coding"):
     """Start an autonomous agent as a background daemon thread — no terminal.
 
@@ -185,6 +247,7 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
         from planet_maiko.agents.wake import set_agent_state
         set_agent_state(_app, task_id, "working")
         popen = None
+        crash_error = None  # captured to mark the AgentJob/Task failed
         try:
             with open(log_path, "w", encoding="utf-8") as log:
                 log.write(f"# Headless coding agent run\n# session_id: {session_id}\n\n")
@@ -210,13 +273,29 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
                     popen.communicate(input=initial_prompt)
                 finally:
                     unregister_running_process(task_id)
+            # Non-zero exit = claude crashed (MCP load failure, auth
+            # missing, network blip, etc). Capture the last bit of the
+            # log so the failure surfaces somewhere useful instead of
+            # vanishing into agent.log nobody reads.
+            if popen is not None and popen.returncode not in (None, 0):
+                crash_error = (
+                    f"claude exited {popen.returncode}: "
+                    + _tail_log(log_path, max_chars=400)
+                )
         except Exception as e:
+            crash_error = f"kickoff thread crashed: {e}"
             logger.warning(f"[agent] Headless run for {task_id} failed: {e}")
         finally:
             if popen is not None:
                 unregister_running_process(task_id)
             set_agent_state(_app, task_id, "idle")
             lock.release()
+            # If the subprocess died before the agent could report back,
+            # nothing else moves the AgentJob/Task off "running" — flip
+            # it to "failed" here so the user sees what went wrong
+            # instead of a row stuck mid-flight.
+            if crash_error:
+                _mark_kickoff_failed(_app, task_id, crash_error)
 
     threading.Thread(target=_run, daemon=True, name=f"coding-{task_id}").start()
     logger.info(f"[agent] Headless coding agent launched for {agent_id} (session {session_id[:8]})")
