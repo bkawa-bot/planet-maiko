@@ -93,12 +93,27 @@ def run(app):
     """
     global _last_cycle, _cycle_count
 
+    from planet_maiko.database import db
+
     with app.app_context():
         logger.info(f"=== Brain cycle #{_cycle_count + 1} ===")
 
         results = {}
         for key, phase_fn in _PHASES:
             results[key] = phase_fn()
+            # Clean the session after every phase. Phases own their
+            # own commits; anything still pending here is a leak from
+            # a phase that errored mid-write. Without this rollback,
+            # the next phase's first query autoflushes the leaked
+            # pending row and trips "UNIQUE constraint failed" /
+            # similar errors that have nothing to do with the phase
+            # the warning surfaces in (the user kept seeing
+            # "stuck escalation skipped: ... pupdates.id" from a leak
+            # in an earlier phase).
+            try:
+                db.session.rollback()
+            except Exception as e:
+                logger.warning(f"[cycle] post-phase rollback ({key}) skipped: {e}")
 
         # Fire plugin hooks for all completed phases
         from planet_maiko.plugins.loader import fire_hook

@@ -105,5 +105,16 @@ def _phase_stuck_escalation():
             db.session.commit()
         return {"escalated": escalated, "auto_dismissed": dismissed}
     except Exception as e:
+        # Roll back so the leaked pending state from upstream phases
+        # (or our own partial writes) doesn't bleed into the cycle's
+        # post-phase rollback path. The user was seeing
+        # "stuck escalation skipped: raised as a result of query
+        # invoked autoflush) UNIQUE constraint failed pupdates.id"
+        # spam every cycle because the failing autoflush left the
+        # session in a half-committed state across phases.
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         logger.warning(f"[cycle] Stuck escalation skipped: {e}")
         return {"escalated": 0, "auto_dismissed": 0}
