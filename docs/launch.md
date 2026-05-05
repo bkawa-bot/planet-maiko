@@ -60,7 +60,7 @@ makes the line land like a closing thought rather than a slogan.
 > wasn't there. So I built Planet Maiko: a self-hosted pack of agents
 > that runs locally, picks up your stack and conventions automatically,
 > learns from every approved PR review, and stays out of your way the
-> rest of the time. The UI is closer to Animal Crossing than to a
+> rest of the time. The UI is closer to Earthbound than to a
 > SaaS dashboard — deliberately. AGPL, no telemetry, no hosted
 > account. The only subscription is caring about your tools.
 
@@ -125,10 +125,10 @@ that's the moat. Frame as our choices, not as critiques of theirs.
 - **Wellbeing as a first-class concern.** "Enough for today" closing
   card. Weekend mode that actually quiets the agents. Interruption
   budget that softens the voice when it's been a hard day.
-- **Pixel sherbet aesthetics.** Animal Crossing / Earthbound register.
-  Live weather and time-of-day backgrounds. 14 themes, all named for
-  what they evoke (`midnight violet`, `slime garden`, `cherry
-  blossom`) rather than light/dark/system.
+- **Strange-not-corporate aesthetics.** Earthbound register. Live
+  weather and time-of-day backgrounds. 14 themes, all named for
+  what they evoke (`midnight`, `slime garden`, `cherry blossom`)
+  rather than light/dark/system.
 - **Self-improving via real signal.** Per-repo LoRA adapters trained
   from approved Learnings. The pack you've trained for a month is
   meaningfully sharper than tomorrow's pack trained from scratch.

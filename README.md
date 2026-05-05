@@ -31,7 +31,7 @@ Maiko makes no assumptions about where your context lives. GitHub, Linear, and c
 
 ![The campfire — end-of-day pack insights](docs/screenshots/campfire.png)
 
-Cozy on the surface — Animal Crossing vibes, live weather, and a real Alaskan Klee Kai named Maiko who gets petted when you close out a good day. Uncompromising underneath — AGPL, anti-extraction, on your machine always. The only subscription is caring about your tools.
+Cozy on the surface — Earthbound-strange theming, live weather, sprite moods that shift with your day, and a real Alaskan Klee Kai named Maiko who lent her name to the project. Uncompromising underneath — AGPL, anti-extraction, on your machine always. The only subscription is caring about your tools.
 
 ---
 

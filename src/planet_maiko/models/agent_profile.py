@@ -13,7 +13,12 @@ class AgentProfile(db.Model):
 
     id = db.Column(db.String(128), primary_key=True)
     display_name = db.Column(db.String(100), nullable=False)
-    avatar = db.Column(db.String(50), default="shiba")  # shiba, corgi, husky, poodle, golden, etc.
+    # Card id (matches a row in data/cards/cards.yaml). Set by
+    # create_profile via roll_card(); the model default is None
+    # because the breed-string default ("shiba") was a leftover
+    # from before the cards system, and CardAvatar's procedural
+    # fallback handles a missing card id gracefully.
+    avatar = db.Column(db.String(50), nullable=True)
     flavor_text = db.Column(db.String(256), nullable=True)  # "Loves debugging. Afraid of CSS."
 
     # Orchestration identity. Role picks what kind of work this agent takes

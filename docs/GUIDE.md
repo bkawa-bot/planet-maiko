@@ -57,7 +57,7 @@ The agent works, commits to its branch, and calls `reply(message_type="ready_for
 
 | Page | What it does |
 |------|-------------|
-| **Home** | Pack Requests, rolling overview pane, scene + weather, pet Maiko |
+| **Home** | Pack Requests, rolling overview pane, scene + weather, sprite mood |
 | **Tasks** | Projects + tasks, AI task generation, agent assignment |
 | **Agents** | Active pack (live state dots), profiles, message threads, Pack Insights |
 | **Knowledge** | Learnings with approve/dismiss, Insights playbook, backfill from PRs |
