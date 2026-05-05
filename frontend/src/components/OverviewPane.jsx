@@ -93,10 +93,6 @@ export default function OverviewPane() {
   const [focusExpanded, setFocusExpanded] = useState(null);
   const [projects, setProjects] = useState([]);
   const [agentNames, setAgentNames] = useState({});
-  // Easter egg: 1-in-50 chance Maiko delivers the overview in Papyrus.
-  // Rolled fresh on every fetch + manual refresh, so it's rare, not
-  // sticky, and refreshing lets you escape (98% chance).
-  const [papyrusMode, setPapyrusMode] = useState(false);
   const navigate = useNavigate();
 
   const memoById = useMemo(() => {
@@ -132,7 +128,6 @@ export default function OverviewPane() {
   const fetchAll = async () => {
     setLoading(true);
     setError(null);
-    setPapyrusMode(Math.random() < 0.02);
     try {
       const [overviewRes, memoRes, taskRes, pendingRes, projectRes, profileRes, brainStatusRes] = await Promise.all([
         api.getHomeOverview(),
@@ -161,7 +156,6 @@ export default function OverviewPane() {
 
   const refresh = async () => {
     setRefreshing(true);
-    setPapyrusMode(Math.random() < 0.02);
     try {
       const data = await api.refreshHomeOverview();
       setOverview(data.overview);
@@ -338,7 +332,7 @@ export default function OverviewPane() {
   const hasMoreNeeds = allNeeds.length > 3;
 
   return (
-    <div className={`overview-pane ${papyrusMode ? "papyrus-mode" : ""}`}>
+    <div className="overview-pane">
       <header className="overview-header">
         <div className="overview-greeting-wrap">
           {/* Sprite mood picked by the overview LLM from the files

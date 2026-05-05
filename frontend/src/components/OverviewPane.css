@@ -15,21 +15,6 @@
   box-shadow: 0 2px 16px rgba(0, 0, 0, 0.12);
 }
 
-/* Easter egg: 1-in-50 chance Maiko delivers the overview in Papyrus.
-   Full takeover inside the pane — every descendent, including the
-   greeting and refresh button, flips to the native Papyrus. Nothing
-   else on the page is affected, which is the whole point: the
-   overview shows up in Papyrus and everything around it stays
-   normal, so it reads as a deliberate choice, not a font-loading
-   bug. Refreshing rolls again (98% chance it goes away). */
-.overview-pane.papyrus-mode,
-.overview-pane.papyrus-mode * {
-  font-family: 'Papyrus', 'Papyrus Condensed', fantasy, serif !important;
-  letter-spacing: 0 !important;
-  text-transform: none !important;
-  -webkit-font-smoothing: antialiased !important;
-}
-
 /* Loading + error states */
 .overview-loading,
 .overview-error {
