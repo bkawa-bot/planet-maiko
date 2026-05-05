@@ -94,6 +94,39 @@ def list_profiles():
     return jsonify(out)
 
 
+@profiles_bp.route("/profiles/just-arrived", methods=["GET"])
+def list_just_arrived():
+    """Profiles whose arrival bio-gen has finished recently.
+
+    Used by the global ArrivalWatcher to pop a celebratory modal
+    once the LLM names + writes the bio for a freshly-created agent.
+    The watcher polls this and dedupes locally in localStorage so a
+    given agent only ever shows the modal once.
+
+    Filters:
+      - not archived
+      - display_name != "Arriving…" (bio gen has resolved, even via
+        the fallback random-name path)
+      - created_at within last 30 min (cuts off old agents that
+        recover_stale_arrivals rescues across a restart, plus keeps
+        the polling response small)
+    """
+    from datetime import datetime, timezone, timedelta
+    from planet_maiko.agents.profiles import ARRIVING_PLACEHOLDER
+
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
+    rows = (
+        AgentProfile.query
+        .filter((AgentProfile.archived == False) | (AgentProfile.archived == None))  # noqa: E712
+        .filter(AgentProfile.display_name != ARRIVING_PLACEHOLDER)
+        .filter(AgentProfile.created_at >= cutoff)
+        .order_by(AgentProfile.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    return jsonify([p.to_dict() for p in rows])
+
+
 @profiles_bp.route("/profiles/<profile_id>", methods=["GET"])
 def get_profile(profile_id):
     """Get a single agent profile."""

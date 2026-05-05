@@ -368,6 +368,7 @@ export const api = {
     const query = new URLSearchParams(params).toString();
     return request(`/profiles${query ? `?${query}` : ""}`);
   },
+  getJustArrivedProfiles: () => request("/profiles/just-arrived"),
   createProfile: (data) =>
     request("/profiles", { method: "POST", body: JSON.stringify(data) }),
   updateProfile: (id, data) =>

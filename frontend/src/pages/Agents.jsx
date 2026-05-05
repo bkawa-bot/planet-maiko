@@ -1,20 +1,16 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
-import {
-  Plus, Flame, Target, AlertTriangle, Code2, Eye, Search, X,
-} from "lucide-react";
+import { Plus, Flame, Target, X } from "lucide-react";
 import InfoButton from "../components/InfoButton";
 import AgentsActiveTab from "../components/agents/AgentsActiveTab";
 import AgentsProfilesTab from "../components/agents/AgentsProfilesTab";
 import AgentsInsightsTab from "../components/agents/AgentsInsightsTab";
 import ModalPortal from "../components/ModalPortal";
-import CardAvatar from "../components/CardAvatar";
-import { formatRepo, useDefaultOrg, useConfiguredRepos } from "../utils/repo";
+import { useConfiguredRepos } from "../utils/repo";
 import "./Agents.css";
 
 export default function Agents() {
-  const defaultOrg = useDefaultOrg();
   const configuredRepos = useConfiguredRepos();
   const [tab, setTab] = useState("active");
   const [profiles, setProfiles] = useState([]);
@@ -24,7 +20,6 @@ export default function Agents() {
   const [conflicts, setConflicts] = useState([]);
   const [allLearnings, setAllLearnings] = useState({});
   const [loading, setLoading] = useState(true);
-  const [showArrival, setShowArrival] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] = useState({ role: "coding", scope_repo: "", instructions: "", specialty_ids: [] });
   const [creating, setCreating] = useState(false);
@@ -89,15 +84,18 @@ export default function Agents() {
   const submitCreateAgent = async () => {
     setCreating(true);
     try {
-      const profile = await api.createProfile({
+      await api.createProfile({
         role: createForm.role,
         scope_repo: createForm.scope_repo.trim() || undefined,
         instructions: createForm.instructions.trim() || undefined,
         specialty_ids: createForm.specialty_ids,
       });
       setShowCreateForm(false);
-      setShowArrival(profile);
-      showToast(`${profile.display_name} just arrived in town! 🐾`, "normal");
+      // Bio gen runs in a daemon thread server-side. The global
+      // ArrivalWatcher (mounted at App level) polls and pops a full
+      // arrival modal once the agent has self-named — replacing the
+      // old fire-too-early modal that showed "Arriving…" as a name.
+      showToast("A new agent is settling in… 🐾", "normal");
       fetchData();
     } catch (err) {
       showToast(err.message || "Create failed", "high");
@@ -196,31 +194,6 @@ export default function Agents() {
               </button>
               <button className="btn btn-primary" onClick={submitCreateAgent} disabled={creating}>
                 {creating ? "Spawning..." : <><Plus size={12} /> Create</>}
-              </button>
-            </div>
-          </div>
-        </div>
-        </ModalPortal>
-      )}
-
-      {/* Arrival Modal */}
-      {showArrival && (
-        <ModalPortal>
-        <div className="modal-overlay" onClick={() => setShowArrival(null)}>
-          <div className="modal arrival-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="arrival-content">
-              <div className="arrival-avatar"><CardAvatar agent={showArrival} size="xl" /></div>
-              <h2 className="arrival-greeting">{showArrival.display_name}</h2>
-              <p className="arrival-flavor">{showArrival.flavor_text}</p>
-              <div className="arrival-role">
-                {(showArrival.role || "coding") === "coding" && <><Code2 size={10} /> Coder</>}
-                {showArrival.role === "review" && <><Eye size={10} /> Reviewer</>}
-                {showArrival.role === "investigation" && <><Search size={10} /> Investigator</>}
-                {showArrival.scope_repo && <span className="arrival-scope" title={showArrival.scope_repo}> · {formatRepo(showArrival.scope_repo, defaultOrg)}</span>}
-                {!showArrival.scope_repo && <span className="arrival-scope"> · global</span>}
-              </div>
-              <button className="btn btn-primary" onClick={() => setShowArrival(null)}>
-                Let's go!
               </button>
             </div>
           </div>

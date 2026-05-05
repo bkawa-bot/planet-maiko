@@ -96,14 +96,19 @@ function CartographLauncher() {
 
 
 // Compact card. Clicking anywhere opens the full profile modal.
-// Surfaces the tagline (flavor_text) on the card — the bio
-// (instructions) lives behind the modal since the user wanted
-// taglines to carry the personality on glance and stats to show
-// the agent has a history. Bio is still load-bearing for the
-// run_skill_as_agent persona preamble; just doesn't render here.
-function ProfileCard({ profile, onOpen }) {
+// Two taglines live here, each saying a different thing:
+//   archetype tagline (card.tagline) — the TYPE's pre-written line
+//     ("moves with the seasons"). Hardcoded in cards.yaml, same for
+//     every Wandering Fox in town. Anchors the archetype identity.
+//   personal tagline (profile.flavor_text) — the agent's own voice,
+//     LLM-written at arrival. Carries the individual personality.
+// The bio (instructions) stays behind the modal since it's load-bearing
+// for the run_skill_as_agent persona preamble, not glanceable copy.
+function ProfileCard({ profile, onOpen, cards }) {
   const defaultOrg = useDefaultOrg();
-  const tagline = (profile.flavor_text || "").trim();
+  const card = cards.find((c) => c.id === profile.avatar);
+  const archetypeTagline = (card?.tagline || "").trim();
+  const personalTagline = (profile.flavor_text || "").trim();
   const ageDays = ageInDays(profile.created_at);
   return (
     <button
@@ -120,14 +125,19 @@ function ProfileCard({ profile, onOpen }) {
           />
           <span className="profile-card-name-text">{profile.display_name}</span>
         </div>
+        {archetypeTagline && (
+          <div className="profile-card-archetype-tagline" title={card?.display_name}>
+            {archetypeTagline}
+          </div>
+        )}
         {profile.scope_repo && (
           <div className="profile-card-chips">
             <span className="profile-card-chip" title={profile.scope_repo}>{formatRepo(profile.scope_repo, defaultOrg)}</span>
           </div>
         )}
-        {tagline && (
+        {personalTagline && (
           <div className="profile-card-preview">
-            {tagline.length > 110 ? tagline.slice(0, 108).replace(/\s+\S*$/, "") + "…" : tagline}
+            {personalTagline.length > 110 ? personalTagline.slice(0, 108).replace(/\s+\S*$/, "") + "…" : personalTagline}
           </div>
         )}
         <div className="profile-card-stats">
@@ -174,6 +184,7 @@ export default function AgentsProfilesTab({
   const [editSaving, setEditSaving] = useState(false);
   const [specialties, setSpecialties] = useState([]);
   const configuredRepos = useConfiguredRepos();
+  const cards = useCards();
 
   useEffect(() => {
     // Pull available specialties once — the edit modal renders a chip
@@ -330,6 +341,7 @@ export default function AgentsProfilesTab({
                   <ProfileCard
                     key={p.id}
                     profile={p}
+                    cards={cards}
                     onOpen={() => setProfileModal(p)}
                   />
                 ))}

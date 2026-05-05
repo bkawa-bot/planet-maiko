@@ -2,25 +2,6 @@
 .agents-header h2 { margin: 0; font-size: 18px; }
 .agents-tabs { display: flex; gap: 8px; }
 
-/* === Arrival Modal === */
-.arrival-modal { max-width: 400px; text-align: center; background: var(--bg-card); border-radius: 16px; }
-.arrival-content { padding: 32px 24px; }
-.arrival-avatar { margin-bottom: 12px; color: var(--pink); }
-.arrival-greeting { font-size: 20px; font-weight: 700; color: var(--text); margin: 0 0 8px; }
-.arrival-flavor { font-size: 12px; color: var(--pink); font-style: italic; margin: 0 0 12px; }
-.arrival-intro { font-size: 13px; color: var(--text-dim); margin: 0 0 16px; line-height: 1.5; }
-.arrival-role {
-  margin-top: 8px; display: inline-flex; align-items: center; gap: 4px;
-  font-size: 11px; color: var(--text-dim);
-}
-.arrival-scope { color: var(--text-muted); }
-
-.arrival-rank {
-  display: inline-block; padding: 4px 14px; border-radius: 12px;
-  background: var(--pink-soft); color: var(--pink); font-size: 12px;
-  font-weight: 600; margin-bottom: 20px;
-}
-
 /* === Agent Grid === */
 .agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
 
@@ -336,6 +317,20 @@
 .profile-card-name-text {
   flex: 1; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Archetype tagline — pre-written, per-card-type, identical for every
+   agent of the same archetype. Sits directly under the name as a
+   small italic line so it reads as identity (the type) rather than
+   voice (the agent's own personal flavor_text below). */
+.profile-card-archetype-tagline {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--text-muted);
+  line-height: 1.3;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* Chips sit on their own row below the name so no matter how long the
    repo slug is, it can't push the name into an ellipsis. Name row stays
