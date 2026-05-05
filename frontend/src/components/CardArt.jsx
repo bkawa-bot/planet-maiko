@@ -25,9 +25,9 @@ function hueFromId(id) {
  * Full baseball-card art for an agent's archetype.
  *
  * Tries `/cards/<id>.png`; on 404 (or before art exists), renders a
- * procedural gradient with the archetype name and tagline. The
- * rarity ribbon sits in the top-right corner regardless of art
- * source so the rarity is always legible.
+ * procedural gradient with the archetype name and tagline. Rarity
+ * still drives the fallback's base hue (so legendary archetypes
+ * read as gold-ish and commons cooler) but isn't surfaced as a label.
  */
 export default function CardArt({ cardId, agent, className = "" }) {
   const id = cardId || agent?.avatar || "";
@@ -62,11 +62,6 @@ export default function CardArt({ cardId, agent, className = "" }) {
           {card?.tagline && (
             <div className="card-art-fallback-tagline">{card.tagline}</div>
           )}
-        </div>
-      )}
-      {card?.rarity && (
-        <div className={`card-art-rarity rarity-${card.rarity}`}>
-          {card.rarity}
         </div>
       )}
     </div>
