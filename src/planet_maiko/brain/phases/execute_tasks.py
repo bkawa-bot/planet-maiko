@@ -102,7 +102,6 @@ def _phase_execute_agent_tasks():
                         task_title=task.title,
                         prompt=full_prompt,
                         repo_path=local_path,
-                        use_worktree=True,
                         agent_profile_id=task.assigned_agent_id,
                         role=role,
                         specialty_id=specialty_id,

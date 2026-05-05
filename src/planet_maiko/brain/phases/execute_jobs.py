@@ -5,51 +5,10 @@ created by the previous phase or by an Automation; this phase
 spawns the runner for each.
 """
 
-"""Brain cycle - the clock tick that drives all processors.
-
-Each cycle runs all phases in order, just like a CPU executes its
-pipeline on each clock tick. Each phase is its own function so failures
-are isolated and the orchestrator stays readable.
-
-Pipeline (phases run in this order):
-    1.  agents               â€” process agent pupdates (auto-complete tasks)
-    1.5 auto_complete_reviews â€” close review tasks for approved/merged PRs
-    2.  awareness            â€” A2A conflict detection + resolution
-    2.5 calendar_focus       â€” auto-focus from calendar events
-    3.2 automations          â€” evaluate user-editable when/then rows (replaced correlator)
-    3.5 pupdates             â€” match remaining pupdates against rules
-    3.6 llm_triage           â€” Tier 2 LLM triage for unmatched pupdates
-    4.  learning             â€” aggregate signals into learnings
-    5.  heartbeats           â€” nudge silent agents
-    6.  projects             â€” auto-advance project phases
-    7.  scheduled_skills     â€” run skills on their schedules
-    8.  orchestrate          â€” materialize investigation tasks + route
-                               unassigned tasks to agent profiles
-    8b. unblock              â€” cascade depends_on completion
-    8b2.spawn_jobs_for_tasks â€” turn assigned review tasks into AgentJobs
-    8c. execute_agent_jobs   â€” run queued AgentJobs (review + pack-owned)
-    8d. execute_agent_tasks  â€” safety net for investigation/repo_analysis
-
-Note: morning brief is user-triggered from the Home page (not a cycle
-phase â€” nobody wants a "morning" brief running at 3am when the first
-cycle happens to tick). Brainstorm can be set up as a scheduled skill
-via the Skills page if the user wants it recurring.
-"""
-
 import logging
-import time
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
-
-# Track cycle history for status reporting
-_last_cycle = None
-_cycle_count = 0
-
-_status_cache = None
-_status_cache_at = 0
-
-
 
 
 def _phase_execute_agent_jobs():
@@ -218,11 +177,30 @@ def _phase_execute_agent_jobs():
 
             if not job.worktree_path:
                 if not local_path:
-                    # Cartograph + some skill runs can work without a
-                    # repo clone (read-only on current working dir), but
-                    # agent runs without a real repo are unusual. Mark
-                    # failed if we can't resolve a path.
-                    logger.warning(f"[cycle] agent_job {job.id}: no repo path, skipping")
+                    # No clone resolved — surface this as an explicit
+                    # failure rather than silently skipping every cycle.
+                    # The two upstream paths to here are (a) job.scope_repo
+                    # set but no local clone — the earlier check at the
+                    # top of this loop handles that — and (b) job.scope_repo
+                    # never set at all, which can happen when the
+                    # triggering pupdate's metadata didn't include a repo.
+                    # Either way, the job can't run; mark it so the user
+                    # sees the reason instead of a job that sits queued
+                    # forever.
+                    logger.warning(
+                        f"[cycle] agent_job {job.id}: no scope_repo set "
+                        f"and no local path resolvable — marking failed"
+                    )
+                    job.status = "failed"
+                    job.error = (
+                        "No scope_repo on the job (the triggering "
+                        "pupdate didn't carry a repo, or the repo isn't "
+                        "in config.github.repos). Set the repo on the "
+                        "job or the source pupdate and re-queue."
+                    )
+                    job.finished_at = datetime.now(timezone.utc)
+                    _bump_agent_failed(job.agent_profile_id)
+                    db.session.commit()
                     continue
                 # Specialty picked at automation-config time or via ask-
                 # first approval lives on job.extra. prepare() safety-
@@ -236,7 +214,6 @@ def _phase_execute_agent_jobs():
                         prompt=full_prompt,
                         repo_path=local_path,
                         branch_prefix="cartographer" if role == "cartographer" else "maiko",
-                        use_worktree=True,
                         agent_profile_id=job.agent_profile_id,
                         role=role,
                         specialty_id=specialty_id,
