@@ -36,7 +36,7 @@
    CardAvatar. line-height: 0 so it sits flush with the title. */
 .proposal-icon-avatar { display: inline-flex; line-height: 0; }
 .proposal-icon-avatar .card-avatar { display: block; }
-.proposal-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); }
+.proposal-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--card-title, var(--text)); }
 .proposal-expand { background: none; border: none; padding: 2px; color: var(--text-muted); cursor: pointer; }
 .proposal-from { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
 .proposal-reasoning {

@@ -37,6 +37,14 @@
   --border: #3F3D70;
   --border-subtle: #2D2D60;
 
+  /* Card title + border accents — pulled per theme so cards stop
+     reading as one-note. Title goes on a hue distinct from --text;
+     border gets a low-alpha accent so the edge has color even at
+     rest. Both fall back to neutral tokens if a theme doesn't set
+     them, so individual surfaces stay safe. */
+  --card-title: #C9A6FF;          /* Soft Lavender Glow */
+  --card-border: rgba(255, 111, 175, 0.30);
+
   /* Themed tint backgrounds — use these instead of hardcoded rgba so
      badges/tags/pills track the active theme. Pair with the matching
      --xxx color for foreground text. */
@@ -125,6 +133,8 @@
   --green: #9BE870;         /* Fresh Green */
   --border: #C8D8EC;
   --border-subtle: #DDE6F2;
+  --card-title: #C48BFF;          /* Lavender Purple title against white card */
+  --card-border: rgba(94, 231, 235, 0.45);  /* Bright Cyan edge */
   --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.08);
   --high-soft: rgba(255, 179, 138, 0.18); --high-faint: rgba(255, 179, 138, 0.08);
   --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
@@ -163,6 +173,8 @@
   --green: #9BE870;         /* Fresh Green */
   --border: #F0E0C8;
   --border-subtle: #F8E8D0;
+  --card-title: #FF7AB8;          /* Light Magenta — sunrise blush */
+  --card-border: rgba(89, 227, 214, 0.45);  /* Bright Aqua edge */
   --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.08);
   --high-soft: rgba(255, 179, 138, 0.18); --high-faint: rgba(255, 179, 138, 0.08);
   --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
@@ -207,6 +219,8 @@
   --green: #7ED957;         /* Slime Green */
   --border: #455185;
   --border-subtle: #2D3D6E;
+  --card-title: #FFD36B;          /* Cosmic Gold — sunset highlight */
+  --card-border: rgba(255, 122, 115, 0.30);  /* Warm Coral edge */
   --urgent-soft: rgba(255, 122, 115, 0.16); --urgent-faint: rgba(255, 122, 115, 0.08);
   --high-soft: rgba(255, 155, 106, 0.16); --high-faint: rgba(255, 155, 106, 0.08);
   --lemon-soft: rgba(255, 211, 107, 0.18); --lemon-faint: rgba(255, 211, 107, 0.09);
@@ -259,6 +273,8 @@
   --green: #7ED957;
   --border: #4A3478;
   --border-subtle: #2A2250;
+  --card-title: #3BE0E5;          /* Electric Cyan title — pops on navy */
+  --card-border: rgba(255, 77, 157, 0.35);  /* Candy Magenta edge */
   --urgent-soft: rgba(255, 122, 115, 0.18); --urgent-faint: rgba(255, 122, 115, 0.08);
   --high-soft: rgba(255, 155, 106, 0.18); --high-faint: rgba(255, 155, 106, 0.08);
   --lemon-soft: rgba(255, 230, 109, 0.20); --lemon-faint: rgba(255, 230, 109, 0.10);
@@ -299,6 +315,8 @@
   --green: #64E3C7;
   --border: #2D4575;
   --border-subtle: #233A5E;
+  --card-title: #FFE66D;          /* Star Yellow — warm pop on cool aurora */
+  --card-border: rgba(49, 212, 198, 0.35);  /* Bright Teal edge */
   --urgent-soft: rgba(255, 122, 115, 0.16); --urgent-faint: rgba(255, 122, 115, 0.08);
   --high-soft: rgba(255, 230, 109, 0.18); --high-faint: rgba(255, 230, 109, 0.10);
   --lemon-soft: rgba(255, 230, 109, 0.22); --lemon-faint: rgba(255, 230, 109, 0.10);
@@ -340,6 +358,8 @@
   --green: #7ED957;
   --border: #2D5048;
   --border-subtle: #1F3530;
+  --card-title: #B46BFF;          /* Violet Purple — alien blossom title */
+  --card-border: rgba(126, 217, 87, 0.35);  /* Slime Green edge */
   --urgent-soft: rgba(255, 122, 115, 0.16); --urgent-faint: rgba(255, 122, 115, 0.08);
   --high-soft: rgba(255, 111, 175, 0.18); --high-faint: rgba(255, 111, 175, 0.08);
   --lemon-soft: rgba(255, 230, 109, 0.18); --lemon-faint: rgba(255, 230, 109, 0.10);
@@ -378,6 +398,8 @@
   --green: #7ED957;
   --border: #2D5048;
   --border-subtle: #1F3838;
+  --card-title: #FFD36B;          /* Cosmic Gold — warm metal in dark woods */
+  --card-border: rgba(180, 107, 255, 0.35);  /* Violet Purple edge */
   --urgent-soft: rgba(255, 122, 115, 0.16); --urgent-faint: rgba(255, 122, 115, 0.08);
   --high-soft: rgba(255, 155, 106, 0.18); --high-faint: rgba(255, 155, 106, 0.08);
   --lemon-soft: rgba(255, 230, 109, 0.20); --lemon-faint: rgba(255, 230, 109, 0.10);
@@ -418,6 +440,8 @@
   --green: #7ED957;
   --border: #5C3F75;
   --border-subtle: #3D2A55;
+  --card-title: #FFE66D;          /* Star Yellow — sun on alien horizon */
+  --card-border: rgba(180, 107, 255, 0.35);  /* Violet sky edge */
   --urgent-soft: rgba(255, 122, 115, 0.20); --urgent-faint: rgba(255, 122, 115, 0.10);
   --high-soft: rgba(255, 155, 106, 0.20); --high-faint: rgba(255, 155, 106, 0.10);
   --lemon-soft: rgba(255, 230, 109, 0.20); --lemon-faint: rgba(255, 230, 109, 0.10);
@@ -458,6 +482,8 @@
   --green: #9BE870;
   --border: #E5D5F0;
   --border-subtle: #F0E5F8;
+  --card-title: #C48BFF;          /* Lavender Purple title */
+  --card-border: rgba(255, 179, 138, 0.50);  /* Apricot edge */
   --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.08);
   --high-soft: rgba(255, 179, 138, 0.20); --high-faint: rgba(255, 179, 138, 0.10);
   --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
@@ -499,6 +525,8 @@
   --green: #9BE870;
   --border: #F0D5E5;
   --border-subtle: #FFE8F0;
+  --card-title: #C48BFF;          /* Lavender Purple — break out of pink-on-pink */
+  --card-border: rgba(196, 139, 255, 0.50);
   --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.08);
   --high-soft: rgba(255, 179, 138, 0.18); --high-faint: rgba(255, 179, 138, 0.08);
   --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
@@ -539,6 +567,8 @@
   --green: #9BE870;
   --border: #B5E5C5;
   --border-subtle: #DDF7E5;
+  --card-title: #38BFA6;          /* Sea Teal title — distinct from sage text */
+  --card-border: rgba(196, 139, 255, 0.50);  /* Lavender Purple edge */
   --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.08);
   --high-soft: rgba(255, 179, 138, 0.18); --high-faint: rgba(255, 179, 138, 0.08);
   --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
@@ -580,6 +610,8 @@
   --green: #38BFA6;
   --border: #FFD4CD;
   --border-subtle: #FFE5E0;
+  --card-title: #C48BFF;          /* Lavender Purple — contrast on coral page */
+  --card-border: rgba(94, 231, 235, 0.55);  /* Bright Cyan edge */
   --urgent-soft: rgba(255, 163, 160, 0.20); --urgent-faint: rgba(255, 163, 160, 0.10);
   --high-soft: rgba(255, 179, 138, 0.20); --high-faint: rgba(255, 179, 138, 0.10);
   --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
@@ -621,6 +653,8 @@
   --green: #9BE870;
   --border: #D8C7FF;
   --border-subtle: #E8DFF8;
+  --card-title: #C48BFF;          /* Lavender Purple — the hero color */
+  --card-border: rgba(94, 231, 235, 0.55);  /* Bright Cyan edge */
   --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.08);
   --high-soft: rgba(255, 179, 138, 0.20); --high-faint: rgba(255, 179, 138, 0.10);
   --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
@@ -826,7 +860,7 @@ a:hover { text-decoration: underline; }
 /* === Cards === */
 .card {
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  border: 1px solid var(--card-border, var(--border));
   border-radius: var(--radius);
   padding: 12px 16px;
   position: relative;
@@ -1042,7 +1076,7 @@ a:hover { text-decoration: underline; }
   background: var(--pane-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border);
+  border: 1px solid var(--card-border, var(--border));
   border-radius: var(--radius);
   box-shadow: 0 2px 16px rgba(0, 0, 0, 0.12);
   padding: 20px 24px;

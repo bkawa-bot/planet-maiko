@@ -103,7 +103,7 @@
 .review-queue-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--card-title, var(--text));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
