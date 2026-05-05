@@ -120,6 +120,15 @@ class BasePoller(ABC):
 
         Handles pupdates AND signals in one pass.
 
+        Transactions are deliberately chunked: pupdates + cheap signals
+        commit FIRST, before _after_sync runs. Without this, the
+        github poller's _after_sync (which makes per-PR API calls)
+        would hold the SQLite write lock across slow network IO,
+        blocking every other writer (brain cycle, agent reply
+        handler, etc.) and tripping autoflush errors when those other
+        writers tried to query in parallel. The hook now runs against
+        already-committed state, so its own writes are isolated.
+
         Args:
             config: integration config dict
             db_session: SQLAlchemy session
@@ -145,21 +154,7 @@ class BasePoller(ABC):
                 # Dismissal is durable, regardless of dismissed/read
                 # state. If the user dismissed a pupdate and nothing
                 # else about the source changed, the same source_id
-                # produces the same hash — we skip. If the source
-                # *did* change in a way worth re-notifying (new commit
-                # on a PR, new batch of PR review comments, etc.) the
-                # poller is expected to disambiguate by including the
-                # changing bit (headRefOid, comment timestamp,
-                # updatedAt, etc.) in source_id, which yields a fresh
-                # id and a fresh pupdate.
-                #
-                # Previously this branch un-dismissed any actionable
-                # pupdate without a linked task on every poll — which
-                # meant dismissed Linear-assigned / PR-review pupdates
-                # came right back on the next 5-minute tick and again
-                # on every server restart. Durable dismissal is the
-                # right default; source re-assertion is the poller's
-                # responsibility.
+                # produces the same hash — we skip.
                 continue
 
             pupdate = Pupdate(
@@ -183,12 +178,12 @@ class BasePoller(ABC):
             db_session.add(pupdate)
             created += 1
 
-        # Also extract and store signals
+        # Also extract and store signals (fast, no network).
+        signal_dicts = []
         try:
-            signal_dicts = self.to_signals(raw_data)
+            signal_dicts = self.to_signals(raw_data) or []
             if signal_dicts:
                 from planet_maiko.models.signal import Signal
-                new_signals = 0
                 for s in signal_dicts:
                     signal = Signal(
                         category=s.get("category", "domain_knowledge"),
@@ -204,31 +199,26 @@ class BasePoller(ABC):
                         synthesized=True,
                     )
                     db_session.add(signal)
-                    new_signals += 1
-                if new_signals:
-                    logger.info(f"[{self.name}] Created {new_signals} learning signal(s)")
+                if signal_dicts:
+                    logger.info(f"[{self.name}] Created {len(signal_dicts)} learning signal(s)")
         except Exception as e:
             logger.debug(f"[{self.name}] Signal extraction skipped: {e}")
 
+        # Commit the cheap stuff FIRST so the lock isn't held across
+        # the (potentially slow, network-heavy) _after_sync hook.
+        if created or signal_dicts:
+            db_session.commit()
+            if created:
+                logger.info(f"[{self.name}] Created {created} new pupdate(s)")
+
         # Subclass hook: per-poller custom processing that needs access
-        # to the raw_data AND the live db session. Used by github_poller
-        # to scrape inline review comments from newly merged PRs into
-        # unsynthesized Signals without duplicating poll scaffolding.
-        # Track whether the hook added anything so we commit if it did
-        # even when no new pupdates + no to_signals() entries landed
-        # this pass — otherwise the hook's additions get rolled back on
-        # the next poll and we re-scan the same comments forever.
-        pre_hook_new = len(list(db_session.new))
+        # to raw_data + the session. The hook is responsible for its
+        # own commit (so it can stage its writes after gathering any
+        # network data first, keeping the write window short).
         try:
             self._after_sync(raw_data, db_session)
         except Exception as e:
             logger.warning(f"[{self.name}] _after_sync hook failed: {e}")
-        hook_added = len(list(db_session.new)) > pre_hook_new
-
-        if created or signal_dicts or hook_added:
-            db_session.commit()
-            if created:
-                logger.info(f"[{self.name}] Created {created} new pupdate(s)")
 
         return created
 

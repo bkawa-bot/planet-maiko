@@ -450,8 +450,14 @@ class GitHubPoller(BasePoller):
     def _after_sync(self, raw_data, db_session):
         """For each merged PR in this poll, fetch inline review comments
         and create unsynthesized Signal rows with code_context. Dedupes
-        per-repo against existing signals by (text, file_path, diff_hunk)
-        so overlapping polls don't duplicate.
+        per-repo against existing signals by external_id or
+        (file_path, diff_hunk) for legacy rows.
+
+        Three phases — read existing dedup keys, do all network calls
+        with no DB activity, then a single fast write batch + commit.
+        Earlier the read / network / write were interleaved, which
+        held the SQLite write lock across slow per-PR API calls and
+        blocked every other writer in the process.
 
         Signals land as synthesized=False — they flow through the normal
         synthesis → clustering pipeline on the next brain cycle tick.
@@ -471,14 +477,11 @@ class GitHubPoller(BasePoller):
                 continue
             by_repo.setdefault(repo, []).append(pr)
 
-        created = 0
-        for repo, prs in by_repo.items():
-            # Dedup on external_id (GitHub's stable comment id) — text
-            # was the old key but synthesis mutates signal.text so the
-            # raw body no longer matches after a signal has been
-            # synthesized once. For pre-existing signals that predate
-            # external_id, fall back to (file_path, diff_hunk) which
-            # synthesis leaves alone.
+        # PHASE 1: read existing dedup keys per repo. Pure read; rolls
+        # back the implicit tx so the session is clean before the
+        # write batch lands at the end.
+        existing_per_repo = {}
+        for repo in by_repo:
             existing_ids = set()
             existing_legacy_paths = set()
             for s in Signal.query.filter_by(
@@ -488,7 +491,16 @@ class GitHubPoller(BasePoller):
                     existing_ids.add(s.external_id)
                 elif s.file_path and s.code_context:
                     existing_legacy_paths.add((s.file_path, s.code_context))
+            existing_per_repo[repo] = (existing_ids, existing_legacy_paths)
+        db_session.rollback()
 
+        # PHASE 2: network calls only. Build a list of Signal kwargs;
+        # no DB activity in this loop. Per-PR API calls can run
+        # several seconds total — keeping them out of the write tx
+        # is the whole point of this rewrite.
+        new_rows = []
+        for repo, prs in by_repo.items():
+            existing_ids, existing_legacy_paths = existing_per_repo[repo]
             for pr in prs:
                 number = pr.get("number")
                 if not number:
@@ -500,12 +512,8 @@ class GitHubPoller(BasePoller):
                     file_path = entry.get("path") or None
                     diff_hunk = entry.get("diff_hunk") or None
 
-                    # Primary dedup: stable GitHub comment id.
                     if external_id and external_id in existing_ids:
                         continue
-                    # Fallback dedup for legacy signals without external_id
-                    # (created before this column existed). Uses the
-                    # immutable (path, diff_hunk) pair.
                     if (
                         not external_id
                         and file_path
@@ -514,30 +522,40 @@ class GitHubPoller(BasePoller):
                     ):
                         continue
 
-                    sig = Signal(
-                        category="pattern",  # placeholder — synthesis sets the real one
-                        text=body,
-                        source_type="pr_comment",
-                        reviewer=entry.get("author", "") or "",
-                        severity="suggestion",
-                        repo=repo,
-                        file_path=file_path,
-                        code_context=diff_hunk,
-                        external_id=external_id,
-                        examples=[{
+                    new_rows.append({
+                        "category": "pattern",
+                        "text": body,
+                        "source_type": "pr_comment",
+                        "reviewer": entry.get("author", "") or "",
+                        "severity": "suggestion",
+                        "repo": repo,
+                        "file_path": file_path,
+                        "code_context": diff_hunk,
+                        "external_id": external_id,
+                        "examples": [{
                             "path": file_path,
                             "diff_hunk": diff_hunk,
                             "author": entry.get("author", "") or "",
                             "line": entry.get("line"),
                         }] if diff_hunk else [],
-                        synthesized=False,  # will be synthesized next cycle
-                    )
-                    db_session.add(sig)
+                        "synthesized": False,
+                    })
+                    # Update local dedup sets so duplicate comments
+                    # within this same poll don't double-insert.
                     if external_id:
                         existing_ids.add(external_id)
                     elif file_path and diff_hunk:
                         existing_legacy_paths.add((file_path, diff_hunk))
-                    created += 1
 
-        if created:
-            logger.info(f"[{self.name}] Scraped {created} inline comment signal(s) from merged PRs")
+        if not new_rows:
+            return
+
+        # PHASE 3: single fast write batch + commit. No network calls
+        # between starting the write tx and committing it.
+        for kwargs in new_rows:
+            db_session.add(Signal(**kwargs))
+        db_session.commit()
+        logger.info(
+            f"[{self.name}] Scraped {len(new_rows)} inline comment signal(s) "
+            f"from merged PRs"
+        )
