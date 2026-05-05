@@ -11,7 +11,7 @@ source="agent". The monitor processes these to:
 import logging
 from datetime import datetime, timezone, timedelta
 
-from planet_maiko.database import db
+from planet_maiko.database import db, iso_utc
 from planet_maiko.models.pupdate import Pupdate
 from planet_maiko.models.task import Task
 
@@ -143,25 +143,95 @@ def get_agent_activity():
 
     # Drop tasks that are finished or no longer exist, and enrich
     # the rest with agent profile info + the task's title (the UI
-    # needs the title to render one card per (agent, task) instead of
-    # one per agent — same agent profile working two tasks should
-    # show two cards, distinguished by task title).
+    # needs the title to render one card per (agent, work-unit)
+    # instead of one per agent — same agent profile working two
+    # things should show two cards, distinguished by title).
+    #
+    # Standalone AgentJobs (cartograph / investigation / specialty
+    # runs without a linked Task) get the same treatment. Their
+    # _kickoff_agent_headless call passes task_id=<job_id>, so their
+    # agent messages + pupdates land in the same per-id buckets the
+    # task loop above already built — we just need a different
+    # enrichment lookup since `Task.id == job_id` returns None.
+    from planet_maiko.models.agent_job import AgentJob
+
     keep = {}
     for key, a in agents.items():
         task = db.session.get(Task, a["task_id"])
-        if not task:
-            continue  # task was deleted out from under the agent
-        if task.status in ("done", "cancelled"):
-            continue  # agent's work on this one is over
-        a["task_title"] = task.title
-        a["task_status"] = task.status
-        a["task_type"] = task.type
-        if task.assigned_agent_id:
-            profile = db.session.get(AgentProfile, task.assigned_agent_id)
+        if task is not None:
+            if task.status in ("done", "cancelled"):
+                continue  # agent's work on this one is over
+            a["kind"] = "task"
+            a["task_title"] = task.title
+            a["task_status"] = task.status
+            a["task_type"] = task.type
+            if task.assigned_agent_id:
+                profile = db.session.get(AgentProfile, task.assigned_agent_id)
+                if profile:
+                    a["agent_name"] = profile.display_name
+                    a["agent_id"] = profile.id
+            keep[key] = a
+            continue
+
+        # Not a task — maybe a standalone AgentJob (cartograph,
+        # investigation, specialty skill run). Show it if it's still
+        # active; jobs that finished / failed / cancelled don't belong
+        # in the active feed.
+        job = db.session.get(AgentJob, a["task_id"])
+        if job is None:
+            continue
+        if job.source_task_id:
+            # Linked-job — already represented by the task above.
+            continue
+        if job.status not in ("queued", "running"):
+            continue
+        a["kind"] = "job"
+        a["job_id"] = job.id
+        a["task_title"] = job.title
+        a["task_status"] = job.status
+        a["task_type"] = job.kind
+        if job.agent_profile_id:
+            profile = db.session.get(AgentProfile, job.agent_profile_id)
             if profile:
                 a["agent_name"] = profile.display_name
                 a["agent_id"] = profile.id
         keep[key] = a
+
+    # Surface running / queued standalone jobs that don't yet have any
+    # agent pupdate or message — so the user sees a fresh job in the
+    # feed before the agent emits its first heartbeat. Jobs with a
+    # linked task fall through to the existing task-keyed path.
+    standalone = (
+        AgentJob.query
+        .filter(AgentJob.status.in_(["queued", "running"]))
+        .filter(AgentJob.source_task_id.is_(None))
+        .all()
+    )
+    for job in standalone:
+        if job.id in keep:
+            continue
+        entry = {
+            "task_id": job.id,
+            "kind": "job",
+            "job_id": job.id,
+            "last_message": None,
+            "last_message_body": None,
+            "last_message_type": None,
+            "last_seen": iso_utc(job.started_at or job.created_at),
+            "type": job.kind,
+            "pupdate_count": 0,
+            "status": "active" if job.status == "running" else "idle",
+            "idle_minutes": 0,
+            "task_title": job.title,
+            "task_status": job.status,
+            "task_type": job.kind,
+        }
+        if job.agent_profile_id:
+            profile = db.session.get(AgentProfile, job.agent_profile_id)
+            if profile:
+                entry["agent_name"] = profile.display_name
+                entry["agent_id"] = profile.id
+        keep[job.id] = entry
 
     return list(keep.values())
 
