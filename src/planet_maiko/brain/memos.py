@@ -30,6 +30,10 @@ CANONICAL_KINDS = {
     "agent_proposal",
     "agent_plan",
     "job_approval",
+    # An agent reply that explicitly addressed the user (recipient="user"
+    # on the originating AgentMessage). Surfaces the message in MemosPane
+    # so it doesn't get lost inside the chat thread.
+    "agent_message",
 }
 
 

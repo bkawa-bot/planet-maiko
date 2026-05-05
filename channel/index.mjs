@@ -135,6 +135,18 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
               "'done' for task completion, " +
               "'stuck' when you're blocked and need the user's help.",
           },
+          recipient: {
+            type: "string",
+            enum: ["user"],
+            description:
+              "Optional. Set to 'user' when this message is specifically " +
+              "for the user to read — Maiko surfaces it in the user's " +
+              "memos/inbox so they see it without having to open the " +
+              "task chat. Leave unset for in-thread chatter (status " +
+              "updates, mid-run progress, anything the user can pick up " +
+              "later by scrolling the thread). Use sparingly — every " +
+              "user-targeted message is an interruption.",
+          },
         },
         required: ["content"],
       },
@@ -263,7 +275,7 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
   if (req.params.name === "reply") {
-    const { content, message_type = "message" } = req.params.arguments;
+    const { content, message_type = "message", recipient } = req.params.arguments;
 
     try {
       const resp = await fetch(`${API_URL}/agents/${TASK_ID}/outbox`, {
@@ -273,6 +285,9 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
           content,
           sender: "agent",
           message_type,
+          // Backend coerces empty / undefined to null; only "user" has
+          // current semantics. Future values land here unchanged.
+          recipient: recipient || null,
         }),
       });
 

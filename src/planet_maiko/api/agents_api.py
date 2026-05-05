@@ -798,10 +798,16 @@ def agent_sends_message(task_id):
     from planet_maiko.models.task import Task as _Task
 
     data = request.get_json()
+    # recipient defaults to None (in-thread chatter). When the agent
+    # explicitly sets recipient="user", emit_user_memo below mints a
+    # Memo so the message reaches the inbox instead of only living
+    # inside the task's chat thread.
+    recipient = (data.get("recipient") or "").strip().lower() or None
     msg = AgentMessage(
         task_id=task_id,
         direction="from_agent",
         sender=data.get("sender", "agent"),
+        recipient=recipient,
         content=data["content"],
         message_type=data.get("message_type", "message"),
     )
@@ -816,6 +822,8 @@ def agent_sends_message(task_id):
         job = None
     if job is not None:
         handle_agent_job_reply(job, msg, data, message_type)
+        if recipient == "user":
+            _emit_user_memo(msg, job=job, task=None)
         db.session.commit()
         return jsonify({"ok": True, "message_id": msg.id, "target": "agent_job"})
 
@@ -832,9 +840,59 @@ def agent_sends_message(task_id):
         handle_pr_opened(task_id, data)
     if message_type == "feedback":
         handle_session_feedback(task_id, msg, data, _get_repo_for_task)
+    if recipient == "user":
+        _emit_user_memo(msg, job=None, task=task)
 
     db.session.commit()
     return jsonify(msg.to_dict()), 201
+
+
+def _emit_user_memo(msg, *, job, task):
+    """Surface an agent message that was explicitly addressed to the
+    user as a Memo in the inbox. Without this, recipient="user"
+    messages would only show up if the user happened to open the
+    chat thread for that task / job — defeating the whole point of
+    the agent flagging "you should see this."
+
+    The memo's source_task_id keys off the linked Task (when the
+    reply landed via a Task-driven flow) or the AgentJob's
+    source_task_id; falls back to the message's task_id (which is
+    the AgentJob id post-unification) so the user can still
+    click-through to the chat.
+    """
+    from planet_maiko.brain.memos import create_memo
+    from planet_maiko.models.agent_profile import AgentProfile
+
+    agent_profile_id = None
+    source_task_id = None
+    title = "Message from an agent"
+    if job is not None:
+        agent_profile_id = job.agent_profile_id
+        source_task_id = job.source_task_id or job.id
+        title = f"Message from {job.kind} agent"
+    elif task is not None:
+        agent_profile_id = task.assigned_agent_id
+        source_task_id = task.id
+
+    if agent_profile_id:
+        profile = db.session.get(AgentProfile, agent_profile_id)
+        if profile and profile.display_name:
+            title = f"Message from {profile.display_name}"
+
+    body = msg.content or ""
+    create_memo(
+        kind="agent_message",
+        category="info",
+        title=title,
+        body=body[:1000],
+        priority="normal",
+        source_agent_id=agent_profile_id,
+        source_task_id=source_task_id,
+        extra={
+            "agent_message_id": msg.id,
+            "task_id": msg.task_id,
+        },
+    )
 
 
 
