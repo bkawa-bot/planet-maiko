@@ -101,7 +101,7 @@ export default function SceneSection({ config, setConfig, initialResolved = "" }
                   setConfig((c) => ({ ...c, scene: { ...(c.scene || {}), show_hill_background: e.target.checked } }))
                 }
               />
-              Show hill background
+              Atmospheric page gradient (off = flat color)
             </label>
           </div>
         </div>

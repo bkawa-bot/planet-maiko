@@ -4,11 +4,13 @@
   /* Dark mode — cosmic nighttime. Deep space backgrounds, neon accents.
      Token names map to the previous sherbet system so all downstream
      components keep working; only the values change. */
-  --bg: #0B0F2A;            /* Deep Space Navy */
-  /* --bg-plain: flat backdrop when the hill SVG is hidden. Same value
-     as --bg in the new palette — backgrounds are already cosmic-flat,
-     no per-time-of-day SVG sky to match. */
-  --bg-plain: #0B0F2A;
+  --bg: #0B0F2A;            /* Deep Space Navy — gradient top */
+  /* --bg-plain: gradient bottom stop. Body uses
+     `linear-gradient(180deg, --bg 0%, --bg-plain 100%)` so the page
+     fades from sky → horizon. Pick a palette neighbor of --bg for a
+     subtle shift; pick the same value if a theme wants flat. The
+     hills-off Settings toggle still falls back to flat --bg-plain. */
+  --bg-plain: #1A1F4A;      /* Cosmic Indigo */
   --bg-card: #1A1F4A;       /* Cosmic Indigo */
   --bg-card-alt: #2A2250;   /* Midnight Purple */
   --bg-hover: #2D2A60;
@@ -43,7 +45,7 @@
      rest. Both fall back to neutral tokens if a theme doesn't set
      them, so individual surfaces stay safe. */
   --card-title: #C9A6FF;          /* Soft Lavender Glow */
-  --card-border: rgba(255, 111, 175, 0.30);
+  --card-border: rgba(255, 111, 175, 0.50);
 
   /* Themed tint backgrounds — use these instead of hardcoded rgba so
      badges/tags/pills track the active theme. Pair with the matching
@@ -99,7 +101,7 @@
 /* === Light theme — bright daylight === */
 [data-theme="light"] {
   --bg: #EAF4FF;            /* Soft Sky */
-  --bg-plain: #EAF4FF;
+  --bg-plain: #F3EFFF;      /* Pastel Lavender Base */
   --bg-card: #FFFFFF;
   --bg-card-alt: #E6FFF7;   /* Light Mint Wash — distinct from bg, not just a lavender tint */
   --bg-hover: #DDEAFC;
@@ -139,7 +141,7 @@
 /* === Morning theme — sunrise warmth, lighter than Day === */
 [data-theme="morning"] {
   --bg: #FFF4E5;            /* warm cream */
-  --bg-plain: #FFF4E5;
+  --bg-plain: #FFF5FA;      /* fade to faint pink — sunrise wash */
   --bg-card: #FFFFFF;
   --bg-card-alt: #FFF3A3;   /* Butter Yellow */
   --bg-hover: #FFEED0;
@@ -185,7 +187,7 @@
    (Coral, Peach, Cosmic Gold) carry the horizon. */
 [data-theme="sunset"] {
   --bg: #1F2D55;            /* twilight indigo */
-  --bg-plain: #1F2D55;
+  --bg-plain: #2A2250;      /* fade to Midnight Purple */
   --bg-card: #2D3D6E;
   --bg-card-alt: #3A4D85;   /* slight mauve lift */
   --bg-hover: #455185;
@@ -212,7 +214,7 @@
   --border: #455185;
   --border-subtle: #2D3D6E;
   --card-title: #FFD36B;          /* Cosmic Gold — sunset highlight */
-  --card-border: rgba(255, 122, 115, 0.30);  /* Warm Coral edge */
+  --card-border: rgba(255, 122, 115, 0.50);  /* Warm Coral edge */
   --urgent-soft: rgba(255, 122, 115, 0.16); --urgent-faint: rgba(255, 122, 115, 0.08);
   --high-soft: rgba(255, 155, 106, 0.16); --high-faint: rgba(255, 155, 106, 0.08);
   --lemon-soft: rgba(255, 211, 107, 0.18); --lemon-faint: rgba(255, 211, 107, 0.09);
@@ -239,7 +241,7 @@
    as bright pops so the surface isn't swimming in one hue. */
 [data-theme="midnight"] {
   --bg: #0B0F2A;
-  --bg-plain: #0B0F2A;
+  --bg-plain: #2A2250;      /* Midnight Purple — neon noir fade */
   --bg-card: #1F1648;
   --bg-card-alt: #2A2250;
   --bg-hover: #3A2860;
@@ -266,7 +268,7 @@
   --border: #4A3478;
   --border-subtle: #2A2250;
   --card-title: #3BE0E5;          /* Electric Cyan title — pops on navy */
-  --card-border: rgba(255, 77, 157, 0.35);  /* Candy Magenta edge */
+  --card-border: rgba(255, 77, 157, 0.55);  /* Candy Magenta edge */
   --urgent-soft: rgba(255, 122, 115, 0.18); --urgent-faint: rgba(255, 122, 115, 0.08);
   --high-soft: rgba(255, 155, 106, 0.18); --high-faint: rgba(255, 155, 106, 0.08);
   --lemon-soft: rgba(255, 230, 109, 0.20); --lemon-faint: rgba(255, 230, 109, 0.10);
@@ -281,7 +283,7 @@
    shift hue so the surface itself shimmers, not just the chips. */
 [data-theme="aurora"] {
   --bg: #0E1230;
-  --bg-plain: #0E1230;
+  --bg-plain: #1A2548;      /* deeper aurora indigo */
   --bg-card: #1A2548;
   --bg-card-alt: #233A5E;
   --bg-hover: #2D4A70;
@@ -308,7 +310,7 @@
   --border: #2D4575;
   --border-subtle: #233A5E;
   --card-title: #FFE66D;          /* Star Yellow — warm pop on cool aurora */
-  --card-border: rgba(49, 212, 198, 0.35);  /* Bright Teal edge */
+  --card-border: rgba(49, 212, 198, 0.55);  /* Bright Teal edge */
   --urgent-soft: rgba(255, 122, 115, 0.16); --urgent-faint: rgba(255, 122, 115, 0.08);
   --high-soft: rgba(255, 230, 109, 0.18); --high-faint: rgba(255, 230, 109, 0.10);
   --lemon-soft: rgba(255, 230, 109, 0.22); --lemon-faint: rgba(255, 230, 109, 0.10);
@@ -324,7 +326,7 @@
    planet, not on Earth. */
 [data-theme="slime-garden"] {
   --bg: #0F1A28;
-  --bg-plain: #0F1A28;
+  --bg-plain: #1A2A38;      /* alien-soil teal-navy */
   --bg-card: #1A2A38;
   --bg-card-alt: #1F3530;
   --bg-hover: #2D4A45;
@@ -351,7 +353,7 @@
   --border: #2D5048;
   --border-subtle: #1F3530;
   --card-title: #B46BFF;          /* Violet Purple — alien blossom title */
-  --card-border: rgba(126, 217, 87, 0.35);  /* Slime Green edge */
+  --card-border: rgba(126, 217, 87, 0.55);  /* Slime Green edge */
   --urgent-soft: rgba(255, 122, 115, 0.16); --urgent-faint: rgba(255, 122, 115, 0.08);
   --high-soft: rgba(255, 111, 175, 0.18); --high-faint: rgba(255, 111, 175, 0.08);
   --lemon-soft: rgba(255, 230, 109, 0.18); --lemon-faint: rgba(255, 230, 109, 0.10);
@@ -364,7 +366,7 @@
 /* === Forest Night — botanical dark, gold accents instead of pink. */
 [data-theme="forest-night"] {
   --bg: #0B1A20;
-  --bg-plain: #0B1A20;
+  --bg-plain: #1A2A28;      /* forest-floor green-navy */
   --bg-card: #1A2A28;
   --bg-card-alt: #1F3838;
   --bg-hover: #2D5048;
@@ -391,7 +393,7 @@
   --border: #2D5048;
   --border-subtle: #1F3838;
   --card-title: #FFD36B;          /* Cosmic Gold — warm metal in dark woods */
-  --card-border: rgba(180, 107, 255, 0.35);  /* Violet Purple edge */
+  --card-border: rgba(180, 107, 255, 0.55);  /* Violet Purple edge */
   --urgent-soft: rgba(255, 122, 115, 0.16); --urgent-faint: rgba(255, 122, 115, 0.08);
   --high-soft: rgba(255, 155, 106, 0.18); --high-faint: rgba(255, 155, 106, 0.08);
   --lemon-soft: rgba(255, 230, 109, 0.20); --lemon-faint: rgba(255, 230, 109, 0.10);
@@ -406,7 +408,7 @@
    horizon, Star Yellow burst. The cool/warm collision is the point. */
 [data-theme="golden-hour"] {
   --bg: #2A1F45;
-  --bg-plain: #2A1F45;
+  --bg-plain: #1A1F4A;      /* fade to Cosmic Indigo — sun has set */
   --bg-card: #3D2A55;
   --bg-card-alt: #4A3068;
   --bg-hover: #5C3F75;
@@ -433,7 +435,7 @@
   --border: #5C3F75;
   --border-subtle: #3D2A55;
   --card-title: #FFE66D;          /* Star Yellow — sun on alien horizon */
-  --card-border: rgba(180, 107, 255, 0.35);  /* Violet sky edge */
+  --card-border: rgba(180, 107, 255, 0.55);  /* Violet sky edge */
   --urgent-soft: rgba(255, 122, 115, 0.20); --urgent-faint: rgba(255, 122, 115, 0.10);
   --high-soft: rgba(255, 155, 106, 0.20); --high-faint: rgba(255, 155, 106, 0.10);
   --lemon-soft: rgba(255, 230, 109, 0.20); --lemon-faint: rgba(255, 230, 109, 0.10);
@@ -448,7 +450,7 @@
    Sunlit Gold so the haze feels prismatic, not single-tone. */
 [data-theme="dawn-mist"] {
   --bg: #F3EFFF;
-  --bg-plain: #F3EFFF;
+  --bg-plain: #EAF4FF;      /* fade to Soft Sky */
   --bg-card: #FFFFFF;
   --bg-card-alt: #FFE8E0;
   --bg-hover: #E8DFF8;
@@ -491,7 +493,7 @@
    not just pink-on-pink. */
 [data-theme="cherry-blossom"] {
   --bg: #FFF5FA;
-  --bg-plain: #FFF5FA;
+  --bg-plain: #F3EFFF;      /* fade to lavender base — petals on the wind */
   --bg-card: #FFFFFF;
   --bg-card-alt: #FFE8F0;
   --bg-hover: #FCE5F0;
@@ -533,7 +535,7 @@
    not just grass. Sage-text grounds it. */
 [data-theme="mint-meadow"] {
   --bg: #E6FFF7;
-  --bg-plain: #E6FFF7;
+  --bg-plain: #EAF4FF;      /* fade to soft sky — distant horizon */
   --bg-card: #FFFFFF;
   --bg-card-alt: #DDF7E5;
   --bg-hover: #D0F0DC;
@@ -576,7 +578,7 @@
    single coral. */
 [data-theme="coral-reef"] {
   --bg: #EAF4FF;
-  --bg-plain: #EAF4FF;
+  --bg-plain: #FFF0EC;      /* fade to coral wash — looking at the reef floor */
   --bg-card: #FFFFFF;
   --bg-card-alt: #FFF0EC;
   --bg-hover: #FFE0D8;
@@ -619,7 +621,7 @@
    not just shades of purple. */
 [data-theme="lavender-dream"] {
   --bg: #F3EFFF;
-  --bg-plain: #F3EFFF;
+  --bg-plain: #FFF5FA;      /* fade to faint pink — strange weather */
   --bg-card: #FFFFFF;
   --bg-card-alt: #EDE7FF;
   --bg-hover: #E0D5FF;
@@ -701,43 +703,45 @@
   letter-spacing: 0;
 }
 
+/* Title color comes from --card-title (per-theme accent). Single rule
+   covers the prominent title surfaces — overview greeting + section
+   titles, sidebar widget headers, memos pane header, modal headers,
+   memo card titles, empty-state titles. Each theme picks an accent
+   here so every "title" reads as the same hue across the app. */
+.overview-greeting,
+.overview-section-title,
+.home-widget .widget-header,
+.review-queue-header,
+.modal-header,
+.card-title,
+.empty-title {
+  color: var(--card-title, var(--text));
+}
+.card-title a {
+  color: var(--card-title, var(--text));
+}
+
+/* Body backdrop is a vertical gradient using the theme's --bg (top)
+   and --bg-plain (bottom). Same two palette colors land on every
+   page; cards/panes float over it with their own --pane-bg tint. */
 body {
-  background-color: var(--bg);
-  background-image: url('/world-night.svg');
-  background-size: cover;
-  background-position: center bottom;
-  background-repeat: no-repeat;
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg-plain, var(--bg)) 100%);
   background-attachment: fixed;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
   color: var(--text);
   font-family: var(--font);
   font-size: 13px;
   line-height: 1.6;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
 }
 
-[data-theme="light"] body { background-image: url('/world-day.svg'); }
-[data-theme="morning"] body { background-image: url('/world-morning.svg'); }
-[data-theme="sunset"] body { background-image: url('/world-sunset.svg'); }
-/* Extended themes inherit the appropriate world SVG. The night-toned
-   themes (midnight, aurora, slime-garden, forest-night) keep the
-   default world-night.svg, so they only need explicit rules when they
-   point somewhere else. */
-[data-theme="golden-hour"] body { background-image: url('/world-sunset.svg'); }
-[data-theme="dawn-mist"] body,
-[data-theme="cherry-blossom"] body,
-[data-theme="lavender-dream"] body { background-image: url('/world-morning.svg'); }
-[data-theme="mint-meadow"] body,
-[data-theme="coral-reef"] body { background-image: url('/world-day.svg'); }
-
-/* Toggle: let users fall back to a plain backdrop via Settings. Uses
-   --bg-plain (a slightly darker, matte variant of --bg) so the page
-   doesn't just look like a faded sky when the hills are off. */
+/* Settings escape hatch — flatten the gradient to a single color when
+   the user prefers a calmer page. Maps to the existing data-hills
+   toggle in Settings (the hills are gone now, but the toggle keeps
+   its purpose: less visual texture). */
 html[data-hills="off"] body {
-  background-image: none;
-  background-color: var(--bg-plain, var(--bg));
+  background: var(--bg-plain, var(--bg));
 }
 
 /* ========================================================================

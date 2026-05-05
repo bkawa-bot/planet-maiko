@@ -1,15 +1,17 @@
 // Custom theme runtime: given a theme JSON from /api/themes, inject a
-// <style> tag with CSS var overrides scoped to [data-theme="custom:<id>"]
-// and the matching world-background rule. Applying a theme is then just
-// flipping documentElement.dataset.theme to "custom:<id>".
+// <style> tag with CSS var overrides scoped to [data-theme="custom:<id>"].
+// Applying a theme is then just flipping documentElement.dataset.theme to
+// "custom:<id>".
+//
+// Body background is a vertical gradient sourced from the theme's --bg
+// and --bg-plain values (defined in index.css). The legacy
+// world_background SVG injection was removed when the built-in themes
+// switched from hill SVGs to gradients — custom themes inherit the
+// same gradient body rule. world_background still rides along on the
+// theme JSON for back-compat / future use, but the value is currently
+// inert in the runtime.
 
 const STYLE_ID = "custom-theme-css";
-const WORLD_SVG = {
-  night: "/world-night.svg",
-  day: "/world-day.svg",
-  morning: "/world-morning.svg",
-  sunset: "/world-sunset.svg",
-};
 
 // When a custom theme doesn't set `topbar_gradient` / `pane_bg` (common for
 // themes saved before those keys were added to the schema), fall back to
@@ -110,13 +112,7 @@ export function themeToCss(theme) {
     .map(([k, v]) => `  ${cssVarName(k)}: ${v};`)
     .join("\n");
 
-  let worldRule = "";
-  if (world === "none") {
-    worldRule = `html${selector} body { background-image: none; }`;
-  } else if (WORLD_SVG[world]) {
-    worldRule = `html${selector} body { background-image: url('${WORLD_SVG[world]}'); }`;
-  }
-  return `${selector} {\n${varLines}\n}\n${worldRule}`.trim();
+  return `${selector} {\n${varLines}\n}`.trim();
 }
 
 export function applyCustomTheme(theme) {
