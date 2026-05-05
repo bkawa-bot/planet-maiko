@@ -108,14 +108,24 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
     }
   };
 
-  const handleStop = async (taskId, taskTitle) => {
-    if (!taskId) return;
+  const handleStop = async (a) => {
+    // Accepts either an activity entry (task or job) or a legacy
+    // (taskId, taskTitle) pair from older call sites. The kind
+    // discriminator decides which cancel endpoint runs — task vs
+    // job — since /tasks/<id>/cancel 404s on a job_id and vice versa.
+    const isJob = a?.kind === "job";
+    const id = isJob ? (a.job_id || a.task_id) : a?.task_id;
+    const title = a?.task_title || id;
+    if (!id) return;
+    const noun = isJob ? "agent job" : "task";
     const confirmed = window.confirm(
-      `Stop the agent for "${taskTitle || taskId}"? This kills the Claude Code process, removes the worktree, and deletes the task.`
+      `Stop the agent for "${title}"? This kills the Claude Code process, removes the worktree, and deletes the ${noun}.`
     );
     if (!confirmed) return;
     try {
-      const res = await api.cancelTask(taskId);
+      const res = isJob
+        ? await api.cancelAgentJob(id)
+        : await api.cancelTask(id);
       const note = res?.agent_stopped ? " (process terminated)" : " (no active process)";
       showToast(`Stopped${note}`, "normal");
       onRefresh?.();
@@ -240,7 +250,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                       autonomous skill in the same worktree without
                       needing a terminal. For coding agents, fall
                       back to Relaunch (open a terminal). */}
-                  {isOneShot && a.task_id && (
+                  {isOneShot && a.task_id && a.kind !== "job" && (
                     <button
                       className="btn btn-icon"
                       onClick={() => handleRerun(a.task_id)}
@@ -267,7 +277,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                   )}
                   <button
                     className="btn btn-icon btn-danger"
-                    onClick={() => handleStop(a.task_id, a.task_title)}
+                    onClick={() => handleStop(a)}
                     title="Stop the agent, clean up the worktree, and delete this task"
                   >
                     <X size={12} />
@@ -348,7 +358,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                   </button>
                   <button
                     className="btn btn-icon btn-danger"
-                    onClick={() => handleStop(a.task_id, a.task_title)}
+                    onClick={() => handleStop(a)}
                     title="Stop the agent, clean up the worktree, and delete this task"
                   >
                     <X size={12} />
