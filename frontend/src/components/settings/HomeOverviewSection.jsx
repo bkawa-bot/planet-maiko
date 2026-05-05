@@ -102,6 +102,21 @@ export default function HomeOverviewSection({ config, updateField }) {
               of surfacing each one as a fresh fire. Soft cap, not enforcement.
             </div>
           </label>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16 }}>
+            <input
+              type="checkbox"
+              checked={!!config.user?.weekend_mode}
+              onChange={(e) => updateField("user", "weekend_mode", e.target.checked)}
+            />
+            <span>Weekend mode — assume you're off-duty</span>
+          </label>
+          <div className="setup-hint" style={{ marginTop: 4, marginLeft: 22 }}>
+            When on, agents read this from their TASK.md preamble and defer
+            anything non-critical to the next workday. The Home overview
+            also shifts toward "what can wait until Monday." Flip on Friday,
+            flip off Monday.
+          </div>
         </div>
       )}
     </section>
