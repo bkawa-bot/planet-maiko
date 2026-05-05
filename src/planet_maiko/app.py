@@ -12,6 +12,45 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# Nullable columns added to existing models since launch. Each entry
+# is (table_name, column_name, sql_type). _ensure_new_columns walks
+# this list, checks PRAGMA table_info, and runs ALTER TABLE ADD
+# COLUMN for any missing one. Keep entries here until the project
+# does its first proper migration framework / fresh-DB-only release.
+# Format: column_type must be SQLite-valid (TEXT / INTEGER / etc.).
+_PATCH_COLUMNS = [
+    ("agent_messages", "recipient", "VARCHAR(50)"),
+]
+
+
+def _ensure_new_columns():
+    """Idempotent column-add for the small set of nullable columns
+    added between releases. Not a migration framework — just a band-
+    aid for the pre-launch churn period so users with an existing
+    DB don't hit "no such column" after a model change.
+
+    Anything destructive (drops, renames, type changes) still needs
+    a fresh DB; this only handles the cheap "I added a nullable
+    column" case.
+    """
+    from sqlalchemy import text
+    try:
+        with db.engine.begin() as conn:
+            for table, column, col_type in _PATCH_COLUMNS:
+                rows = conn.execute(text(f"PRAGMA table_info({table})")).all()
+                existing = {r[1] for r in rows}  # col 1 is name
+                if not existing:
+                    # table doesn't exist (likely a fresh DB whose
+                    # create_all just ran but pragma raced); skip.
+                    continue
+                if column in existing:
+                    continue
+                conn.execute(text(
+                    f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"
+                ))
+                logger.info(f"[startup] Added {table}.{column} to existing DB")
+    except Exception as e:
+        logger.warning(f"[startup] Column-patch check failed: {e}")
 
 
 def create_app(start_scheduler=False):
@@ -118,10 +157,17 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.memo import Memo  # noqa: F401
         from planet_maiko.models.adapter_eval import AdapterEval  # noqa: F401
         # Fresh-DB shape: every model registered above gets its table
-        # via SQLAlchemy. No schema migrations — Maiko targets new
-        # installs only, and the legacy ALTER TABLE / DROP TABLE
-        # cleanup it used to do is gone.
+        # via SQLAlchemy.
         db.create_all()
+        # Pre-launch churn: SQLAlchemy's create_all only creates
+        # missing TABLES, not missing COLUMNS. When a model gains a
+        # nullable column between commits, existing user DBs hit
+        # "no such column" on first query. _ensure_new_columns runs
+        # idempotent ALTER TABLE statements for the small set of
+        # columns added since launch. NOT a migration framework —
+        # the rule stays "destructive schema changes need a fresh
+        # DB"; this is just for cheap nullable-column additions.
+        _ensure_new_columns()
 
         # Seed default skills on first run
         from planet_maiko.agents.skills import seed_defaults
