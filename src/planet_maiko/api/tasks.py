@@ -38,18 +38,37 @@ def get_task(task_id):
 def create_task():
     """Create a new task. `id` is auto-generated if the client doesn't
     provide one — matches the pattern used by _act_create_task so the
-    same task-{hex10} shape lands regardless of origin."""
+    same task-{hex10} shape lands regardless of origin.
+
+    FK-shaped fields (project_id, source_pupdate_id, assigned_agent_id)
+    get empty-string-to-None coercion before insert so a "No project"
+    dropdown selection writes NULL instead of "" — SQLite would
+    otherwise reject "" as a missing FK target with the generic
+    "FOREIGN KEY constraint failed" message.
+    """
     import uuid
     data = request.get_json()
     task_id = data.get("id") or f"task-{uuid.uuid4().hex[:10]}"
+
+    def _nullable(field):
+        v = data.get(field)
+        return v if v else None
+
+    project_id = _nullable("project_id")
+    if project_id:
+        from planet_maiko.models.project import Project
+        if not db.session.get(Project, project_id):
+            return jsonify({"error": f"Project not found: {project_id}"}), 400
+
     task = Task(
         id=task_id,
         title=data["title"],
         type=data.get("type", "todo"),
         status=data.get("status", "new"),
         priority=data.get("priority", "normal"),
-        source_pupdate_id=data.get("source_pupdate_id"),
-        project_id=data.get("project_id"),
+        source_pupdate_id=_nullable("source_pupdate_id"),
+        project_id=project_id,
+        assigned_agent_id=_nullable("assigned_agent_id"),
         url=data.get("url"),
         tags=data.get("tags", []),
         extra=data.get("metadata", {}),
