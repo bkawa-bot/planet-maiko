@@ -271,7 +271,6 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.home_api import home_bp
     from planet_maiko.api.pack_api import pack_bp
     from planet_maiko.api.checks_api import checks_bp
-    from planet_maiko.api.pet_api import pet_bp
     from planet_maiko.api.automations_api import automations_bp
     from planet_maiko.api.agent_jobs_api import agent_jobs_bp
     from planet_maiko.api.memos_api import memos_bp
@@ -298,7 +297,6 @@ def create_app(start_scheduler=False):
     app.register_blueprint(home_bp, url_prefix="/api")
     app.register_blueprint(pack_bp, url_prefix="/api")
     app.register_blueprint(checks_bp, url_prefix="/api")
-    app.register_blueprint(pet_bp, url_prefix="/api")
     app.register_blueprint(automations_bp, url_prefix="/api")
     app.register_blueprint(agent_jobs_bp, url_prefix="/api")
     app.register_blueprint(memos_bp, url_prefix="/api")
@@ -325,7 +323,6 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.custom_skill import CustomSkill  # noqa: F401
         from planet_maiko.models.diff_comment import DiffComment  # noqa: F401
         from planet_maiko.models.insight import Insight  # noqa: F401
-        from planet_maiko.models.pet import Pet  # noqa: F401
         from planet_maiko.models.automation import Automation  # noqa: F401
         from planet_maiko.models.agent_job import AgentJob  # noqa: F401
         from planet_maiko.models.memo import Memo  # noqa: F401

@@ -21,7 +21,6 @@ const ReviewDiff = lazy(() => import("./pages/ReviewDiff"));
 const ReviewPlan = lazy(() => import("./pages/ReviewPlan"));
 const TaskReport = lazy(() => import("./pages/TaskReport"));
 const JobReport = lazy(() => import("./pages/JobReport"));
-const PetLog = lazy(() => import("./pages/PetLog"));
 import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
 
 
@@ -62,7 +61,6 @@ function AppRoutes() {
             looks up a linked AgentJob and redirects when one exists. */}
         <Route path="/tasks/:taskId/report" element={<Suspense fallback={<RouteFallback />}><TaskReport /></Suspense>} />
         <Route path="/jobs/:jobId" element={<Suspense fallback={<RouteFallback />}><JobReport /></Suspense>} />
-        <Route path="/pet-log" element={<Suspense fallback={<RouteFallback />}><PetLog /></Suspense>} />
         {/* Legacy routes */}
         <Route path="/skills" element={<Navigate to="/automations" replace />} />
         <Route path="/brain" element={<Navigate to="/knowledge" replace />} />

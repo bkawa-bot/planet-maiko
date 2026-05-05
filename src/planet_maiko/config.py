@@ -41,27 +41,6 @@ DEFAULT_CONFIG = {
         # surfaces things, but framed as "a lot piled up — want to do
         # these together?"). Set to null to disable the signal entirely.
         "interruption_budget": 3,
-        # How many times a single user can pet Maiko per local day.
-        # The Home page shows a community counter across everyone on
-        # this deployment; the cap keeps one person from spamming it
-        # alone. Null disables petting entirely (the avatar becomes
-        # decorative).
-        "pet_daily_cap": 5,
-    },
-    "pets": {
-        # Optional global counter aggregator. When set to a Cloudflare
-        # Worker URL (see deploy/cloudflare-worker/), every pet fires an
-        # INCR against it, and the Home counter shows the cross-
-        # deployment total instead of the local-only one. When null,
-        # every Maiko instance just shows its own local counter.
-        #
-        # No token — the Worker holds the real Upstash creds as
-        # secrets on Cloudflare's side. This client only has access to
-        # two scoped endpoints (increment + read counters) and can't
-        # reach anything else in Redis, so shipping this URL publicly
-        # is safe. See deploy/cloudflare-worker/README.md for how to
-        # deploy your own Worker (one-time, ~10 min, $0).
-        "aggregator_url": None,
         # IANA timezone name (e.g. "America/Los_Angeles"). Leave blank to
         # use the system's local timezone. Controls what "today" means for
         # the morning brief, skill-injected current_date, scene time-of-day,
