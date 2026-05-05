@@ -17,27 +17,36 @@ from planet_maiko.models.task import Task
 
 logger = logging.getLogger(__name__)
 
-# How long before an agent is considered idle
+# How long before an agent is considered idle (status=idle)
 IDLE_THRESHOLD_MINUTES = 30
+# How long before an agent is considered stale — surfaced separately
+# so the user notices "this one's been quiet" instead of the row
+# silently disappearing from the active feed.
+STALE_THRESHOLD_DAYS = 7
 
 
 def get_agent_activity():
     """Get the latest activity for each agent whose task is still open.
 
+    Returns one dict per (agent, task) with a status of:
+      - "active"  → reported within IDLE_THRESHOLD_MINUTES
+      - "idle"    → quiet for >IDLE_THRESHOLD_MINUTES but <STALE_THRESHOLD_DAYS
+      - "stale"   → quiet for >STALE_THRESHOLD_DAYS
+
+    Stale rows used to be filtered out entirely; now they stay so the
+    user can see "Mochi.flow has been quiet for 9 days on the auth
+    refactor — was that supposed to wrap up?" instead of the row
+    silently vanishing.
+
     Filters out:
       - Tasks the agent finished (done / cancelled)
       - Tasks that no longer exist (deleted out from under the agent)
-      - Tasks whose most recent agent pupdate is older than
-        STALE_AGENT_DAYS — the agent's clearly abandoned this one,
-        nothing productive happens from surfacing it in "Active"
 
     Returns:
         list of dicts with agent_id, last_message, last_seen, status
     """
     from planet_maiko.models.task import Task
     from planet_maiko.models.agent_profile import AgentProfile
-
-    STALE_AGENT_DAYS = 7
 
     # source="agent" catches the post-tool-use hook (agent_update). The
     # reply-handler pupdates (ready_for_review, stuck, plan_for_approval,
@@ -61,10 +70,10 @@ def get_agent_activity():
 
     agents = {}
     now = datetime.now(timezone.utc)
-    stale_cutoff = now - timedelta(days=STALE_AGENT_DAYS)
+    stale_cutoff = now - timedelta(days=STALE_THRESHOLD_DAYS)
 
     # Pupdates drive activity tracking (last_seen, pupdate_count,
-    # idle/active status) — they include the post-tool-use hook
+    # idle/active/stale status) — they include the post-tool-use hook
     # which is the truest signal for "is this agent doing something
     # right now". They do NOT drive the speech-bubble text; that
     # used to read pupdate titles like "Agent ready: <task>" and
@@ -79,9 +88,14 @@ def get_agent_activity():
             last_seen = p.timestamp
             if last_seen.tzinfo is None:
                 last_seen = last_seen.replace(tzinfo=timezone.utc)
-            if last_seen < stale_cutoff:
-                continue  # Abandoned task, skip entirely
             idle_minutes = (now - last_seen).total_seconds() / 60
+
+            if last_seen < stale_cutoff:
+                status = "stale"
+            elif idle_minutes > IDLE_THRESHOLD_MINUTES:
+                status = "idle"
+            else:
+                status = "active"
 
             agents[agent_key] = {
                 "task_id": agent_key,
@@ -93,7 +107,7 @@ def get_agent_activity():
                 "last_seen": p.timestamp.isoformat(),
                 "type": p.type,
                 "pupdate_count": 0,
-                "status": "idle" if idle_minutes > IDLE_THRESHOLD_MINUTES else "active",
+                "status": status,
                 "idle_minutes": round(idle_minutes),
             }
 
@@ -257,9 +271,10 @@ def get_stuck_agents():
     """Find agents that haven't reported in a while.
 
     Returns:
-        list of agent activity dicts that are idle
+        list of agent activity dicts whose status is idle or stale
+        (i.e. anything not currently active).
     """
     activity = get_agent_activity()
-    return [a for a in activity if a["status"] == "idle"]
+    return [a for a in activity if a["status"] in ("idle", "stale")]
 
 
