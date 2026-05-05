@@ -174,18 +174,19 @@ def create_app(start_scheduler=False):
         except Exception as e:
             logger.warning(f"[startup] Stale arrival rescue skipped: {e}")
 
-        # Kick off the violation-description backfill LAST. It runs on
-        # a daemon thread that commits per learning — placed after all
-        # main-thread startup writes complete so the bulk UPDATE in
-        # reset_stale_working never races the backfill for SQLite's
-        # write lock. (Even with WAL + 30s busy_timeout, the previous
-        # interleaving could deadlock when the backfill held the lock
-        # right when reset_stale_working tried to acquire it.)
-        try:
-            from planet_maiko.brain.learning.violation_backfill import backfill_in_background
-            backfill_in_background(app)
-        except Exception as e:
-            logger.warning(f"[startup] Violation-description backfill skipped: {e}")
+        # Violation-description backfill is OPT-IN now. It used to fire
+        # on every boot, hammering the SQLite write lock with per-rule
+        # commits while the LLM round-trips ran. RAG retrieval is
+        # already gated on an embedding backend (offline by default
+        # until the user installs sentence-transformers / sets an API
+        # key), so generating descriptions before that's set up is
+        # wasted work. Triggers that still mint descriptions:
+        #   - Approving / editing a learning (learning_api hooks)
+        #   - POST /api/rules/regenerate-descriptions (manual)
+        #   - `maiko lora rules backfill` CLI command
+        # If you want it back on boot, call backfill_in_background(app)
+        # here — but reset_stale_working at the top of this block
+        # races it for the write lock and "database is locked" follows.
 
     # Serve pre-built frontend static files
     frontend_dir = static_dir()
