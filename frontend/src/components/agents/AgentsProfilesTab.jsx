@@ -96,9 +96,15 @@ function CartographLauncher() {
 
 
 // Compact card. Clicking anywhere opens the full profile modal.
+// Surfaces the tagline (flavor_text) on the card — the bio
+// (instructions) lives behind the modal since the user wanted
+// taglines to carry the personality on glance and stats to show
+// the agent has a history. Bio is still load-bearing for the
+// run_skill_as_agent persona preamble; just doesn't render here.
 function ProfileCard({ profile, onOpen }) {
-  const preview = (profile.instructions || profile.flavor_text || "").trim();
   const defaultOrg = useDefaultOrg();
+  const tagline = (profile.flavor_text || "").trim();
+  const ageDays = ageInDays(profile.created_at);
   return (
     <button
       type="button"
@@ -119,14 +125,33 @@ function ProfileCard({ profile, onOpen }) {
             <span className="profile-card-chip" title={profile.scope_repo}>{formatRepo(profile.scope_repo, defaultOrg)}</span>
           </div>
         )}
-        {preview && (
+        {tagline && (
           <div className="profile-card-preview">
-            {preview.length > 110 ? preview.slice(0, 108).replace(/\s+\S*$/, "") + "…" : preview}
+            {tagline.length > 110 ? tagline.slice(0, 108).replace(/\s+\S*$/, "") + "…" : tagline}
           </div>
         )}
+        <div className="profile-card-stats">
+          <span title="Tasks completed">{profile.tasks_completed || 0} done</span>
+          {ageDays != null && (
+            <span title={`Joined ${profile.created_at}`}>{ageDays === 0 ? "new" : `${ageDays}d old`}</span>
+          )}
+        </div>
       </div>
     </button>
   );
+}
+
+
+// Days since the profile's created_at, floored. Returns null when
+// the timestamp is missing or unparseable so the card doesn't render
+// "NaNd old". Same locale-relaxed parsing as everywhere else — ISO
+// strings from the API plus tz markers handle correctly.
+function ageInDays(createdAt) {
+  if (!createdAt) return null;
+  const created = new Date(createdAt);
+  if (isNaN(created.getTime())) return null;
+  const ms = Date.now() - created.getTime();
+  return Math.max(0, Math.floor(ms / 86400000));
 }
 
 
