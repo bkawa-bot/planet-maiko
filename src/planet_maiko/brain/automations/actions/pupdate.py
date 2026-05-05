@@ -297,33 +297,35 @@ def _act_complete_linked_task(automation, config, pupdate=None, context=None):
     Replaces the old ACTION_COMPLETE_TASK in rules.py — same cleanup
     semantics, now living inside the Automation engine.
 
-    Also dismisses every un-dismissed pupdate pointing at the same URL
-    so the overview and ReviewQueue stop surfacing "reviewer requested"
-    / "changes requested" cards for a PR that's already closed. Without
-    this the pupdates linger for their full 24h freshness window and
-    Maiko keeps mentioning them in the narrative.
+    Also cancels any queued/running AgentJob linked to those tasks
+    (the unified kickoff path means the worktree + session live on
+    AgentJob, not the Task), and dismisses every un-dismissed pupdate
+    pointing at the same URL so the overview and ReviewQueue stop
+    surfacing "reviewer requested" / "changes requested" cards for a
+    PR that's already closed.
     """
     if pupdate is None or not pupdate.url:
         return {"skipped": "no url"}
     from planet_maiko.models.task import Task
     from planet_maiko.models.pupdate import Pupdate
+    from planet_maiko.models.agent_job import AgentJob
 
     closed_review = 0
     closed_coding = 0
+    cancelled_jobs = 0
     dismissed_linked = 0
-    # Review tasks hold onto their worktree through the "review" status
-    # (so the user can load the diff inline) — once the PR is merged or
-    # approved and we close the task, the worktree has no remaining job.
-    # Clean it up here alongside coding tasks below.
-    review_tasks = Task.query.filter(
-        Task.url == pupdate.url,
-        Task.type.in_(["review", "pr_review"]),
-        Task.status.in_(["new", "in_progress", "review"]),
-    ).all()
-    for t in review_tasks:
+
+    def _cleanup_task(t):
+        """Close the task, tear down any task-side worktree, and cancel
+        the linked AgentJob (which owns the real worktree + session
+        post-unification). Returns nothing — caller increments counters."""
+        nonlocal cancelled_jobs
         t.status = "done"
         t.updated_at = datetime.now(timezone.utc)
-        closed_review += 1
+
+        # Legacy Task-side worktree (pre-unification kickoffs left the
+        # path on task.extra). Still cleaned up here so older rows
+        # don't leak directories.
         branch = (t.extra or {}).get("branch")
         wp = (t.extra or {}).get("working_path")
         if branch and wp and ".maiko-worktrees" in wp:
@@ -331,25 +333,62 @@ def _act_complete_linked_task(automation, config, pupdate=None, context=None):
                 from planet_maiko.agents.coding_agent import cleanup
                 cleanup(wp, branch)
             except Exception as e:
-                logger.debug(f"[automation {automation.id}] review worktree cleanup failed: {e}")
+                logger.debug(f"[automation {automation.id}] task-side worktree cleanup failed: {e}")
+
+        # Cancel any AgentJob still working this task. Stops the
+        # subprocess, cleans the AgentJob-owned worktree, marks the
+        # row cancelled. Without this, a coding agent kept running
+        # after the PR was merged because the AgentJob row stayed
+        # "running" — stop_agent_session + cleanup must fire here.
+        linked_jobs = (
+            AgentJob.query
+            .filter_by(source_task_id=t.id)
+            .filter(AgentJob.status.in_(["queued", "running", "pending_approval"]))
+            .all()
+        )
+        for job in linked_jobs:
+            try:
+                from planet_maiko.agents.coding_agent import (
+                    stop_agent_session, cleanup as cleanup_worktree,
+                )
+                if job.status == "running":
+                    try:
+                        stop_agent_session(job.id)
+                    except Exception as e:
+                        logger.debug(
+                            f"[automation {automation.id}] stop_agent_session "
+                            f"({job.id}) failed: {e}"
+                        )
+                if job.worktree_path and job.branch and ".maiko-worktrees" in job.worktree_path:
+                    try:
+                        cleanup_worktree(job.worktree_path, job.branch)
+                    except Exception as e:
+                        logger.debug(
+                            f"[automation {automation.id}] AgentJob worktree "
+                            f"cleanup failed for {job.id}: {e}"
+                        )
+            except Exception as e:
+                logger.debug(f"[automation {automation.id}] job cleanup imports failed: {e}")
+            job.status = "cancelled"
+            job.finished_at = datetime.now(timezone.utc)
+            cancelled_jobs += 1
+
+    review_tasks = Task.query.filter(
+        Task.url == pupdate.url,
+        Task.type.in_(["review", "pr_review"]),
+        Task.status.in_(["new", "in_progress", "review"]),
+    ).all()
+    for t in review_tasks:
+        _cleanup_task(t)
+        closed_review += 1
 
     coding_tasks = Task.query.filter(
         Task.status.in_(["new", "in_progress", "in_review"]),
     ).all()
     for t in coding_tasks:
         if t.url == pupdate.url or (t.extra or {}).get("pr_url") == pupdate.url:
-            t.status = "done"
-            t.updated_at = datetime.now(timezone.utc)
+            _cleanup_task(t)
             closed_coding += 1
-            # Worktree cleanup for Maiko-owned coding agents
-            branch = (t.extra or {}).get("branch")
-            wp = (t.extra or {}).get("working_path")
-            if branch and wp and ".maiko-worktrees" in wp:
-                try:
-                    from planet_maiko.agents.coding_agent import cleanup
-                    cleanup(wp, branch)
-                except Exception as e:
-                    logger.debug(f"[automation {automation.id}] worktree cleanup failed: {e}")
 
     # Dismiss all pupdates pointing at this URL (review_requested,
     # changes_requested, approved, merged, etc.) so the overview and
@@ -372,5 +411,6 @@ def _act_complete_linked_task(automation, config, pupdate=None, context=None):
         "kind": "complete_linked_task",
         "review_tasks_closed": closed_review,
         "coding_tasks_closed": closed_coding,
+        "agent_jobs_cancelled": cancelled_jobs,
         "pupdates_dismissed": dismissed_linked,
     }

@@ -26,6 +26,13 @@ dev = [
     "pytest>=7.0",
     "pytest-flask>=1.3",
 ]
+# Local embedding backend for the rule-retrieval (RAG) layer. Pulls in
+# torch (~2GB) so it's opt-in — users who don't want the local model
+# can set VOYAGE_API_KEY or OPENAI_API_KEY instead and skip this extra.
+# Install with: pip install -e ".[rag]"
+rag = [
+    "sentence-transformers>=2.2",
+]
 
 [project.scripts]
 maiko = "planet_maiko.cli.main:main"

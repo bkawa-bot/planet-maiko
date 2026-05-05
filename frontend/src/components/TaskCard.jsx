@@ -161,7 +161,17 @@ export default function TaskCard({
               <Zap size={9} /> auto
             </span>
           )}
-          {t.project_id && <span className="tag tag-project">{t.project_id}</span>}
+          {t.project_id && (() => {
+            // Resolve to project title (Linear name) when the projects
+            // list is available; fall back to the id so the chip stays
+            // useful before /projects has loaded.
+            const proj = (projects || []).find((p) => p.id === t.project_id);
+            return (
+              <span className="tag tag-project" title={t.project_id}>
+                {proj?.title || t.project_id}
+              </span>
+            );
+          })()}
           {(t.metadata?.repo) && (
             <span className="tag" title={t.metadata?.repo}><GitBranch size={9} /> {formatRepo(t.metadata?.repo, defaultOrg)}</span>
           )}
@@ -267,11 +277,6 @@ export default function TaskCard({
                   <option key={p.id} value={p.id}>{p.title}</option>
                 ))}
               </select>
-              {t.url && (
-                <a href={t.url} target="_blank" rel="noreferrer" className="btn btn-sm" onClick={(e) => e.stopPropagation()}>
-                  <ExternalLink size={10} /> Open
-                </a>
-              )}
               <button className="btn btn-sm btn-action" onClick={handleEditClick}>
                 <Pencil size={10} /> Edit
               </button>

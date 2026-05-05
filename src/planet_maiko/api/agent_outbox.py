@@ -129,7 +129,12 @@ def handle_agent_job_reply(job, msg, data, message_type):
             # "done" stat reflects reality.
             ag.tasks_completed = (ag.tasks_completed or 0) + 1
 
-        # Sync the linked Task (Stage D: review tasks have a linked job).
+        # Sync the linked Task. Mirror the full set of parsed-block
+        # metadata (patterns, proposals, confidence, rules_considered)
+        # so TaskCard's inline artifact viewer shows the same chips
+        # the AgentJob report does — without this, the user opens the
+        # task and sees "View report" without the counts that tell
+        # them at a glance what the agent produced.
         if job.source_task_id:
             t = db.session.get(_Task, job.source_task_id)
             if t:
@@ -140,6 +145,13 @@ def handle_agent_job_reply(job, msg, data, message_type):
                     task_extra["review_summary"] = summary
                 task_extra["artifact"] = job.artifact
                 task_extra["completed_at"] = datetime.now(timezone.utc).isoformat()
+                # Mirror the parsed-block metadata too. These keys come
+                # from parse_and_apply_blocks; copy whichever the job
+                # picked up so the Task surface tells the same story.
+                for key in ("patterns_emitted", "proposals_emitted",
+                            "confidence", "rules_considered"):
+                    if key in extra:
+                        task_extra[key] = extra[key]
                 t.extra = task_extra
                 t.status = "review" if is_review else "done"
 

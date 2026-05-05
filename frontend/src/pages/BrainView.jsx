@@ -352,16 +352,16 @@ export default function BrainView() {
           {ragStatus !== null && (() => {
             // Three states: offline (no backend installed), partial
             // (backfill in flight), ready (every active rule has an
-            // embedding). Title carries the model name + raw counts
-            // for the diagnostics-curious.
+            // embedding). Click on offline to surface install steps
+            // — the hover tooltip is too easy to miss.
             const offline = !ragStatus.backend;
             const indexed = ragStatus.rules_indexed || 0;
             const total = ragStatus.rules_total_active || 0;
             const partial = !offline && total > 0 && indexed < total;
             let label, title;
             if (offline) {
-              label = "RAG offline";
-              title = "No embedding backend available. Install sentence-transformers (local) or set VOYAGE_API_KEY / OPENAI_API_KEY to enable rule retrieval.";
+              label = "RAG offline — click for setup";
+              title = "Click for install instructions";
             } else if (total === 0) {
               label = "RAG: no rules";
               title = `Backend: ${ragStatus.model || "(unknown)"}. No active rules yet — retrieval will be empty until rules graduate.`;
@@ -372,10 +372,26 @@ export default function BrainView() {
               label = `RAG ready: ${indexed} indexed`;
               title = `Backend: ${ragStatus.model}. All ${total} active rules indexed for retrieval.`;
             }
+            const ragSetupMessage = (
+              "RAG (rule retrieval) needs an embedding backend. Three options:\n\n" +
+              "1. Local model (free, ~2GB download):\n" +
+              "   pip install -e \".[rag]\"\n" +
+              "   Restart `maiko serve`.\n\n" +
+              "2. Voyage (Anthropic-aligned):\n" +
+              "   pip install voyageai\n" +
+              "   export VOYAGE_API_KEY=your-key\n" +
+              "   Restart `maiko serve`.\n\n" +
+              "3. OpenAI:\n" +
+              "   pip install openai\n" +
+              "   export OPENAI_API_KEY=your-key\n" +
+              "   Restart `maiko serve`."
+            );
             return (
               <span
-                className={`kstat${offline ? " kstat-warning" : ""}`}
+                className={`kstat${offline ? " kstat-warning kstat-clickable" : ""}`}
                 title={title}
+                onClick={offline ? () => alert(ragSetupMessage) : undefined}
+                style={offline ? { cursor: "pointer" } : undefined}
               >
                 <Sparkles size={12} /> {label}
               </span>

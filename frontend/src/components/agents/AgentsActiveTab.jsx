@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle, CheckSquare, ChevronDown, ChevronRight, Clock,
   ExternalLink, GitBranch, HeartPulse, MessageCircle, Play, Sparkles, X,
@@ -9,6 +9,7 @@ import { showToast } from "../Toast";
 import { formatTime, relativeFromMinutes, relativeTime } from "../../utils/dates";
 import { formatRepo, useDefaultOrg } from "../../utils/repo";
 import CardAvatar from "../CardAvatar";
+import ModalPortal from "../ModalPortal";
 
 /**
  * Active tab — pack awareness, queued tasks, ready-to-launch agents, live
@@ -52,6 +53,15 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
   const [selectedThread, setSelectedThread] = useState(null);
   const [messages, setMessages] = useState([]);
   const [msgInput, setMsgInput] = useState("");
+  const threadMessagesRef = useRef(null);
+  // Snap the scroll to the bottom whenever the message list changes
+  // — opening the thread or sending a new message — so the user lands
+  // on the latest reply instead of the start of the conversation.
+  useEffect(() => {
+    if (!selectedThread) return;
+    const el = threadMessagesRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [selectedThread, messages.length]);
   // Queue + recent failures — separate fetch so the live grid stays
   // pupdate-driven and this section reflects pure AgentJob state.
   // Pulled on mount + whenever onRefresh fires upstream (the parent
@@ -450,17 +460,34 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
           </div>
         )}
 
-        {selectedThread && (
+        {selectedThread && (() => {
+          // Compose a friendly thread title: prefer "<agent name> · <task title>"
+          // over the raw bucket key. activity is the canonical source for the
+          // currently-displayed agent metadata; queueJobs covers fresh
+          // queued jobs that haven't pupdate'd yet; profiles is the fallback
+          // for resolving a profile_id off any of those.
+          const a = activity.find((x) => x.task_id === selectedThread);
+          const j = queueJobs.find((q) => q.id === selectedThread || q.source_task_id === selectedThread);
+          const profileId = a?.agent_id || j?.agent_profile_id;
+          const profile = profileId ? profiles.find((p) => p.id === profileId) : null;
+          const agentName = a?.agent_name || profile?.display_name;
+          const taskTitle = a?.task_title || j?.title;
+          const titleParts = [];
+          if (agentName) titleParts.push(agentName);
+          if (taskTitle) titleParts.push(taskTitle);
+          const title = titleParts.length ? titleParts.join(" · ") : "Chat";
+          return (
+          <ModalPortal>
           <div className="modal-overlay" onClick={() => setSelectedThread(null)}>
             <div className="thread-modal" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
-                <MessageCircle size={14} /> Thread: {selectedThread}
+                <MessageCircle size={14} /> {title}
                 <span style={{ flex: 1 }} />
                 <button className="btn btn-sm modal-close-btn" onClick={() => setSelectedThread(null)}>
                   <X size={14} />
                 </button>
               </div>
-              <div className="thread-messages">
+              <div className="thread-messages" ref={threadMessagesRef}>
                 {messages.length === 0 ? (
                   <p className="page-empty thread-empty">No messages yet.</p>
                 ) : messages.map((m) => (
@@ -485,7 +512,9 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
               </div>
             </div>
           </div>
-        )}
+          </ModalPortal>
+          );
+        })()}
 
     </div>
   );
