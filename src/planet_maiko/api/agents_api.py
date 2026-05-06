@@ -792,61 +792,6 @@ def rerun_agent(task_id):
     }), 202
 
 
-@agents_bp.route("/agents/<task_id>/nudge", methods=["POST"])
-def nudge_agent(task_id):
-    """User-triggered nudge: drop a message in the agent's inbox asking
-    for a status check, and resume the claude session if there is one
-    so the agent actually wakes up to read it.
-    """
-    from planet_maiko.models.task import Task
-    from planet_maiko.models.agent_profile import AgentProfile
-
-    task = db.session.get(Task, task_id)
-    if not task:
-        return jsonify({"error": "task not found"}), 404
-
-    agent_name = "the agent"
-    if task.assigned_agent_id:
-        profile = db.session.get(AgentProfile, task.assigned_agent_id)
-        if profile:
-            agent_name = profile.display_name
-
-    db.session.add(AgentMessage(
-        task_id=task_id,
-        direction="to_agent",
-        sender="user",
-        content=(
-            "Hi! Just checking in — please post a quick status update "
-            "via reply(message_type='status') so I know where you're at."
-        ),
-        message_type="message",
-    ))
-    db.session.commit()
-
-    resumed = False
-    mode = "none"
-    working_path = (task.extra or {}).get("working_path")
-    if working_path:
-        try:
-            from planet_maiko.agents.wake import wake_agent
-            nudge_prompt = (
-                "The user nudged you. Call check_inbox for any new "
-                "messages and give a quick status via "
-                "reply(message_type='status')."
-            )
-            ok, mode = wake_agent(task_id, nudge_prompt, source="nudge", working_path=working_path)
-            resumed = ok
-        except Exception as e:
-            logger.warning(f"[nudge] Resume failed for {task_id}: {e}")
-
-    return jsonify({
-        "status": "nudged",
-        "agent": agent_name,
-        "resumed": resumed,
-        "mode": mode,
-    }), 201
-
-
 # Outbox dispatcher — per-message-type handlers live in
 # planet_maiko.api.agent_outbox so this stays a thin route.
 @agents_bp.route("/agents/<task_id>/outbox", methods=["POST"])

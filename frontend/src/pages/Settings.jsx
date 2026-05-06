@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { BookOpen } from "lucide-react";
-import ScheduledBriefings from "../components/ScheduledBriefings";
 import ConceptsModal from "../components/ConceptsModal";
 import IntegrationsSection from "../components/settings/IntegrationsSection";
 import AutopilotSection from "../components/settings/AutopilotSection";
@@ -15,11 +14,10 @@ import { invalidateDefaultOrg } from "../utils/repo";
 import "./Settings.css";
 
 /**
- * Settings page — composition root for ten sections (Your Name,
- * Autopilot, Home Overview, Repo Checks, Scheduled Briefings,
+ * Settings page — composition root for the section components under
+ * components/settings/ (Autopilot, Home Overview, Repo Checks,
  * Integrations, Agent Preferences, Model Routing, Scene & Weather,
- * Plugins). Each big section is its own file under
- * components/settings/; only the trivial "Your Name" stays inline.
+ * Plugins). Only the trivial "Your Name" stays inline.
  */
 export default function Settings() {
   const [config, setConfig] = useState(null);
@@ -29,7 +27,6 @@ export default function Settings() {
   const [message, setMessage] = useState("");
   const [showConcepts, setShowConcepts] = useState(false);
   const [plugins, setPlugins] = useState([]);
-  const [briefingsOpen, setBriefingsOpen] = useState(true);
 
   // Persistent location-resolved hint, derived from saved config so a
   // returning user sees their previously-resolved name even before
@@ -150,18 +147,6 @@ export default function Settings() {
       <AutopilotSection config={config} setConfig={setConfig} />
       <HomeOverviewSection config={config} updateField={updateField} />
       <RepoChecksSection />
-
-      {/* Scheduled Briefings — light wrapper around the existing component. */}
-      <section className="settings-collapsible">
-        <div className="collapsible-header" onClick={() => setBriefingsOpen((v) => !v)}>
-          <span>{briefingsOpen ? "▼" : "▶"} Scheduled Briefings</span>
-        </div>
-        {briefingsOpen && (
-          <div className="collapsible-body">
-            <ScheduledBriefings />
-          </div>
-        )}
-      </section>
 
       <IntegrationsSection
         config={config}

@@ -22,7 +22,6 @@ const ICON_MAP = {
 // don't fit the specialty model are hidden from the grid:
 //   - pr-review: invoked internally by the review agent
 //   - agent-protocol: global CLAUDE.md template, not a role
-//   - plan / team: digest prompts surfaced on Scheduled Briefings.
 //
 // The API methods are still named api.getSkills / api.runSkill / etc.
 // because the backend routes (/skills/*) haven't been renamed yet —
@@ -31,8 +30,6 @@ const ICON_MAP = {
 const HIDDEN_SPECIALTY_IDS = new Set([
   "pr-review",
   "agent-protocol",
-  "plan",
-  "team",
 ]);
 
 export default function Automations() {

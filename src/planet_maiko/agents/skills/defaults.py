@@ -60,22 +60,6 @@ Analyze the repository at the current working directory for code health and impr
 Focus on actionable findings, not style preferences.""",
     },
     {
-        "id": "plan",
-        "name": "Smart Planner",
-        "description": "Optimize your work order — groups by repo, respects calendar, minimizes context switching",
-        "icon": "calendar",
-        "mcps": [],
-        "prompt": "Create an optimized work schedule from tasks, calendar, and pupdates.",
-    },
-    {
-        "id": "team",
-        "name": "Team Snapshot",
-        "description": "See what everyone's working on and where things are stuck",
-        "icon": "users",
-        "mcps": [],
-        "prompt": "Summarize team activity, review bottlenecks, and agent status.",
-    },
-    {
         "id": "pr-review",
         "name": "PR Review",
         "description": "Review a pull request for bugs, design, testing, and code quality",

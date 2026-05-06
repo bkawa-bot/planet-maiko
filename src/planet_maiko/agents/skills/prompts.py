@@ -20,8 +20,6 @@ _PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent / "prompts"
 _SKILL_IDS = [
     "investigate",
     "repo-analysis",
-    "plan",
-    "team",
 ]
 
 

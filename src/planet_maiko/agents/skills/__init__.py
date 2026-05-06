@@ -63,7 +63,12 @@ def seed_defaults():
     # it's not a user-facing skill anymore, just an LLM call the
     # overview pane makes internally. Drop any CustomSkill row for
     # these so they stop appearing in the Specialties list.
-    for retired_id in ("pack-insights", "morning-brief", "evening-wrap", "home-overview"):
+    for retired_id in (
+        "pack-insights", "morning-brief", "evening-wrap", "home-overview",
+        # Digest defaults retired with ScheduledBriefings.jsx — no live
+        # invocation path remained, the UI was the only consumer.
+        "plan", "team",
+    ):
         row = db.session.get(CustomSkill, retired_id)
         if row is not None:
             db.session.delete(row)
