@@ -414,14 +414,26 @@ def _write_claude_settings(working_path, task_id, agent_id):
     if not hooks:
         return
 
-    # enableAllProjectMcpServers auto-approves every server in the
-    # worktree's .mcp.json on session start — without it, project-level
-    # MCPs (including our own maiko-channel and any inherited from the
-    # parent repo) prompt for trust and stall headless / resumed
-    # sessions. Worktree isolation already bounds blast radius.
+    # Auto-approve every server we wrote into .mcp.json so the
+    # session doesn't stall on a trust prompt (we ran headless —
+    # no human to click). Use the explicit `enabledMcpjsonServers`
+    # allowlist instead of `enableAllProjectMcpServers: true`; the
+    # blanket-true flag has a known Claude Code hang bug post-Feb
+    # 2026 in non-interactive mode, and the allowlist also reads
+    # less alarming on the security side.
+    enabled_servers = []
+    mcp_path = os.path.join(working_path, ".mcp.json")
+    if os.path.isfile(mcp_path):
+        try:
+            with open(mcp_path, encoding="utf-8") as f:
+                mcp_data = json.load(f)
+            enabled_servers = list((mcp_data.get("mcpServers") or {}).keys())
+        except Exception as e:
+            logger.warning(f"[agent] Couldn't read .mcp.json for {task_id}: {e}")
+
     settings = {
         "hooks": hooks,
-        "enableAllProjectMcpServers": True,
+        "enabledMcpjsonServers": enabled_servers or ["maiko-channel"],
     }
 
     # Write .claude/settings.json

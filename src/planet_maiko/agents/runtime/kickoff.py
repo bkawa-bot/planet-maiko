@@ -210,6 +210,17 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
         "--dangerously-skip-permissions",
     ]
 
+    # Headless `claude --print` stopped auto-discovering .mcp.json
+    # reliably in recent CLI versions — without an explicit
+    # --mcp-config the worktree's project servers (maiko-channel +
+    # whatever inherited from the parent repo) silently don't load.
+    # The agent then "can't connect to the Maiko MCP" because there
+    # IS no maiko-channel registered. Pointing at the worktree's
+    # .mcp.json explicitly is what the docs recommend post Feb 2026.
+    mcp_config_path = os.path.join(worktree_path, ".mcp.json")
+    if os.path.exists(mcp_config_path):
+        cmd.extend(["--mcp-config", mcp_config_path])
+
     # Effort level: route through resolve_effort so the per-task rule
     # in routing.effort_rules wins over the global thinking_budget.
     # Coding agents default to "high" — they benefit visibly from
