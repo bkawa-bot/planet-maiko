@@ -177,20 +177,24 @@ Maiko maintains a knowledge layer of *graduated rules* — patterns the team has
 
 Run both. They're complementary.
 
-Once you understand what you're about to build (or have just built), pass one or more `--query` flags describing the change in active voice. The agent — you, with full repo context — does the semantic decomposition; the retrieval skips Haiku and embeds your descriptions directly.
+Workflow:
 
-```bash
-maiko rules-relevant \
-  --query "Adding a new POST endpoint that accepts user input" \
-  --query "Writing a database query that incorporates request values" \
-  --repo acme/api
-```
+1. **Decompose your change semantically yourself** — what are the logical pieces? "Adding a new POST endpoint that accepts user input", "Writing a database query that incorporates request values", "Wrapping a GitHub API call in a retry loop." Active voice, one sentence per logical piece. Don't fire the retrieval until you can name what you're doing — the retrieval skips Haiku and embeds your descriptions directly, so a single lazy query like "updated some code" returns mush. Specific descriptions return useful matches.
 
-Returned rules are similarity-ranked; the closest match isn't always relevant. You decide which ones actually apply, then write code that respects them. If you find an applicable rule you weren't following, fix the code before `ready_for_review`.
+2. **Query per logical piece** — pass one `--query` flag for each item from step 1.
+
+   ```bash
+   maiko rules-relevant \
+     --query "Adding a new POST endpoint that accepts user input" \
+     --query "Writing a database query that incorporates request values" \
+     --repo acme/api
+   ```
+
+3. **For each retrieved rule, decide**: does it actually apply to what you're building? Returned rules are similarity-ranked, so the closest match isn't always relevant — you decide. If you find an applicable rule you weren't following, fix the code before `ready_for_review`.
 
 When to call:
-- **Planning** — once you've decided the approach, query per logical change. Folds team rules into your design instead of bolting them on later.
-- **Pre-`ready_for_review`** — re-query with what you actually built. Catches things you drifted on while iterating. Cheap (no Haiku call, just embeddings).
+- **Planning** — once you've decided the approach. Folds team rules into your design instead of bolting them on later.
+- **Pre-`ready_for_review`** — re-decompose what you actually built (it usually drifts from the plan) and re-query. Cheap (no Haiku call, just embeddings).
 
 If the embedding backend is unavailable (`Rules indexed: 0 / N` in the output), skip retrieval — the layer's offline. Don't block on it.
 
