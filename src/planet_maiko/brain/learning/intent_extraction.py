@@ -47,6 +47,59 @@ MAX_COMMENT_CHARS = 600
 DEFAULT_EXAMPLES_PER_RULE = 6
 
 
+_NO_EVIDENCE_PROMPT = """You're describing the kind of code change this rule applies to. The output will be embedded and matched against descriptions of new diffs at review time — same grammatical voice on both sides means tighter cosine matches, so frame your description AS IF YOU WERE DESCRIBING A TYPICAL DIFF that triggers the rule.
+
+Use active voice: "Adding…", "Modifying…", "Refactoring…", "Removing…". DO NOT use abstract framings like "Any code change that…" or "Code changes which…". The diff-side description (what we'll match against) reads like "Adding a new POST endpoint that accepts user input"; your description should read in the same shape.
+
+CRITICAL: do NOT describe what a violation looks like. Do NOT describe red flags, anti-patterns, or "telltale signs of bad code." Describe the SITUATION an engineer is in when this rule becomes relevant — what kind of change they're making, what kind of code they're writing or modifying. Assume the engineer hasn't yet realized the rule applies; your description is what helps the system notice that the rule is relevant to their work.
+
+## The rule
+
+Rule: {rule_text}
+Category: {category}
+{scope_line}
+
+## Why no evidence
+
+This rule was either added manually or is too new for signals to have accumulated. Reason directly from the rule text and its category — imagine the kind of code change a reviewer would invoke this rule for. You're a senior engineer who's seen enough codebases to know what kinds of diffs typically trigger a rule like this; describe one or two of them.
+
+## Your task
+
+Describe the kind of diff that triggers this rule. Cover:
+
+1. WHAT KIND of change is happening
+   (adding a new feature, modifying a query, refactoring, removing code, etc.)
+2. WHAT KIND of code is being created or modified
+   (new endpoint, new database query, new public function, new test, new dependency, etc.)
+3. The BROAD CATEGORY of work
+   (data access, public API, auth, error handling, configuration, testing, observability, etc.)
+4. VARIATIONS — different forms the relevant change can take
+
+DO NOT cover:
+- What a violation looks like
+- What's "wrong" with bad code
+- Specific anti-patterns or red flags
+- Implementation-specific details (variable names, exact function calls, library specifics)
+
+## Examples of GOOD descriptions (note the active voice)
+
+For "Add smoke tests for new endpoints":
+> "Adding a new public-facing API endpoint, route handler, or web-accessible function. Covers REST endpoints (GET/POST/PUT/DELETE), RPC procedures, GraphQL resolvers, and new URL routes. Also includes meaningful modifications to an existing endpoint's public contract — new path, new request shape, or new response shape."
+
+For "Always validate input on user-facing endpoints":
+> "Adding or modifying a function that receives external data — request bodies, query parameters, file uploads, form submissions, or message-queue payloads. Covers both new endpoints and changes to existing ones that introduce or alter input fields."
+
+For "Use parameterized queries":
+> "Writing or modifying a database query that incorporates variable data — function parameters, request values, computed values, or results from other queries. Covers INSERT, UPDATE, DELETE, and SELECT-with-WHERE statements equally, regardless of database engine."
+
+Notice: every example starts with a verb ("Adding", "Writing", "Modifying"), reads like a description of a specific diff, and never mentions what bad code looks like.
+
+Length: 2-4 sentences. Generic enough to apply across languages, frameworks, and team conventions.
+
+Output ONLY the description, no preamble or formatting.
+"""
+
+
 _VIOLATION_PROMPT = """You're describing the kind of code change this rule applies to. The output will be embedded and matched against descriptions of new diffs at review time — same grammatical voice on both sides means tighter cosine matches, so frame your description AS IF YOU WERE DESCRIBING A TYPICAL DIFF that triggers the rule.
 
 Use active voice: "Adding…", "Modifying…", "Refactoring…", "Removing…". DO NOT use abstract framings like "Any code change that…" or "Code changes which…". The diff-side description (what we'll match against) reads like "Adding a new POST endpoint that accepts user input"; your description should read in the same shape.
@@ -229,27 +282,50 @@ def build_violation_prompt(learning, evidence):
     return prompt, len(blocks)
 
 
+def _build_no_evidence_prompt(learning):
+    """Format the rule-text-only prompt for Learnings with no signals.
+    Used when the rule was added manually or hasn't accumulated evidence
+    yet — Claude reasons from the rule text alone."""
+    scope_line = ""
+    if learning.scope_repo:
+        scope_line = f"Scope: applies in {learning.scope_repo}"
+    elif learning.is_global:
+        scope_line = "Scope: global (applies across repos)"
+    return _NO_EVIDENCE_PROMPT.format(
+        rule_text=learning.rule,
+        category=learning.category,
+        scope_line=scope_line,
+    )
+
+
 def generate_violation_description(learning):
     """Run the full pipeline for one Learning. Returns the generated
     description text on success, or None on any failure (LLM unavailable,
-    no evidence, parse error). Caller is responsible for embedding and
-    persisting; this function is pure compute.
+    parse error). Caller is responsible for embedding and persisting;
+    this function is pure compute.
+
+    Rules with graduated signals get the evidence-grounded prompt (richer
+    descriptions tied to real PR comments). Rules without evidence —
+    manually-added or single-feedback — fall through to a rule-text-only
+    prompt so they still get indexed and become retrievable. A weaker
+    description is way better than no description; without one, the rule
+    never has an embedding and never surfaces in RAG.
     """
     from planet_maiko.agents.brain_session import _get_runtime
     from planet_maiko.agents.routing import resolve_model, resolve_effort
 
     evidence = gather_evidence_for_learning(learning)
-    if not evidence:
-        # No graduated signals to ground on — skip rather than asking
-        # Claude to hallucinate. We could fall back to a rule-text-only
-        # prompt, but those descriptions are weaker; better to wait for
-        # signals to accumulate.
+    if evidence:
+        prompt, used_examples = build_violation_prompt(learning, evidence)
+        evidence_mode = f"{used_examples} examples"
+    else:
+        prompt = _build_no_evidence_prompt(learning)
+        used_examples = 0
+        evidence_mode = "no evidence (rule-text-only)"
         logger.info(
-            f"[intent] Learning #{learning.id} has no evidence yet — skipping description"
+            f"[intent] Learning #{learning.id} has no evidence — "
+            f"falling back to rule-text-only prompt"
         )
-        return None
-
-    prompt, used_examples = build_violation_prompt(learning, evidence)
 
     runtime = _get_runtime()
     if not runtime or not runtime.is_available():
@@ -294,7 +370,7 @@ def generate_violation_description(learning):
 
     logger.info(
         f"[intent] Learning #{learning.id}: generated description from "
-        f"{used_examples} examples ({len(text)} chars)"
+        f"{evidence_mode} ({len(text)} chars)"
     )
     return text
 
