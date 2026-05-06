@@ -87,6 +87,11 @@ def seed_defaults():
             logger.info(f"[skills] Seeded default skill: {s['name']}")
             continue
 
+        # User soft-deleted this default — leave the tombstone alone.
+        # Don't resurrect by syncing structural flags either.
+        if existing.deleted_at is not None:
+            continue
+
         # Sync structural flags for un-edited default skills so changes
         # in defaults.py propagate to existing installs. needs_worktree
         # in particular determines whether the skill runs as a real
@@ -188,7 +193,12 @@ def list_skills():
     """List all available skills."""
     try:
         from planet_maiko.models.custom_skill import CustomSkill
-        skills = CustomSkill.query.order_by(CustomSkill.is_default.desc(), CustomSkill.name).all()
+        skills = (
+            CustomSkill.query
+            .filter(CustomSkill.deleted_at.is_(None))
+            .order_by(CustomSkill.is_default.desc(), CustomSkill.name)
+            .all()
+        )
         if skills:
             return [s.to_dict() for s in skills]
     except Exception as e:

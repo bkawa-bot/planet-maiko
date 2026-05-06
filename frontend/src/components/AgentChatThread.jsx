@@ -58,7 +58,17 @@ export default function AgentChatThread({
     if (!text || sendingChat || !id) return;
     setSendingChat(true);
     try {
-      await api.sendToAgent(id, { content: text, sender: "user" });
+      // Backend auto-wakes when sender=user and returns wake_mode so we
+      // can tell the user whether the agent was actually woken, queued
+      // behind a current run, or has no resumable session at all. Same
+      // shape as AgentsActiveTab — keep the surfaces consistent so users
+      // know whether their message will actually be read.
+      const res = await api.sendToAgent(id, { content: text, sender: "user" });
+      const mode = res?.wake_mode;
+      if (mode === "woke") showToast("Message sent — waking the agent ✨", "normal");
+      else if (mode === "queued") showToast("Agent's working — queued for the next turn", "normal");
+      else if (mode === "error") showToast("Sent, but agent has no live session to wake", "high");
+      else showToast("Message saved to inbox", "normal");
       setChatInput("");
       await fetchMessages();
     } catch (err) {

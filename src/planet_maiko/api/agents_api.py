@@ -35,6 +35,8 @@ def get_skill_detail(skill_id):
     """Get a skill's full details including prompt."""
     from planet_maiko.models.custom_skill import CustomSkill
     skill = db.get_or_404(CustomSkill, skill_id)
+    if skill.deleted_at is not None:
+        return jsonify({"error": "Skill not found"}), 404
     return jsonify(skill.to_dict())
 
 
@@ -51,8 +53,6 @@ def create_skill():
         mcps=data.get("mcps", []),
         icon=data.get("icon", "wand"),
         is_default=False,
-        schedule_interval_minutes=data.get("schedule_interval_minutes"),
-        creates_pupdates=data.get("creates_pupdates", False),
         needs_worktree=bool(data.get("needs_worktree", False)),
     )
     db.session.add(skill)
@@ -77,10 +77,6 @@ def update_skill(skill_id):
         skill.mcps = data["mcps"]
     if "icon" in data:
         skill.icon = data["icon"]
-    if "schedule_interval_minutes" in data:
-        skill.schedule_interval_minutes = data["schedule_interval_minutes"] or None
-    if "creates_pupdates" in data:
-        skill.creates_pupdates = data["creates_pupdates"]
     if "needs_worktree" in data:
         skill.needs_worktree = bool(data["needs_worktree"])
     db.session.commit()
@@ -89,12 +85,21 @@ def update_skill(skill_id):
 
 @agents_bp.route("/skills/<skill_id>", methods=["DELETE"])
 def delete_skill(skill_id):
-    """Delete a custom skill (cannot delete defaults)."""
+    """Delete a skill.
+
+    User-created skills are hard-deleted. Defaults are soft-deleted
+    (deleted_at = now) so the seed pass on next boot doesn't re-create
+    them — the row sticks around as a tombstone the seed can see and
+    skip. List/get queries filter out tombstones, so the user-visible
+    behavior is identical either way.
+    """
+    from datetime import datetime, timezone
     from planet_maiko.models.custom_skill import CustomSkill
     skill = db.get_or_404(CustomSkill, skill_id)
     if skill.is_default:
-        return jsonify({"error": "Cannot delete default skills. Edit them instead."}), 400
-    db.session.delete(skill)
+        skill.deleted_at = datetime.now(timezone.utc)
+    else:
+        db.session.delete(skill)
     db.session.commit()
     return jsonify({"status": "deleted"})
 
@@ -679,29 +684,25 @@ def send_to_agent(task_id):
 
     woke_mode = "none"
     if msg.sender == "user":
-        from planet_maiko.models.task import Task
-        from planet_maiko.models.agent_job import AgentJob as _AgentJob
-        # The path id can be either a task id or a job id — both
-        # share the inbox column. Look up both and pick whichever
-        # has a worktree, so wake-on-send works whether the agent
-        # is task-linked or a standalone job (cartograph,
-        # investigation, skill run).
-        task = db.session.get(Task, task_id)
-        working_path = (task.extra or {}).get("working_path") if task else None
-        if not working_path:
-            job = db.session.get(_AgentJob, task_id)
-            if job is not None:
-                working_path = job.worktree_path
-        if working_path:
-            from planet_maiko.agents.wake import wake_agent
-            chat_prompt = (
-                "The user sent you a message. Call check_inbox to read "
-                "it, respond with reply(message_type='status'), and "
-                "continue working."
-            )
-            _ok, woke_mode = wake_agent(
-                task_id, chat_prompt, source="chat", working_path=working_path,
-            )
+        # Always try wake_agent — it has its own resolution chain:
+        # session registry first, then AgentJob.session_id /
+        # worktree_path fallback. Don't gate on a local lookup of
+        # task.extra.working_path; that path is empty for plenty of
+        # legitimate cases (worktree was cleaned but session is still
+        # resumable, task.extra never got populated, the inbox id is
+        # an AgentJob id rather than a Task id). Letting wake_agent
+        # handle it means "Message saved to inbox" only fires when
+        # there really is no resumable session — not whenever the
+        # narrow lookup happens to come up empty.
+        from planet_maiko.agents.wake import wake_agent
+        chat_prompt = (
+            "The user sent you a message. Call check_inbox to read "
+            "it, respond with reply(message_type='status'), and "
+            "continue working."
+        )
+        _ok, woke_mode = wake_agent(
+            task_id, chat_prompt, source="chat",
+        )
 
     out = msg.to_dict()
     out["wake_mode"] = woke_mode

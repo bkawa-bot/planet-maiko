@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import {
   Zap, Wand2, Sunrise, Brain, Coffee, Search, GitFork,
-  Rocket, Clipboard, X, Loader, Plus, Save, Eye, Pencil, Trash2, Clock,
+  Rocket, Clipboard, X, Loader, Plus, Save, Eye, Pencil, Trash2,
   Compass, Pause, Play, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
@@ -42,12 +42,10 @@ export default function Automations() {
   const [editPrompt, setEditPrompt] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [editMcps, setEditMcps] = useState("");
-  const [editSchedule, setEditSchedule] = useState("");
-  const [editCreatesPupdates, setEditCreatesPupdates] = useState(false);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [newSpecialty, setNewSpecialty] = useState({ id: "", name: "", description: "", prompt: "", mcps: "", schedule_interval_minutes: "", creates_pupdates: false, needs_worktree: false });
+  const [newSpecialty, setNewSpecialty] = useState({ id: "", name: "", description: "", prompt: "", mcps: "", needs_worktree: false });
 
   const fetchSpecialties = () => api.getSkills()
     .then((list) => setSpecialties(list.filter((s) => !HIDDEN_SPECIALTY_IDS.has(s.id))))
@@ -61,8 +59,6 @@ export default function Automations() {
       setEditPrompt(detail.prompt);
       setEditDesc(detail.description || "");
       setEditMcps((detail.mcps || []).join(", "));
-      setEditSchedule(detail.schedule_interval_minutes ? String(detail.schedule_interval_minutes) : "");
-      setEditCreatesPupdates(detail.creates_pupdates || false);
       setEditing(false);
       setResult(null);
     } catch (err) {
@@ -75,8 +71,6 @@ export default function Automations() {
       prompt: editPrompt,
       description: editDesc,
       mcps: editMcps.split(",").map(s => s.trim()).filter(Boolean),
-      schedule_interval_minutes: editSchedule ? parseInt(editSchedule) : null,
-      creates_pupdates: editCreatesPupdates,
     });
     showToast("Specialty updated! ✏️", "normal");
     setEditing(false);
@@ -138,11 +132,10 @@ export default function Automations() {
       await api.createSkill({
         ...newSpecialty,
         mcps: newSpecialty.mcps.split(",").map(s => s.trim()).filter(Boolean),
-        schedule_interval_minutes: newSpecialty.schedule_interval_minutes ? parseInt(newSpecialty.schedule_interval_minutes) : null,
       });
       showToast(`Specialty "${newSpecialty.name}" created! 🎉`, "normal");
       setShowCreate(false);
-      setNewSpecialty({ id: "", name: "", description: "", prompt: "", mcps: "", schedule_interval_minutes: "", creates_pupdates: false, needs_worktree: false });
+      setNewSpecialty({ id: "", name: "", description: "", prompt: "", mcps: "", needs_worktree: false });
       fetchSpecialties();
     } catch (err) {
       showToast(err.message || "Couldn't create specialty", "high");
@@ -161,7 +154,7 @@ export default function Automations() {
   };
 
   const openCreate = () => {
-    setNewSpecialty({ id: "", name: "", description: "", prompt: "# My Specialty\n\nUse {pupdates} and {tasks} for context.\n\n## Instructions\n1. ...", mcps: "", needs_worktree: false, schedule_interval_minutes: "", creates_pupdates: false });
+    setNewSpecialty({ id: "", name: "", description: "", prompt: "# My Specialty\n\nUse {pupdates} and {tasks} for context.\n\n## Instructions\n1. ...", mcps: "", needs_worktree: false });
     setShowCreate(true);
   };
 
@@ -210,25 +203,6 @@ export default function Automations() {
                   </small>
                 </label>
                 <label>MCPs (comma-separated) <input type="text" value={newSpecialty.mcps} onChange={e => setNewSpecialty(s => ({ ...s, mcps: e.target.value }))} placeholder="slack, linear, figma" /></label>
-                <div className="specialty-form-row">
-                  <label>Schedule
-                    <select value={newSpecialty.schedule_interval_minutes} onChange={e => setNewSpecialty(s => ({ ...s, schedule_interval_minutes: e.target.value }))}>
-                      <option value="">Manual only</option>
-                      <option value="15">Every 15 min</option>
-                      <option value="30">Every 30 min</option>
-                      <option value="60">Every hour</option>
-                      <option value="360">Every 6 hours</option>
-                      <option value="720">Every 12 hours</option>
-                      <option value="1440">Daily</option>
-                    </select>
-                  </label>
-                  {newSpecialty.schedule_interval_minutes && (
-                    <label className="checkbox-label">
-                      <input type="checkbox" checked={newSpecialty.creates_pupdates} onChange={e => setNewSpecialty(s => ({ ...s, creates_pupdates: e.target.checked }))} />
-                      Creates pupdates from output
-                    </label>
-                  )}
-                </div>
                 <label>Prompt
                   <textarea value={newSpecialty.prompt} onChange={e => setNewSpecialty(s => ({ ...s, prompt: e.target.value }))} rows={12} />
                 </label>
@@ -252,9 +226,6 @@ export default function Automations() {
               <div className="specialty-desc">{s.description}</div>
               <div className="specialty-mcps">
                 {s.mcps?.map(m => <span key={m} className="tag">{m}</span>)}
-                {s.schedule_interval_minutes && (
-                  <span className="tag schedule-tag"><Clock size={8} /> {s.schedule_interval_minutes}m</span>
-                )}
               </div>
             </div>
           );
@@ -271,11 +242,9 @@ export default function Automations() {
                 <button className="btn btn-sm" onClick={() => setEditing(!editing)}>
                   {editing ? <><Eye size={10} /> View</> : <><Pencil size={10} /> Edit</>}
                 </button>
-                {!selected.is_default && (
-                  <button className="btn btn-sm btn-danger" onClick={() => handleDelete(selected.id)}>
-                    <Trash2 size={10} />
-                  </button>
-                )}
+                <button className="btn btn-sm btn-danger" onClick={() => handleDelete(selected.id)}>
+                  <Trash2 size={10} />
+                </button>
                 <button className="btn btn-sm" onClick={() => { setSelected(null); setResult(null); }}>
                   <X size={10} />
                 </button>
@@ -291,25 +260,6 @@ export default function Automations() {
                   <label>MCPs (comma-separated)
                     <input type="text" value={editMcps} onChange={e => setEditMcps(e.target.value)} />
                   </label>
-                  <div className="specialty-form-row">
-                    <label>Schedule
-                      <select value={editSchedule} onChange={e => setEditSchedule(e.target.value)}>
-                        <option value="">Manual only</option>
-                        <option value="15">Every 15 min</option>
-                        <option value="30">Every 30 min</option>
-                        <option value="60">Every hour</option>
-                        <option value="360">Every 6 hours</option>
-                        <option value="720">Every 12 hours</option>
-                        <option value="1440">Daily</option>
-                      </select>
-                    </label>
-                    {editSchedule && (
-                      <label className="checkbox-label">
-                        <input type="checkbox" checked={editCreatesPupdates} onChange={e => setEditCreatesPupdates(e.target.checked)} />
-                        Creates pupdates from output
-                      </label>
-                    )}
-                  </div>
                   <label>Prompt
                     <textarea value={editPrompt} onChange={e => setEditPrompt(e.target.value)} rows={15} />
                   </label>

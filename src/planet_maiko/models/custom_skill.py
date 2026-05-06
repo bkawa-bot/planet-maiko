@@ -22,8 +22,6 @@ class CustomSkill(db.Model):
     icon = db.Column(db.String(20), default="wand")  # lucide icon name
     is_default = db.Column(db.Boolean, default=False)  # shipped with Maiko
     user_edited = db.Column(db.Boolean, default=False)  # True once user edits the prompt
-    schedule_interval_minutes = db.Column(db.Integer, nullable=True)  # null = manual only
-    creates_pupdates = db.Column(db.Boolean, default=False)  # parse output into pupdates
     # Does this specialty need a git worktree to do its work? True for
     # anything that reads actual code (investigate, repo-analysis,
     # cartograph-style specialties). False for narrative / analysis
@@ -31,6 +29,11 @@ class CustomSkill(db.Model):
     # a prompt from DB state. Default off — opt-in per specialty.
     needs_worktree = db.Column(db.Boolean, default=False)
     last_run_at = db.Column(db.DateTime, nullable=True)
+    # Soft-delete tombstone for default skills. Hard delete is fine for
+    # user-created skills, but defaults get re-seeded on every boot, so
+    # the user's "delete this default" needs a flag the seed pass can
+    # see and skip. NULL = active, set = deleted.
+    deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
                            onupdate=lambda: datetime.now(timezone.utc))
@@ -45,10 +48,9 @@ class CustomSkill(db.Model):
             "icon": self.icon,
             "is_default": self.is_default,
             "user_edited": self.user_edited,
-            "schedule_interval_minutes": self.schedule_interval_minutes,
-            "creates_pupdates": self.creates_pupdates,
             "needs_worktree": bool(self.needs_worktree),
             "last_run_at": iso_utc(self.last_run_at),
+            "deleted_at": iso_utc(self.deleted_at),
             "created_at": iso_utc(self.created_at),
             "updated_at": iso_utc(self.updated_at),
         }

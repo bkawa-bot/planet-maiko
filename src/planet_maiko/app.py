@@ -20,6 +20,19 @@ logger = logging.getLogger(__name__)
 # Format: column_type must be SQLite-valid (TEXT / INTEGER / etc.).
 _PATCH_COLUMNS = [
     ("agent_messages", "recipient", "VARCHAR(50)"),
+    ("custom_skills", "deleted_at", "DATETIME"),
+]
+
+
+# Columns that have been removed from a model and should be dropped from
+# existing DBs. SQLite supports DROP COLUMN since 3.35 (March 2021), and
+# the harness here is best-effort: if the drop fails (column doesn't
+# exist, table missing, old SQLite), we log and move on. Anything left
+# in the column after model removal is just dead data — the ORM stops
+# touching it the moment the model attribute is gone.
+_DROP_COLUMNS = [
+    ("custom_skills", "schedule_interval_minutes"),
+    ("custom_skills", "creates_pupdates"),
 ]
 
 
@@ -74,6 +87,41 @@ def _ensure_new_columns():
         )
     except Exception as e:
         logger.warning(f"[startup] Column-patch check failed: {e}")
+
+
+def _drop_legacy_columns():
+    """Drop columns that have been removed from a model. Mirror of
+    _ensure_new_columns: scans PRAGMA table_info, runs ALTER TABLE
+    DROP COLUMN for any column still present that the model no
+    longer declares.
+
+    Best-effort. SQLite < 3.35 doesn't support DROP COLUMN; if the
+    drop fails, the column just sits there as orphan data. The ORM
+    has already stopped reading/writing it.
+    """
+    from sqlalchemy import text
+    if not _DROP_COLUMNS:
+        return
+    try:
+        with db.engine.begin() as conn:
+            for table, column in _DROP_COLUMNS:
+                rows = conn.execute(text(f"PRAGMA table_info({table})")).all()
+                existing = {r[1] for r in rows}
+                if not existing or column not in existing:
+                    continue
+                try:
+                    conn.execute(text(
+                        f"ALTER TABLE {table} DROP COLUMN {column}"
+                    ))
+                    logger.info(
+                        f"[startup] Dropped legacy column {table}.{column}"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"[startup] Could not drop {table}.{column}: {e}"
+                    )
+    except Exception as e:
+        logger.warning(f"[startup] Column-drop pass failed: {e}")
 
 
 def create_app(start_scheduler=False):
@@ -191,6 +239,7 @@ def create_app(start_scheduler=False):
         # the rule stays "destructive schema changes need a fresh
         # DB"; this is just for cheap nullable-column additions.
         _ensure_new_columns()
+        _drop_legacy_columns()
 
         # Seed default skills on first run
         from planet_maiko.agents.skills import seed_defaults
