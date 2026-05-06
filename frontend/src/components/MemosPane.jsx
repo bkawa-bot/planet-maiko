@@ -12,6 +12,8 @@ import { renderMarkdown } from "../utils/markdown";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import ProposalCard from "./ProposalCard";
 import CardAvatar from "./CardAvatar";
+import AgentChatThread from "./AgentChatThread";
+import ModalPortal from "./ModalPortal";
 import "./ReviewQueue.css";
 import "./MemosPane.css";
 import ArtifactRow from "./memos/ArtifactRow";
@@ -111,6 +113,11 @@ export default function MemosPane() {
     () => Object.fromEntries(profiles.map((p) => [p.id, p])),
     [profiles],
   );
+  // Chat-thread modal target (the AgentJob/Task id that drives the
+  // agent_message memo's reply box). Null = closed. State lives at
+  // pane level so the modal escapes the inline scroll context and
+  // sits cleanly above the page.
+  const [chatThreadId, setChatThreadId] = useState(null);
 
   const fetchQueue = async () => {
     try {
@@ -438,22 +445,53 @@ export default function MemosPane() {
           }
 
           // Default row: click-to-navigate + dismiss X. Covers plan,
-          // review, agent_ready, agent_stuck.
+          // review, agent_ready, agent_stuck, agent_message, plus
+          // anything the catchall memo path surfaces.
           //
-          // Agent message rows (agent_ready / agent_stuck / agent_plan)
-          // additionally render the agent's message body inline as an
-          // expand-on-click <details>. The body is the actual content
-          // the user wants to read — without inline rendering they had
-          // to click through to a per-task page just to see "what did
-          // the agent say" — and stuck messages especially had no
-          // valid destination at all.
+          // Agent message rows render the body inline:
+          //   - agent_ready / agent_stuck / agent_plan keep the
+          //     existing "Read message" expand-on-click <details>.
+          //   - agent_message (recipient="user" replies) shows a
+          //     short preview directly under the title and gives
+          //     the user a one-click "Reply" that opens the full
+          //     chat thread in a modal — the existing chat surface
+          //     already shows every message in the thread, so we
+          //     don't need to also embed the markdown body inline.
           const cta = it.cta_label || meta.cta;
           const hasRoute = !!it.route;
           const isAgentMessage =
             it.kind === "agent_ready" ||
             it.kind === "agent_stuck" ||
             it.kind === "agent_plan";
+          const isUserDirectedMessage = it.kind === "agent_message";
           const showInlineBody = isAgentMessage && !!(it.body && it.body.trim());
+
+          // Preview shown under the title for user-directed agent
+          // messages. Trims to a single line and caps length so the
+          // memo grid stays scannable; the modal carries the full
+          // markdown when the user clicks Reply.
+          const PREVIEW_CHARS = 140;
+          let bodyPreview = null;
+          if (isUserDirectedMessage && it.body) {
+            const oneLine = it.body.replace(/\s+/g, " ").trim();
+            bodyPreview = oneLine.length > PREVIEW_CHARS
+              ? oneLine.slice(0, PREVIEW_CHARS - 1).replace(/\s+\S*$/, "") + "…"
+              : oneLine;
+          }
+
+          // Click semantics: navigate when there's a real route, but
+          // for agent_message the "route" is just /agents which isn't
+          // useful — open the chat modal directly instead.
+          const handleRowClick = () => {
+            if (isUserDirectedMessage) {
+              const id = it.thread_id || it.task_id || it.job_id;
+              if (id) setChatThreadId(id);
+              return;
+            }
+            if (hasRoute) navigate(it.route);
+          };
+          const rowClickable = isUserDirectedMessage || hasRoute;
+
           return (
             <div
               key={`${it.kind}:${it.task_id || it.job_id || it.memo_id}`}
@@ -462,14 +500,19 @@ export default function MemosPane() {
               <button
                 type="button"
                 className="review-queue-row-main"
-                onClick={() => hasRoute && navigate(it.route)}
-                disabled={!hasRoute}
+                onClick={handleRowClick}
+                disabled={!rowClickable}
               >
                 {renderRowIcon(it, Icon)}
                 <div className="review-queue-body">
                   <div className="review-queue-title">
                     {it.title || "(untitled)"}
                   </div>
+                  {bodyPreview && (
+                    <div className="review-queue-message-preview">
+                      {bodyPreview}
+                    </div>
+                  )}
                   <div className="review-queue-meta">
                     <span className="review-queue-kind">{meta.label}</span>
                     {it.repo && (
@@ -487,8 +530,12 @@ export default function MemosPane() {
                     )}
                   </div>
                 </div>
-                {hasRoute && cta && (
-                  <span className="review-queue-cta">{cta} →</span>
+                {isUserDirectedMessage ? (
+                  <span className="review-queue-cta">Reply →</span>
+                ) : (
+                  hasRoute && cta && (
+                    <span className="review-queue-cta">{cta} →</span>
+                  )
                 )}
               </button>
               {showInlineBody && (
@@ -530,6 +577,34 @@ export default function MemosPane() {
           );
         })}
       </div>
+
+      {chatThreadId && (
+        <ModalPortal>
+          <div
+            className="modal-overlay"
+            onClick={() => setChatThreadId(null)}
+          >
+            <div
+              className="memos-pane-chat-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="modal-header">
+                <MessageCircle size={14} />
+                <span style={{ flex: 1 }}>Chat</span>
+                <button
+                  className="btn btn-sm modal-close-btn"
+                  onClick={() => setChatThreadId(null)}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="memos-pane-chat-modal-body">
+                <AgentChatThread id={chatThreadId} />
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
     </div>
   );
 }

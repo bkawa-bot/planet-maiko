@@ -242,6 +242,40 @@
   align-self: center;
 }
 
+/* One-line preview shown directly under the title for agent_message
+   memos so the user can scan what the agent said without expanding.
+   Single line, dimmed, ellipsis on overflow. */
+.review-queue-message-preview {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 2px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 56ch;
+}
+
+/* Chat modal that opens when the user clicks Reply on an
+   agent_message memo. Holds the AgentChatThread component which
+   provides full thread + reply box. */
+.memos-pane-chat-modal {
+  background: var(--bg-card);
+  border: 1px solid var(--card-border, var(--border));
+  border-radius: var(--radius);
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+}
+.memos-pane-chat-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px 16px;
+}
+
 /* Inline message body for agent_ready / agent_stuck / agent_plan
    memos. Expand-on-click <details>; the row's main button still
    navigates separately, the body just lets the user read content
