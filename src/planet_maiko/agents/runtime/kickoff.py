@@ -221,17 +221,21 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
     if os.path.exists(mcp_config_path):
         cmd.extend(["--mcp-config", mcp_config_path])
 
-    # Effort level: route through resolve_effort so the per-task rule
-    # in routing.effort_rules wins over the global thinking_budget.
-    # Coding agents default to "high" — they benefit visibly from
-    # deeper reasoning. Cartographers / investigators use the same
-    # role key for now (they're long-running too); the user can
-    # split them in Settings if they want.
+    # Model + effort routing: pull both from config so the agent runs
+    # on whatever the user picked in Settings → Model Routing rather
+    # than Claude Code's CLI default. All agent roles share the
+    # "coding_agent" key today (review / investigation / cartographer
+    # are long-running too); user can split them in routing.rules if
+    # they want different tiers per role.
     try:
-        from planet_maiko.agents.routing import resolve_effort
+        from planet_maiko.agents.routing import resolve_model, resolve_effort
+        model = resolve_model("coding_agent")
         budget = resolve_effort("coding_agent") or "medium"
     except Exception:
+        model = None
         budget = "medium"
+    if model:
+        cmd.extend(["--model", model])
     if budget in ("low", "medium", "high", "max"):
         cmd.extend(["--effort", budget])
 
