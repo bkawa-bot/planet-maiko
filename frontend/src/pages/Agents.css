@@ -103,6 +103,12 @@
   opacity: 0.7;
 }
 .speech-bubble.status-disconnected { border-left: 3px solid var(--urgent); }
+/* Ready = follow-up-capable agent that finished its primary work
+   (review / investigation / cartograph posted ready_for_review). The
+   worktree is preserved so the user can wake the agent for follow-up
+   questions. Pink — matches the "review queue" tone the row's CTA
+   uses, signals "shipped, you should look at this." */
+.speech-bubble.status-ready { border-left: 3px solid var(--pink); }
 .speech-time { font-size: 9px; color: var(--text-muted); margin-top: 4px; }
 
 .agent-card-body { display: flex; gap: 12px; padding: 14px 16px; }

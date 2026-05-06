@@ -141,57 +141,82 @@ def get_agent_activity():
         a["last_message_body"] = last.content
         a["last_message_type"] = last.message_type
 
-    # Drop tasks that are finished or no longer exist, and enrich
-    # the rest with agent profile info + the task's title (the UI
-    # needs the title to render one card per (agent, work-unit)
-    # instead of one per agent — same agent profile working two
-    # things should show two cards, distinguished by title).
+    # Filter + enrich the agents dict for the active feed.
     #
-    # Standalone AgentJobs (cartograph / investigation / specialty
-    # runs without a linked Task) get the same treatment. Their
-    # _kickoff_agent_headless call passes task_id=<job_id>, so their
-    # agent messages + pupdates land in the same per-id buckets the
-    # task loop above already built — we just need a different
-    # enrichment lookup since `Task.id == job_id` returns None.
+    # Post-unification, every agent's MAIKO_TASK_ID is its AgentJob.id
+    # — that's what the post-tool-use hook tags pupdates with, so the
+    # `agents` dict is keyed by job.id. Job-first lookup is the natural
+    # identity; the parent Task (if any) is looked up afterward for
+    # display metadata.
+    #
+    # Visibility rules:
+    #   - Job in queued / running / pending_approval — alive, keep.
+    #   - FOLLOWUP_KINDS job in done with worktree still on disk —
+    #     keep with status="ready" so the user sees "agent shipped, you
+    #     can ask follow-ups" instead of the row vanishing the instant
+    #     ready_for_review lands. Drops out once the worktree gets
+    #     cleaned (shutdown ritual or pr_merged automation).
+    #   - Anything else (terminal job + no resumable worktree) — drop.
+    #
+    # Legacy fallback (no job, key is a Task.id): drop on done/cancelled
+    # like before. Coding worktrees get cleaned on completion so
+    # wake_agent wouldn't work anyway.
     from planet_maiko.models.agent_job import AgentJob
+    from planet_maiko.api.agent_outbox import FOLLOWUP_KINDS
 
     keep = {}
     for key, a in agents.items():
-        task = db.session.get(Task, a["task_id"])
-        if task is not None:
-            if task.status in ("done", "cancelled"):
-                continue  # agent's work on this one is over
-            a["kind"] = "task"
-            a["task_title"] = task.title
-            a["task_status"] = task.status
-            a["task_type"] = task.type
-            if task.assigned_agent_id:
-                profile = db.session.get(AgentProfile, task.assigned_agent_id)
+        # Job-first: post-unification, the agent-side id IS the job.id.
+        job = db.session.get(AgentJob, key)
+        if job is not None:
+            is_active = job.status in ("queued", "running", "pending_approval")
+            is_ready_for_followup = (
+                job.kind in FOLLOWUP_KINDS
+                and job.status == "done"
+                and bool(job.worktree_path)
+            )
+            if not (is_active or is_ready_for_followup):
+                continue
+
+            # Pull the linked Task (if any) for display metadata. The
+            # task's title reads better than the job.title for linked
+            # work; the job's metadata wins only when standalone.
+            linked_task = (
+                db.session.get(Task, job.source_task_id)
+                if job.source_task_id else None
+            )
+            a["kind"] = "task" if linked_task is not None else "job"
+            a["job_id"] = job.id
+            a["task_title"] = linked_task.title if linked_task else job.title
+            a["task_status"] = linked_task.status if linked_task else job.status
+            a["task_type"] = linked_task.type if linked_task else job.kind
+            if is_ready_for_followup:
+                # Override the pupdate-derived status so the UI shows
+                # "ready" instead of stale active/idle from the last
+                # heartbeat before completion.
+                a["status"] = "ready"
+            if job.agent_profile_id:
+                profile = db.session.get(AgentProfile, job.agent_profile_id)
                 if profile:
                     a["agent_name"] = profile.display_name
                     a["agent_id"] = profile.id
             keep[key] = a
             continue
 
-        # Not a task — maybe a standalone AgentJob (cartograph,
-        # investigation, specialty skill run). Show it if it's still
-        # active; jobs that finished / failed / cancelled don't belong
-        # in the active feed.
-        job = db.session.get(AgentJob, a["task_id"])
-        if job is None:
+        # Legacy fallback — key is a Task.id (pre-unification flow or
+        # tasks that never got an AgentJob row). Same drop-on-terminal
+        # rule as before; coding worktrees can't follow-up anyway.
+        task = db.session.get(Task, a["task_id"])
+        if task is None:
             continue
-        if job.source_task_id:
-            # Linked-job — already represented by the task above.
+        if task.status in ("done", "cancelled"):
             continue
-        if job.status not in ("queued", "running"):
-            continue
-        a["kind"] = "job"
-        a["job_id"] = job.id
-        a["task_title"] = job.title
-        a["task_status"] = job.status
-        a["task_type"] = job.kind
-        if job.agent_profile_id:
-            profile = db.session.get(AgentProfile, job.agent_profile_id)
+        a["kind"] = "task"
+        a["task_title"] = task.title
+        a["task_status"] = task.status
+        a["task_type"] = task.type
+        if task.assigned_agent_id:
+            profile = db.session.get(AgentProfile, task.assigned_agent_id)
             if profile:
                 a["agent_name"] = profile.display_name
                 a["agent_id"] = profile.id
@@ -200,16 +225,18 @@ def get_agent_activity():
     # Surface running / queued AgentJobs that don't yet have any
     # agent pupdate or message. Without this, a freshly-queued job
     # is invisible until its agent emits the first heartbeat (or
-    # never, if the kickoff fails). For task-linked jobs we key on
-    # the task_id (so the row merges with later pupdate-driven
-    # entries) and for standalone jobs we key on job.id.
+    # never, if the kickoff fails). Keyed by job.id to match the
+    # keep loop above — post-unification, pupdate-driven entries are
+    # also keyed by job.id (the agent's MAIKO_TASK_ID), so a freshly-
+    # added entry here gets superseded by the richer pupdate-driven
+    # row on the next refresh once the agent emits its first heartbeat.
     pending_jobs = (
         AgentJob.query
         .filter(AgentJob.status.in_(["queued", "running"]))
         .all()
     )
     for job in pending_jobs:
-        bucket_key = job.source_task_id or job.id
+        bucket_key = job.id
         if bucket_key in keep:
             # Already represented (either by pupdates above or by an
             # earlier loop iteration). Don't clobber its richer state.
@@ -260,7 +287,7 @@ def get_agent_activity():
 
         entry = {
             "task_id": bucket_key,
-            "kind": "job",
+            "kind": "task" if job.source_task_id else "job",
             "job_id": job.id,
             "last_message": last_msg_preview,
             "last_message_body": last_msg_body,
