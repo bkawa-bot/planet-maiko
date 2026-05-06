@@ -1149,37 +1149,6 @@ def hook_post_tool_use():
     return jsonify({"status": "ok"}), 201
 
 
-@agents_bp.route("/hooks/post-compact", methods=["POST"])
-def hook_post_compact():
-    """Handle post-compact hook: refresh agent's learning context."""
-    from planet_maiko.brain.learning.processor import compile_brief
-
-    data = request.get_json()
-    task_id = data.get("task_id", "")
-    agent_id = data.get("agent_id", "")
-
-    if not task_id:
-        return jsonify({"error": "task_id required"}), 400
-
-    # Compile a fresh brief for this agent
-    brief = compile_brief(agent_profile_id=agent_id)
-
-    if not brief or brief == "No active learnings yet.":
-        return jsonify({"status": "no_learnings"}), 200
-
-    # Send the brief as an inbox message
-    msg = AgentMessage(
-        task_id=task_id,
-        direction="to_agent",
-        sender="maiko",
-        content=f"Context refreshed after compaction. Here are the current coding guidelines:\n\n{brief}",
-        message_type="context_refresh",
-    )
-    db.session.add(msg)
-    db.session.commit()
-    return jsonify({"status": "ok", "brief_length": len(brief)}), 201
-
-
 @agents_bp.route("/hooks/notification", methods=["POST"])
 def hook_notification():
     """Handle notification hook: create milestone pupdate."""

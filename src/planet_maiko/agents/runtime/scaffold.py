@@ -395,12 +395,6 @@ def _write_claude_settings(working_path, task_id, agent_id):
             },
         ]
 
-    if hooks_config.get("post_compact", True):
-        hooks["PostCompact"] = [{
-            "matcher": "*",
-            "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/post_compact.py"}],
-        }]
-
     if hooks_config.get("notification", True):
         hooks["Notification"] = [{
             "matcher": "*",

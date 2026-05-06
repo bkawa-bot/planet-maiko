@@ -175,7 +175,6 @@ DEFAULT_CONFIG = {
     "hooks": {
         "enabled": True,
         "post_tool_use": True,
-        "post_compact": True,
         "notification": True,
         "subagent_stop": True,
     },
