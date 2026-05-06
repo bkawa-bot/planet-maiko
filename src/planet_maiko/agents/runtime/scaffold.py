@@ -298,17 +298,24 @@ def _write_mcp_json(working_path, task_id, parent_repo_path=None):
     import json
 
     # Find the channel script path relative to the planet-maiko repo root.
-    # __file__ is src/planet_maiko/agents/runtime/scaffold.py — go up 4
-    # levels lands at src/. The fallback below catches the dev setup
-    # where channel/ lives one level higher (alongside src/).
-    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+    # __file__ is src/planet_maiko/agents/runtime/scaffold.py — five
+    # dirname() calls lands at the repo root. The previous count (four)
+    # stopped at src/, fell through to a working_path-based fallback
+    # whose unnormalized "..\..\" segments confused users reading the
+    # generated .mcp.json. Both branches now normpath so the path
+    # written into .mcp.json is always clean and absolute.
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__)
-    ))))
-    channel_path = os.path.join(repo_root, "channel", "index.mjs")
+    )))))
+    channel_path = os.path.normpath(os.path.join(repo_root, "channel", "index.mjs"))
 
-    # Fall back to looking relative to the working path
+    # Fall back to looking relative to the working path. Worktrees
+    # always live at <repo>/.maiko-worktrees/<branch>, so going up
+    # two levels lands at the repo root that holds channel/.
     if not os.path.exists(channel_path):
-        channel_path = os.path.join(working_path, "..", "..", "channel", "index.mjs")
+        channel_path = os.path.normpath(
+            os.path.join(working_path, "..", "..", "channel", "index.mjs")
+        )
 
     from planet_maiko.config import maiko_api_url
 
@@ -345,14 +352,19 @@ def _write_claude_settings(working_path, task_id, agent_id):
     """
     import json
 
-    # Resolve hooks directory — same repo root as _write_mcp_json
-    hooks_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+    # Resolve hooks directory — same five-dirname walk as _write_mcp_json
+    # to land at the repo root, then `/hooks`. normpath cleans up any
+    # `..` segments from the fallback before the path lands in
+    # settings.json so the generated config reads cleanly.
+    hooks_dir = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__)
-    )))), "hooks")
+    ))))), "hooks"))
 
     # Fall back to looking relative to the working path
     if not os.path.isdir(hooks_dir):
-        hooks_dir = os.path.join(working_path, "..", "..", "hooks")
+        hooks_dir = os.path.normpath(
+            os.path.join(working_path, "..", "..", "hooks")
+        )
 
     # Normalize to absolute path with forward slashes for cross-platform compat
     hooks_dir = os.path.abspath(hooks_dir)
