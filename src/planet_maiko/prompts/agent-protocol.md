@@ -64,6 +64,7 @@ reply(content="Quick question — should I keep the existing logging shape or mi
 
 When you set `recipient="user"`, Maiko surfaces the message as a memo in the user's inbox alongside their other actionable items — they get a clear ping rather than having to scroll the chat. Reserve this for:
 
+- **You're replying to a message the user sent you.** If `check_inbox` returned a message from `sender="user"` (a question, a request, a clarification), your reply is for them — set `recipient="user"` so they see your answer in their inbox. The user often asks something and walks away; without the recipient tag, your answer lives in a thread they have to remember to open.
 - A direct question you want the user to answer before you continue.
 - A heads-up they should see (you noticed something orthogonal to the task; you decided to defer something they might want to weigh in on).
 - A blocker you're working around but want them to know about.
