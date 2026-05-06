@@ -52,6 +52,26 @@ Two MCP tools from the maiko-channel drive communication:
 - **`check_inbox`** — pull pending messages from the user. Returns structured text. You normally don't have to remember this — Maiko installs a `Stop` hook that polls the inbox automatically every time you're about to end a response, blocks the stop if there are unread messages, and feeds them back as a system message. Calling `check_inbox` mid-step is still useful when you specifically want to wait for input (e.g. asked the user a question and want to gate on their reply).
 - **`leave_comment`** — drop an inline comment on a specific diff line for the user to see during their review. Use sparingly on uncertain / load-bearing spots (~5 max per round).
 
+### Reaching the user — `recipient="user"`
+
+`reply()` accepts an optional `recipient` parameter. By default messages live inside the task's chat thread — the user sees them only if they open that thread. Pass `recipient="user"` when the message is **specifically for the user to read** and shouldn't risk getting buried mid-thread:
+
+```
+reply(content="Quick question — should I keep the existing logging shape or migrate to the new structured logger while I'm here?",
+      message_type="message",
+      recipient="user")
+```
+
+When you set `recipient="user"`, Maiko surfaces the message as a memo in the user's inbox alongside their other actionable items — they get a clear ping rather than having to scroll the chat. Reserve this for:
+
+- A direct question you want the user to answer before you continue.
+- A heads-up they should see (you noticed something orthogonal to the task; you decided to defer something they might want to weigh in on).
+- A blocker you're working around but want them to know about.
+
+DO NOT set `recipient="user"` for: routine status updates, self-narration, "I'm thinking about X" chatter, tool-call summaries. Those belong in-thread (no recipient). Every user-targeted message is an interruption — use it like you'd tag someone in a Slack channel: rarely, and only when their attention is actually needed.
+
+`message_type="ready_for_review"`, `"plan_for_approval"`, `"stuck"`, and `"pr_opened"` already create their own pupdates / memos as part of their semantics — don't add `recipient="user"` to those, the surface already knows the user should see them.
+
 ### Feedback vs Insight — two different things
 
 Two reply `message_type` values exist for sharing what you learned, and they mean genuinely different things:
