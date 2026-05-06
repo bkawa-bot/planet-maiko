@@ -25,6 +25,19 @@ from datetime import datetime, timezone
 from planet_maiko.database import db
 from planet_maiko.models.agent_message import AgentMessage
 
+
+# Job kinds whose worktree the user can come back to and ask follow-up
+# questions of. wake_agent resumes the claude session against this
+# worktree, so cleanup needs to wait until the user is done — typically
+# a few days after the job finished. shutdown.cleanup_worktrees imports
+# this set and gates by finished_at age before cleaning these. Anything
+# not in this set is "throwaway scratch" — clean immediately on done.
+FOLLOWUP_KINDS = {
+    "review", "pr_review",
+    "investigation", "repo_analysis",
+    "cartograph",
+}
+
 logger = logging.getLogger(__name__)
 
 
@@ -168,11 +181,6 @@ def handle_agent_job_reply(job, msg, data, message_type):
         #     else)                 captured on the artifact / pushed to
         #                            the PR; the worktree is throwaway
         #                            scratch from here on.
-        FOLLOWUP_KINDS = {
-            "review", "pr_review",
-            "investigation", "repo_analysis",
-            "cartograph",
-        }
         if job.kind not in FOLLOWUP_KINDS and job.worktree_path and job.branch:
             try:
                 from planet_maiko.agents.runtime import cleanup

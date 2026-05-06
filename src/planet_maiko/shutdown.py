@@ -43,6 +43,15 @@ PUPDATE_MAX_AGE_HOURS = 24
 MESSAGE_MAX_AGE_DAYS = 14
 SIGNAL_MAX_AGE_DAYS = 90
 DISMISSED_MAX_AGE_DAYS = 30
+# Follow-up-capable AgentJobs (review / investigation / cartograph etc.)
+# keep their worktree post-completion so the user can ask the agent
+# follow-up questions via wake_agent. Without this gate the shutdown
+# ritual would nuke yesterday's investigation worktree, breaking
+# tomorrow's "let me ask one more thing" flow. Past this many days the
+# follow-up window is closed enough that the worktree is fair game.
+# Picked shorter than MESSAGE_MAX_AGE_DAYS (14) so we don't keep
+# worktrees alive past when their inbox messages get pruned anyway.
+AGENT_JOB_FOLLOWUP_MAX_AGE_DAYS = 7
 
 
 def _utc_now():
@@ -86,6 +95,23 @@ def _count_active_sessions():
     return task_cnt + job_cnt
 
 
+def _job_worktree_is_cleanable(job, cutoff):
+    """True when the job's worktree should be cleaned in this pass.
+
+    Coding (and any other non-follow-up kind) is always eligible the
+    moment it finishes. Follow-up kinds (review / investigation /
+    cartograph) only become eligible past the age cutoff so the user
+    can still wake them for follow-up questions in the meantime.
+    finished_at unset means we can't reason about age — leave it.
+    """
+    from planet_maiko.api.agent_outbox import FOLLOWUP_KINDS
+    if job.kind not in FOLLOWUP_KINDS:
+        return True
+    if job.finished_at is None:
+        return False
+    return _strip_tz(job.finished_at) < cutoff
+
+
 def _count_done_worktrees():
     cnt = 0
     tasks = Task.query.filter(Task.status.in_(("done", "cancelled"))).all()
@@ -94,15 +120,21 @@ def _count_done_worktrees():
         if wp and "/.maiko-worktrees/" in wp.replace("\\", "/"):
             cnt += 1
     # AgentJobs that finished (done / failed / cancelled) still own
-    # their worktree until shutdown cleans it up.
+    # their worktree until shutdown cleans it up. Follow-up kinds are
+    # gated by age so fresh investigations / reviews / cartograph walks
+    # survive the ritual and the user can still ask follow-ups.
+    cutoff = _strip_tz(_utc_now() - timedelta(days=AGENT_JOB_FOLLOWUP_MAX_AGE_DAYS))
     done_jobs = AgentJob.query.filter(
         AgentJob.status.in_(("done", "failed", "cancelled")),
         AgentJob.worktree_path.isnot(None),
     ).all()
     for j in done_jobs:
         wp = j.worktree_path or ""
-        if wp and "/.maiko-worktrees/" in wp.replace("\\", "/"):
-            cnt += 1
+        if not (wp and "/.maiko-worktrees/" in wp.replace("\\", "/")):
+            continue
+        if not _job_worktree_is_cleanable(j, cutoff):
+            continue
+        cnt += 1
     return cnt
 
 
@@ -259,7 +291,12 @@ def cleanup_worktrees():
 
     # AgentJob-owned worktrees (cartograph / investigation / review
     # runs that finished). Don't touch queued/running/pending_approval —
-    # those still need their worktree.
+    # those still need their worktree. Follow-up kinds are age-gated:
+    # fresh ones survive the ritual so the user can wake them tomorrow
+    # to ask "what about X?", but past AGENT_JOB_FOLLOWUP_MAX_AGE_DAYS
+    # the worktree is fair game (worth more as disk space than as a
+    # follow-up surface that the user has clearly moved on from).
+    cutoff = _strip_tz(_utc_now() - timedelta(days=AGENT_JOB_FOLLOWUP_MAX_AGE_DAYS))
     done_jobs = AgentJob.query.filter(
         AgentJob.status.in_(("done", "failed", "cancelled")),
         AgentJob.worktree_path.isnot(None),
@@ -267,6 +304,8 @@ def cleanup_worktrees():
     for j in done_jobs:
         wp = j.worktree_path or ""
         if "/.maiko-worktrees/" not in wp.replace("\\", "/"):
+            continue
+        if not _job_worktree_is_cleanable(j, cutoff):
             continue
         try:
             _cleanup_worktree_paths(j.worktree_path, j.branch)
