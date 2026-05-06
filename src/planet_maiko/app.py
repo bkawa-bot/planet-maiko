@@ -243,6 +243,17 @@ def create_app(start_scheduler=False):
         except Exception as e:
             logger.warning(f"[startup] Stale arrival rescue skipped: {e}")
 
+        # Catch up any from_agent AgentMessage with recipient="user"
+        # that doesn't have a matching Memo yet — covers messages
+        # that landed before _emit_user_memo was wired or where the
+        # live emission silently failed. Idempotent + bounded to the
+        # last 7 days so it can't flood the inbox.
+        try:
+            from planet_maiko.api.agents_api import backfill_user_message_memos
+            backfill_user_message_memos()
+        except Exception as e:
+            logger.warning(f"[startup] User-message memo backfill skipped: {e}")
+
         # Violation-description backfill is OPT-IN now. It used to fire
         # on every boot, hammering the SQLite write lock with per-rule
         # commits while the LLM round-trips ran. RAG retrieval is

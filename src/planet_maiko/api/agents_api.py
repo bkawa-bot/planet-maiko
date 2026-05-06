@@ -891,6 +891,10 @@ def _emit_user_memo(msg, *, job, task):
     source_task_id; falls back to the message's task_id (which is
     the AgentJob id post-unification) so the user can still
     click-through to the chat.
+
+    Logs at INFO so the boot trail records every user-targeted
+    message that hits this path — makes "the message exists but
+    no memo" easy to diagnose next time.
     """
     from planet_maiko.brain.memos import create_memo
     from planet_maiko.models.agent_profile import AgentProfile
@@ -912,7 +916,7 @@ def _emit_user_memo(msg, *, job, task):
             title = f"Message from {profile.display_name}"
 
     body = msg.content or ""
-    create_memo(
+    memo = create_memo(
         kind="agent_message",
         category="info",
         title=title,
@@ -925,6 +929,69 @@ def _emit_user_memo(msg, *, job, task):
             "task_id": msg.task_id,
         },
     )
+    logger.info(
+        f"[outbox] Emitted user memo for AgentMessage #{msg.id} "
+        f"(agent_profile_id={agent_profile_id}, task_id={msg.task_id})"
+    )
+    return memo
+
+
+def backfill_user_message_memos():
+    """One-shot startup pass: for any from_agent AgentMessage with
+    recipient="user" that doesn't have a Memo pointing at it, mint
+    one. Catches messages that landed before the memo emission was
+    wired (or any case where _emit_user_memo silently failed during
+    the live request).
+
+    Idempotent — uses Memo.extra.agent_message_id as the dedup key.
+    Skips messages older than 7 days so a one-time backfill doesn't
+    flood the inbox with stale ancient threads.
+    """
+    from datetime import datetime, timezone, timedelta
+    from planet_maiko.models.agent_message import AgentMessage
+    from planet_maiko.models.memo import Memo
+    from planet_maiko.models.task import Task
+    from planet_maiko.models.agent_job import AgentJob
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    candidates = (
+        AgentMessage.query
+        .filter(AgentMessage.direction == "from_agent")
+        .filter(AgentMessage.recipient == "user")
+        .filter(AgentMessage.created_at >= cutoff)
+        .all()
+    )
+    if not candidates:
+        return
+    # Build a dedup set in one query — pulling Memo.extra.agent_message_id
+    # via JSON path. SQLite supports json_extract; for portability we
+    # pull all agent_message memos and filter in-Python (the set is small).
+    existing_msg_ids = set()
+    for memo in Memo.query.filter_by(kind="agent_message").all():
+        mid = (memo.extra or {}).get("agent_message_id")
+        if mid is not None:
+            existing_msg_ids.add(mid)
+
+    minted = 0
+    for m in candidates:
+        if m.id in existing_msg_ids:
+            continue
+        # Resolve job/task to compose the memo. Same priority as the
+        # live path: AgentJob first (post-unification), then Task.
+        job = db.session.get(AgentJob, m.task_id) if m.task_id else None
+        task = None
+        if job is None:
+            task = db.session.get(Task, m.task_id) if m.task_id else None
+        try:
+            _emit_user_memo(m, job=job, task=task)
+            minted += 1
+        except Exception as e:
+            logger.warning(
+                f"[outbox] Backfill memo failed for AgentMessage #{m.id}: {e}"
+            )
+    if minted:
+        db.session.commit()
+        logger.info(f"[outbox] Backfilled {minted} user-message memo(s)")
 
 
 
