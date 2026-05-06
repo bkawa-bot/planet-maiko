@@ -256,11 +256,43 @@ def resume_session():
     task_id = data.get("task_id", "")
     session_info = _get_sessions().get(task_id)
 
-    # Fall back to the task's own record if the in-memory cache lost
-    # track (e.g. older review/investigation tasks whose session was
-    # registered before the cache was persistent, or any flow where
-    # _set_session was skipped). The session_id + working_path stored
-    # on task.extra are the canonical record.
+    # Resolution order:
+    #   1. In-memory _get_sessions() cache. Lost across server restart.
+    #   2. AgentJob.session_id — canonical post-unification storage.
+    #      The id the frontend sends is the AgentJob id when the row
+    #      came from execute_jobs.py (review / investigation / coding
+    #      via the assign endpoint), so this catches the common case.
+    #   3. Linked Task.extra fallback (covers older one-shot rows
+    #      written before unification mirrored worktree onto the job).
+    #   4. Bare Task.extra by task_id (legacy Task-keyed kickoffs).
+    if not session_info:
+        from planet_maiko.models.agent_job import AgentJob
+        job = db.session.get(AgentJob, task_id) if task_id else None
+        if job and job.session_id:
+            session_info = {
+                "session_id": job.session_id,
+                "working_path": job.worktree_path or "",
+            }
+
+    if not session_info:
+        from planet_maiko.models.task import Task
+        from planet_maiko.models.agent_job import AgentJob
+        # Some flows pass the linked Task id even when the kickoff was
+        # AgentJob-driven; resolve to the job via source_task_id.
+        if task_id:
+            linked_job = (
+                AgentJob.query
+                .filter_by(source_task_id=task_id)
+                .filter(AgentJob.session_id.isnot(None))
+                .order_by(AgentJob.started_at.desc())
+                .first()
+            )
+            if linked_job:
+                session_info = {
+                    "session_id": linked_job.session_id,
+                    "working_path": linked_job.worktree_path or "",
+                }
+
     if not session_info:
         from planet_maiko.models.task import Task
         task = db.session.get(Task, task_id) if task_id else None
