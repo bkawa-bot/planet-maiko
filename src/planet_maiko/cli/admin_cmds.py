@@ -7,6 +7,8 @@ bootstrap-from-PRs moved to the in-app SetupWizard and Knowledge
 page; backup ops stay here because there's no DB-snapshot UI.
 """
 
+import sys
+
 from planet_maiko.cli._helpers import api_request
 from planet_maiko.config import MAIKO_PORT
 
@@ -123,6 +125,85 @@ def cmd_restore(args):
     print(f"Previous db stashed at: {result['previous_db']}")
 
 
+def cmd_inspect_prompt(args):
+    """Print what get_skill_prompt actually returns for a given skill,
+    plus the DB row state so you can tell whether a default skill is
+    being served from file or from a (stale) DB override.
+
+    Most useful for diagnosing "I edited the protocol but agents
+    aren't seeing it" — if user_edited=True on a default skill, the
+    DB prompt wins over the file. The reset-skill command clears it.
+    """
+    from planet_maiko.app import create_app
+    from planet_maiko.database import db
+    from planet_maiko.models.custom_skill import CustomSkill
+    from planet_maiko.agents.skills import get_skill_prompt
+
+    skill_id = args.skill_id
+    app = create_app(start_scheduler=False)
+    with app.app_context():
+        row = db.session.get(CustomSkill, skill_id)
+        if row is None:
+            print(f"No CustomSkill row for {skill_id!r}.")
+        else:
+            print(f"DB row for {skill_id!r}:")
+            print(f"  name:         {row.name}")
+            print(f"  is_default:   {row.is_default}")
+            print(f"  user_edited:  {row.user_edited}")
+            print(f"  prompt chars: {len(row.prompt or '')}")
+
+        prompt = get_skill_prompt(skill_id, {
+            "task_title": "<title>",
+            "task_id": "task-inspect",
+            "maiko_port": "8420",
+            "agent_identity": "<agent>",
+            "agent_signature": "",
+        })
+        if prompt is None:
+            print("\nget_skill_prompt returned None.")
+            return
+        print(f"\nLive get_skill_prompt -> {len(prompt)} chars.")
+        # Heuristic: real protocols are >=1000 chars; if much shorter,
+        # the agent is seeing the placeholder.
+        if len(prompt) < 500:
+            print("(Suspiciously short - likely the placeholder. "
+                  "Try `maiko reset-skill <id>` to drop user_edited.)")
+        print("\nFirst 800 chars:\n")
+        # Encode safely for Windows cp1252 consoles — agent prompts
+        # contain unicode (emoji, em-dashes) that crashes cp1252's
+        # charmap. Replace unencodable chars rather than raise.
+        encoding = (sys.stdout.encoding or "utf-8")
+        sys.stdout.write(prompt[:800].encode(encoding, errors="replace").decode(encoding))
+        print()
+
+
+def cmd_reset_skill(args):
+    """Clear user_edited on a default skill so the next read pulls
+    fresh content from the prompt file. Idempotent."""
+    from planet_maiko.app import create_app
+    from planet_maiko.database import db
+    from planet_maiko.models.custom_skill import CustomSkill
+
+    app = create_app(start_scheduler=False)
+    with app.app_context():
+        row = db.session.get(CustomSkill, args.skill_id)
+        if row is None:
+            print(f"No CustomSkill row for {args.skill_id!r}.")
+            return
+        if not row.is_default:
+            print(f"{args.skill_id!r} isn't a default skill — refusing to "
+                  f"reset (you'd lose the user-authored prompt).")
+            return
+        if not row.user_edited:
+            print(f"{args.skill_id!r} already at default (user_edited=False). "
+                  f"Next agent will read from prompts/{args.skill_id}.md.")
+            return
+        row.user_edited = False
+        db.session.commit()
+        print(f"Reset user_edited on {args.skill_id!r}. The file at "
+              f"prompts/{args.skill_id}.md is now authoritative.")
+
+
 def cmd_db_schema(args):
     """Print every table's columns + flag missing patches.
 
@@ -179,6 +260,16 @@ def register(subparsers):
     p = subparsers.add_parser("db-schema", help="Print live DB schema + patch column status")
     p.add_argument("--table", default=None, help="Only show this table")
     p.set_defaults(func=cmd_db_schema)
+
+    # maiko inspect-prompt <skill_id>
+    p = subparsers.add_parser("inspect-prompt", help="Show what an agent gets for a skill prompt (file vs DB override)")
+    p.add_argument("skill_id", help="Skill id, e.g. agent-protocol or review-agent-protocol")
+    p.set_defaults(func=cmd_inspect_prompt)
+
+    # maiko reset-skill <skill_id>
+    p = subparsers.add_parser("reset-skill", help="Clear user_edited on a default skill so file content is authoritative")
+    p.add_argument("skill_id", help="Skill id, e.g. agent-protocol")
+    p.set_defaults(func=cmd_reset_skill)
 
     # maiko serve
     p = subparsers.add_parser("serve", help="Start Planet Maiko server")

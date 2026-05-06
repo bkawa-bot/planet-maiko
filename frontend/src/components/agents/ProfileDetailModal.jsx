@@ -1,13 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
-  Brain, CheckSquare, ChevronDown, ChevronRight, Plus,
-  Target, X, Pencil, Save, Code2, Eye, Search, Map, Loader, Compass, Pause, Play, Sparkles,
+  Brain, CheckSquare, X, Pencil, Code2, Eye, Search, Map, Sparkles,
 } from "lucide-react";
-import { api } from "../../api/client";
-import { showToast } from "../Toast";
-import { formatRepo, useDefaultOrg, useConfiguredRepos } from "../../utils/repo";
-import { relativeTime } from "../../utils/dates";
-import CardAvatar from "../CardAvatar";
+import { formatRepo, useDefaultOrg } from "../../utils/repo";
 import CardArt from "../CardArt";
 import { useCards } from "../../hooks/useCards";
 
@@ -32,63 +27,11 @@ const COLLAPSE_STORAGE_KEY = "maiko-profiles-collapsed";
 
 
 // User-facing strings for automation metadata. Small helpers shared
-// across the profile modal, Automations page, and ProposalCard.
-// Keep in sync with utils/automations.js style — eventually extract if
-// a fourth consumer shows up.
-function describeCondition(trigger) {
-  const cfg = trigger?.config || {};
-  switch (trigger?.kind) {
-    case "cadence": {
-      if (cfg.interval_minutes) {
-        const m = cfg.interval_minutes;
-        if (m < 60) return `every ${m}min`;
-        if (m % 60 === 0) return `every ${m / 60}h`;
-        return `every ${Math.floor(m / 60)}h ${m % 60}min`;
-      }
-      return `every ${cfg.interval_hours || 24}h`;
-    }
-    case "overview_stale":
-      return `overview >${cfg.stale_days || 30}d stale`;
-    case "lora_missing":
-      return `${cfg.min_learnings || 10}+ rules, no adapter`;
-    default:
-      return trigger?.kind || "unknown";
-  }
-}
-
-function describeAction(action) {
-  const cfg = action?.config || {};
-  switch (action?.kind) {
-    case "propose":
-      return `propose: ${cfg.draft?.title || "(no title)"}`;
-    case "nudge":
-      return `nudge: ${cfg.title || "(no title)"}`;
-    case "create_task":
-      return `create task: ${cfg.title || "(no title)"}`;
-    case "run_skill":
-      return `run skill: ${cfg.skill_name || "(none)"}`;
-    default:
-      return action?.kind || "unknown";
-  }
-}
-
-function describeAutomationTrigger(automation) {
-  const when = automation.when || [];
-  if (when.length === 0) return "no trigger";
-  if (when.length === 1) return describeCondition(when[0]);
-  const logic = automation.when_logic === "any" ? " OR " : " AND ";
-  return when.map(describeCondition).join(logic);
-}
-
-
-
 // Full profile modal — shown when a card is clicked.
 export default function ProfileDetailModal({
   profile, allLearnings, specialties, onClose, onEdit, onArchive, onUnarchive,
 }) {
   const [showContextSet, setShowContextSet] = useState(false);
-  const [automations, setAutomations] = useState(null);
-  const [automationsLoading, setAutomationsLoading] = useState(true);
   const defaultOrg = useDefaultOrg();
   const hasContextSet = profile.context_set?.length > 0;
   const role = profile.role || "coding";
@@ -96,31 +39,6 @@ export default function ProfileDetailModal({
   const RoleIcon = meta.icon;
   const cards = useCards();
   const card = cards.find((c) => c.id === profile.avatar);
-
-  // Profile card's Automations section shows rows tied to this profile
-  // (agent_profile_id matches) plus role-wide ones (agent_profile_id null).
-  // Backend list endpoint filters on agent_profile_id=<id> to include both.
-  useEffect(() => {
-    let cancelled = false;
-    setAutomationsLoading(true);
-    api.getAutomations({ agent_profile_id: profile.id })
-      .then((rows) => { if (!cancelled) setAutomations(rows || []); })
-      .catch(() => { if (!cancelled) setAutomations([]); })
-      .finally(() => { if (!cancelled) setAutomationsLoading(false); });
-    return () => { cancelled = true; };
-  }, [profile.id]);
-
-  const toggleAutomation = async (automation) => {
-    const nextStatus = automation.status === "active" ? "paused" : "active";
-    setAutomations((rows) => rows.map((a) => a.id === automation.id ? { ...a, status: nextStatus } : a));
-    try {
-      const updated = await api.updateAutomation(automation.id, { status: nextStatus });
-      setAutomations((rows) => rows.map((a) => a.id === automation.id ? updated : a));
-    } catch (err) {
-      setAutomations((rows) => rows.map((a) => a.id === automation.id ? { ...a, status: automation.status } : a));
-      showToast("Couldn't update automation: " + (err.message || "unknown"), "high");
-    }
-  };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -257,53 +175,6 @@ export default function ProfileDetailModal({
             </div>
           )}
 
-          <div className="profile-modal-section">
-            <div className="profile-modal-section-label">
-              <Compass size={11} /> Automations
-              {automations && automations.length > 0 && (
-                <span className="profile-modal-goal-count">{automations.filter((a) => a.status === "active").length} active</span>
-              )}
-            </div>
-            {automationsLoading ? (
-              <div className="profile-modal-goals-empty">
-                <Loader size={10} className="spin" /> Loading…
-              </div>
-            ) : !automations || automations.length === 0 ? (
-              <div className="profile-modal-goals-empty">
-                No automations watching for this agent yet. Build one on the Automations page.
-              </div>
-            ) : (
-              <ul className="profile-modal-goal-list">
-                {automations.map((a) => (
-                  <li key={a.id} className={`profile-modal-goal status-${a.status}`}>
-                    <div className="profile-modal-goal-main">
-                      <span className="profile-modal-goal-kind">{a.name}</span>
-                      {a.scope_repo && (
-                        <span className="profile-modal-goal-repo" title={a.scope_repo}>
-                          {formatRepo(a.scope_repo, defaultOrg)}
-                        </span>
-                      )}
-                      <span className="profile-modal-goal-meta">
-                        {describeAutomationTrigger(a)}
-                        {a.last_fired_at && (
-                          <> · fired {relativeTime(a.last_fired_at)}</>
-                        )}
-                      </span>
-                    </div>
-                    <button
-                      className="btn btn-sm profile-modal-goal-toggle"
-                      onClick={() => toggleAutomation(a)}
-                      title={a.status === "active" ? "Pause this automation" : "Resume this automation"}
-                      disabled={a.status === "archived"}
-                    >
-                      {a.status === "active" ? <Pause size={10} /> : <Play size={10} />}
-                      {a.status === "active" ? " pause" : a.status === "paused" ? " resume" : " archived"}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
           </div>
         </div>
 
