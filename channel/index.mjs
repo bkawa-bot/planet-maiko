@@ -107,9 +107,9 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: "reply",
       description:
         "Send a message back to Planet Maiko (status update, review request, " +
-        "task completion, or help request). The message body goes in the " +
-        "REQUIRED `content` parameter — NOT `message` or `body` (those will " +
-        "fail). Example: reply(content=\"All tests pass.\", message_type=\"ready_for_review\")",
+        "or help request). The message body goes in the REQUIRED `content` " +
+        "parameter — NOT `message` or `body` (those will fail). Example: " +
+        "reply(content=\"All tests pass.\", message_type=\"ready_for_review\")",
       inputSchema: {
         type: "object",
         properties: {
@@ -122,7 +122,7 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           message_type: {
             type: "string",
-            enum: ["message", "status", "feedback", "insight", "done", "stuck", "ready_for_review", "plan_for_approval", "pr_opened"],
+            enum: ["message", "status", "feedback", "insight", "stuck", "ready_for_review", "plan_for_approval", "pr_opened"],
             description:
               "Type of message: " +
               "'message' for general replies to the user, " +
@@ -132,8 +132,8 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
               "'plan_for_approval' when the task was started in plan mode and you've produced a markdown plan for the user to approve before you implement, " +
               "'ready_for_review' when you've committed work and the user should review the diff, " +
               "'pr_opened' after you've run `gh pr create` in response to an approved message — put the PR URL on its own line in the content, " +
-              "'done' for task completion, " +
-              "'stuck' when you're blocked and need the user's help.",
+              "'stuck' when you're blocked and need the user's help. " +
+              "There is no 'done' — agents don't decide completion. Use 'ready_for_review' and let the user close the task after reviewing.",
           },
           recipient: {
             type: "string",
@@ -298,10 +298,12 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
         };
       }
 
-      // If task is done, also update task status
-      if (message_type === "done") {
-        await fetch(`${API_URL}/tasks/${TASK_ID}/done`, { method: "POST" });
-      }
+      // No auto-close on message_type="done". Agents don't decide when
+      // a task is complete — the user does (via the UI close button) or
+      // the pr_merged automation does (when the linked PR lands). The
+      // protocol retired the agent-side "done" exit; this server-side
+      // call would delete the task row outright (/tasks/<id>/done is
+      // destructive), which is a foot-gun nobody wants.
 
       return { content: [{ type: "text", text: "sent" }] };
     } catch (err) {

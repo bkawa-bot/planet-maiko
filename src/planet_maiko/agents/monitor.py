@@ -369,26 +369,19 @@ def process_agent_pupdates():
         .all()
     )
 
-    completed_tasks = 0
-
+    # Agents no longer auto-close tasks. Only the user (via UI) or the
+    # pr_merged automation (on PR landing) closes a coding task; review
+    # and investigation jobs close their parent task via the
+    # ready_for_review handler in brain_session.py. agent_done pupdates
+    # remain as record-only signals — we mark them processed so the
+    # pupdate processor doesn't re-handle them, but no task state changes.
     for p in agent_pupdates:
-        # Mark as processed so the pupdate processor skips these
         p.brain_processed = True
-
-        if p.type == "agent_done":
-            task_tags = [t for t in (p.tags or []) if t.startswith("task-")]
-            if task_tags:
-                task = db.session.get(Task, task_tags[0])
-                if task and task.status != "done":
-                    task.status = "done"
-                    task.updated_at = datetime.now(timezone.utc)
-                    completed_tasks += 1
-                    logger.info(f"[monitor] Agent completed task: {task.id}")
 
     if agent_pupdates:
         db.session.commit()
 
-    return {"completed_tasks": completed_tasks, "processed": len(agent_pupdates)}
+    return {"completed_tasks": 0, "processed": len(agent_pupdates)}
 
 
 def get_stuck_agents():

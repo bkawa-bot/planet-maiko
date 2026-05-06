@@ -43,19 +43,18 @@ def cmd_task(args):
 
     action = args.action
     if action == "done":
-        # Report completion via pupdate so the monitor picks it up
-        pupdate = {
-            "id": f"agent-done-{task_id}-{int(time.time())}",
-            "source": "agent",
-            "type": "agent_done",
-            "priority": "normal",
-            "title": f"[Agent] Task completed: {task_id}",
-            "body": args.message or "Task completed successfully.",
-            "tags": [task_id],
-        }
-        api_request("/pupdates", method="POST", data=pupdate)
-        api_request(f"/tasks/{task_id}/done", method="POST")
-        print(f"Task {task_id} marked as done")
+        # Retired. The user decides when a task is complete (via the UI)
+        # or the pr_merged automation does (on PR landing). The legacy
+        # behavior here POSTed to /tasks/<id>/done, which deletes the
+        # task row outright — a foot-gun. Use `reply(message_type=
+        # "ready_for_review")` from inside the agent session instead.
+        print(
+            "Refused: agents don't close tasks. Use "
+            "reply(message_type='ready_for_review') and let the user "
+            "close after reviewing.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     elif action == "start":
         api_request(f"/tasks/{task_id}/start", method="POST")
         print(f"Task {task_id} marked as in progress")
