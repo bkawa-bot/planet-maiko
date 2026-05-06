@@ -18,6 +18,44 @@ logger = logging.getLogger(__name__)
 agents_bp = Blueprint("agents", __name__)
 
 
+def _resolve_canonical_inbox_id(inbox_id):
+    """Inbox routing post-AgentJob unification.
+
+    Every agent kicked off via execute_jobs gets MAIKO_TASK_ID set to
+    its AgentJob.id (see brain/phases/execute_jobs.py: prepare(task_id=job.id)).
+    But Task-keyed UIs (ReviewPlan, anything navigating from /tasks/<id>)
+    open the chat with Task.id. Without translation, the user posts to
+    the Task.id inbox and the agent posts to the AgentJob.id inbox —
+    two parallel keys, never resolved.
+
+    Resolve to whichever id the agent's MCP env actually points at:
+    - If the id IS an AgentJob.id, it's already canonical.
+    - If the id is a Task.id with a non-cancelled AgentJob attached,
+      use the most recent job's id (where the agent really posts).
+    - Otherwise return the id as-is (legacy task-only flows, brand-new
+      tasks with no agent yet, etc).
+    """
+    from planet_maiko.models.task import Task
+    from planet_maiko.models.agent_job import AgentJob
+
+    if db.session.get(AgentJob, inbox_id) is not None:
+        return inbox_id
+
+    task = db.session.get(Task, inbox_id)
+    if task is not None:
+        job = (
+            AgentJob.query
+            .filter_by(source_task_id=inbox_id)
+            .filter(AgentJob.status != "cancelled")
+            .order_by(AgentJob.created_at.desc())
+            .first()
+        )
+        if job is not None:
+            return job.id
+
+    return inbox_id
+
+
 @agents_bp.route("/brain/session", methods=["GET"])
 def get_brain_session():
     """Get brain session status (runtime info)."""
@@ -644,7 +682,8 @@ def get_agent_inbox(task_id):
     unread_only = request.args.get("unread_only", "true").lower() == "true"
     mark_read = request.args.get("mark_read", "true").lower() == "true"
 
-    query = AgentMessage.query.filter_by(task_id=task_id, direction="to_agent")
+    canonical_id = _resolve_canonical_inbox_id(task_id)
+    query = AgentMessage.query.filter_by(task_id=canonical_id, direction="to_agent")
     if unread_only:
         # Quick count check to avoid loading objects when nothing is unread
         count = query.filter_by(read=False).count()
@@ -672,8 +711,9 @@ def send_to_agent(task_id):
     free because they're usually paired with their own triggers.
     """
     data = request.get_json()
+    canonical_id = _resolve_canonical_inbox_id(task_id)
     msg = AgentMessage(
-        task_id=task_id,
+        task_id=canonical_id,
         direction="to_agent",
         sender=data.get("sender", "user"),
         content=data["content"],
@@ -701,7 +741,7 @@ def send_to_agent(task_id):
             "continue working."
         )
         _ok, woke_mode = wake_agent(
-            task_id, chat_prompt, source="chat",
+            canonical_id, chat_prompt, source="chat",
         )
 
     out = msg.to_dict()
@@ -1008,10 +1048,19 @@ def _get_repo_for_task(task_id):
 
 @agents_bp.route("/agents/<task_id>/messages", methods=["GET"])
 def get_all_messages(task_id):
-    """Get full conversation history for a task (both directions)."""
+    """Get full conversation history for a task (both directions).
+
+    Queries both the requested id and its canonical sibling so the
+    chat thread shows everything regardless of which side wrote where
+    (user from a Task-keyed UI, agent from its AgentJob.id env). For
+    historical / pre-unification rows that landed on Task.id, this
+    keeps them visible alongside new agent-side rows on AgentJob.id.
+    """
+    canonical_id = _resolve_canonical_inbox_id(task_id)
+    ids_to_query = {task_id, canonical_id}
     messages = (
         AgentMessage.query
-        .filter_by(task_id=task_id)
+        .filter(AgentMessage.task_id.in_(ids_to_query))
         .order_by(AgentMessage.created_at.asc())
         .all()
     )
