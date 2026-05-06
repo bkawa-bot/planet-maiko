@@ -90,11 +90,31 @@ def _phase_execute_agent_jobs():
                 # specialty's protocol.
                 role = specialty.id
             if role is None:
+                # Defaults to "coding" — the most common role and the
+                # right home for any kind that doesn't match one of
+                # the explicit one-shot mappings (review / pr_review /
+                # investigation / cartograph). Earlier this fell to
+                # "investigation" silently, so coding jobs (kind=
+                # "coding") got investigation-agent-protocol.md written
+                # into their CLAUDE.md and the agent ran in the wrong
+                # mode. Prefer the assigned profile's role when we have
+                # one — the profile's role is what the user explicitly
+                # picked when assigning, and beats type-shape inference.
                 role = {
                     "cartograph": "cartographer",
                     "review": "review",
                     "pr_review": "review",
-                }.get(job.kind, "investigation")
+                    "coding": "coding",
+                }.get(job.kind, "coding")
+                profile_role = None
+                if job.agent_profile_id:
+                    try:
+                        prof = db.session.get(AgentProfile, job.agent_profile_id)
+                        profile_role = prof.role if prof else None
+                    except Exception:
+                        profile_role = None
+                if profile_role and profile_role != role:
+                    role = profile_role
 
             # Prefer an explicit repo_path the user picked at assign
             # time (coding tasks let them point at any local clone, not
