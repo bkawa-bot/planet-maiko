@@ -7,7 +7,7 @@ from flask import Blueprint, current_app, jsonify, request
 from planet_maiko.database import db
 from planet_maiko.models.agent_message import AgentMessage
 from planet_maiko.agents.brain_session import run_skill, get_status as brain_status, ONE_SHOT_ROLE_FOR_TYPE
-from planet_maiko.agents.coding_agent import prepare, list_prepared, cleanup
+from planet_maiko.agents.runtime import prepare, list_prepared, cleanup
 from planet_maiko.agents.monitor import get_agent_activity, get_queued_agent_tasks, process_agent_pupdates, get_stuck_agents
 from planet_maiko.agents.sessions import _get_sessions, _save_sessions, _set_session
 from planet_maiko.agents.skills import list_skills

@@ -17,7 +17,7 @@ The orchestrator adds three things the direct spawns didn't:
      show a live indicator instead of guessing from last_active_at.
 
 Headless kickoffs (new sessions) still go through
-coding_agent._kickoff_agent_headless — those don't need the lock
+runtime._kickoff_agent_headless — those don't need the lock
 because a brand-new session_id can't collide with itself.
 """
 

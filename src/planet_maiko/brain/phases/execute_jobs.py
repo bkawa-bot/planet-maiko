@@ -58,7 +58,7 @@ def _phase_execute_agent_jobs():
     from planet_maiko.models.custom_skill import CustomSkill
     from planet_maiko.database import db
     from planet_maiko.agents.brain_session import ONE_SHOT_ROLE_FOR_TYPE
-    from planet_maiko.agents.coding_agent import prepare, _kickoff_agent_headless
+    from planet_maiko.agents.runtime import prepare, _kickoff_agent_headless
     from planet_maiko.orchestration import resolve_repo_path, maybe_spawn, build_task_prompt
 
     try:

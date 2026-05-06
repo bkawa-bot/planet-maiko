@@ -1,4 +1,10 @@
-"""Coding agent orchestrator - prepares everything an agent needs to work.
+"""Agent runtime — worktree + kickoff machinery for every role.
+
+Originally this package was named `coding_agent` because it only
+handled coding tasks. Post-unification (every role goes through the
+same prepare → kickoff → AgentJob flow), it serves coding, review,
+investigation, cartographer, and specialty agents alike — the name
+was the last vestige of the split.
 
 Planet Maiko doesn't control the agent runtime. It controls the
 surrounding orchestration:
@@ -14,16 +20,15 @@ directly or through the `maiko` CLI:
     maiko report "Finished implementing OAuth"
     maiko task done
 
-This package was split out of the original 1300-line coding_agent.py:
+Submodules:
     .process    — running-subprocess registry
     .worktree   — git worktree creation + cleanup
     .scaffold   — TASK.md / CLAUDE.md / .mcp.json authoring
     .kickoff    — `_kickoff_agent_headless`
 
-The high-level orchestrators (`prepare`, `list_prepared`) live
-here, plus re-exports of the public API so existing
-`from planet_maiko.agents.coding_agent import X` calls keep
-working without churn at every call site.
+The high-level orchestrators (`prepare`, `list_prepared`) live here,
+plus re-exports of the public API so call sites can do
+`from planet_maiko.agents.runtime import X`.
 """
 
 import logging

@@ -76,14 +76,14 @@ def cancel_job(job_id):
     if j.status == "running":
         # Reuse the coding-agent teardown. Safe no-op if session not tracked.
         try:
-            from planet_maiko.agents.coding_agent import stop_agent_session
+            from planet_maiko.agents.runtime import stop_agent_session
             stop_agent_session(job_id)
         except Exception:
             pass
         # Worktree cleanup if we have the path + branch
         if j.worktree_path and j.branch:
             try:
-                from planet_maiko.agents.coding_agent import cleanup
+                from planet_maiko.agents.runtime import cleanup
                 cleanup(j.worktree_path, j.branch)
             except Exception:
                 pass

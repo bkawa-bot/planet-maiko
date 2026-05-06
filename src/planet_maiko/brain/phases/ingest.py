@@ -66,7 +66,7 @@ def _phase_awareness():
     """
     try:
         from planet_maiko.brain.awareness.conflicts import detect_conflicts, resolve_conflicts
-        from planet_maiko.agents.coding_agent import list_prepared
+        from planet_maiko.agents.runtime import list_prepared
 
         prepared = list_prepared()
         worktrees = [

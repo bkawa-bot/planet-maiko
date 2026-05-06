@@ -297,8 +297,10 @@ def _write_mcp_json(working_path, task_id, parent_repo_path=None):
     """
     import json
 
-    # Find the channel script path relative to the planet-maiko repo root
-    # __file__ is src/planet_maiko/agents/coding_agent.py — go up 4 levels to repo root
+    # Find the channel script path relative to the planet-maiko repo root.
+    # __file__ is src/planet_maiko/agents/runtime/scaffold.py — go up 4
+    # levels lands at src/. The fallback below catches the dev setup
+    # where channel/ lives one level higher (alongside src/).
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__)
     ))))

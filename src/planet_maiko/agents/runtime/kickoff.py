@@ -1,6 +1,6 @@
-"""Headless kickoff for coding agents — fires `claude --print`
-in a detached subprocess so the agent runs autonomously without
-a terminal. Talks to MCP via the channel server registered in .mcp.json."""
+"""Headless kickoff for any agent role — fires `claude --print` in a
+detached subprocess so the agent runs autonomously without a terminal.
+Talks to MCP via the channel server registered in .mcp.json."""
 
 import logging
 import os
@@ -10,7 +10,7 @@ import threading
 import time as _time
 import uuid
 
-from planet_maiko.agents.coding_agent.process import (
+from planet_maiko.agents.runtime.process import (
     register_running_process,
     unregister_running_process,
 )

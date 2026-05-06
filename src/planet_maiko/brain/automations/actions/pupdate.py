@@ -209,7 +209,7 @@ def _act_create_task_from_pupdate(automation, config, pupdate=None, context=None
                 branch = extra.get("branch")
                 if wp and branch and ".maiko-worktrees" in wp:
                     try:
-                        from planet_maiko.agents.coding_agent import cleanup
+                        from planet_maiko.agents.runtime import cleanup
                         cleanup(wp, branch)
                     except Exception as e:
                         logger.debug(
@@ -330,7 +330,7 @@ def _act_complete_linked_task(automation, config, pupdate=None, context=None):
         wp = (t.extra or {}).get("working_path")
         if branch and wp and ".maiko-worktrees" in wp:
             try:
-                from planet_maiko.agents.coding_agent import cleanup
+                from planet_maiko.agents.runtime import cleanup
                 cleanup(wp, branch)
             except Exception as e:
                 logger.debug(f"[automation {automation.id}] task-side worktree cleanup failed: {e}")
@@ -348,7 +348,7 @@ def _act_complete_linked_task(automation, config, pupdate=None, context=None):
         )
         for job in linked_jobs:
             try:
-                from planet_maiko.agents.coding_agent import (
+                from planet_maiko.agents.runtime import (
                     stop_agent_session, cleanup as cleanup_worktree,
                 )
                 if job.status == "running":

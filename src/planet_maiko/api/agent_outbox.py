@@ -157,7 +157,7 @@ def handle_agent_job_reply(job, msg, data, message_type):
 
         if not is_review and job.worktree_path and job.branch:
             try:
-                from planet_maiko.agents.coding_agent import cleanup
+                from planet_maiko.agents.runtime import cleanup
                 cleanup(job.worktree_path, job.branch)
             except Exception as e:
                 logger.debug(f"[outbox/job] worktree cleanup skipped for {job.id}: {e}")
@@ -284,7 +284,7 @@ def handle_task_ready_for_review(task_id, task, data):
 
         if not is_review_task:
             try:
-                from planet_maiko.agents.coding_agent import cleanup_task_worktree
+                from planet_maiko.agents.runtime import cleanup_task_worktree
                 cleanup_task_worktree(task)
             except Exception as e:
                 logger.warning(f"[outbox] worktree cleanup failed for {task_id}: {e}")

@@ -235,7 +235,7 @@ def cleanup_worktrees():
     orphan-directory sweep treats **active** AgentJob paths as
     protected so it doesn't nuke a cartograph or investigation mid-run.
     """
-    from planet_maiko.agents.coding_agent import cleanup_task_worktree, cleanup as _cleanup_worktree_paths
+    from planet_maiko.agents.runtime import cleanup_task_worktree, cleanup as _cleanup_worktree_paths
 
     cleaned = 0
 

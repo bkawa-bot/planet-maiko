@@ -216,7 +216,7 @@ def complete_task(task_id):
     removes any agent worktree backing it. The agent's last reply
     + its task.extra.artifact already capture the result; the
     worktree itself is just throwaway scratch space at this point."""
-    from planet_maiko.agents.coding_agent import cleanup_task_worktree
+    from planet_maiko.agents.runtime import cleanup_task_worktree
     task = db.get_or_404(Task, task_id)
     # Push to Linear before we delete the task row (extra disappears with
     # the row). Best-effort — won't block the delete on Linear issues.
@@ -238,7 +238,7 @@ def cancel_task(task_id):
     Worktree removal and task delete are idempotent; the subprocess
     stop is best-effort (no-op if nothing is running).
     """
-    from planet_maiko.agents.coding_agent import cleanup_task_worktree, stop_agent_session
+    from planet_maiko.agents.runtime import cleanup_task_worktree, stop_agent_session
     task = db.get_or_404(Task, task_id)
     stopped = stop_agent_session(task_id)
     _maybe_push_close_to_linear(task, "canceled")
@@ -406,7 +406,7 @@ def reassign_task(task_id):
     # clean one for the new assignee. Clearing working_path + branch
     # on task.extra is what tells the cycle to prepare a new
     # worktree instead of re-using.
-    from planet_maiko.agents.coding_agent import cleanup_task_worktree
+    from planet_maiko.agents.runtime import cleanup_task_worktree
     cleanup_task_worktree(task)
     new_extra = dict(task.extra or {})
     new_extra.pop("working_path", None)

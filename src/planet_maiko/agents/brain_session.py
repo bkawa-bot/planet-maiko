@@ -214,7 +214,7 @@ def execute_one_shot_task(task, working_dir=None):
     Args:
         task: the Task to run.
         working_dir: optional path to run the skill in — typically a
-            worktree prepared by coding_agent.prepare() so the agent has
+            worktree prepared by runtime.prepare() so the agent has
             repo access and the user can attach later to "dig deeper".
             If None, falls back to task.extra.working_path, otherwise
             no working_dir (skill runs in the default cwd).
