@@ -223,14 +223,49 @@ def get_agent_activity():
         )
         if linked is not None and linked.status in ("done", "cancelled"):
             continue  # task closed out — don't keep its job around in active
+
+        # Pull the agent's latest from-agent message — the agent might
+        # have emitted a "starting up" status before any pupdate
+        # landed, and we want the bubble to show "I'm reading TASK.md"
+        # rather than blank. Try both the bucket key (post-unification
+        # agents reply with task_id=<job.id>) and the source task id.
+        last = None
+        last_keys = [job.id]
+        if job.source_task_id and job.source_task_id != job.id:
+            last_keys.append(job.source_task_id)
+        for k in last_keys:
+            cand = (
+                AgentMessage.query
+                .filter_by(task_id=k, direction="from_agent")
+                .order_by(AgentMessage.created_at.desc())
+                .first()
+            )
+            if cand is not None and (last is None or cand.created_at > last.created_at):
+                last = cand
+        last_seen = iso_utc(
+            (last.created_at if last is not None else None)
+            or job.started_at or job.created_at
+        )
+        last_msg_preview = None
+        last_msg_body = None
+        last_msg_type = None
+        if last is not None:
+            body = (last.content or "").strip()
+            last_msg_preview = (
+                body[:LAST_MESSAGE_PREVIEW_CHARS].rstrip() + "…"
+                if len(body) > LAST_MESSAGE_PREVIEW_CHARS else body
+            )
+            last_msg_body = last.content
+            last_msg_type = last.message_type
+
         entry = {
             "task_id": bucket_key,
             "kind": "job",
             "job_id": job.id,
-            "last_message": None,
-            "last_message_body": None,
-            "last_message_type": None,
-            "last_seen": iso_utc(job.started_at or job.created_at),
+            "last_message": last_msg_preview,
+            "last_message_body": last_msg_body,
+            "last_message_type": last_msg_type,
+            "last_seen": last_seen,
             "type": job.kind,
             "pupdate_count": 0,
             "status": "active" if job.status == "running" else "idle",

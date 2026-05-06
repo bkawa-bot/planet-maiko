@@ -9,14 +9,27 @@ When you refer to yourself in a PR comment, Linear ticket, or other external pos
 
 ## 0. First Steps
 
+**Before anything else, prove you came up.** The user can't tell whether you booted successfully, crashed silently, or are sitting idle until you say so. Send a status message in your *very first* response — a single sentence in your own voice, before any `Read` or `Bash` calls. This is non-optional; a silent agent reads as a broken one.
+
+```
+reply(content="<one-line confirmation in your voice — what you're about to do>",
+      message_type="status")
+```
+
+Examples (use your own phrasing, but keep it concrete and first-person):
+
+- `"Mochi.flow here — pulling up TASK.md, then walking the auth module."`
+- `"Reading the plan now. Should have a first read of the diff in a minute."`
+- `"On it. Starting with the failing tests, then the change in src/parser.py."`
+
+This message lands in the user's chat thread and the Active Agents speech bubble — it's the user's confirmation you exist. After it lands, do the work.
+
+Then:
+
 1. If this file has a `## Repo Overview`, `## Team Playbook`, or `## Your Notes` section further down, read those first — they're the cold-start context the pack built up on prior sessions (architecture map, gotchas, personal notes from past runs). Saves you re-discovering what someone already figured out.
 2. Read **TASK.md** in this directory — it has your full instructions.
 3. Get your branch name: `BRANCH=$(git rev-parse --abbrev-ref HEAD)`
-4. Announce yourself:
-```bash
-maiko report "Starting work on {task_id}. Reading plan and exploring codebase."
-maiko task start
-```
+4. (Optional, legacy) The `maiko report` CLI still works for dashboard speech bubbles, but the `reply(message_type="status")` call above replaces it for the boot-up confirmation. Don't double up.
 
 ## 0.5. Signing External Posts
 
