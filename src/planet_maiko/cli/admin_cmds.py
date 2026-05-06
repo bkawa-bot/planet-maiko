@@ -123,11 +123,62 @@ def cmd_restore(args):
     print(f"Previous db stashed at: {result['previous_db']}")
 
 
+def cmd_db_schema(args):
+    """Print every table's columns + flag missing patches.
+
+    Diagnostic for the "I added a column but don't see it in my DB"
+    case — checks the live schema against _PATCH_COLUMNS and reports
+    which patches are present, missing, or already applied.
+    """
+    from planet_maiko.app import create_app, _PATCH_COLUMNS
+    from planet_maiko.database import db
+    from sqlalchemy import text
+
+    app = create_app(start_scheduler=False)
+    with app.app_context():
+        with db.engine.begin() as conn:
+            tables = [
+                r[0] for r in conn.execute(text(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='table' AND name NOT LIKE 'sqlite_%' "
+                    "ORDER BY name"
+                )).all()
+            ]
+            target = (args.table or "").strip().lower() or None
+            for t in tables:
+                if target and t.lower() != target:
+                    continue
+                rows = conn.execute(text(f"PRAGMA table_info({t})")).all()
+                print(f"\n{t} ({len(rows)} columns)")
+                for r in rows:
+                    # PRAGMA: cid, name, type, notnull, default, pk
+                    nullness = "NOT NULL" if r[3] else ""
+                    pk = " PK" if r[5] else ""
+                    print(f"  {r[1]:30s} {r[2]:20s}{nullness}{pk}")
+
+            print("\nPatch column status:")
+            for table, column, col_type in _PATCH_COLUMNS:
+                rows = conn.execute(text(f"PRAGMA table_info({table})")).all()
+                names = {r[1] for r in rows}
+                if not names:
+                    state = "table missing"
+                elif column in names:
+                    state = "present"
+                else:
+                    state = "MISSING — boot will patch"
+                print(f"  {table}.{column} ({col_type}) — {state}")
+
+
 def register(subparsers):
     """Register admin/server lifecycle subcommands."""
     # maiko status
     p = subparsers.add_parser("status", help="Check Planet Maiko status")
     p.set_defaults(func=cmd_status)
+
+    # maiko db-schema [--table NAME]
+    p = subparsers.add_parser("db-schema", help="Print live DB schema + patch column status")
+    p.add_argument("--table", default=None, help="Only show this table")
+    p.set_defaults(func=cmd_db_schema)
 
     # maiko serve
     p = subparsers.add_parser("serve", help="Start Planet Maiko server")

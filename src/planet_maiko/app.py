@@ -32,23 +32,46 @@ def _ensure_new_columns():
     Anything destructive (drops, renames, type changes) still needs
     a fresh DB; this only handles the cheap "I added a nullable
     column" case.
+
+    Logs every patch decision at INFO so a boot trail makes it
+    obvious which columns were already present, which were just
+    added, and which couldn't be patched (e.g. table doesn't
+    exist yet).
     """
     from sqlalchemy import text
+    if not _PATCH_COLUMNS:
+        return
+    logger.info(
+        f"[startup] Checking {len(_PATCH_COLUMNS)} patch column(s) on existing DB"
+    )
+    added = 0
+    skipped = 0
     try:
         with db.engine.begin() as conn:
             for table, column, col_type in _PATCH_COLUMNS:
                 rows = conn.execute(text(f"PRAGMA table_info({table})")).all()
                 existing = {r[1] for r in rows}  # col 1 is name
                 if not existing:
-                    # table doesn't exist (likely a fresh DB whose
-                    # create_all just ran but pragma raced); skip.
+                    logger.warning(
+                        f"[startup] Table {table!r} not found — patch for "
+                        f"{column} skipped (will be picked up on next boot "
+                        f"once the table exists)"
+                    )
                     continue
                 if column in existing:
+                    skipped += 1
                     continue
                 conn.execute(text(
                     f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"
                 ))
-                logger.info(f"[startup] Added {table}.{column} to existing DB")
+                added += 1
+                logger.info(
+                    f"[startup] Added {table}.{column} ({col_type}) to existing DB"
+                )
+        logger.info(
+            f"[startup] Column-patch pass complete — added {added}, "
+            f"already-present {skipped}"
+        )
     except Exception as e:
         logger.warning(f"[startup] Column-patch check failed: {e}")
 
