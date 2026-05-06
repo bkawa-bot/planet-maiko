@@ -736,9 +736,12 @@ def send_to_agent(task_id):
         # narrow lookup happens to come up empty.
         from planet_maiko.agents.wake import wake_agent
         chat_prompt = (
-            "The user sent you a message. Call check_inbox to read "
-            "it, respond with reply(message_type='status'), and "
-            "continue working."
+            "The user sent you a message. Call check_inbox to read it, "
+            "then reply with your answer using recipient='user' so it "
+            "surfaces in their inbox as a memo — they often ask and walk "
+            "away, so an in-thread-only reply gets buried. Use the default "
+            "message_type (omit it, or 'message'); status is chatter and "
+            "won't generate a memo. After replying, continue working."
         )
         _ok, woke_mode = wake_agent(
             canonical_id, chat_prompt, source="chat",
