@@ -33,6 +33,7 @@ export default function BrainView() {
   const [addText, setAddText] = useState("");
   const [addCategory, setAddCategory] = useState("domain_knowledge");
   const [backfilling, setBackfilling] = useState(false);
+  const [clustering, setClustering] = useState(false);
   const [backfillProgress, setBackfillProgress] = useState(null);
   const [expandedLearning, setExpandedLearning] = useState(null);
   const [provenanceCache, setProvenanceCache] = useState({});
@@ -441,7 +442,47 @@ export default function BrainView() {
           )}
           <button
             className="btn btn-sm"
+            // When there are no pending learnings, the pending-buttons
+            // group above doesn't render and Cluster becomes the leftmost
+            // button in this row — needs marginLeft:auto to push the
+            // whole tail (Cluster + Backfill + InfoButton) to the right.
             style={pending.length === 0 ? { marginLeft: "auto" } : {}}
+            disabled={clustering || backfilling}
+            onClick={async () => {
+              // Manual full-sweep dedupe across every category. Brain
+              // cycle only re-checks categories that got new signals
+              // each tick, so cross-category-batch duplicates from
+              // quiet windows accumulate. This is the explicit catch-up.
+              // Synchronous on the backend; can take a few minutes for
+              // large pools, hence the spinner.
+              setClustering(true);
+              showToast("Clustering — this can take a few minutes…", "normal");
+              try {
+                const res = await api.clusterLearnings();
+                const merged = res?.learnings_merged ?? 0;
+                const cats = res?.categories_scanned ?? 0;
+                if (merged === 0) {
+                  showToast(`No duplicates found across ${cats} categories.`, "normal");
+                } else {
+                  showToast(`Merged ${merged} duplicate${merged === 1 ? "" : "s"} across ${cats} categories.`, "normal");
+                }
+                fetchLearnings();
+              } catch (err) {
+                showToast("Clustering failed: " + (err.message || "unknown"), "high");
+              } finally {
+                setClustering(false);
+              }
+            }}
+            title="Run a full-sweep dedupe across every category. Picks up duplicates the per-tick drift collector missed."
+          >
+            {clustering ? (
+              <><Loader size={10} className="spin" /> Clustering…</>
+            ) : (
+              <><Layers size={10} /> Cluster duplicates</>
+            )}
+          </button>
+          <button
+            className="btn btn-sm"
             disabled={backfilling}
             onClick={() => setShowBackfillModal(true)}
             title={backfilling && backfillProgress ? `Phase: ${backfillProgress.phase}` : ""}

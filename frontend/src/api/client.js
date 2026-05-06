@@ -232,6 +232,14 @@ export const api = {
     request(`/learnings/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   getLearning: (id) => request(`/learnings/${id}`),
   classifyLearnings: (batchSize = 50) => request("/learnings/classify", { method: "POST", body: JSON.stringify({ batch_size: batchSize }) }),
+  // Manual full-sweep clustering across every active+pending Learning,
+  // category by category. The brain cycle's drift collector only
+  // re-checks categories that got new signals on a given tick — this
+  // is what the user clicks when duplicates have accumulated across
+  // quiet windows and they want a full pass. Synchronous on the
+  // backend (one LLM call per ~40-rule batch per category), so the
+  // request can take a few minutes for big pools.
+  clusterLearnings: () => request("/learnings/cluster", { method: "POST" }),
 
   // Automations (unified when/then model; replaced goals)
   getAutomations: (params = {}) => {
