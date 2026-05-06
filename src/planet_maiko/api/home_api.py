@@ -476,6 +476,56 @@ def get_review_queue():
             "kind_label": (m.extra or {}).get("skill_title") or skill_name,
         })
 
+    # 9. Catchall — every other pending/seen Memo gets surfaced with
+    #    a generic shape so new kinds (agent_message, plus any plugin-
+    #    introduced kinds in the future) show up on the home pane
+    #    without needing this endpoint to grow another section. Only
+    #    appends memos NOT already represented above (dedup by
+    #    memo_id) so the kind-specific shaping wins for rich kinds
+    #    like agent_proposal / job_approval / agent_ready / etc.
+    seen_memo_ids = {i.get("memo_id") for i in items if i.get("memo_id") is not None}
+    other_memos = (
+        Memo.query
+        .filter(Memo.status.in_(("pending", "seen")))
+        .order_by(Memo.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    for m in other_memos:
+        if m.id in seen_memo_ids:
+            continue
+        extra = m.extra or {}
+        # Route heuristic: if the memo carries a task or job link,
+        # send the user there. Otherwise drop them on /agents (where
+        # the chat thread for agent-authored memos lives) or fall
+        # back to the memo's own url.
+        route = m.url
+        if not route and m.source_task_id:
+            # source_task_id may be either a Task id or an AgentJob
+            # id post-unification — both render under /agents via
+            # the active-agents chat thread.
+            route = "/agents"
+        items.append({
+            "kind": m.kind,
+            "task_id": m.source_task_id,
+            "job_id": None,
+            "memo_id": m.id,
+            "title": m.title,
+            "body": m.body,
+            "repo": None,
+            "agent_id": m.source_agent_id,
+            "agent_name": _agent_name(m.source_agent_id),
+            "route": route,
+            "cta_label": m.cta_label,
+            "age_seconds": _age(m.created_at),
+            "timestamp": iso_utc(m.created_at),
+            "priority": m.priority,
+            # Pass thread_id when the source points at an agent run
+            # (Task or AgentJob id) so the frontend can deep-link
+            # into the chat modal directly.
+            "thread_id": extra.get("task_id") or m.source_task_id,
+        })
+
     # Fresh items first — the user wants to see "what just landed",
     # not "what's been sitting forever".
     items.sort(key=lambda x: x["age_seconds"])

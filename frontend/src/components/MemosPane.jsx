@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ClipboardCheck, FileText, GitPullRequest, Map, Inbox, Bot, Check, X,
   Bell, HelpCircle, ExternalLink, ChevronDown, ChevronRight, Plus, Rocket,
-  Sparkles,
+  Sparkles, MessageCircle,
 } from "lucide-react";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
@@ -87,6 +87,12 @@ const KIND_META = {
     cta: "Help out",
     label: "Stuck",
     tone: "stuck",
+  },
+  agent_message: {
+    Icon: MessageCircle,
+    cta: "Reply",
+    label: "Message",
+    tone: "info",
   },
 };
 
