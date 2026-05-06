@@ -79,16 +79,15 @@ export default function BrainView() {
     setKLoading(true);
     try {
       // Fetch active + pending separately. The /learnings endpoint
-      // sorts by confidence desc and caps at 500 — without splitting
-      // by status, active rules (which start at higher confidence)
-      // can crowd pending rules out of the page entirely. With ~600
-      // pending in the DB, the unfiltered list returned 0 of them
-      // and the Pending tab read as empty even though /brain/status
-      // showed 590 waiting.
+      // sorts by confidence desc — without splitting by status, active
+      // rules (which start at higher confidence) crowd pending rules
+      // out of the page. Limit bumped to 3000 per status so a team
+      // with ~2k pending learnings sees them all in one shot rather
+      // than mysteriously running into the cap.
       const [active, pending, sigs, sigCount] = await Promise.all([
-        api.getLearnings({ status: "active", limit: 500 }),
-        api.getLearnings({ status: "pending", limit: 500 }),
-        api.getSignals({ synthesized: false, limit: 500 }).catch(() => []),
+        api.getLearnings({ status: "active", limit: 3000 }),
+        api.getLearnings({ status: "pending", limit: 3000 }),
+        api.getSignals({ synthesized: false, limit: 2000 }).catch(() => []),
         api.getSignalsCount({ synthesized: false }).catch(() => ({ count: 0 })),
       ]);
       setLearnings([...(active || []), ...(pending || [])]);

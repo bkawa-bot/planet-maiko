@@ -20,14 +20,15 @@ def list_signals():
         category, source_type, aggregated, synthesized — all optional
         filters. `synthesized=false` is how the Knowledge tab surfaces
         raw signals that haven't made it through LLM synthesis yet.
-        limit — default 500 (up from 100) so big backfill queues stay
-        visible in one page.
+        limit — default 1000, cap 5000. Big backfill queues need to
+        stay visible in one page; clustering itself is batched server-
+        side so the UI doesn't have to.
     """
     category = request.args.get("category")
     source_type = request.args.get("source_type")
     aggregated = request.args.get("aggregated")
     synthesized = request.args.get("synthesized")
-    limit = min(int(request.args.get("limit", 500)), 2000)
+    limit = min(int(request.args.get("limit", 1000)), 5000)
 
     query = Signal.query
     if category:
@@ -121,10 +122,16 @@ def _actual_signal_counts(learning_ids):
 
 @learning_bp.route("/learnings", methods=["GET"])
 def list_learnings():
-    """List learnings, optionally filtered by status or category, with pagination."""
+    """List learnings, optionally filtered by status or category, with pagination.
+
+    Cap is generous (5000) because the Brain page wants the whole set
+    in one response — 900-2000 learnings is normal once a team's been
+    using the system for a while, and clustering happens server-side
+    in batches so the UI doesn't page through anything besides display.
+    """
     status = request.args.get("status")
     category = request.args.get("category")
-    limit = min(int(request.args.get("limit", 200)), 500)
+    limit = min(int(request.args.get("limit", 500)), 5000)
     offset = int(request.args.get("offset", 0))
 
     query = Learning.query
