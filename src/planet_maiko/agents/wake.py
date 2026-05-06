@@ -114,6 +114,21 @@ def wake_agent(task_id, prompt, source, working_path=None, session_id=None, app=
         session_id = session_id or info.get("session_id")
         working_path = working_path or info.get("working_path")
 
+    # Fallback for AgentJob-keyed sessions when the registry got
+    # cleared (server restart + validate_registry purge before the
+    # AgentJob branch was wired). The DB row is the source of truth
+    # for session_id post-unification; pull from there if the cache
+    # doesn't have it. Same fix shape as resume_session uses.
+    if not session_id or not working_path:
+        try:
+            from planet_maiko.models.agent_job import AgentJob
+            job = db.session.get(AgentJob, task_id)
+            if job is not None:
+                session_id = session_id or job.session_id
+                working_path = working_path or job.worktree_path
+        except Exception as e:
+            logger.debug(f"[wake] AgentJob fallback lookup failed for {task_id}: {e}")
+
     if not session_id:
         logger.warning(f"[wake] no session for task {task_id} (source={source})")
         return False, "error"
@@ -272,16 +287,32 @@ def validate_registry():
     """
     from planet_maiko.api.agents_api import _get_sessions, _save_sessions
     from planet_maiko.models.task import Task
+    from planet_maiko.models.agent_job import AgentJob
 
     sessions = _get_sessions()
     dropped = []
     try:
         for task_id, info in list(sessions.items()):
-            task = db.session.get(Task, task_id)
             wp = info.get("working_path") if isinstance(info, dict) else None
-            task_alive = task and task.status not in ("done", "cancelled")
             worktree_ok = bool(wp) and os.path.isdir(wp)
-            if not task_alive or not worktree_ok:
+            # Session keys are either a Task id (legacy) or an AgentJob
+            # id (post-unification — every review/investigation/coding
+            # agent kicked off via execute_jobs lands here). Probe both
+            # tables; an entry survives if EITHER row exists and isn't
+            # in a terminal state.
+            task = db.session.get(Task, task_id)
+            job = db.session.get(AgentJob, task_id) if task is None else None
+            task_alive = task is not None and task.status not in ("done", "cancelled")
+            # Review jobs stay status="done" but keep their worktree +
+            # session because the user can still send follow-up
+            # questions. Treat done-but-not-cancelled review/investigation
+            # jobs as "alive enough" for wake purposes.
+            job_alive = (
+                job is not None
+                and job.status not in ("cancelled", "failed")
+            )
+            owner_alive = task_alive or job_alive
+            if not owner_alive or not worktree_ok:
                 sessions.pop(task_id)
                 dropped.append(task_id)
         if dropped:
