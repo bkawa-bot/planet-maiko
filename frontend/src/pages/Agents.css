@@ -378,28 +378,55 @@
   content: "·"; margin-right: 8px; opacity: 0.6;
 }
 
-/* Full profile modal — opens when a mini card is clicked. */
+/* Full profile modal — opens when a mini card is clicked. Wider
+   than the old 540px because the layout is now two-column (card art
+   on the left, identity + stats + sections on the right). */
 .profile-detail-modal {
   background: var(--bg-card);
   border-radius: var(--radius-md);
-  max-width: 540px; width: calc(100% - 40px); max-height: 90vh;
+  max-width: 720px; width: calc(100% - 40px); max-height: 90vh;
   display: flex; flex-direction: column;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.25);
   position: relative;
 }
 
-/* Baseball-card top section: full archetype art with name/tagline
-   below it. Sits flush at the top of the modal so the card reads
-   like a banner. */
-.profile-modal-baseball {
-  padding: 20px 20px 12px 20px;
+/* Two-column body. Left = baseball card (visual anchor); right =
+   identity + stats + scrolling section list. The split itself
+   doesn't scroll — the right column does — so the card stays
+   visible while the user reads the agent's bio / context set /
+   automations. */
+.profile-modal-split {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 20px;
+  padding: 20px;
+  min-height: 0;
+  flex: 1;
+}
+@media (max-width: 720px) {
+  .profile-modal-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.profile-modal-left {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
 }
+.profile-modal-right {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  /* Keep the scroll-edge inside the column instead of dropping
+     to the modal frame so the close button + footer stay anchored. */
+  padding-right: 4px;
+}
 .profile-modal-card-art {
-  max-width: 200px;
+  max-width: 220px;
   width: 100%;
 }
 .profile-modal-archetype {
@@ -427,15 +454,32 @@
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 }
-.profile-modal-identity-row {
-  /* Identity sits between the card and the body */
-}
-.profile-detail-modal .modal-header {
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px 20px 14px 20px;
+/* Identity block at the top of the right column — name, role chip,
+   scope chip. No top/bottom borders since the split layout doesn't
+   need a visual divider; the card on the left is its own anchor. */
+.profile-modal-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 4px;
   border-bottom: 1px solid var(--border-subtle);
-  border-top: 1px solid var(--border-subtle);
+}
+.profile-modal-specialties {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.profile-modal-specialty-chips {
+  display: flex; flex-wrap: wrap; gap: 5px;
+}
+.profile-modal-specialty-chip {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--lavender-soft, var(--bg-hover));
+  color: var(--lavender, var(--text-dim));
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 .profile-modal-avatar {
   width: 44px; height: 44px; flex-shrink: 0;
@@ -471,10 +515,8 @@
 .profile-modal-chip-lora { background: var(--pink-soft); color: var(--pink); }
 .profile-modal-chip-archived { background: var(--bg); color: var(--text-muted); }
 
-.profile-modal-body {
-  overflow-y: auto; padding: 16px 20px;
-  display: flex; flex-direction: column; gap: 14px;
-}
+/* .profile-modal-body is no longer used — content sits directly inside
+   .profile-modal-right after the split-layout rewrite. */
 .profile-modal-flavor {
   font-style: italic;
   color: var(--text-dim);

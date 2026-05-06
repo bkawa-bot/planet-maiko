@@ -9,7 +9,6 @@ import { formatRepo, useDefaultOrg, useConfiguredRepos } from "../../utils/repo"
 import { relativeTime } from "../../utils/dates";
 import CardAvatar from "../CardAvatar";
 import CardArt from "../CardArt";
-import { useCards } from "../../hooks/useCards";
 import ProfileDetailModal from "./ProfileDetailModal";
 
 const ROLE_META = {
@@ -96,18 +95,12 @@ function CartographLauncher() {
 
 
 // Compact card. Clicking anywhere opens the full profile modal.
-// Two taglines live here, each saying a different thing:
-//   archetype tagline (card.tagline) — the TYPE's pre-written line
-//     ("moves with the seasons"). Hardcoded in cards.yaml, same for
-//     every Wandering Fox in town. Anchors the archetype identity.
-//   personal tagline (profile.flavor_text) — the agent's own voice,
-//     LLM-written at arrival. Carries the individual personality.
-// The bio (instructions) stays behind the modal since it's load-bearing
-// for the run_skill_as_agent persona preamble, not glanceable copy.
-function ProfileCard({ profile, onOpen, cards }) {
+// Surfaces only the agent's personal tagline (profile.flavor_text) —
+// the archetype tagline (card.tagline) is the same line for every
+// Wandering Fox in town and adds noise here; it lives in the modal
+// where the user actually wants the type-level context.
+function ProfileCard({ profile, onOpen }) {
   const defaultOrg = useDefaultOrg();
-  const card = cards.find((c) => c.id === profile.avatar);
-  const archetypeTagline = (card?.tagline || "").trim();
   const personalTagline = (profile.flavor_text || "").trim();
   const ageDays = ageInDays(profile.created_at);
   return (
@@ -125,11 +118,6 @@ function ProfileCard({ profile, onOpen, cards }) {
           />
           <span className="profile-card-name-text">{profile.display_name}</span>
         </div>
-        {archetypeTagline && (
-          <div className="profile-card-archetype-tagline" title={card?.display_name}>
-            {archetypeTagline}
-          </div>
-        )}
         {profile.scope_repo && (
           <div className="profile-card-chips">
             <span className="profile-card-chip" title={profile.scope_repo}>{formatRepo(profile.scope_repo, defaultOrg)}</span>
@@ -184,7 +172,6 @@ export default function AgentsProfilesTab({
   const [editSaving, setEditSaving] = useState(false);
   const [specialties, setSpecialties] = useState([]);
   const configuredRepos = useConfiguredRepos();
-  const cards = useCards();
 
   useEffect(() => {
     // Pull available specialties once — the edit modal renders a chip
@@ -341,7 +328,6 @@ export default function AgentsProfilesTab({
                   <ProfileCard
                     key={p.id}
                     profile={p}
-                    cards={cards}
                     onOpen={() => setProfileModal(p)}
                   />
                 ))}
@@ -355,6 +341,7 @@ export default function AgentsProfilesTab({
         <ProfileDetailModal
           profile={profileModal}
           allLearnings={allLearnings}
+          specialties={specialties}
           onClose={() => setProfileModal(null)}
           onEdit={(p) => { setProfileModal(null); openEdit(p); }}
           onArchive={(p) => { handleArchive(p); setProfileModal(null); }}

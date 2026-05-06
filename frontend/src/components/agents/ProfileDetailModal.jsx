@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   Brain, CheckSquare, ChevronDown, ChevronRight, Plus,
-  Target, X, Pencil, Save, Code2, Eye, Search, Map, Loader, Compass, Pause, Play,
+  Target, X, Pencil, Save, Code2, Eye, Search, Map, Loader, Compass, Pause, Play, Sparkles,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
@@ -84,7 +84,7 @@ function describeAutomationTrigger(automation) {
 
 // Full profile modal — shown when a card is clicked.
 export default function ProfileDetailModal({
-  profile, allLearnings, onClose, onEdit, onArchive, onUnarchive,
+  profile, allLearnings, specialties, onClose, onEdit, onArchive, onUnarchive,
 }) {
   const [showContextSet, setShowContextSet] = useState(false);
   const [automations, setAutomations] = useState(null);
@@ -129,62 +129,98 @@ export default function ProfileDetailModal({
           <X size={14} />
         </button>
 
-        <div className="profile-modal-baseball">
-          <CardArt cardId={profile.avatar} className="profile-modal-card-art" />
-          {card && (
-            <div className="profile-modal-archetype">
-              <div className="profile-modal-archetype-name">{card.display_name}</div>
-              <div className="profile-modal-archetype-tagline">{card.tagline}</div>
-            </div>
-          )}
-        </div>
-
-        <div className="modal-header profile-modal-identity-row">
-          <div className="profile-modal-title">
-            <div className="profile-modal-name">
-              <span className={`agent-state-dot state-${profile.state || "idle"}`} />
-              {profile.display_name}
-            </div>
-            <div className="profile-modal-meta">
-              <span className="profile-modal-role" style={{ color: meta.color }}>
-                <RoleIcon size={10} /> {meta.label}
-              </span>
-              <span className="profile-modal-chip" title={profile.scope_repo || ""}>{profile.scope_repo ? formatRepo(profile.scope_repo, defaultOrg) : "global"}</span>
-              {profile.archived && <span className="profile-modal-chip profile-modal-chip-archived">archived</span>}
-            </div>
+        <div className="profile-modal-split">
+          {/* Left column: archetype card art + name/tagline. The
+              archetype tagline lives here only — the mini ProfileCard
+              dropped it because every Wandering Fox shares the same
+              line and it added noise on the grid. */}
+          <div className="profile-modal-left">
+            <CardArt cardId={profile.avatar} className="profile-modal-card-art" />
+            {card && (
+              <div className="profile-modal-archetype">
+                <div className="profile-modal-archetype-name">{card.display_name}</div>
+                <div className="profile-modal-archetype-tagline">{card.tagline}</div>
+              </div>
+            )}
           </div>
-        </div>
 
-        <div className="modal-body profile-modal-body">
-          {profile.flavor_text && (
-            <div className="profile-modal-flavor">"{profile.flavor_text}"</div>
-          )}
+          {/* Right column: identity + agent's own voice + stats +
+              specialties + sections. Scrolls independently when
+              the agent's bio / context set / automations push past
+              the modal height. */}
+          <div className="profile-modal-right">
+            <div className="profile-modal-identity">
+              <div className="profile-modal-name">
+                <span className={`agent-state-dot state-${profile.state || "idle"}`} />
+                {profile.display_name}
+              </div>
+              <div className="profile-modal-meta">
+                <span className="profile-modal-role" style={{ color: meta.color }}>
+                  <RoleIcon size={10} /> {meta.label}
+                </span>
+                <span className="profile-modal-chip" title={profile.scope_repo || ""}>{profile.scope_repo ? formatRepo(profile.scope_repo, defaultOrg) : "global"}</span>
+                {profile.archived && <span className="profile-modal-chip profile-modal-chip-archived">archived</span>}
+              </div>
+            </div>
 
-          {profile.instructions && (
-            <div className="profile-modal-bio">
-              {profile.instructions}
-            </div>
-          )}
+            {profile.flavor_text && (
+              <div className="profile-modal-flavor">"{profile.flavor_text}"</div>
+            )}
 
-          <div className="profile-modal-stats">
-            <div className="profile-modal-stat">
-              <div className="profile-modal-stat-value">{profile.tasks_completed}</div>
-              <div className="profile-modal-stat-label">done</div>
+            {profile.instructions && (
+              <div className="profile-modal-bio">
+                {profile.instructions}
+              </div>
+            )}
+
+            {/* Stats row — `done` and `failed` increment from the brain
+                cycle and outbox handler; `learnings` here is the size
+                of context_set (the rules the agent has graduated to
+                exploit). The legacy `learnings_contributed` model
+                field isn't shown — it's a stub that's never
+                incremented anywhere, so rendering it as 0 was
+                misleading. */}
+            <div className="profile-modal-stats">
+              <div className="profile-modal-stat">
+                <div className="profile-modal-stat-value">{profile.tasks_completed}</div>
+                <div className="profile-modal-stat-label">done</div>
+              </div>
+              <div className="profile-modal-stat">
+                <div className="profile-modal-stat-value">{profile.tasks_failed}</div>
+                <div className="profile-modal-stat-label">failed</div>
+              </div>
+              <button
+                type="button"
+                className={`profile-modal-stat ${hasContextSet ? "clickable" : ""}`}
+                onClick={() => hasContextSet && setShowContextSet((v) => !v)}
+                disabled={!hasContextSet}
+              >
+                <div className="profile-modal-stat-value">{profile.context_set?.length || 0}</div>
+                <div className="profile-modal-stat-label">learnings</div>
+              </button>
             </div>
-            <div className="profile-modal-stat">
-              <div className="profile-modal-stat-value">{profile.tasks_failed}</div>
-              <div className="profile-modal-stat-label">failed</div>
-            </div>
-            <button
-              type="button"
-              className={`profile-modal-stat ${hasContextSet ? "clickable" : ""}`}
-              onClick={() => hasContextSet && setShowContextSet((v) => !v)}
-              disabled={!hasContextSet}
-            >
-              <div className="profile-modal-stat-value">{profile.context_set?.length || 0}</div>
-              <div className="profile-modal-stat-label">learnings</div>
-            </button>
-          </div>
+
+            {(profile.specialty_ids || []).length > 0 && (
+              <div className="profile-modal-specialties">
+                <div className="profile-modal-section-label">
+                  <Sparkles size={11} /> Specialties
+                </div>
+                <div className="profile-modal-specialty-chips">
+                  {(profile.specialty_ids || []).map((sid) => {
+                    const s = (specialties || []).find((x) => x.id === sid);
+                    return (
+                      <span
+                        key={sid}
+                        className="profile-modal-specialty-chip"
+                        title={s?.description || sid}
+                      >
+                        {s?.name || sid}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
           {showContextSet && hasContextSet && (
             <div className="profile-modal-section">
@@ -267,6 +303,7 @@ export default function ProfileDetailModal({
                 ))}
               </ul>
             )}
+          </div>
           </div>
         </div>
 
