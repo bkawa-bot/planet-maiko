@@ -4,7 +4,7 @@ import {
   ClipboardCheck, FileText, GitPullRequest, Map, Inbox, Bot, Check, X,
   Bell, HelpCircle, ExternalLink, ChevronDown, ChevronRight, Plus, Rocket,
   Sparkles, MessageCircle,
-} from "lucide-react";
+} from "lucide-react"; // MessageCircle still used in KIND_META.agent_message
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { relativeTime } from "../utils/dates";
@@ -12,8 +12,6 @@ import { renderMarkdown } from "../utils/markdown";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import ProposalCard from "./ProposalCard";
 import CardAvatar from "./CardAvatar";
-import AgentChatThread from "./AgentChatThread";
-import ModalPortal from "./ModalPortal";
 import "./ReviewQueue.css";
 import "./MemosPane.css";
 import ArtifactRow from "./memos/ArtifactRow";
@@ -113,11 +111,6 @@ export default function MemosPane() {
     () => Object.fromEntries(profiles.map((p) => [p.id, p])),
     [profiles],
   );
-  // Chat-thread modal target (the AgentJob/Task id that drives the
-  // agent_message memo's reply box). Null = closed. State lives at
-  // pane level so the modal escapes the inline scroll context and
-  // sits cleanly above the page.
-  const [chatThreadId, setChatThreadId] = useState(null);
 
   const fetchQueue = async () => {
     try {
@@ -448,50 +441,29 @@ export default function MemosPane() {
           // review, agent_ready, agent_stuck, agent_message, plus
           // anything the catchall memo path surfaces.
           //
-          // Agent message rows render the body inline:
-          //   - agent_ready / agent_stuck / agent_plan keep the
-          //     existing "Read message" expand-on-click <details>.
-          //   - agent_message (recipient="user" replies) shows a
-          //     short preview directly under the title and gives
-          //     the user a one-click "Reply" that opens the full
-          //     chat thread in a modal — the existing chat surface
-          //     already shows every message in the thread, so we
-          //     don't need to also embed the markdown body inline.
+          // Agent message rows render the body inline as a
+          // expand-on-click <details>. Stuck and user-directed
+          // (agent_message) rows additionally embed the inline
+          // reply box so the user can answer without leaving Home.
           const cta = it.cta_label || meta.cta;
           const hasRoute = !!it.route;
           const isAgentMessage =
             it.kind === "agent_ready" ||
             it.kind === "agent_stuck" ||
-            it.kind === "agent_plan";
-          const isUserDirectedMessage = it.kind === "agent_message";
+            it.kind === "agent_plan" ||
+            it.kind === "agent_message";
           const showInlineBody = isAgentMessage && !!(it.body && it.body.trim());
-
-          // Preview shown under the title for user-directed agent
-          // messages. Trims to a single line and caps length so the
-          // memo grid stays scannable; the modal carries the full
-          // markdown when the user clicks Reply.
-          const PREVIEW_CHARS = 140;
-          let bodyPreview = null;
-          if (isUserDirectedMessage && it.body) {
-            const oneLine = it.body.replace(/\s+/g, " ").trim();
-            bodyPreview = oneLine.length > PREVIEW_CHARS
-              ? oneLine.slice(0, PREVIEW_CHARS - 1).replace(/\s+\S*$/, "") + "…"
-              : oneLine;
-          }
-
-          // Click semantics: navigate when there's a real route, but
-          // for agent_message the "route" is just /agents which isn't
-          // useful — open the chat modal directly instead.
-          const handleRowClick = () => {
-            if (isUserDirectedMessage) {
-              const id = it.thread_id || it.task_id || it.job_id;
-              if (id) setChatThreadId(id);
-              return;
-            }
-            if (hasRoute) navigate(it.route);
-          };
-          const rowClickable = isUserDirectedMessage || hasRoute;
-
+          const showInlineReply =
+            (it.kind === "agent_stuck" || it.kind === "agent_message")
+            && !!(it.thread_id || it.task_id);
+          const replyTargetId =
+            it.thread_id || it.task_id || it.job_id || null;
+          // Summary label per kind. agent_message reuses the
+          // stuck wording — same interface, same affordance.
+          const summaryLabel =
+            (it.kind === "agent_stuck" || it.kind === "agent_message")
+              ? "Read & reply"
+              : "Read message";
           return (
             <div
               key={`${it.kind}:${it.task_id || it.job_id || it.memo_id}`}
@@ -500,19 +472,14 @@ export default function MemosPane() {
               <button
                 type="button"
                 className="review-queue-row-main"
-                onClick={handleRowClick}
-                disabled={!rowClickable}
+                onClick={() => hasRoute && navigate(it.route)}
+                disabled={!hasRoute}
               >
                 {renderRowIcon(it, Icon)}
                 <div className="review-queue-body">
                   <div className="review-queue-title">
                     {it.title || "(untitled)"}
                   </div>
-                  {bodyPreview && (
-                    <div className="review-queue-message-preview">
-                      {bodyPreview}
-                    </div>
-                  )}
                   <div className="review-queue-meta">
                     <span className="review-queue-kind">{meta.label}</span>
                     {it.repo && (
@@ -530,12 +497,8 @@ export default function MemosPane() {
                     )}
                   </div>
                 </div>
-                {isUserDirectedMessage ? (
-                  <span className="review-queue-cta">Reply →</span>
-                ) : (
-                  hasRoute && cta && (
-                    <span className="review-queue-cta">{cta} →</span>
-                  )
+                {hasRoute && cta && (
+                  <span className="review-queue-cta">{cta} →</span>
                 )}
               </button>
               {showInlineBody && (
@@ -545,15 +508,15 @@ export default function MemosPane() {
                 >
                   <summary>
                     <ChevronRight size={10} className="review-queue-message-chevron" />
-                    {it.kind === "agent_stuck" ? "Read & reply" : "Read message"}
+                    {summaryLabel}
                   </summary>
                   <div
                     className="markdown"
                     dangerouslySetInnerHTML={{ __html: renderMarkdown(it.body) }}
                   />
-                  {it.kind === "agent_stuck" && it.task_id && (
+                  {showInlineReply && (
                     <StuckReplyBox
-                      taskId={it.task_id}
+                      taskId={replyTargetId}
                       memoId={it.memo_id}
                       onReplied={fetchQueue}
                     />
@@ -577,34 +540,6 @@ export default function MemosPane() {
           );
         })}
       </div>
-
-      {chatThreadId && (
-        <ModalPortal>
-          <div
-            className="modal-overlay"
-            onClick={() => setChatThreadId(null)}
-          >
-            <div
-              className="memos-pane-chat-modal"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="modal-header">
-                <MessageCircle size={14} />
-                <span style={{ flex: 1 }}>Chat</span>
-                <button
-                  className="btn btn-sm modal-close-btn"
-                  onClick={() => setChatThreadId(null)}
-                >
-                  <X size={14} />
-                </button>
-              </div>
-              <div className="memos-pane-chat-modal-body">
-                <AgentChatThread id={chatThreadId} />
-              </div>
-            </div>
-          </div>
-        </ModalPortal>
-      )}
     </div>
   );
 }
