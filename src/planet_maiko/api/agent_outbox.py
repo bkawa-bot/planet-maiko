@@ -155,7 +155,25 @@ def handle_agent_job_reply(job, msg, data, message_type):
                 t.extra = task_extra
                 t.status = "review" if is_review else "done"
 
-        if not is_review and job.worktree_path and job.branch:
+        # Worktree retention by kind:
+        #   review / pr_review     — keep (user iterates with PATTERN /
+        #                            PROPOSAL discussions, asks follow-ups
+        #                            via wake_agent → claude --resume).
+        #   investigation /        — keep (same reason: user often has
+        #     repo_analysis         follow-up questions on the report;
+        #                            wake fails if the worktree is gone).
+        #   cartograph             — keep (cartographer's repo walk is
+        #                            useful state to query against).
+        #   coding (and anything   — clean up on done. The diff has been
+        #     else)                 captured on the artifact / pushed to
+        #                            the PR; the worktree is throwaway
+        #                            scratch from here on.
+        FOLLOWUP_KINDS = {
+            "review", "pr_review",
+            "investigation", "repo_analysis",
+            "cartograph",
+        }
+        if job.kind not in FOLLOWUP_KINDS and job.worktree_path and job.branch:
             try:
                 from planet_maiko.agents.runtime import cleanup
                 cleanup(job.worktree_path, job.branch)
