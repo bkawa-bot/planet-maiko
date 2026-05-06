@@ -390,6 +390,56 @@ def _act_complete_linked_task(automation, config, pupdate=None, context=None):
             _cleanup_task(t)
             closed_coding += 1
 
+    # Second pass for AgentJobs whose linked Task was already closed
+    # (or was never set) but whose row is still queued/running. The
+    # task-driven loop above only fires when the Task is in an active
+    # status; a Task that flipped to "done" early via a different
+    # signal path leaves its job orphaned. Find all queued/running
+    # jobs whose linked task points at this PR's URL OR whose extra
+    # carries the pr URL directly, and cancel each.
+    orphan_jobs = (
+        AgentJob.query
+        .filter(AgentJob.status.in_(["queued", "running", "pending_approval"]))
+        .all()
+    )
+    for job in orphan_jobs:
+        # source_task_id might point at a Task we've already closed in
+        # this same pass — that's the case we're catching.
+        linked_url = None
+        if job.source_task_id:
+            linked = db.session.get(Task, job.source_task_id)
+            if linked is not None:
+                linked_url = linked.url or (linked.extra or {}).get("pr_url")
+        if linked_url is None:
+            linked_url = (job.extra or {}).get("pr_url")
+        if linked_url != pupdate.url:
+            continue
+        try:
+            from planet_maiko.agents.runtime import (
+                stop_agent_session, cleanup as cleanup_worktree,
+            )
+            if job.status == "running":
+                try:
+                    stop_agent_session(job.id)
+                except Exception as e:
+                    logger.debug(
+                        f"[automation {automation.id}] stop_agent_session "
+                        f"({job.id}) on orphan failed: {e}"
+                    )
+            if job.worktree_path and job.branch and ".maiko-worktrees" in job.worktree_path:
+                try:
+                    cleanup_worktree(job.worktree_path, job.branch)
+                except Exception as e:
+                    logger.debug(
+                        f"[automation {automation.id}] orphan worktree "
+                        f"cleanup failed for {job.id}: {e}"
+                    )
+        except Exception as e:
+            logger.debug(f"[automation {automation.id}] orphan job cleanup imports failed: {e}")
+        job.status = "cancelled"
+        job.finished_at = datetime.now(timezone.utc)
+        cancelled_jobs += 1
+
     # Dismiss all pupdates pointing at this URL (review_requested,
     # changes_requested, approved, merged, etc.) so the overview and
     # ReviewQueue stop showing cards for a PR that's closed. The
@@ -406,6 +456,16 @@ def _act_complete_linked_task(automation, config, pupdate=None, context=None):
         p.dismissed = True
         p.dismissed_at = now
         dismissed_linked += 1
+
+    # Log every run so future "linked job didn't get cancelled" reports
+    # are easy to diagnose — the line shows what we matched and what
+    # we acted on against this specific pupdate's URL.
+    logger.info(
+        f"[automation {automation.id}] complete_linked_task on "
+        f"{pupdate.url!r}: review_tasks={closed_review}, "
+        f"coding_tasks={closed_coding}, agent_jobs_cancelled="
+        f"{cancelled_jobs}, pupdates_dismissed={dismissed_linked}"
+    )
 
     return {
         "kind": "complete_linked_task",
