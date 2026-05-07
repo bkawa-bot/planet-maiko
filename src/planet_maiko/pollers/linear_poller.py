@@ -4,6 +4,8 @@ Generates pupdates for:
     - Issues assigned to you
     - Issues approaching their due date
     - Issue status changes
+    - @-mentions in issue bodies and comments
+    - New comments on issues you're subscribed to
 """
 
 import logging
@@ -130,18 +132,82 @@ query {
 PRIORITY_MAP = {0: "normal", 1: "urgent", 2: "high", 3: "normal", 4: "low"}
 
 
+# Notification types we surface as their own pupdates. Issue assignment
+# is already covered by the assignedIssues pull above; status changes
+# come from sync_statuses. We only care here about the "someone said
+# something to/about you" types that the existing flow doesn't cover.
+NOTIFICATION_KINDS_OF_INTEREST = {
+    "issueMention",          # @-mentioned in issue title/description
+    "issueCommentMention",   # @-mentioned in a comment
+    "issueNewComment",       # new comment on issue you're subscribed to
+}
+
+
+# Pull unread notifications. The `... on IssueNotification` fragment
+# unwraps the issue + comment payload — Linear's Notification is an
+# interface with several implementations, but only IssueNotification
+# carries the issue+comment fields we care about for now. Other types
+# (project update mentions, documents) we ignore for the MVP.
+NOTIFICATIONS_QUERY = """
+query Notifications {
+  notifications(
+    filter: { readAt: { null: true } }
+    first: 50
+    orderBy: createdAt
+  ) {
+    nodes {
+      id
+      type
+      createdAt
+      ... on IssueNotification {
+        actor {
+          name
+          displayName
+        }
+        issue {
+          id
+          identifier
+          title
+          url
+        }
+        comment {
+          id
+          body
+          url
+        }
+      }
+    }
+  }
+}
+"""
+
+# Mark a single notification read so the next poll doesn't see it
+# again. Linear stores readAt as the timestamp the user read it —
+# the API expects it inline. We pass the current ISO time at call site.
+NOTIFICATION_MARK_READ_MUTATION = """
+mutation MarkNotificationRead($id: String!, $readAt: DateTime!) {
+  notificationUpdate(id: $id, input: { readAt: $readAt }) {
+    success
+  }
+}
+"""
+
+
 class LinearPoller(BasePoller):
 
     @property
     def name(self):
         return "linear"
 
-    def _query(self, api_key, query):
-        """Execute a GraphQL query against the Linear API."""
+    def _query(self, api_key, query, variables=None):
+        """Execute a GraphQL query/mutation against the Linear API."""
         import certifi
+        payload = {"query": query}
+        if variables:
+            payload["variables"] = variables
         resp = requests.post(
             LINEAR_API,
-            json={"query": query},
+            json=payload,
             headers={"Authorization": api_key, "Content-Type": "application/json"},
             timeout=30,
             verify=certifi.where(),
@@ -175,7 +241,21 @@ class LinearPoller(BasePoller):
         except Exception as e:
             logger.warning(f"[linear] Led-project sync failed: {e}")
 
-        return {"issues": issues}
+        # Pull unread notifications and filter to the kinds the rest of
+        # the flow doesn't already cover (mentions + new comments).
+        # Best-effort: a notifications-side error shouldn't break the
+        # main issue sync.
+        notifications = []
+        try:
+            ndata = self._query(api_key, NOTIFICATIONS_QUERY)
+            raw = ndata.get("notifications", {}).get("nodes", []) or []
+            for n in raw:
+                if n.get("type") in NOTIFICATION_KINDS_OF_INTEREST and n.get("issue"):
+                    notifications.append(n)
+        except Exception as e:
+            logger.warning(f"[linear] Notification fetch failed: {e}")
+
+        return {"issues": issues, "notifications": notifications, "_api_key": api_key}
 
     @staticmethod
     def sync_statuses(issues):
@@ -445,7 +525,99 @@ class LinearPoller(BasePoller):
                 except (ValueError, TypeError):
                     pass
 
+        # Notifications: @-mentions + new comments. source_id is the
+        # Linear notification id so dedup is precise across polls;
+        # _after_sync marks the matching notifications as read on
+        # Linear so the bell icon doesn't pile up on the user's side.
+        for n in raw_data.get("notifications", []):
+            issue = n.get("issue") or {}
+            comment = n.get("comment") or {}
+            actor = n.get("actor") or {}
+            ntype = n.get("type") or ""
+            identifier = issue.get("identifier", "")
+            issue_title = issue.get("title", "")
+            actor_name = actor.get("displayName") or actor.get("name") or "someone"
+
+            # Mentions are higher-stakes ("you were specifically tagged")
+            # than a generic new-comment notification on a subscribed
+            # issue. Bump priority accordingly.
+            is_mention = ntype in ("issueMention", "issueCommentMention")
+            priority = "high" if is_mention else "normal"
+
+            if ntype == "issueMention":
+                kind_label = "mentioned you in"
+                pupdate_type = "linear_mention"
+                action_hint = "Open in Linear"
+                body = f"{actor_name} mentioned you in {identifier}: {issue_title}"
+            elif ntype == "issueCommentMention":
+                kind_label = "mentioned you in a comment on"
+                pupdate_type = "linear_mention"
+                action_hint = "Open comment"
+                body = (comment.get("body") or "")[:500] or f"Comment by {actor_name} on {identifier}"
+            else:  # issueNewComment
+                kind_label = "commented on"
+                pupdate_type = "linear_comment"
+                action_hint = "Open comment"
+                body = (comment.get("body") or "")[:500] or f"New comment on {identifier}"
+
+            url = comment.get("url") or issue.get("url", "")
+            title = f"{actor_name} {kind_label} {identifier}: {issue_title}"
+
+            pupdates.append({
+                "source_id": f"notification/{n.get('id')}",
+                "type": pupdate_type,
+                "priority": priority,
+                "title": title[:200],
+                "body": body,
+                "url": url,
+                "actionable": True,
+                "action_hint": action_hint,
+                "tags": [identifier, "linear", "mention" if is_mention else "comment"],
+                "metadata": {
+                    "linear_notification_id": n.get("id"),
+                    "linear_notification_type": ntype,
+                    "issue_id": issue.get("id"),
+                    "identifier": identifier,
+                    "comment_id": comment.get("id"),
+                    "actor_name": actor_name,
+                    "created_at": n.get("createdAt"),
+                },
+            })
+
         return pupdates
+
+    def _after_sync(self, raw_data, db_session):
+        """Mark the notifications we just ingested as read on Linear.
+
+        Only marks the ones that matched NOTIFICATION_KINDS_OF_INTEREST
+        — assignedToYou / statusChanged / etc. are handled elsewhere
+        and the user might be relying on Linear's own bell to track
+        them. Best-effort: a per-notification mark-read failure
+        doesn't fail the poll; the dedup via source_id keeps things
+        idempotent if the bell stays lit.
+        """
+        from datetime import datetime as _dt, timezone as _tz
+        api_key = raw_data.get("_api_key")
+        notifications = raw_data.get("notifications") or []
+        if not api_key or not notifications:
+            return
+        read_at = _dt.now(_tz.utc).isoformat()
+        marked = 0
+        for n in notifications:
+            nid = n.get("id")
+            if not nid:
+                continue
+            try:
+                self._query(
+                    api_key,
+                    NOTIFICATION_MARK_READ_MUTATION,
+                    variables={"id": nid, "readAt": read_at},
+                )
+                marked += 1
+            except Exception as e:
+                logger.debug(f"[linear] mark-read failed for notification {nid}: {e}")
+        if marked:
+            logger.info(f"[linear] Marked {marked} notification(s) read after ingest")
 
     @staticmethod
     def fetch_teams(api_key=None):
