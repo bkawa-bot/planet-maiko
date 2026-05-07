@@ -266,6 +266,9 @@ export const api = {
   cancelAgentJob: (id) => request(`/agent-jobs/${id}/cancel`, { method: "POST" }),
   // Bring a cancelled job back. Worktree must still be on disk.
   reviveAgentJob: (id) => request(`/agent-jobs/${id}/revive`, { method: "POST" }),
+  // Hard delete — row + worktree. The "I'm sure" escape hatch from
+  // soft-cancel. Backend refuses on running jobs.
+  deleteAgentJob: (id) => request(`/agent-jobs/${id}`, { method: "DELETE" }),
   // Cancelled tasks + jobs whose worktree is still resumable — feeds
   // the "Recently stopped" section on the active agents page.
   getRecoverableAgents: () => request("/agents/recoverable"),

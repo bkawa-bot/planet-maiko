@@ -104,20 +104,19 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
   };
 
   const handleForget = async (entry) => {
-    if (entry.kind !== "task") {
-      // AgentJob has no /forget yet — soft-cancelled jobs age out via
-      // shutdown. The "X" on the recoverable row only confirms a hard
-      // delete for tasks.
-      showToast("Job cleanup happens at shutdown", "normal");
-      return;
-    }
+    const isJob = entry.kind === "job";
+    const noun = isJob ? "job" : "task";
+    const tail = isJob
+      ? "This removes the row and cleans the worktree. There's no undo."
+      : "This removes the task, the worktree, and all linked diff comments. There's no undo.";
     const confirmed = window.confirm(
-      `Permanently delete "${entry.task_title}"? This removes the task, the worktree, and all linked diff comments. There's no undo.`
+      `Permanently delete "${entry.task_title}"? ${tail}`
     );
     if (!confirmed) return;
     try {
-      await api.forgetTask(entry.task_id);
-      showToast("Forgotten — worktree cleaned", "normal");
+      if (isJob) await api.deleteAgentJob(entry.job_id);
+      else await api.forgetTask(entry.task_id);
+      showToast(`${noun[0].toUpperCase()}${noun.slice(1)} forgotten — worktree cleaned`, "normal");
       api.getRecoverableAgents()
         .then((rows) => setRecoverable(Array.isArray(rows) ? rows : []))
         .catch(() => {});

@@ -1,13 +1,10 @@
-"""Tests for the learning pipeline — signal aggregation, graduation, brief compilation."""
+"""Tests for the learning pipeline — signal aggregation, graduation."""
 
 import pytest
 from planet_maiko.models.signal import Signal
 from planet_maiko.models.learning import Learning
 from planet_maiko.models.agent_profile import AgentProfile
-from planet_maiko.brain.learning.processor import (
-    process_signals,
-    compile_brief,
-)
+from planet_maiko.brain.learning.processor import process_signals
 
 
 # ---------------------------------------------------------------------------
@@ -120,104 +117,3 @@ def test_process_signals_links_signal_to_learning(app, db):
     assert db.session.get(Learning, refreshed.learning_id) is not None
 
 
-# ---------------------------------------------------------------------------
-# compile_brief
-# ---------------------------------------------------------------------------
-
-
-def test_compile_brief_returns_markdown_with_active_learnings(app, db):
-    l1 = Learning(
-        rule="Always use Optional for nullable returns",
-        category="null_safety",
-        status="active",
-        confidence=0.5,
-        signal_count=5,
-    )
-    l2 = Learning(
-        rule="Wrap API calls in try/except",
-        category="error_handling",
-        status="active",
-        confidence=0.3,
-        signal_count=3,
-    )
-    db.session.add_all([l1, l2])
-    db.session.commit()
-
-    brief = compile_brief()
-    assert "# Coding Guidelines (Learned)" in brief
-    assert "Optional" in brief
-    assert "try/except" in brief
-
-
-def test_compile_brief_excludes_pending_learnings(app, db):
-    active = Learning(
-        rule="Active rule", category="testing",
-        status="active", confidence=0.5, signal_count=5,
-    )
-    pending = Learning(
-        rule="Pending rule should NOT appear", category="style",
-        status="pending", confidence=0.1, signal_count=1,
-    )
-    db.session.add_all([active, pending])
-    db.session.commit()
-
-    brief = compile_brief()
-    assert "Active rule" in brief
-    assert "Pending rule should NOT appear" not in brief
-
-
-def test_compile_brief_includes_exploration_slots(app, db):
-    # Create enough learnings that exploration slots are meaningful
-    for i in range(10):
-        learning = Learning(
-            rule=f"Rule number {i}",
-            category="testing",
-            status="active",
-            confidence=0.5 - i * 0.02,
-            signal_count=5,
-        )
-        db.session.add(learning)
-    db.session.commit()
-
-    brief = compile_brief(max_learnings=8)
-    # Should include rules beyond the top 6 (8 - 2 exploration slots)
-    assert "# Coding Guidelines (Learned)" in brief
-
-
-def test_compile_brief_returns_no_learnings_message_when_empty(app, db):
-    brief = compile_brief()
-    assert brief == "No active learnings yet."
-
-
-def test_compile_brief_scopes_to_repo(app, db):
-    global_learning = Learning(
-        rule="Global rule applies everywhere",
-        category="style",
-        status="active",
-        confidence=0.5,
-        signal_count=5,
-        scope_repo=None,
-    )
-    repo_learning = Learning(
-        rule="Repo-specific rule for api-service",
-        category="testing",
-        status="active",
-        confidence=0.5,
-        signal_count=5,
-        scope_repo="api-service",
-    )
-    other_repo_learning = Learning(
-        rule="Should not appear for api-service",
-        category="docs",
-        status="active",
-        confidence=0.5,
-        signal_count=5,
-        scope_repo="other-repo",
-    )
-    db.session.add_all([global_learning, repo_learning, other_repo_learning])
-    db.session.commit()
-
-    brief = compile_brief(repo="api-service")
-    assert "Global rule" in brief
-    assert "Repo-specific rule" in brief
-    assert "Should not appear" not in brief

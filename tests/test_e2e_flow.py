@@ -123,16 +123,7 @@ class TestFullAgentLifecycle:
         assert profile.display_name
         assert profile.avatar
 
-        # ---- 6. Compile brief for this agent ----
-        from planet_maiko.brain.learning.processor import compile_brief
-        brief = compile_brief(
-            repo="org/repo",
-            task_id="task-e2e-1",
-            agent_profile_id="agent-e2e-1",
-        )
-        assert "Coding Guidelines" in brief
-        # At least one of our seeded rules should appear
-        assert any(l.rule in brief for l in learnings)
+        # ---- 6. (compile_brief step removed — agents now use live RAG) ----
 
         # ---- 7. Prepare agent work area (branch-only, no worktree for speed) ----
         repo_path = _make_temp_git_repo(tmp_path)

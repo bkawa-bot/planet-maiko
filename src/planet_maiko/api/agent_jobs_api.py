@@ -5,12 +5,15 @@ scheduled skills, etc.). Separate from Task, which is the user's own
 todo / bug / feature list. See models/agent_job.py.
 """
 
+import logging
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 
 from planet_maiko.database import db
 from planet_maiko.models.agent_job import AgentJob
+
+logger = logging.getLogger(__name__)
 
 agent_jobs_bp = Blueprint("agent_jobs", __name__)
 
@@ -117,9 +120,25 @@ def revive_job(job_id):
 
 @agent_jobs_bp.route("/agent-jobs/<job_id>", methods=["DELETE"])
 def delete_job(job_id):
-    """Hard delete. Use cancel for running jobs first; delete is for
-    tidying up completed/cancelled history."""
+    """Hard delete a job — cleans the worktree if one is still on disk
+    and removes the row. The "I'm sure, this is gone for good" escape
+    hatch from the soft-cancel pattern.
+
+    Refuses on running jobs to keep the cancel-first workflow honest;
+    a running job's worktree shouldn't get yanked while the claude
+    process is still writing into it.
+    """
     j = db.get_or_404(AgentJob, job_id)
+    if j.status == "running":
+        return jsonify({
+            "error": "Job is running — cancel it first, then delete",
+        }), 400
+    if j.worktree_path and j.branch:
+        try:
+            from planet_maiko.agents.runtime import cleanup
+            cleanup(j.worktree_path, j.branch)
+        except Exception as e:
+            logger.warning(f"[delete-job] worktree cleanup failed for {job_id}: {e}")
     db.session.delete(j)
     db.session.commit()
     return jsonify({"deleted": job_id})
