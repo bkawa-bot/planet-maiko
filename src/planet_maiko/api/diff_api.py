@@ -866,7 +866,9 @@ def approve(task_id):
     db.session.commit()
 
     # Resume the agent so it sees the approved message immediately.
-    resumed = _resume_agent_with_review(task_id, worktree)
+    # Wake against the canonical inbox id so the resume targets the
+    # session the agent is actually running on.
+    resumed = _resume_agent_with_review(_canonical_inbox_id(task_id), worktree)
 
     return jsonify({
         "task_id": task_id,
