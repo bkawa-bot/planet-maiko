@@ -186,8 +186,16 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
     // (taskId, taskTitle) pair from older call sites. The kind
     // discriminator decides which cancel endpoint runs — task vs
     // job — since /tasks/<id>/cancel 404s on a job_id and vice versa.
+    //
+    // a.task_id is the canonical inbox key (post-unification: the
+    // AgentJob.id), so for kind="task" entries we route through
+    // a.linked_task_id when present — that's the real Task.id the
+    // /tasks/<id>/cancel endpoint wants. Falls back to a.task_id for
+    // legacy task-keyed entries that pre-date the unification.
     const isJob = a?.kind === "job";
-    const id = isJob ? (a.job_id || a.task_id) : a?.task_id;
+    const id = isJob
+      ? (a.job_id || a.task_id)
+      : (a?.linked_task_id || a?.task_id);
     const title = a?.task_title || id;
     if (!id) return;
     const noun = isJob ? "agent job" : "task";
@@ -326,7 +334,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                   {isOneShot && a.task_id && a.kind !== "job" && (
                     <button
                       className="btn btn-icon"
-                      onClick={() => handleRerun(a.task_id)}
+                      onClick={() => handleRerun(a.linked_task_id || a.task_id)}
                       title="Re-run the autonomous skill"
                     >
                       <Sparkles size={12} />

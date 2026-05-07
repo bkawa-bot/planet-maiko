@@ -200,6 +200,12 @@ def get_agent_activity():
             )
             a["kind"] = "task" if linked_task is not None else "job"
             a["job_id"] = job.id
+            # task_id stays the canonical inbox key (job.id post-unification)
+            # so chat / wake routing keep working; expose the real Task.id
+            # separately for surfaces that need to call /tasks/<id>/...
+            # endpoints (cancel, forget, route to /tasks/<id>/review).
+            if linked_task is not None:
+                a["linked_task_id"] = linked_task.id
             a["task_title"] = linked_task.title if linked_task else job.title
             a["task_status"] = linked_task.status if linked_task else job.status
             a["task_type"] = linked_task.type if linked_task else job.kind
