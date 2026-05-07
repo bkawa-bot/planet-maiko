@@ -143,22 +143,24 @@ NOTIFICATION_KINDS_OF_INTEREST = {
 }
 
 
-# Pull unread notifications. The `... on IssueNotification` fragment
-# unwraps the issue + comment payload — Linear's Notification is an
-# interface with several implementations, but only IssueNotification
-# carries the issue+comment fields we care about for now. Other types
-# (project update mentions, documents) we ignore for the MVP.
+# Pull recent notifications. Stripped down to the most schema-stable
+# shape after a 400 from Linear with the previous filter+orderBy
+# variant. We fetch the most recent 50 and filter unread + types in
+# Python — slightly more bytes over the wire but immune to API
+# variations on filter/orderBy syntax.
+#
+# `... on IssueNotification` unwraps the issue + comment payload —
+# Linear's Notification is an interface with several implementations,
+# but only IssueNotification carries the issue+comment fields we
+# care about. Project / document mentions skipped for MVP.
 NOTIFICATIONS_QUERY = """
 query Notifications {
-  notifications(
-    filter: { readAt: { null: true } }
-    first: 50
-    orderBy: createdAt
-  ) {
+  notifications(first: 50) {
     nodes {
       id
       type
       createdAt
+      readAt
       ... on IssueNotification {
         actor {
           name
@@ -241,17 +243,24 @@ class LinearPoller(BasePoller):
         except Exception as e:
             logger.warning(f"[linear] Led-project sync failed: {e}")
 
-        # Pull unread notifications and filter to the kinds the rest of
-        # the flow doesn't already cover (mentions + new comments).
-        # Best-effort: a notifications-side error shouldn't break the
-        # main issue sync.
+        # Pull recent notifications and filter (in Python) to unread,
+        # the kinds we care about, with an issue payload. The previous
+        # version ran the filter + orderBy server-side which Linear
+        # 400'd on; the conservative fetch + Python filter is immune
+        # to API variation. Best-effort: a notifications-side error
+        # shouldn't break the main issue sync.
         notifications = []
         try:
             ndata = self._query(api_key, NOTIFICATIONS_QUERY)
             raw = ndata.get("notifications", {}).get("nodes", []) or []
             for n in raw:
-                if n.get("type") in NOTIFICATION_KINDS_OF_INTEREST and n.get("issue"):
-                    notifications.append(n)
+                if n.get("readAt"):
+                    continue  # already read in Linear
+                if n.get("type") not in NOTIFICATION_KINDS_OF_INTEREST:
+                    continue
+                if not n.get("issue"):
+                    continue
+                notifications.append(n)
         except Exception as e:
             logger.warning(f"[linear] Notification fetch failed: {e}")
 
