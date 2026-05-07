@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, Check, Loader, FileText, MessageSquare, GitBranch,
@@ -255,6 +255,13 @@ function DiffPanel({ jobId, taskId, task, onChanged }) {
   const [approving, setApproving] = useState(false);
   const [newAnchor, setNewAnchor] = useState(null);
   const [newBody, setNewBody] = useState("");
+  // Bidirectional scroll state. Inline marker click → scrollToThread;
+  // sidebar anchor click → scrollToDiffLine. Each direction sets a
+  // brief focus flag so the user's eye lands on the destination.
+  const threadRefs = useRef({});
+  const inlineMarkerRefs = useRef({});
+  const [focusedThreadKey, setFocusedThreadKey] = useState(null);
+  const [focusedDiffKey, setFocusedDiffKey] = useState(null);
   const navigate = useNavigate();
 
   const refetch = useCallback(async () => {
@@ -285,6 +292,22 @@ function DiffPanel({ jobId, taskId, task, onChanged }) {
   const anchorKeys = Object.keys(threadsByAnchor);
 
   const drafts = comments.filter((c) => c.status === "draft" && c.author === "user");
+
+  const scrollToThread = useCallback((key) => {
+    const node = threadRefs.current[key];
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    setFocusedThreadKey(key);
+    setTimeout(() => setFocusedThreadKey((p) => (p === key ? null : p)), 1600);
+  }, []);
+
+  const scrollToDiffLine = useCallback((key) => {
+    const node = inlineMarkerRefs.current[key];
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    setFocusedDiffKey(key);
+    setTimeout(() => setFocusedDiffKey((p) => (p === key ? null : p)), 1600);
+  }, []);
 
   const handleLineClick = (filePath, line, side) => {
     setNewAnchor({ filePath, line, side });
@@ -338,6 +361,34 @@ function DiffPanel({ jobId, taskId, task, onChanged }) {
   const summary = task?.metadata?.review_summary;
   const artifact = task?.metadata?.artifact;
 
+  // Rules the agent retrieved via `maiko rules-relevant` while doing
+  // this task — auto-recorded by the CLI. Dedupe across queries (the
+  // same rule may surface for several queries) and keep each rule's
+  // best score so the highest-confidence match wins. Surface the
+  // queries themselves too so the user can see what the agent had
+  // in mind, not just what came back.
+  const { rulesConsidered, agentQueries } = useMemo(() => {
+    const history = task?.metadata?.rules_considered || [];
+    const byId = new Map();
+    const querySet = new Set();
+    for (const entry of history) {
+      for (const r of (entry?.rules || [])) {
+        if (r?.id == null) continue;
+        const prior = byId.get(r.id);
+        if (!prior || (r.score || 0) > (prior.score || 0)) byId.set(r.id, r);
+      }
+      for (const q of (entry?.queries || [])) {
+        // Skip the placeholder the CLI inserts when no agent queries
+        // were given (diff was decomposed by Haiku instead).
+        if (q && q !== "(diff-decomposed)") querySet.add(q);
+      }
+    }
+    return {
+      rulesConsidered: Array.from(byId.values()).sort((a, b) => (b.score || 0) - (a.score || 0)),
+      agentQueries: Array.from(querySet),
+    };
+  }, [task]);
+
   return (
     <div className="agent-job-diff">
       {(verdict || summary) && (
@@ -355,6 +406,47 @@ function DiffPanel({ jobId, taskId, task, onChanged }) {
           />
         </details>
       )}
+      {rulesConsidered.length > 0 && (
+        <details className="rules-considered-panel">
+          <summary className="rules-considered-summary">
+            <Sparkles size={12} />
+            <span>
+              {rulesConsidered.length} team rule{rulesConsidered.length === 1 ? "" : "s"} considered
+            </span>
+            <span className="rules-considered-hint">
+              what the agent had in mind during this work
+            </span>
+          </summary>
+          {agentQueries.length > 0 && (
+            <div className="rules-considered-queries">
+              <div className="rules-considered-queries-label">Agent searched for</div>
+              <ul className="rules-considered-queries-list">
+                {agentQueries.map((q, i) => (
+                  <li key={i} className="rules-considered-queries-item">
+                    <span className="rules-considered-queries-quote">“</span>
+                    {q}
+                    <span className="rules-considered-queries-quote">”</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <ul className="rules-considered-list">
+            {rulesConsidered.map((r) => (
+              <li key={r.id} className="rules-considered-item">
+                <span className="rules-considered-cat">[{r.category}]</span>
+                <span className="rules-considered-rule">{r.rule}</span>
+                <span
+                  className="rules-considered-score"
+                  title="Best cosine similarity across the agent's queries"
+                >
+                  {Math.round((r.score || 0) * 100)}%
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       <div className="agent-job-diff-grid">
         <div className="agent-job-diff-main">
           {diff?.raw_diff ? (
@@ -362,7 +454,17 @@ function DiffPanel({ jobId, taskId, task, onChanged }) {
               rawDiff={diff.raw_diff}
               anchors={Object.fromEntries(
                 Object.entries(threadsByAnchor).map(([k, cs]) => [
-                  k, <InlineMarker key={k} count={cs.length} />,
+                  k,
+                  <InlineMarker
+                    key={k}
+                    count={cs.length}
+                    focused={focusedDiffKey === k}
+                    onClick={() => scrollToThread(k)}
+                    registerRef={(el) => {
+                      if (el) inlineMarkerRefs.current[k] = el;
+                      else delete inlineMarkerRefs.current[k];
+                    }}
+                  />,
                 ])
               )}
               onLineClick={handleLineClick}
@@ -390,11 +492,21 @@ function DiffPanel({ jobId, taskId, task, onChanged }) {
             const cs = threadsByAnchor[key];
             const first = cs[0];
             const anchor = { filePath: first.file_path, line: first.line_number, side: first.side };
+            const isFocused = focusedThreadKey === key;
             return (
-              <div key={key} className="diff-sidebar-thread">
-                <div className="diff-sidebar-anchor">
+              <div
+                key={key}
+                ref={(el) => { threadRefs.current[key] = el; }}
+                className={`diff-sidebar-thread ${isFocused ? "is-focused" : ""}`}
+              >
+                <button
+                  type="button"
+                  className="diff-sidebar-anchor"
+                  onClick={() => scrollToDiffLine(key)}
+                  title="Jump to this line in the diff"
+                >
                   <code>{first.file_path}:{first.line_number}</code>
-                </div>
+                </button>
                 <CommentThread
                   comments={cs}
                   onReply={async (body, parentId) => {
@@ -468,9 +580,14 @@ function DiffPanel({ jobId, taskId, task, onChanged }) {
   );
 }
 
-function InlineMarker({ count }) {
+function InlineMarker({ count, focused, onClick, registerRef }) {
   return (
-    <button className="diff-inline-marker">
+    <button
+      ref={registerRef}
+      className={`diff-inline-marker ${focused ? "is-focused" : ""}`}
+      onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+      title={`${count} comment${count === 1 ? "" : "s"} — click to view`}
+    >
       <MessageSquare size={9} />
       <span>{count}</span>
     </button>

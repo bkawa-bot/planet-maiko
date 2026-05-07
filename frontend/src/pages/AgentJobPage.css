@@ -270,6 +270,148 @@
   font-size: 10px;
   font-weight: 700;
   border: none;
+  cursor: pointer;
+}
+.agent-job-diff .diff-inline-marker:hover { transform: scale(1.08); }
+/* Focus ring fired briefly when the user clicks a sidebar thread to
+   jump here — pulses so the eye lands on the right line. */
+.agent-job-diff .diff-inline-marker.is-focused {
+  outline: 2px solid var(--pink);
+  outline-offset: 2px;
+  animation: agent-job-marker-pulse 1.6s ease-out;
+}
+@keyframes agent-job-marker-pulse {
+  0%   { box-shadow: 0 0 0 0 var(--pink); }
+  60%  { box-shadow: 0 0 0 8px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* Sidebar thread focus ring — same idea, opposite direction. The
+   inline marker click fires this on the corresponding sidebar
+   thread so the user sees where they landed. */
+.diff-sidebar-thread.is-focused {
+  outline: 2px solid var(--pink);
+  outline-offset: 4px;
+  border-radius: var(--radius-xs);
+  animation: agent-job-thread-pulse 1.6s ease-out;
+}
+@keyframes agent-job-thread-pulse {
+  0%   { box-shadow: 0 0 0 0 var(--pink); }
+  60%  { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* Sidebar anchor as a real button. Was a div; stripping default
+   button styling so it visually matches the prior inline anchor
+   while staying interactive + accessible. */
+button.diff-sidebar-anchor {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+button.diff-sidebar-anchor:hover code {
+  background: var(--pink);
+  color: var(--bg);
+}
+
+/* Rules-considered panel — collapsible RAG context for review/coding
+   tasks. Shows what team rules the agent retrieved while working,
+   plus the queries they ran. Collapsed by default; expanding reveals
+   the queries + a confidence-ranked rule list. */
+.rules-considered-panel {
+  margin: 0 0 4px;
+  padding: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+}
+.rules-considered-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  color: var(--text);
+}
+.rules-considered-summary::-webkit-details-marker { display: none; }
+.rules-considered-hint {
+  margin-left: auto;
+  color: var(--text-dim, var(--text-muted));
+  font-size: 11px;
+  font-style: italic;
+}
+.rules-considered-list {
+  margin: 0;
+  padding: 0 12px 8px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rules-considered-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px dashed var(--border-subtle);
+}
+.rules-considered-item:first-child { border-top: none; }
+.rules-considered-cat {
+  font-size: 10px;
+  color: var(--text-dim, var(--text-muted));
+  text-transform: lowercase;
+  flex-shrink: 0;
+}
+.rules-considered-rule {
+  flex: 1;
+  color: var(--text);
+}
+.rules-considered-score {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--text-dim, var(--text-muted));
+}
+.rules-considered-queries {
+  padding: 0 12px 8px;
+  border-bottom: 1px dashed var(--border-subtle);
+  margin-bottom: 4px;
+}
+.rules-considered-queries-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim, var(--text-muted));
+  margin-bottom: 4px;
+}
+.rules-considered-queries-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rules-considered-queries-item {
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--text);
+  line-height: 1.45;
+}
+.rules-considered-queries-quote {
+  color: var(--text-dim, var(--text-muted));
+  margin: 0 1px;
+  font-style: normal;
 }
 
 /* New comment overlay ----------------------------------------- */
