@@ -54,6 +54,32 @@ def _resolve_task_id(inbox_id):
     return None
 
 
+def _canonical_inbox_id(task_id):
+    """Translate a Task.id → the AgentJob.id the agent's MCP env
+    actually points at, so AgentMessage rows we write are visible
+    to the agent's check_inbox.
+
+    The diff_api endpoints all take a Task.id in the URL (the user
+    is reviewing from /tasks/<id>/review). But post-unification the
+    agent's MAIKO_TASK_ID is the AgentJob.id, so any AgentMessage
+    we want the agent to actually read needs to be keyed by job.id.
+    Cancelled jobs are excluded so a revived task with a fresh job
+    routes to the new job, not the dead one.
+
+    Returns the linked AgentJob.id when one exists, else the task_id
+    unchanged so legacy task-keyed flows (pre-unification) still work.
+    """
+    from planet_maiko.models.agent_job import AgentJob
+    job = (
+        AgentJob.query
+        .filter_by(source_task_id=task_id)
+        .filter(AgentJob.status != "cancelled")
+        .order_by(AgentJob.created_at.desc())
+        .first()
+    )
+    return job.id if job is not None else task_id
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -465,10 +491,15 @@ def request_changes(task_id):
 
     # Post a single review message into the agent's inbox so it shows
     # up as one cohesive round on check_inbox, not N scattered ones.
+    # Keyed by the canonical inbox id (the linked AgentJob.id) so the
+    # agent's check_inbox actually finds it — writing under task_id
+    # silently dropped the message into a parallel inbox the agent
+    # never reads.
     from planet_maiko.models.agent_message import AgentMessage
+    inbox_id = _canonical_inbox_id(task_id)
     review_body = _format_review_message(drafts)
     inbox_msg = AgentMessage(
-        task_id=task_id,
+        task_id=inbox_id,
         direction="to_agent",
         sender="user",
         content=review_body,
@@ -651,9 +682,10 @@ def approve_plan(task_id):
         return jsonify({"error": "No worktree for this task"}), 400
 
     # Log the approval into the conversation so the transcript is
-    # complete, then resume without plan mode.
+    # complete, then resume without plan mode. Keyed by canonical
+    # inbox id so the agent's check_inbox sees it.
     db.session.add(AgentMessage(
-        task_id=task_id,
+        task_id=_canonical_inbox_id(task_id),
         direction="to_agent",
         sender="user",
         content="Plan approved. Go implement it — make the changes, commit locally, and call reply(message_type='ready_for_review') when done.",
@@ -709,7 +741,7 @@ def revise_plan(task_id):
         return jsonify({"error": "feedback is required"}), 400
 
     db.session.add(AgentMessage(
-        task_id=task_id,
+        task_id=_canonical_inbox_id(task_id),
         direction="to_agent",
         sender="user",
         content=feedback,
@@ -803,7 +835,7 @@ def approve(task_id):
 
     from planet_maiko.models.agent_message import AgentMessage
     db.session.add(AgentMessage(
-        task_id=task_id,
+        task_id=_canonical_inbox_id(task_id),
         direction="to_agent",
         sender="user",
         content=instruction,
