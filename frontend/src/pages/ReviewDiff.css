@@ -255,7 +255,12 @@
   font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
-  position: sticky; top: 48px; z-index: 4;
+  /* Was position: sticky; top: 48px — but the parent .diff-file-block
+     has overflow: hidden, which silently breaks sticky positioning
+     and was rendering the header partially over the first diff row.
+     The global .diff-sticky-bar (top of the scroll region) already
+     tracks which file is in view via IntersectionObserver, so the
+     per-file header doesn't need to also stick. */
 }
 
 .diff-file-path {
@@ -378,6 +383,18 @@
   transition: transform 120ms ease;
 }
 .diff-inline-marker:hover { transform: scale(1.08); }
+/* Brief focus ring when the user clicks a sidebar thread to jump
+   here — the marker pulses so the eye lands on the right line. */
+.diff-inline-marker.is-focused {
+  outline: 2px solid var(--pink);
+  outline-offset: 2px;
+  animation: diff-marker-pulse 1.6s ease-out;
+}
+@keyframes diff-marker-pulse {
+  0%   { box-shadow: 0 0 0 0 var(--pink); }
+  60%  { box-shadow: 0 0 0 8px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
 .diff-inline-marker.has-agent { background: var(--lavender); }
 .diff-inline-marker.mixed    { background: linear-gradient(90deg, var(--pink) 0%, var(--lavender) 100%); }
 .diff-inline-marker-count { font-variant-numeric: tabular-nums; }
@@ -438,6 +455,19 @@
   gap: 4px;
   margin-bottom: 6px;
   font-size: 10px;
+  /* Was a div; now a button. Strip the default browser button
+     styling so it reads identical to the prior anchor row, with a
+     subtle hover hint to signal it's clickable. */
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+.review-diff-sidebar-anchor:hover .sidebar-anchor-file {
+  background: var(--pink);
+  color: var(--bg);
 }
 .review-diff-sidebar-anchor .sidebar-anchor-dir {
   font-size: 9px;

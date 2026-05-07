@@ -18,14 +18,17 @@ const VERDICT_META = {
 
 /** Inline chip rendered on a diff line that has comments. Shows the
  *  count + a color reflecting who authored them. Clicking scrolls
- *  the sidebar thread into view and focus-rings it briefly. */
-function InlineCommentMarker({ threadComments, onClick }) {
+ *  the sidebar thread into view and focus-rings it briefly. The
+ *  outer ref hooks the marker into a parent-side map so the sidebar
+ *  → diff scroll direction can target the exact diff row. */
+function InlineCommentMarker({ threadComments, onClick, registerRef, focused }) {
   const hasUser = threadComments.some((c) => c.author === "user");
   const hasAgent = threadComments.some((c) => c.author === "agent");
   const cls = hasUser && hasAgent ? "mixed" : hasAgent ? "has-agent" : "";
   return (
     <button
-      className={`diff-inline-marker ${cls}`}
+      ref={registerRef}
+      className={`diff-inline-marker ${cls} ${focused ? "is-focused" : ""}`}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       title={`${threadComments.length} comment${threadComments.length === 1 ? "" : "s"} — click to view`}
     >
@@ -62,6 +65,12 @@ export default function ReviewDiff() {
   // file usually wants it for the whole review.
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const threadRefs = useRef({});
+  // Refs to inline comment markers in the diff body, keyed by the
+  // same anchor key (file::line::side) the sidebar uses. Lets the
+  // sidebar → diff scroll direction land on the exact diff row
+  // without needing to wire into react-diff-view's internals.
+  const inlineMarkerRefs = useRef({});
+  const [focusedDiffKey, setFocusedDiffKey] = useState(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -107,6 +116,14 @@ export default function ReviewDiff() {
     setTimeout(() => setFocusedKey((prev) => (prev === key ? null : prev)), 1600);
   }, []);
 
+  const scrollToDiffLine = useCallback((key) => {
+    const node = inlineMarkerRefs.current[key];
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    setFocusedDiffKey(key);
+    setTimeout(() => setFocusedDiffKey((prev) => (prev === key ? null : prev)), 1600);
+  }, []);
+
   // Build the inline-marker map DiffView expects. Each anchor key
   // matches file_path::line::side (same shape DiffView uses internally)
   // and the value is a React node rendered on the matching diff line.
@@ -117,11 +134,16 @@ export default function ReviewDiff() {
         <InlineCommentMarker
           threadComments={threadComments}
           onClick={() => scrollToThread(key)}
+          registerRef={(el) => {
+            if (el) inlineMarkerRefs.current[key] = el;
+            else delete inlineMarkerRefs.current[key];
+          }}
+          focused={focusedDiffKey === key}
         />
       );
     }
     return map;
-  }, [threadsByAnchor, scrollToThread]);
+  }, [threadsByAnchor, scrollToThread, focusedDiffKey]);
 
   // Rules the agent retrieved via `maiko rules-relevant` while
   // working on this task — auto-recorded by the CLI. Dedupe across
@@ -495,7 +517,12 @@ export default function ReviewDiff() {
                 ref={(el) => { threadRefs.current[key] = el; }}
                 className={`review-diff-sidebar-thread ${isFocused ? "is-focused" : ""}`}
               >
-                <div className="review-diff-sidebar-anchor">
+                <button
+                  type="button"
+                  className="review-diff-sidebar-anchor"
+                  onClick={() => scrollToDiffLine(key)}
+                  title="Jump to this line in the diff"
+                >
                   {(() => {
                     const segs = (first.file_path || "").split("/");
                     const filename = segs.pop() || first.file_path;
@@ -508,7 +535,7 @@ export default function ReviewDiff() {
                     );
                   })()}
                   {first.side === "old" && <span className="side-badge">old</span>}
-                </div>
+                </button>
                 <CommentThread
                   comments={threadComments}
                   onReply={(body, parentId) => replyInThread(anchor, body, parentId)}
