@@ -109,6 +109,14 @@
    questions. Pink — matches the "review queue" tone the row's CTA
    uses, signals "shipped, you should look at this." */
 .speech-bubble.status-ready { border-left: 3px solid var(--pink); }
+/* Waiting = agent is parked mid-work waiting on the user (emitted
+   stuck / plan_for_approval / agent_message with recipient=user). The
+   auto-nudge phase deliberately skips these — they're idle on purpose,
+   not because something broke. Lavender so it reads as "your turn"
+   distinct from green-active and pink-ready. */
+.speech-bubble.status-waiting {
+  border-left: 3px solid var(--lavender, #b59dd8);
+}
 .speech-time { font-size: 9px; color: var(--text-muted); margin-top: 4px; }
 
 .agent-card-body { display: flex; gap: 12px; padding: 14px 16px; }

@@ -1,5 +1,7 @@
 """Agent + task health phases.
 
+  - nudge_quiet_agents: heartbeat-wake running agents that have gone
+    silent — gives them a chance to re-engage before stuck_check flags.
   - stuck_check: flag agents whose claude process exited silently
   - stuck_escalation: surface tasks stuck in_progress for too long
 """
@@ -8,6 +10,121 @@ import logging
 from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
+
+
+# How long an AgentJob in status="running" can go without its agent
+# emitting any pupdate / message before we send a heartbeat-wake. Tuned
+# below STUCK_AFTER_MINUTES (15) so quiet agents get one nudge cycle to
+# re-engage before the next stuck-check flags them as broken.
+NUDGE_AFTER_MINUTES = 10
+
+
+def _phase_nudge_quiet_agents():
+    """Phase: wake any AgentJob whose agent has been silent for too long.
+
+    Agents are reactive — a claude process exits after each turn and
+    only re-runs when wake_agent fires. Without an external trigger
+    (user message, automation, this nudge), a job in status="running"
+    with no pending input can sit idle indefinitely. This phase pings
+    them so their next inbox check happens automatically.
+
+    Skip rules:
+      - Lock is held — wake_agent would drop-on-busy anyway, save the
+        noise.
+      - Agent's most recent message is a "waiting on user" type
+        (stuck / plan_for_approval / recipient=user) — they're not
+        idle, they're parked waiting for a reply. Don't disturb.
+      - last_active_at is fresh (< NUDGE_AFTER_MINUTES) — already
+        active in this window.
+
+    wake_agent uses source="heartbeat" so a redundant call against a
+    truly-busy agent is silently dropped.
+    """
+    from flask import current_app
+    from planet_maiko.database import db
+    from planet_maiko.models.agent_job import AgentJob
+    from planet_maiko.models.agent_message import AgentMessage
+    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.agents.wake import wake_agent, is_working
+
+    nudged = 0
+    skipped_busy = 0
+    skipped_waiting = 0
+    skipped_fresh = 0
+    failed = 0
+
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=NUDGE_AFTER_MINUTES)
+        running = AgentJob.query.filter(AgentJob.status == "running").all()
+        for job in running:
+            if is_working(job.id):
+                skipped_busy += 1
+                continue
+
+            # Check the agent's last_active_at via the linked profile.
+            # wake_agent.set_agent_state stamps this on each claude
+            # subprocess start/end, so it's the canonical heartbeat.
+            profile = (
+                db.session.get(AgentProfile, job.agent_profile_id)
+                if job.agent_profile_id else None
+            )
+            last_active = profile.last_active_at if profile else None
+            if last_active is not None:
+                la = last_active
+                if la.tzinfo is None:
+                    la = la.replace(tzinfo=timezone.utc)
+                if la >= cutoff:
+                    skipped_fresh += 1
+                    continue
+
+            # Skip agents that emitted a "waiting on user" signal — they
+            # SHOULD be parked until the user replies, not woken.
+            last_msg = (
+                AgentMessage.query
+                .filter_by(task_id=job.id, direction="from_agent")
+                .order_by(AgentMessage.created_at.desc())
+                .first()
+            )
+            if last_msg is not None and (
+                last_msg.message_type in ("stuck", "plan_for_approval")
+                or (last_msg.recipient or "").lower() == "user"
+            ):
+                skipped_waiting += 1
+                continue
+
+            try:
+                ok, _mode = wake_agent(
+                    job.id,
+                    "Heartbeat. Call check_inbox for any pending messages, "
+                    "post a quick status update via "
+                    "reply(message_type='status'), and continue your work.",
+                    source="heartbeat",
+                )
+                if ok:
+                    nudged += 1
+                else:
+                    failed += 1
+            except Exception as e:
+                failed += 1
+                logger.warning(f"[nudge] wake failed for job {job.id}: {e}")
+
+        if nudged:
+            logger.info(
+                f"[nudge] heartbeat-woke {nudged} quiet agent(s) "
+                f"(skipped: busy={skipped_busy}, waiting={skipped_waiting}, "
+                f"fresh={skipped_fresh})"
+            )
+    except Exception as e:
+        logger.warning(f"[nudge] phase error: {e}")
+        return {"nudged": nudged, "error": str(e)}
+
+    return {
+        "nudged": nudged,
+        "skipped_busy": skipped_busy,
+        "skipped_waiting": skipped_waiting,
+        "skipped_fresh": skipped_fresh,
+        "failed": failed,
+    }
 
 
 def _phase_stuck_check():

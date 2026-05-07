@@ -141,6 +141,19 @@ def get_agent_activity():
         a["last_message_body"] = last.content
         a["last_message_type"] = last.message_type
 
+        # Override the activity-derived status when the most recent
+        # agent message means the agent is parked waiting for the user
+        # to respond — visually distinct from active/idle/stale (still
+        # working, just quiet) and from "ready" (FOLLOWUP_KINDS done
+        # job, available for follow-up chat). The auto-nudge phase
+        # uses the same signals to decide NOT to nudge a waiting agent.
+        is_waiting_on_user = (
+            (last.message_type or "") in ("stuck", "plan_for_approval")
+            or (last.recipient or "").lower() == "user"
+        )
+        if is_waiting_on_user:
+            a["status"] = "waiting"
+
     # Filter + enrich the agents dict for the active feed.
     #
     # Post-unification, every agent's MAIKO_TASK_ID is its AgentJob.id
