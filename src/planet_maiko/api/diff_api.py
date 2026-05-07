@@ -34,6 +34,26 @@ logger = logging.getLogger(__name__)
 diff_bp = Blueprint("diff", __name__)
 
 
+def _resolve_task_id(inbox_id):
+    """Translate an inbox id → the canonical Task.id for diff_comments
+    storage. Post-unification, the agent's MAIKO_TASK_ID is the
+    AgentJob.id, but DiffComment.task_id has a FK to tasks.id and would
+    raise "FOREIGN KEY constraint failed" on insert. Resolve to the
+    linked Task.id when the input is a Job.id; pass through unchanged
+    when it's already a Task.id (or a legacy task-keyed flow).
+
+    Returns the resolved id, or None when nothing matches — callers
+    should 404 rather than insert with a phantom id.
+    """
+    if db.session.get(Task, inbox_id) is not None:
+        return inbox_id
+    from planet_maiko.models.agent_job import AgentJob
+    job = db.session.get(AgentJob, inbox_id)
+    if job is not None and job.source_task_id:
+        return job.source_task_id
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -133,9 +153,12 @@ def get_task_diff(task_id):
 @diff_bp.route("/tasks/<task_id>/comments", methods=["GET"])
 def list_comments(task_id):
     """Return all comments for a task ordered by file, then line, then time."""
+    real_task_id = _resolve_task_id(task_id)
+    if real_task_id is None:
+        return jsonify([])
     comments = (
         DiffComment.query
-        .filter_by(task_id=task_id)
+        .filter_by(task_id=real_task_id)
         .order_by(
             DiffComment.file_path.asc(),
             DiffComment.line_number.asc(),
@@ -155,15 +178,19 @@ def create_comment(task_id):
     if "file_path" not in data or "line_number" not in data:
         return jsonify({"error": "file_path and line_number are required"}), 400
 
+    real_task_id = _resolve_task_id(task_id)
+    if real_task_id is None:
+        return jsonify({"error": "task not found"}), 404
+
     # Validate parent_id belongs to the same task if provided
     parent_id = data.get("parent_id")
     if parent_id:
         parent = db.session.get(DiffComment, parent_id)
-        if not parent or parent.task_id != task_id:
+        if not parent or parent.task_id != real_task_id:
             return jsonify({"error": "parent_id does not belong to this task"}), 400
 
     comment = DiffComment(
-        task_id=task_id,
+        task_id=real_task_id,
         file_path=data["file_path"],
         line_number=int(data["line_number"]),
         side=data.get("side", "new"),
@@ -221,14 +248,21 @@ def create_agent_comment(task_id):
     Always stores as author=agent, status=submitted. The agent anchors
     comments to the user's post-image (the "new" side) by default; they
     can override by passing side="old" explicitly.
+
+    The MCP tool calls this with MAIKO_TASK_ID — which post-unification
+    is the AgentJob.id. Resolve to the linked Task.id before insert so
+    DiffComment.task_id's FK constraint to tasks.id is satisfied.
     """
     data = request.get_json() or {}
     if not data.get("body"):
         return jsonify({"error": "body is required"}), 400
     if "file_path" not in data or "line_number" not in data:
         return jsonify({"error": "file_path and line_number are required"}), 400
+    real_task_id = _resolve_task_id(task_id)
+    if real_task_id is None:
+        return jsonify({"error": "no task linked to this agent — comment dropped"}), 404
     comment = DiffComment(
-        task_id=task_id,
+        task_id=real_task_id,
         file_path=data["file_path"],
         line_number=int(data["line_number"]),
         side=data.get("side", "new"),
