@@ -134,7 +134,21 @@ def _git(args, cwd, timeout=30):
 
 @diff_bp.route("/tasks/<task_id>/diff", methods=["GET"])
 def get_task_diff(task_id):
-    """Return the unified diff of the agent's worktree vs the default branch."""
+    """Return the unified diff of the agent's worktree vs the default branch.
+
+    Uses `git diff <base_sha>` (no `..HEAD`) so the diff includes BOTH
+    committed AND uncommitted edits. The previous form `base..HEAD`
+    only showed committed work — agents that edited files without
+    running git commit reported "the changes are in my branch" but
+    the review page rendered empty. The agent-protocol does say
+    "commit locally before ready_for_review" but the failure mode
+    is silent and easy to miss; this just shows everything.
+
+    Untracked (never-added) files still don't appear — git diff
+    doesn't see them. We surface a hint via `untracked_files` in the
+    response so the frontend can show a "the agent has unsaved files
+    they haven't added: X, Y, Z" line if it wants.
+    """
     task, err = _task_or_404(task_id)
     if err:
         return err
@@ -152,12 +166,27 @@ def get_task_diff(task_id):
     rc, head_sha, _ = _git(["rev-parse", "HEAD"], cwd=worktree)
     head_sha = head_sha.strip() if rc == 0 else ""
 
+    # Compare base against the working tree (includes committed +
+    # uncommitted). git diff with a single ref means
+    # "diff(<ref>, working_tree)".
     rc, raw, err_out = _git(
-        ["diff", "--no-color", f"{base_sha}..HEAD"],
+        ["diff", "--no-color", base_sha],
         cwd=worktree, timeout=60,
     )
     if rc != 0:
         return jsonify({"error": f"git diff failed: {err_out.strip()[:200]}"}), 500
+
+    # Surface untracked files separately so the user can tell the
+    # agent to git add them. ls-files --others --exclude-standard
+    # lists files in the worktree that aren't tracked AND aren't
+    # gitignored.
+    untracked = []
+    rc_u, raw_u, _ = _git(
+        ["ls-files", "--others", "--exclude-standard"],
+        cwd=worktree, timeout=10,
+    )
+    if rc_u == 0 and raw_u.strip():
+        untracked = [line for line in raw_u.splitlines() if line.strip()][:50]
 
     return jsonify({
         "task_id": task_id,
@@ -165,6 +194,7 @@ def get_task_diff(task_id):
         "base_sha": base_sha,
         "head_sha": head_sha,
         "raw_diff": raw,
+        "untracked_files": untracked,
     })
 
 
