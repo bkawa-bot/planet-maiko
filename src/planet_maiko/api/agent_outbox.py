@@ -204,13 +204,18 @@ def handle_agent_job_reply(job, msg, data, message_type):
             if len(preview) > 80:
                 preview = preview[:77] + "…"
 
-            # Route + CTA depend on whether the artifact is a diff
-            # (review) or a report (investigation / repo_analysis /
-            # cartograph). Reviews link into the diff page when the
-            # job has a parent task; report-style kinds always go to
-            # /jobs/<id>.
+            # Route + CTA by what the artifact actually IS:
+            #   diff-producing kinds (coding, review, pr_review) →
+            #     /tasks/<id>/review when there's a linked task. The
+            #     coding agent wrote the diff; the review agent's
+            #     comments live on the diff. Either way the user is
+            #     reading code at a line level.
+            #   report-producing kinds (investigation, repo_analysis,
+            #     cartograph) → /jobs/<id>. Markdown writeup, no diff.
+            #   diff-producing kind with no linked task — fallback to
+            #     the job report page.
             is_report_kind = job.kind in ("investigation", "repo_analysis", "cartograph")
-            if is_review and job.source_task_id:
+            if not is_report_kind and job.source_task_id:
                 cta_label = "Review diff"
                 cta_action = "review"
                 memo_url = f"/tasks/{job.source_task_id}/review"
