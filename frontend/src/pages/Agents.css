@@ -886,6 +886,22 @@
   border-color: rgba(255, 122, 115, 0.45);
   background: rgba(255, 122, 115, 0.06);
 }
+/* Cancelled-but-revivable rows live in the "Recently stopped" section.
+   Muted appearance — they're not actively working — but the inline
+   Revive + Forget actions sit on the right so the user can act
+   without entering a detail view. */
+.agent-queue-row.status-cancelled {
+  opacity: 0.85;
+}
+.agent-queue-row.status-cancelled .agent-queue-status.status-cancelled {
+  color: var(--text-muted);
+}
+.agent-queue-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  align-items: center;
+}
 .agent-queue-avatar {
   flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;

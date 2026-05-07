@@ -85,6 +85,12 @@ export const api = {
   startTask: (id) => request(`/tasks/${id}/start`, { method: "POST" }),
   completeTask: (id) => request(`/tasks/${id}/done`, { method: "POST" }),
   cancelTask: (id) => request(`/tasks/${id}/cancel`, { method: "POST" }),
+  // Bring a soft-cancelled task back. Worktree must still be on disk;
+  // returns 410 if it was cleaned up.
+  reviveTask: (id) => request(`/tasks/${id}/revive`, { method: "POST" }),
+  // Hard-delete a cancelled or done task. The escape hatch from the
+  // soft-delete pattern — use after cancel if the task is truly gone.
+  forgetTask: (id) => request(`/tasks/${id}/forget`, { method: "POST" }),
   reassignTask: (id, agent_id) =>
     request(`/tasks/${id}/reassign`, { method: "POST", body: JSON.stringify(agent_id ? { agent_id } : {}) }),
   launchTask: (id) => request(`/tasks/${id}/launch`, { method: "POST" }),
@@ -258,6 +264,11 @@ export const api = {
   getAgentJob: (id) => request(`/agent-jobs/${id}`),
   approveAgentJob: (id) => request(`/agent-jobs/${id}/approve`, { method: "POST" }),
   cancelAgentJob: (id) => request(`/agent-jobs/${id}/cancel`, { method: "POST" }),
+  // Bring a cancelled job back. Worktree must still be on disk.
+  reviveAgentJob: (id) => request(`/agent-jobs/${id}/revive`, { method: "POST" }),
+  // Cancelled tasks + jobs whose worktree is still resumable — feeds
+  // the "Recently stopped" section on the active agents page.
+  getRecoverableAgents: () => request("/agents/recoverable"),
   ackAgentJob: (id) => request(`/agent-jobs/${id}/ack`, { method: "POST" }),
 
   // Insights (Team Playbook — tribal / operational notes injected into CLAUDE.md)

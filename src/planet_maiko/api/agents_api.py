@@ -8,7 +8,7 @@ from planet_maiko.database import db
 from planet_maiko.models.agent_message import AgentMessage
 from planet_maiko.agents.brain_session import run_skill, get_status as brain_status, ONE_SHOT_ROLE_FOR_TYPE
 from planet_maiko.agents.runtime import prepare, list_prepared, cleanup
-from planet_maiko.agents.monitor import get_agent_activity, get_queued_agent_tasks, process_agent_pupdates, get_stuck_agents
+from planet_maiko.agents.monitor import get_agent_activity, get_queued_agent_tasks, process_agent_pupdates, get_stuck_agents, get_recoverable_agents
 from planet_maiko.agents.sessions import _get_sessions, _save_sessions, _set_session
 from planet_maiko.agents.skills import list_skills
 from planet_maiko.agents.terminal import _find_claude_session_file, _launch_terminal
@@ -613,6 +613,14 @@ def get_agents():
 def get_activity():
     """Get recent agent activity (pupdates from agents)."""
     return jsonify(get_agent_activity())
+
+
+@agents_bp.route("/agents/recoverable", methods=["GET"])
+def get_recoverable():
+    """Cancelled tasks + jobs whose worktree is still on disk —
+    revivable. The active page surfaces these in a 'Recently stopped'
+    section so a misclick doesn't cost a day of context."""
+    return jsonify(get_recoverable_agents())
 
 
 @agents_bp.route("/agents/queued", methods=["GET"])

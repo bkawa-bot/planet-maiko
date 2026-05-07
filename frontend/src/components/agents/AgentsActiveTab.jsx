@@ -69,13 +69,62 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
   // effect on activity to rerun when something changes).
   const [queueJobs, setQueueJobs] = useState([]);
   const [queueOpen, setQueueOpen] = useState(true);
+  // Cancelled tasks/jobs whose worktree is still on disk — revivable.
+  // Default-collapsed because this is a recovery surface, not the
+  // primary view; the user opens it when they need to undo a misclick.
+  const [recoverable, setRecoverable] = useState([]);
+  const [recoverableOpen, setRecoverableOpen] = useState(false);
   useEffect(() => {
     let cancelled = false;
     api.getAgentJobs({ status: "queued,failed", limit: 20 })
       .then((rows) => { if (!cancelled) setQueueJobs(Array.isArray(rows) ? rows : []); })
       .catch(() => { if (!cancelled) setQueueJobs([]); });
+    api.getRecoverableAgents()
+      .then((rows) => { if (!cancelled) setRecoverable(Array.isArray(rows) ? rows : []); })
+      .catch(() => { if (!cancelled) setRecoverable([]); });
     return () => { cancelled = true; };
   }, [activity.length, agents.length]);
+
+  const handleRevive = async (entry) => {
+    const isJob = entry.kind === "job";
+    const id = isJob ? entry.job_id : entry.task_id;
+    try {
+      if (isJob) await api.reviveAgentJob(id);
+      else await api.reviveTask(id);
+      showToast(`Revived "${entry.task_title || id}" — worktree intact`, "normal");
+      onRefresh?.();
+      // Also refresh the recoverable list since this entry just left it.
+      api.getRecoverableAgents()
+        .then((rows) => setRecoverable(Array.isArray(rows) ? rows : []))
+        .catch(() => {});
+    } catch (err) {
+      const msg = err.message || "Couldn't revive";
+      showToast(msg, "high");
+    }
+  };
+
+  const handleForget = async (entry) => {
+    if (entry.kind !== "task") {
+      // AgentJob has no /forget yet — soft-cancelled jobs age out via
+      // shutdown. The "X" on the recoverable row only confirms a hard
+      // delete for tasks.
+      showToast("Job cleanup happens at shutdown", "normal");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Permanently delete "${entry.task_title}"? This removes the task, the worktree, and all linked diff comments. There's no undo.`
+    );
+    if (!confirmed) return;
+    try {
+      await api.forgetTask(entry.task_id);
+      showToast("Forgotten — worktree cleaned", "normal");
+      api.getRecoverableAgents()
+        .then((rows) => setRecoverable(Array.isArray(rows) ? rows : []))
+        .catch(() => {});
+    } catch (err) {
+      showToast(err.message || "Couldn't forget", "high");
+    }
+  };
 
   const loadThread = async (taskId) => {
     setSelectedThread(taskId);
@@ -144,7 +193,7 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
     if (!id) return;
     const noun = isJob ? "agent job" : "task";
     const confirmed = window.confirm(
-      `Stop the agent for "${title}"? This kills the Claude Code process, removes the worktree, and deletes the ${noun}.`
+      `Stop the agent for "${title}"? This terminates the Claude Code process. The worktree + session stay around — you can revive the ${noun} from the "Recently stopped" section if you change your mind.`
     );
     if (!confirmed) return;
     try {
@@ -451,6 +500,68 @@ export default function AgentsActiveTab({ agents, activity, queued = [], conflic
                             {j.error.length > 140 ? j.error.slice(0, 138) + "…" : j.error}
                           </div>
                         )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {recoverable.length > 0 && (
+          <div className="agent-queue-section">
+            <button
+              type="button"
+              className="agent-queue-header"
+              onClick={() => setRecoverableOpen((v) => !v)}
+            >
+              {recoverableOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+              <HeartPulse size={11} /> Recently stopped — revivable
+              <span className="agent-queue-count">{recoverable.length}</span>
+            </button>
+            {recoverableOpen && (
+              <div className="agent-queue-list">
+                {recoverable.map((entry) => {
+                  const profile = entry.agent_id
+                    ? profiles.find((p) => p.id === entry.agent_id)
+                    : null;
+                  const key = `${entry.kind}-${entry.task_id}`;
+                  return (
+                    <div key={key} className="agent-queue-row status-cancelled">
+                      <div className="agent-queue-avatar">
+                        {profile
+                          ? <CardAvatar agent={profile} size={28} />
+                          : <span className="agent-queue-pending-dot">·</span>}
+                      </div>
+                      <div className="agent-queue-body">
+                        <div className="agent-queue-title">{entry.task_title || entry.task_id}</div>
+                        <div className="agent-queue-meta">
+                          <span className="agent-queue-status status-cancelled">cancelled</span>
+                          {profile && <span className="agent-queue-agent">{profile.display_name}</span>}
+                          {entry.task_type && <span className="agent-queue-agent">{entry.task_type}</span>}
+                          {entry.stopped_at && (
+                            <span className="agent-queue-age">
+                              stopped {relativeTime(entry.stopped_at)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="agent-queue-actions">
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => handleRevive(entry)}
+                          title="Resume the agent — worktree + session are still intact"
+                        >
+                          <Play size={10} /> Revive
+                        </button>
+                        <button
+                          className="btn btn-sm btn-danger"
+                          onClick={() => handleForget(entry)}
+                          title="Permanently delete (worktree + row). No undo."
+                        >
+                          <X size={10} />
+                        </button>
                       </div>
                     </div>
                   );

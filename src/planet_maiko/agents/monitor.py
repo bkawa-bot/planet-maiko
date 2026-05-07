@@ -422,3 +422,83 @@ def get_stuck_agents():
     return [a for a in activity if a["status"] in ("idle", "stale")]
 
 
+def get_recoverable_agents():
+    """Find cancelled tasks + jobs whose worktree is still on disk.
+
+    The active page shows these in a "Recently stopped" section with
+    a revive button. The misclick recovery surface — without it, every
+    accidental cancel is a day of context loss.
+
+    Pulls from both Task and AgentJob:
+      - Task in status="cancelled" with task.extra.working_path on disk
+      - AgentJob in status="cancelled" with worktree_path on disk
+
+    Linked jobs (job.source_task_id is set) are de-duplicated against
+    the task entry — the surface row is keyed by the linked task.
+    """
+    import os
+    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.models.agent_job import AgentJob
+
+    out = []
+    seen_task_ids = set()
+
+    cancelled_tasks = (
+        Task.query
+        .filter(Task.status == "cancelled")
+        .order_by(Task.updated_at.desc())
+        .all()
+    )
+    for t in cancelled_tasks:
+        wp = (t.extra or {}).get("working_path")
+        if not wp or not os.path.isdir(wp):
+            continue
+        entry = {
+            "kind": "task",
+            "task_id": t.id,
+            "task_title": t.title,
+            "task_status": t.status,
+            "task_type": t.type,
+            "stopped_at": iso_utc(t.updated_at),
+            "working_path": wp,
+        }
+        if t.assigned_agent_id:
+            profile = db.session.get(AgentProfile, t.assigned_agent_id)
+            if profile:
+                entry["agent_name"] = profile.display_name
+                entry["agent_id"] = profile.id
+        out.append(entry)
+        seen_task_ids.add(t.id)
+
+    cancelled_jobs = (
+        AgentJob.query
+        .filter(AgentJob.status == "cancelled")
+        .filter(AgentJob.worktree_path.isnot(None))
+        .order_by(AgentJob.finished_at.desc())
+        .all()
+    )
+    for j in cancelled_jobs:
+        if not j.worktree_path or not os.path.isdir(j.worktree_path):
+            continue
+        if j.source_task_id and j.source_task_id in seen_task_ids:
+            continue  # represented by the task entry above
+        entry = {
+            "kind": "job",
+            "task_id": j.id,  # frontend uses this for routing
+            "job_id": j.id,
+            "task_title": j.title,
+            "task_status": j.status,
+            "task_type": j.kind,
+            "stopped_at": iso_utc(j.finished_at),
+            "working_path": j.worktree_path,
+        }
+        if j.agent_profile_id:
+            profile = db.session.get(AgentProfile, j.agent_profile_id)
+            if profile:
+                entry["agent_name"] = profile.display_name
+                entry["agent_id"] = profile.id
+        out.append(entry)
+
+    return out
+
+

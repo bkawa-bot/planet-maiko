@@ -230,23 +230,75 @@ def complete_task(task_id):
 
 @tasks_bp.route("/tasks/<task_id>/cancel", methods=["POST"])
 def cancel_task(task_id):
-    """Cancel a task — terminate any in-flight agent subprocess, remove
-    the worktree, and delete the task row.
+    """Soft-cancel a task — terminate the agent subprocess but keep
+    the row + worktree + session around so the user can revive.
 
-    Order matters: we stop the subprocess FIRST so it can't race-write
-    new commits or MCP replies into a worktree we're about to delete.
-    Worktree removal and task delete are idempotent; the subprocess
-    stop is best-effort (no-op if nothing is running).
+    Behavior changed from hard-delete to soft-delete: the cancel
+    button on the active agents page is too easy to click by accident,
+    and losing a day of agent context to a misclick was a recurring
+    sting. Now: stop the process, mark cancelled, leave the artifacts
+    on disk. The revive endpoint flips it back. Permanent cleanup
+    happens via the shutdown ritual (worktree age-out) or an explicit
+    forget call later.
     """
-    from planet_maiko.agents.runtime import cleanup_task_worktree, stop_agent_session
+    from planet_maiko.agents.runtime import stop_agent_session
     task = db.get_or_404(Task, task_id)
     stopped = stop_agent_session(task_id)
     _maybe_push_close_to_linear(task, "canceled")
+    task.status = "cancelled"
+    task.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"status": "cancelled", "id": task_id, "agent_stopped": stopped})
+
+
+@tasks_bp.route("/tasks/<task_id>/revive", methods=["POST"])
+def revive_task(task_id):
+    """Bring a cancelled task back. Flips status to in_progress and
+    leaves the worktree where it was. The agent's session_id (on the
+    linked AgentJob) is still resumable; the next chat message or
+    Launch click wakes the claude process.
+
+    Refuses if the worktree was already cleaned (shutdown ritual aged
+    it out, or pr_merged automation cleared it). At that point there's
+    nothing to revive — the user has to start fresh.
+    """
+    import os
+    task = db.get_or_404(Task, task_id)
+    if task.status != "cancelled":
+        return jsonify({
+            "error": f"Task is {task.status}, not cancelled — can't revive",
+        }), 400
+    working_path = (task.extra or {}).get("working_path")
+    if working_path and not os.path.isdir(working_path):
+        return jsonify({
+            "error": "Worktree was cleaned up — can't revive. Start a fresh task.",
+        }), 410
+    task.status = "in_progress"
+    task.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"status": "revived", "id": task_id})
+
+
+@tasks_bp.route("/tasks/<task_id>/forget", methods=["POST"])
+def forget_task(task_id):
+    """Hard-delete a cancelled task — row, worktree, dependents.
+
+    The "I'm sure, this is gone for good" escape hatch from soft-delete.
+    Use after cancel when the user has decided the task is truly dead.
+    Refuses on non-terminal tasks so it can't be used to skip the
+    cancel-first flow.
+    """
+    from planet_maiko.agents.runtime import cleanup_task_worktree
+    task = db.get_or_404(Task, task_id)
+    if task.status not in ("cancelled", "done"):
+        return jsonify({
+            "error": f"Task is {task.status} — cancel it first, then forget",
+        }), 400
     cleanup_task_worktree(task)
     _clear_task_dependents(task)
     db.session.delete(task)
     db.session.commit()
-    return jsonify({"status": "deleted", "id": task_id, "agent_stopped": stopped})
+    return jsonify({"status": "deleted", "id": task_id})
 
 
 @tasks_bp.route("/tasks/<task_id>/launch", methods=["POST"])

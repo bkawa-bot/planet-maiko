@@ -70,25 +70,47 @@ def approve_job(job_id):
 
 @agent_jobs_bp.route("/agent-jobs/<job_id>/cancel", methods=["POST"])
 def cancel_job(job_id):
-    """Cancel a job. For pending_approval / queued: just mark cancelled.
-    For running: terminate the subprocess + cleanup worktree."""
+    """Soft-cancel a job. Stops the subprocess but keeps the worktree
+    and session_id around so the user can revive.
+
+    Worktree cleanup used to fire here on running jobs; the misclick
+    cost was high enough (a day of cartograph walking, an investigation
+    half-done) that we now defer cleanup to the shutdown ritual or an
+    explicit forget call. Revive flips status back to running so the
+    user can resume.
+    """
     j = db.get_or_404(AgentJob, job_id)
     if j.status == "running":
-        # Reuse the coding-agent teardown. Safe no-op if session not tracked.
         try:
             from planet_maiko.agents.runtime import stop_agent_session
             stop_agent_session(job_id)
         except Exception:
             pass
-        # Worktree cleanup if we have the path + branch
-        if j.worktree_path and j.branch:
-            try:
-                from planet_maiko.agents.runtime import cleanup
-                cleanup(j.worktree_path, j.branch)
-            except Exception:
-                pass
     j.status = "cancelled"
     j.finished_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify(j.to_dict())
+
+
+@agent_jobs_bp.route("/agent-jobs/<job_id>/revive", methods=["POST"])
+def revive_job(job_id):
+    """Bring a cancelled job back. Flips status to running and keeps
+    the worktree intact. The next chat message or wake call resumes
+    the claude session.
+
+    Refuses if the worktree was cleaned up — there's nothing left to
+    resume into; the user starts fresh.
+    """
+    import os
+    j = db.get_or_404(AgentJob, job_id)
+    if j.status != "cancelled":
+        return jsonify({"error": f"Job is {j.status}, not cancelled"}), 400
+    if j.worktree_path and not os.path.isdir(j.worktree_path):
+        return jsonify({
+            "error": "Worktree was cleaned up — can't revive. Start a fresh job.",
+        }), 410
+    j.status = "running"
+    j.finished_at = None
     db.session.commit()
     return jsonify(j.to_dict())
 
