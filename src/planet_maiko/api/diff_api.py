@@ -136,50 +136,89 @@ def _git(args, cwd, timeout=30):
 def get_task_diff(task_id):
     """Return the unified diff of the agent's worktree vs the default branch.
 
-    Uses `git diff <base_sha>` (no `..HEAD`) so the diff includes BOTH
-    committed AND uncommitted edits. The previous form `base..HEAD`
-    only showed committed work — agents that edited files without
-    running git commit reported "the changes are in my branch" but
-    the review page rendered empty. The agent-protocol does say
-    "commit locally before ready_for_review" but the failure mode
-    is silent and easy to miss; this just shows everything.
+    Tries a chain of diff strategies and returns the first non-empty
+    result. Diagnostics ride along on every response so the frontend
+    can show "no diff because <reason>" instead of just an empty page.
 
-    Untracked (never-added) files still don't appear — git diff
-    doesn't see them. We surface a hint via `untracked_files` in the
-    response so the frontend can show a "the agent has unsaved files
-    they haven't added: X, Y, Z" line if it wants.
+    Strategy order:
+      1. git diff <merge-base(HEAD, origin/<default>)>
+         — most correct: shows only what the agent actually did,
+         agnostic to upstream commits.
+      2. git diff origin/<default>
+         — fallback when merge-base resolution failed (no origin ref,
+         no shared ancestor). Less correct (upstream commits look like
+         reverse-diffs) but better than nothing.
+      3. git diff <merge-base(HEAD, <default>)> using the local branch
+         — last-ditch when origin/<default> doesn't exist at all.
+
+    Always combines committed + uncommitted edits via `git diff <ref>`
+    (no `..HEAD`). Untracked files surface separately so the user can
+    nudge the agent to `git add` them.
     """
     task, err = _task_or_404(task_id)
     if err:
         return err
     worktree = _worktree_path(task)
     if not worktree:
-        return jsonify({"error": "No worktree for this task (yet)"}), 400
+        return jsonify({
+            "error": "No worktree for this task (yet)",
+            "diag": {"task_extra_working_path": (task.extra or {}).get("working_path")},
+        }), 400
 
     base_branch = _default_branch(worktree)
-    rc, merge_base, merr = _git(["merge-base", "HEAD", f"origin/{base_branch}"], cwd=worktree)
-    if rc != 0:
-        # Fall back to the local base branch if origin ref is missing
-        rc, merge_base, merr = _git(["merge-base", "HEAD", base_branch], cwd=worktree)
-    base_sha = merge_base.strip() if rc == 0 else base_branch
 
-    rc, head_sha, _ = _git(["rev-parse", "HEAD"], cwd=worktree)
-    head_sha = head_sha.strip() if rc == 0 else ""
-
-    # Compare base against the working tree (includes committed +
-    # uncommitted). git diff with a single ref means
-    # "diff(<ref>, working_tree)".
-    rc, raw, err_out = _git(
-        ["diff", "--no-color", base_sha],
-        cwd=worktree, timeout=60,
+    # Resolve the parent commit each strategy diffs against.
+    rc_mb_o, mb_origin, mb_origin_err = _git(
+        ["merge-base", "HEAD", f"origin/{base_branch}"], cwd=worktree
     )
-    if rc != 0:
-        return jsonify({"error": f"git diff failed: {err_out.strip()[:200]}"}), 500
+    rc_mb_l, mb_local, mb_local_err = _git(
+        ["merge-base", "HEAD", base_branch], cwd=worktree
+    )
 
-    # Surface untracked files separately so the user can tell the
-    # agent to git add them. ls-files --others --exclude-standard
-    # lists files in the worktree that aren't tracked AND aren't
-    # gitignored.
+    rc_h, head_sha, _ = _git(["rev-parse", "HEAD"], cwd=worktree)
+    head_sha = head_sha.strip() if rc_h == 0 else ""
+
+    # Try strategies in order. Each candidate is (label, ref).
+    candidates = []
+    if rc_mb_o == 0 and mb_origin.strip():
+        candidates.append(("merge-base origin", mb_origin.strip()))
+    candidates.append(("origin branch tip", f"origin/{base_branch}"))
+    if rc_mb_l == 0 and mb_local.strip():
+        candidates.append(("merge-base local", mb_local.strip()))
+    candidates.append(("local branch tip", base_branch))
+
+    raw = ""
+    used_strategy = None
+    base_sha = None
+    last_err = ""
+    attempts = []
+    for label, ref in candidates:
+        rc, out, err_out = _git(
+            ["diff", "--no-color", ref], cwd=worktree, timeout=60,
+        )
+        attempts.append({
+            "strategy": label, "ref": ref, "rc": rc,
+            "diff_chars": len(out) if out else 0,
+            "err": (err_out or "").strip()[:160] if rc != 0 else "",
+        })
+        if rc == 0 and out.strip():
+            raw = out
+            used_strategy = label
+            base_sha = ref
+            break
+        if rc != 0:
+            last_err = (err_out or "").strip()[:200]
+
+    # Status for diagnostic context — even when the diff has content,
+    # this tells the frontend whether the agent has uncommitted changes
+    # still pending.
+    rc_s, status_raw, _ = _git(
+        ["status", "--porcelain"], cwd=worktree, timeout=10,
+    )
+    status_lines = []
+    if rc_s == 0 and status_raw.strip():
+        status_lines = [line for line in status_raw.splitlines() if line.strip()][:50]
+
     untracked = []
     rc_u, raw_u, _ = _git(
         ["ls-files", "--others", "--exclude-standard"],
@@ -194,7 +233,22 @@ def get_task_diff(task_id):
         "base_sha": base_sha,
         "head_sha": head_sha,
         "raw_diff": raw,
+        "used_strategy": used_strategy,
         "untracked_files": untracked,
+        "git_status": status_lines,
+        # Diagnostic block — surfaced on every response so the
+        # frontend can render "no diff because <reason>" rather than
+        # leaving the user staring at an empty page wondering whether
+        # the agent did nothing or the lookup misfired.
+        "diag": {
+            "worktree_path": worktree,
+            "merge_base_origin_rc": rc_mb_o,
+            "merge_base_origin_err": (mb_origin_err or "").strip()[:200] if rc_mb_o != 0 else "",
+            "merge_base_local_rc": rc_mb_l,
+            "merge_base_local_err": (mb_local_err or "").strip()[:200] if rc_mb_l != 0 else "",
+            "attempts": attempts,
+            "last_diff_err": last_err,
+        },
     })
 
 
