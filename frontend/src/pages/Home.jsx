@@ -55,16 +55,21 @@ export default function Home() {
 
   const fetchSidebar = async () => {
     try {
-      const [sc, jobs, brain, cfg, pupdates] = await Promise.all([
+      // Use /agents/activity (richer, includes last_message + status
+      // pill + linked agent profile) instead of raw /agent-jobs. The
+      // overview-generation flow now wakes every running agent for a
+      // fresh status before regenerating, so last_message reflects
+      // recent agent voice rather than initial heartbeat.
+      const [sc, activity, brain, cfg, pupdates] = await Promise.all([
         api.getScene(),
-        api.getAgentJobs({ status: "running" }).catch(() => []),
+        api.getAgentActivity().catch(() => []),
         api.getBrainStatus().catch(() => null),
         api.getConfig().catch(() => null),
         api.getPupdates(),
       ]);
       setScene(sc);
       setHomeConfig(cfg);
-      setWorkingJobs(Array.isArray(jobs) ? jobs : []);
+      setWorkingJobs(Array.isArray(activity) ? activity : []);
       setBrainStatus(brain);
       // Today's events only. Calendar pupdates use a YYYY-MM-DD date in
       // their source_id, so yesterday's events linger in the DB as
@@ -221,19 +226,35 @@ export default function Home() {
             </div>
             {workingJobs.length > 0 ? (
               <ul className="shipped-list">
-                {workingJobs.slice(0, 5).map((j) => (
-                  <li
-                    key={j.id}
-                    className="shipped-item"
-                    title={j.scope_repo || j.kind}
-                    onClick={() => navigate(`/jobs/${j.id}`)}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <span className="shipped-title">
-                      [{j.kind}] {j.title}
-                    </span>
-                  </li>
-                ))}
+                {workingJobs.slice(0, 5).map((a) => {
+                  // a is an activity entry — task_id is the canonical
+                  // inbox key (post-unification: AgentJob.id), job_id
+                  // is set when the entry came through the unified path.
+                  const id = a.job_id || a.task_id;
+                  const route = a.kind === "job"
+                    ? `/jobs/${a.job_id || a.task_id}`
+                    : `/tasks/${a.linked_task_id || a.task_id}/review`;
+                  const name = a.agent_name || "agent";
+                  const status = a.status || "active";
+                  return (
+                    <li
+                      key={id}
+                      className="shipped-item working-agent-item"
+                      title={a.task_title || a.task_type}
+                      onClick={() => navigate(route)}
+                      style={{ cursor: "pointer" }}
+                    >
+                      <div className="working-agent-line1">
+                        <span className={`working-agent-pill status-${status}`}>{status}</span>
+                        <span className="working-agent-name">{name}</span>
+                        <span className="working-agent-title">{a.task_title || a.task_type}</span>
+                      </div>
+                      {a.last_message && (
+                        <div className="working-agent-msg">"{a.last_message}"</div>
+                      )}
+                    </li>
+                  );
+                })}
                 {workingJobs.length > 5 && (
                   <li className="shipped-more">
                     + {workingJobs.length - 5} more

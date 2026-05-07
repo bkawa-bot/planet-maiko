@@ -37,8 +37,10 @@ logger = logging.getLogger(__name__)
 # review-iteration request is bad.
 _QUEUEING_SOURCES = {"chat", "feedback", "review", "plan", "queued"}
 # Drop silently — a second heartbeat while the agent is already working
-# is noise.
-_DROP_ON_BUSY_SOURCES = {"nudge", "heartbeat"}
+# is noise. status_request fires when the home overview regenerates and
+# wants every agent to post a fresh status; if the agent is mid-work
+# they can't respond now anyway, so dropping is correct.
+_DROP_ON_BUSY_SOURCES = {"nudge", "heartbeat", "status_request"}
 
 _TASK_LOCKS_GUARD = threading.Lock()
 _TASK_LOCKS = {}

@@ -555,6 +555,67 @@
   color: var(--text-muted);
   text-decoration: line-through;
 }
+
+/* Working agents widget rows: 2-line layout — header (status pill +
+   name + task title) above the agent's last status message. The
+   message is the agent's voice; quote-marked + slightly smaller so
+   it reads as a quote rather than the row's primary label. */
+.working-agent-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 4px;
+  border-radius: var(--radius-xs);
+}
+.working-agent-item:hover {
+  background: var(--bg-hover, var(--bg-card));
+}
+.working-agent-line1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+.working-agent-pill {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  color: var(--bg);
+  background: var(--green);
+}
+.working-agent-pill.status-idle { background: var(--lemon); }
+.working-agent-pill.status-stale { background: var(--text-muted); }
+.working-agent-pill.status-ready { background: var(--pink); }
+.working-agent-pill.status-waiting { background: var(--lavender, #b59dd8); }
+.working-agent-name {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.working-agent-title {
+  color: var(--text-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.working-agent-msg {
+  font-size: 11px;
+  color: var(--text-dim, var(--text-muted));
+  font-style: italic;
+  line-height: 1.35;
+  padding-left: 2px;
+  /* Cap to two lines so a chatty status doesn't blow up the widget. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .shipped-more {
   list-style: none;
   font-size: 11px;

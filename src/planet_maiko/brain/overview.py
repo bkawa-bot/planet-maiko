@@ -829,6 +829,84 @@ def _prepoll_and_cycle(app):
         logger.warning("[overview] pre-cycle failed: %s", e)
 
 
+def _request_agent_status_updates(timeout_s=20):
+    """Wake every running AgentJob and wait briefly for a status reply.
+
+    Called at the start of overview generation so the LLM (and the
+    home page's Working agents widget) sees fresh agent voices rather
+    than whatever was last said. Best-effort:
+      - Agents already mid-work get drop-on-busy (the wake_agent
+        source 'status_request' is in _DROP_ON_BUSY_SOURCES).
+      - Agents that don't reply within timeout_s contribute their
+        stale last_message to the overview.
+
+    Returns the count of agents that posted a fresh status during the
+    wait. Bounded blocking is OK here — overview generation runs on a
+    daemon thread, so the user never sees the wait.
+    """
+    from datetime import datetime, timezone
+    import time
+
+    try:
+        from planet_maiko.models.agent_job import AgentJob
+        from planet_maiko.models.agent_message import AgentMessage
+        from planet_maiko.agents.wake import wake_agent, is_working
+    except Exception as e:
+        logger.debug(f"[overview] agent imports failed: {e}")
+        return 0
+
+    threshold = datetime.now(timezone.utc)
+    running = AgentJob.query.filter_by(status="running").all()
+    if not running:
+        return 0
+
+    prompt = (
+        "The user just opened their home overview and Maiko is summarizing "
+        "the pack's state. Reply with a single one-line status update via "
+        "reply(message_type='status') — what you're working on, what (if "
+        "anything) you're waiting on, in your own voice and brief. "
+        "Then continue your work."
+    )
+
+    waited_on = []
+    for job in running:
+        if is_working(job.id):
+            continue
+        try:
+            ok, mode = wake_agent(job.id, prompt, source="status_request")
+            if ok and mode == "woke":
+                waited_on.append(job.id)
+        except Exception as e:
+            logger.debug(f"[overview] status wake failed for {job.id}: {e}")
+
+    if not waited_on:
+        return 0
+
+    logger.info(
+        f"[overview] requesting status from {len(waited_on)} agent(s), "
+        f"waiting up to {timeout_s}s"
+    )
+    received = set()
+    start = time.time()
+    while time.time() - start < timeout_s:
+        new_msgs = (
+            AgentMessage.query
+            .filter(AgentMessage.task_id.in_(waited_on))
+            .filter(AgentMessage.direction == "from_agent")
+            .filter(AgentMessage.created_at >= threshold)
+            .all()
+        )
+        received.update(m.task_id for m in new_msgs)
+        if len(received) >= len(waited_on):
+            break
+        time.sleep(2)
+
+    logger.info(
+        f"[overview] {len(received)}/{len(waited_on)} agent(s) replied with status"
+    )
+    return len(received)
+
+
 def generate_overview():
     """Run the home-overview skill and persist the result to the
     on-disk JSON cache.
@@ -858,6 +936,15 @@ def _generate_overview_locked():
 
     app = current_app._get_current_object()
     _prepoll_and_cycle(app)
+
+    # Ask every running agent for a fresh status before we build the
+    # context. This is the "live wake" architecture: we'd rather
+    # hold up the overview by ~15-30s and have the LLM weave in
+    # current agent voices than render a stale snapshot.
+    try:
+        _request_agent_status_updates(timeout_s=20)
+    except Exception as e:
+        logger.warning(f"[overview] agent status fan-out skipped: {e}")
 
     context = _build_context()
     prompt = get_skill_prompt("home-overview", context)
