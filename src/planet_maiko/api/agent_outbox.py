@@ -26,13 +26,25 @@ from planet_maiko.database import db
 from planet_maiko.models.agent_message import AgentMessage
 
 
-# Job kinds whose worktree the user can come back to and ask follow-up
-# questions of. wake_agent resumes the claude session against this
-# worktree, so cleanup needs to wait until the user is done — typically
-# a few days after the job finished. shutdown.cleanup_worktrees imports
-# this set and gates by finished_at age before cleaning these. Anything
-# not in this set is "throwaway scratch" — clean immediately on done.
+# Job kinds whose worktree the user can come back to and act on after
+# the agent posts ready_for_review:
+#   coding                 — agent committed locally; user reviews the
+#                            diff, approves, then the SAME agent (in the
+#                            same worktree) pushes + opens the PR. If
+#                            we cleaned the worktree on ready_for_review
+#                            the diff would be lost and the approve flow
+#                            would have nothing to push. The pr_merged
+#                            automation cleans up after the PR lands.
+#   review / pr_review     — user iterates with PATTERN / PROPOSAL
+#                            discussions, asks follow-ups via wake_agent.
+#   investigation /        — user often has follow-up questions on the
+#     repo_analysis         report; wake fails if the worktree is gone.
+#   cartograph             — repo walk is useful state to query against.
+# wake_agent resumes the claude session against this worktree, so
+# cleanup waits until either the user is truly done (PR merged, task
+# closed, shutdown age-out at 7 days) or an explicit forget call.
 FOLLOWUP_KINDS = {
+    "coding",
     "review", "pr_review",
     "investigation", "repo_analysis",
     "cartograph",
