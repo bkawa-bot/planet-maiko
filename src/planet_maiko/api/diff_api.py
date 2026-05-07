@@ -66,15 +66,37 @@ def _task_or_404(task_id):
 
 
 def _worktree_path(task):
-    """Resolve the agent's working dir from task.extra.working_path.
+    """Resolve the agent's working dir for diff/review operations.
 
-    Returns None if unset or the path no longer exists — most calls
-    should surface that as a 400 since the review UI is meaningless
-    without a worktree.
+    Two storage spots, in priority order:
+      1. task.extra.working_path — legacy task-keyed flow.
+      2. AgentJob.worktree_path on the most recent non-cancelled job
+         linked to this task — the unified path stores the worktree
+         here, NOT on task.extra. Without this fallback, coding
+         agents (which always run via the unified path post-Stage D)
+         have a working diff on disk but the diff endpoint can't
+         find it; the review page renders the agent's summary +
+         verdict (those land on task.extra) but no actual diff.
+
+    Returns None if both are unset or the path no longer exists.
     """
     wp = (task.extra or {}).get("working_path")
     if wp and os.path.isdir(wp):
         return wp
+    try:
+        from planet_maiko.models.agent_job import AgentJob
+        job = (
+            AgentJob.query
+            .filter_by(source_task_id=task.id)
+            .filter(AgentJob.worktree_path.isnot(None))
+            .filter(AgentJob.status != "cancelled")
+            .order_by(AgentJob.created_at.desc())
+            .first()
+        )
+        if job and job.worktree_path and os.path.isdir(job.worktree_path):
+            return job.worktree_path
+    except Exception as e:
+        logger.debug(f"[diff] AgentJob worktree fallback failed: {e}")
     return None
 
 
