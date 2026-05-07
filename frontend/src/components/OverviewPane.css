@@ -50,8 +50,8 @@
 }
 
 .overview-greeting-sprite {
-  width: 88px;
-  height: 88px;
+  width: 104px;
+  height: 104px;
   flex-shrink: 0;
   object-fit: contain;
   /* No background / border — sprite carries its own silhouette.
@@ -63,7 +63,12 @@
 .overview-greeting {
   font-size: 30px;
   font-weight: 600;
-  color: var(--text);
+  /* Hero color — the lavender-purple defined in index.css as
+     --card-title with the comment "the hero color". The greeting
+     was reading the same as body text before, which lost the
+     "this is Maiko talking to you" framing the sprite is trying
+     to set up. */
+  color: var(--card-title, var(--text));
   margin: 0;
   line-height: 1.15;
   /* font-family lives in index.css (Fraunces) so it's applied
