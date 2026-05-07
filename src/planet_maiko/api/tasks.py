@@ -253,14 +253,19 @@ def cancel_task(task_id):
     _maybe_push_close_to_linear(task, "canceled")
     task.status = "cancelled"
     task.updated_at = datetime.now(timezone.utc)
-    # Cascade: any AgentJob linked to this task that's not already
-    # terminal should follow the cancel. The active feed and the
-    # /agents/recoverable query both look at job.status, so the row
-    # would otherwise stick around as "running" indefinitely.
+    # Cascade: any AgentJob linked to this task that isn't already
+    # cancelled or failed should follow the cancel.
+    #
+    # 'done' is INCLUDED here on purpose. FOLLOWUP_KINDS jobs (review,
+    # investigation, cartograph, etc.) sit in status='done' post-
+    # ready_for_review with their worktree preserved — they show as
+    # "ready" in the active feed, and clicking cancel on that row means
+    # "I'm done with the follow-up surface, drop it." Without flipping
+    # those done jobs to cancelled, they stay visible as ready forever.
     linked_jobs = (
         AgentJob.query
         .filter_by(source_task_id=task.id)
-        .filter(AgentJob.status.notin_(["cancelled", "done", "failed"]))
+        .filter(AgentJob.status.notin_(["cancelled", "failed"]))
         .all()
     )
     now = datetime.now(timezone.utc)
