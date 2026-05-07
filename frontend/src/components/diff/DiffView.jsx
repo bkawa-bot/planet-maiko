@@ -1,6 +1,54 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Diff, Hunk, parseDiff, getChangeKey } from "react-diff-view";
+import { Diff, Hunk, parseDiff, getChangeKey, tokenize } from "react-diff-view";
 import "react-diff-view/style/index.css";
+import { refractor } from "refractor";
+import javascript from "refractor/lang/javascript.js";
+import jsx from "refractor/lang/jsx.js";
+import typescript from "refractor/lang/typescript.js";
+import tsx from "refractor/lang/tsx.js";
+import python from "refractor/lang/python.js";
+import json from "refractor/lang/json.js";
+import css from "refractor/lang/css.js";
+import scss from "refractor/lang/scss.js";
+import bash from "refractor/lang/bash.js";
+import markdown from "refractor/lang/markdown.js";
+import yaml from "refractor/lang/yaml.js";
+import "./diff-syntax.css";
+
+// Register the languages we actually review. Anything not in this set
+// falls back to plaintext rendering — no highlighting but no crash.
+// Keep the list tight: each language adds ~3-8KB to the bundle. Add
+// more as the team's review surface widens.
+[
+  javascript, jsx, typescript, tsx, python,
+  json, css, scss, bash, markdown, yaml,
+].forEach((lang) => {
+  try { refractor.register(lang); } catch { /* already registered or refractor variant differs */ }
+});
+
+// File-extension → refractor language alias. Falls through to null
+// when the extension isn't one we registered, which the tokenize
+// pass uses as the "skip highlight" signal.
+const EXT_TO_LANG = {
+  js: "javascript", mjs: "javascript", cjs: "javascript",
+  jsx: "jsx",
+  ts: "typescript",
+  tsx: "tsx",
+  py: "python", pyi: "python",
+  json: "json",
+  css: "css",
+  scss: "scss",
+  sh: "bash", bash: "bash", zsh: "bash",
+  md: "markdown", markdown: "markdown",
+  yml: "yaml", yaml: "yaml",
+};
+
+function languageFromPath(path) {
+  if (!path) return null;
+  const m = path.match(/\.([^./\\]+)$/);
+  if (!m) return null;
+  return EXT_TO_LANG[m[1].toLowerCase()] || null;
+}
 
 /**
  * Thin wrapper over react-diff-view. Parses a raw unified diff, renders
@@ -133,6 +181,28 @@ function fileStatsFor(file) {
 function FileBlock({ ref, file, stats, viewType, anchors, onLineClick, idx }) {
   const displayPath = stats.path;
 
+  // Tokenize each file's hunks against its detected language. Memoized
+  // on the file identity so re-renders (anchor updates, focus changes)
+  // don't re-tokenize. Wrapped in try/catch so a bad language guess on
+  // exotic content can't crash the whole page — we just fall through
+  // to plain rendering. ~3-8KB extra bundle per language registered
+  // up top; tokenize itself is O(diff lines) so even big files render
+  // in tens of ms.
+  const tokens = useMemo(() => {
+    const language = languageFromPath(displayPath);
+    if (!language) return undefined;
+    try {
+      return tokenize(file.hunks, {
+        highlight: true,
+        refractor,
+        language,
+      });
+    } catch (err) {
+      console.warn(`[diff] tokenize failed for ${displayPath}:`, err);
+      return undefined;
+    }
+  }, [file.hunks, displayPath]);
+
   const widgets = useMemo(() => {
     // Walk every change in the file and map (file_path, line, side)
     // back to the library's changeKey. Normal (unchanged) lines are
@@ -184,6 +254,7 @@ function FileBlock({ ref, file, stats, viewType, anchors, onLineClick, idx }) {
         viewType={viewType}
         diffType={file.type}
         hunks={file.hunks}
+        tokens={tokens}
         widgets={widgets}
         gutterEvents={{ onClick: ({ change }) => handleGutterClick(change) }}
       >

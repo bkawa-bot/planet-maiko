@@ -1,0 +1,70 @@
+/* Prism token classes mapped to the Maiko palette. react-diff-view
+   wraps each tokenized span with .token.<kind> classes (the same
+   shape Prism uses), so a small targeted set covers most real-world
+   languages without pulling in a full Prism theme.
+
+   Tuned for both light and dark via CSS variables — the colors
+   reference the same accents the rest of the app uses so the diff
+   reads like part of the surface, not a stranded code block. */
+
+.diff-view .token.comment,
+.diff-view .token.prolog,
+.diff-view .token.doctype,
+.diff-view .token.cdata {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.diff-view .token.punctuation {
+  color: var(--text-dim, var(--text-muted));
+}
+
+.diff-view .token.keyword,
+.diff-view .token.builtin,
+.diff-view .token.atrule,
+.diff-view .token.tag {
+  color: var(--lavender, #b59dd8);
+  font-weight: 500;
+}
+
+.diff-view .token.string,
+.diff-view .token.char,
+.diff-view .token.attr-value,
+.diff-view .token.template-string {
+  color: var(--mint, #4ade80);
+}
+
+.diff-view .token.number,
+.diff-view .token.boolean,
+.diff-view .token.constant {
+  color: var(--lemon, #f5d77a);
+}
+
+.diff-view .token.function,
+.diff-view .token.class-name {
+  color: var(--pink, #ff7eb6);
+}
+
+.diff-view .token.operator,
+.diff-view .token.entity,
+.diff-view .token.url {
+  color: var(--text);
+}
+
+.diff-view .token.property,
+.diff-view .token.attr-name,
+.diff-view .token.symbol {
+  color: var(--blue, #6fc3ff);
+}
+
+.diff-view .token.regex,
+.diff-view .token.important {
+  color: var(--warm-coral, #c97a4a);
+}
+
+.diff-view .token.deleted {
+  /* Don't override the diff library's add/del row backgrounds —
+     just adjust the foreground subtly so the change is still
+     readable without competing with the row tint. */
+  text-decoration: line-through;
+}
