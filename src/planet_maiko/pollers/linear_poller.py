@@ -166,6 +166,13 @@ query Notifications {
           name
           displayName
         }
+        botActor {
+          name
+        }
+        externalUserActor {
+          name
+          displayName
+        }
         issue {
           id
           identifier
@@ -541,11 +548,23 @@ class LinearPoller(BasePoller):
         for n in raw_data.get("notifications", []):
             issue = n.get("issue") or {}
             comment = n.get("comment") or {}
-            actor = n.get("actor") or {}
             ntype = n.get("type") or ""
             identifier = issue.get("identifier", "")
             issue_title = issue.get("title", "")
-            actor_name = actor.get("displayName") or actor.get("name") or "someone"
+            # Actor resolution: Linear puts the trigger on one of three
+            # fields depending on who/what fired the notification.
+            #   actor              — Linear workspace user (most common)
+            #   botActor           — integration bot (Slack, GitHub, etc.)
+            #   externalUserActor  — non-Linear user via integration
+            # Without checking all three, a bot-triggered or external-user
+            # notification falls through to a generic placeholder which
+            # reads as "unknown" / "someone" in the inbox.
+            actor = n.get("actor") or n.get("externalUserActor") or n.get("botActor") or {}
+            actor_name = (
+                actor.get("displayName")
+                or actor.get("name")
+                or "Someone"
+            )
 
             # Mentions are higher-stakes ("you were specifically tagged")
             # than a generic new-comment notification on a subscribed
@@ -570,7 +589,18 @@ class LinearPoller(BasePoller):
                 body = (comment.get("body") or "")[:500] or f"New comment on {identifier}"
 
             url = comment.get("url") or issue.get("url", "")
-            title = f"{actor_name} {kind_label} {identifier}: {issue_title}"
+            # Title varies on what we actually got. Some notifications
+            # arrive without an issue title (deleted/renamed/permission
+            # gap); fall back gracefully so the inbox card never reads
+            # as broken with a trailing colon and nothing after.
+            if identifier and issue_title:
+                title = f"{actor_name} {kind_label} {identifier}: {issue_title}"
+            elif identifier:
+                title = f"{actor_name} {kind_label} {identifier}"
+            elif issue_title:
+                title = f"{actor_name} {kind_label} {issue_title}"
+            else:
+                title = f"{actor_name} {kind_label} a Linear issue"
 
             pupdates.append({
                 "source_id": f"notification/{n.get('id')}",
