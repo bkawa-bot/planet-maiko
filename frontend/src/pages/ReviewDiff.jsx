@@ -263,6 +263,18 @@ export default function ReviewDiff() {
   // - Coding task = agent wrote code on their own branch. User
   //   approves/requests changes, and an Approve pushes + opens a PR.
   const isReviewTask = task && (task.type === "review" || task.type === "pr_review");
+  // True for any task type that produces a diff: coding agents write
+  // code, review/pr_review agents anchor PATTERN/PROPOSAL comments
+  // against a diff. Both want the same UI shell — agent's summary
+  // collapsed at the top, the diff itself as the page body. Without
+  // including coding here, coding tasks fell through to the
+  // artifact-only branch and rendered the markdown summary with no
+  // diff at all.
+  const hasDiffSurface = task && (
+    task.type === "coding"
+    || task.type === "review"
+    || task.type === "pr_review"
+  );
   const verdict = task?.metadata?.review_verdict;
   const verdictMeta = verdict ? VERDICT_META[verdict] : null;
   const summary = task?.metadata?.review_summary;
@@ -420,7 +432,7 @@ export default function ReviewDiff() {
               stale memo route lands the user on this page; they
               render their artifact as the page body since they have
               no diff to show. */}
-          {isReviewTask ? (
+          {hasDiffSurface ? (
             <>
               {task?.metadata?.artifact && (
                 <details className="review-diff-agent-notes" open>
@@ -442,7 +454,7 @@ export default function ReviewDiff() {
                 <div className="review-diff-empty">
                   {task && task.status === "review"
                     ? "No diff resolved for this PR yet. The agent may still be checking out the PR's branch."
-                    : "Agent is still working on the review. Come back in a bit."}
+                    : "Agent is still working on the diff. Come back in a bit."}
                 </div>
               )}
             </>
