@@ -38,9 +38,11 @@ _llm_cooldown_until = 0.0
 # rule texts; bigger batches cluster less precisely.
 BATCH_SIZE = 40
 
-# Don't try to cluster ultra-rare learnings that haven't graduated yet
-# unless the caller explicitly asks for it — they're still volatile.
-DEFAULT_STATUSES = ("active", "pending")
+# Statuses included in the dedup sweep. Includes "incubating" so
+# 1-signal-each rules from different cycles can merge with each other
+# and promote — without that, two singletons stay frozen as
+# incubating forever, never reaching the pending threshold.
+DEFAULT_STATUSES = ("active", "pending", "incubating")
 
 # Flip a Learning to is_global=True once its signals have come from
 # this many distinct repos. Once global, the rule feeds every repo's
@@ -572,11 +574,11 @@ def cluster_signals_into_learnings():
                 if learning is None:
                     # New Learning for this cluster. signal_count /
                     # confidence start at 0; bumped once per member by
-                    # _apply_positive_signal below. No flush here —
-                    # _apply_positive_signal uses the `signal.learning`
-                    # relationship (not the `.learning_id` FK), so the
-                    # ORM resolves the FK at commit time without us
-                    # needing to materialise an autoincrement id now.
+                    # _apply_positive_signal below — that's where the
+                    # incubating → pending promotion fires once the
+                    # second signal lands. Single-member clusters end
+                    # at signal_count=1 and stay incubating until a
+                    # later signal joins (or the user manually approves).
                     canonical = (cluster.get("canonical") or "").strip()
                     if not canonical:
                         canonical = batch_by_id[member_ids[0]].text[:300]
@@ -589,7 +591,7 @@ def cluster_signals_into_learnings():
                         confidence=0.0,
                         signal_count=0,
                         source="auto",
-                        status="pending",
+                        status="incubating",
                         aggregation_key=f"cluster:{category}:{canonical[:60].lower()}",
                         last_signal_at=datetime.now(timezone.utc),
                     )
@@ -607,6 +609,9 @@ def cluster_signals_into_learnings():
 
             # Any signal the LLM dropped on the floor — park it as its
             # own new Learning using its own text. Safer than losing it.
+            # Starts incubating; will promote to pending if a future
+            # signal in a later batch joins this cluster (or the user
+            # approves it manually for a one-shot rule).
             for sid, sig in batch_by_id.items():
                 if sid in placed:
                     continue
@@ -618,7 +623,7 @@ def cluster_signals_into_learnings():
                     confidence=0.0,
                     signal_count=0,
                     source="auto",
-                    status="pending",
+                    status="incubating",
                     aggregation_key=f"cluster:{category}:{sig.text[:60].lower()}",
                     last_signal_at=datetime.now(timezone.utc),
                 )

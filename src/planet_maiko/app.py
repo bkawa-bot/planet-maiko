@@ -124,6 +124,37 @@ def _drop_legacy_columns():
         logger.warning(f"[startup] Column-drop pass failed: {e}")
 
 
+def _retro_incubate_thin_pending():
+    """One-shot: flip auto-created 1-signal pending learnings to
+    incubating so existing DBs match the new graduation gate.
+
+    Idempotent — after the first run there's nothing matching the
+    WHERE clause, so subsequent boots are a no-op. Manual additions
+    (source!='auto') are skipped so a user-curated singleton rule
+    stays visible in the approval queue.
+    """
+    from sqlalchemy import text
+    try:
+        with db.engine.begin() as conn:
+            rows = conn.execute(text("PRAGMA table_info(learnings)")).all()
+            cols = {r[1] for r in rows}
+            if not cols or "status" not in cols or "signal_count" not in cols:
+                return
+            result = conn.execute(text(
+                "UPDATE learnings SET status = 'incubating' "
+                "WHERE status = 'pending' AND signal_count < 2 "
+                "AND (source IS NULL OR source = 'auto')"
+            ))
+            n = result.rowcount or 0
+            if n > 0:
+                logger.info(
+                    f"[startup] Re-incubated {n} thin pending learning(s) — "
+                    f"need a second corroborating signal to surface for approval"
+                )
+    except Exception as e:
+        logger.warning(f"[startup] Retro-incubate pass skipped: {e}")
+
+
 def create_app(start_scheduler=False):
     app = Flask(__name__)
 
@@ -240,6 +271,7 @@ def create_app(start_scheduler=False):
         # DB"; this is just for cheap nullable-column additions.
         _ensure_new_columns()
         _drop_legacy_columns()
+        _retro_incubate_thin_pending()
 
         # Seed default skills on first run
         from planet_maiko.agents.skills import seed_defaults

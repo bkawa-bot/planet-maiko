@@ -128,15 +128,23 @@ def list_learnings():
     in one response — 900-2000 learnings is normal once a team's been
     using the system for a while, and clustering happens server-side
     in batches so the UI doesn't page through anything besides display.
+
+    Default behavior excludes 'incubating' learnings (1-signal auto-
+    created rules waiting for a second corroborating signal) so the
+    approval queue isn't drowned in noise. Pass include_incubating=true
+    or status=incubating explicitly to surface them.
     """
     status = request.args.get("status")
     category = request.args.get("category")
+    include_incubating = request.args.get("include_incubating", "").lower() == "true"
     limit = min(int(request.args.get("limit", 500)), 5000)
     offset = int(request.args.get("offset", 0))
 
     query = Learning.query
     if status:
         query = query.filter_by(status=status)
+    elif not include_incubating:
+        query = query.filter(Learning.status != "incubating")
     if category:
         query = query.filter_by(category=category)
 

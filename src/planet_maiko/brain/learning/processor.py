@@ -66,8 +66,15 @@ def _apply_negative_signal(signal, learning, counts):
 
 def _apply_positive_signal(signal, learning, counts):
     """A confirming signal — bump signal count + confidence, link the
-    signal to the learning. The learning's status stays "pending" — the
-    user has to explicitly approve it in the Knowledge UI.
+    signal to the learning, and promote out of incubation once a second
+    signal corroborates the rule.
+
+    Status lifecycle for auto-created learnings:
+        signal #1 lands — Learning created with status="incubating"
+        signal #2 lands — promoted to "pending" (visible in approval queue)
+        user approves   — flipped to "active"
+    Manual additions skip incubating entirely and are created at
+    "active" or "pending" by their respective endpoints.
 
     Uses the `signal.learning = learning` relationship assignment
     (not `signal.learning_id = learning.id`) so callers don't need to
@@ -81,11 +88,15 @@ def _apply_positive_signal(signal, learning, counts):
     learning.last_signal_at = datetime.now(timezone.utc)
     signal.learning = learning
     counts["updated_learnings"] += 1
+    if learning.status == "incubating" and learning.signal_count >= 2:
+        learning.status = "pending"
+        counts["promoted"] = counts.get("promoted", 0) + 1
 
 
 def _create_new_learning(signal, agg_key, counts):
     """No existing learning matched this aggregation key — create one
-    in pending state and link the signal to it.
+    in incubating state and link the signal to it. Promotes to pending
+    via _apply_positive_signal once a second matching signal lands.
     """
     learning = Learning(
         rule=signal.text,
@@ -95,7 +106,7 @@ def _create_new_learning(signal, agg_key, counts):
         confidence=CONFIDENCE_PER_SIGNAL,
         signal_count=1,
         source="auto",
-        status="pending",
+        status="incubating",
         aggregation_key=agg_key,
         last_signal_at=datetime.now(timezone.utc),
     )
