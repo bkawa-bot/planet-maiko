@@ -51,6 +51,30 @@ _RULE_SEEDS = [
         "action_config": {"task_type": "todo"},
     },
     {
+        "name": "Notify on Linear @-mention",
+        "description": "Someone tagged you in a Linear issue or comment — surface as a high-priority memo so you don't miss it.",
+        "match": {"type": "linear_mention"},
+        "action": "notify_me",
+        "action_config": {
+            "title": "{pupdate_title}",
+            "body": "{pupdate_body}",
+            "priority": "high",
+            "url": "{pupdate_url}",
+        },
+    },
+    {
+        "name": "Notify on Linear comment",
+        "description": "New comment on a Linear issue you're subscribed to — surface as an info memo.",
+        "match": {"type": "linear_comment"},
+        "action": "notify_me",
+        "action_config": {
+            "title": "{pupdate_title}",
+            "body": "{pupdate_body}",
+            "priority": "normal",
+            "url": "{pupdate_url}",
+        },
+    },
+    {
         "name": "Create task on PagerDuty incident",
         "description": "An incident assigned to you becomes a high-priority bug task.",
         "match": {"type": "pagerduty_incident"},
