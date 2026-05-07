@@ -35,13 +35,20 @@ import "./OverviewPane.css";
 function resolveAction(m) {
   if (!m) return null;
   const taskId = m.source_task_id || m.extra?.task_id;
+  const jobId = m.extra?.job_id;
   const kind = m.kind;
 
-  if (kind === "agent_plan" && taskId) {
-    return { label: m.cta_label || "Review plan", to: m.url || `/tasks/${taskId}/plan` };
+  // Prefer the unified /jobs/<id> page when we have a job id.
+  // Memos emitted post-consolidation include m.url directly; the
+  // legacy /tasks/<id>/{plan,review} fallback only fires for older
+  // memos that lack m.url, and even those route via TaskRouteRedirect.
+  if (kind === "agent_plan" && (jobId || taskId)) {
+    const fallback = jobId ? `/jobs/${jobId}?view=plan` : `/tasks/${taskId}/plan`;
+    return { label: m.cta_label || "Review plan", to: m.url || fallback };
   }
-  if (kind === "agent_ready" && taskId) {
-    return { label: m.cta_label || "Review diff", to: m.url || `/tasks/${taskId}/review` };
+  if (kind === "agent_ready" && (jobId || taskId)) {
+    const fallback = jobId ? `/jobs/${jobId}?view=diff` : `/tasks/${taskId}/review`;
+    return { label: m.cta_label || "Review diff", to: m.url || fallback };
   }
   if (kind === "agent_stuck" && taskId) {
     return { label: m.cta_label || "Help out", to: m.url || `/tasks/${taskId}` };

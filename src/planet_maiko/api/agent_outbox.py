@@ -216,25 +216,24 @@ def handle_agent_job_reply(job, msg, data, message_type):
             if len(preview) > 80:
                 preview = preview[:77] + "…"
 
-            # Route + CTA by what the artifact actually IS:
+            # Every memo CTA points at the unified /jobs/<id> page now.
+            # The page renders the right section based on ?view=<...>:
             #   diff-producing kinds (coding, review, pr_review) →
-            #     /tasks/<id>/review when there's a linked task. The
-            #     coding agent wrote the diff; the review agent's
-            #     comments live on the diff. Either way the user is
-            #     reading code at a line level.
+            #     ?view=diff (DiffPanel)
             #   report-producing kinds (investigation, repo_analysis,
-            #     cartograph) → /jobs/<id>. Markdown writeup, no diff.
-            #   diff-producing kind with no linked task — fallback to
-            #     the job report page.
+            #     cartograph) → ?view=report (ReportPanel)
+            # The legacy /tasks/<id>/review URL still resolves through
+            # TaskRouteRedirect, but new memos route directly so the
+            # user lands without the redirect hop.
             is_report_kind = job.kind in ("investigation", "repo_analysis", "cartograph")
-            if not is_report_kind and job.source_task_id:
+            if not is_report_kind:
                 cta_label = "Review diff"
                 cta_action = "review"
-                memo_url = f"/tasks/{job.source_task_id}/review"
+                memo_url = f"/jobs/{job.id}?view=diff"
             else:
                 cta_label = "View report"
                 cta_action = "open"
-                memo_url = f"/jobs/{job.id}"
+                memo_url = f"/jobs/{job.id}?view=report"
             type_label = "ready for review"
             priority = "high"
             if extra.get("confidence") == "low":
@@ -553,29 +552,44 @@ def emit_user_facing_signal(task_id, task, msg, data, message_type):
         from planet_maiko.models.agent_job import AgentJob as _AgentJob
         # Report-producing one-shot roles (investigation, repo_analysis)
         # finish with no diff — worktree is wiped and the artifact lives
-        # on task.extra. Route those to /jobs/<id> (markdown + chat).
+        # All memo CTAs route into the unified /jobs/<id> page now.
+        # ?view selects the right section. Old /tasks/<id>/{review,plan,
+        # report} URLs still resolve via the TaskRouteRedirect bridge,
+        # but emitting the canonical job URL upfront skips the
+        # redirect hop.
         task_type = task.type if task else None
         is_report_task = task_type in ("investigation", "repo_analysis")
-        linked_job = None
-        if is_report_task and memo_kind == "agent_ready":
-            linked_job = (
-                _AgentJob.query
-                .filter_by(source_task_id=task_id)
-                .order_by(_AgentJob.created_at.desc())
-                .first()
+        linked_job = (
+            _AgentJob.query
+            .filter_by(source_task_id=task_id)
+            .filter(_AgentJob.status != "cancelled")
+            .order_by(_AgentJob.created_at.desc())
+            .first()
+        )
+        view_for_kind = {
+            "agent_ready": "report" if is_report_task else "diff",
+            "agent_plan": "plan",
+        }.get(memo_kind)
+        if memo_kind == "agent_stuck":
+            # Stuck routes to the agents page — there's no specific
+            # section to deep-link into when the agent's blocked.
+            cta = ("Help out", "open", "/agents")
+        elif linked_job and view_for_kind:
+            label = "View report" if view_for_kind == "report" else (
+                "Review plan" if view_for_kind == "plan" else "Review diff"
             )
-        if memo_kind == "agent_ready" and is_report_task:
-            report_route = (
-                f"/jobs/{linked_job.id}" if linked_job
-                else f"/tasks/{task_id}/report"
-            )
-            cta = ("View report", "open", report_route)
+            cta_action = "open" if view_for_kind == "report" else "review"
+            cta = (label, cta_action, f"/jobs/{linked_job.id}?view={view_for_kind}")
         else:
-            # agent_stuck routes to /agents — there's no per-task detail
-            # page for non-review/non-coding tasks.
+            # No linked job (legacy task with no AgentJob) — fall
+            # back to the legacy task route so the redirect bridge
+            # at least lands the user somewhere.
             cta = {
-                "agent_ready": ("Review diff", "review", f"/tasks/{task_id}/review"),
-                "agent_stuck": ("Help out", "open", "/agents"),
+                "agent_ready": (
+                    "View report" if is_report_task else "Review diff",
+                    "open" if is_report_task else "review",
+                    f"/tasks/{task_id}/{'report' if is_report_task else 'review'}",
+                ),
                 "agent_plan": ("Review plan", "review", f"/tasks/{task_id}/plan"),
             }[memo_kind]
         create_memo(

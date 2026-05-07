@@ -231,9 +231,12 @@ export default function Home() {
                   // inbox key (post-unification: AgentJob.id), job_id
                   // is set when the entry came through the unified path.
                   const id = a.job_id || a.task_id;
-                  const route = a.kind === "job"
-                    ? `/jobs/${a.job_id || a.task_id}`
-                    : `/tasks/${a.linked_task_id || a.task_id}/review`;
+                  // Unified destination — the AgentJobPage decides
+                  // which section (diff / plan / report / chat /
+                  // activity) to surface based on job kind. No more
+                  // splitting kind=task vs kind=job to different
+                  // pages.
+                  const route = `/jobs/${a.job_id || a.task_id}`;
                   const name = a.agent_name || "agent";
                   const status = a.status || "active";
                   return (

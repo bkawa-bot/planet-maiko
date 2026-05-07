@@ -18,10 +18,10 @@ const Settings = lazy(() => import("./pages/Settings"));
 const BrainView = lazy(() => import("./pages/BrainView"));
 const Automations = lazy(() => import("./pages/Automations"));
 const Themes = lazy(() => import("./pages/Themes"));
-const ReviewDiff = lazy(() => import("./pages/ReviewDiff"));
-const ReviewPlan = lazy(() => import("./pages/ReviewPlan"));
-const TaskReport = lazy(() => import("./pages/TaskReport"));
-const JobReport = lazy(() => import("./pages/JobReport"));
+// Unified agent-job surface — replaces JobReport / ReviewDiff / ReviewPlan
+// as separate pages. The old paths redirect into this with ?view=...
+const AgentJobPage = lazy(() => import("./pages/AgentJobPage"));
+const TaskRouteRedirect = lazy(() => import("./pages/TaskRouteRedirect"));
 import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
 
 
@@ -54,14 +54,14 @@ function AppRoutes() {
         <Route path="/training" element={<Navigate to="/knowledge?tab=training" replace />} />
         <Route path="/themes" element={<Suspense fallback={<RouteFallback />}><Themes /></Suspense>} />
         <Route path="/settings" element={<Suspense fallback={<RouteFallback />}><Settings /></Suspense>} />
-        <Route path="/tasks/:taskId/review" element={<Suspense fallback={<RouteFallback />}><ReviewDiff /></Suspense>} />
-        <Route path="/tasks/:taskId/plan" element={<Suspense fallback={<RouteFallback />}><ReviewPlan /></Suspense>} />
-        {/* Legacy task-keyed report route. New memos route to
-            /jobs/<id> directly; this entry stays so older memos
-            with the /tasks/<id>/report URL still resolve — TaskReport
-            looks up a linked AgentJob and redirects when one exists. */}
-        <Route path="/tasks/:taskId/report" element={<Suspense fallback={<RouteFallback />}><TaskReport /></Suspense>} />
-        <Route path="/jobs/:jobId" element={<Suspense fallback={<RouteFallback />}><JobReport /></Suspense>} />
+        {/* Old per-task routes — kept so existing bookmarks /
+            cached memos resolve. TaskRouteRedirect resolves the
+            task's linked AgentJob and forwards to /jobs/<id>?view=...
+            so the unified page is the canonical destination. */}
+        <Route path="/tasks/:taskId/review" element={<Suspense fallback={<RouteFallback />}><TaskRouteRedirect view="diff" /></Suspense>} />
+        <Route path="/tasks/:taskId/plan" element={<Suspense fallback={<RouteFallback />}><TaskRouteRedirect view="plan" /></Suspense>} />
+        <Route path="/tasks/:taskId/report" element={<Suspense fallback={<RouteFallback />}><TaskRouteRedirect view="report" /></Suspense>} />
+        <Route path="/jobs/:jobId" element={<Suspense fallback={<RouteFallback />}><AgentJobPage /></Suspense>} />
         {/* Legacy routes */}
         <Route path="/skills" element={<Navigate to="/automations" replace />} />
         <Route path="/brain" element={<Navigate to="/knowledge" replace />} />
