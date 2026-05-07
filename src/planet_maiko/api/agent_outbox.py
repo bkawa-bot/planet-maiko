@@ -188,6 +188,66 @@ def handle_agent_job_reply(job, msg, data, message_type):
             except Exception as e:
                 logger.debug(f"[outbox/job] worktree cleanup skipped for {job.id}: {e}")
 
+        # Emit the user-facing memo. The Task path does this via
+        # emit_user_facing_signal but the AgentJob branch returns early
+        # before that helper runs, so without this call review /
+        # investigation / cartograph completions never landed in the
+        # user's inbox — they only showed up on Active Agents and
+        # /jobs/<id>. The protocol tells agents NOT to set
+        # recipient="user" on ready_for_review specifically because
+        # "the surface already knows the user should see them"; this
+        # is the surface knowing.
+        try:
+            from planet_maiko.brain.memos import create_memo
+            agent_name = (ag.display_name if ag else None) or f"{job.kind} agent"
+            preview = (content or "").replace("\n", " ").strip()
+            if len(preview) > 80:
+                preview = preview[:77] + "…"
+
+            # Route + CTA depend on whether the artifact is a diff
+            # (review) or a report (investigation / repo_analysis /
+            # cartograph). Reviews link into the diff page when the
+            # job has a parent task; report-style kinds always go to
+            # /jobs/<id>.
+            is_report_kind = job.kind in ("investigation", "repo_analysis", "cartograph")
+            if is_review and job.source_task_id:
+                cta_label = "Review diff"
+                cta_action = "review"
+                memo_url = f"/tasks/{job.source_task_id}/review"
+            else:
+                cta_label = "View report"
+                cta_action = "open"
+                memo_url = f"/jobs/{job.id}"
+            type_label = "ready for review"
+            priority = "high"
+            if extra.get("confidence") == "low":
+                priority = "normal"
+
+            create_memo(
+                kind="agent_ready",
+                category="waiting",
+                title=f"{agent_name} {type_label}: {preview}",
+                body=content,
+                url=memo_url,
+                cta_label=cta_label,
+                cta_action=cta_action,
+                priority=priority,
+                source_agent_id=job.agent_profile_id,
+                source_task_id=job.source_task_id or job.id,
+                extra={
+                    "task_id": job.source_task_id or job.id,
+                    "job_id": job.id,
+                    "agent_id": job.agent_profile_id,
+                    "message_type": "ready_for_review",
+                    "review_url": memo_url,
+                    "verdict": verdict,
+                    "summary": summary,
+                    "confidence": extra.get("confidence"),
+                },
+            )
+        except Exception as e:
+            logger.warning(f"[outbox/job] memo emission failed for {job.id}: {e}")
+
         logger.info(f"[outbox/job] {job.kind} job {job.id} done")
         return
 
