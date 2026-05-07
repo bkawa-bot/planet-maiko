@@ -91,6 +91,15 @@ def cancel_job(job_id):
             pass
     j.status = "cancelled"
     j.finished_at = datetime.now(timezone.utc)
+    # Cascade cancel to the linked Task so the Tasks page also stops
+    # showing this work as in-flight. Skip terminal tasks — never
+    # un-close a done one.
+    if j.source_task_id:
+        from planet_maiko.models.task import Task
+        t = db.session.get(Task, j.source_task_id)
+        if t is not None and t.status not in ("done", "cancelled"):
+            t.status = "cancelled"
+            t.updated_at = datetime.now(timezone.utc)
     db.session.commit()
     return jsonify(j.to_dict())
 
@@ -114,6 +123,15 @@ def revive_job(job_id):
         }), 410
     j.status = "running"
     j.finished_at = None
+    # Cascade revive to the linked Task so it leaves the cancelled
+    # state too. Only flip if the task is currently cancelled — don't
+    # disturb done or in-flight states.
+    if j.source_task_id:
+        from planet_maiko.models.task import Task
+        t = db.session.get(Task, j.source_task_id)
+        if t is not None and t.status == "cancelled":
+            t.status = "in_progress"
+            t.updated_at = datetime.now(timezone.utc)
     db.session.commit()
     return jsonify(j.to_dict())
 

@@ -240,13 +240,37 @@ def cancel_task(task_id):
     on disk. The revive endpoint flips it back. Permanent cleanup
     happens via the shutdown ritual (worktree age-out) or an explicit
     forget call later.
+
+    Also cascades the cancel to any linked AgentJob — the active feed
+    keys visibility off job.status post-unification, so without this
+    the cancelled task would still show up as a running agent until
+    the next page refresh failed to find it.
     """
     from planet_maiko.agents.runtime import stop_agent_session
+    from planet_maiko.models.agent_job import AgentJob
     task = db.get_or_404(Task, task_id)
     stopped = stop_agent_session(task_id)
     _maybe_push_close_to_linear(task, "canceled")
     task.status = "cancelled"
     task.updated_at = datetime.now(timezone.utc)
+    # Cascade: any AgentJob linked to this task that's not already
+    # terminal should follow the cancel. The active feed and the
+    # /agents/recoverable query both look at job.status, so the row
+    # would otherwise stick around as "running" indefinitely.
+    linked_jobs = (
+        AgentJob.query
+        .filter_by(source_task_id=task.id)
+        .filter(AgentJob.status.notin_(["cancelled", "done", "failed"]))
+        .all()
+    )
+    now = datetime.now(timezone.utc)
+    for j in linked_jobs:
+        try:
+            stop_agent_session(j.id)
+        except Exception:
+            pass
+        j.status = "cancelled"
+        j.finished_at = now
     db.session.commit()
     return jsonify({"status": "cancelled", "id": task_id, "agent_stopped": stopped})
 
@@ -273,8 +297,24 @@ def revive_task(task_id):
         return jsonify({
             "error": "Worktree was cleaned up — can't revive. Start a fresh task.",
         }), 410
+    from planet_maiko.models.agent_job import AgentJob
     task.status = "in_progress"
     task.updated_at = datetime.now(timezone.utc)
+    # Cascade revive to the linked AgentJob (most-recent cancelled one)
+    # so the active feed surfaces it again. If the job's worktree was
+    # cleaned, leave it alone — the user can re-assign manually rather
+    # than getting a half-revived state.
+    linked_job = (
+        AgentJob.query
+        .filter_by(source_task_id=task.id, status="cancelled")
+        .order_by(AgentJob.finished_at.desc().nullslast())
+        .first()
+    )
+    if linked_job is not None and linked_job.worktree_path:
+        import os as _os
+        if _os.path.isdir(linked_job.worktree_path):
+            linked_job.status = "running"
+            linked_job.finished_at = None
     db.session.commit()
     return jsonify({"status": "revived", "id": task_id})
 
