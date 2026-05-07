@@ -50,8 +50,8 @@
 }
 
 .overview-greeting-sprite {
-  width: 44px;
-  height: 44px;
+  width: 88px;
+  height: 88px;
   flex-shrink: 0;
   object-fit: contain;
   /* No background / border — sprite carries its own silhouette.
