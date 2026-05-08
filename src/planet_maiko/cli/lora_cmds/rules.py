@@ -225,17 +225,19 @@ def cmd_rules_relevant(args):
                 min_similarity=args.min_similarity,
             )
 
-        # Persist to task.extra.rules_considered so the user can see
-        # what the agent had in mind on the diff/report page. Append-
-        # only — every retrieval the agent runs adds a record. No-op
-        # when no task_id (CLI used outside an agent worktree).
+        # Persist rules_considered so the user can see what the agent
+        # had in mind on the diff/report page. Anchored on the
+        # AgentJob (the agent's identity post-unification) — Task
+        # fallback for pre-rename worktrees that still hand us a
+        # Task.id. Append-only: every retrieval adds a record.
         if task_id and matches:
             from planet_maiko.database import db
             from planet_maiko.models.task import Task
+            from planet_maiko.models.agent_job import AgentJob
             try:
-                task = db.session.get(Task, task_id)
-                if task is not None:
-                    extra = dict(task.extra or {})
+                target = db.session.get(AgentJob, task_id) or db.session.get(Task, task_id)
+                if target is not None:
+                    extra = dict(target.extra or {})
                     history = list(extra.get("rules_considered") or [])
                     history.append({
                         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -251,7 +253,7 @@ def cmd_rules_relevant(args):
                         ],
                     })
                     extra["rules_considered"] = history
-                    task.extra = extra
+                    target.extra = extra
                     db.session.commit()
             except Exception as e:
                 # Never fail the CLI on persistence — the retrieval

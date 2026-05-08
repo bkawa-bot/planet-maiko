@@ -106,6 +106,7 @@ export default function AgentJobPage() {
         {activeView === "diff" && (
           <DiffPanel
             jobId={jobId}
+            job={job}
             task={task}
             onChanged={fetchAll}
           />
@@ -245,7 +246,7 @@ function JobTabs({ tabs, active, onChange }) {
 // Diff panel
 // ---------------------------------------------------------------------------
 
-function DiffPanel({ jobId, task, onChanged }) {
+function DiffPanel({ jobId, job, task, onChanged }) {
   // Every /tasks/<id>/... endpoint accepts either Task.id or
   // AgentJob.id post-canonicalization (_task_or_404 in diff_api.py
   // resolves either). So the panel passes jobId through the API
@@ -370,7 +371,15 @@ function DiffPanel({ jobId, task, onChanged }) {
   // the previous render" rule on the second render after the diff
   // finished loading.
   const { rulesConsidered, agentQueries } = useMemo(() => {
-    const history = task?.metadata?.rules_considered || [];
+    // Post-rename, `maiko rules-relevant` writes to AgentJob.extra
+    // because the agent's MAIKO_JOB_ID is what the CLI gets. We still
+    // read Task.metadata.rules_considered as a fallback for pre-
+    // rename worktrees whose history landed there. Merging both
+    // gives the user the full audit trail across the migration.
+    const history = [
+      ...(job?.extra?.rules_considered || []),
+      ...(task?.metadata?.rules_considered || []),
+    ];
     const byId = new Map();
     const querySet = new Set();
     for (const entry of history) {
@@ -389,7 +398,7 @@ function DiffPanel({ jobId, task, onChanged }) {
       rulesConsidered: Array.from(byId.values()).sort((a, b) => (b.score || 0) - (a.score || 0)),
       agentQueries: Array.from(querySet),
     };
-  }, [task]);
+  }, [job, task]);
 
   if (loading) {
     return <div className="agent-job-loading"><PlanetSpinner size={12} /> Loading diff…</div>;
