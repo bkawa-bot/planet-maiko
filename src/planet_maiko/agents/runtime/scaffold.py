@@ -10,15 +10,20 @@ from datetime import datetime, timezone
 logger = logging.getLogger(__name__)
 
 
-def _write_task_file(working_path, task_id, task_title, prompt):
-    """Write TASK.md so the agent knows what to do."""
+def _write_task_file(working_path, job_id, job_title, prompt):
+    """Write TASK.md so the agent knows what to do.
+
+    The file name stays TASK.md (the agent's "task" in the colloquial
+    sense — the work in front of them), but the underlying ID is the
+    AgentJob.id post-unification.
+    """
     # Human-readable file — show the user's local time, not UTC. Agents
     # and users both read this; a "Created: 23:30 UTC" line is confusing
     # when the user thinks of it as 3:30pm Pacific.
     from planet_maiko.config import user_now
-    content = f"""# Task: {task_title}
+    content = f"""# Task: {job_title}
 
-**Task ID:** {task_id}
+**Job ID:** {job_id}
 **Created:** {user_now().strftime('%Y-%m-%d %H:%M %Z')}
 
 ## Instructions
@@ -29,7 +34,7 @@ def _write_task_file(working_path, task_id, task_title, prompt):
         f.write(content)
 
 
-def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_port=None, parent_repo_path=None, agent_profile_id=None, specialty_id=None):
+def _write_claude_md(working_path, job_id, job_title, role="coding", maiko_port=None, parent_repo_path=None, agent_profile_id=None, specialty_id=None):
     """Write CLAUDE.md with full agent protocol.
 
     Loads the protocol template for the given role. "coding" uses the
@@ -92,13 +97,18 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
     except Exception:
         pass
 
-    # Load protocol from skill prompt (editable via Skills page)
+    # Load protocol from skill prompt (editable via Skills page).
+    # `task_title` / `task_id` template vars stayed for backwards compat
+    # with prompts the user may have customized; `job_title` / `job_id`
+    # are the new canonical names. Both resolve to the same values.
     content = None
     try:
         from planet_maiko.agents.skills import get_skill_prompt
         content = get_skill_prompt(protocol_skill, {
-            "task_title": task_title,
-            "task_id": task_id,
+            "job_title": job_title,
+            "job_id": job_id,
+            "task_title": job_title,
+            "task_id": job_id,
             "maiko_port": str(maiko_port),
             "agent_identity": agent_identity,
             "agent_signature": agent_signature,
@@ -115,13 +125,15 @@ def _write_claude_md(working_path, task_id, task_title, role="coding", maiko_por
         try:
             with open(prompt_path, "r") as f:
                 content = f.read()
-            content = content.replace("{task_title}", task_title)
-            content = content.replace("{task_id}", task_id)
+            content = content.replace("{job_title}", job_title)
+            content = content.replace("{job_id}", job_id)
+            content = content.replace("{task_title}", job_title)
+            content = content.replace("{task_id}", job_id)
             content = content.replace("{maiko_port}", str(maiko_port))
             content = content.replace("{agent_identity}", agent_identity)
             content = content.replace("{agent_signature}", agent_signature)
         except Exception:
-            content = f"# Agent Protocol\n\nTask: {task_title}\nTask ID: {task_id}\nRole: {role}\n\nRead TASK.md for instructions."
+            content = f"# Agent Protocol\n\nJob: {job_title}\nJob ID: {job_id}\nRole: {role}\n\nRead TASK.md for instructions."
 
     if role_instructions_for_role:
         content += f"\n\n## Team instructions for {role} agents\n\n{role_instructions_for_role.strip()}\n"
@@ -286,7 +298,7 @@ def _inherit_mcp_servers(parent_repo_path):
     return inherited
 
 
-def _write_mcp_json(working_path, task_id, parent_repo_path=None):
+def _write_mcp_json(working_path, job_id, parent_repo_path=None):
     """Write .mcp.json so maiko-channel + the user's parent-repo MCPs
     auto-load when claude starts inside the worktree.
 
@@ -326,7 +338,12 @@ def _write_mcp_json(working_path, task_id, parent_repo_path=None):
         "command": "node",
         "args": [channel_path],
         "env": {
-            "MAIKO_TASK_ID": task_id,
+            # MAIKO_JOB_ID is the canonical name post-unification (it's
+            # the AgentJob.id). MAIKO_TASK_ID is mirrored so any in-
+            # flight agent session that already has the older env name
+            # baked into its mcp config keeps working until it restarts.
+            "MAIKO_JOB_ID": job_id,
+            "MAIKO_TASK_ID": job_id,
             "MAIKO_API_URL": maiko_api_url(),
             "MAIKO_POLL_MS": "60000",
         },
@@ -344,7 +361,7 @@ def _write_mcp_json(working_path, task_id, parent_repo_path=None):
         )
 
 
-def _write_claude_settings(working_path, task_id, agent_id):
+def _write_claude_settings(working_path, job_id, agent_id):
     """Write .claude/settings.json (hooks config) and .maiko-env.json (identity).
 
     Checks the hooks config to determine which hooks are enabled before
@@ -435,7 +452,7 @@ def _write_claude_settings(working_path, task_id, agent_id):
                 mcp_data = json.load(f)
             enabled_servers = list((mcp_data.get("mcpServers") or {}).keys())
         except Exception as e:
-            logger.warning(f"[agent] Couldn't read .mcp.json for {task_id}: {e}")
+            logger.warning(f"[agent] Couldn't read .mcp.json for {job_id}: {e}")
 
     settings = {
         "hooks": hooks,
@@ -448,10 +465,16 @@ def _write_claude_settings(working_path, task_id, agent_id):
     with open(os.path.join(claude_dir, "settings.json"), "w") as f:
         json.dump(settings, f, indent=2)
 
-    # Write .maiko-env.json for hook scripts to read
+    # Write .maiko-env.json for hook scripts to read.
+    # The on-disk field name stays `task_id` because six hook scripts
+    # (post_tool_use, notification, stop, subagent_stop, pre_commit_review,
+    # lora_review_hook) read it and forward it as `task_id` to the maiko
+    # API. Renaming requires a coordinated sweep across hooks + every
+    # endpoint that accepts `task_id`. Internally Python now calls it
+    # job_id; the on-the-wire name stays for compatibility.
     from planet_maiko.config import maiko_api_url
     env_data = {
-        "task_id": task_id,
+        "task_id": job_id,
         "agent_id": agent_id,
         "api_url": maiko_api_url(),
     }

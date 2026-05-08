@@ -86,7 +86,7 @@ def _mark_kickoff_failed(app, kickoff_id, error):
         logger.warning(f"[agent] Couldn't surface kickoff failure for {kickoff_id}: {e}")
 
 
-def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, plan_first=False, role="coding"):
+def _kickoff_agent_headless(agent_id, worktree_path, job_id, branch_name=None, plan_first=False, role="coding"):
     """Start an autonomous agent as a background daemon thread — no terminal.
 
     Single entry point for every role (coding / review / investigation).
@@ -127,17 +127,17 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
         return {"success": False, "error": f"Unsafe worktree path: {worktree_path!r}"}
 
     # Kickoff concurrency guard: if a wake or a prior kickoff is still
-    # running for this task, don't overwrite the session registry
+    # running for this job, don't overwrite the session registry
     # mid-flight — the orphaned claude process would write to an
     # abandoned session_id and the user would lose its work.
     from planet_maiko.agents.wake import claim_task
-    lock = claim_task(task_id)
+    lock = claim_task(job_id)
     if lock is None:
-        return {"success": False, "error": "Agent is already running for this task"}
+        return {"success": False, "error": "Agent is already running for this job"}
 
     session_id = str(uuid.uuid4())
     from planet_maiko.api.agents_api import _set_session
-    _set_session(task_id, session_id, worktree_path)
+    _set_session(job_id, session_id, worktree_path)
 
     if plan_first:
         initial_prompt = (
@@ -260,7 +260,7 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
 
     def _run():
         from planet_maiko.agents.wake import set_agent_state
-        set_agent_state(_app, task_id, "working")
+        set_agent_state(_app, job_id, "working")
         popen = None
         crash_error = None  # captured to mark the AgentJob/Task failed
         try:
@@ -269,7 +269,7 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
                 log.flush()
                 # Popen (not subprocess.run) so stop_agent_session can
                 # reach into _running_processes and terminate in-flight
-                # when the user cancels a task. Communicate() still
+                # when the user cancels a job. Communicate() still
                 # blocks this thread until the subprocess exits, so the
                 # set_agent_state("idle") + lock.release() happen at
                 # the right moment.
@@ -283,11 +283,11 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
                     errors="replace",
                     cwd=worktree_path,
                 )
-                register_running_process(task_id, popen)
+                register_running_process(job_id, popen)
                 try:
                     popen.communicate(input=initial_prompt)
                 finally:
-                    unregister_running_process(task_id)
+                    unregister_running_process(job_id)
             # Non-zero exit = claude crashed (MCP load failure, auth
             # missing, network blip, etc). Capture the last bit of the
             # log so the failure surfaces somewhere useful instead of
@@ -299,20 +299,20 @@ def _kickoff_agent_headless(agent_id, worktree_path, task_id, branch_name=None, 
                 )
         except Exception as e:
             crash_error = f"kickoff thread crashed: {e}"
-            logger.warning(f"[agent] Headless run for {task_id} failed: {e}")
+            logger.warning(f"[agent] Headless run for {job_id} failed: {e}")
         finally:
             if popen is not None:
-                unregister_running_process(task_id)
-            set_agent_state(_app, task_id, "idle")
+                unregister_running_process(job_id)
+            set_agent_state(_app, job_id, "idle")
             lock.release()
             # If the subprocess died before the agent could report back,
             # nothing else moves the AgentJob/Task off "running" — flip
             # it to "failed" here so the user sees what went wrong
             # instead of a row stuck mid-flight.
             if crash_error:
-                _mark_kickoff_failed(_app, task_id, crash_error)
+                _mark_kickoff_failed(_app, job_id, crash_error)
 
-    threading.Thread(target=_run, daemon=True, name=f"coding-{task_id}").start()
+    threading.Thread(target=_run, daemon=True, name=f"coding-{job_id}").start()
     logger.info(f"[agent] Headless coding agent launched for {agent_id} (session {session_id[:8]})")
     return {
         "success": True,

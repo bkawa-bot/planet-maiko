@@ -531,7 +531,7 @@ def get_review_queue():
             # Pass thread_id when the source points at an agent run
             # (Task or AgentJob id) so the frontend can deep-link
             # into the chat modal directly.
-            "thread_id": extra.get("task_id") or m.source_task_id,
+            "thread_id": extra.get("job_id") or extra.get("task_id") or m.source_task_id,
         })
 
     # Fresh items first — the user wants to see "what just landed",

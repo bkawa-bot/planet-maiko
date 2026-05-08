@@ -201,7 +201,7 @@ def _scratch_root():
     return os.path.join(data_dir(), _SCRATCH_DIRNAME)
 
 
-def _create_scratch_dir(task_id):
+def _create_scratch_dir(job_id):
     """Create a plain working directory for a repo-less agent run.
 
     For jobs without a scope_repo (planning skills, investigation,
@@ -209,17 +209,16 @@ def _create_scratch_dir(task_id):
     where TASK.md / CLAUDE.md / .mcp.json land, but not a git
     worktree. Returns the absolute path on success, None on failure.
 
-    The directory is keyed by task_id (which post-unification is the
-    AgentJob.id), so a job's scratch dir is stable across kickoff
-    retries within the same job — no UUID suffix dance needed because
-    AgentJob ids are already unique.
+    The directory is keyed by AgentJob.id, so a job's scratch dir is
+    stable across kickoff retries within the same job — no UUID
+    suffix dance needed because AgentJob ids are already unique.
     """
     try:
         root = _scratch_root()
         os.makedirs(root, exist_ok=True)
-        path = os.path.join(root, str(task_id))
+        path = os.path.join(root, str(job_id))
         os.makedirs(path, exist_ok=True)
-        logger.info(f"[worktree] Created scratch dir for {task_id} at {path}")
+        logger.info(f"[worktree] Created scratch dir for {job_id} at {path}")
         return path
     except Exception as e:
         logger.error(f"[worktree] scratch dir creation failed: {e}")

@@ -69,10 +69,14 @@ from .kickoff import _kickoff_agent_headless
 logger = logging.getLogger(__name__)
 
 
-def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
+def prepare(job_id, job_title, prompt, repo_path, branch_prefix="maiko",
             agent_profile_id=None, role="coding", specialty_id=None,
             pr_number=None):
-    """Prepare a working directory for an agent to work on a task.
+    """Prepare a working directory for an agent to work on a job.
+
+    `job_id` is an AgentJob.id (post-unification, every agent's
+    MAIKO_JOB_ID is its AgentJob.id; the parameter used to be called
+    `task_id` from when Tasks were the only thing agents ran on).
 
     Two flavors, picked automatically by whether `repo_path` is set:
 
@@ -82,7 +86,7 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
       review agents need.
 
     - Scratch (when `repo_path` is falsy): mints a plain working dir
-      under <data_dir>/scratch-worktrees/<task_id>. No git, no branch.
+      under <data_dir>/scratch-worktrees/<job_id>. No git, no branch.
       For planning skills, investigation, and one-off question
       answerers — agents that don't touch code and shouldn't force
       the user to pick a repo just to run.
@@ -91,8 +95,8 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     separately when ready.
 
     Args:
-        task_id: the task this agent will work on
-        task_title: human-readable task title
+        job_id: the AgentJob this agent will work on
+        job_title: human-readable job title
         prompt: full instructions for the agent
         repo_path: path to the git repository, or None/"" for scratch
         branch_prefix: prefix for the branch name (ignored in scratch)
@@ -111,23 +115,23 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     scratch_mode = not repo_path
 
     if scratch_mode:
-        # No repo, no branch. Working dir is keyed by task_id (= AgentJob.id),
-        # which is already unique, so no collision dance is needed.
+        # No repo, no branch. Working dir is keyed by AgentJob.id,
+        # which is already unique — no collision dance needed.
         branch_name = None
-        working_path = _create_scratch_dir(task_id)
+        working_path = _create_scratch_dir(job_id)
         if not working_path:
             return None
     else:
-        # Build a descriptive branch name from the task title.
+        # Build a descriptive branch name from the job title.
         # Suffix = last 5 digits of unix time + 4 hex chars of uuid. The
         # short timestamp keeps branch names skim-readable; the uuid chars
-        # make collisions effectively impossible even when two tasks land
+        # make collisions effectively impossible even when two jobs land
         # on the same second with the same title (which used to silently
         # land both agents on the same branch via a 4-digit timestamp).
         import time as _time
-        slug = _slugify(task_title, max_len=40)
+        slug = _slugify(job_title, max_len=40)
         if not slug:
-            slug = _slugify(task_id)
+            slug = _slugify(job_id)
         slug = f"{slug}-{str(int(_time.time()))[-5:]}-{uuid.uuid4().hex[:4]}"
 
         # If the user typed a full branch name (contains /), use it as-is.
@@ -153,10 +157,10 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
         if not working_path:
             return None
 
-    # Write task files
-    _write_task_file(working_path, task_id, task_title, prompt)
+    # Write the agent's bootstrap files into the working dir.
+    _write_task_file(working_path, job_id, job_title, prompt)
     _write_claude_md(
-        working_path, task_id, task_title,
+        working_path, job_id, job_title,
         role=role, parent_repo_path=repo_path,
         agent_profile_id=agent_profile_id,
         specialty_id=specialty_id,
@@ -165,20 +169,20 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     # per-project MCPs (Linear / Slack / etc.) — otherwise the agent
     # session only has maiko-channel and feels MCP-blind compared to
     # the user's normal Claude Code session in the parent repo.
-    _write_mcp_json(working_path, task_id, parent_repo_path=repo_path)
+    _write_mcp_json(working_path, job_id, parent_repo_path=repo_path)
 
     # Use existing profile if provided, otherwise generate an ID. In
     # scratch mode there's no branch to key off, so we fall back to the
-    # task_id which is already unique.
+    # job_id which is already unique.
     if agent_profile_id:
         agent_id = agent_profile_id
     elif branch_name:
         agent_id = f"agent-{branch_name}"
     else:
-        agent_id = f"agent-{task_id}"
+        agent_id = f"agent-{job_id}"
 
     # Write Claude Code hooks configuration
-    _write_claude_settings(working_path, task_id, agent_id)
+    _write_claude_settings(working_path, job_id, agent_id)
 
     # LoRA compliance review is now handled by Claude Code PostToolUse hook
     # (lora_review_hook.py), registered in _write_claude_settings above.
@@ -202,17 +206,17 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     # once the result pupdate arrives. Coding agents still need a manual
     # terminal launch.
     if role == "coding":
-        ready_title = f"Agent ready: {task_title}"
+        ready_title = f"Agent ready: {job_title}"
         ready_hint = "Launch agent"
     else:
-        ready_title = f"{role.capitalize()} agent working: {task_title}"
+        ready_title = f"{role.capitalize()} agent working: {job_title}"
         ready_hint = "Dig deeper"
     if scratch_mode:
         body_text = f"Prepared in scratch workspace.\n\nWorking in: {working_path}"
     else:
         body_text = f"Prepared on branch `{branch_name}`.\n\nWorking in: {working_path}"
     notify = Pupdate(
-        id=f"agent-ready-{task_id}-{uuid.uuid4().hex[:8]}",
+        id=f"agent-ready-{job_id}-{uuid.uuid4().hex[:8]}",
         source="maiko",
         source_id=f"agent/{agent_id}",
         type="agent_ready",
@@ -221,12 +225,12 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
         body=body_text,
         actionable=True,
         action_hint=ready_hint,
-        tags=[task_id, "agent", role],
+        tags=[job_id, "agent", role],
         extra={
             "agent_id": agent_id,
             "branch": branch_name,
             "working_path": working_path,
-            "task_id": task_id,
+            "job_id": job_id,
             "role": role,
             "scratch": scratch_mode,
         },
@@ -238,7 +242,7 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
 
     return {
         "agent_id": agent_id,
-        "task_id": task_id,
+        "job_id": job_id,
         "branch": branch_name,
         "working_path": working_path,
         "status": "ready",
@@ -251,35 +255,50 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
 
 
 def list_prepared():
-    """List prepared agent worktrees whose task is still open.
+    """List prepared agent worktrees whose underlying job is still open.
 
-    Filters out agent_ready pupdates that are dismissed, that
-    reference a task in done/cancelled state, or that reference a
-    task that no longer exists. Those are finished work, not active
-    work — leaving them on the Active tab buries the real signal.
+    Filters out agent_ready pupdates that are dismissed, that point at
+    a job in done/cancelled/failed state, or whose job no longer
+    exists. Those are finished work, not active work — leaving them
+    on the Active tab buries the real signal.
+
+    Reads `extra.job_id` (current shape) with a fallback to the legacy
+    `extra.task_id` field for agent_ready rows from before the
+    rename. Looks up against AgentJob; the previous Task lookup was
+    a stale path that has been broken since the unification (every
+    job_id was queried against the Task table and silently filtered
+    out).
     """
-    from planet_maiko.models.task import Task
+    from planet_maiko.models.agent_job import AgentJob
     agents = Pupdate.query.filter_by(type="agent_ready", dismissed=False).all()
-    task_ids = [p.extra.get("task_id") for p in agents if p.extra.get("task_id")]
-    tasks_by_id = {}
-    if task_ids:
-        tasks_by_id = {t.id: t for t in Task.query.filter(Task.id.in_(task_ids)).all()}
+    job_ids = []
+    for p in agents:
+        ex = p.extra or {}
+        jid = ex.get("job_id") or ex.get("task_id")
+        if jid:
+            job_ids.append(jid)
+    jobs_by_id = {}
+    if job_ids:
+        jobs_by_id = {
+            j.id: j for j in AgentJob.query.filter(AgentJob.id.in_(job_ids)).all()
+        }
     out = []
     for p in agents:
-        tid = p.extra.get("task_id")
-        task = tasks_by_id.get(tid)
-        if tid and not task:
-            continue  # task deleted
-        if task and task.status in ("done", "cancelled"):
+        ex = p.extra or {}
+        jid = ex.get("job_id") or ex.get("task_id")
+        job = jobs_by_id.get(jid)
+        if jid and not job:
+            continue  # job deleted
+        if job and job.status in ("done", "cancelled", "failed"):
             continue  # finished
         out.append({
-            "agent_id": p.extra.get("agent_id"),
-            "task_id": tid,
-            "task_title": task.title if task else None,
-            "task_status": task.status if task else None,
-            "role": p.extra.get("role", "coding"),
-            "branch": p.extra.get("branch"),
-            "working_path": p.extra.get("working_path"),
+            "agent_id": ex.get("agent_id"),
+            "job_id": jid,
+            "job_title": job.title if job else None,
+            "job_status": job.status if job else None,
+            "role": ex.get("role", "coding"),
+            "branch": ex.get("branch"),
+            "working_path": ex.get("working_path"),
             "prepared_at": p.timestamp.isoformat() if p.timestamp else None,
         })
     return out

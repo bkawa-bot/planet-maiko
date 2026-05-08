@@ -69,8 +69,13 @@ def _phase_awareness():
         from planet_maiko.agents.runtime import list_prepared
 
         prepared = list_prepared()
+        # Conflicts detection still keys its internal worktree dicts by
+        # `task_id` (it was never renamed alongside the runtime layer).
+        # Pull the new `job_id` out of list_prepared and feed it under
+        # the older key so detect.py keeps working without a parallel
+        # rename across the awareness module.
         worktrees = [
-            {"task_id": a.get("task_id", ""), "worktree_path": a.get("working_path", "")}
+            {"task_id": a.get("job_id", ""), "worktree_path": a.get("working_path", "")}
             for a in prepared if a.get("working_path")
         ]
 

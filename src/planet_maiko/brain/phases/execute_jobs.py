@@ -271,8 +271,8 @@ def _phase_execute_agent_jobs():
                         )
                 try:
                     prep = prepare(
-                        task_id=job.id,
-                        task_title=job.title,
+                        job_id=job.id,
+                        job_title=job.title,
                         prompt=full_prompt,
                         repo_path=local_path,
                         branch_prefix=branch_prefix,
