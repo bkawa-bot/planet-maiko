@@ -99,6 +99,7 @@ def _act_run_agent_job(automation, config, pupdate=None, context=None):
             category="offer",
             title=title,
             body=description or None,
+            url=(pupdate.url if pupdate is not None else None),
             priority=priority,
             cta_label="Approve",
             cta_action="approve",
@@ -355,28 +356,6 @@ def _act_notify(automation, config, pupdate=None, context=None):
     if priority not in ("low", "normal", "high", "urgent"):
         priority = "normal"
 
-    # Idempotency: same (automation, pupdate) shouldn't mint a second
-    # memo. Scoped to non-dismissed memos so a user-dismissed memo
-    # doesn't permanently suppress legitimate re-firing on a future
-    # similar pupdate (the source_pupdate_id gates that — different
-    # pupdate id = new memo).
-    if pupdate is not None:
-        existing = (
-            Memo.query
-            .filter(Memo.kind == "notification")
-            .filter(Memo.source_pupdate_id == pupdate.id)
-            .filter(Memo.status.in_(("pending", "seen", "actioned")))
-            .all()
-        )
-        for m in existing:
-            if (m.extra or {}).get("from_automation") == automation.id:
-                return {
-                    "kind": "notify_me",
-                    "memo_id": m.id,
-                    "title": (m.title or "")[:80],
-                    "duplicate": True,
-                }
-
     memo_extra = {
         "from_automation": automation.id,
         "triggered_by_pupdate": pupdate.id if pupdate else None,
@@ -384,6 +363,16 @@ def _act_notify(automation, config, pupdate=None, context=None):
     snap = _pupdate_snapshot(pupdate)
     if snap:
         memo_extra["pupdate_snapshot"] = snap
+
+    # create_memo dedups on (kind, source_pupdate_id) automatically,
+    # so re-firing on the same pupdate returns the existing memo
+    # instead of stacking a duplicate. Detected duplicates surface
+    # via memo.id == existing.id; the action-result reflects whichever
+    # row the user is meant to see.
+    pre_count = Memo.query.filter_by(
+        kind="notification",
+        source_pupdate_id=pupdate.id if pupdate else None,
+    ).count() if pupdate is not None else 0
 
     memo = create_memo(
         kind="notification",
@@ -396,4 +385,10 @@ def _act_notify(automation, config, pupdate=None, context=None):
         extra=memo_extra,
     )
     db.session.flush()
-    return {"kind": "notify_me", "memo_id": memo.id, "title": title[:80]}
+    is_duplicate = pre_count > 0
+    return {
+        "kind": "notify_me",
+        "memo_id": memo.id,
+        "title": title[:80],
+        "duplicate": is_duplicate,
+    }

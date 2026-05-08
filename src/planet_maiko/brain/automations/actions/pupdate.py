@@ -67,6 +67,7 @@ def _act_spawn_agent_job_from_pupdate(automation, config, pupdate=None, context=
             category="offer",
             title=title,
             body=description or None,
+            url=pupdate.url,
             priority=priority,
             cta_label="Approve",
             cta_action="approve",

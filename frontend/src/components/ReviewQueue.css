@@ -109,6 +109,18 @@
   white-space: nowrap;
 }
 
+/* Memo title acts as a link when the underlying memo has a url —
+ * inherit the title color so the row reads as a clickable card,
+ * not a blue "<a>"-styled string out of nowhere. Underline on hover
+ * so the affordance is still discoverable. */
+.review-queue-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+.review-queue-title-link:hover {
+  text-decoration: underline;
+}
+
 .review-queue-meta {
   display: flex;
   flex-wrap: wrap;

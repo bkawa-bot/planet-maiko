@@ -37,6 +37,32 @@ CANONICAL_KINDS = {
 }
 
 
+def find_dedup_match(kind, source_pupdate_id):
+    """Return an existing live memo with this (kind, source_pupdate_id),
+    or None if none exists.
+
+    "Live" = not dismissed. We allow seen and actioned matches because
+    a duplicate-creating automation re-firing on the same pupdate
+    shouldn't bury what the user already saw and dealt with — the right
+    behavior is to surface the original, not stack a fresh copy.
+
+    Only matches when source_pupdate_id is set; memos minted from agent
+    output (no pupdate) opt out of pupdate-keyed dedup by simply not
+    passing one. Callers that need a different dedup key (e.g. agent
+    message dedup on source_pupdate_id alone is too coarse) handle it
+    themselves.
+    """
+    if not source_pupdate_id:
+        return None
+    return (
+        Memo.query
+        .filter(Memo.kind == kind)
+        .filter(Memo.source_pupdate_id == source_pupdate_id)
+        .filter(Memo.status != "dismissed")
+        .first()
+    )
+
+
 def create_memo(
     *,
     kind,
@@ -51,13 +77,23 @@ def create_memo(
     source_task_id=None,
     source_pupdate_id=None,
     extra=None,
+    dedup=True,
 ):
-    """Create a Memo row. Caller is responsible for db.session.commit().
+    """Create a Memo row, or return the existing duplicate.
+
+    Caller is responsible for db.session.commit().
 
     Validates category against the fixed set; kind is open but logged
     if not in CANONICAL_KINDS so typos surface. Returns the new Memo
     (already added to the session — the caller's commit picks it up
     with their other writes).
+
+    `dedup=True` (the default) plus a non-empty `source_pupdate_id`
+    short-circuits to an existing live memo with the same (kind,
+    source_pupdate_id), so re-firing automations on the same pupdate
+    don't stack duplicates in the user's inbox. Pass `dedup=False` for
+    cases where the same kind+pupdate genuinely should produce
+    multiple memos.
     """
     if category not in VALID_CATEGORIES:
         raise ValueError(
@@ -67,6 +103,15 @@ def create_memo(
         logger.debug(
             f"[memo] Unknown kind {kind!r} — fine for plugins, but check for typos"
         )
+
+    if dedup:
+        existing = find_dedup_match(kind, source_pupdate_id)
+        if existing is not None:
+            logger.debug(
+                f"[memo] dedup hit: kind={kind} pupdate={source_pupdate_id} "
+                f"-> reusing memo #{existing.id}"
+            )
+            return existing
 
     memo = Memo(
         kind=kind,

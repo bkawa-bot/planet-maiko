@@ -360,7 +360,18 @@ export default function MemosPane() {
                 {renderRowIcon(it, Icon)}
                 <div className="review-queue-body">
                   <div className="review-queue-title">
-                    {it.title || "(notification)"}
+                    {hasUrl ? (
+                      <a
+                        href={it.route}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="review-queue-title-link"
+                      >
+                        {it.title || "(notification)"}
+                      </a>
+                    ) : (
+                      it.title || "(notification)"
+                    )}
                   </div>
                   {it.body && (
                     <div
