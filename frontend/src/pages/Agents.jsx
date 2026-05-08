@@ -259,7 +259,6 @@ export default function Agents() {
         <AgentsActiveTab
           agents={agents}
           activity={activity}
-          queued={queued}
           conflicts={conflicts}
           profiles={profiles}
           onRefresh={fetchData}

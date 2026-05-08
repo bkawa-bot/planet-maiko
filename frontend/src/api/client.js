@@ -271,6 +271,10 @@ export const api = {
   cancelAgentJob: (id) => request(`/agent-jobs/${id}/cancel`, { method: "POST" }),
   // Bring a cancelled job back. Worktree must still be on disk.
   reviveAgentJob: (id) => request(`/agent-jobs/${id}/revive`, { method: "POST" }),
+  // Re-queue a FAILED job so the next cycle picks it up. Distinct
+  // from revive, which is for cancelled jobs — the backend gates on
+  // status to keep the two flows from cross-firing.
+  retryAgentJob: (id) => request(`/agent-jobs/${id}/retry`, { method: "POST" }),
   // Hard delete — row + worktree. The "I'm sure" escape hatch from
   // soft-cancel. Backend refuses on running jobs.
   deleteAgentJob: (id) => request(`/agent-jobs/${id}`, { method: "DELETE" }),

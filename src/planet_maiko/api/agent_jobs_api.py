@@ -104,6 +104,31 @@ def cancel_job(job_id):
     return jsonify(j.to_dict())
 
 
+@agent_jobs_bp.route("/agent-jobs/<job_id>/retry", methods=["POST"])
+def retry_job(job_id):
+    """Re-queue a failed AgentJob so the next cycle re-runs it.
+
+    Flips status from `failed` → `queued`, clears the error and
+    finished_at, and leaves the worktree (if one exists) intact.
+    execute_jobs.py's "if not job.worktree_path" guard means a job
+    that failed before prepare() finished will get a fresh worktree
+    on retry, while one that failed at kickoff or later resumes the
+    existing one — both right.
+
+    Refuses on non-failed jobs so a misclick doesn't requeue a
+    running or already-completed run.
+    """
+    j = db.get_or_404(AgentJob, job_id)
+    if j.status != "failed":
+        return jsonify({"error": f"Job is {j.status}, not failed"}), 400
+    j.status = "queued"
+    j.error = None
+    j.finished_at = None
+    db.session.commit()
+    logger.info(f"[retry] {job_id} re-queued for next cycle")
+    return jsonify(j.to_dict())
+
+
 @agent_jobs_bp.route("/agent-jobs/<job_id>/revive", methods=["POST"])
 def revive_job(job_id):
     """Bring a cancelled job back. Flips status to running and keeps

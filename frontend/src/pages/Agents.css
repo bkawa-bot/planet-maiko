@@ -165,13 +165,29 @@
    at a glance — same agent profile across multiple tasks now shows
    one card per task with the title clearly visible. */
 .agent-task-title {
-  display: flex; align-items: center; gap: 5px;
+  display: flex; align-items: flex-start; gap: 5px;
   font-size: 12px; color: var(--text-dim); font-weight: 500;
   margin-bottom: 6px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* Wrap onto as many lines as the title needs — truncating to one
+   * line buried half the context for jobs with descriptive names. */
+  white-space: normal;
+  word-break: break-word;
   max-width: 100%;
+  line-height: 1.35;
 }
-.agent-task-title svg { color: var(--pink); flex-shrink: 0; }
+.agent-task-title svg { color: var(--pink); flex-shrink: 0; margin-top: 2px; }
+
+/* Make the whole card body a navigable link to /jobs/<id>. The
+ * Link-as-block wrapper handles the click; CSS removes the default
+ * underline + colour shift so the card still reads as a card. */
+.agent-card-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.agent-card-link:hover { text-decoration: none; }
+.agent-card-link-disabled { cursor: default; }
 
 .agent-chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .agent-chip {
