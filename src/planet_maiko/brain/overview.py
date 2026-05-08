@@ -861,11 +861,18 @@ def _request_agent_status_updates(timeout_s=20):
         return 0
 
     prompt = (
-        "The user just opened their home overview and Maiko is summarizing "
-        "the pack's state. Reply with a single one-line status update via "
-        "reply(message_type='status') — what you're working on, what (if "
-        "anything) you're waiting on, in your own voice and brief. "
-        "Then continue your work."
+        "The user just walked into the town square — they're checking in, "
+        "and they can see you from across the way. This is your coffee-"
+        "machine moment, not a status report.\n\n"
+        "Say hi the way your character would (a wave, a nod, a weird "
+        "non-sequitur, whatever fits) and tell them in one beat what "
+        "you're chewing on right now, plus anything you'd love their "
+        "eyes on — a question, a blocker, a fresh diff, a thought you "
+        "had on the bus. If you're deep in flow and don't need anything, "
+        "just say so in a way that sounds like you. Show personality. "
+        "Be funny if the moment lands; be quiet if it doesn't. Brief — "
+        "one sentence, two if the second one really earns it.\n\n"
+        "Reply via reply(message_type='status'). Then get back to it."
     )
 
     waited_on = []
