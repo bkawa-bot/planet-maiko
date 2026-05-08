@@ -358,20 +358,18 @@ function DiffPanel({ jobId, task, onChanged }) {
     setApproving(false);
   };
 
-  if (loading) {
-    return <div className="agent-job-loading"><PlanetSpinner size={12} /> Loading diff…</div>;
-  }
-
-  const verdict = task?.metadata?.review_verdict;
-  const summary = task?.metadata?.review_summary;
-  const artifact = task?.metadata?.artifact;
-
   // Rules the agent retrieved via `maiko rules-relevant` while doing
   // this task — auto-recorded by the CLI. Dedupe across queries (the
   // same rule may surface for several queries) and keep each rule's
   // best score so the highest-confidence match wins. Surface the
   // queries themselves too so the user can see what the agent had
   // in mind, not just what came back.
+  //
+  // Computed UP HERE (before the loading early return) so the hook
+  // count is identical on every render — moving it below the
+  // `if (loading)` branch tripped React's "rendered more hooks than
+  // the previous render" rule on the second render after the diff
+  // finished loading.
   const { rulesConsidered, agentQueries } = useMemo(() => {
     const history = task?.metadata?.rules_considered || [];
     const byId = new Map();
@@ -393,6 +391,14 @@ function DiffPanel({ jobId, task, onChanged }) {
       agentQueries: Array.from(querySet),
     };
   }, [task]);
+
+  if (loading) {
+    return <div className="agent-job-loading"><PlanetSpinner size={12} /> Loading diff…</div>;
+  }
+
+  const verdict = task?.metadata?.review_verdict;
+  const summary = task?.metadata?.review_summary;
+  const artifact = task?.metadata?.artifact;
 
   return (
     <div className="agent-job-diff">
