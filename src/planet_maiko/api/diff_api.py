@@ -34,31 +34,41 @@ logger = logging.getLogger(__name__)
 diff_bp = Blueprint("diff", __name__)
 
 
-def _resolve_task_id(inbox_id):
-    """Translate an inbox id → a stable id for diff_comments storage.
+def _resolve_to_job_id(inbox_id):
+    """Translate an inbox id → the AgentJob.id that owns the diff.
 
-    Order of preference:
-      1. Already a Task.id → use it.
-      2. AgentJob.id with source_task_id set → use the linked Task.id
-         so the comment lives in the Task's id space (review surface
-         the user sees).
-      3. AgentJob.id without source_task_id → use the job.id directly.
-         The DiffComment.task_id column dropped its FK to tasks.id
-         (see app._drop_diff_comment_task_fk) so this is allowed; the
-         /tasks/<id>/comments endpoint will canonicalize back to the
-         same id at read time.
+    DiffComments are anchored to AgentJobs (each agent run has its own
+    diff). This helper canonicalizes whatever the wire passed us:
 
-    Always returns SOMETHING — callers used to 404 when no Task matched,
-    which broke leave_comment for review agents whose job has no
-    linked task.
+      1. Already an AgentJob.id → use it.
+      2. A Task.id → look up the most recent non-cancelled AgentJob
+         linked via source_task_id; one Task can spawn coding + review
+         + investigation jobs, and the most recent one is the diff
+         the user is currently looking at.
+      3. Anything else → return the input unchanged so the caller's
+         filter still has SOMETHING to query against (no comments
+         match, but the page renders cleanly).
     """
-    if db.session.get(Task, inbox_id) is not None:
-        return inbox_id
     from planet_maiko.models.agent_job import AgentJob
-    job = db.session.get(AgentJob, inbox_id)
-    if job is not None:
-        return job.source_task_id or job.id
+    if db.session.get(AgentJob, inbox_id) is not None:
+        return inbox_id
+    if db.session.get(Task, inbox_id) is not None:
+        job = (
+            AgentJob.query
+            .filter_by(source_task_id=inbox_id)
+            .filter(AgentJob.status != "cancelled")
+            .order_by(AgentJob.created_at.desc())
+            .first()
+        )
+        if job is not None:
+            return job.id
     return inbox_id
+
+
+# Back-compat alias — older imports / patches refer to the previous
+# name. _resolve_to_job_id replaced it; keep this around for one
+# release so churn elsewhere doesn't cascade into another rename pass.
+_resolve_task_id = _resolve_to_job_id
 
 
 def _canonical_inbox_id(any_id):
@@ -307,13 +317,18 @@ def get_task_diff(task_id):
 
 @diff_bp.route("/tasks/<task_id>/comments", methods=["GET"])
 def list_comments(task_id):
-    """Return all comments for a task ordered by file, then line, then time."""
-    real_task_id = _resolve_task_id(task_id)
-    if real_task_id is None:
+    """Return every diff comment for an agent run, ordered by file, line, time.
+
+    Route name kept for back-compat (`/tasks/<id>/comments` matches
+    the older URL); the path variable accepts either a Job.id or a
+    Task.id and canonicalizes to AgentJob.id internally.
+    """
+    job_id = _resolve_to_job_id(task_id)
+    if job_id is None:
         return jsonify([])
     comments = (
         DiffComment.query
-        .filter_by(task_id=real_task_id)
+        .filter_by(job_id=job_id)
         .order_by(
             DiffComment.file_path.asc(),
             DiffComment.line_number.asc(),
@@ -333,19 +348,19 @@ def create_comment(task_id):
     if "file_path" not in data or "line_number" not in data:
         return jsonify({"error": "file_path and line_number are required"}), 400
 
-    real_task_id = _resolve_task_id(task_id)
-    if real_task_id is None:
-        return jsonify({"error": "task not found"}), 404
+    job_id = _resolve_to_job_id(task_id)
+    if job_id is None:
+        return jsonify({"error": "job not found"}), 404
 
-    # Validate parent_id belongs to the same task if provided
+    # Validate parent_id belongs to the same job if provided
     parent_id = data.get("parent_id")
     if parent_id:
         parent = db.session.get(DiffComment, parent_id)
-        if not parent or parent.task_id != real_task_id:
-            return jsonify({"error": "parent_id does not belong to this task"}), 400
+        if not parent or parent.job_id != job_id:
+            return jsonify({"error": "parent_id does not belong to this job"}), 400
 
     comment = DiffComment(
-        task_id=real_task_id,
+        job_id=job_id,
         file_path=data["file_path"],
         line_number=int(data["line_number"]),
         side=data.get("side", "new"),
@@ -404,18 +419,18 @@ def create_agent_comment(task_id):
     comments to the user's post-image (the "new" side) by default; they
     can override by passing side="old" explicitly.
 
-    The MCP tool calls this with MAIKO_TASK_ID — which post-unification
-    is the AgentJob.id. Resolve to the linked Task.id before insert so
-    DiffComment.task_id's FK constraint to tasks.id is satisfied.
+    The MCP tool calls this with MAIKO_JOB_ID — already an AgentJob.id
+    post-rename. Canonicalize via _resolve_to_job_id anyway in case
+    legacy callers still hand us a Task.id.
     """
     data = request.get_json() or {}
     if not data.get("body"):
         return jsonify({"error": "body is required"}), 400
     if "file_path" not in data or "line_number" not in data:
         return jsonify({"error": "file_path and line_number are required"}), 400
-    real_task_id = _resolve_task_id(task_id)
+    job_id = _resolve_to_job_id(task_id)
     comment = DiffComment(
-        task_id=real_task_id,
+        job_id=job_id,
         file_path=data["file_path"],
         line_number=int(data["line_number"]),
         side=data.get("side", "new"),
@@ -484,16 +499,14 @@ def request_changes(task_id):
         return jsonify({"error": "No worktree for this task"}), 400
 
     # The route param is whatever id the UI dropped in (Job.id or
-    # Task.id post-unification). DiffComments are stored against the
-    # canonical Task.id, so resolve before querying — without this the
-    # endpoint queried a Job.id against the Task FK column and came up
-    # empty even when the list endpoint was correctly returning N
-    # drafts. _resolve_task_id falls back to inbox_id, which is what
-    # the list endpoint uses too, so the two now match.
-    drafts_task_id = _resolve_task_id(task_id)
+    # Task.id). DiffComments are stored against the canonical
+    # AgentJob.id; canonicalize before querying so the filter matches
+    # the list endpoint's filter (otherwise we'd return zero drafts
+    # while the UI is correctly showing some).
+    drafts_job_id = _resolve_to_job_id(task_id)
     drafts = (
         DiffComment.query
-        .filter_by(task_id=drafts_task_id, status="draft", author="user")
+        .filter_by(job_id=drafts_job_id, status="draft", author="user")
         .order_by(DiffComment.file_path.asc(), DiffComment.line_number.asc())
         .all()
     )
@@ -828,7 +841,7 @@ def approve(task_id):
         return jsonify({"error": "No branch tracked for this task"}), 400
 
     submitted = DiffComment.query.filter_by(
-        task_id=_resolve_task_id(task_id), status="submitted",
+        job_id=_resolve_to_job_id(task_id), status="submitted",
     ).all()
     for c in submitted:
         c.status = "resolved"

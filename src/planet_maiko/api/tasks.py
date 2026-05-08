@@ -189,14 +189,14 @@ def _maybe_push_close_to_linear(task, target_state_type):
 def _clear_task_dependents(task):
     """Orphan-clean rows that point at tasks.id before the delete.
 
-    Two tables have FKs into tasks.id without an ON DELETE clause on
-    the column, so with PRAGMA foreign_keys=ON SQLite blocks the
-    delete even when the row's semantics say "OK to drop":
-      - diff_comments.task_id (NOT NULL) — a comment that belongs to
-        this task is meaningless without it; delete the rows.
-      - agent_jobs.source_task_id (nullable) — the job may outlive
-        the task (artifact-retention), so null out the pointer and
-        leave the job row intact.
+    Two table-shapes need attention:
+      - diff_comments.job_id — comments belong to AgentJobs, but those
+        jobs are linked to this Task via source_task_id. A task that's
+        being closed/cancelled implies its diffs aren't worth keeping
+        either; delete every comment for jobs linked to this task.
+      - agent_jobs.source_task_id (nullable) — the job may outlive the
+        task (artifact retention), so null the pointer instead of
+        deleting the job row.
 
     Called from /tasks/<id>/done and /tasks/<id>/cancel before the
     db.session.delete(task) so the commit succeeds.
@@ -204,7 +204,13 @@ def _clear_task_dependents(task):
     from planet_maiko.models.diff_comment import DiffComment
     from planet_maiko.models.agent_job import AgentJob
 
-    DiffComment.query.filter_by(task_id=task.id).delete(synchronize_session=False)
+    linked_job_ids = [
+        j.id for j in AgentJob.query.filter_by(source_task_id=task.id).all()
+    ]
+    if linked_job_ids:
+        (DiffComment.query
+            .filter(DiffComment.job_id.in_(linked_job_ids))
+            .delete(synchronize_session=False))
     (AgentJob.query
         .filter_by(source_task_id=task.id)
         .update({"source_task_id": None}, synchronize_session=False))

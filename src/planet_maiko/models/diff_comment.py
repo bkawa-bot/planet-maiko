@@ -5,7 +5,7 @@ from planet_maiko.database import db, iso_utc
 class DiffComment(db.Model):
     """An inline comment on an agent's diff.
 
-    Anchored to (task, file_path, line_number, side). Side is "old" or
+    Anchored to (job, file_path, line_number, side). Side is "old" or
     "new" to match git's pre-image / post-image — most user comments
     land on the "new" side since you're reviewing added code, but
     comments on removed lines are sometimes the right call.
@@ -25,15 +25,15 @@ class DiffComment(db.Model):
     __tablename__ = "diff_comments"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    # Was db.ForeignKey("tasks.id") — relaxed because review agents
-    # often run on AgentJobs that don't have a linked Task (PR-review
-    # automations spawn jobs directly). The column now holds either a
-    # Task.id or an AgentJob.id; _resolve_task_id() in diff_api
-    # canonicalizes for the diff view, and the agent leave_comment
-    # path stores under whichever id the agent's MCP env points at.
-    # Existing DBs are migrated to drop the FK on app boot via the
-    # _drop_diff_comment_fk routine.
-    task_id = db.Column(db.String(128), nullable=False, index=True)
+    # An AgentJob.id — the diff this comment is pinned to belongs to a
+    # specific agent run. Originally stored Task.id (with a FK), then
+    # relaxed to a plain VARCHAR holding either id during the wire-
+    # rename transition; now canonicalized to the Job side because:
+    # (a) the agent that authored / receives the comment is keyed by
+    # job, (b) one task can spawn multiple jobs (coding + review) and
+    # storing on the Task ambiguates which diff the comment lives on.
+    # Existing DBs are migrated by app._rename_diff_comment_task_to_job.
+    job_id = db.Column(db.String(128), nullable=False, index=True)
 
     file_path = db.Column(db.String(512), nullable=False)
     line_number = db.Column(db.Integer, nullable=False)
@@ -60,7 +60,7 @@ class DiffComment(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
-            "task_id": self.task_id,
+            "job_id": self.job_id,
             "file_path": self.file_path,
             "line_number": self.line_number,
             "side": self.side,

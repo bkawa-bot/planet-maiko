@@ -197,6 +197,118 @@ def _drop_diff_comment_task_fk():
         logger.warning(f"[startup] diff_comments FK drop skipped: {e}")
 
 
+def _rename_diff_comment_task_to_job():
+    """One-shot: rename diff_comments.task_id → diff_comments.job_id and
+    backfill any rows that still hold a Task.id to the corresponding
+    AgentJob.id.
+
+    Background: comments used to be anchored to a Task because pre-
+    unification the Task was the agent's primary key. Now agents run
+    as AgentJobs (one Task can spawn coding + review + investigation
+    jobs, each with its own diff), so the comment belongs on the job
+    that owns the diff. SQLite can't rename a column in place on
+    older versions, so we rebuild the table.
+
+    Idempotent — checks if `job_id` already exists and exits if so.
+    Best-effort: if the rebuild fails the column stays as-is and the
+    code path falls back to whichever name SQLAlchemy reflection
+    found.
+    """
+    from sqlalchemy import text
+    try:
+        with db.engine.begin() as conn:
+            rows = conn.execute(text("PRAGMA table_info(diff_comments)")).all()
+            if not rows:
+                return  # Fresh DB — model already declares job_id.
+            cols = {r[1] for r in rows}
+            if "job_id" in cols:
+                return  # Already renamed.
+            if "task_id" not in cols:
+                return  # Model and table both already on the new shape.
+
+            # Backfill: for every row whose stored id is a Task.id (not
+            # a Job.id), find the Job that owns the diff. Prefer the
+            # most recent non-cancelled review/coding job linked to the
+            # task. Rows where the id already IS a Job.id pass through
+            # unchanged. Rows where neither lookup hits stay on the old
+            # id — orphans, kept for history rather than dropped.
+            agent_jobs = conn.execute(
+                text("SELECT id, source_task_id FROM agent_jobs")
+            ).all() if "agent_jobs" in {
+                r[0] for r in conn.execute(text(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )).all()
+            } else []
+            job_ids = {j[0] for j in agent_jobs}
+            task_to_job = {}
+            for jid, source_task_id in agent_jobs:
+                if source_task_id and source_task_id not in task_to_job:
+                    task_to_job[source_task_id] = jid
+
+            comment_rows = conn.execute(
+                text("SELECT id, task_id FROM diff_comments")
+            ).all()
+            backfilled = 0
+            for cid, tid in comment_rows:
+                if tid in job_ids:
+                    continue  # already a Job.id, nothing to do
+                replacement = task_to_job.get(tid)
+                if replacement:
+                    conn.execute(
+                        text("UPDATE diff_comments SET task_id = :j WHERE id = :c"),
+                        {"j": replacement, "c": cid},
+                    )
+                    backfilled += 1
+
+            # SQLite recreate-table idiom for column rename.
+            conn.execute(text("PRAGMA foreign_keys=OFF"))
+            conn.execute(text("ALTER TABLE diff_comments RENAME TO diff_comments_old"))
+            conn.execute(text(
+                """
+                CREATE TABLE diff_comments (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    job_id VARCHAR(128) NOT NULL,
+                    file_path VARCHAR(512) NOT NULL,
+                    line_number INTEGER NOT NULL,
+                    side VARCHAR(3) NOT NULL,
+                    base_sha VARCHAR(40),
+                    body TEXT NOT NULL,
+                    parent_id INTEGER,
+                    status VARCHAR(16) NOT NULL,
+                    author VARCHAR(8) NOT NULL,
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME,
+                    FOREIGN KEY(parent_id) REFERENCES diff_comments(id)
+                )
+                """
+            ))
+            conn.execute(text(
+                "INSERT INTO diff_comments "
+                "(id, job_id, file_path, line_number, side, base_sha, body, "
+                " parent_id, status, author, created_at, updated_at) "
+                "SELECT id, task_id, file_path, line_number, side, base_sha, "
+                "       body, parent_id, status, author, created_at, updated_at "
+                "FROM diff_comments_old"
+            ))
+            conn.execute(text("DROP TABLE diff_comments_old"))
+            conn.execute(text(
+                "CREATE INDEX ix_diff_comments_job_id ON diff_comments(job_id)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX ix_diff_comments_status ON diff_comments(status)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX ix_diff_comments_parent_id ON diff_comments(parent_id)"
+            ))
+            conn.execute(text("PRAGMA foreign_keys=ON"))
+            logger.info(
+                f"[startup] Renamed diff_comments.task_id -> job_id "
+                f"({backfilled} row(s) backfilled from Task.id to AgentJob.id)"
+            )
+    except Exception as e:
+        logger.warning(f"[startup] diff_comments column rename skipped: {e}")
+
+
 def _retro_incubate_thin_pending():
     """One-shot: flip auto-created 1-signal pending learnings to
     incubating so existing DBs match the new graduation gate.
@@ -345,6 +457,7 @@ def create_app(start_scheduler=False):
         _ensure_new_columns()
         _drop_legacy_columns()
         _drop_diff_comment_task_fk()
+        _rename_diff_comment_task_to_job()
         _retro_incubate_thin_pending()
 
         # Seed default skills on first run
