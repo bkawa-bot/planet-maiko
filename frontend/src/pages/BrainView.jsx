@@ -11,6 +11,7 @@ import { relativeTime } from "../utils/dates";
 import InfoButton from "../components/InfoButton";
 import ConfirmModal from "../components/ConfirmModal";
 import BackfillProgress from "../components/BackfillProgress";
+import ClusterProgress from "../components/ClusterProgress";
 import Training from "./Training";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import "./Knowledge.css";
@@ -33,7 +34,12 @@ export default function BrainView() {
   const [addText, setAddText] = useState("");
   const [addCategory, setAddCategory] = useState("domain_knowledge");
   const [backfilling, setBackfilling] = useState(false);
+  // Manual cluster sweep state. Distinct from `backfilling` because
+  // a cluster pass can run while backfill is idle (and vice versa)
+  // and the progress shape is different — clustering reports
+  // current_category + processed/total rather than per-repo phases.
   const [clustering, setClustering] = useState(false);
+  const [clusterProgress, setClusterProgress] = useState(null);
   const [backfillProgress, setBackfillProgress] = useState(null);
   const [expandedLearning, setExpandedLearning] = useState(null);
   const [provenanceCache, setProvenanceCache] = useState({});
@@ -110,6 +116,14 @@ export default function BrainView() {
         setBackfillProgress(s);
       }
     }).catch(() => {});
+    // Same for clustering — a sweep started in another tab, or a
+    // page reload mid-sweep, picks up the running progress.
+    api.getClusterStatus().then((s) => {
+      if (s?.running) {
+        setClustering(true);
+        setClusterProgress(s);
+      }
+    }).catch(() => {});
     // RAG status. Quiet failure — the pill just hides if we couldn't
     // reach the endpoint. Re-fetched after a backfill kickoff so the
     // indexed-count reflects the new state.
@@ -163,6 +177,49 @@ export default function BrainView() {
     const interval = setInterval(tick, 1500);
     return () => { cancelled = true; clearInterval(interval); };
   }, [backfilling]);
+
+  // Poll cluster status while a sweep is running. Fires the same
+  // "done" toast shape as the synchronous version used to (merged N
+  // duplicates across K categories) so the user sees the same
+  // feedback they got before, plus a progress bar in between.
+  useEffect(() => {
+    if (!clustering) return undefined;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const s = await api.getClusterStatus();
+        if (cancelled) return;
+        setClusterProgress(s);
+        if (!s?.running) {
+          setClustering(false);
+          if (s?.error) {
+            showToast(`Clustering failed: ${s.error}`, "high");
+          } else {
+            const r = s?.result || {};
+            const merged = r.learnings_merged ?? 0;
+            const cats = r.categories_scanned ?? 0;
+            if (merged === 0) {
+              showToast(`No duplicates found across ${cats} categories.`, "normal");
+            } else {
+              showToast(
+                `Merged ${merged} duplicate${merged === 1 ? "" : "s"} across ${cats} categories.`,
+                "normal",
+              );
+            }
+            fetchLearnings();
+          }
+          // Linger the final panel briefly so the user sees the
+          // result state, then clear it.
+          setTimeout(() => setClusterProgress(null), 4000);
+        }
+      } catch {
+        // transient — keep polling
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [clustering]);
 
   // Learnings with category="pattern" are now legitimate — the LLM
   // chose "pattern" as the real bucket. "Unsynthesized" is reserved
@@ -296,6 +353,9 @@ export default function BrainView() {
         {/* Live progress while backfill is running */}
         {(backfilling || backfillProgress?.phase === "done" || backfillProgress?.phase === "error") && (
           <BackfillProgress progress={backfillProgress} />
+        )}
+        {clusterProgress && (
+          <ClusterProgress progress={clusterProgress} />
         )}
         {/* Tabs */}
         <div className="knowledge-tabs">
@@ -449,28 +509,20 @@ export default function BrainView() {
             style={pending.length === 0 ? { marginLeft: "auto" } : {}}
             disabled={clustering || backfilling}
             onClick={async () => {
-              // Manual full-sweep dedupe across every category. Brain
-              // cycle only re-checks categories that got new signals
-              // each tick, so cross-category-batch duplicates from
-              // quiet windows accumulate. This is the explicit catch-up.
-              // Synchronous on the backend; can take a few minutes for
-              // large pools, hence the spinner.
+              // Manual full-sweep dedupe across every category. POSTs
+              // start the job on a background thread; the polling
+              // effect below drives the progress bar. The brain cycle's
+              // per-tick drift collector still runs on its own
+              // schedule — this is the explicit "catch up across all
+              // categories" sweep.
               setClustering(true);
               showToast("Clustering — this can take a few minutes…", "normal");
               try {
-                const res = await api.clusterLearnings();
-                const merged = res?.learnings_merged ?? 0;
-                const cats = res?.categories_scanned ?? 0;
-                if (merged === 0) {
-                  showToast(`No duplicates found across ${cats} categories.`, "normal");
-                } else {
-                  showToast(`Merged ${merged} duplicate${merged === 1 ? "" : "s"} across ${cats} categories.`, "normal");
-                }
-                fetchLearnings();
+                const initial = await api.clusterLearnings();
+                setClusterProgress(initial);
               } catch (err) {
-                showToast("Clustering failed: " + (err.message || "unknown"), "high");
-              } finally {
                 setClustering(false);
+                showToast("Clustering failed: " + (err.message || "unknown"), "high");
               }
             }}
             title="Run a full-sweep dedupe across every category. Picks up duplicates the per-tick drift collector missed."

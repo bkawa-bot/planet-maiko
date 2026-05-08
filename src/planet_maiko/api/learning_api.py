@@ -517,21 +517,97 @@ def backfill_status():
     return jsonify(get_backfill_progress())
 
 
+# Module-level cluster job state. Single-job (no concurrency assumed —
+# clicking Cluster while one is running just returns the current state).
+# The brain cycle's auto-clustering doesn't update this dict; it's
+# scoped to the user-triggered manual sweeps so the Brain page progress
+# bar stays focused on "the run I just kicked off."
+_cluster_progress = {
+    "running": False,
+    "current_category": None,
+    "processed": 0,
+    "total": 0,
+    "started_at": None,
+    "finished_at": None,
+    "result": None,
+    "error": None,
+}
+_cluster_lock = None  # threading.Lock, lazy-created so import-time stays cheap
+
+
+def _ensure_cluster_lock():
+    global _cluster_lock
+    if _cluster_lock is None:
+        import threading
+        _cluster_lock = threading.Lock()
+    return _cluster_lock
+
+
+def _cluster_run(app):
+    """Background runner for the manual cluster sweep. Updates
+    _cluster_progress as cluster_learnings() walks each category +
+    batch. on_progress is invoked once per (category, batch) tick."""
+    from datetime import datetime, timezone
+    from planet_maiko.brain.learning.clustering import cluster_learnings
+
+    def on_progress(category, processed, total):
+        _cluster_progress["current_category"] = category
+        _cluster_progress["processed"] = processed
+        _cluster_progress["total"] = total
+
+    with app.app_context():
+        try:
+            result = cluster_learnings(on_progress=on_progress)
+            _cluster_progress["result"] = result
+        except Exception as e:
+            logger.exception("[cluster] background run failed")
+            _cluster_progress["error"] = str(e)
+        finally:
+            _cluster_progress["running"] = False
+            _cluster_progress["finished_at"] = datetime.now(timezone.utc).isoformat()
+            _cluster_progress["current_category"] = None
+
+
 @learning_bp.route("/learnings/cluster", methods=["POST"])
 def cluster_learnings_endpoint():
-    """Run semantic clustering over the active learning pool.
+    """Kick off a full-sweep clustering pass on a background thread.
 
-    Useful to merge duplicates that slipped through the prefix-based
-    aggregator (e.g. "handle null with Optional" and "null check missing"
-    that ended up as separate Learnings). Synchronous — one LLM call per
-    batch of ~40 learnings per category.
+    Returns 202 immediately so the frontend can render a progress bar
+    via /learnings/cluster/status polling. If a sweep is already
+    running, returns the existing progress instead of starting a
+    second one.
     """
-    from planet_maiko.brain.learning.clustering import cluster_learnings
-    try:
-        results = cluster_learnings()
-        return jsonify(results)
-    except Exception as e:
-        logger.exception("[cluster] failed")
-        return jsonify({"error": str(e)}), 500
+    from datetime import datetime, timezone
+    import threading
+    from flask import current_app
+
+    lock = _ensure_cluster_lock()
+    with lock:
+        if _cluster_progress["running"]:
+            return jsonify({"already_running": True, **_cluster_progress}), 202
+        # Reset state for a fresh run.
+        _cluster_progress.update({
+            "running": True,
+            "current_category": None,
+            "processed": 0,
+            "total": 0,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": None,
+            "result": None,
+            "error": None,
+        })
+
+    app = current_app._get_current_object()
+    thread = threading.Thread(target=_cluster_run, args=(app,), daemon=True)
+    thread.start()
+    return jsonify({"started": True, **_cluster_progress}), 202
+
+
+@learning_bp.route("/learnings/cluster/status", methods=["GET"])
+def cluster_status():
+    """Poll the current/last clustering sweep's progress. Returns the
+    same dict shape regardless of state — the `running` flag tells
+    the caller whether to keep polling."""
+    return jsonify(_cluster_progress)
 
 
