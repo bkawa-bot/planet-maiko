@@ -304,13 +304,22 @@ def _act_notify(automation, config, pupdate=None, context=None):
     me when a PR approval lands from someone outside my team" or
     "notify me when CI has been red for 30 minutes."
 
-    Config fields (all optional except title):
-      title:    short headline (required). Supports {pupdate_title}.
-      body:     longer markdown (optional). Supports {pupdate_body}.
+    Config fields (all optional):
+      title:    short headline. Defaults to {pupdate_title}.
+      body:     longer markdown. Defaults to {pupdate_body} so the
+                user sees the full pupdate content in the memo card
+                without needing to click through.
       priority: normal | high | urgent. Default normal.
       url:      optional click-through. Supports {pupdate_url}.
+
+    Idempotency: if this automation already minted a notification memo
+    for this pupdate (matched by source_pupdate_id + extra.from_automation),
+    return the existing memo instead of creating a duplicate. Without
+    this, a cycle-scope automation re-firing on the same pupdate
+    across multiple cycles produced N memos for the same event.
     """
     from planet_maiko.brain.memos import create_memo
+    from planet_maiko.models.memo import Memo
 
     # Default: use the triggering pupdate's title. Matches what
     # _act_spawn_agent_job_from_pupdate does. Leaving the field blank
@@ -325,18 +334,48 @@ def _act_notify(automation, config, pupdate=None, context=None):
         else:
             title_template = automation.name or "Notification"
     title = _interpolate(title_template, pupdate=pupdate, context=context)
-    # _interpolate can still return "" if the pupdate had an empty
-    # title AND the template was just {pupdate_title} — fall back one
-    # more step so the memo always has something rather than being
-    # filed under "(notification)" in the UI.
     if not title.strip():
         title = automation.name or "Notification"
-    body = _interpolate(config.get("body") or "", pupdate=pupdate, context=context)
+
+    # Default body = pupdate body. Same reasoning as the title — most
+    # notify_me automations want the user to see the full pupdate
+    # content; making them re-type "{pupdate_body}" every time is
+    # busywork, and an empty body produces a card with just the title
+    # which loses context. Explicit "" in the editor still wins
+    # (someone who really wants a title-only card sets body="" with
+    # an empty string, not by leaving it blank).
+    body_template = config.get("body")
+    if body_template is None:
+        body_template = "{pupdate_body}" if pupdate is not None else ""
+    body = _interpolate(body_template, pupdate=pupdate, context=context)
+
     url_template = config.get("url") or (pupdate.url if pupdate else "")
     url = _interpolate(url_template, pupdate=pupdate, context=context) or None
     priority = (config.get("priority") or "normal").lower()
     if priority not in ("low", "normal", "high", "urgent"):
         priority = "normal"
+
+    # Idempotency: same (automation, pupdate) shouldn't mint a second
+    # memo. Scoped to non-dismissed memos so a user-dismissed memo
+    # doesn't permanently suppress legitimate re-firing on a future
+    # similar pupdate (the source_pupdate_id gates that — different
+    # pupdate id = new memo).
+    if pupdate is not None:
+        existing = (
+            Memo.query
+            .filter(Memo.kind == "notification")
+            .filter(Memo.source_pupdate_id == pupdate.id)
+            .filter(Memo.status.in_(("pending", "seen", "actioned")))
+            .all()
+        )
+        for m in existing:
+            if (m.extra or {}).get("from_automation") == automation.id:
+                return {
+                    "kind": "notify_me",
+                    "memo_id": m.id,
+                    "title": (m.title or "")[:80],
+                    "duplicate": True,
+                }
 
     memo_extra = {
         "from_automation": automation.id,

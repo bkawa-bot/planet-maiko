@@ -171,6 +171,19 @@ def _apply_context_to_config(config, context):
 
 
 def _run_actions(automation, context=None, pupdate=None):
+    # Cycle-scope automations match a pupdate via condition matching
+    # but the engine doesn't pass the pupdate object through —
+    # _cond_pupdate_match leaves the id in context.pupdate_id and
+    # moves on. Fetch the actual row here so action handlers (notify_me,
+    # spawn_agent_job_from_pupdate, etc.) get a real pupdate to attach
+    # source_pupdate_id from. Without this, notification memos came
+    # out with source_pupdate_id=None and the automation re-fired on
+    # every cycle creating duplicate memos.
+    if pupdate is None and context and context.get("pupdate_id"):
+        try:
+            pupdate = db.session.get(Pupdate, context["pupdate_id"])
+        except Exception:
+            pupdate = None
     results = []
     for action in (automation.then or []):
         kind = action.get("kind")
