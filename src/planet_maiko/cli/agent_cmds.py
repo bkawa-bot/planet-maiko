@@ -191,7 +191,7 @@ def register(subparsers):
     p = subparsers.add_parser("report", help="Report status to Planet Maiko")
     p.add_argument("message", help="Status message")
     p.add_argument("--body", help="Detailed body text")
-    p.add_argument("--task", help="Task ID (auto-detected from TASK.md if omitted)")
+    p.add_argument("--job", "--task", dest="task", help="Job ID (auto-detected from TASK.md if omitted; --task accepted for back-compat)")
     p.add_argument("--priority", default="normal", choices=["low", "normal", "high", "urgent"])
     # Default to agent_status, NOT agent_update. agent_update is the
     # type the post-tool-use hook emits on every git commit / bash /
@@ -213,14 +213,14 @@ def register(subparsers):
 
     # maiko inbox
     p = subparsers.add_parser("inbox", help="Check for messages from Planet Maiko")
-    p.add_argument("--task", help="Task ID (auto-detected if omitted)")
+    p.add_argument("--job", "--task", dest="task", help="Job ID (auto-detected if omitted; --task accepted for back-compat)")
     p.add_argument("--all", action="store_true", help="Show all messages, not just unread")
     p.set_defaults(func=cmd_inbox)
 
     # maiko reply
     p = subparsers.add_parser("reply", help="Send a message back to Planet Maiko")
     p.add_argument("message", help="Reply message")
-    p.add_argument("--task", help="Task ID (auto-detected if omitted)")
+    p.add_argument("--job", "--task", dest="task", help="Job ID (auto-detected if omitted; --task accepted for back-compat)")
     p.add_argument("--type", default="message", help="Message type")
     p.set_defaults(func=cmd_reply)
 
@@ -231,12 +231,12 @@ def register(subparsers):
     p.add_argument("--severity", default="suggestion", help="suggestion, warning, or blocking")
     p.add_argument("--code", help="Code snippet showing the pattern (before/after)")
     p.add_argument("--file", help="File path to include as code context")
-    p.add_argument("--task", help="Task ID (auto-detected if in worktree)")
+    p.add_argument("--job", "--task", dest="task", help="Job ID (auto-detected if in worktree; --task accepted for back-compat)")
     p.set_defaults(func=cmd_feedback)
 
     # maiko sleep
     p = subparsers.add_parser("sleep", help="Put agent to sleep")
-    p.add_argument("--task", help="Task ID (auto-detected from TASK.md if omitted)")
+    p.add_argument("--job", "--task", dest="task", help="Job ID (auto-detected from TASK.md if omitted; --task accepted for back-compat)")
     p.set_defaults(func=cmd_sleep)
 
     # maiko wake

@@ -338,12 +338,7 @@ def _write_mcp_json(working_path, job_id, parent_repo_path=None):
         "command": "node",
         "args": [channel_path],
         "env": {
-            # MAIKO_JOB_ID is the canonical name post-unification (it's
-            # the AgentJob.id). MAIKO_TASK_ID is mirrored so any in-
-            # flight agent session that already has the older env name
-            # baked into its mcp config keeps working until it restarts.
             "MAIKO_JOB_ID": job_id,
-            "MAIKO_TASK_ID": job_id,
             "MAIKO_API_URL": maiko_api_url(),
             "MAIKO_POLL_MS": "60000",
         },
@@ -465,16 +460,12 @@ def _write_claude_settings(working_path, job_id, agent_id):
     with open(os.path.join(claude_dir, "settings.json"), "w") as f:
         json.dump(settings, f, indent=2)
 
-    # Write .maiko-env.json for hook scripts to read.
-    # The on-disk field name stays `task_id` because six hook scripts
-    # (post_tool_use, notification, stop, subagent_stop, pre_commit_review,
-    # lora_review_hook) read it and forward it as `task_id` to the maiko
-    # API. Renaming requires a coordinated sweep across hooks + every
-    # endpoint that accepts `task_id`. Internally Python now calls it
-    # job_id; the on-the-wire name stays for compatibility.
+    # Write .maiko-env.json for hook scripts to read. Hooks read
+    # `job_id` first and fall back to the older `task_id` field, so
+    # we only write the canonical name now.
     from planet_maiko.config import maiko_api_url
     env_data = {
-        "task_id": job_id,
+        "job_id": job_id,
         "agent_id": agent_id,
         "api_url": maiko_api_url(),
     }

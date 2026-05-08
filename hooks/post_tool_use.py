@@ -24,7 +24,7 @@ def main():
         with open(env_path) as f:
             env = json.load(f)
 
-        task_id = env.get("task_id", "")
+        job_id = env.get("job_id") or env.get("task_id", "")
         agent_id = env.get("agent_id", "")
         api_url = env.get("api_url", "http://localhost:8420/api")
 
@@ -55,7 +55,7 @@ def main():
 
         event = "git_commit" if is_commit else "git_push"
         body = json.dumps({
-            "task_id": task_id,
+            "job_id": job_id,
             "agent_id": agent_id,
             "event": event,
             "message": message or f"Agent ran: {event}",

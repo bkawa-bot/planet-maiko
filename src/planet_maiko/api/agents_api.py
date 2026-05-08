@@ -679,9 +679,13 @@ def cleanup_agent():
 
 # --- Agent Inbox (bidirectional communication) ---
 
-@agents_bp.route("/agents/<task_id>/inbox", methods=["GET"])
-def get_agent_inbox(task_id):
+@agents_bp.route("/agents/<job_id>/inbox", methods=["GET"])
+def get_agent_inbox(job_id):
     """Get messages for an agent (channel polls this every ~15s).
+
+    `job_id` accepts either an AgentJob.id (post-rename canonical) or a
+    Task.id (transitional, for in-flight agent sessions whose hooks
+    haven't been upgraded). _resolve_canonical_inbox_id handles both.
 
     Query params:
         unread_only: "true" to only return unread messages (default: true)
@@ -690,7 +694,7 @@ def get_agent_inbox(task_id):
     unread_only = request.args.get("unread_only", "true").lower() == "true"
     mark_read = request.args.get("mark_read", "true").lower() == "true"
 
-    canonical_id = _resolve_canonical_inbox_id(task_id)
+    canonical_id = _resolve_canonical_inbox_id(job_id)
     query = AgentMessage.query.filter_by(task_id=canonical_id, direction="to_agent")
     if unread_only:
         # Quick count check to avoid loading objects when nothing is unread
@@ -709,9 +713,12 @@ def get_agent_inbox(task_id):
     return jsonify([m.to_dict() for m in messages])
 
 
-@agents_bp.route("/agents/<task_id>/inbox", methods=["POST"])
-def send_to_agent(task_id):
+@agents_bp.route("/agents/<job_id>/inbox", methods=["POST"])
+def send_to_agent(job_id):
     """Send a message to an agent (from dashboard, brain, or user).
+
+    `job_id` accepts AgentJob.id (canonical) or Task.id (legacy);
+    _resolve_canonical_inbox_id picks the right side.
 
     When sender is "user", also auto-wake the agent so the message
     actually gets read — otherwise it sits in the inbox until the
@@ -719,7 +726,7 @@ def send_to_agent(task_id):
     free because they're usually paired with their own triggers.
     """
     data = request.get_json()
-    canonical_id = _resolve_canonical_inbox_id(task_id)
+    canonical_id = _resolve_canonical_inbox_id(job_id)
     msg = AgentMessage(
         task_id=canonical_id,
         direction="to_agent",
@@ -1122,18 +1129,21 @@ def get_conflicts():
 
 @agents_bp.route("/hooks/post-tool-use", methods=["POST"])
 def hook_post_tool_use():
-    """Handle post-tool-use hook events (git commit, git push)."""
+    """Handle post-tool-use hook events (git commit, git push).
+
+    Accepts both `job_id` (canonical, post-rename) and `task_id`
+    (legacy, in case an agent's hooks haven't been upgraded yet).
+    """
     from datetime import datetime, timezone
     from planet_maiko.models.pupdate import Pupdate
     from planet_maiko.models.agent_profile import AgentProfile
 
     data = request.get_json()
-    task_id = data.get("task_id", "")
+    job_id = data.get("job_id") or data.get("task_id", "")
     agent_id = data.get("agent_id", "")
     event = data.get("event", "tool_use")
     message = data.get("message", "")
 
-    # Create an agent_update pupdate
     pupdate = Pupdate(
         id=f"hook-{agent_id}-{event}-{uuid.uuid4().hex[:8]}",
         source="agent",
@@ -1142,10 +1152,10 @@ def hook_post_tool_use():
         priority="low",
         title=f"Agent {event.replace('_', ' ')}",
         body=message,
-        tags=[task_id, "agent", "hook"],
+        tags=[job_id, "agent", "hook"],
         extra={
             "agent_id": agent_id,
-            "task_id": task_id,
+            "job_id": job_id,
             "event": event,
         },
     )
@@ -1162,12 +1172,15 @@ def hook_post_tool_use():
 
 @agents_bp.route("/hooks/notification", methods=["POST"])
 def hook_notification():
-    """Handle notification hook: create milestone pupdate."""
+    """Handle notification hook: create milestone pupdate.
+
+    Accepts both `job_id` (canonical) and `task_id` (legacy fallback).
+    """
     from datetime import datetime, timezone
     from planet_maiko.models.pupdate import Pupdate
 
     data = request.get_json()
-    task_id = data.get("task_id", "")
+    job_id = data.get("job_id") or data.get("task_id", "")
     agent_id = data.get("agent_id", "")
     title = data.get("title", "Agent notification")
     body = data.get("body", "")
@@ -1182,10 +1195,10 @@ def hook_notification():
         body=body,
         actionable=True,
         action_hint="Review agent milestone",
-        tags=[task_id, "agent", "milestone"],
+        tags=[job_id, "agent", "milestone"],
         extra={
             "agent_id": agent_id,
-            "task_id": task_id,
+            "job_id": job_id,
         },
     )
     db.session.add(pupdate)

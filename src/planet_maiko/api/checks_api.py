@@ -40,19 +40,30 @@ def list_checks():
 
 @checks_bp.route("/checks/run", methods=["POST"])
 def run_checks_route():
+    """Run the worktree's checks (tests/lint/typecheck) plus LoRA.
+
+    Accepts both `job_id` (canonical) and `task_id` (legacy) on the
+    request body. The id is used to resolve a working_path when the
+    caller didn't pass one explicitly.
+    """
     data = request.get_json(silent=True) or {}
     repo_path = (data.get("repo_path") or "").strip()
-    task_id = (data.get("task_id") or "").strip()
+    job_id = (data.get("job_id") or data.get("task_id") or "").strip()
     timeout = int(data.get("timeout") or 120)
 
-    if not repo_path:
-        # Fall back to the task's working_path if the agent didn't send one.
-        if task_id:
-            task = db.session.get(Task, task_id)
+    if not repo_path and job_id:
+        # Resolve via AgentJob first, fall back to Task. The id can be
+        # either post-unification — agents send their MAIKO_JOB_ID.
+        from planet_maiko.models.agent_job import AgentJob
+        job = db.session.get(AgentJob, job_id)
+        if job and job.worktree_path:
+            repo_path = job.worktree_path
+        else:
+            task = db.session.get(Task, job_id)
             if task and (task.extra or {}).get("working_path"):
                 repo_path = (task.extra or {}).get("working_path")
     if not repo_path:
-        return jsonify({"error": "repo_path required (or a task_id with extra.working_path)"}), 400
+        return jsonify({"error": "repo_path required (or a job_id with a worktree)"}), 400
 
     try:
         result = run_checks(repo_path, timeout=timeout)
@@ -68,10 +79,10 @@ def run_checks_route():
     # lora_false_positive / lora_false_negative feedback on specific
     # items when they disagree with the model.
     lora_result = None
-    if task_id:
+    if job_id:
         try:
             from planet_maiko.api.lora_api import run_lora_for_task
-            lora_result = run_lora_for_task(task_id=task_id, scope="branch")
+            lora_result = run_lora_for_task(task_id=job_id, scope="branch")
         except Exception as e:
             logger.warning(f"[checks] LoRA verifier failed: {e}")
             lora_result = {"error": str(e)}
@@ -88,10 +99,20 @@ def run_checks_route():
             summary["blocked"] = True
             result["summary"] = summary
 
-    # Persist the latest run on the task so the UI can surface it and
-    # `ready_for_review` can be cross-checked against it.
-    if task_id:
-        task = db.session.get(Task, task_id)
+    # Persist the latest run on the linked Task so the UI can surface
+    # it and `ready_for_review` can be cross-checked against it. The
+    # id from the wire is a job_id — resolve to the linked Task via
+    # AgentJob.source_task_id when needed.
+    persist_task_id = None
+    if job_id:
+        from planet_maiko.models.agent_job import AgentJob
+        job = db.session.get(AgentJob, job_id)
+        if job and job.source_task_id:
+            persist_task_id = job.source_task_id
+        else:
+            persist_task_id = job_id  # fall back: id may already BE a Task.id
+    if persist_task_id:
+        task = db.session.get(Task, persist_task_id)
         if task is not None:
             extra = dict(task.extra or {})
             extra["check_results"] = {

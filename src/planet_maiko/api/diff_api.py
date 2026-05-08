@@ -483,9 +483,17 @@ def request_changes(task_id):
     if not worktree:
         return jsonify({"error": "No worktree for this task"}), 400
 
+    # The route param is whatever id the UI dropped in (Job.id or
+    # Task.id post-unification). DiffComments are stored against the
+    # canonical Task.id, so resolve before querying — without this the
+    # endpoint queried a Job.id against the Task FK column and came up
+    # empty even when the list endpoint was correctly returning N
+    # drafts. _resolve_task_id falls back to inbox_id, which is what
+    # the list endpoint uses too, so the two now match.
+    drafts_task_id = _resolve_task_id(task_id)
     drafts = (
         DiffComment.query
-        .filter_by(task_id=task_id, status="draft", author="user")
+        .filter_by(task_id=drafts_task_id, status="draft", author="user")
         .order_by(DiffComment.file_path.asc(), DiffComment.line_number.asc())
         .all()
     )
@@ -819,7 +827,9 @@ def approve(task_id):
     if not branch:
         return jsonify({"error": "No branch tracked for this task"}), 400
 
-    submitted = DiffComment.query.filter_by(task_id=task_id, status="submitted").all()
+    submitted = DiffComment.query.filter_by(
+        task_id=_resolve_task_id(task_id), status="submitted",
+    ).all()
     for c in submitted:
         c.status = "resolved"
 

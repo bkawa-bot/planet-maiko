@@ -51,9 +51,9 @@ def _read_env():
         return None
 
 
-def _fetch_inbox(api_url, task_id):
+def _fetch_inbox(api_url, job_id):
     url = (
-        f"{api_url}/agents/{task_id}/inbox"
+        f"{api_url}/agents/{job_id}/inbox"
         "?unread_only=true&mark_read=true"
     )
     req = urllib.request.Request(url, method="GET")
@@ -88,13 +88,13 @@ def main():
     env = _read_env()
     if not env:
         return  # No Maiko identity — not a Maiko-managed worktree
-    task_id = env.get("task_id")
+    job_id = env.get("job_id") or env.get("task_id")
     api_url = env.get("api_url") or "http://localhost:8420/api"
-    if not task_id:
+    if not job_id:
         return
 
     try:
-        messages = _fetch_inbox(api_url, task_id)
+        messages = _fetch_inbox(api_url, job_id)
     except Exception:
         return  # Server down or unreachable — allow stop, don't strand the agent
 

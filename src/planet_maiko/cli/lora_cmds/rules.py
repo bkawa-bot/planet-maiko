@@ -139,10 +139,14 @@ def cmd_rules_list(args):
         print(f"Total: {len(learnings)} learnings")
 
 
-def _detect_task_id_from_env():
+def _detect_job_id_from_env():
     """If we're running inside a Maiko agent worktree, the kickoff
-    wrote .maiko-env.json with the task_id. Read it transparently so
-    agents get rules-considered tracking without remembering a flag."""
+    wrote .maiko-env.json with the job_id. Read it transparently so
+    agents get rules-considered tracking without remembering a flag.
+
+    Falls back to the older `task_id` field for worktrees written
+    before the rename.
+    """
     import json as _json
     env_path = os.path.join(os.getcwd(), ".maiko-env.json")
     if not os.path.exists(env_path):
@@ -150,9 +154,13 @@ def _detect_task_id_from_env():
     try:
         with open(env_path, encoding="utf-8") as f:
             env = _json.load(f)
-        return (env.get("task_id") or "").strip() or None
+        return (env.get("job_id") or env.get("task_id") or "").strip() or None
     except Exception:
         return None
+
+
+# Back-compat alias for older callers.
+_detect_task_id_from_env = _detect_job_id_from_env
 
 
 def cmd_rules_relevant(args):

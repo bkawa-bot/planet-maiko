@@ -188,18 +188,19 @@ def run_lora_for_task(task_id, scope="branch"):
 
 @lora_bp.route("/lora/check", methods=["POST"])
 def lora_check():
-    """Run the task's LoRA against its worktree diff.
+    """Run the agent's LoRA against its worktree diff.
 
     Thin HTTP wrapper around `run_lora_for_task`. Kept as its own
     endpoint so the MCP tool `lora_check` can still call it directly
     when the agent wants to drill into LoRA output after fixing
     violations (re-check without re-running shell tests).
 
-    Body: {"task_id": str, "scope": "branch" | "last_commit"}
+    Body: {"job_id" | "task_id": str, "scope": "branch" | "last_commit"}
     """
     data = request.get_json(silent=True) or {}
+    job_id = data.get("job_id") or data.get("task_id")
     result = run_lora_for_task(
-        task_id=data.get("task_id"),
+        task_id=job_id,
         scope=data.get("scope") or "branch",
     )
     if "error" in result and "no_model_for_repo" not in result:

@@ -7,11 +7,12 @@
  *
  * Environment variables:
  *   MAIKO_API_URL  — Planet Maiko API base URL (default: http://localhost:8420/api)
- *   MAIKO_TASK_ID  — The task ID this agent is working on (required)
+ *   MAIKO_JOB_ID   — The AgentJob ID this agent is working on (required;
+ *                    MAIKO_TASK_ID is accepted as a transitional alias)
  *   MAIKO_POLL_MS  — Polling interval in ms (default: 60000)
  *
  * Usage:
- *   MAIKO_TASK_ID=task-123 claude --dangerously-load-development-channels server:maiko-channel
+ *   MAIKO_JOB_ID=job-abc123 claude --dangerously-load-development-channels server:maiko-channel
  *
  * Or in .mcp.json:
  *   {
@@ -19,7 +20,7 @@
  *       "maiko-channel": {
  *         "command": "node",
  *         "args": ["./channel/index.js"],
- *         "env": { "MAIKO_TASK_ID": "task-123" }
+ *         "env": { "MAIKO_JOB_ID": "job-abc123" }
  *       }
  *     }
  *   }
@@ -33,11 +34,14 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 const API_URL = process.env.MAIKO_API_URL || "http://localhost:8420/api";
-const TASK_ID = process.env.MAIKO_TASK_ID;
+// MAIKO_JOB_ID is canonical post-rename; MAIKO_TASK_ID kept as a
+// transitional fallback for sessions whose .mcp.json was written
+// before the rename.
+const JOB_ID = process.env.MAIKO_JOB_ID || process.env.MAIKO_TASK_ID;
 const POLL_MS = parseInt(process.env.MAIKO_POLL_MS || "60000", 10);
 
-if (!TASK_ID) {
-  console.error("MAIKO_TASK_ID environment variable is required");
+if (!JOB_ID) {
+  console.error("MAIKO_JOB_ID (or MAIKO_TASK_ID) environment variable is required");
   process.exit(1);
 }
 
@@ -94,7 +98,7 @@ const mcp = new Server(
       `  for those). One insight per call, keep it to a sentence.`,
       `- Check your inbox whenever you're about to end a response or`,
       `  wait for input — there may be a message queued.`,
-      `Your task ID is: ${TASK_ID}`,
+      `Your job ID is: ${JOB_ID}`,
     ].join("\n"),
   }
 );
@@ -278,7 +282,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     const { content, message_type = "message", recipient } = req.params.arguments;
 
     try {
-      const resp = await fetch(`${API_URL}/agents/${TASK_ID}/outbox`, {
+      const resp = await fetch(`${API_URL}/agents/${JOB_ID}/outbox`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -319,7 +323,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       const resp = await fetch(`${API_URL}/lora/check`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ task_id: TASK_ID, scope }),
+        body: JSON.stringify({ job_id: JOB_ID, scope }),
       });
       if (!resp.ok) {
         const err = await resp.text();
@@ -392,7 +396,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       const resp = await fetch(`${API_URL}/checks/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ task_id: TASK_ID, timeout }),
+        body: JSON.stringify({ job_id: JOB_ID, timeout }),
       });
       if (!resp.ok) {
         const err = await resp.text();
@@ -459,7 +463,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
   if (req.params.name === "leave_comment") {
     const { file_path, line_number, side = "new", body } = req.params.arguments;
     try {
-      const resp = await fetch(`${API_URL}/tasks/${TASK_ID}/comments/agent`, {
+      const resp = await fetch(`${API_URL}/tasks/${JOB_ID}/comments/agent`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ file_path, line_number, side, body }),
@@ -476,7 +480,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
 
   if (req.params.name === "check_inbox") {
     const unreadOnly = req.params.arguments?.unread_only !== false;
-    const url = `${API_URL}/agents/${TASK_ID}/inbox?unread_only=${unreadOnly}&mark_read=${unreadOnly}`;
+    const url = `${API_URL}/agents/${JOB_ID}/inbox?unread_only=${unreadOnly}&mark_read=${unreadOnly}`;
     try {
       const resp = await fetch(url);
       if (!resp.ok) {
@@ -523,7 +527,7 @@ async function pollMessages() {
     // Leaving messages unread lets the Stop hook catch anything the
     // notification channel missed — that's the guaranteed delivery path.
     const resp = await fetch(
-      `${API_URL}/agents/${TASK_ID}/inbox?unread_only=true&mark_read=false`
+      `${API_URL}/agents/${JOB_ID}/inbox?unread_only=true&mark_read=false`
     );
     if (!resp.ok) return;
 
@@ -541,7 +545,7 @@ async function pollMessages() {
             sender: msg.sender || "maiko",
             message_type: msg.message_type || "message",
             message_id: String(msg.id),
-            task_id: TASK_ID,
+            job_id: JOB_ID,
           },
         },
       });
@@ -555,10 +559,10 @@ async function pollMessages() {
 
 async function reportSessionId() {
   const sessionId = process.env.CLAUDE_SESSION_ID;
-  if (!sessionId || !TASK_ID) return;
+  if (!sessionId || !JOB_ID) return;
 
   try {
-    await fetch(`${API_URL}/agents/${TASK_ID}/session`, {
+    await fetch(`${API_URL}/agents/${JOB_ID}/session`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId }),

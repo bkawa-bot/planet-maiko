@@ -1,6 +1,6 @@
 """Shared helpers for the maiko CLI submodules.
 
-Holds the API client wrapper and the TASK.md task-id detector that
+Holds the API client wrapper and the TASK.md job-id detector that
 several commands need. Kept private (`_helpers`) so it doesn't get
 imported as a public API.
 """
@@ -39,13 +39,25 @@ def api_request(path, method="GET", data=None):
         sys.exit(1)
 
 
-def detect_task_id():
-    """Try to detect the task ID from the current directory's TASK.md."""
+def detect_job_id():
+    """Try to detect the job ID from the current directory's TASK.md.
+
+    Reads the new "**Job ID:**" line first; falls back to the older
+    "**Task ID:**" so worktrees written before the rename keep
+    working.
+    """
     try:
         with open("TASK.md") as f:
             for line in f:
+                if line.startswith("**Job ID:**"):
+                    return line.split("**Job ID:**")[1].strip()
                 if line.startswith("**Task ID:**"):
                     return line.split("**Task ID:**")[1].strip()
     except FileNotFoundError:
         pass
     return None
+
+
+# Back-compat alias — older imports from cli/agent_cmds.py and
+# cli/lora_cmds expect the old name.
+detect_task_id = detect_job_id

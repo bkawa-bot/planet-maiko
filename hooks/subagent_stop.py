@@ -23,7 +23,7 @@ def main():
         with open(env_path) as f:
             env = json.load(f)
 
-        task_id = env.get("task_id", "")
+        job_id = env.get("job_id") or env.get("task_id", "")
         agent_id = env.get("agent_id", "")
         api_url = env.get("api_url", "http://localhost:8420/api")
 
@@ -31,7 +31,7 @@ def main():
         payload = json.loads(sys.stdin.read())
 
         req_body = json.dumps({
-            "task_id": task_id,
+            "job_id": job_id,
             "agent_id": agent_id,
         }).encode()
 

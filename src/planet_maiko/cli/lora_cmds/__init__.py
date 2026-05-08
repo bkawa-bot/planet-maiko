@@ -221,8 +221,9 @@ def register(subparsers):
     p.add_argument("--k", type=int, default=5, help="Max rules to return (default 5)")
     p.add_argument("--min-similarity", type=float, default=0.40,
                    help="Cosine threshold below which rules are dropped (default 0.40)")
-    p.add_argument("--task-id",
+    p.add_argument("--job-id", "--task-id", dest="task_id",
                    help="Persist retrieval to task.extra.rules_considered. "
                         "Auto-detected from .maiko-env.json when run inside "
-                        "an agent worktree, so agents normally don't pass it.")
+                        "an agent worktree, so agents normally don't pass it. "
+                        "(--task-id accepted for back-compat.)")
     p.set_defaults(func=cmd_rules_relevant)
