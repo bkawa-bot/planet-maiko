@@ -253,9 +253,59 @@
 .agent-job-diff-actions {
   display: flex;
   gap: 8px;
+  align-items: center;
   justify-content: flex-end;
-  padding: 10px 0;
+  padding: 12px 14px;
   border-top: 1px solid var(--border);
+  /* Sticky to the bottom of the viewport so on long diffs the user
+     never has to scroll to find Request changes / Approve. The
+     subtle backdrop helps it read as "controls" against the diff
+     scrolling underneath. */
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-card);
+  border-radius: var(--radius-xs);
+  margin-top: 4px;
+  z-index: 2;
+}
+.diff-actions-hint {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* react-diff-view default styles assume a light theme — without
+   these overrides the diff body, gutter, and hunk headers all
+   render with white-ish backgrounds against the dark Maiko theme,
+   which reads as "random white blocks" between the colored
+   add/delete rows. Mirrored from the original ReviewDiff.css. */
+.agent-job-diff .diff-view .diff,
+.agent-job-diff .diff {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  background: transparent;
+  color: var(--text);
+}
+.agent-job-diff .diff-gutter {
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+.agent-job-diff .diff-gutter:hover {
+  background: var(--pink-soft);
+}
+.agent-job-diff .diff-gutter-insert { color: var(--green); background: rgba(125, 219, 163, 0.28); }
+.agent-job-diff .diff-gutter-delete { color: var(--urgent); background: rgba(255, 107, 127, 0.26); }
+.agent-job-diff .diff-code-insert   { background: rgba(125, 219, 163, 0.20); }
+.agent-job-diff .diff-code-delete   { background: rgba(255, 107, 127, 0.18); }
+.agent-job-diff .diff-hunk-header {
+  background: var(--bg-card-alt);
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.agent-job-diff .diff-line {
+  background: transparent;
 }
 
 /* Inline diff marker (re-used from comment surface) */

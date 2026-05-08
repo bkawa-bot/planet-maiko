@@ -538,18 +538,22 @@ function DiffPanel({ jobId, task, onChanged }) {
           })}
         </aside>
       </div>
-      {(drafts.length > 0 || diff?.raw_diff) && (
+      {diff?.raw_diff && (
         <div className="agent-job-diff-actions">
-          {drafts.length > 0 && (
-            <button
-              className="btn"
-              disabled={submitting}
-              onClick={handleRequestChanges}
-            >
-              {submitting ? <Loader size={11} className="spin" /> : <MessageSquare size={11} />}
-              {" "}Request changes ({drafts.length})
-            </button>
-          )}
+          <span className="diff-actions-hint">
+            {drafts.length === 0
+              ? "Click any line in the diff to leave a comment, then send."
+              : `${drafts.length} draft${drafts.length === 1 ? "" : "s"} ready to send.`}
+          </span>
+          <button
+            className="btn"
+            disabled={submitting || drafts.length === 0}
+            onClick={handleRequestChanges}
+            title={drafts.length === 0 ? "Leave at least one draft comment first" : "Send all drafts to the agent"}
+          >
+            {submitting ? <Loader size={11} className="spin" /> : <MessageSquare size={11} />}
+            {" "}Request changes{drafts.length > 0 ? ` (${drafts.length})` : ""}
+          </button>
           <button
             className="btn btn-primary"
             disabled={approving || drafts.length > 0}
