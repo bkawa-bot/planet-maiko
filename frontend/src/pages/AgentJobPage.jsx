@@ -106,14 +106,13 @@ export default function AgentJobPage() {
         {activeView === "diff" && (
           <DiffPanel
             jobId={jobId}
-            taskId={task?.id || jobId}
             task={task}
             onChanged={fetchAll}
           />
         )}
         {activeView === "plan" && (
           <PlanPanel
-            taskId={task?.id || jobId}
+            jobId={jobId}
             task={task}
             onChanged={fetchAll}
           />
@@ -247,7 +246,13 @@ function JobTabs({ tabs, active, onChange }) {
 // Diff panel
 // ---------------------------------------------------------------------------
 
-function DiffPanel({ jobId, taskId, task, onChanged }) {
+function DiffPanel({ jobId, task, onChanged }) {
+  // Every /tasks/<id>/... endpoint accepts either Task.id or
+  // AgentJob.id post-canonicalization (_task_or_404 in diff_api.py
+  // resolves either). So the panel passes jobId through the API
+  // calls — no more awkward task?.id || jobId fallback shape, and
+  // the page is consistently job-keyed end-to-end.
+  const id = jobId;
   const [diff, setDiff] = useState(null);
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -268,8 +273,8 @@ function DiffPanel({ jobId, taskId, task, onChanged }) {
     setLoading(true);
     try {
       const [d, c] = await Promise.all([
-        api.getTaskDiff(taskId).catch((e) => ({ error: e.message })),
-        api.listDiffComments(taskId).catch(() => []),
+        api.getTaskDiff(id).catch((e) => ({ error: e.message })),
+        api.listDiffComments(id).catch(() => []),
       ]);
       if (d?.error) showToast(d.error, "high");
       else setDiff(d);
@@ -277,7 +282,7 @@ function DiffPanel({ jobId, taskId, task, onChanged }) {
     } finally {
       setLoading(false);
     }
-  }, [taskId]);
+  }, [id]);
 
   useEffect(() => { refetch(); }, [refetch]);
 
@@ -316,7 +321,7 @@ function DiffPanel({ jobId, taskId, task, onChanged }) {
   const submitNew = async () => {
     if (!newAnchor || !newBody.trim()) return;
     try {
-      await api.createDiffComment(taskId, {
+      await api.createDiffComment(id, {
         file_path: newAnchor.filePath,
         line_number: newAnchor.line,
         side: newAnchor.side,
@@ -333,7 +338,7 @@ function DiffPanel({ jobId, taskId, task, onChanged }) {
     if (submitting || drafts.length === 0) return;
     setSubmitting(true);
     try {
-      const r = await api.requestDiffChanges(taskId);
+      const r = await api.requestDiffChanges(id);
       showToast(`Sent ${r.submitted_comments} comment${r.submitted_comments === 1 ? "" : "s"} to the agent.`, "normal");
       await refetch();
       onChanged?.();
@@ -345,7 +350,7 @@ function DiffPanel({ jobId, taskId, task, onChanged }) {
     if (approving) return;
     setApproving(true);
     try {
-      const r = await api.approveDiffReview(taskId);
+      const r = await api.approveDiffReview(id);
       const url = r?.pr_url || r?.existing_pr_url;
       showToast(url ? `Approved — PR: ${url}` : "Approved", "normal");
       onChanged?.();
@@ -510,7 +515,7 @@ function DiffPanel({ jobId, taskId, task, onChanged }) {
                 <CommentThread
                   comments={cs}
                   onReply={async (body, parentId) => {
-                    await api.createDiffComment(taskId, {
+                    await api.createDiffComment(id, {
                       file_path: anchor.filePath,
                       line_number: anchor.line,
                       side: anchor.side,
@@ -598,7 +603,11 @@ function InlineMarker({ count, focused, onClick, registerRef }) {
 // Plan panel
 // ---------------------------------------------------------------------------
 
-function PlanPanel({ taskId, task, onChanged }) {
+function PlanPanel({ jobId, task, onChanged }) {
+  // Same canonicalization story as DiffPanel — the backend's
+  // /tasks/<id>/plan endpoints accept either Task.id or Job.id, so
+  // the panel just passes jobId through.
+  const id = jobId;
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [revising, setRevising] = useState(false);
@@ -608,17 +617,17 @@ function PlanPanel({ taskId, task, onChanged }) {
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const p = await api.getTaskPlan(taskId).catch(() => null);
+      const p = await api.getTaskPlan(id).catch(() => null);
       setPlan(p);
     } finally { setLoading(false); }
-  }, [taskId]);
+  }, [id]);
   useEffect(() => { refetch(); }, [refetch]);
 
   const handleApprove = async () => {
     if (approving) return;
     setApproving(true);
     try {
-      await api.approveTaskPlan(taskId);
+      await api.approveTaskPlan(id);
       showToast("Plan approved — agent is implementing.", "normal");
       onChanged?.();
       refetch();
@@ -630,7 +639,7 @@ function PlanPanel({ taskId, task, onChanged }) {
     if (!feedback.trim() || revising) return;
     setRevising(true);
     try {
-      await api.reviseTaskPlan(taskId, feedback);
+      await api.reviseTaskPlan(id, feedback);
       showToast("Revision requested.", "normal");
       setFeedback("");
       onChanged?.();

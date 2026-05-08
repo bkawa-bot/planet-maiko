@@ -54,30 +54,31 @@ def _resolve_task_id(inbox_id):
     return None
 
 
-def _canonical_inbox_id(task_id):
-    """Translate a Task.id → the AgentJob.id the agent's MCP env
+def _canonical_inbox_id(any_id):
+    """Translate any URL id → the AgentJob.id the agent's MCP env
     actually points at, so AgentMessage rows we write are visible
     to the agent's check_inbox.
 
-    The diff_api endpoints all take a Task.id in the URL (the user
-    is reviewing from /tasks/<id>/review). But post-unification the
-    agent's MAIKO_TASK_ID is the AgentJob.id, so any AgentMessage
-    we want the agent to actually read needs to be keyed by job.id.
-    Cancelled jobs are excluded so a revived task with a fresh job
-    routes to the new job, not the dead one.
+    Accepts either:
+      - A Task.id  → looks up the most-recent non-cancelled linked job
+      - A Job.id   → returns it as-is
 
-    Returns the linked AgentJob.id when one exists, else the task_id
-    unchanged so legacy task-keyed flows (pre-unification) still work.
+    Falls back to the input id when nothing resolves so legacy
+    task-keyed flows (pre-unification, no AgentJob row) still work.
     """
     from planet_maiko.models.agent_job import AgentJob
+    # If the caller already handed us a Job.id, that IS the canonical
+    # inbox id — no lookup needed.
+    if db.session.get(AgentJob, any_id) is not None:
+        return any_id
     job = (
         AgentJob.query
-        .filter_by(source_task_id=task_id)
+        .filter_by(source_task_id=any_id)
         .filter(AgentJob.status != "cancelled")
         .order_by(AgentJob.created_at.desc())
         .first()
     )
-    return job.id if job is not None else task_id
+    return job.id if job is not None else any_id
 
 
 # ---------------------------------------------------------------------------
@@ -85,10 +86,25 @@ def _canonical_inbox_id(task_id):
 # ---------------------------------------------------------------------------
 
 def _task_or_404(task_id):
+    """Resolve a request-id (URL param) to a Task row.
+
+    Accepts either a Task.id directly OR an AgentJob.id whose
+    source_task_id points at a Task. Post-unification the AgentJobPage
+    passes jobId to every /tasks/<id>/* endpoint here; this lookup
+    canonicalizes so the entire diff_api surface is id-space agnostic.
+
+    Returns (task, None) on success, (None, error_response) on 404.
+    """
     task = db.session.get(Task, task_id)
-    if not task:
-        return None, (jsonify({"error": f"Task {task_id} not found"}), 404)
-    return task, None
+    if task is not None:
+        return task, None
+    from planet_maiko.models.agent_job import AgentJob
+    job = db.session.get(AgentJob, task_id)
+    if job is not None and job.source_task_id:
+        linked = db.session.get(Task, job.source_task_id)
+        if linked is not None:
+            return linked, None
+    return None, (jsonify({"error": f"Task {task_id} not found"}), 404)
 
 
 def _worktree_path(task):
