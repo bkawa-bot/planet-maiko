@@ -86,7 +86,7 @@ def _normalize_cond_result(result):
 
 
 def _evaluate_conditions(automation, pupdate=None):
-    """Run all when[] entries. Returns (bool, merged_context).
+    """Run all when[] entries. Returns (bool, merged_context, outcomes).
 
     When `pupdate` is supplied (pupdate-scope evaluation), each
     condition handler gets it — handlers that don't care ignore the
@@ -96,10 +96,16 @@ def _evaluate_conditions(automation, pupdate=None):
     with_logic == "all" = every condition must match; "any" = one is
     enough. Context from matched conditions is merged (later wins)
     so actions can templatize over the extracted values.
+
+    The third return value `outcomes` is a list of per-condition dicts
+    `[{kind, matched, reason?}]` — exposed so the cycle logger can
+    surface "automation X was unmet because pupdate_match=false,
+    repo_in=true" instead of opaque counters.
     """
     when = automation.when or []
+    outcomes = []
     if not when:
-        return False, {}
+        return False, {}, outcomes
     logic = (automation.when_logic or "all").lower()
     results = []
     context = {}
@@ -110,6 +116,7 @@ def _evaluate_conditions(automation, pupdate=None):
             logger.warning(
                 f"[automation {automation.id}] unknown condition kind {kind!r}; treating as False"
             )
+            outcomes.append({"kind": kind, "matched": False, "reason": "unknown kind"})
             results.append(False)
             continue
         try:
@@ -120,13 +127,29 @@ def _evaluate_conditions(automation, pupdate=None):
             logger.warning(
                 f"[automation {automation.id}] condition {kind} error: {e}"
             )
+            outcomes.append({"kind": kind, "matched": False, "reason": f"error: {e}"})
             results.append(False)
             continue
+        outcomes.append({"kind": kind, "matched": matched})
         results.append(matched)
         if matched and ctx:
             context.update(ctx)
     ok = any(results) if logic == "any" else all(results)
-    return ok, context
+    return ok, context, outcomes
+
+
+def _format_outcomes(outcomes):
+    """Pretty-format a list of condition outcomes for log output.
+    `pupdate_match=✓ repo_in=✗(error: …)` style, compact + scannable.
+    """
+    parts = []
+    for o in outcomes:
+        mark = "✓" if o["matched"] else "✗"
+        suffix = ""
+        if not o["matched"] and o.get("reason"):
+            suffix = f"({o['reason']})"
+        parts.append(f"{o['kind']}={mark}{suffix}")
+    return " ".join(parts) if parts else "(no conditions)"
 
 
 def _apply_context_to_config(config, context):
@@ -198,18 +221,39 @@ def evaluate():
     details = []
 
     for a in cycle_automations:
+        name = a.name or f"<id={a.id}>"
         if _cooldown_active(a):
             cooldown += 1
             details.append({"id": a.id, "outcome": "cooldown"})
+            # Log when each cooldown will lift so the user can debug
+            # "why didn't this fire" without doing the math themselves.
+            if a.last_fired_at:
+                ago = datetime.now(timezone.utc) - a.last_fired_at.replace(
+                    tzinfo=timezone.utc
+                ) if a.last_fired_at.tzinfo is None else (
+                    datetime.now(timezone.utc) - a.last_fired_at
+                )
+                logger.info(
+                    f"[automation '{name}' id={a.id}] cooldown — fired "
+                    f"{int(ago.total_seconds() / 60)}m ago "
+                    f"(cooldown_days={a.cooldown_days})"
+                )
             continue
         try:
-            matched, context = _evaluate_conditions(a)
+            matched, context, outcomes = _evaluate_conditions(a)
             if not matched:
                 unmet += 1
-                details.append({"id": a.id, "outcome": "unmet"})
+                details.append({
+                    "id": a.id, "outcome": "unmet",
+                    "outcomes": outcomes,
+                })
+                logger.info(
+                    f"[automation '{name}' id={a.id}] unmet — "
+                    f"{_format_outcomes(outcomes)}"
+                )
                 continue
         except Exception as e:
-            logger.warning(f"[automation {a.id}] evaluation error: {e}")
+            logger.warning(f"[automation '{name}' id={a.id}] evaluation error: {e}")
             details.append({"id": a.id, "outcome": "error", "error": str(e)})
             continue
 
@@ -223,6 +267,11 @@ def evaluate():
             "actions": actions_result,
             "context": context,
         })
+        logger.info(
+            f"[automation '{name}' id={a.id}] fired — "
+            f"{_format_outcomes(outcomes)} → "
+            f"{len(actions_result)} action(s)"
+        )
 
     # Pupdate-scope: iterate each unprocessed pupdate, first matching
     # automation (ordered by id) claims it. Mirrors the old rules.py
@@ -254,19 +303,32 @@ def evaluate():
             if p.type == "pr_review_commented":
                 continue
             fired_for_this = False
+            # Per-pupdate diagnostic trail — which automations were
+            # tried, which conditions failed. Logged at DEBUG so the
+            # default INFO log doesn't drown in pupdate × rule misses,
+            # but flips on cleanly when the user is hunting a specific
+            # "why didn't my automation match this pupdate" question.
+            tried = []
             for a in pupdate_automations:
+                name = a.name or f"<id={a.id}>"
                 try:
-                    matched, context = _evaluate_conditions(a, pupdate=p)
+                    matched, context, outcomes = _evaluate_conditions(a, pupdate=p)
                 except Exception as e:
-                    logger.warning(f"[automation {a.id}] pupdate-scope eval error: {e}")
+                    logger.warning(f"[automation '{name}' id={a.id}] pupdate-scope eval error: {e}")
+                    tried.append(f"'{name}'=error")
                     continue
                 if not matched:
+                    tried.append(f"'{name}'=miss[{_format_outcomes(outcomes)}]")
                     continue
                 _run_actions(a, context=context, pupdate=p)
                 a.last_fired_at = datetime.now(timezone.utc)
                 a.fire_count = (a.fire_count or 0) + 1
                 pupdate_fired += 1
                 fired_for_this = True
+                logger.info(
+                    f"[automation '{name}' id={a.id}] fired on pupdate "
+                    f"{p.id} (type={p.type})"
+                )
                 # Auto-dismiss: the automation routed this pupdate to
                 # its downstream effect (task, memo, agent job). The
                 # pupdate is a queue event — once routed, it has no
@@ -281,6 +343,19 @@ def evaluate():
                 break  # first-match wins
             if not fired_for_this:
                 pupdate_unmatched += 1
+                # Surface unmatched pupdates at INFO so the user can
+                # see "PR webhook landed but no automation claimed it"
+                # without enabling DEBUG. The per-rule miss reasons
+                # stay at DEBUG to avoid drowning the log in noise.
+                logger.info(
+                    f"[automation pupdate-scope] no rule matched "
+                    f"pupdate {p.id} (type={p.type}, source={p.source})"
+                )
+                if tried:
+                    logger.debug(
+                        f"[automation pupdate-scope] tried for {p.id}: "
+                        + " ".join(tried)
+                    )
             p.brain_processed = True
 
     if fired or pupdate_fired:
