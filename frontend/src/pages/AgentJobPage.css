@@ -275,6 +275,85 @@
   font-style: italic;
 }
 
+/* Each file in the diff renders as its own card — bordered,
+   bg-card, rounded — so a multi-file diff reads as a stack of
+   discrete files rather than one continuous wall of code. The
+   per-file header (badge + path + +N/-M stats) sits at the top
+   of each card. Mirrored from ReviewDiff.css. */
+.agent-job-diff .diff-file-block {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.agent-job-diff .diff-file-header {
+  padding: 10px 14px;
+  background: var(--bg-card-alt);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+}
+.agent-job-diff .diff-file-path {
+  flex: 1;
+  color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.agent-job-diff .diff-file-stats {
+  display: inline-flex; gap: 8px; align-items: baseline;
+  font-size: 11px; font-weight: 600;
+}
+.agent-job-diff .diff-stat-add { color: var(--mint, #4ade80); }
+.agent-job-diff .diff-stat-del { color: var(--urgent, #f87171); }
+.agent-job-diff .diff-type-badge {
+  font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  padding: 3px 8px; border-radius: 10px;
+  white-space: nowrap;
+}
+.agent-job-diff .diff-type-badge.type-add {
+  background: rgba(74, 222, 128, 0.18); color: var(--mint, #4ade80);
+}
+.agent-job-diff .diff-type-badge.type-delete {
+  background: rgba(248, 113, 113, 0.18); color: var(--urgent, #f87171);
+}
+.agent-job-diff .diff-type-badge.type-modify {
+  background: var(--pink-soft); color: var(--pink);
+}
+.agent-job-diff .diff-type-badge.type-rename {
+  background: rgba(167, 139, 250, 0.18); color: #a78bfa;
+}
+/* The library has its own .diff-sticky-bar at the top of the
+   scroll region — IntersectionObserver tracks which file is in
+   view. We let DiffView.jsx handle that internally. */
+.agent-job-diff .diff-sticky-bar {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+.agent-job-diff .diff-sticky-path {
+  flex: 1;
+  color: var(--text); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.agent-job-diff .diff-sticky-counter {
+  font-size: 10px; color: var(--text-muted);
+  padding: 2px 8px; border-radius: 10px;
+  background: var(--bg-hover);
+  white-space: nowrap;
+}
+
 /* react-diff-view default styles assume a light theme — without
    these overrides the diff body, gutter, and hunk headers all
    render with white-ish backgrounds against the dark Maiko theme,
@@ -565,13 +644,42 @@ button.diff-sidebar-anchor:hover code {
   line-height: 1.55;
 }
 
-/* Chat panel -------------------------------------------------- */
+/* Chat panel — activity-style cards + reply input -------------- */
 
 .agent-job-chat {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.agent-job-chat .chat-thread {
+  padding: 14px 18px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.agent-job-chat .chat-input {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-card-alt);
+}
+.agent-job-chat .chat-input textarea {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.agent-job-chat .chat-input button {
+  align-self: flex-end;
 }
 
 /* Activity panel ---------------------------------------------- */

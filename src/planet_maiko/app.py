@@ -124,6 +124,79 @@ def _drop_legacy_columns():
         logger.warning(f"[startup] Column-drop pass failed: {e}")
 
 
+def _drop_diff_comment_task_fk():
+    """One-shot: rebuild diff_comments without the FK to tasks.id.
+
+    Original schema: `task_id VARCHAR(128) NOT NULL REFERENCES tasks(id)`.
+    Now we want a plain text column so the row can hold either a Task.id
+    OR an AgentJob.id (review agents whose job has no source_task_id
+    can't insert otherwise — leave_comment 404s with "no task linked
+    to this agent"). SQLite can't drop a FK in place, so the standard
+    pattern is recreate-table-without-it.
+
+    Idempotent — checks pragma foreign_key_list first; subsequent
+    boots find no FK to drop and exit immediately. Wrapped in a
+    transaction so a partial run can't strand data.
+    """
+    from sqlalchemy import text
+    try:
+        with db.engine.begin() as conn:
+            rows = conn.execute(text("PRAGMA table_info(diff_comments)")).all()
+            if not rows:
+                return  # Table doesn't exist yet — fresh DB, model is FK-less.
+            fks = conn.execute(text("PRAGMA foreign_key_list(diff_comments)")).all()
+            # FK row format: (id, seq, table, from, to, on_update, on_delete, match)
+            has_task_fk = any(r[2] == "tasks" and r[3] == "task_id" for r in fks)
+            if not has_task_fk:
+                return
+            # SQLite recreate-table idiom: rename old, create new, copy,
+            # drop old. Indexes get recreated explicitly. PRAGMA
+            # foreign_keys is connection-scoped; we toggle it off for
+            # the rebuild so the COPY doesn't trip on existing rows
+            # whose task_id no longer points at a Task (orphaned during
+            # review-job-without-task flows).
+            conn.execute(text("PRAGMA foreign_keys=OFF"))
+            conn.execute(text("ALTER TABLE diff_comments RENAME TO diff_comments_old"))
+            conn.execute(text(
+                """
+                CREATE TABLE diff_comments (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    task_id VARCHAR(128) NOT NULL,
+                    file_path VARCHAR(512) NOT NULL,
+                    line_number INTEGER NOT NULL,
+                    side VARCHAR(3) NOT NULL,
+                    base_sha VARCHAR(40),
+                    body TEXT NOT NULL,
+                    parent_id INTEGER,
+                    status VARCHAR(16) NOT NULL,
+                    author VARCHAR(8) NOT NULL,
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME,
+                    FOREIGN KEY(parent_id) REFERENCES diff_comments(id)
+                )
+                """
+            ))
+            conn.execute(text(
+                "INSERT INTO diff_comments SELECT * FROM diff_comments_old"
+            ))
+            conn.execute(text("DROP TABLE diff_comments_old"))
+            conn.execute(text(
+                "CREATE INDEX ix_diff_comments_task_id ON diff_comments(task_id)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX ix_diff_comments_status ON diff_comments(status)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX ix_diff_comments_parent_id ON diff_comments(parent_id)"
+            ))
+            conn.execute(text("PRAGMA foreign_keys=ON"))
+            logger.info(
+                "[startup] Dropped FK on diff_comments.task_id (review-agent comments)"
+            )
+    except Exception as e:
+        logger.warning(f"[startup] diff_comments FK drop skipped: {e}")
+
+
 def _retro_incubate_thin_pending():
     """One-shot: flip auto-created 1-signal pending learnings to
     incubating so existing DBs match the new graduation gate.
@@ -271,6 +344,7 @@ def create_app(start_scheduler=False):
         # DB"; this is just for cheap nullable-column additions.
         _ensure_new_columns()
         _drop_legacy_columns()
+        _drop_diff_comment_task_fk()
         _retro_incubate_thin_pending()
 
         # Seed default skills on first run

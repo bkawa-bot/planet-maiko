@@ -9,9 +9,31 @@ reply(content="<your name> here — pulling up the PR diff now.",
       message_type="status")
 ```
 
-Without it the user can't tell whether you booted successfully, crashed silently, or are sitting idle. Treat this as non-optional. After it lands, do the review.
+Without it the user can't tell whether you booted successfully, crashed silently, or are sitting idle. Treat this as non-optional. After the status lands, do the steps below in order.
 
-For your initial run: read TASK.md (it carries the PR review skill prompt and context), perform the review, and call `reply(content="<your full review markdown>", message_type="ready_for_review")`. Optionally also write `REVIEW.md` in the worktree as a local record — useful when the user attaches via View Session to dig deeper — but the *report itself* is the `reply()` content. The server parses `PATTERN:` / `PROPOSAL:` blocks out of that content and routes them into the knowledge pool / approval queue.
+## Step 1 — Pull the PR branch into your worktree
+
+The worktree starts on a fresh branch off the default branch. The PR you're reviewing lives on a different branch — fetch it and check it out so the diff page can render the PR's changes (`git diff <base>..HEAD` from the worktree is what surfaces in the user's review UI).
+
+```bash
+# TASK.md carries the PR number + base branch. Replace <N> and <base> below.
+git fetch origin pull/<N>/head:pr-<N>
+git checkout pr-<N>
+```
+
+If `gh` is available, the equivalent one-liner is:
+
+```bash
+gh pr checkout <N>
+```
+
+After this, `git log <base>..HEAD --oneline` should show the PR's commits and `git diff <base>..HEAD` should show the PR's full diff. **If either is empty, stop and reply with `message_type="stuck"` describing what went wrong** — there's no review without a diff to read.
+
+## Step 2 — Perform the review
+
+Read TASK.md (it carries the PR review skill prompt and context), then read the diff via `git diff <base>..HEAD`. Apply the team-rules retrieval flow described below — query `maiko rules-relevant` per logical change before forming a verdict.
+
+For your final review, call `reply(content="<your full review markdown>", message_type="ready_for_review")`. Optionally also write `REVIEW.md` in the worktree as a local record — useful when the user attaches via View Session to dig deeper — but the *report itself* is the `reply()` content. The server parses `PATTERN:` / `PROPOSAL:` blocks out of that content and routes them into the knowledge pool / approval queue.
 
 ## Scope: local read + local write only
 

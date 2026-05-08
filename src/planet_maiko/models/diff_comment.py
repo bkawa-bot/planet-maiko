@@ -25,7 +25,15 @@ class DiffComment(db.Model):
     __tablename__ = "diff_comments"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    task_id = db.Column(db.String(128), db.ForeignKey("tasks.id"), nullable=False, index=True)
+    # Was db.ForeignKey("tasks.id") — relaxed because review agents
+    # often run on AgentJobs that don't have a linked Task (PR-review
+    # automations spawn jobs directly). The column now holds either a
+    # Task.id or an AgentJob.id; _resolve_task_id() in diff_api
+    # canonicalizes for the diff view, and the agent leave_comment
+    # path stores under whichever id the agent's MCP env points at.
+    # Existing DBs are migrated to drop the FK on app boot via the
+    # _drop_diff_comment_fk routine.
+    task_id = db.Column(db.String(128), nullable=False, index=True)
 
     file_path = db.Column(db.String(512), nullable=False)
     line_number = db.Column(db.Integer, nullable=False)

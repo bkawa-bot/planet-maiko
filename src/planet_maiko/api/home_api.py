@@ -187,11 +187,19 @@ def get_review_queue():
     #    Task (linked ones are covered by case 1). Cap at 10 days old
     #    so long-finished reports don't pile up; user can still find
     #    them via the Agents page.
+    #
+    #    Restricted to "report-producing" kinds only. review/pr_review
+    #    were leaking through here when their source_task_id was null
+    #    (race conditions, deleted tasks, etc.), producing a "REPORT"
+    #    memo alongside the "READY FOR REVIEW" one from section 7 —
+    #    same job, two surfaces, confusing.
     from datetime import timedelta
+    REPORT_KINDS = ("investigation", "repo_analysis", "cartograph")
     cutoff = now - timedelta(days=10)
     jobs = (
         AgentJob.query
         .filter(AgentJob.status == "done")
+        .filter(AgentJob.kind.in_(REPORT_KINDS))
         .filter(AgentJob.source_task_id.is_(None))
         .filter(AgentJob.artifact.isnot(None))
         .filter(AgentJob.finished_at >= cutoff)

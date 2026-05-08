@@ -123,9 +123,6 @@ export default function AgentJobPage() {
         {activeView === "chat" && (
           <ChatPanel jobId={jobId} />
         )}
-        {activeView === "activity" && (
-          <ActivityPanel jobId={jobId} task={task} />
-        )}
       </div>
     </div>
   );
@@ -159,8 +156,10 @@ function computeTabs(job, task) {
   if (isReportKind || (hasArtifact && !isDiffKind)) {
     tabs.push({ id: "report", label: "Report", icon: FileText });
   }
+  // Activity rolled into Chat — same data stream, the chat tab now
+  // renders the activity-style cards and includes an input at the
+  // bottom for sending replies. One tab, both behaviors.
   tabs.push({ id: "chat", label: "Chat", icon: MessageSquare });
-  tabs.push({ id: "activity", label: "Activity", icon: Activity });
   return tabs;
 }
 
@@ -738,63 +737,122 @@ function ReportPanel({ job, task }) {
 }
 
 // ---------------------------------------------------------------------------
-// Chat panel
+// Chat panel — combined activity feed + reply input
+//
+// Activity (read-only chronology) and Chat (input + transcript) used to
+// be separate tabs but rendered the same AgentMessage stream. Folded
+// into one: the activity-style cards above (same color-coded
+// border-left for stuck / ready_for_review / plan_for_approval) plus
+// a textarea + Send below for new replies.
 // ---------------------------------------------------------------------------
 
 function ChatPanel({ jobId }) {
-  return (
-    <div className="agent-job-chat">
-      <AgentChatThread
-        id={jobId}
-        hint="Talk to the agent. Replies via reply(recipient='user') land in your inbox; status updates show here."
-        emptyMessage="No messages yet. Send something — they'll respond on their next check-in."
-      />
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Activity panel — chronological combined feed
-// ---------------------------------------------------------------------------
-
-function ActivityPanel({ jobId, task }) {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const endRef = useRef(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    api.getAgentMessages(jobId)
-      .then((m) => { if (!cancelled) setMessages(Array.isArray(m) ? m : []); })
-      .catch(() => { if (!cancelled) setMessages([]); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+  const refetch = useCallback(async () => {
+    try {
+      const m = await api.getAgentMessages(jobId);
+      setMessages(Array.isArray(m) ? m : []);
+    } catch {
+      // Best-effort — keep prior list on transient failures.
+    } finally {
+      setLoading(false);
+    }
   }, [jobId]);
 
-  if (loading) {
-    return <div className="agent-job-loading"><PlanetSpinner size={12} /> Loading activity…</div>;
-  }
-  if (!messages.length) {
-    return <div className="agent-job-empty">No activity yet.</div>;
-  }
+  // Initial load + 8s poll while the panel's open. Same cadence
+  // AgentChatThread uses for its own polling.
+  useEffect(() => {
+    refetch();
+    const t = setInterval(refetch, 8000);
+    return () => clearInterval(t);
+  }, [refetch]);
+
+  // Snap to the bottom whenever the message count changes — opening
+  // the panel or sending a new message lands on the latest entry.
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages.length]);
+
+  const handleSend = async () => {
+    const text = input.trim();
+    if (!text || sending) return;
+    setSending(true);
+    try {
+      const res = await api.sendToAgent(jobId, { content: text, sender: "user" });
+      const mode = res?.wake_mode;
+      if (mode === "woke") showToast("Message sent — waking the agent ✨", "normal");
+      else if (mode === "queued") showToast("Agent's working — queued for the next turn", "normal");
+      else if (mode === "error") showToast("Sent, but agent has no live session to wake", "high");
+      else showToast("Message saved to inbox", "normal");
+      setInput("");
+      await refetch();
+    } catch (err) {
+      showToast(err.message || "Couldn't send", "high");
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
-    <div className="agent-job-activity">
-      <ul className="activity-list">
-        {messages.map((m) => (
-          <li key={m.id} className={`activity-item dir-${m.direction} type-${m.message_type || "message"}`}>
-            <div className="activity-meta">
-              <span className="activity-sender">{m.sender}</span>
-              {m.message_type && m.message_type !== "message" && (
-                <span className="activity-type">{m.message_type}</span>
-              )}
-              <span className="activity-time" title={formatTime(m.created_at)}>
-                {relativeTime(m.created_at)}
-              </span>
-            </div>
-            <div className="activity-content">{m.content}</div>
-          </li>
-        ))}
-      </ul>
+    <div className="agent-job-chat">
+      <div className="chat-thread">
+        {loading ? (
+          <div className="agent-job-loading"><PlanetSpinner size={12} /> Loading…</div>
+        ) : messages.length === 0 ? (
+          <div className="agent-job-empty">No messages yet. Send something below — they'll respond on their next check-in.</div>
+        ) : (
+          <ul className="activity-list">
+            {messages.map((m) => (
+              <li
+                key={m.id}
+                className={`activity-item dir-${m.direction} type-${m.message_type || "message"}`}
+              >
+                <div className="activity-meta">
+                  <span className="activity-sender">{m.sender}</span>
+                  {m.message_type && m.message_type !== "message" && (
+                    <span className="activity-type">{m.message_type}</span>
+                  )}
+                  <span className="activity-time" title={formatTime(m.created_at)}>
+                    {relativeTime(m.created_at)}
+                  </span>
+                </div>
+                <div className="activity-content">{m.content}</div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div ref={endRef} />
+      </div>
+      <div className="chat-input">
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            // Cmd/Ctrl+Enter sends; plain Enter inserts a newline so
+            // multi-line messages are easy.
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
+          placeholder="Ask a follow-up… ⌘+Enter to send"
+          rows={3}
+          disabled={sending}
+        />
+        <button
+          className="btn btn-primary"
+          onClick={handleSend}
+          disabled={sending || !input.trim()}
+        >
+          {sending ? <Loader size={11} className="spin" /> : <MessageSquare size={11} />}
+          {" "}Send
+        </button>
+      </div>
     </div>
   );
 }

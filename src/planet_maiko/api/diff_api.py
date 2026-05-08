@@ -35,23 +35,30 @@ diff_bp = Blueprint("diff", __name__)
 
 
 def _resolve_task_id(inbox_id):
-    """Translate an inbox id → the canonical Task.id for diff_comments
-    storage. Post-unification, the agent's MAIKO_TASK_ID is the
-    AgentJob.id, but DiffComment.task_id has a FK to tasks.id and would
-    raise "FOREIGN KEY constraint failed" on insert. Resolve to the
-    linked Task.id when the input is a Job.id; pass through unchanged
-    when it's already a Task.id (or a legacy task-keyed flow).
+    """Translate an inbox id → a stable id for diff_comments storage.
 
-    Returns the resolved id, or None when nothing matches — callers
-    should 404 rather than insert with a phantom id.
+    Order of preference:
+      1. Already a Task.id → use it.
+      2. AgentJob.id with source_task_id set → use the linked Task.id
+         so the comment lives in the Task's id space (review surface
+         the user sees).
+      3. AgentJob.id without source_task_id → use the job.id directly.
+         The DiffComment.task_id column dropped its FK to tasks.id
+         (see app._drop_diff_comment_task_fk) so this is allowed; the
+         /tasks/<id>/comments endpoint will canonicalize back to the
+         same id at read time.
+
+    Always returns SOMETHING — callers used to 404 when no Task matched,
+    which broke leave_comment for review agents whose job has no
+    linked task.
     """
     if db.session.get(Task, inbox_id) is not None:
         return inbox_id
     from planet_maiko.models.agent_job import AgentJob
     job = db.session.get(AgentJob, inbox_id)
-    if job is not None and job.source_task_id:
-        return job.source_task_id
-    return None
+    if job is not None:
+        return job.source_task_id or job.id
+    return inbox_id
 
 
 def _canonical_inbox_id(any_id):
@@ -407,8 +414,6 @@ def create_agent_comment(task_id):
     if "file_path" not in data or "line_number" not in data:
         return jsonify({"error": "file_path and line_number are required"}), 400
     real_task_id = _resolve_task_id(task_id)
-    if real_task_id is None:
-        return jsonify({"error": "no task linked to this agent — comment dropped"}), 404
     comment = DiffComment(
         task_id=real_task_id,
         file_path=data["file_path"],
