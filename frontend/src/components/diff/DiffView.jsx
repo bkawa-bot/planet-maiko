@@ -1,18 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Diff, Hunk, parseDiff, getChangeKey, tokenize } from "react-diff-view";
 import "react-diff-view/style/index.css";
-import { refractor } from "refractor";
-import javascript from "refractor/lang/javascript.js";
-import jsx from "refractor/lang/jsx.js";
-import typescript from "refractor/lang/typescript.js";
-import tsx from "refractor/lang/tsx.js";
-import python from "refractor/lang/python.js";
-import json from "refractor/lang/json.js";
-import css from "refractor/lang/css.js";
-import scss from "refractor/lang/scss.js";
-import bash from "refractor/lang/bash.js";
-import markdown from "refractor/lang/markdown.js";
-import yaml from "refractor/lang/yaml.js";
+// refractor v5 ships an exports map that only exposes `refractor`
+// (common bundle), `refractor/core`, `refractor/all`, and individual
+// languages as `refractor/<lang>`. Explicit `refractor/lang/*.js`
+// paths are blocked by the exports field — Vite/Rollup honors that
+// and the build fails to resolve. Use the package-name + language
+// shape instead.
+import { refractor } from "refractor/core";
+import javascript from "refractor/javascript";
+import jsx from "refractor/jsx";
+import typescript from "refractor/typescript";
+import tsx from "refractor/tsx";
+import python from "refractor/python";
+import json from "refractor/json";
+import css from "refractor/css";
+import scss from "refractor/scss";
+import bash from "refractor/bash";
+import markdown from "refractor/markdown";
+import yaml from "refractor/yaml";
 import "./diff-syntax.css";
 
 // Register the languages we actually review. Anything not in this set
