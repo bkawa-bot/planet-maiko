@@ -235,32 +235,13 @@ def _phase_execute_agent_jobs():
                 full_prompt = "\n".join(prompt_parts)
 
             if not job.worktree_path:
-                if not local_path:
-                    # No clone resolved — surface this as an explicit
-                    # failure rather than silently skipping every cycle.
-                    # The two upstream paths to here are (a) job.scope_repo
-                    # set but no local clone — the earlier check at the
-                    # top of this loop handles that — and (b) job.scope_repo
-                    # never set at all, which can happen when the
-                    # triggering pupdate's metadata didn't include a repo.
-                    # Either way, the job can't run; mark it so the user
-                    # sees the reason instead of a job that sits queued
-                    # forever.
-                    logger.warning(
-                        f"[cycle] agent_job {job.id}: no scope_repo set "
-                        f"and no local path resolvable — marking failed"
-                    )
-                    job.status = "failed"
-                    job.error = (
-                        "No scope_repo on the job (the triggering "
-                        "pupdate didn't carry a repo, or the repo isn't "
-                        "in config.github.repos). Set the repo on the "
-                        "job or the source pupdate and re-queue."
-                    )
-                    job.finished_at = datetime.now(timezone.utc)
-                    _bump_agent_failed(job.agent_profile_id)
-                    db.session.commit()
-                    continue
+                # No local_path resolved AND no scope_repo set means
+                # this is a repo-less run — planning skill, investigation,
+                # one-off question answer. prepare() handles it by
+                # minting a scratch dir under <data_dir>/scratch-worktrees
+                # instead of a git worktree. The earlier "scope_repo set
+                # but no clone" check above still fails the misconfig
+                # case (user wanted a repo, none on disk).
                 # Specialty picked at automation-config time or via ask-
                 # first approval lives on job.extra. prepare() safety-
                 # checks it against the agent's attached pool; runner

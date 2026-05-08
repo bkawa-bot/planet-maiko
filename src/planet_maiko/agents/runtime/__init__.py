@@ -50,6 +50,7 @@ from .worktree import (
     _slugify,
     _fetch_latest_base,
     _create_worktree,
+    _create_scratch_dir,
     cleanup,
     cleanup_task_worktree,
 )
@@ -71,7 +72,20 @@ logger = logging.getLogger(__name__)
 def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
             agent_profile_id=None, role="coding", specialty_id=None,
             pr_number=None):
-    """Prepare a git worktree on a new branch for an agent to work on a task.
+    """Prepare a working directory for an agent to work on a task.
+
+    Two flavors, picked automatically by whether `repo_path` is set:
+
+    - Repo-backed (the default): mints a fresh git worktree on a new
+      branch cut from the latest origin/<default> tip (or the PR's
+      head ref when `pr_number` is set). What coding / review / PR-
+      review agents need.
+
+    - Scratch (when `repo_path` is falsy): mints a plain working dir
+      under <data_dir>/scratch-worktrees/<task_id>. No git, no branch.
+      For planning skills, investigation, and one-off question
+      answerers — agents that don't touch code and shouldn't force
+      the user to pick a repo just to run.
 
     The agent is not started — caller invokes _kickoff_agent_headless()
     separately when ready.
@@ -80,8 +94,8 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
         task_id: the task this agent will work on
         task_title: human-readable task title
         prompt: full instructions for the agent
-        repo_path: path to the git repository
-        branch_prefix: prefix for the branch name
+        repo_path: path to the git repository, or None/"" for scratch
+        branch_prefix: prefix for the branch name (ignored in scratch)
         role: "coding" | "review" | "investigation" | "cartographer" —
             picks the CLAUDE.md protocol template and role-scoped team
             instructions.
@@ -90,42 +104,54 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
             "specialty for this run" section. None = base role only.
 
     Returns:
-        dict with agent info and launch instructions, or None on failure
+        dict with agent info and launch instructions, or None on failure.
+        Scratch runs return branch=None and working_path under the
+        scratch root.
     """
-    # Build a descriptive branch name from the task title.
-    # Suffix = last 5 digits of unix time + 4 hex chars of uuid. The
-    # short timestamp keeps branch names skim-readable; the uuid chars
-    # make collisions effectively impossible even when two tasks land
-    # on the same second with the same title (which used to silently
-    # land both agents on the same branch via a 4-digit timestamp).
-    import time as _time
-    slug = _slugify(task_title, max_len=40)
-    if not slug:
-        slug = _slugify(task_id)
-    slug = f"{slug}-{str(int(_time.time()))[-5:]}-{uuid.uuid4().hex[:4]}"
+    scratch_mode = not repo_path
 
-    # If the user typed a full branch name (contains /), use it as-is.
-    # Otherwise treat it as a prefix and append the auto-generated slug.
-    if "/" in branch_prefix:
-        branch_name = branch_prefix
+    if scratch_mode:
+        # No repo, no branch. Working dir is keyed by task_id (= AgentJob.id),
+        # which is already unique, so no collision dance is needed.
+        branch_name = None
+        working_path = _create_scratch_dir(task_id)
+        if not working_path:
+            return None
     else:
-        if branch_prefix == "maiko":
-            try:
-                from planet_maiko.config import load_config
-                cfg_prefix = load_config().get("agents", {}).get("branch_prefix", "maiko")
-                if cfg_prefix:
-                    branch_prefix = cfg_prefix
-            except Exception:
-                pass
-        branch_name = f"{branch_prefix}/{slug}"
+        # Build a descriptive branch name from the task title.
+        # Suffix = last 5 digits of unix time + 4 hex chars of uuid. The
+        # short timestamp keeps branch names skim-readable; the uuid chars
+        # make collisions effectively impossible even when two tasks land
+        # on the same second with the same title (which used to silently
+        # land both agents on the same branch via a 4-digit timestamp).
+        import time as _time
+        slug = _slugify(task_title, max_len=40)
+        if not slug:
+            slug = _slugify(task_id)
+        slug = f"{slug}-{str(int(_time.time()))[-5:]}-{uuid.uuid4().hex[:4]}"
 
-    # Review jobs pass pr_number so the worktree is built from the PR's
-    # head ref instead of origin/main — the agent needs to see the
-    # actual code under review for `git diff origin/main...HEAD` and
-    # leave_comment to pin to real lines.
-    working_path = _create_worktree(repo_path, branch_name, pr_number=pr_number)
-    if not working_path:
-        return None
+        # If the user typed a full branch name (contains /), use it as-is.
+        # Otherwise treat it as a prefix and append the auto-generated slug.
+        if "/" in branch_prefix:
+            branch_name = branch_prefix
+        else:
+            if branch_prefix == "maiko":
+                try:
+                    from planet_maiko.config import load_config
+                    cfg_prefix = load_config().get("agents", {}).get("branch_prefix", "maiko")
+                    if cfg_prefix:
+                        branch_prefix = cfg_prefix
+                except Exception:
+                    pass
+            branch_name = f"{branch_prefix}/{slug}"
+
+        # Review jobs pass pr_number so the worktree is built from the PR's
+        # head ref instead of origin/main — the agent needs to see the
+        # actual code under review for `git diff origin/main...HEAD` and
+        # leave_comment to pin to real lines.
+        working_path = _create_worktree(repo_path, branch_name, pr_number=pr_number)
+        if not working_path:
+            return None
 
     # Write task files
     _write_task_file(working_path, task_id, task_title, prompt)
@@ -141,8 +167,15 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     # the user's normal Claude Code session in the parent repo.
     _write_mcp_json(working_path, task_id, parent_repo_path=repo_path)
 
-    # Use existing profile if provided, otherwise generate an ID
-    agent_id = agent_profile_id or f"agent-{branch_name}"
+    # Use existing profile if provided, otherwise generate an ID. In
+    # scratch mode there's no branch to key off, so we fall back to the
+    # task_id which is already unique.
+    if agent_profile_id:
+        agent_id = agent_profile_id
+    elif branch_name:
+        agent_id = f"agent-{branch_name}"
+    else:
+        agent_id = f"agent-{task_id}"
 
     # Write Claude Code hooks configuration
     _write_claude_settings(working_path, task_id, agent_id)
@@ -174,6 +207,10 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
     else:
         ready_title = f"{role.capitalize()} agent working: {task_title}"
         ready_hint = "Dig deeper"
+    if scratch_mode:
+        body_text = f"Prepared in scratch workspace.\n\nWorking in: {working_path}"
+    else:
+        body_text = f"Prepared on branch `{branch_name}`.\n\nWorking in: {working_path}"
     notify = Pupdate(
         id=f"agent-ready-{task_id}-{uuid.uuid4().hex[:8]}",
         source="maiko",
@@ -181,7 +218,7 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
         type="agent_ready",
         priority="normal",
         title=ready_title,
-        body=f"Prepared on branch `{branch_name}`.\n\nWorking in: {working_path}",
+        body=body_text,
         actionable=True,
         action_hint=ready_hint,
         tags=[task_id, "agent", role],
@@ -191,6 +228,7 @@ def prepare(task_id, task_title, prompt, repo_path, branch_prefix="maiko",
             "working_path": working_path,
             "task_id": task_id,
             "role": role,
+            "scratch": scratch_mode,
         },
     )
     db.session.add(notify)

@@ -1,9 +1,19 @@
 """Git worktree creation, branch management, and cleanup helpers
 for coding agents. Each task gets its own worktree on a fresh branch
-cut from the latest origin/<default> tip."""
+cut from the latest origin/<default> tip.
+
+Not every agent run touches code. Planning skills, investigation
+agents, and one-off question answerers don't need a git checkout —
+forcing one means the user has to pick a repo for jobs that have
+nothing to do with one. For those, `_create_scratch_dir` mints a
+plain working directory under the maiko data dir; `prepare()` routes
+to it when no repo_path is supplied, and cleanup() rmtrees it
+instead of calling `git worktree remove`.
+"""
 
 import logging
 import os
+import shutil
 import subprocess
 import uuid
 
@@ -176,8 +186,94 @@ def _create_worktree(repo_path, branch_name, pr_number=None):
     return None
 
 
+_SCRATCH_DIRNAME = "scratch-worktrees"
+
+
+def _scratch_root():
+    """Where repo-less agent working dirs live: <data_dir>/scratch-worktrees/.
+
+    Kept under the maiko data dir (not the user's repos) so the marker
+    check in cleanup_task_worktree never confuses a scratch dir for a
+    git worktree, and so users grepping their repos for `.maiko-worktrees`
+    don't see scratch debris.
+    """
+    from planet_maiko.paths import data_dir
+    return os.path.join(data_dir(), _SCRATCH_DIRNAME)
+
+
+def _create_scratch_dir(task_id):
+    """Create a plain working directory for a repo-less agent run.
+
+    For jobs without a scope_repo (planning skills, investigation,
+    one-off question answers): we still want an isolated workspace
+    where TASK.md / CLAUDE.md / .mcp.json land, but not a git
+    worktree. Returns the absolute path on success, None on failure.
+
+    The directory is keyed by task_id (which post-unification is the
+    AgentJob.id), so a job's scratch dir is stable across kickoff
+    retries within the same job — no UUID suffix dance needed because
+    AgentJob ids are already unique.
+    """
+    try:
+        root = _scratch_root()
+        os.makedirs(root, exist_ok=True)
+        path = os.path.join(root, str(task_id))
+        os.makedirs(path, exist_ok=True)
+        logger.info(f"[worktree] Created scratch dir for {task_id} at {path}")
+        return path
+    except Exception as e:
+        logger.error(f"[worktree] scratch dir creation failed: {e}")
+        return None
+
+
+def _is_scratch_path(path):
+    """True if `path` lives under the maiko scratch root.
+
+    Used by cleanup to decide between rmtree and `git worktree remove`.
+    Normalizes separators so it works on Windows.
+    """
+    if not path:
+        return False
+    norm = os.path.abspath(path).replace("\\", "/")
+    root = os.path.abspath(_scratch_root()).replace("\\", "/")
+    return norm == root or norm.startswith(root + "/")
+
+
 def cleanup(repo_path, branch_name):
-    """Remove a worktree and its branch after agent is done."""
+    """Tear down an agent's working directory.
+
+    Two flavors:
+
+    - Git worktree (the default): repo_path is the parent repo, branch_name
+      is the worktree's branch. We compute <repo>/.maiko-worktrees/<branch>
+      and run `git worktree remove --force` so the linked checkout +
+      branch metadata go away cleanly.
+
+    - Scratch dir (repo-less agents): branch_name is None *or* repo_path
+      already points inside the scratch root. We rmtree it directly —
+      there's no git metadata to unwind.
+
+    Idempotent: silently no-ops on missing paths so callers can fire
+    this in cancel / cleanup paths without checking first.
+    """
+    # Scratch path: repo_path is itself the working dir (no branch).
+    if not branch_name or _is_scratch_path(repo_path):
+        if not repo_path or not os.path.isdir(repo_path):
+            return
+        # Paranoia: only rmtree under the maiko-managed scratch root.
+        # Refuse to delete an arbitrary path even if the caller asked.
+        if not _is_scratch_path(repo_path):
+            logger.warning(
+                f"[worktree] refusing scratch cleanup outside scratch root: {repo_path}"
+            )
+            return
+        try:
+            shutil.rmtree(repo_path, ignore_errors=True)
+            logger.info(f"[worktree] rmtree scratch dir {repo_path}")
+        except Exception as e:
+            logger.warning(f"[worktree] scratch cleanup failed: {e}")
+        return
+
     worktree_path = os.path.join(repo_path, ".maiko-worktrees", branch_name)
     try:
         subprocess.run(
@@ -189,25 +285,43 @@ def cleanup(repo_path, branch_name):
 
 
 def cleanup_task_worktree(task):
-    """Best-effort: remove the agent worktree backing this task.
+    """Best-effort: remove the agent working dir backing this task.
 
     Called when a task is closed (done / cancelled / deleted) so
-    .maiko-worktrees doesn't accumulate stale dirs and we stop
-    burning disk on workstreams the user is no longer interested in.
+    .maiko-worktrees + scratch-worktrees don't accumulate stale dirs
+    and we stop burning disk on workstreams the user is no longer
+    interested in.
 
-    Idempotent — silently no-ops on tasks without a worktree, paths
-    that aren't under .maiko-worktrees (paranoia: never run on a
-    user's main checkout), or repos we can't locate.
+    Handles both flavors:
+      - Git worktree: working_path is <repo>/.maiko-worktrees/<branch>;
+        derive repo_path and run `git worktree remove`.
+      - Scratch dir: working_path lives under <data_dir>/scratch-worktrees;
+        rmtree directly (no branch on task.extra in this case).
+
+    Idempotent — silently no-ops on tasks without a working_path or
+    paths that aren't under either managed marker (paranoia: never
+    run on a user's main checkout).
     """
     extra = task.extra or {}
     wp = extra.get("working_path")
     branch = extra.get("branch")
-    if not wp or not branch:
+    if not wp:
         return
-    # Normalize separators so the marker check works on Windows too.
+    # Scratch dir — no branch, lives under data_dir's scratch root.
+    if _is_scratch_path(wp):
+        try:
+            cleanup(wp, None)
+            logger.info(f"[task] Cleaned up scratch dir for {task.id}: {wp}")
+        except Exception as e:
+            logger.warning(f"[task] Scratch cleanup failed for {task.id}: {e}")
+        return
+    # Git worktree — only proceed if we can pinpoint the parent repo
+    # via the .maiko-worktrees marker, never touch a user-owned path.
+    if not branch:
+        return
     norm = wp.replace("\\", "/")
     if "/.maiko-worktrees/" not in norm:
-        return  # never touch a user-owned path
+        return
     repo_path = norm.split("/.maiko-worktrees/", 1)[0]
     if not repo_path or not os.path.isdir(repo_path):
         return
