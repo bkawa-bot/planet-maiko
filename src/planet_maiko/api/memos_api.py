@@ -110,17 +110,37 @@ def approve_route(memo_id):
     by the producing code (e.g. job_approval registers a handler that
     mints the actual AgentJob when the memo is approved).
 
+    Optional JSON body is forwarded to the handler so handlers can
+    accept additional input (e.g. job_approval takes `repo_path` to
+    override the local-clone lookup when the user picks one from
+    the prompt).
+
+    A handler that needs more input from the user raises
+    MemoApproveNeedsInput; the endpoint converts that to a 422 with
+    the payload and DOES NOT mark the memo actioned, so the frontend
+    can show a picker and retry.
+
     Memos without a registered handler return 400 — they're info-only
     and shouldn't have an approve button in the first place.
     """
+    from planet_maiko.brain.memo_handlers import MemoApproveNeedsInput
+
     memo = db.get_or_404(Memo, memo_id)
     handler = memo_svc.APPROVE_HANDLERS.get(memo.kind)
     if not handler:
         return jsonify({
             "error": f"no approve handler registered for kind {memo.kind!r}",
         }), 400
+    data = request.get_json(silent=True) or {}
     try:
-        result = handler(memo) or {}
+        result = handler(memo, data) or {}
+    except MemoApproveNeedsInput as needs:
+        # Don't mark actioned — the user needs to provide more input
+        # before we commit. The frontend prompts and retries.
+        return jsonify({
+            "needs_input": needs.kind,
+            "payload": needs.payload,
+        }), 422
     except Exception as e:
         logger.exception(f"[memos] approve handler for {memo.kind} crashed")
         return jsonify({"error": f"approve failed: {e}"}), 500

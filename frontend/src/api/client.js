@@ -48,7 +48,14 @@ async function request(path, options = {}) {
     // returns `message`, others return `error`. Try both before
     // falling back to the raw status text, otherwise users see
     // "BAD REQUEST" instead of the actual reason.
-    throw new Error(body.error || body.message || res.statusText);
+    const err = new Error(body.error || body.message || res.statusText);
+    // Preserve the parsed body + status on the Error so callers
+    // can act on structured failures — e.g. 422 with needs_input
+    // payload from /memos/<id>/approve when it can't proceed
+    // without a repo pick.
+    err.status = res.status;
+    err.body = body;
+    throw err;
   }
   const data = await res.json();
 
@@ -334,7 +341,16 @@ export const api = {
     return request(`/memos${q ? `?${q}` : ""}`);
   },
   dismissMemo: (id) => request(`/memos/${id}/dismiss`, { method: "POST" }),
-  approveMemo: (id) => request(`/memos/${id}/approve`, { method: "POST" }),
+  // Approve a memo. Optional body lets handlers receive extra input
+  // (e.g. repo_path for job_approval when no local clone was found).
+  // Backend returns 422 with { needs_input, payload } when the
+  // handler can't proceed without more input — the caller should
+  // surface a prompt and retry.
+  approveMemo: (id, body = {}) =>
+    request(`/memos/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify(body || {}),
+    }),
   // Promote a memo (typically a notification) into actionable work.
   // Both pull pupdate_snapshot from memo.extra for context. Marks
   // the memo actioned on success so it disappears from the pane.

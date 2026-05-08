@@ -118,10 +118,15 @@ def _phase_execute_agent_jobs():
 
             # Prefer an explicit repo_path the user picked at assign
             # time (coding tasks let them point at any local clone, not
-            # just the configured ones). Fall back to resolving from
-            # scope_repo + repo_roots when no explicit path is set.
-            local_path = (job.extra or {}).get("repo_path") or (
-                resolve_repo_path(job.scope_repo) if job.scope_repo else None
+            # just the configured ones), or one supplied at memo-approve
+            # time when no clone was found in the configured roots.
+            # Fall back to resolving from scope_repo + repo_roots when
+            # no explicit path is set.
+            extra = job.extra or {}
+            local_path = (
+                extra.get("repo_path")
+                or extra.get("repo_path_override")
+                or (resolve_repo_path(job.scope_repo) if job.scope_repo else None)
             )
             if job.scope_repo and not local_path:
                 logger.warning(

@@ -1,0 +1,114 @@
+.repo-picker-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+}
+.repo-picker-modal {
+  width: 540px;
+  max-width: 92vw;
+  max-height: 86vh;
+  display: flex; flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+  overflow: hidden;
+}
+.repo-picker-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+}
+.repo-picker-header > button { margin-left: auto; }
+.repo-picker-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+.repo-picker-explainer {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.repo-picker-explainer code {
+  background: var(--pink-soft);
+  color: var(--pink);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.repo-picker-section { display: flex; flex-direction: column; gap: 6px; }
+.repo-picker-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.repo-picker-list {
+  list-style: none;
+  margin: 0; padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.repo-picker-choice label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  font-size: 12px;
+}
+.repo-picker-choice label:hover {
+  background: var(--bg-hover);
+}
+.repo-picker-choice input[type="radio"] {
+  margin: 0;
+}
+.repo-picker-name {
+  font-weight: 600;
+}
+.repo-picker-path {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 50%;
+}
+.repo-picker-manual {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  box-sizing: border-box;
+}
+.repo-picker-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.repo-picker-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}

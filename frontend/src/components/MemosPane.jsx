@@ -17,6 +17,8 @@ import "./MemosPane.css";
 import ArtifactRow from "./memos/ArtifactRow";
 import StuckReplyBox from "./memos/StuckReplyBox";
 import PupdateSnapshot from "./memos/PupdateSnapshot";
+import RepoPickerModal from "./RepoPickerModal";
+import "./RepoPickerModal.css";
 
 /**
  * Home's unified Memos pane — the single surface for every
@@ -111,6 +113,12 @@ export default function MemosPane() {
     () => Object.fromEntries(profiles.map((p) => [p.id, p])),
     [profiles],
   );
+  // When approving a job-approval memo lands a 422 with needs_input,
+  // we surface a picker rather than letting the error toast win and
+  // leaving the user unable to retry. The pending state holds the
+  // memo id + the payload so the modal renders, and confirming
+  // re-fires approveMemo with { repo_path }.
+  const [repoPicker, setRepoPicker] = useState(null);
 
   const fetchQueue = async () => {
     try {
@@ -238,6 +246,18 @@ export default function MemosPane() {
                 }
                 fetchQueue();
               } catch (err) {
+                // 422 with needs_input → handler asked for more user
+                // input. Today the only case is needs_repo (no local
+                // clone for the job's scope_repo). Open the picker so
+                // the user can pick a path and retry without losing
+                // the memo.
+                if (err.status === 422 && err.body?.needs_input === "needs_repo") {
+                  setRepoPicker({
+                    memoId: it.memo_id,
+                    payload: err.body.payload || {},
+                  });
+                  return;
+                }
                 showToast("Couldn't approve: " + (err.message || "unknown"), "high");
               }
             };
@@ -540,6 +560,25 @@ export default function MemosPane() {
           );
         })}
       </div>
+      {repoPicker && (
+        <RepoPickerModal
+          payload={repoPicker.payload}
+          onCancel={() => setRepoPicker(null)}
+          onConfirm={async (repoPath) => {
+            try {
+              await api.approveMemo(repoPicker.memoId, { repo_path: repoPath });
+              setRepoPicker(null);
+              fetchQueue();
+              showToast("Approved — agent is queued.", "normal");
+            } catch (err) {
+              showToast(
+                "Couldn't approve with that path: " + (err.message || "unknown"),
+                "high",
+              );
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
