@@ -219,6 +219,7 @@ def get_agent_activity():
                 if profile:
                     a["agent_name"] = profile.display_name
                     a["agent_id"] = profile.id
+                    a["agent_avatar"] = profile.avatar
             keep[key] = a
             continue
 
@@ -325,6 +326,7 @@ def get_agent_activity():
             if profile:
                 entry["agent_name"] = profile.display_name
                 entry["agent_id"] = profile.id
+                entry["agent_avatar"] = profile.avatar
         else:
             # Queued job that hasn't been picked up by the executor
             # yet (so no agent_profile_id assigned). Without an

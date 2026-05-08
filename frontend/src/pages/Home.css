@@ -556,65 +556,129 @@
   text-decoration: line-through;
 }
 
-/* Working agents widget rows: 2-line layout — header (status pill +
-   name + task title) above the agent's last status message. The
-   message is the agent's voice; quote-marked + slightly smaller so
-   it reads as a quote rather than the row's primary label. */
-.working-agent-item {
+/* Pack square — the homepage "town center" view of the working agents.
+   Avatars line up side-by-side (wrapping if many), each with a
+   state-colored dot in the corner. Hovering pops a speech bubble with
+   the agent's name + task title + last status message; clicking jumps
+   to /jobs/<id>. Replaces the older row-list shape; the row layout
+   buried the avatars and made the home page feel like a status table
+   instead of a town the user is wandering into.
+*/
+.pack-square {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 14px 10px;
   align-items: flex-start;
-  gap: 2px;
-  padding: 6px 4px;
-  border-radius: var(--radius-xs);
+  padding: 6px 2px 2px;
+  /* Reserve enough headroom for the hover speech bubble so the first
+     row doesn't clip it against the widget header. */
+  margin-top: 4px;
 }
-.working-agent-item:hover {
-  background: var(--bg-hover, var(--bg-card));
-}
-.working-agent-line1 {
-  display: flex;
+
+.pack-square-villager {
+  position: relative;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  width: 100%;
-  min-width: 0;
+  justify-content: center;
+  border-radius: 50%;
+  /* Hover lift — subtle so the row doesn't reflow. The villager
+     gently rises like they noticed you walking by. */
+  transition: transform 0.15s ease;
 }
-.working-agent-pill {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 1px 5px;
-  border-radius: 8px;
-  flex-shrink: 0;
-  color: var(--bg);
+.pack-square-villager:hover { transform: translateY(-2px); }
+.pack-square-villager:focus-visible {
+  outline: 2px solid var(--pink);
+  outline-offset: 3px;
+}
+
+/* Avatar + state-dot wrapper. The dot is positioned-absolute against
+   this so it always pins to the avatar's bottom-right regardless of
+   sprite size. */
+.pack-square-avatar-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.pack-square-state-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
   background: var(--green);
 }
-.working-agent-pill.status-idle { background: var(--lemon); }
-.working-agent-pill.status-stale { background: var(--text-muted); }
-.working-agent-pill.status-ready { background: var(--pink); }
-.working-agent-pill.status-waiting { background: var(--lavender, #b59dd8); }
-.working-agent-name {
+.pack-square-state-dot.state-idle    { background: var(--lemon); }
+.pack-square-state-dot.state-stale   { background: var(--text-muted); }
+.pack-square-state-dot.state-ready   { background: var(--pink); }
+.pack-square-state-dot.state-waiting { background: var(--lavender, #b59dd8); }
+
+/* Speech bubble — only visible on hover/focus. Floats above the
+   avatar with a small tail. Width-capped so a chatty status doesn't
+   blow off the widget; pointer-events: none so the bubble itself
+   doesn't catch clicks meant for the avatar underneath. */
+.pack-square-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%) scale(0.96);
+  background: var(--bg-card, var(--bg));
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  padding: 8px 10px;
+  min-width: 180px;
+  max-width: 240px;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: left;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pack-square-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid var(--bg-card, var(--bg));
+  filter: drop-shadow(0 1px 0 var(--border));
+}
+.pack-square-villager:hover .pack-square-bubble,
+.pack-square-villager:focus-visible .pack-square-bubble {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+.pack-square-bubble-name {
   font-weight: 600;
-  flex-shrink: 0;
+  color: var(--text);
 }
-.working-agent-title {
+.pack-square-bubble-title {
   color: var(--text-muted);
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
+  font-size: 10.5px;
 }
-.working-agent-msg {
-  font-size: 11px;
-  color: var(--text-dim, var(--text-muted));
+.pack-square-bubble-msg {
   font-style: italic;
-  line-height: 1.35;
-  padding-left: 2px;
-  /* Cap to two lines so a chatty status doesn't blow up the widget. */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  color: var(--text-dim, var(--text-muted));
+  /* Allow long status messages to wrap onto multiple lines so the
+     full agent voice is preserved on hover. */
+  white-space: normal;
+  word-break: break-word;
 }
 .shipped-more {
   list-style: none;

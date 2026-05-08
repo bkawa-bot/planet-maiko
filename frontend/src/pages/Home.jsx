@@ -4,8 +4,9 @@ import SetupWizard from "../components/SetupWizard";
 import OverviewPane from "../components/OverviewPane";
 import MemosPane from "../components/MemosPane";
 import PackAskBox from "../components/PackAskBox";
+import CardAvatar from "../components/CardAvatar";
 import { formatTime, formatClock } from "../utils/dates";
-import { Brain, Calendar, Palette, Video, Sparkles, CheckCircle2 } from "lucide-react";
+import { Brain, Calendar, Palette, Video, Sparkles, Users } from "lucide-react";
 import { showToast } from "../components/Toast";
 import FooterPendingPopover from "../components/FooterPendingPopover";
 import { useNavigate } from "react-router-dom";
@@ -217,55 +218,59 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="home-widget shipped-today-widget">
+          <div className="home-widget pack-square-widget">
             <div className="widget-header">
-              <CheckCircle2 size={12} /> Working agents
+              <Users size={12} /> Pack
               {workingJobs.length > 0 && (
                 <span className="widget-count">{workingJobs.length}</span>
               )}
             </div>
             {workingJobs.length > 0 ? (
-              <ul className="shipped-list">
-                {workingJobs.slice(0, 5).map((a) => {
-                  // a is an activity entry — task_id is the canonical
-                  // inbox key (post-unification: AgentJob.id), job_id
-                  // is set when the entry came through the unified path.
+              <div className="pack-square">
+                {workingJobs.map((a) => {
+                  // task_id post-unification is the AgentJob.id, so
+                  // either field gets us to the unified job page.
                   const id = a.job_id || a.task_id;
-                  // Unified destination — the AgentJobPage decides
-                  // which section (diff / plan / report / chat /
-                  // activity) to surface based on job kind. No more
-                  // splitting kind=task vs kind=job to different
-                  // pages.
-                  const route = `/jobs/${a.job_id || a.task_id}`;
+                  const route = `/jobs/${id}`;
                   const name = a.agent_name || "agent";
                   const status = a.status || "active";
+                  // CardAvatar resolves agent.avatar -> sprite path; the
+                  // backend now drops agent_avatar onto each activity
+                  // entry so we don't need a separate profile fetch.
+                  const agentForAvatar = {
+                    avatar: a.agent_avatar,
+                    display_name: name,
+                  };
                   return (
-                    <li
+                    <button
                       key={id}
-                      className="shipped-item working-agent-item"
-                      title={a.task_title || a.task_type}
+                      type="button"
+                      className={`pack-square-villager pack-status-${status}`}
                       onClick={() => navigate(route)}
-                      style={{ cursor: "pointer" }}
+                      title={`${name} — ${a.task_title || a.task_type || "working"}`}
                     >
-                      <div className="working-agent-line1">
-                        <span className={`working-agent-pill status-${status}`}>{status}</span>
-                        <span className="working-agent-name">{name}</span>
-                        <span className="working-agent-title">{a.task_title || a.task_type}</span>
-                      </div>
-                      {a.last_message && (
-                        <div className="working-agent-msg">"{a.last_message}"</div>
-                      )}
-                    </li>
+                      <span className="pack-square-avatar-wrap">
+                        <CardAvatar agent={agentForAvatar} size={40} />
+                        <span
+                          className={`pack-square-state-dot state-${status}`}
+                          aria-label={`status: ${status}`}
+                        />
+                      </span>
+                      <span className="pack-square-bubble" role="tooltip">
+                        <span className="pack-square-bubble-name">{name}</span>
+                        {a.task_title && (
+                          <span className="pack-square-bubble-title">{a.task_title}</span>
+                        )}
+                        {a.last_message && (
+                          <span className="pack-square-bubble-msg">"{a.last_message}"</span>
+                        )}
+                      </span>
+                    </button>
                   );
                 })}
-                {workingJobs.length > 5 && (
-                  <li className="shipped-more">
-                    + {workingJobs.length - 5} more
-                  </li>
-                )}
-              </ul>
+              </div>
             ) : (
-              <div className="widget-empty">No agents running right now.</div>
+              <div className="widget-empty">The town square is quiet — nobody's out yet.</div>
             )}
           </div>
 
