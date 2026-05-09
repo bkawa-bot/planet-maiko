@@ -139,17 +139,18 @@
   --pane-bg: rgba(255, 255, 255, 0.55);
 }
 
-/* === Dawn — alien sunrise haze. Pastel lavender base + frozen wash,
-   soft pink as the rising light, butter yellow as the bloom. Cooler
-   than the old "Sunrise" — leans into the alien-daylight side of the
-   light master palette rather than warm cream. */
+/* === Dawn — arctic sunrise. Icy near-white snow under a sunrise
+   sky: the body fades from frosty almost-white into a whisper of
+   pink at the horizon, so the light itself feels like alpenglow on
+   snow. Cooler bg + warmer accents = the sunrise stripe across an
+   ice plane. */
 [data-theme="morning"] {
-  --bg: #F3EFFF;            /* Pastel Lavender Base */
-  --bg-plain: #FFE8F1;      /* whisper of pink — sunrise wash */
+  --bg: #ECF4FB;            /* icy white-blue — the snow */
+  --bg-plain: #FFE8F1;      /* whisper of pink — sunrise on the horizon */
   --bg-card: #FFFFFF;
   --bg-card-alt: #E0F4F7;   /* Frozen Wash */
-  --bg-hover: #E8DFF8;
-  --bg-selected: #D8C7FF;   /* Light Periwinkle */
+  --bg-hover: #DCE7F2;
+  --bg-selected: #C5DDF0;
   --text: #2B2F42;
   --text-dim: #6B7280;
   --text-muted: #9CA3B5;
