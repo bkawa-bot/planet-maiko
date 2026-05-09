@@ -13,6 +13,7 @@ Optional LLM tinting pass can add creative color variations.
 
 import logging
 import math
+import os
 from datetime import datetime, timezone, date
 
 logger = logging.getLogger(__name__)
@@ -170,12 +171,60 @@ import threading
 #   next_retry — negative cache: when the last attempt failed, don't try
 #                again until this timestamp (avoids hammering Claude on
 #                every /api/scene poll if the runtime is down)
+# `text` and `expires` are persisted to <data_dir>/scene_note.json so a
+# `maiko serve` restart inherits the still-valid sentence instead of
+# paying for a fresh LLM generation every reboot. `refreshing` and
+# `next_retry` are runtime-only (a paused refresh from one process
+# shouldn't lock out the next one).
 _creative_note_cache = {
     "text": None,
     "expires": 0,
     "refreshing": False,
     "next_retry": 0,
 }
+
+
+def _scene_note_cache_path():
+    from planet_maiko.paths import data_dir
+    return os.path.join(data_dir(), "scene_note.json")
+
+
+def _load_persisted_cache():
+    """Restore (text, expires) from disk on module import.
+
+    Best-effort — a missing/corrupt file just means the next /api/scene
+    call kicks off a fresh refresh, the same as a true cold start.
+    """
+    import json as _json
+    try:
+        path = _scene_note_cache_path()
+        if not os.path.isfile(path):
+            return
+        with open(path, encoding="utf-8") as f:
+            data = _json.load(f)
+        if isinstance(data, dict) and isinstance(data.get("text"), str):
+            _creative_note_cache["text"] = data["text"]
+            _creative_note_cache["expires"] = float(data.get("expires") or 0)
+    except Exception as e:
+        logger.debug(f"[scene] cache load failed: {e}")
+
+
+def _persist_cache():
+    """Write the cache to disk after a successful refresh."""
+    import json as _json
+    try:
+        path = _scene_note_cache_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            _json.dump({
+                "text": _creative_note_cache["text"],
+                "expires": _creative_note_cache["expires"],
+            }, f)
+    except Exception as e:
+        logger.debug(f"[scene] cache persist failed: {e}")
+
+
+_load_persisted_cache()
 
 
 def _refresh_creative_note(weather, season, time_bucket, mood):
@@ -210,6 +259,7 @@ def _refresh_creative_note(weather, season, time_bucket, mood):
             # means one LLM call per overview cycle instead of two.
             _creative_note_cache["expires"] = time.time() + 14400
             _creative_note_cache["next_retry"] = 0
+            _persist_cache()
         else:
             # LLM responded but with no usable output — back off shorter
             _creative_note_cache["next_retry"] = time.time() + 300
