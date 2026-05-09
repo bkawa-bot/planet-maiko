@@ -87,10 +87,11 @@
   /* Surface backgrounds — theme-controllable. Custom themes can
      override via `topbar_gradient` and `pane_bg` in their colors
      dict; otherwise they inherit these defaults (night look). */
-  /* Signature gradient: pink → candy magenta → deep cobalt → electric
-     ice → frozen cyan. The full 5-stop sweep matches the master palette
-     reference so the topbar reads as the actual "planet" gradient. */
-  --topbar-gradient: linear-gradient(135deg, #FF6FAF 0%, #FF4D9D 22%, #1A3D8F 50%, #1FB5E5 75%, #6FE0E8 100%);
+  /* Topbar gradient. The full 5-stop signature gradient lives on the
+     palette reference — on the nav strip it's noise. Settled on a
+     2-stop pink → electric-ice sweep that still reads as the brand
+     without the rainbow. */
+  --topbar-gradient: linear-gradient(135deg, #FF6FAF 0%, #1FB5E5 100%);
   --pane-bg: rgba(26, 31, 74, 0.45);
 }
 
@@ -133,9 +134,8 @@
   --lemon-soft: rgba(255, 243, 163, 0.40); --lemon-faint: rgba(255, 243, 163, 0.18);
   --green-soft: rgba(200, 236, 92, 0.22); --green-faint: rgba(200, 236, 92, 0.10);
   --lavender-soft: rgba(196, 139, 255, 0.18); --lavender-faint: rgba(196, 139, 255, 0.08);
-  /* Soft daylight gradient — a calmer version of the master signature
-     so the topbar doesn't punch the eye on a light theme. */
-  --topbar-gradient: linear-gradient(135deg, #FF9CC4 0%, #FF7AB8 22%, #4A6FC4 50%, #38C5E0 75%, #9FEEEF 100%);
+  /* Soft daylight sweep — the cosmic two-stop, gentled. */
+  --topbar-gradient: linear-gradient(135deg, #FF9CC4 0%, #38C5E0 100%);
   --pane-bg: rgba(255, 255, 255, 0.55);
 }
 
@@ -178,7 +178,9 @@
   --lemon-soft: rgba(255, 243, 163, 0.40); --lemon-faint: rgba(255, 243, 163, 0.18);
   --green-soft: rgba(200, 236, 92, 0.22); --green-faint: rgba(200, 236, 92, 0.10);
   --lavender-soft: rgba(196, 139, 255, 0.20); --lavender-faint: rgba(196, 139, 255, 0.10);
-  --topbar-gradient: linear-gradient(135deg, #FFF3A3 0%, #FF9CC4 35%, #C48BFF 70%, #9FEEEF 100%);
+  /* Sunrise blush: butter yellow → soft pink. Two stops keeps the
+     dawn feeling warm without competing with the actual greeting. */
+  --topbar-gradient: linear-gradient(135deg, #FFF3A3 0%, #FF9CC4 100%);
   --pane-bg: rgba(255, 255, 255, 0.55);
 }
 
