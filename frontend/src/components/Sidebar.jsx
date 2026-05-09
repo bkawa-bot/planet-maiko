@@ -22,24 +22,18 @@ const NAV_ITEMS = [
 // index.css with the matching color tokens.
 const THEMES = [
   { id: "auto", label: "Auto", emoji: "🔄", group: "auto" },
-  // Night
+  // Night — cosmic, bioluminescent, frozen, magical
   { id: "dark", label: "Cosmic Nighttime", emoji: "🌙", group: "night" },
-  { id: "midnight", label: "Midnight Violet", emoji: "🪐", group: "night" },
+  { id: "bioluminescent", label: "Bioluminescent", emoji: "🟢", group: "night" },
+  { id: "frozen", label: "Frozen", emoji: "❄️", group: "night" },
   { id: "aurora", label: "Aurora", emoji: "🌌", group: "night" },
-  { id: "slime-garden", label: "Slime Garden", emoji: "🍀", group: "night" },
-  { id: "forest-night", label: "Forest Night", emoji: "🌲", group: "night" },
-  // Twilight (sunset + warm dusk)
-  { id: "sunset", label: "Civil Twilight", emoji: "🌇", group: "twilight" },
-  { id: "golden-hour", label: "Golden Hour", emoji: "🍯", group: "twilight" },
-  // Morning (dawn / pastel)
-  { id: "morning", label: "Sunrise", emoji: "🌅", group: "morning" },
-  { id: "dawn-mist", label: "Dawn Mist", emoji: "🌷", group: "morning" },
-  { id: "cherry-blossom", label: "Cherry Blossom", emoji: "🌸", group: "morning" },
-  // Day (bright)
-  { id: "light", label: "Bright Daylight", emoji: "☀️", group: "day" },
+  // Twilight — coral horizon over deep indigo
+  { id: "sunset", label: "Twilight", emoji: "🌇", group: "twilight" },
+  // Morning — alien sunrise haze
+  { id: "morning", label: "Dawn", emoji: "🌅", group: "morning" },
+  // Day — bright iced sky + mint meadow
+  { id: "light", label: "Daylight", emoji: "☀️", group: "day" },
   { id: "mint-meadow", label: "Mint Meadow", emoji: "🌿", group: "day" },
-  { id: "coral-reef", label: "Coral Reef", emoji: "🐚", group: "day" },
-  { id: "lavender-dream", label: "Lavender Dream", emoji: "💜", group: "day" },
 ];
 
 function getAutoTheme() {

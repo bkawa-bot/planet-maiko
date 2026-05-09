@@ -87,11 +87,7 @@
 
 [data-theme="light"] .topbar-planet,
 [data-theme="morning"] .topbar-planet,
-[data-theme="dawn-mist"] .topbar-planet,
-[data-theme="cherry-blossom"] .topbar-planet,
-[data-theme="mint-meadow"] .topbar-planet,
-[data-theme="coral-reef"] .topbar-planet,
-[data-theme="lavender-dream"] .topbar-planet {
+[data-theme="mint-meadow"] .topbar-planet {
   /* Light themes get a softer halo — a heavy dark drop-shadow on a
      pastel background reads as a smudge. */
   text-shadow: 0 1px 2px rgba(255, 255, 255, 0.55);
@@ -99,11 +95,7 @@
 
 [data-theme="light"] .topbar-maiko,
 [data-theme="morning"] .topbar-maiko,
-[data-theme="dawn-mist"] .topbar-maiko,
-[data-theme="cherry-blossom"] .topbar-maiko,
-[data-theme="mint-meadow"] .topbar-maiko,
-[data-theme="coral-reef"] .topbar-maiko,
-[data-theme="lavender-dream"] .topbar-maiko {
+[data-theme="mint-meadow"] .topbar-maiko {
   /* Light themes: soft warm halo under the gradient text instead of
      a hard dark shadow, so the brand glows rather than smudges. */
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
@@ -241,11 +233,7 @@
 
 [data-theme="light"] .nav-pill,
 [data-theme="morning"] .nav-pill,
-[data-theme="dawn-mist"] .nav-pill,
-[data-theme="cherry-blossom"] .nav-pill,
-[data-theme="mint-meadow"] .nav-pill,
-[data-theme="coral-reef"] .nav-pill,
-[data-theme="lavender-dream"] .nav-pill {
+[data-theme="mint-meadow"] .nav-pill {
   text-shadow: 0 1px 2px rgba(255, 255, 255, 0.55);
 }
 
@@ -257,11 +245,7 @@
 
 [data-theme="light"] .nav-pill:hover,
 [data-theme="morning"] .nav-pill:hover,
-[data-theme="dawn-mist"] .nav-pill:hover,
-[data-theme="cherry-blossom"] .nav-pill:hover,
-[data-theme="mint-meadow"] .nav-pill:hover,
-[data-theme="coral-reef"] .nav-pill:hover,
-[data-theme="lavender-dream"] .nav-pill:hover { background: rgba(0,0,0,0.06); }
+[data-theme="mint-meadow"] .nav-pill:hover { background: rgba(0,0,0,0.06); }
 
 /* Active pill is a solid raised tile so the label always reads against
    it — earlier we used translucent --pink-glow + var(--pink) text,

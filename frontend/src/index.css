@@ -1,15 +1,12 @@
 /* Planet Maiko — Cosmic palette */
 
 :root {
-  /* Dark mode — cosmic nighttime. Deep space backgrounds, neon accents.
-     Token names map to the previous sherbet system so all downstream
-     components keep working; only the values change. */
+  /* Cosmic Nighttime — the master dark palette. Deep space backgrounds,
+     signature pink → cobalt → frozen-cyan gradient, plant accents from
+     the bioluminescent flora set. The signature gradient lives in
+     --topbar-gradient below; per-token values pick the right hue from
+     the palette doc rather than improvising. */
   --bg: #0B0F2A;            /* Deep Space Navy — gradient top */
-  /* --bg-plain: gradient bottom stop. Body uses
-     `linear-gradient(180deg, --bg 0%, --bg-plain 100%)` so the page
-     fades from sky → horizon. Picking a palette color far enough
-     from --bg that the gradient is visibly readable — the previous
-     near-neighbor pairs were too subtle. */
   --bg-plain: #2A2250;      /* Midnight Purple — pronounced shift */
   --bg-card: #1A1F4A;       /* Cosmic Indigo */
   --bg-card-alt: #2A2250;   /* Midnight Purple */
@@ -22,42 +19,38 @@
   --pink: #FF6FAF;          /* Neon Pink — primary accent */
   --pink-soft: rgba(255, 111, 175, 0.15);
   --pink-glow: rgba(255, 111, 175, 0.08);
-  --blue: #6FB6FF;          /* Sky Blue Spark */
-  --blue-soft: rgba(111, 182, 255, 0.14);
-  --mint: #A8F0D1;          /* Mint Pastel */
-  --orange: #FF9B6A;        /* Peach Orange */
+  --blue: #1FB5E5;          /* Electric Ice — the new cobalt-cyan hero */
+  --blue-soft: rgba(31, 181, 229, 0.16);
+  --mint: #8FFFC9;          /* Bio Mint */
+  --orange: #FF6B5C;        /* Plasma Coral */
   --lavender: #C9A6FF;      /* Soft Lavender Glow */
-  --peach: #FF9B6A;         /* Peach Orange */
-  --creamsicle: #FFCAA8;
+  --peach: #FF6B5C;         /* Plasma Coral */
+  --creamsicle: #FF8FE0;    /* Magenta Spark — sweet, between pink + lavender */
   --lemon: #FFE66D;         /* Star Yellow */
 
-  --urgent: #FF7A73;        /* Warm Coral */
-  --high: #FF9B6A;          /* Peach Orange */
+  --urgent: #FF5577;        /* Hot Magenta Red — distinct from pink */
+  --high: #FF6B5C;          /* Plasma Coral */
   --normal: #FF6FAF;        /* Neon Pink */
   --low: #6E7A92;
-  --green: #7ED957;         /* Slime Green */
+  --green: #C4F542;         /* Toxic Lime — bioluminescent green */
   --border: #3F3D70;
   --border-subtle: #2D2D60;
 
   /* Card title + border accents — pulled per theme so cards stop
-     reading as one-note. Title goes on a hue distinct from --text;
-     border gets a low-alpha accent so the edge has color even at
-     rest. Both fall back to neutral tokens if a theme doesn't set
-     them, so individual surfaces stay safe. */
-  --card-title: #C9A6FF;          /* Soft Lavender Glow */
+     reading as one-note. */
+  --card-title: #6FE0E8;          /* Frozen Cyan — frosty title against indigo card */
   --card-border: rgba(255, 111, 175, 0.50);
 
-  /* Themed tint backgrounds — use these instead of hardcoded rgba so
-     badges/tags/pills track the active theme. Pair with the matching
-     --xxx color for foreground text. */
-  --urgent-soft: rgba(255, 122, 115, 0.15);
-  --urgent-faint: rgba(255, 122, 115, 0.08);
-  --high-soft: rgba(255, 155, 106, 0.15);
-  --high-faint: rgba(255, 155, 106, 0.08);
+  /* Themed tint backgrounds — track the active theme so badges/pills
+     stay coherent. */
+  --urgent-soft: rgba(255, 85, 119, 0.16);
+  --urgent-faint: rgba(255, 85, 119, 0.08);
+  --high-soft: rgba(255, 107, 92, 0.16);
+  --high-faint: rgba(255, 107, 92, 0.08);
   --lemon-soft: rgba(255, 230, 109, 0.15);
   --lemon-faint: rgba(255, 230, 109, 0.06);
-  --green-soft: rgba(126, 217, 87, 0.15);
-  --green-faint: rgba(126, 217, 87, 0.08);
+  --green-soft: rgba(196, 245, 66, 0.16);
+  --green-faint: rgba(196, 245, 66, 0.08);
   --lavender-soft: rgba(201, 166, 255, 0.15);
   --lavender-faint: rgba(201, 166, 255, 0.08);
 
@@ -94,567 +87,321 @@
   /* Surface backgrounds — theme-controllable. Custom themes can
      override via `topbar_gradient` and `pane_bg` in their colors
      dict; otherwise they inherit these defaults (night look). */
-  --topbar-gradient: linear-gradient(135deg, #0B0F2A 0%, #FF6FAF 100%);
+  /* Signature gradient: pink → candy magenta → deep cobalt → electric
+     ice → frozen cyan. The full 5-stop sweep matches the master palette
+     reference so the topbar reads as the actual "planet" gradient. */
+  --topbar-gradient: linear-gradient(135deg, #FF6FAF 0%, #FF4D9D 22%, #1A3D8F 50%, #1FB5E5 75%, #6FE0E8 100%);
   --pane-bg: rgba(26, 31, 74, 0.45);
 }
 
 /* === Light theme — bright daylight === */
 [data-theme="light"] {
-  --bg: #EAF4FF;            /* Soft Sky */
-  --bg-plain: #F8F4FF;      /* whisper of lavender — airy daylight fade */
+  /* Daylight — alien noon. Iced sky bg with electric cyan as the
+     hero accent and soft pink as the warm beat against it. The
+     light master palette in the design doc. */
+  --bg: #E8F1FA;            /* Iced Sky */
+  --bg-plain: #F3EFFF;      /* Pastel Lavender Base — airy fade */
   --bg-card: #FFFFFF;
-  --bg-card-alt: #E6FFF7;   /* Light Mint Wash — distinct from bg, not just a lavender tint */
-  --bg-hover: #DDEAFC;
-  --bg-selected: #C8DDF8;
+  --bg-card-alt: #E0F4F7;   /* Frozen Wash */
+  --bg-hover: #DAE8F5;
+  --bg-selected: #C5DDF0;
   --text: #2B2F42;          /* Dark Slate */
   --text-dim: #6B7280;      /* Mid Gray */
   --text-muted: #9CA3B5;
   --pink: #FF7AB8;          /* Light Magenta */
   --pink-soft: rgba(255, 122, 184, 0.16);
   --pink-glow: rgba(255, 122, 184, 0.08);
-  --blue: #5EE7EB;          /* Bright Cyan */
-  --blue-soft: rgba(94, 231, 235, 0.18);
-  --mint: #CFF7E6;          /* Pale Mint */
-  --orange: #FFB38A;        /* Apricot */
+  --blue: #38C5E0;          /* Electric Cyan */
+  --blue-soft: rgba(56, 197, 224, 0.18);
+  --mint: #A8FFD4;          /* Bio Mint Light */
+  --orange: #FF8A7A;        /* Plasma Coral Light */
   --lavender: #C48BFF;      /* Lavender Purple */
-  --peach: #FFA3A0;         /* Soft Coral */
-  --creamsicle: #FFB38A;
-  --lemon: #FFC557;         /* Sunlit Gold */
-  --urgent: #FFA3A0;        /* Soft Coral */
-  --high: #FFB38A;          /* Apricot */
+  --peach: #FF9CC4;         /* Soft Pink */
+  --creamsicle: #FFB8E8;    /* Magenta Spark Light */
+  --lemon: #FFF3A3;         /* Butter Yellow */
+  --urgent: #FF8095;        /* Hot Pink Soft */
+  --high: #FF8A7A;          /* Plasma Coral Light */
   --normal: #FF7AB8;        /* Light Magenta */
   --low: #9CA3B5;
-  --green: #9BE870;         /* Fresh Green */
+  --green: #C8EC5C;         /* Lime Glow */
   --border: #C8D8EC;
   --border-subtle: #DDE6F2;
-  --card-title: #C48BFF;          /* Lavender Purple title against white card */
-  --card-border: rgba(94, 231, 235, 0.45);  /* Bright Cyan edge */
-  --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.08);
-  --high-soft: rgba(255, 179, 138, 0.18); --high-faint: rgba(255, 179, 138, 0.08);
-  --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
-  --green-soft: rgba(155, 232, 112, 0.20); --green-faint: rgba(155, 232, 112, 0.10);
+  --card-title: #38C5E0;          /* Electric Cyan title — frosty pop on white card */
+  --card-border: rgba(56, 197, 224, 0.40);
+  --urgent-soft: rgba(255, 128, 149, 0.18); --urgent-faint: rgba(255, 128, 149, 0.08);
+  --high-soft: rgba(255, 138, 122, 0.18); --high-faint: rgba(255, 138, 122, 0.08);
+  --lemon-soft: rgba(255, 243, 163, 0.40); --lemon-faint: rgba(255, 243, 163, 0.18);
+  --green-soft: rgba(200, 236, 92, 0.22); --green-faint: rgba(200, 236, 92, 0.10);
   --lavender-soft: rgba(196, 139, 255, 0.18); --lavender-faint: rgba(196, 139, 255, 0.08);
-  --topbar-gradient: linear-gradient(135deg, #EAF4FF 0%, #5EE7EB 100%);
-  --pane-bg: rgba(255, 255, 255, 0.50);
+  /* Soft daylight gradient — a calmer version of the master signature
+     so the topbar doesn't punch the eye on a light theme. */
+  --topbar-gradient: linear-gradient(135deg, #FF9CC4 0%, #FF7AB8 22%, #4A6FC4 50%, #38C5E0 75%, #9FEEEF 100%);
+  --pane-bg: rgba(255, 255, 255, 0.55);
 }
 
-/* === Morning theme — sunrise warmth, lighter than Day === */
+/* === Dawn — alien sunrise haze. Pastel lavender base + frozen wash,
+   soft pink as the rising light, butter yellow as the bloom. Cooler
+   than the old "Sunrise" — leans into the alien-daylight side of the
+   light master palette rather than warm cream. */
 [data-theme="morning"] {
-  --bg: #FFF4E5;            /* warm cream */
-  --bg-plain: #FFEDF5;      /* whisper of pink — gentle sunrise wash */
+  --bg: #F3EFFF;            /* Pastel Lavender Base */
+  --bg-plain: #FFE8F1;      /* whisper of pink — sunrise wash */
   --bg-card: #FFFFFF;
-  --bg-card-alt: #FFF3A3;   /* Butter Yellow */
-  --bg-hover: #FFEED0;
-  --bg-selected: #FFE0B5;
-  --text: #2B2F42;          /* Dark Slate */
-  --text-dim: #6B7280;      /* Mid Gray */
+  --bg-card-alt: #E0F4F7;   /* Frozen Wash */
+  --bg-hover: #E8DFF8;
+  --bg-selected: #D8C7FF;   /* Light Periwinkle */
+  --text: #2B2F42;
+  --text-dim: #6B7280;
   --text-muted: #9CA3B5;
-  --pink: #FF9CC4;          /* Soft Pink — sunrise blush, softer than Day's magenta */
+  --pink: #FF9CC4;          /* Soft Pink — sunrise blush */
   --pink-soft: rgba(255, 156, 196, 0.18);
   --pink-glow: rgba(255, 156, 196, 0.08);
-  --blue: #59E3D6;          /* Bright Aqua — actual contrast against the warm cream */
-  --blue-soft: rgba(89, 227, 214, 0.18);
-  --mint: #CFF7E6;          /* Pale Mint */
-  --orange: #FFB38A;        /* Apricot */
-  --lavender: #C48BFF;      /* Lavender Purple — distinct from periwinkle bg */
-  --peach: #FFB38A;
+  --blue: #38C5E0;          /* Electric Cyan — counter-warm contrast */
+  --blue-soft: rgba(56, 197, 224, 0.18);
+  --mint: #A8FFD4;          /* Bio Mint Light */
+  --orange: #FF8A7A;        /* Plasma Coral Light */
+  --lavender: #C48BFF;      /* Lavender Purple — distinct from base */
+  --peach: #FFB8E8;         /* Magenta Spark Light */
   --creamsicle: #FFC9A8;
-  --lemon: #FFC557;         /* Sunlit Gold — punchier than Butter Yellow which is already in BG */
-  --urgent: #FFA3A0;        /* Soft Coral */
-  --high: #FFB38A;          /* Apricot */
+  --lemon: #FFF3A3;         /* Butter Yellow — sunrise bloom */
+  --urgent: #FF8095;
+  --high: #FF8A7A;
   --normal: #FF9CC4;
   --low: #9CA3B5;
-  --green: #9BE870;         /* Fresh Green */
-  --border: #F0E0C8;
-  --border-subtle: #F8E8D0;
-  --card-title: #FF7AB8;          /* Light Magenta — sunrise blush */
-  --card-border: rgba(89, 227, 214, 0.45);  /* Bright Aqua edge */
-  --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.08);
-  --high-soft: rgba(255, 179, 138, 0.18); --high-faint: rgba(255, 179, 138, 0.08);
-  --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
-  --green-soft: rgba(155, 232, 112, 0.20); --green-faint: rgba(155, 232, 112, 0.10);
+  --green: #C8EC5C;         /* Lime Glow */
+  --border: #E5D5F0;
+  --border-subtle: #F0E5F8;
+  --card-title: #FF7AB8;          /* Light Magenta — the sunrise hero */
+  --card-border: rgba(56, 197, 224, 0.40);  /* Electric Cyan edge */
+  --urgent-soft: rgba(255, 128, 149, 0.18); --urgent-faint: rgba(255, 128, 149, 0.08);
+  --high-soft: rgba(255, 138, 122, 0.18); --high-faint: rgba(255, 138, 122, 0.08);
+  --lemon-soft: rgba(255, 243, 163, 0.40); --lemon-faint: rgba(255, 243, 163, 0.18);
+  --green-soft: rgba(200, 236, 92, 0.22); --green-faint: rgba(200, 236, 92, 0.10);
   --lavender-soft: rgba(196, 139, 255, 0.20); --lavender-faint: rgba(196, 139, 255, 0.10);
-  --topbar-gradient: linear-gradient(135deg, #FFF4E5 0%, #FF9CC4 100%);
-  --pane-bg: rgba(255, 255, 255, 0.50);
+  --topbar-gradient: linear-gradient(135deg, #FFF3A3 0%, #FF9CC4 35%, #C48BFF 70%, #9FEEEF 100%);
+  --pane-bg: rgba(255, 255, 255, 0.55);
 }
 
-/* === Sunset theme — civil twilight: periwinkle sky + coral horizon ===
-   The 20-30 min window after the sun drops: the upper sky is still
-   indigo-blue, the horizon glows coral/gold, and the high clouds
-   catch a periwinkle wash. So bg leans periwinkle-indigo (not deep
-   purple), text-dim picks up the periwinkle so labels feel like
-   they're catching leftover sky-light, and the warm accents
-   (Coral, Peach, Cosmic Gold) carry the horizon. */
+/* === Twilight — civil dusk on the alien planet. Cosmic indigo sky,
+   plasma coral horizon, dusk lavender wisps, cosmic gold last rays.
+   The cool/warm collision is the whole point — periwinkle-indigo bg,
+   not deep purple, so the horizon really glows. */
 [data-theme="sunset"] {
-  --bg: #1F2D55;            /* twilight indigo */
-  --bg-plain: #4A2050;      /* deep mauve horizon — sun has dropped */
-  --bg-card: #2D3D6E;
-  --bg-card-alt: #3A4D85;   /* slight mauve lift */
-  --bg-hover: #455185;
-  --bg-selected: #515C95;
-  --text: #F4F7FF;          /* Soft White */
-  --text-dim: #B5C0E0;      /* periwinkle-tinted */
-  --text-muted: #7C89B5;
-  --pink: #FF7A73;          /* Warm Coral — primary, the horizon glow */
-  --pink-soft: rgba(255, 122, 115, 0.16);
-  --pink-glow: rgba(255, 122, 115, 0.08);
-  --blue: #6FB6FF;          /* Sky Blue Spark — the still-lit upper sky */
-  --blue-soft: rgba(111, 182, 255, 0.16);
-  --mint: #A8F0D1;
-  --orange: #FF9B6A;        /* Peach Orange */
+  --bg: #1A1F4A;            /* Cosmic Indigo — twilight sky */
+  --bg-plain: #4A2050;      /* deep mauve horizon */
+  --bg-card: #2A2250;       /* Midnight Purple */
+  --bg-card-alt: #3A2D6A;
+  --bg-hover: #443572;
+  --bg-selected: #514080;
+  --text: #F4F7FF;
+  --text-dim: #C9A6FF;      /* Soft Lavender Glow — periwinkle-tinted labels */
+  --text-muted: #7B6BAA;    /* Dusk Lavender */
+  --pink: #FF6B5C;          /* Plasma Coral — horizon glow */
+  --pink-soft: rgba(255, 107, 92, 0.16);
+  --pink-glow: rgba(255, 107, 92, 0.08);
+  --blue: #5C85D4;          /* Twilight Blue — still-lit upper sky */
+  --blue-soft: rgba(92, 133, 212, 0.16);
+  --mint: #8FFFC9;          /* Bio Mint */
+  --orange: #FF6B5C;        /* Plasma Coral */
   --lavender: #C9A6FF;      /* Soft Lavender Glow — wispy clouds */
-  --peach: #FF9B6A;
+  --peach: #FF8FE0;         /* Magenta Spark */
   --creamsicle: #FFCAA8;
   --lemon: #FFD36B;         /* Cosmic Gold — last rays */
-  --urgent: #FF7A73;
-  --high: #FF9B6A;
-  --normal: #FF7A73;
-  --low: #7C89B5;
-  --green: #7ED957;         /* Slime Green */
-  --border: #455185;
-  --border-subtle: #2D3D6E;
+  --urgent: #FF5577;        /* Hot Magenta Red */
+  --high: #FF6B5C;
+  --normal: #FF6B5C;
+  --low: #7B6BAA;
+  --green: #C4F542;         /* Toxic Lime */
+  --border: #443572;
+  --border-subtle: #2A2250;
   --card-title: #FFD36B;          /* Cosmic Gold — sunset highlight */
-  --card-border: rgba(255, 122, 115, 0.50);  /* Warm Coral edge */
-  --urgent-soft: rgba(255, 122, 115, 0.16); --urgent-faint: rgba(255, 122, 115, 0.08);
-  --high-soft: rgba(255, 155, 106, 0.16); --high-faint: rgba(255, 155, 106, 0.08);
+  --card-border: rgba(255, 107, 92, 0.50);
+  --urgent-soft: rgba(255, 85, 119, 0.16); --urgent-faint: rgba(255, 85, 119, 0.08);
+  --high-soft: rgba(255, 107, 92, 0.16); --high-faint: rgba(255, 107, 92, 0.08);
   --lemon-soft: rgba(255, 211, 107, 0.18); --lemon-faint: rgba(255, 211, 107, 0.09);
-  --green-soft: rgba(126, 217, 87, 0.16); --green-faint: rgba(126, 217, 87, 0.08);
+  --green-soft: rgba(196, 245, 66, 0.16); --green-faint: rgba(196, 245, 66, 0.08);
   --lavender-soft: rgba(201, 166, 255, 0.16); --lavender-faint: rgba(201, 166, 255, 0.08);
-  --topbar-gradient: linear-gradient(135deg, #1F2D55 0%, #FF7A73 100%);
-  --pane-bg: rgba(45, 61, 110, 0.55);
+  --topbar-gradient: linear-gradient(135deg, #1A1F4A 0%, #4A2050 35%, #FF6B5C 70%, #FFD36B 100%);
+  --pane-bg: rgba(42, 34, 80, 0.55);
 }
 
 /* ============================================================
-   Extended palette — 10 additional themes built from the
-   Cosmic palette image. Grouped by mood:
-     Night:    midnight, aurora, slime-garden, forest-night
-     Twilight: golden-hour
-     Morning:  dawn-mist, cherry-blossom
-     Day:      mint-meadow, coral-reef, lavender-dream
-   Each picks a primary accent that drives badges/buttons,
-   secondary hues that fill chips/links, and an appropriate
-   world hill SVG.
+   Curated extended themes — built from the new master palette.
+     Night:    bioluminescent, frozen, aurora
+     Day:      mint-meadow
+   The remaining themes (cosmic default, sunset twilight, dawn
+   morning, daylight light) live above. Each picks a primary
+   accent that drives badges/buttons, secondary hues that fill
+   chips/links, and a topbar gradient that matches the vibe.
    ============================================================ */
 
-/* === Midnight — neon noir. Deep navy + Candy Magenta primary,
-   Electric Cyan as the hard counter-accent, Star Yellow + Slime Green
-   as bright pops so the surface isn't swimming in one hue. */
-[data-theme="midnight"] {
-  --bg: #0B0F2A;
-  --bg-plain: #2A2250;      /* Midnight Purple — neon noir fade */
-  --bg-card: #1F1648;
-  --bg-card-alt: #2A2250;
-  --bg-hover: #3A2860;
-  --bg-selected: #4A3478;
-  --text: #F4F7FF;
-  --text-dim: #C9A6FF;
-  --text-muted: #8B83A8;
-  --pink: #FF4D9D;
-  --pink-soft: rgba(255, 77, 157, 0.20);
-  --pink-glow: rgba(255, 77, 157, 0.10);
-  --blue: #3BE0E5;
-  --blue-soft: rgba(59, 224, 229, 0.18);
-  --mint: #A8F0D1;
-  --orange: #FF9B6A;
-  --lavender: #C9A6FF;
-  --peach: #FF9B6A;
-  --creamsicle: #FFCAA8;
-  --lemon: #FFE66D;
-  --urgent: #FF7A73;
-  --high: #FF9B6A;
-  --normal: #FF4D9D;
-  --low: #8B83A8;
-  --green: #7ED957;
-  --border: #4A3478;
-  --border-subtle: #2A2250;
-  --card-title: #3BE0E5;          /* Electric Cyan title — pops on navy */
-  --card-border: rgba(255, 77, 157, 0.55);  /* Candy Magenta edge */
-  --urgent-soft: rgba(255, 122, 115, 0.18); --urgent-faint: rgba(255, 122, 115, 0.08);
-  --high-soft: rgba(255, 155, 106, 0.18); --high-faint: rgba(255, 155, 106, 0.08);
-  --lemon-soft: rgba(255, 230, 109, 0.20); --lemon-faint: rgba(255, 230, 109, 0.10);
-  --green-soft: rgba(126, 217, 87, 0.18); --green-faint: rgba(126, 217, 87, 0.08);
-  --lavender-soft: rgba(201, 166, 255, 0.20); --lavender-faint: rgba(201, 166, 255, 0.10);
-  --topbar-gradient: linear-gradient(135deg, #0B0F2A 0%, #3BE0E5 100%);
-  --pane-bg: rgba(31, 22, 72, 0.55);
-}
-
-/* === Aurora — northern lights. Bright Teal primary against Soft
-   Lavender Glow + Sky Blue Spark + Star Yellow. Background layers
-   shift hue so the surface itself shimmers, not just the chips. */
-[data-theme="aurora"] {
-  --bg: #0E1230;
-  --bg-plain: #2D4575;      /* aurora bloom — visible teal shift */
-  --bg-card: #1A2548;
-  --bg-card-alt: #233A5E;
-  --bg-hover: #2D4A70;
-  --bg-selected: #3D5A85;
-  --text: #F4F7FF;
-  --text-dim: #A8E4DC;
-  --text-muted: #6E8A92;
-  --pink: #31D4C6;
-  --pink-soft: rgba(49, 212, 198, 0.18);
-  --pink-glow: rgba(49, 212, 198, 0.10);
-  --blue: #6FB6FF;
-  --blue-soft: rgba(111, 182, 255, 0.20);
-  --mint: #A8F0D1;
-  --orange: #FF9B6A;
-  --lavender: #C9A6FF;
-  --peach: #FF9B6A;
-  --creamsicle: #FFCAA8;
-  --lemon: #FFE66D;
-  --urgent: #FF7A73;
-  --high: #FFE66D;
-  --normal: #31D4C6;
-  --low: #6E8A92;
-  --green: #64E3C7;
-  --border: #2D4575;
-  --border-subtle: #233A5E;
-  --card-title: #FFE66D;          /* Star Yellow — warm pop on cool aurora */
-  --card-border: rgba(49, 212, 198, 0.55);  /* Bright Teal edge */
-  --urgent-soft: rgba(255, 122, 115, 0.16); --urgent-faint: rgba(255, 122, 115, 0.08);
-  --high-soft: rgba(255, 230, 109, 0.18); --high-faint: rgba(255, 230, 109, 0.10);
-  --lemon-soft: rgba(255, 230, 109, 0.22); --lemon-faint: rgba(255, 230, 109, 0.10);
-  --green-soft: rgba(100, 227, 199, 0.20); --green-faint: rgba(100, 227, 199, 0.10);
-  --lavender-soft: rgba(201, 166, 255, 0.22); --lavender-faint: rgba(201, 166, 255, 0.12);
-  --topbar-gradient: linear-gradient(135deg, #0E1230 0%, #C9A6FF 100%);
-  --pane-bg: rgba(35, 58, 94, 0.55);
-}
-
-/* === Slime Garden — alien botanical at night. Deep navy ground,
-   Slime Green primary, Electric Cyan + Violet Purple as the alien
-   bloom. Magenta-pink for exotic blossoms. The garden is on another
-   planet, not on Earth. */
-[data-theme="slime-garden"] {
-  --bg: #0F1A28;
-  --bg-plain: #2D5048;      /* deep moss horizon — alien soil */
-  --bg-card: #1A2A38;
+/* === Bioluminescent — alien jungle at night. Toxic lime as primary,
+   bio mint and sea glass for botanical glow, violet purple as the
+   exotic-bloom accent. The forest is alive and humming. */
+[data-theme="bioluminescent"] {
+  --bg: #0F1A2A;            /* deep ocean-jungle floor */
+  --bg-plain: #1F3838;      /* moss-teal horizon */
+  --bg-card: #1A2A3A;
   --bg-card-alt: #1F3530;
-  --bg-hover: #2D4A45;
+  --bg-hover: #2D4A48;
   --bg-selected: #3A5A55;
   --text: #F4F7FF;
-  --text-dim: #A8F0D1;
+  --text-dim: #8FFFC9;      /* Bio Mint — softly glowing labels */
   --text-muted: #6E8A82;
-  --pink: #7ED957;
-  --pink-soft: rgba(126, 217, 87, 0.20);
-  --pink-glow: rgba(126, 217, 87, 0.10);
-  --blue: #3BE0E5;
-  --blue-soft: rgba(59, 224, 229, 0.18);
-  --mint: #A8F0D1;
-  --orange: #FF9B6A;
-  --lavender: #B46BFF;
-  --peach: #FF6FAF;
+  --pink: #C4F542;          /* Toxic Lime — the spore primary */
+  --pink-soft: rgba(196, 245, 66, 0.18);
+  --pink-glow: rgba(196, 245, 66, 0.10);
+  --blue: #5BB5BD;          /* Sea Glass */
+  --blue-soft: rgba(91, 181, 189, 0.18);
+  --mint: #8FFFC9;          /* Bio Mint */
+  --orange: #FF6B5C;        /* Plasma Coral */
+  --lavender: #B46BFF;      /* Violet Purple — exotic bloom */
+  --peach: #FF8FE0;         /* Magenta Spark */
   --creamsicle: #FFCAA8;
   --lemon: #FFE66D;
-  --urgent: #FF7A73;
-  --high: #FF6FAF;
-  --normal: #7ED957;
+  --urgent: #FF5577;
+  --high: #FF6B5C;
+  --normal: #C4F542;
   --low: #6E8A82;
-  --green: #7ED957;
-  --border: #2D5048;
-  --border-subtle: #1F3530;
-  --card-title: #B46BFF;          /* Violet Purple — alien blossom title */
-  --card-border: rgba(126, 217, 87, 0.55);  /* Slime Green edge */
-  --urgent-soft: rgba(255, 122, 115, 0.16); --urgent-faint: rgba(255, 122, 115, 0.08);
-  --high-soft: rgba(255, 111, 175, 0.18); --high-faint: rgba(255, 111, 175, 0.08);
-  --lemon-soft: rgba(255, 230, 109, 0.18); --lemon-faint: rgba(255, 230, 109, 0.10);
-  --green-soft: rgba(126, 217, 87, 0.20); --green-faint: rgba(126, 217, 87, 0.10);
-  --lavender-soft: rgba(180, 107, 255, 0.20); --lavender-faint: rgba(180, 107, 255, 0.10);
-  --topbar-gradient: linear-gradient(135deg, #0F1A28 0%, #7ED957 100%);
-  --pane-bg: rgba(31, 53, 48, 0.55);
-}
-
-/* === Forest Night — botanical dark, gold accents instead of pink. */
-[data-theme="forest-night"] {
-  --bg: #0B1A20;
-  --bg-plain: #2D5048;      /* forest floor — clear teal fade */
-  --bg-card: #1A2A28;
-  --bg-card-alt: #1F3838;
-  --bg-hover: #2D5048;
-  --bg-selected: #3A5A52;
-  --text: #F4F7FF;
-  --text-dim: #A8E0D0;
-  --text-muted: #6E8E80;
-  --pink: #FFD36B;
-  --pink-soft: rgba(255, 211, 107, 0.20);
-  --pink-glow: rgba(255, 211, 107, 0.10);
-  --blue: #31D4C6;
-  --blue-soft: rgba(49, 212, 198, 0.18);
-  --mint: #A8F0D1;
-  --orange: #FF9B6A;
-  --lavender: #B46BFF;
-  --peach: #FF9B6A;
-  --creamsicle: #FFCAA8;
-  --lemon: #FFE66D;
-  --urgent: #FF7A73;
-  --high: #FF9B6A;
-  --normal: #FFD36B;
-  --low: #6E8E80;
-  --green: #7ED957;
+  --green: #8FFFC9;         /* Bio Mint as the secondary green */
   --border: #2D5048;
   --border-subtle: #1F3838;
-  --card-title: #FFD36B;          /* Cosmic Gold — warm metal in dark woods */
-  --card-border: rgba(180, 107, 255, 0.55);  /* Violet Purple edge */
-  --urgent-soft: rgba(255, 122, 115, 0.16); --urgent-faint: rgba(255, 122, 115, 0.08);
-  --high-soft: rgba(255, 155, 106, 0.18); --high-faint: rgba(255, 155, 106, 0.08);
-  --lemon-soft: rgba(255, 230, 109, 0.20); --lemon-faint: rgba(255, 230, 109, 0.10);
-  --green-soft: rgba(126, 217, 87, 0.20); --green-faint: rgba(126, 217, 87, 0.10);
+  --card-title: #B46BFF;          /* Violet Purple — alien blossom title */
+  --card-border: rgba(196, 245, 66, 0.55);
+  --urgent-soft: rgba(255, 85, 119, 0.16); --urgent-faint: rgba(255, 85, 119, 0.08);
+  --high-soft: rgba(255, 107, 92, 0.16); --high-faint: rgba(255, 107, 92, 0.08);
+  --lemon-soft: rgba(255, 230, 109, 0.18); --lemon-faint: rgba(255, 230, 109, 0.10);
+  --green-soft: rgba(143, 255, 201, 0.20); --green-faint: rgba(143, 255, 201, 0.10);
   --lavender-soft: rgba(180, 107, 255, 0.20); --lavender-faint: rgba(180, 107, 255, 0.10);
-  --topbar-gradient: linear-gradient(135deg, #0B1A20 0%, #FFD36B 100%);
-  --pane-bg: rgba(31, 56, 56, 0.55);
+  --topbar-gradient: linear-gradient(135deg, #0F1A2A 0%, #059E8A 40%, #C4F542 100%);
+  --pane-bg: rgba(31, 53, 56, 0.55);
 }
 
-/* === Golden Hour — alien sunset. Warm purple bg, Peach Orange
-   primary against Violet Purple sky, Cosmic Gold sun, Warm Coral
-   horizon, Star Yellow burst. The cool/warm collision is the point. */
-[data-theme="golden-hour"] {
-  --bg: #2A1F45;
-  --bg-plain: #5C3F75;      /* warm purple horizon — visible glow */
-  --bg-card: #3D2A55;
-  --bg-card-alt: #4A3068;
-  --bg-hover: #5C3F75;
-  --bg-selected: #6E4F88;
+/* === Frozen — ice planet, cryo glow. Frozen cyan + electric ice as
+   the dominant accent, soft lavender for the under-glaze, magenta
+   spark as the rare warm beat against all the cold. */
+[data-theme="frozen"] {
+  --bg: #0B1830;            /* deep ice-cave navy */
+  --bg-plain: #1A3D8F;      /* Deep Cobalt — visible cryo shift */
+  --bg-card: #122448;
+  --bg-card-alt: #1A2D58;
+  --bg-hover: #1F3870;
+  --bg-selected: #2D4A88;
   --text: #F4F7FF;
-  --text-dim: #FFCAA8;
-  --text-muted: #B58A95;
-  --pink: #FF9B6A;
-  --pink-soft: rgba(255, 155, 106, 0.20);
-  --pink-glow: rgba(255, 155, 106, 0.10);
-  --blue: #B46BFF;
-  --blue-soft: rgba(180, 107, 255, 0.18);
-  --mint: #A8F0D1;
-  --orange: #FFD36B;
-  --lavender: #C9A6FF;
-  --peach: #FF7A73;
-  --creamsicle: #FFCAA8;
+  --text-dim: #6FE0E8;      /* Frozen Cyan — labels catch the cryo light */
+  --text-muted: #8295B5;
+  --pink: #6FE0E8;          /* Frozen Cyan — primary, the cryo glow */
+  --pink-soft: rgba(111, 224, 232, 0.18);
+  --pink-glow: rgba(111, 224, 232, 0.10);
+  --blue: #1FB5E5;          /* Electric Ice */
+  --blue-soft: rgba(31, 181, 229, 0.18);
+  --mint: #9FEEEF;          /* Frozen Highlight */
+  --orange: #FF8FE0;        /* Magenta Spark — the rare warm break */
+  --lavender: #C9A6FF;      /* Soft Lavender Glow */
+  --peach: #FF8FE0;
+  --creamsicle: #D8C7FF;    /* Light Periwinkle */
   --lemon: #FFE66D;
-  --urgent: #FF7A73;
-  --high: #FF9B6A;
-  --normal: #FF9B6A;
-  --low: #B58A95;
-  --green: #7ED957;
-  --border: #5C3F75;
-  --border-subtle: #3D2A55;
-  --card-title: #FFE66D;          /* Star Yellow — sun on alien horizon */
-  --card-border: rgba(180, 107, 255, 0.55);  /* Violet sky edge */
-  --urgent-soft: rgba(255, 122, 115, 0.20); --urgent-faint: rgba(255, 122, 115, 0.10);
-  --high-soft: rgba(255, 155, 106, 0.20); --high-faint: rgba(255, 155, 106, 0.10);
-  --lemon-soft: rgba(255, 230, 109, 0.20); --lemon-faint: rgba(255, 230, 109, 0.10);
-  --green-soft: rgba(126, 217, 87, 0.18); --green-faint: rgba(126, 217, 87, 0.08);
+  --urgent: #FF6FAF;        /* Neon Pink — only warm urgent the eye finds */
+  --high: #FF8FE0;
+  --normal: #6FE0E8;
+  --low: #8295B5;
+  --green: #8FFFC9;         /* Bio Mint — distant aurora streaks */
+  --border: #2D4A88;
+  --border-subtle: #1A2D58;
+  --card-title: #FF8FE0;          /* Magenta Spark — warm pop on cool card */
+  --card-border: rgba(111, 224, 232, 0.55);
+  --urgent-soft: rgba(255, 111, 175, 0.16); --urgent-faint: rgba(255, 111, 175, 0.08);
+  --high-soft: rgba(255, 143, 224, 0.16); --high-faint: rgba(255, 143, 224, 0.08);
+  --lemon-soft: rgba(255, 230, 109, 0.16); --lemon-faint: rgba(255, 230, 109, 0.08);
+  --green-soft: rgba(143, 255, 201, 0.18); --green-faint: rgba(143, 255, 201, 0.10);
   --lavender-soft: rgba(201, 166, 255, 0.20); --lavender-faint: rgba(201, 166, 255, 0.10);
-  --topbar-gradient: linear-gradient(135deg, #2A1F45 0%, #FFD36B 100%);
-  --pane-bg: rgba(74, 48, 104, 0.55);
+  --topbar-gradient: linear-gradient(135deg, #0B1830 0%, #1A3D8F 40%, #1FB5E5 75%, #6FE0E8 100%);
+  --pane-bg: rgba(18, 36, 72, 0.55);
 }
 
-/* === Dawn Mist — early morning haze on an alien valley. Pastel
-   Lavender base, Apricot primary, Bright Aqua + Lavender Purple +
-   Sunlit Gold so the haze feels prismatic, not single-tone. */
-[data-theme="dawn-mist"] {
-  --bg: #F3EFFF;
-  --bg-plain: #FFF5F0;      /* whisper of peach — airy mist fade */
-  --bg-card: #FFFFFF;
-  --bg-card-alt: #FFE8E0;
-  --bg-hover: #E8DFF8;
-  --bg-selected: #D8C7FF;
-  --text: #2B2F42;
-  --text-dim: #6B7280;
-  --text-muted: #9CA3B5;
-  --pink: #FFB38A;
-  --pink-soft: rgba(255, 179, 138, 0.20);
-  --pink-glow: rgba(255, 179, 138, 0.10);
-  --blue: #59E3D6;
-  --blue-soft: rgba(89, 227, 214, 0.18);
-  --mint: #CFF7E6;
-  --orange: #FFA3A0;
-  --lavender: #C48BFF;
-  --peach: #FFA3A0;
-  --creamsicle: #FFCAA8;
-  --lemon: #FFC557;
-  --urgent: #FFA3A0;
-  --high: #FFB38A;
-  --normal: #FFB38A;
-  --low: #9CA3B5;
-  --green: #9BE870;
-  --border: #E5D5F0;
-  --border-subtle: #F0E5F8;
-  --card-title: #C48BFF;          /* Lavender Purple title */
-  --card-border: rgba(255, 179, 138, 0.50);  /* Apricot edge */
-  --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.08);
-  --high-soft: rgba(255, 179, 138, 0.20); --high-faint: rgba(255, 179, 138, 0.10);
-  --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
-  --green-soft: rgba(155, 232, 112, 0.18); --green-faint: rgba(155, 232, 112, 0.10);
-  --lavender-soft: rgba(196, 139, 255, 0.22); --lavender-faint: rgba(196, 139, 255, 0.10);
-  --topbar-gradient: linear-gradient(135deg, #F3EFFF 0%, #59E3D6 100%);
-  --pane-bg: rgba(255, 255, 255, 0.50);
+/* === Aurora — northern lights over a violet plane. Lavender + magenta
+   spark + soft lavender glow on a deep-indigo bg. Star yellow as the
+   single warm beat (the lone moon). Heavier on the highlights/sparkles
+   palette than the original aurora; less mint-teal, more witching. */
+[data-theme="aurora"] {
+  --bg: #0E1230;            /* deep cosmos */
+  --bg-plain: #2A2250;      /* Midnight Purple */
+  --bg-card: #1A1F4A;
+  --bg-card-alt: #2A2250;
+  --bg-hover: #3A2D6A;
+  --bg-selected: #4A3878;
+  --text: #F4F7FF;
+  --text-dim: #C9A6FF;      /* Soft Lavender Glow */
+  --text-muted: #7B6BAA;    /* Dusk Lavender */
+  --pink: #C9A6FF;          /* Soft Lavender Glow — primary */
+  --pink-soft: rgba(201, 166, 255, 0.18);
+  --pink-glow: rgba(201, 166, 255, 0.10);
+  --blue: #B46BFF;          /* Violet Purple */
+  --blue-soft: rgba(180, 107, 255, 0.18);
+  --mint: #8FFFC9;          /* Bio Mint */
+  --orange: #FF8FE0;        /* Magenta Spark */
+  --lavender: #C9A6FF;
+  --peach: #FF8FE0;
+  --creamsicle: #FF8FE0;
+  --lemon: #FFE66D;         /* Star Yellow — the lone moon */
+  --urgent: #FF5577;
+  --high: #FF8FE0;
+  --normal: #C9A6FF;
+  --low: #7B6BAA;
+  --green: #C4F542;
+  --border: #3A2D6A;
+  --border-subtle: #2A2250;
+  --card-title: #FFE66D;          /* Star Yellow — warm pop on cool aurora */
+  --card-border: rgba(201, 166, 255, 0.55);
+  --urgent-soft: rgba(255, 85, 119, 0.16); --urgent-faint: rgba(255, 85, 119, 0.08);
+  --high-soft: rgba(255, 143, 224, 0.18); --high-faint: rgba(255, 143, 224, 0.08);
+  --lemon-soft: rgba(255, 230, 109, 0.20); --lemon-faint: rgba(255, 230, 109, 0.10);
+  --green-soft: rgba(196, 245, 66, 0.16); --green-faint: rgba(196, 245, 66, 0.08);
+  --lavender-soft: rgba(201, 166, 255, 0.22); --lavender-faint: rgba(201, 166, 255, 0.12);
+  --topbar-gradient: linear-gradient(135deg, #0E1230 0%, #B46BFF 50%, #C9A6FF 100%);
+  --pane-bg: rgba(26, 31, 74, 0.55);
 }
 
-/* === Cherry Blossom — petal storm. Pink bg, Light Magenta primary,
-   Lavender Purple + Bright Cyan + Sunlit Gold + Fresh Green so the
-   wind through the trees feels like multiple bloom colors swirling,
-   not just pink-on-pink. */
-[data-theme="cherry-blossom"] {
-  --bg: #FFF5FA;
-  --bg-plain: #F8EEFF;      /* whisper of lavender — petals on the wind */
-  --bg-card: #FFFFFF;
-  --bg-card-alt: #FFE8F0;
-  --bg-hover: #FCE5F0;
-  --bg-selected: #FFD0E0;
-  --text: #2B2F42;
-  --text-dim: #6B7280;
-  --text-muted: #B5A3C0;
-  --pink: #FF7AB8;
-  --pink-soft: rgba(255, 122, 184, 0.20);
-  --pink-glow: rgba(255, 122, 184, 0.10);
-  --blue: #5EE7EB;
-  --blue-soft: rgba(94, 231, 235, 0.18);
-  --mint: #CFF7E6;
-  --orange: #FFB38A;
-  --lavender: #C48BFF;
-  --peach: #FF9CC4;
-  --creamsicle: #FFCAA8;
-  --lemon: #FFC557;
-  --urgent: #FFA3A0;
-  --high: #FFB38A;
-  --normal: #FF7AB8;
-  --low: #B5A3C0;
-  --green: #9BE870;
-  --border: #F0D5E5;
-  --border-subtle: #FFE8F0;
-  --card-title: #C48BFF;          /* Lavender Purple — break out of pink-on-pink */
-  --card-border: rgba(196, 139, 255, 0.50);
-  --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.08);
-  --high-soft: rgba(255, 179, 138, 0.18); --high-faint: rgba(255, 179, 138, 0.08);
-  --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
-  --green-soft: rgba(155, 232, 112, 0.20); --green-faint: rgba(155, 232, 112, 0.10);
-  --lavender-soft: rgba(196, 139, 255, 0.22); --lavender-faint: rgba(196, 139, 255, 0.10);
-  --topbar-gradient: linear-gradient(135deg, #FFF5FA 0%, #C48BFF 100%);
-  --pane-bg: rgba(255, 255, 255, 0.50);
-}
-
-/* === Mint Meadow — alien meadow at noon. Mint bg, Sea Teal primary,
-   Lavender Purple + Soft Coral + Sunlit Gold so the field has wildflowers,
-   not just grass. Sage-text grounds it. */
+/* === Mint Meadow — alien meadow at noon. Frozen wash bg, sea teal as
+   the primary, bio mint light fields, lavender purple wildflowers,
+   sunlit gold sun. The light counterpart to bioluminescent. */
 [data-theme="mint-meadow"] {
-  --bg: #E6FFF7;
-  --bg-plain: #F4FFF0;      /* whisper of pale lime — airy meadow fade */
+  --bg: #E0F4F7;            /* Frozen Wash */
+  --bg-plain: #F4FFFA;      /* whisper of pale lime */
   --bg-card: #FFFFFF;
   --bg-card-alt: #DDF7E5;
-  --bg-hover: #D0F0DC;
-  --bg-selected: #B5E5C5;
+  --bg-hover: #D0F0E8;
+  --bg-selected: #B5E5D8;
   --text: #1F3F35;
-  --text-dim: #4A6B5A;
+  --text-dim: #38BFA6;      /* Sea Teal — labels catch the meadow light */
   --text-muted: #7C9A88;
-  --pink: #38BFA6;
+  --pink: #38BFA6;          /* Sea Teal — primary */
   --pink-soft: rgba(56, 191, 166, 0.20);
   --pink-glow: rgba(56, 191, 166, 0.10);
-  --blue: #59E3D6;
-  --blue-soft: rgba(89, 227, 214, 0.18);
-  --mint: #7EE8C1;
-  --orange: #FFB38A;
-  --lavender: #C48BFF;
-  --peach: #FFA3A0;
-  --creamsicle: #FFCAA8;
-  --lemon: #FFC557;
-  --urgent: #FFA3A0;
-  --high: #FFB38A;
+  --blue: #38C5E0;          /* Electric Cyan */
+  --blue-soft: rgba(56, 197, 224, 0.18);
+  --mint: #A8FFD4;          /* Bio Mint Light */
+  --orange: #FF8A7A;
+  --lavender: #C48BFF;      /* Lavender Purple — wildflowers */
+  --peach: #FFB8E8;         /* Magenta Spark Light */
+  --creamsicle: #FFC9A8;
+  --lemon: #FFC557;         /* Sunlit Gold */
+  --urgent: #FF8095;
+  --high: #FF8A7A;
   --normal: #38BFA6;
   --low: #7C9A88;
-  --green: #9BE870;
-  --border: #B5E5C5;
+  --green: #C8EC5C;         /* Lime Glow */
+  --border: #B5E5D8;
   --border-subtle: #DDF7E5;
   --card-title: #38BFA6;          /* Sea Teal title — distinct from sage text */
-  --card-border: rgba(196, 139, 255, 0.50);  /* Lavender Purple edge */
-  --urgent-soft: rgba(255, 163, 160, 0.18); --urgent-faint: rgba(255, 163, 160, 0.08);
-  --high-soft: rgba(255, 179, 138, 0.18); --high-faint: rgba(255, 179, 138, 0.08);
+  --card-border: rgba(196, 139, 255, 0.45);  /* Lavender Purple edge */
+  --urgent-soft: rgba(255, 128, 149, 0.18); --urgent-faint: rgba(255, 128, 149, 0.08);
+  --high-soft: rgba(255, 138, 122, 0.18); --high-faint: rgba(255, 138, 122, 0.08);
   --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
-  --green-soft: rgba(155, 232, 112, 0.22); --green-faint: rgba(155, 232, 112, 0.10);
+  --green-soft: rgba(200, 236, 92, 0.22); --green-faint: rgba(200, 236, 92, 0.10);
   --lavender-soft: rgba(196, 139, 255, 0.20); --lavender-faint: rgba(196, 139, 255, 0.10);
-  --topbar-gradient: linear-gradient(135deg, #E6FFF7 0%, #C48BFF 100%);
-  --pane-bg: rgba(255, 255, 255, 0.50);
-}
-
-/* === Coral Reef — alien reef in shallow sun. Sky bg, Soft Coral
-   primary, Bright Aqua + Lavender Purple + Sunlit Gold + Light
-   Magenta so it feels like a school of mismatched fish, not a
-   single coral. */
-[data-theme="coral-reef"] {
-  --bg: #EAF4FF;
-  --bg-plain: #FFF0EC;      /* whisper of coral — soft reef-floor wash */
-  --bg-card: #FFFFFF;
-  --bg-card-alt: #FFF0EC;
-  --bg-hover: #FFE0D8;
-  --bg-selected: #FFD4CD;
-  --text: #2B2F42;
-  --text-dim: #6B7280;
-  --text-muted: #9CA3B5;
-  --pink: #FFA3A0;
-  --pink-soft: rgba(255, 163, 160, 0.20);
-  --pink-glow: rgba(255, 163, 160, 0.10);
-  --blue: #5EE7EB;
-  --blue-soft: rgba(94, 231, 235, 0.20);
-  --mint: #CFF7E6;
-  --orange: #FFB38A;
-  --lavender: #C48BFF;
-  --peach: #FF7AB8;
-  --creamsicle: #FFCAA8;
-  --lemon: #FFC557;
-  --urgent: #FFA3A0;
-  --high: #FFB38A;
-  --normal: #FFA3A0;
-  --low: #9CA3B5;
-  --green: #38BFA6;
-  --border: #FFD4CD;
-  --border-subtle: #FFE5E0;
-  --card-title: #C48BFF;          /* Lavender Purple — contrast on coral page */
-  --card-border: rgba(94, 231, 235, 0.55);  /* Bright Cyan edge */
-  --urgent-soft: rgba(255, 163, 160, 0.20); --urgent-faint: rgba(255, 163, 160, 0.10);
-  --high-soft: rgba(255, 179, 138, 0.20); --high-faint: rgba(255, 179, 138, 0.10);
-  --lemon-soft: rgba(255, 197, 87, 0.22); --lemon-faint: rgba(255, 197, 87, 0.10);
-  --green-soft: rgba(56, 191, 166, 0.20); --green-faint: rgba(56, 191, 166, 0.10);
-  --lavender-soft: rgba(196, 139, 255, 0.20); --lavender-faint: rgba(196, 139, 255, 0.10);
-  --topbar-gradient: linear-gradient(135deg, #EAF4FF 0%, #FFA3A0 100%);
-  --pane-bg: rgba(255, 255, 255, 0.50);
-}
-
-/* === Lavender Dream — lilac field with strange weather. Stays in
-   the cool lavender/cyan family; coral was creeping in earlier and
-   broke the calm-lavender mood. */
-[data-theme="lavender-dream"] {
-  --bg: #F3EFFF;
-  --bg-plain: #EAF4FF;      /* whisper of soft sky — strange cool light */
-  --bg-card: #FFFFFF;
-  --bg-card-alt: #EDE7FF;
-  --bg-hover: #E0D5FF;
-  --bg-selected: #D8C7FF;
-  --text: #2B2F42;
-  --text-dim: #6B7280;
-  --text-muted: #A89BC0;
-  --pink: #C48BFF;
-  --pink-soft: rgba(196, 139, 255, 0.20);
-  --pink-glow: rgba(196, 139, 255, 0.10);
-  --blue: #5EE7EB;
-  --blue-soft: rgba(94, 231, 235, 0.20);
-  --mint: #CFF7E6;
-  --orange: #C48BFF;        /* swap apricot → lavender to keep cool */
-  --lavender: #D8C7FF;
-  --peach: #C9A6FF;         /* swap soft coral → soft lavender glow */
-  --creamsicle: #C9A6FF;
-  --lemon: #5EE7EB;         /* swap sunlit gold → bright cyan */
-  --urgent: #FF7AB8;        /* keep a magenta urgent — visible against the field */
-  --high: #C48BFF;
-  --normal: #C48BFF;
-  --low: #A89BC0;
-  --green: #9BE870;
-  --border: #D8C7FF;
-  --border-subtle: #E8DFF8;
-  --card-title: #C48BFF;          /* Lavender Purple — the hero color */
-  --card-border: rgba(94, 231, 235, 0.55);  /* Bright Cyan edge */
-  --urgent-soft: rgba(255, 122, 184, 0.18); --urgent-faint: rgba(255, 122, 184, 0.08);
-  --high-soft: rgba(196, 139, 255, 0.20); --high-faint: rgba(196, 139, 255, 0.10);
-  --lemon-soft: rgba(94, 231, 235, 0.22); --lemon-faint: rgba(94, 231, 235, 0.10);
-  --green-soft: rgba(155, 232, 112, 0.20); --green-faint: rgba(155, 232, 112, 0.10);
-  --lavender-soft: rgba(196, 139, 255, 0.22); --lavender-faint: rgba(196, 139, 255, 0.10);
-  --topbar-gradient: linear-gradient(135deg, #F3EFFF 0%, #5EE7EB 100%);
-  --pane-bg: rgba(255, 255, 255, 0.50);
+  --topbar-gradient: linear-gradient(135deg, #E0F4F7 0%, #A8FFD4 40%, #38BFA6 100%);
+  --pane-bg: rgba(255, 255, 255, 0.55);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -879,19 +626,12 @@ a:hover { text-decoration: underline; }
 [data-theme="light"] .card { box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
 [data-theme="light"] .card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.08); border-color: var(--pink); }
 [data-theme="sunset"] .card { box-shadow: 0 1px 6px rgba(0,0,0,0.15); }
-/* Extended light themes get the same softer shadows as Day so cards
-   don't drop a hard navy shadow over a pastel page. */
-[data-theme="dawn-mist"] .card,
-[data-theme="cherry-blossom"] .card,
-[data-theme="mint-meadow"] .card,
-[data-theme="coral-reef"] .card,
-[data-theme="lavender-dream"] .card { box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
-[data-theme="dawn-mist"] .card:hover,
-[data-theme="cherry-blossom"] .card:hover,
-[data-theme="mint-meadow"] .card:hover,
-[data-theme="coral-reef"] .card:hover,
-[data-theme="lavender-dream"] .card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.08); border-color: var(--pink); }
-[data-theme="golden-hour"] .card { box-shadow: 0 1px 6px rgba(0,0,0,0.15); }
+/* Light themes (morning, mint-meadow) get the same softer shadows as
+   daylight so cards don't drop a hard navy shadow over a pastel page. */
+[data-theme="morning"] .card,
+[data-theme="mint-meadow"] .card { box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+[data-theme="morning"] .card:hover,
+[data-theme="mint-meadow"] .card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.08); border-color: var(--pink); }
 
 /* Extend hover glow to widgets */
 .home-widget { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -1096,18 +836,11 @@ a:hover { text-decoration: underline; }
 [data-theme="sunset"] .card-list-container {
   background: rgba(58, 34, 72, 0.5);
 }
-/* Extended light themes use a near-white frosted backdrop so the
-   default rgba(45,54,60,…) (sized for dark mode) doesn't punch a
-   navy hole in a pastel page. */
-[data-theme="dawn-mist"] .card-list-container,
-[data-theme="cherry-blossom"] .card-list-container,
-[data-theme="mint-meadow"] .card-list-container,
-[data-theme="coral-reef"] .card-list-container,
-[data-theme="lavender-dream"] .card-list-container {
+/* Light themes use a near-white frosted backdrop so the default
+   dark-mode rgba doesn't punch a navy hole in a pastel page. */
+[data-theme="morning"] .card-list-container,
+[data-theme="mint-meadow"] .card-list-container {
   background: rgba(255, 255, 255, 0.55);
-}
-[data-theme="golden-hour"] .card-list-container {
-  background: rgba(74, 48, 96, 0.50);
 }
 
 /* Cards inside glass container get tighter margins */
