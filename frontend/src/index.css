@@ -139,14 +139,14 @@
   --pane-bg: rgba(255, 255, 255, 0.55);
 }
 
-/* === Dawn — arctic sunrise. Icy near-white snow under a sunrise
-   sky: the body fades from frosty almost-white into a whisper of
-   pink at the horizon, so the light itself feels like alpenglow on
-   snow. Cooler bg + warmer accents = the sunrise stripe across an
-   ice plane. */
+/* === Dawn — arctic sunrise. The page itself reads as the snow
+   plane (icy near-white, top → bottom), and the actual sunrise
+   stripe lives up in the topbar (butter yellow → soft pink). That
+   way the body is pure arctic light and the warm beat is contained
+   in the brand bar where it belongs. */
 [data-theme="morning"] {
   --bg: #ECF4FB;            /* icy white-blue — the snow */
-  --bg-plain: #FFE8F1;      /* whisper of pink — sunrise on the horizon */
+  --bg-plain: #F6FAFD;      /* paler frost — keeps the body cool top-to-bottom */
   --bg-card: #FFFFFF;
   --bg-card-alt: #E0F4F7;   /* Frozen Wash */
   --bg-hover: #DCE7F2;
