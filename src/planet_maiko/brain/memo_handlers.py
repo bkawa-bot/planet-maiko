@@ -91,14 +91,14 @@ def _approve_job_approval(memo, data=None):
     ask_first=True. Approving mints the real AgentJob with status=
     queued so the next cycle's execute phase picks it up.
 
-    If the spec scopes to a repo that has no local clone (and the
-    request body didn't supply a `repo_path` override), raise
-    MemoApproveNeedsInput so the endpoint can prompt the user to
-    pick a repo before the job gets minted. Without this pre-flight,
-    the job lands queued, the next cycle's execute phase fails on
-    resolve_repo_path() returning None, and the user has no way to
-    retry with a different path — they're stuck dismissing the failed
-    job and re-triggering the upstream automation.
+    Pre-flight repo lookup: only prompt the user to pick a repo when
+    the kind actually needs one. Coding/review/pr_review touch code
+    so they can't proceed without a worktree, and dropping into the
+    next cycle's execute phase failure is worse than blocking on
+    approve. Investigation / repo_analysis / cartograph and skill
+    kinds are report-producing — they take scope_repo as a hint but
+    fall through to scratch mode if no clone exists, so we don't
+    block them on approve.
     """
     from datetime import datetime, timezone
     from planet_maiko.models.agent_job import AgentJob
@@ -113,12 +113,14 @@ def _approve_job_approval(memo, data=None):
     data = data or {}
     repo_path_override = (data.get("repo_path") or "").strip() or None
     scope_repo = spec.get("scope_repo")
+    # Kinds that actually need a checkout to run. Anything else can
+    # run in scratch mode if no clone is available — execute_jobs
+    # routes prepare(repo_path=None) into a maiko-managed scratch
+    # workspace for those.
+    WORKTREE_REQUIRED_KINDS = {"coding", "review", "pr_review"}
+    needs_worktree = spec.get("kind") in WORKTREE_REQUIRED_KINDS
 
-    # Pre-flight repo lookup. Skip when:
-    #   - the user already supplied an explicit repo_path
-    #   - the spec doesn't scope to a repo at all (some skill jobs
-    #     don't need a worktree — those route through repo-less)
-    if not repo_path_override and scope_repo:
+    if not repo_path_override and scope_repo and needs_worktree:
         local = resolve_repo_path(scope_repo)
         if not local:
             cfg_github = (load_config().get("github") or {})

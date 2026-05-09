@@ -128,7 +128,16 @@ def _phase_execute_agent_jobs():
                 or extra.get("repo_path_override")
                 or (resolve_repo_path(job.scope_repo) if job.scope_repo else None)
             )
-            if job.scope_repo and not local_path:
+            # Kinds that actually need a checkout. Investigation / repo_analysis
+            # / cartograph and skills are report-producing — they take
+            # scope_repo as a hint but can fall through to scratch mode
+            # when no clone exists, rather than failing the job.
+            WORKTREE_REQUIRED_KINDS = {"coding", "review", "pr_review"}
+            if (
+                job.scope_repo
+                and not local_path
+                and job.kind in WORKTREE_REQUIRED_KINDS
+            ):
                 logger.warning(
                     f"[cycle] agent_job {job.id}: no local clone for "
                     f"{job.scope_repo}, marking failed"
@@ -139,6 +148,12 @@ def _phase_execute_agent_jobs():
                 _bump_agent_failed(job.agent_profile_id)
                 db.session.commit()
                 continue
+            if job.scope_repo and not local_path:
+                logger.info(
+                    f"[cycle] agent_job {job.id}: no local clone for "
+                    f"{job.scope_repo}, falling through to scratch mode "
+                    f"(kind={job.kind})"
+                )
 
             # Find or spawn an agent profile for this role+scope.
             if job.agent_profile_id:
