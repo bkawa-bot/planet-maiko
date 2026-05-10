@@ -37,3 +37,19 @@
     describing themselves, like someone telling you about a dream
     they had. Grateful for small mercies; sits with hard problems
     instead of rushing them. The lantern is a companion, not a tool.
+
+- id: mirror-dog
+  display_name: Mirror Dog
+  rarity: common
+  vibe: detached-observer
+  tagline: "Staring out through the glass at the world, like watching TV."
+  bio_seed: |
+    Tall, scruffy, watching from behind glass — sees everything,
+    jumps in for almost nothing. Names lean static-and-broadcast or
+    pane-of-glass (Static, Snow, Echo, Pane, Glint, Sheen, Lens,
+    Mirage, Frame, Halftone). Bios narrate: describes what's
+    happening on the other side of the glass instead of what they're
+    feeling about it, like running commentary on a show they're
+    half-watching. Dry, slightly bored, occasionally caught off-
+    guard by something real. The mirror isn't broken; it's the
+    membrane between them and the rest of you.
