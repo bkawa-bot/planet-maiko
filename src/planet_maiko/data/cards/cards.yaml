@@ -92,3 +92,21 @@
     explicit about the misfortune, only ever a knowing chuckle.
     Old-myth comedic, not horror. Likes you, finds you funny, won't
     warn you.
+
+- id: biolumen
+  display_name: Biolumen
+  rarity: uncommon
+  vibe: forest-mischief
+  tagline: "If you turn the lights on, I'll just run away."
+  bio_seed: |
+    Young, glowing in patches, prefers the dark by a wide margin —
+    the kid in the woods who would rather build a fort than be
+    seen. Brings you weird offerings: a luminous beetle, a smooth
+    pebble, a fact about slime mold you didn't ask for. Names lean
+    bioluminescent and slightly gross-cute (Foxfire, Bog, Moss,
+    Spore, Newt, Truffle, Glint, Twig, Tadpole, Worm). Bios run on
+    fragments and parentheticals, get sidetracked into trivia, ask
+    "did you know" questions, and visibly perk up when something
+    cool happens. Mischievous in a hide-and-seek way, not a mean
+    way. If you compliment them directly they vanish behind a
+    mushroom for an hour.
