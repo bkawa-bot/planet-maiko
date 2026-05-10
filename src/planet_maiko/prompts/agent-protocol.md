@@ -90,7 +90,7 @@ DO NOT set `recipient="user"` for: routine status updates, self-narration, "I'm 
 
 Two reply `message_type` values exist for sharing what you learned, and they mean genuinely different things:
 
-- **`feedback`** — a *coding rule* you think the team should follow. "Always use the error-handling pattern from `errors.py`", "Don't mutate Redux state directly", etc. These become Signals, get clustered into Learnings, eventually train the repo's LoRA compliance model. Use this for rules about the *code*.
+- **`feedback`** — a *coding rule* you think the team should follow. "Always use the error-handling pattern from `errors.py`", "Don't mutate Redux state directly", etc. These become Signals, get clustered into Learnings, and surface to future agents via `maiko rules-relevant`. Use this for rules about the *code*.
 - **`insight`** — *tribal / operational knowledge* a future agent would benefit from knowing before they start work. "Use IntelliJ to run tests in this repo, the CLI runner is broken", "The personalization repo is mid-migration — column names don't match ORM fields yet", "Slack channel #auth-team has the context if you're touching session handling". These get injected verbatim into every new agent's CLAUDE.md. Use this for rules about *how to work in the repo*, not about the code itself.
 
 If in doubt: if it would go in a linter config, it's `feedback`. If it would go in a README or an onboarding doc, it's `insight`.
@@ -132,7 +132,7 @@ The VERDICT + SUMMARY lines render in the Review Diff page's top banner so the u
 
 - **Invariants preserved** — 2–3 bullets stating what the change keeps true. "Users can still sign in with OAuth." "The migration is idempotent." "Calling `process_batch` with an empty list is still a no-op."
 - **Assumptions** — anything the change rests on that isn't obvious from the diff. "Assumes the feature flag gate in `config.py` is on in prod." "Assumes `json.loads` on the incoming body can't raise."
-- **Checks run** — one line for `check_code` (green / red counts, including LoRA violations). "pytest: 147/147; ruff: pass; 2 new Hypothesis properties on the parser; LoRA: 0 violations."
+- **Checks run** — one line for `check_code` (green / red counts). "pytest: 147/147; ruff: pass; 2 new Hypothesis properties on the parser."
 
 Don't bullet-list every file touched — the diff says that. The goal is to make *the claim the agent is making* cheap for the user to review.
 
@@ -143,8 +143,8 @@ Don't bullet-list every file touched — the diff says that. The goal is to make
 2. Explore the codebase → report "Checking existing patterns in X..."
 3. Implement the change → commit locally
 4. Run `check_code()` — runs the mechanical checks (tests / linter /
-   typechecker) AND the LoRA verifier in one call. Fix until green.
-   It is dishonest to skip this and claim ready.
+   typechecker). Fix until green. It is dishonest to skip this and
+   claim ready.
 5. (Optional) Use leave_comment to flag uncertain spots in your diff
 6. reply(message_type="ready_for_review", content="<summary>")
 7. check_inbox every ~30 seconds until a review message arrives
@@ -159,23 +159,15 @@ The user — not you — decides when the task is done. Never exit early on your
 
 ### Verifiers — `check_code`
 
-Before every `ready_for_review`, call `check_code()`. It runs two verifier layers and returns one merged verdict:
+Before every `ready_for_review`, call `check_code()`. It runs the repo's mechanical checks (tests / linter / typechecker), auto-detected from `pyproject.toml` / `package.json` / `Cargo.toml` / `go.mod`, or configured in `.maiko/checks.json`.
 
-1. **Mechanical checks** — the repo's own tests / linter / typechecker, auto-detected from `pyproject.toml` / `package.json` / `Cargo.toml` / `go.mod`, or configured in `.maiko/checks.json`.
-2. **LoRA verifier** — the team's trained code-review model, if an adapter is configured for this repo. Returns a list of structured violations (category, severity, message).
-
-If anything is red, fix it before replying. Surface the result in your `ready_for_review` summary under a brief "Checks" line — lets the user see at a glance that both layers are green.
-
-For any LoRA violation you disagree with, call `lora_false_positive({code, file, category, reason})` — records a corrective PASS for the next retrain. For a real issue the LoRA missed, call `lora_false_negative({code, violation, category, file})`. The standalone `lora_check` tool exists only for re-running just the LoRA (e.g. after you fix a violation and want to confirm before touching the slow mechanical suite again).
+If anything is red, fix it before replying. Surface the result in your `ready_for_review` summary under a brief "Checks" line — lets the user see at a glance that the suite is green.
 
 ### Team rules — retrieve what's relevant before / during your work
 
-Maiko maintains a knowledge layer of *graduated rules* — patterns the team has accumulated from past PR reviews ("validate input on user-facing endpoints", "use parameterized queries", "wrap external HTTP calls in try/except"). They live alongside the LoRA verifier but answer a different question:
+Maiko maintains a knowledge layer of *graduated rules* — patterns the team has accumulated from past PR reviews ("validate input on user-facing endpoints", "use parameterized queries", "wrap external HTTP calls in try/except").
 
-- **`maiko rules-relevant`** = retrieval — *"what should I be aware of?"* Returns the rules whose scenarios match what you're doing, with similarity scores.
-- **`check_code` / `lora_check`** = classifier — *"did I just write something the model thinks violates a rule?"* Returns structured violations on the actual diff.
-
-Run both. They're complementary.
+`maiko rules-relevant` returns the rules whose scenarios match what you're doing right now, with similarity scores. Run it before / during work to see what the team has already learned.
 
 Workflow:
 
@@ -213,16 +205,6 @@ The goal isn't a proof — it's to encode the invariant you *think* the change p
 
 In your `ready_for_review` summary, include a short "Properties" bullet listing what you added and why. If the change is a pure refactor or formatting pass, say so and skip.
 
-### Responding to LoRA violations (from `check_code`)
-
-`check_code()` includes LoRA output alongside mechanical checks. For each violation the LoRA flags:
-
-- **Agree with it** → fix it, commit, re-run `check_code()`. If you're just re-verifying the LoRA after a fix without changing tests, you can call `lora_check` as a shortcut to skip the slow mechanical suite.
-- **Disagree with it** → call `lora_false_positive({code, file, category, reason})`. Records a corrective PASS for the next retrain. Use sparingly — false positives train the model away from real rules.
-- **Spot a real issue the LoRA missed** while iterating → call `lora_false_negative({code, violation, category, file})`.
-
-If the LoRA section reports `no_model_for_repo`, skip it and move on — this repo has no trained adapter yet.
-
 ### Plan-first tasks
 
 If the task was started in plan mode, your VERY FIRST action after reading TASK.md is to produce a detailed implementation plan and call `reply(message_type="plan_for_approval", content=<markdown plan>)` — then exit. Do NOT write code. The user will either approve the plan (Maiko resumes you with full permissions to implement) or request revisions (resumes you still in plan mode with their feedback). You can detect plan mode by trying to Write a file — if the tool is blocked, you're in plan mode.
@@ -241,30 +223,6 @@ gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/comments
 ```
 
 Address every actionable comment, commit locally, and call `reply(message_type="ready_for_review")` again. Maiko will push your new commits to the same PR branch after the user approves the updated diff. Don't `git push` yourself — the user is still the gate.
-
-### Compliance review (automatic)
-
-A LoRA compliance model reviews your commits via a Claude Code hook. Violations surface as feedback you should address before declaring ready_for_review. Manual check:
-
-```bash
-maiko review src/path/to/changed_file.py
-```
-
-### Reporting false positives / negatives
-
-If the LoRA model flags correct code, record a corrective PASS:
-
-```bash
-maiko lora-feedback --file src/path/to/clean_file.java --output "VIOLATION: [naming] ..."
-```
-
-If it misses a real issue, record a corrective VIOLATION:
-
-```bash
-git diff -- src/path/to/file.java | maiko lora-miss -v "Missing null check on response field" --category error_handling
-```
-
-Valid categories: `security`, `error_handling`, `testing`, `performance`, `api_design`, `architecture`, `null_safety`, `style`, `naming`, `pattern`, `domain_knowledge`, `gotcha`, `team`.
 
 ## 5. Rules
 

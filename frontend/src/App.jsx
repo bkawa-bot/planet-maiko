@@ -49,9 +49,10 @@ function AppRoutes() {
         <Route path="/agents" element={<Agents />} />
         <Route path="/knowledge" element={<Suspense fallback={<RouteFallback />}><BrainView /></Suspense>} />
         <Route path="/automations" element={<Suspense fallback={<RouteFallback />}><Automations /></Suspense>} />
-        {/* Training is now a tab inside Knowledge — legacy bookmark
-            redirects land on that tab via ?tab=training. */}
-        <Route path="/training" element={<Navigate to="/knowledge?tab=training" replace />} />
+        {/* /training redirect retired alongside the Knowledge → Training
+            tab as part of the LoRA park. Old bookmarks just land on
+            Knowledge. */}
+        <Route path="/training" element={<Navigate to="/knowledge" replace />} />
         <Route path="/themes" element={<Suspense fallback={<RouteFallback />}><Themes /></Suspense>} />
         <Route path="/settings" element={<Suspense fallback={<RouteFallback />}><Settings /></Suspense>} />
         {/* Old per-task routes — kept so existing bookmarks /

@@ -5,14 +5,12 @@ import { showToast } from "../components/Toast";
 import {
   BookOpen, Brain, Clock, Layers, Check, X, Edit3,
   ChevronDown, ChevronRight, Plus, Shield, Download, Loader, Sparkles,
-  GraduationCap,
 } from "lucide-react";
 import { relativeTime } from "../utils/dates";
 import InfoButton from "../components/InfoButton";
 import ConfirmModal from "../components/ConfirmModal";
 import BackfillProgress from "../components/BackfillProgress";
 import ClusterProgress from "../components/ClusterProgress";
-import Training from "./Training";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import "./Knowledge.css";
 import LearningProvenance from "./brain/LearningProvenance";
@@ -51,13 +49,14 @@ export default function BrainView() {
   const [startingBackfill, setStartingBackfill] = useState(false);
   const [configuredRepos, setConfiguredRepos] = useState([]);
   // Tab state persists through the URL. Valid tabs: pool, pending,
-  // unsynthesized, training. (The old "queue" tab was retired — the
-  // unprocessed-pupdate queue now opens as a modal from the Brain
-  // widget on Home.)
+  // unsynthesized. (Training was retired as part of the LoRA park —
+  // the page lives on disk dormant; revival re-adds it here. The old
+  // "queue" tab was also retired — the unprocessed-pupdate queue now
+  // opens as a modal from the Brain widget on Home.)
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTabState] = useState(() => {
     const urlTab = searchParams.get("tab");
-    return ["pool", "pending", "unsynthesized", "training"].includes(urlTab) ? urlTab : "pool";
+    return ["pool", "pending", "unsynthesized"].includes(urlTab) ? urlTab : "pool";
   });
   const setTab = (next) => {
     setTabState(next);
@@ -377,19 +376,8 @@ export default function BrainView() {
           >
             Unsynthesized {rawSignalsTotal > 0 && <span className="tab-badge">{rawSignalsTotal}</span>}
           </button>
-          <button
-            className={`inbox-tab ${tab === "training" ? "active" : ""}`}
-            onClick={() => setTab("training")}
-          >
-            <GraduationCap size={11} /> Training
-          </button>
         </div>
 
-        {tab === "training" && <Training />}
-
-        {/* Everything below is the learnings/signals surface — hide it on
-            the Training tab which has its own content above. */}
-        {tab !== "training" && <>
         {tab === "unsynthesized" && unsynthesized.length > 0 && (
           <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 0", marginBottom: 8 }}>
             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, flex: 1 }}>
@@ -564,7 +552,7 @@ export default function BrainView() {
             <h4>What confidence means</h4>
             <p>Each learning has a confidence score (the colored bar). It starts low and increases with each confirming signal. If the pre-commit hook flags code and the developer bypasses it, confidence decreases.</p>
             <h4>How learnings are used</h4>
-            <p>Active learnings become training data for the LoRA compliance model. Run <code>maiko retrain</code> to generate synthetic examples and fine-tune the model on your team's rules.</p>
+            <p>Active learnings are retrieved by agents at task kickoff via <code>maiko rules-relevant</code> — relevant patterns surface in the agent's context so they can apply the team's accumulated knowledge from past PR reviews.</p>
           </InfoButton>
         </div>
 
@@ -646,7 +634,7 @@ export default function BrainView() {
                             {l.status === "unsynthesized" && <span className="badge" title="Raw PR-comment signal waiting for LLM synthesis">raw</span>}
                             {l.source && <span className="tag">{l.source}</span>}
                             {l.is_global ? (
-                              <span className="tag tag-global" title="Seen in 3+ repos — feeds every LoRA">🌐 global</span>
+                              <span className="tag tag-global" title="Seen in 3+ repos — surfaces in every agent's rules-relevant retrieval">🌐 global</span>
                             ) : l.scope_repo ? (
                               <span className="tag" title={l.scope_repo}>{formatRepo(l.scope_repo, defaultOrg)}</span>
                             ) : (
@@ -734,7 +722,6 @@ export default function BrainView() {
             <button className="btn" onClick={handleAdd}><Check size={12} /></button>
           </div>
         </div>
-        </>}
       </div>
 
       {/* Backfill modal */}
@@ -748,7 +735,7 @@ export default function BrainView() {
             </div>
             <div className="modal-body">
               <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>
-                Scans every inline (per-file) PR review comment in the selected repo(s). Each becomes a raw signal — paired with the diff hunk around the comment — that feeds classification, aggregation, and LoRA training. Summary "LGTM" bodies and conversation comments are skipped on purpose.
+                Scans every inline (per-file) PR review comment in the selected repo(s). Each becomes a raw signal — paired with the diff hunk around the comment — that feeds classification and aggregation into the team's learnings pool. Summary "LGTM" bodies and conversation comments are skipped on purpose.
               </p>
               <div className="form-row">
                 <label>

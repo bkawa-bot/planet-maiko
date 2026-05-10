@@ -186,8 +186,10 @@ def prepare(job_id, job_title, prompt, repo_path, branch_prefix="maiko",
     # Write Claude Code hooks configuration
     _write_claude_settings(working_path, job_id, agent_id)
 
-    # LoRA compliance review is now handled by Claude Code PostToolUse hook
-    # (lora_review_hook.py), registered in _write_claude_settings above.
+    # LoRA verifier is currently parked — the training pipeline + inference
+    # modules stay in brain/learning/ but no Claude Code hooks fire it and
+    # the agent-facing tools are removed. Code review feedback continues
+    # to flow via live RAG (rules-relevant) below.
 
     # Every role learns rules the same way: live RAG via `maiko
     # rules-relevant`, queried at planning + pre-ready_for_review per

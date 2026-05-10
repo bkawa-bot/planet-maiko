@@ -236,7 +236,7 @@ export default function Agents() {
             <p>An end-of-day ritual: the pack gathers around the campfire and shares what they noticed today.</p>
             <h4>What agents share</h4>
             <ul>
-              <li><strong>Feedback</strong> — coding rules that should apply to future work in a repo (goes to Knowledge Pool → LoRA).</li>
+              <li><strong>Feedback</strong> — coding rules that should apply to future work in a repo (goes to the Knowledge Pool, retrieved by future agents via <code>rules-relevant</code>).</li>
               <li><strong>Insights</strong> — tribal knowledge future agents should inherit, like tooling quirks or repo state (goes to the Pack Insights library → every agent's CLAUDE.md).</li>
             </ul>
             <h4>The flow</h4>

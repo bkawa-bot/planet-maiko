@@ -18,14 +18,14 @@ export default function RepoChecksSection() {
       {open && (
         <div className="collapsible-body">
           <div className="setup-hint">
-            Before an agent says they're done, they call <code>check_code()</code>. It runs two verifier layers in one pass:
+            Before an agent says they're done, they call <code>check_code()</code>. It runs your repo's mechanical checks (tests, linter, typechecker) and returns a verdict the agent has to address before declaring ready_for_review.
           </div>
           <ul style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.6, paddingLeft: 20, margin: "8px 0" }}>
             <li>
-              <strong>Mechanical checks</strong> — your repo's tests, linter, typechecker. Auto-detected from <code>pyproject.toml</code> / <code>package.json</code> / <code>Cargo.toml</code> / <code>go.mod</code>, or configured by you.
+              <strong>Auto-detected</strong> from <code>pyproject.toml</code> / <code>package.json</code> / <code>Cargo.toml</code> / <code>go.mod</code>.
             </li>
             <li>
-              <strong>LoRA verifier</strong> — your team's trained code-review model (if an adapter exists for the repo). The rule layer. Learns from approved Learnings in the Knowledge tab.
+              <strong>Override or customize</strong> by committing <code>.maiko/checks.json</code> to your repo root.
             </li>
           </ul>
           <div className="setup-hint" style={{ marginTop: 12 }}>

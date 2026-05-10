@@ -388,15 +388,10 @@ export const api = {
   openTerminal: (path, taskId, branch) => request("/agents/open-terminal", { method: "POST", body: JSON.stringify({ path, task_id: taskId, branch }) }),
   resumeAgentSession: (taskId) => request("/agents/resume-session", { method: "POST", body: JSON.stringify({ task_id: taskId }) }),
 
-  // Training
-  getTrainingDatasets: () => request("/training/datasets"),
-  trainAgent: (data) => request("/training/train-agent", { method: "POST", body: JSON.stringify(data) }),
-  getTrainingProgress: () => request("/training/progress"),
-  generateFromRules: (data) => request("/training/generate-from-rules", { method: "POST", body: JSON.stringify(data || {}) }),
-  getRuleGenProgress: () => request("/training/generate-from-rules/progress"),
-  getRuleCoverage: (repo) => request(`/training/rule-coverage${repo ? `?repo=${encodeURIComponent(repo)}` : ""}`),
-  getAdapters: () => request("/training/adapters"),
-  getBaseModels: () => request("/training/base-models"),
+  // Training / LoRA wrappers retired as part of the lora-park —
+  // the backend training_bp + lora_bp are no longer registered. The
+  // training pipeline code stays in src/planet_maiko/brain/learning/
+  // dormant for future revival.
 
   // Ask the Pack — natural-language dispatcher that picks an agent and launches them.
   // Backend calls an LLM router with a 45s ceiling; we give the network a small cushion

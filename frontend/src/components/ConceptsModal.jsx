@@ -49,11 +49,11 @@ export default function ConceptsModal({ onClose }) {
           verbatim into every new agent's CLAUDE.md.
         </Concept>
 
-        <Concept icon={<Brain size={14} />} title="Learnings" subtitle="coding rules for the LoRA trainer">
+        <Concept icon={<Brain size={14} />} title="Learnings" subtitle="coding rules surfaced to future agents">
           Rule-shaped knowledge, extracted from PR review comments,
           agent feedback, and the Pack Insights ritual. Live on the
-          <strong> Knowledge</strong> page. Aggregate into a per-repo LoRA
-          adapter via <strong>Training</strong>.
+          <strong> Knowledge</strong> page. Surface to future agents at
+          task kickoff via <code>maiko rules-relevant</code>.
         </Concept>
 
         <Concept icon={<Zap size={14} />} title="Automations" subtitle="things Maiko runs for you">
@@ -74,8 +74,8 @@ export default function ConceptsModal({ onClose }) {
           <strong>Goals vs Automations:</strong> automations run the
           same template on demand or a cadence; goals watch a
           condition and only nudge when it's met. An automation says
-          "run morning brief at 8am"; a goal says "tell me when
-          planet-maiko has &gt;10 rules and no LoRA."
+          "run morning brief at 8am"; a goal says "tell me when an
+          agent hasn't checked in for a week."
         </Concept>
 
         <div className="concepts-divider" />
@@ -89,8 +89,9 @@ export default function ConceptsModal({ onClose }) {
           worktrees. At end of day, the <strong>Pack Insights campfire</strong>
           on the Agents page gathers every active agent; each one
           shares feedback (→ <em>learnings</em>) and insights (→ <em>
-          playbook</em>). Over time, the Knowledge Pool trains a LoRA
-          adapter that makes agents better at your repos.
+          playbook</em>). Future agents retrieve relevant learnings
+          on task kickoff so the pack gets better at your repos over
+          time.
         </p>
 
         <h4>Status you can glance at</h4>

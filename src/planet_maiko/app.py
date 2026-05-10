@@ -378,11 +378,14 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.expertise_api import expertise_bp
     from planet_maiko.api.awareness_api import awareness_bp
     from planet_maiko.api.profiles_api import profiles_bp
-    from planet_maiko.api.training_api import training_bp
+    # LoRA verifier + Training UI are currently parked (lora-park). The
+    # training_bp / lora_bp blueprints + their underlying training and
+    # inference pipelines stay in the repo dormant for future revival;
+    # they're just not registered as routes so the API doesn't surface
+    # them. To revive: re-add the imports + register_blueprint calls.
     from planet_maiko.api.chat_api import chat_bp
     from planet_maiko.api.themes_api import themes_bp
     from planet_maiko.api.diff_api import diff_bp
-    from planet_maiko.api.lora_api import lora_bp
     from planet_maiko.api.shutdown_api import shutdown_bp
     from planet_maiko.api.home_api import home_bp
     from planet_maiko.api.pack_api import pack_bp
@@ -404,11 +407,10 @@ def create_app(start_scheduler=False):
     app.register_blueprint(expertise_bp, url_prefix="/api")
     app.register_blueprint(awareness_bp, url_prefix="/api")
     app.register_blueprint(profiles_bp, url_prefix="/api")
-    app.register_blueprint(training_bp, url_prefix="/api")
+    # training_bp + lora_bp deliberately not registered — see lora-park.
     app.register_blueprint(chat_bp, url_prefix="/api")
     app.register_blueprint(themes_bp, url_prefix="/api")
     app.register_blueprint(diff_bp, url_prefix="/api")
-    app.register_blueprint(lora_bp, url_prefix="/api")
     app.register_blueprint(shutdown_bp, url_prefix="/api")
     app.register_blueprint(home_bp, url_prefix="/api")
     app.register_blueprint(pack_bp, url_prefix="/api")

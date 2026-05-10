@@ -71,34 +71,6 @@ def run_checks_route():
         logger.exception("[checks] run failed: %s", e)
         return jsonify({"error": str(e)}), 500
 
-    # Also run the LoRA verifier for this task when an adapter is
-    # configured for the repo. The LoRA is just another verifier with
-    # pass/fail output — surfacing it alongside mechanical checks lets
-    # agents react to both in one place instead of calling two tools.
-    # Violations are returned structured so the agent can still record
-    # lora_false_positive / lora_false_negative feedback on specific
-    # items when they disagree with the model.
-    lora_result = None
-    if job_id:
-        try:
-            from planet_maiko.api.lora_api import run_lora_for_task
-            lora_result = run_lora_for_task(task_id=job_id, scope="branch")
-        except Exception as e:
-            logger.warning(f"[checks] LoRA verifier failed: {e}")
-            lora_result = {"error": str(e)}
-
-    if lora_result is not None:
-        result["lora"] = lora_result
-        # Hoist "lora found violations" into the summary so the agent's
-        # blocked flag reflects it. Missing adapter / no changes / hard
-        # errors don't count as failures — only substantive violations do.
-        lora_violations = lora_result.get("violations") or []
-        if lora_violations:
-            summary = result.get("summary") or {}
-            summary["lora_violations"] = len(lora_violations)
-            summary["blocked"] = True
-            result["summary"] = summary
-
     # Persist the latest run on the linked Task so the UI can surface
     # it and `ready_for_review` can be cross-checked against it. The
     # id from the wire is a job_id — resolve to the linked Task via
@@ -121,7 +93,6 @@ def run_checks_route():
                     {k: v for k, v in c.items() if k != "command"}  # drop the command from the stored blob to keep it compact
                     for c in result.get("checks") or []
                 ],
-                "lora": lora_result,
                 "ran_at": _now_iso(),
             }
             task.extra = extra

@@ -401,10 +401,6 @@ def _write_claude_settings(working_path, job_id, agent_id):
                 "matcher": "Bash",
                 "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/post_tool_use.py"}],
             },
-            {
-                "matcher": "Bash",
-                "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/lora_review_hook.py"}],
-            },
         ]
 
     if hooks_config.get("notification", True):

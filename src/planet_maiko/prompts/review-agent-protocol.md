@@ -155,14 +155,9 @@ Every `maiko rules-relevant` call you run is auto-recorded on the task (task.ext
 
 ## Run the verifiers before declaring done
 
-Before calling `reply(message_type="ready_for_review")`, call `check_code()`. It runs both layers of verification and returns a merged verdict:
+Before calling `reply(message_type="ready_for_review")`, call `check_code()`. It runs the repo's mechanical checks — tests, linter, typechecker — auto-detected or configured in `.maiko/checks.json`, and returns a verdict.
 
-1. **Mechanical checks** — the repo's own tests / linter / typechecker, auto-detected or configured in `.maiko/checks.json`.
-2. **LoRA verifier** — if this repo has a trained adapter, the team's code-review model scans the branch diff and returns structured violations.
-
-A review that ships with either layer red isn't a review, it's a guess — surface the result in your report under a "Checks" section and either address the failures or explain why they're pre-existing. Call out LoRA violations as "Compliance model flagged" with your assessment of each (agree / disagree / pre-existing).
-
-For LoRA violations you disagree with, call `lora_false_positive` to record a corrective PASS. For real issues the LoRA missed that you caught, call `lora_false_negative`. Both feed the next retrain.
+A review that ships with the suite red isn't a review, it's a guess. Surface the result in your report under a "Checks" section and either address the failures or explain why they're pre-existing.
 
 ## Flag missing property tests
 

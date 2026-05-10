@@ -74,15 +74,10 @@ const mcp = new Server(
       ``,
       `Guidelines:`,
       `- Before declaring ready_for_review, run check_code(). It runs`,
-      `  both the mechanical checks (tests/lint/typecheck) AND the LoRA`,
-      `  verifier (if this repo has a trained adapter) and returns`,
-      `  one merged verdict. It is dishonest to claim you are done`,
-      `  if the verdict is red — address failures first, re-run, then`,
-      `  reply ready.`,
-      `- For any LoRA violation you believe is wrong, call`,
-      `  lora_false_positive to record a corrective PASS for the next`,
-      `  retrain. For a real issue the LoRA missed, call`,
-      `  lora_false_negative. These feed the training loop.`,
+      `  the mechanical checks (tests/lint/typecheck) auto-detected`,
+      `  from your repo and returns a verdict. It is dishonest to claim`,
+      `  you are done if the verdict is red — address failures first,`,
+      `  re-run, then reply ready.`,
       `- Coding agents: after your first meaningful commit, call`,
       `  check_code() then reply(content="<summary>", message_type="ready_for_review").`,
       `  Then loop: check_inbox every ~30s; on a message_type="review"`,
@@ -131,7 +126,7 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
               "Type of message: " +
               "'message' for general replies to the user, " +
               "'status' for live progress updates (chatter, no pupdate), " +
-              "'feedback' to record a learning / training signal (coding rule — feeds the LoRA pipeline), " +
+              "'feedback' to record a learning / training signal (coding rule — surfaces to future agents via rules-relevant), " +
               "'insight' to share tribal / operational knowledge that future agents should know (e.g. \"use IntelliJ to run tests\", \"the personalization repo is mid-migration\") — these get injected into every agent's CLAUDE.md, NOT trained on. One fact per reply. Reserve 'feedback' for coding rules and 'insight' for workflow / tooling / team context. " +
               "'plan_for_approval' when the task was started in plan mode and you've produced a markdown plan for the user to approve before you implement, " +
               "'ready_for_review' when you've committed work and the user should review the diff, " +
@@ -175,72 +170,14 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
-      name: "lora_check",
-      description:
-        "Drill-down tool for the LoRA verifier specifically. In most " +
-        "cases you should just call check_code() instead — it runs the " +
-        "LoRA alongside the mechanical checks and returns both in one " +
-        "verdict. Use lora_check only when you want to re-run the LoRA " +
-        "after fixing a violation, without waiting for the full mechanical " +
-        "suite, or when you need just the LoRA output with full metadata. " +
-        "Returns the same violation shape as check_code's lora section.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          scope: {
-            type: "string",
-            enum: ["branch", "last_commit"],
-            description: "'branch' (default) reviews everything since the merge-base with the default branch; 'last_commit' reviews just HEAD~1..HEAD.",
-          },
-        },
-      },
-    },
-    {
-      name: "lora_false_positive",
-      description:
-        "Record that the LoRA model flagged a line as a violation but " +
-        "it's actually correct. Feeds the next retrain as a corrective " +
-        "PASS. Use sparingly — only when you're confident the model is wrong.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          code:   { type: "string", description: "The code snippet the model flagged" },
-          file:   { type: "string", description: "File path (relative to repo root)" },
-          category: { type: "string", description: "Category the model assigned (e.g. 'testing', 'security')" },
-          reason: { type: "string", description: "Why you think the model is wrong" },
-        },
-        required: ["code"],
-      },
-    },
-    {
-      name: "lora_false_negative",
-      description:
-        "Record that the LoRA model said a piece of code was clean but " +
-        "it's actually a real violation the model missed. Feeds the next " +
-        "retrain as a corrective VIOLATION.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          code:      { type: "string", description: "The code snippet the model missed" },
-          violation: { type: "string", description: "Description of the issue the model should have caught" },
-          category:  { type: "string", description: "Which category the violation falls into (e.g. 'error_handling')" },
-          file:      { type: "string", description: "File path (relative to repo root)" },
-        },
-        required: ["code", "violation"],
-      },
-    },
-    {
       name: "check_code",
       description:
-        "Run every verifier for your worktree and return a merged " +
-        "verdict. Two layers: (1) mechanical checks — tests, linters, " +
-        "typechecker — auto-detected from the repo (pyproject.toml, " +
-        "package.json, Cargo.toml, go.mod) or configured via " +
-        "`.maiko/checks.json`; (2) the LoRA verifier — your team's " +
-        "trained code-review model, if an adapter is configured for " +
-        "this repo. Call this BEFORE declaring ready_for_review. For " +
-        "any LoRA violation you disagree with, use lora_false_positive; " +
-        "for a real issue the LoRA missed, use lora_false_negative.",
+        "Run the mechanical checks for your worktree (tests, linters, " +
+        "typechecker — auto-detected from the repo via pyproject.toml, " +
+        "package.json, Cargo.toml, go.mod, or configured via " +
+        "`.maiko/checks.json`) and return a verdict. Call this BEFORE " +
+        "declaring ready_for_review. If anything fails, address the " +
+        "failures and re-run before replying ready.",
       inputSchema: {
         type: "object",
         properties: {
@@ -317,79 +254,6 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     }
   }
 
-  if (req.params.name === "lora_check") {
-    const { scope = "branch" } = req.params.arguments || {};
-    try {
-      const resp = await fetch(`${API_URL}/lora/check`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ job_id: JOB_ID, scope }),
-      });
-      if (!resp.ok) {
-        const err = await resp.text();
-        return { content: [{ type: "text", text: `Failed to run LoRA: ${err}` }] };
-      }
-      const data = await resp.json();
-      if (data.no_model_for_repo) {
-        return { content: [{ type: "text", text: `No LoRA configured for repo ${data.repo || "(unknown)"} — skipping check.` }] };
-      }
-      if (data.no_changes) {
-        return { content: [{ type: "text", text: "No changes to review — worktree is at the base." }] };
-      }
-      const violations = data.violations || [];
-      if (violations.length === 0) {
-        return { content: [{ type: "text", text: "LoRA check: PASS. No violations detected." }] };
-      }
-      const formatted = violations
-        .map((v, i) => `${i + 1}. [${v.category}] ${v.message}`)
-        .join("\n");
-      return {
-        content: [{
-          type: "text",
-          text: `LoRA check found ${violations.length} violation(s):\n${formatted}\n\nAddress each one you agree with. For any you believe the model got wrong, call lora_false_positive.`,
-        }],
-      };
-    } catch (err) {
-      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
-    }
-  }
-
-  if (req.params.name === "lora_false_positive") {
-    const { code, file, category, reason } = req.params.arguments;
-    try {
-      const resp = await fetch(`${API_URL}/lora/false_positive`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, file, category, reason }),
-      });
-      if (!resp.ok) {
-        const err = await resp.text();
-        return { content: [{ type: "text", text: `Failed: ${err}` }] };
-      }
-      return { content: [{ type: "text", text: "Recorded false positive — next retrain will learn from it." }] };
-    } catch (err) {
-      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
-    }
-  }
-
-  if (req.params.name === "lora_false_negative") {
-    const { code, violation, category, file } = req.params.arguments;
-    try {
-      const resp = await fetch(`${API_URL}/lora/false_negative`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, violation, category, file }),
-      });
-      if (!resp.ok) {
-        const err = await resp.text();
-        return { content: [{ type: "text", text: `Failed: ${err}` }] };
-      }
-      return { content: [{ type: "text", text: "Recorded false negative — next retrain will learn from it." }] };
-    } catch (err) {
-      return { content: [{ type: "text", text: `Error: ${err.message}` }] };
-    }
-  }
-
   if (req.params.name === "check_code") {
     const { timeout = 120 } = req.params.arguments || {};
     try {
@@ -405,7 +269,6 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       const data = await resp.json();
       const checks = data.checks || [];
       const summary = data.summary || {};
-      const lora = data.lora || null;
 
       const lines = [];
 
@@ -421,32 +284,6 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
         }
       } else {
         lines.push("Mechanical checks: none detected. Add a `.maiko/checks.json` with the commands you want agents to run, or ensure the repo has pyproject.toml + tests/, package.json with a test script, Cargo.toml, or go.mod.");
-      }
-
-      // LoRA verifier — shown as its own section so agents can call
-      // lora_false_positive / lora_false_negative on specific
-      // violations they disagree with.
-      if (lora) {
-        lines.push("");
-        if (lora.no_model_for_repo) {
-          lines.push(`LoRA verifier: no adapter configured for repo ${lora.repo || "(unknown)"} — skipped.`);
-        } else if (lora.no_changes) {
-          lines.push("LoRA verifier: no diff to review.");
-        } else if (lora.error) {
-          lines.push(`LoRA verifier: error — ${lora.error}`);
-        } else {
-          const v = lora.violations || [];
-          if (v.length === 0) {
-            lines.push("LoRA verifier: PASS. No violations detected.");
-          } else {
-            lines.push(`LoRA verifier: ${v.length} violation(s) flagged.`);
-            v.forEach((item, i) => {
-              lines.push(`  ${i + 1}. [${item.category || "pattern"}] ${item.message}`);
-            });
-            lines.push("");
-            lines.push("  For any LoRA violation you disagree with, call lora_false_positive({code, file, category, reason}) to record a corrective PASS for the next retrain. For a real issue the model missed, call lora_false_negative.");
-          }
-        }
       }
 
       if (summary.blocked) {

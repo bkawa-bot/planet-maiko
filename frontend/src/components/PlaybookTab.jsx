@@ -11,10 +11,10 @@ import "./PlaybookTab.css";
 /**
  * Playbook tab: tribal / operational knowledge scoped per repo.
  *
- * Different intent from Learnings. Learnings are coding rules that
- * feed the LoRA; Insights are workflow context injected verbatim
- * into every new agent's CLAUDE.md — tooling quirks, repo state,
- * team conventions.
+ * Different intent from Learnings. Learnings are coding rules
+ * retrieved by agents at task kickoff via `rules-relevant`. Insights
+ * are workflow context injected verbatim into every new agent's
+ * CLAUDE.md — tooling quirks, repo state, team conventions.
  *
  * Surfaces:
  *   - Pending queue (agent-authored, awaiting user approval)
@@ -145,7 +145,7 @@ export default function PlaybookTab({ onCountsChange }) {
   return (
     <div className="playbook-tab">
       <div className="playbook-intro">
-        The playbook is tribal knowledge every agent inherits via CLAUDE.md — tooling tips, repo-state notes, team conventions. Different from the Knowledge Pool (which is coding rules feeding the LoRA). Think "things I wish I'd known before starting work on this repo."
+        The playbook is tribal knowledge every agent inherits via CLAUDE.md — tooling tips, repo-state notes, team conventions. Different from the Knowledge Pool (which is coding rules retrieved by agents at task kickoff via `rules-relevant`). Think "things I wish I'd known before starting work on this repo."
       </div>
 
       <div className="playbook-filter-row">
