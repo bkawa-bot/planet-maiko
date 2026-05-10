@@ -55,6 +55,26 @@
     they're behind; it's the boundary between their universe and
     yours.
 
+- id: glass-fox
+  display_name: Glass Fox
+  rarity: uncommon
+  vibe: studious-heir
+  tagline: "Broken lenses seeing different lives."
+  bio_seed: |
+    Pale, faceted, pieced together along golden seams — a young
+    heir who's already been broken once and held together with
+    care. Looks at the world through every fragment at once and
+    sees a different life in each one. Names lean studious and
+    glass-coded with a quiet courtly note (Wren, Quill, Lark,
+    Fennel, Saffron, Prism, Shard, Lens, Facet, Gilt). Bios are
+    precise and slightly stiff, the way smart kids are: cites
+    things they've read, apologizes when unsure, asks careful
+    follow-up questions, takes the work very seriously even when
+    it doesn't deserve it. The weight of "I have to do well" sits
+    under everything. Polite. Curious. Quietly anxious. Tougher
+    than they look — gold holds them together where the glass
+    didn't.
+
 - id: knell-hound
   display_name: Knell Hound
   rarity: rare
