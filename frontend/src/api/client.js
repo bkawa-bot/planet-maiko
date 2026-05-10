@@ -281,6 +281,15 @@ export const api = {
   // Cancelled tasks + jobs whose worktree is still resumable — feeds
   // the "Recently stopped" section on the active agents page.
   getRecoverableAgents: () => request("/agents/recoverable"),
+  // Worktree-maintenance read + write. Stats walks every managed
+  // worktree dir on disk (cheap-ish); sweep removes those older than
+  // max_age_days whose AgentJob is terminal.
+  getWorktreeStats: () => request("/agents/worktrees/stats"),
+  sweepWorktrees: (maxAgeDays) =>
+    request("/agents/worktrees/sweep", {
+      method: "POST",
+      body: JSON.stringify({ max_age_days: maxAgeDays }),
+    }),
   ackAgentJob: (id) => request(`/agent-jobs/${id}/ack`, { method: "POST" }),
 
   // Insights (Team Playbook — tribal / operational notes injected into CLAUDE.md)

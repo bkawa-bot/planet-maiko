@@ -48,6 +48,7 @@ from .phases.health import (  # noqa: E402
     _phase_nudge_quiet_agents,
     _phase_stuck_check,
     _phase_stuck_escalation,
+    _phase_worktree_sweep,
 )
 from .phases.orchestrate import (  # noqa: E402
     _phase_projects,
@@ -83,6 +84,9 @@ _PHASES = [
     ("spawn_jobs_for_tasks", _phase_spawn_jobs_for_tasks),
     ("execute_agent_jobs", _phase_execute_agent_jobs),
     ("stuck_escalation", _phase_stuck_escalation),
+    # Daily-cadenced; the phase itself gates on a 24h cooldown so this
+    # is cheap to invoke every cycle.
+    ("worktree_sweep", _phase_worktree_sweep),
 ]
 
 

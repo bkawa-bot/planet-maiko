@@ -53,6 +53,8 @@ from .worktree import (
     _create_scratch_dir,
     cleanup,
     cleanup_task_worktree,
+    sweep_old_worktrees,
+    worktree_stats,
 )
 from .scaffold import (
     _write_task_file,

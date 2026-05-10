@@ -623,6 +623,39 @@ def get_recoverable():
     return jsonify(get_recoverable_agents())
 
 
+@agents_bp.route("/agents/worktrees/stats", methods=["GET"])
+def get_worktree_stats():
+    """Snapshot of every Planet-Maiko-managed worktree on disk.
+
+    Used by the Settings → Worktree maintenance section to show what's
+    accumulating (count, total bytes, oldest mtime). Cheap-ish — walks
+    each configured repo's .maiko-worktrees plus the scratch root,
+    sizing each dir.
+    """
+    from planet_maiko.agents.runtime import worktree_stats
+    return jsonify(worktree_stats())
+
+
+@agents_bp.route("/agents/worktrees/sweep", methods=["POST"])
+def post_worktree_sweep():
+    """Manually trigger a worktree sweep.
+
+    Body: { "max_age_days": int }  (default 14)
+
+    Removes worktrees older than max_age_days whose AgentJob is
+    terminal (done / cancelled / failed). Never touches active jobs.
+    Returns a stats dict describing what happened.
+    """
+    from planet_maiko.agents.runtime import sweep_old_worktrees
+    data = request.get_json(silent=True) or {}
+    try:
+        max_age_days = int(data.get("max_age_days", 14))
+    except (TypeError, ValueError):
+        return jsonify({"error": "max_age_days must be an integer"}), 400
+    result = sweep_old_worktrees(max_age_days)
+    return jsonify(result)
+
+
 @agents_bp.route("/agents/queued", methods=["GET"])
 def get_queued():
     """Get tasks with an assigned agent but no worktree/activity yet.

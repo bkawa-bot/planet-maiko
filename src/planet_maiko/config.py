@@ -85,6 +85,19 @@ DEFAULT_CONFIG = {
             "review": "",
             "investigation": "",
         },
+        # Daily background sweep that removes stale worktrees (git
+        # worktrees under <repo>/.maiko-worktrees + scratch dirs under
+        # <data_dir>/scratch-worktrees) whose AgentJob is terminal
+        # (done/cancelled/failed) and older than max_age_days. Never
+        # touches active worktrees regardless of age. The brain cycle
+        # fires the phase every run; the phase itself gates on a 24h
+        # cooldown so the actual filesystem walk happens once a day.
+        # User can also trigger manually via Settings → Worktree
+        # maintenance.
+        "worktree_cleanup": {
+            "enabled": True,
+            "max_age_days": 14,
+        },
     },
     "brain": {
         # Tools pre-approved for Claude Code sessions (avoids permission prompts)

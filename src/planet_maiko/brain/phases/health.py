@@ -4,9 +4,11 @@
     silent — gives them a chance to re-engage before stuck_check flags.
   - stuck_check: flag agents whose claude process exited silently
   - stuck_escalation: surface tasks stuck in_progress for too long
+  - worktree_sweep: daily-cadenced cleanup of stale agent worktrees
 """
 
 import logging
+import time
 from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
@@ -17,6 +19,15 @@ logger = logging.getLogger(__name__)
 # below STUCK_AFTER_MINUTES (15) so quiet agents get one nudge cycle to
 # re-engage before the next stuck-check flags them as broken.
 NUDGE_AFTER_MINUTES = 10
+
+# Worktree sweep is gated to once-per-day. The brain cycle runs every
+# ~minute; we don't want to walk every repo's .maiko-worktrees and
+# stat every scratch dir that often. Module-level so a process restart
+# resets the clock and a fresh boot does an initial sweep — desirable
+# since long-uptime processes are the case where dirs accumulate
+# unnoticed.
+_last_worktree_sweep_at = 0.0
+_WORKTREE_SWEEP_INTERVAL_S = 24 * 60 * 60
 
 
 def _phase_nudge_quiet_agents():
@@ -235,3 +246,47 @@ def _phase_stuck_escalation():
             pass
         logger.warning(f"[cycle] Stuck escalation skipped: {e}")
         return {"escalated": 0, "auto_dismissed": 0}
+
+
+def _phase_worktree_sweep():
+    """Phase: daily-cadenced removal of stale agent worktrees.
+
+    Gated by `agents.worktree_cleanup.enabled` (default True) and
+    `agents.worktree_cleanup.max_age_days` (default 14). Runs at most
+    once per 24h regardless of cycle cadence — module-level timestamp
+    tracks last sweep.
+
+    Skipped silently when disabled or when the cooldown hasn't
+    elapsed. Errors are logged but never block the cycle.
+    """
+    global _last_worktree_sweep_at
+
+    try:
+        from planet_maiko.config import load_config
+        cfg = (load_config().get("agents") or {}).get("worktree_cleanup") or {}
+        if not cfg.get("enabled", True):
+            return {"skipped": "disabled"}
+        max_age_days = int(cfg.get("max_age_days") or 14)
+    except Exception as e:
+        logger.debug(f"[worktree-sweep] config read failed: {e}")
+        return {"skipped": "config_error"}
+
+    now = time.time()
+    if (now - _last_worktree_sweep_at) < _WORKTREE_SWEEP_INTERVAL_S:
+        return {"skipped": "cooldown"}
+
+    try:
+        from planet_maiko.agents.runtime import sweep_old_worktrees
+        result = sweep_old_worktrees(max_age_days)
+        _last_worktree_sweep_at = now
+        if result.get("removed"):
+            logger.info(
+                f"[cycle] worktree sweep: removed {result['removed']} dir(s), "
+                f"freed {result['freed_bytes']} bytes "
+                f"(skipped {result.get('skipped_active', 0)} active, "
+                f"{result.get('skipped_recent', 0)} recent)"
+            )
+        return result
+    except Exception as e:
+        logger.warning(f"[cycle] worktree sweep failed: {e}")
+        return {"error": str(e)}

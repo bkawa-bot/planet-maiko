@@ -330,3 +330,218 @@ def cleanup_task_worktree(task):
     except Exception as e:
         logger.warning(f"[task] Worktree cleanup failed for {task.id}: {e}")
 
+
+# ---------------------------------------------------------------------------
+# Worktree maintenance — periodic sweep for stale dirs
+# ---------------------------------------------------------------------------
+
+_TERMINAL_JOB_STATUSES = ("done", "cancelled", "failed")
+
+
+def _dir_size_bytes(path):
+    """Best-effort recursive size in bytes. Returns 0 on any error so a
+    permissions failure on one subtree doesn't break the whole stats
+    walk."""
+    total = 0
+    try:
+        for root, _dirs, files in os.walk(path):
+            for f in files:
+                try:
+                    total += os.path.getsize(os.path.join(root, f))
+                except OSError:
+                    continue
+    except OSError:
+        return 0
+    return total
+
+
+def _enumerate_managed_worktrees():
+    """Walk every worktree currently on disk that Planet Maiko owns.
+
+    Returns a list of dicts: {path, kind, job_id, size_bytes, mtime}.
+      kind   — "scratch" | "git"
+      job_id — best-guess id (scratch dirs are keyed by job_id directly;
+               git worktrees encode the branch in the path, which doesn't
+               trivially reverse to a job — left as None and matched up
+               via AgentJob.worktree_path at the call site)
+      mtime  — directory mtime as a unix timestamp
+
+    Doesn't touch the DB — just a filesystem scan. The caller is
+    responsible for cross-referencing with AgentJob.
+    """
+    out = []
+
+    # Scratch dirs live under <data_dir>/scratch-worktrees/<job_id>/
+    root = _scratch_root()
+    if os.path.isdir(root):
+        for name in os.listdir(root):
+            full = os.path.join(root, name)
+            if not os.path.isdir(full):
+                continue
+            try:
+                stat = os.stat(full)
+            except OSError:
+                continue
+            out.append({
+                "path": full,
+                "kind": "scratch",
+                "job_id": name,
+                "size_bytes": _dir_size_bytes(full),
+                "mtime": stat.st_mtime,
+            })
+
+    # Git worktrees live under each configured repo's .maiko-worktrees/.
+    # Walk the configured repos rather than the whole filesystem.
+    try:
+        from planet_maiko.config import load_config
+        from planet_maiko.orchestration import resolve_repo_path
+        cfg_github = (load_config().get("github") or {})
+        for repo in (cfg_github.get("repos") or []):
+            local = resolve_repo_path(repo)
+            if not local:
+                continue
+            wt_root = os.path.join(local, ".maiko-worktrees")
+            if not os.path.isdir(wt_root):
+                continue
+            for name in os.listdir(wt_root):
+                full = os.path.join(wt_root, name)
+                if not os.path.isdir(full):
+                    continue
+                try:
+                    stat = os.stat(full)
+                except OSError:
+                    continue
+                out.append({
+                    "path": full,
+                    "kind": "git",
+                    "job_id": None,  # resolved by worktree_path lookup
+                    "branch": name,
+                    "repo_path": local,
+                    "size_bytes": _dir_size_bytes(full),
+                    "mtime": stat.st_mtime,
+                })
+    except Exception as e:
+        logger.debug(f"[worktree] git-worktree enumeration skipped: {e}")
+
+    return out
+
+
+def worktree_stats():
+    """Return a snapshot of every Planet-Maiko-managed worktree on disk.
+
+    Used by the Settings page to show what's accumulating. Returns:
+        {
+          "total_count": int,
+          "total_bytes": int,
+          "oldest_mtime": float | None,
+          "scratch_count": int,
+          "git_count": int,
+        }
+    """
+    entries = _enumerate_managed_worktrees()
+    total_count = len(entries)
+    total_bytes = sum(e["size_bytes"] for e in entries)
+    oldest = min((e["mtime"] for e in entries), default=None)
+    scratch_count = sum(1 for e in entries if e["kind"] == "scratch")
+    git_count = sum(1 for e in entries if e["kind"] == "git")
+    return {
+        "total_count": total_count,
+        "total_bytes": total_bytes,
+        "oldest_mtime": oldest,
+        "scratch_count": scratch_count,
+        "git_count": git_count,
+    }
+
+
+def sweep_old_worktrees(max_age_days):
+    """Remove worktrees older than `max_age_days` whose AgentJob is in a
+    terminal state (done / cancelled / failed) — or whose AgentJob no
+    longer exists at all (orphan dirs).
+
+    Active worktrees (queued / running jobs) are never touched
+    regardless of age. The intent is recovering disk space from agent
+    runs the user has clearly moved on from, not yanking the rug from
+    under in-flight work.
+
+    Returns a dict with what happened:
+        {
+          "scanned": int,
+          "removed": int,
+          "skipped_active": int,
+          "skipped_recent": int,
+          "freed_bytes": int,
+        }
+    """
+    if not max_age_days or max_age_days <= 0:
+        return {"scanned": 0, "removed": 0, "skipped_active": 0,
+                "skipped_recent": 0, "freed_bytes": 0, "disabled": True}
+
+    import time
+    from planet_maiko.models.agent_job import AgentJob
+    from planet_maiko.database import db
+
+    cutoff = time.time() - (max_age_days * 86400)
+    entries = _enumerate_managed_worktrees()
+
+    # Build a quick lookup of every AgentJob.worktree_path that's still
+    # owned by an active job. We do this rather than a one-by-one DB
+    # query per entry so the sweep is bounded at one query for the
+    # whole pass.
+    active_paths = set()
+    job_by_path = {}
+    try:
+        jobs = AgentJob.query.filter(
+            AgentJob.worktree_path.isnot(None)
+        ).all()
+        for j in jobs:
+            wp = (j.worktree_path or "").replace("\\", "/")
+            if not wp:
+                continue
+            job_by_path[wp] = j
+            if j.status not in _TERMINAL_JOB_STATUSES:
+                active_paths.add(wp)
+    except Exception as e:
+        logger.warning(f"[worktree-sweep] DB lookup failed, aborting: {e}")
+        return {"scanned": 0, "removed": 0, "skipped_active": 0,
+                "skipped_recent": 0, "freed_bytes": 0, "error": str(e)}
+
+    removed = 0
+    freed_bytes = 0
+    skipped_active = 0
+    skipped_recent = 0
+
+    for entry in entries:
+        norm = entry["path"].replace("\\", "/")
+        if norm in active_paths:
+            skipped_active += 1
+            continue
+        if entry["mtime"] > cutoff:
+            skipped_recent += 1
+            continue
+        # OK to remove. Route through the existing cleanup() so git
+        # worktrees go through `git worktree remove` and scratch dirs
+        # rmtree through the scratch-root safety check.
+        try:
+            if entry["kind"] == "scratch":
+                cleanup(entry["path"], None)
+            else:
+                cleanup(entry.get("repo_path"), entry.get("branch"))
+            removed += 1
+            freed_bytes += entry["size_bytes"]
+            logger.info(
+                f"[worktree-sweep] removed {entry['kind']} worktree "
+                f"{entry['path']} (age {int((time.time() - entry['mtime'])/86400)}d)"
+            )
+        except Exception as e:
+            logger.warning(
+                f"[worktree-sweep] failed to remove {entry['path']}: {e}"
+            )
+
+    return {
+        "scanned": len(entries),
+        "removed": removed,
+        "skipped_active": skipped_active,
+        "skipped_recent": skipped_recent,
+        "freed_bytes": freed_bytes,
+    }
+
