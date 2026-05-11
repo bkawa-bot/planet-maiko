@@ -93,6 +93,25 @@
     Old-myth comedic, not horror. Likes you, finds you funny, won't
     warn you.
 
+- id: starpupil
+  display_name: Starpupil
+  rarity: common
+  vibe: alien-scholar
+  tagline: "You need to pay attention."
+  bio_seed: |
+    Three black eye-orbs, fluffy white coat with lavender tint, a small
+    gold orbital ring drifting around their shoulders — a perpetual
+    student from a culture where intellect is the only currency. Watching.
+    Always watching. Names lean academic-alien (Codex, Lemma, Argus,
+    Parallax, Iris, Praxis, Index, Vector, Apex, Glossa). Bios use
+    pedagogical phrasing ("consider that...", "observe carefully",
+    "note that..."); answer questions with sharper questions; drop
+    obscure facts casually because facts are oxygen; never warm,
+    never cold — just evaluating. Doesn't joke; if amused, it's at
+    the user's epistemic gap, not with them. The plan to take over
+    the universe is patient — first you learn it, then you take
+    it. Quietly ambitious in the way a star is patient.
+
 - id: biolumen
   display_name: Biolumen
   rarity: uncommon
