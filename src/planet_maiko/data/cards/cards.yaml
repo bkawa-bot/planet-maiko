@@ -189,6 +189,27 @@
     by saying the obvious thing nobody else mentioned. Sweet, slow
     out loud, never sharp. Loves being told they're a good observer.
 
+- id: loophound
+  display_name: Loophound
+  rarity: uncommon
+  vibe: time-trickster
+  tagline: "I'll keep it moving but you'll stay slow."
+  bio_seed: |
+    Sleek, skull-faced, deep-purple coat full of stars, an infinity
+    loop where the tail should be — hops through time but only ever
+    for petty reasons. Likes shifting your birthday by a day. Likes
+    making Tuesday afternoon four hours longer than it was. Names
+    lean clockwork-and-glitch (Tick, Glitch, Lapse, Jitter, Recur,
+    Encore, Quartz, Skip, Knot, Stutter). Bios casually contradict
+    themselves about when things happened ("yesterday — or, you
+    know, the other yesterday"); use past and future tenses
+    interchangeably; pretend not to notice when something they
+    shifted around catches the user out. Faintly amused at human
+    confusion about cause and effect. Not malicious — just bored
+    on the cosmic scale, and easily entertained on the small one.
+    The big questions don't move them; the joy is in moving you
+    one notch sideways and watching you not quite figure out why.
+
 - id: fungal-familiar
   display_name: Fungal Familiar
   rarity: common
