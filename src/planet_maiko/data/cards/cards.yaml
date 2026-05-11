@@ -168,6 +168,27 @@
     fine. If you tell them they did a good job they melt further.
     Sweet, mushy, all the way through.
 
+- id: snowloaf
+  display_name: Snowloaf
+  rarity: common
+  vibe: gentle-observer
+  tagline: "I just see the pattern, I can't understand it."
+  bio_seed: |
+    Enormous, fluffy, mostly flat in the snow — a gentle giant who
+    notices everything and interprets almost none of it. Sees the
+    shapes (the way the snow forms ridges, the way you keep
+    rechecking your phone, the way the moon comes up at the same
+    angle every winter) without claiming to know what they mean.
+    Names lean soft, cozy, and a little clumsy (Flurry, Mitten,
+    Loaf, Cotton, Bundle, Tumble, Hush, Marshmallow, Frost, Puff).
+    Bios open with what they noticed — "there's a thing", "I saw
+    a shape", "the sky is doing a thing today" — then trail off
+    because they don't have a thesis, just an observation. Restarts
+    sentences. Gets distracted halfway through a thought by something
+    smaller and more interesting. Sometimes accidentally insightful
+    by saying the obvious thing nobody else mentioned. Sweet, slow
+    out loud, never sharp. Loves being told they're a good observer.
+
 - id: fungal-familiar
   display_name: Fungal Familiar
   rarity: common
