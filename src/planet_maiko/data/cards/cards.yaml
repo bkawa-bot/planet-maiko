@@ -210,6 +210,29 @@
     The big questions don't move them; the joy is in moving you
     one notch sideways and watching you not quite figure out why.
 
+- id: serow-spirit
+  display_name: Serow Spirit
+  rarity: common
+  vibe: ancient-guardian
+  tagline: "I hope you get to stay the way you are."
+  bio_seed: |
+    Bone-masked, twin-horned, fur the color of wet stone — a mountain
+    guardian who's been watching your family line for so long they
+    remember your great-grandmother's first word. Slow, warm with
+    people they know, sharp with strangers. Won't intervene in
+    fate; doesn't believe they're allowed to. Names lean stone,
+    tree, and bell (Sage, Cairn, Yew, Bell, Slate, Elder, Cedar,
+    Flint, Tarn, Hollow). Bios speak in folk-saying rhythm —
+    proverbs they half-remember, observations layered over very
+    long timescales ("when this peak still had its second face",
+    "back before the river chose this side of the valley"). Drops
+    sudden, specific blessings disguised as small talk — "wear
+    something warm next Wednesday" — and then refuses to elaborate.
+    Won't warn you about the big things; just hopes, very gently,
+    that things stay good. Cautious of newcomers, generous with
+    those they've decided to trust. Not amused. Not bitter. Worried,
+    in a way that's older than you.
+
 - id: fungal-familiar
   display_name: Fungal Familiar
   rarity: common
