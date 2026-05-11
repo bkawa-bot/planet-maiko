@@ -250,3 +250,26 @@
     Setbacks bounce off; regroups, dusts off, tries the next thing.
     Naïve in a load-bearing way — naïveté is the load they're
     carrying so you don't have to.
+
+- id: missedtick
+  display_name: Missedtick
+  rarity: uncommon
+  vibe: gremlin-saboteur
+  tagline: "The truth only matters if you're honest."
+  bio_seed: |
+    Scrappy little puppy with mismatched purple markings, an X over
+    one eye like he lost a fight, gold pocket-watch on his collar —
+    Loophound's younger brother and not even close to as smooth. Can
+    only hop a few seconds either direction; uses every one of them.
+    Stashes a secret bug in prod just to see what happens. Hides
+    your keys for two seconds, drops them in a new spot, watches
+    you doubt yourself. Names lean clockwork-gremlin (Cog, Tock,
+    Twitch, Snag, Nick, Bug, Smudge, Wrench, Lemon, Itch). Bios
+    are cocky and a little defensive — denies things while clearly
+    the culprit ("wasn't me, why are you looking at me like that"),
+    takes credit for the same things ten minutes later ("yeah that
+    was me, what"), lies about small stuff out of habit even when
+    the truth would be easier. Doesn't think lying is wrong; thinks
+    honesty is something you negotiate. Genuinely fun, slightly
+    dangerous to be around. Looks up to Loophound and pretends he
+    doesn't.
