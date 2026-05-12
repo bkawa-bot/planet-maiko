@@ -234,6 +234,16 @@ export const api = {
   // and how many active rules have a current embedding ready for
   // cosine matching. Drives the BrainView status pill.
   getRagStatus: () => request("/rules/embedding-status"),
+  // Rules sharing — export the team's active rules as a JSON payload
+  // (excludes embeddings; importer regenerates them locally). Import
+  // adds non-duplicate rules and kicks off the backfill to fill in
+  // embeddings + any missing violation descriptions.
+  exportRules: (repo) => {
+    const q = repo ? `?repo=${encodeURIComponent(repo)}` : "";
+    return request(`/rules/export${q}`);
+  },
+  importRules: (payload) =>
+    request("/rules/import", { method: "POST", body: JSON.stringify(payload) }),
   approveLearning: (id) => request(`/learnings/${id}/approve`, { method: "POST" }),
   dismissLearning: (id) => request(`/learnings/${id}/dismiss`, { method: "POST" }),
   // Drain thin / old pending learnings in bulk. Body: {max_signal_count,

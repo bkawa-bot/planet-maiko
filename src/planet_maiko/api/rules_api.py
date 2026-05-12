@@ -10,9 +10,12 @@ Endpoints:
   POST /api/rules/regenerate-descriptions — kick off backfill manually
   GET  /api/rules/embedding-status — diagnostic: which backend, how
                                       many rules ready
+  GET  /api/rules/export    — dump active rules as JSON for teammates
+  POST /api/rules/import    — import a previously-exported rules JSON
 """
 
 import logging
+from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request
 
 logger = logging.getLogger(__name__)
@@ -197,6 +200,127 @@ def review_rag():
 
     status = 200 if result.get("success") else 500
     return jsonify(result), status
+
+
+@rules_bp.route("/rules/export", methods=["GET"])
+def export_rules():
+    """Export the team's active rules as a JSON payload for sharing with
+    a teammate. Skips embeddings — the receiver regenerates them locally
+    (cheap, avoids embedding-model version drift).
+
+    Query params:
+      repo (optional): "org/name" — include rules scoped to this repo
+        plus globals. Without it, exports every active rule.
+    """
+    from planet_maiko.models.learning import Learning
+    from sqlalchemy import or_
+
+    repo = (request.args.get("repo") or "").strip() or None
+
+    query = Learning.query.filter_by(status="active")
+    if repo:
+        query = query.filter(or_(Learning.scope_repo == repo, Learning.is_global.is_(True)))
+
+    rules = query.order_by(Learning.category, Learning.id).all()
+
+    payload = {
+        "schema_version": 1,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "exported_from_repo": repo,
+        "rule_count": len(rules),
+        "rules": [
+            {
+                "rule": r.rule,
+                "category": r.category,
+                "scope_repo": r.scope_repo,
+                "scope_language": r.scope_language,
+                "is_global": bool(r.is_global),
+                "violation_description": r.violation_description,
+                "signal_count": r.signal_count or 0,
+            }
+            for r in rules
+        ],
+    }
+    return jsonify(payload)
+
+
+@rules_bp.route("/rules/import", methods=["POST"])
+def import_rules():
+    """Import rules from a previously-exported JSON payload. New rules
+    land as status='active' with source='imported'. Duplicates (same
+    aggregation_key) are skipped, not overwritten. After insert, kicks
+    off the violation backfill so embeddings populate for the new rows
+    (and any descriptions are filled in if missing from the export).
+    """
+    from flask import current_app
+    from planet_maiko.database import db
+    from planet_maiko.models.learning import Learning
+    from planet_maiko.brain.learning.violation_backfill import backfill_in_background
+
+    data = request.get_json(silent=True) or {}
+    schema_version = data.get("schema_version", 1)
+    if schema_version != 1:
+        return jsonify({"error": f"unsupported schema_version: {schema_version}"}), 400
+
+    rules_in = data.get("rules") or []
+    if not isinstance(rules_in, list):
+        return jsonify({"error": "rules must be a list"}), 400
+
+    imported = 0
+    skipped_duplicate = 0
+    errors = []
+
+    for idx, r in enumerate(rules_in):
+        if not isinstance(r, dict):
+            errors.append(f"row {idx}: not an object")
+            continue
+        rule_text = (r.get("rule") or "").strip()
+        category = (r.get("category") or "").strip()
+        if not rule_text or not category:
+            errors.append(f"row {idx}: missing rule or category")
+            continue
+
+        scope_repo = r.get("scope_repo") or None
+        scope_language = r.get("scope_language") or None
+
+        # Recompute aggregation_key the same way processor.py does, so
+        # dedup matches whether the rule was mined locally or imported.
+        text_prefix = rule_text[:80].lower().strip()
+        agg_key = f"{category}|{scope_repo or '_global'}|{scope_language or '_any'}|{text_prefix}"
+
+        if Learning.query.filter_by(aggregation_key=agg_key).first():
+            skipped_duplicate += 1
+            continue
+
+        learning = Learning(
+            rule=rule_text,
+            category=category,
+            scope_repo=scope_repo,
+            scope_language=scope_language,
+            is_global=bool(r.get("is_global", False)),
+            source="imported",
+            status="active",
+            signal_count=int(r.get("signal_count", 0) or 0),
+            aggregation_key=agg_key,
+            violation_description=r.get("violation_description"),
+            # violation_embedding stays null — backfill regenerates locally.
+        )
+        db.session.add(learning)
+        imported += 1
+
+    db.session.commit()
+
+    # Kick off the backfill so new rows get embeddings (and any missing
+    # descriptions). Runs in a background thread; this endpoint returns
+    # immediately.
+    if imported:
+        backfill_in_background(current_app._get_current_object(), force=False)
+
+    return jsonify({
+        "imported": imported,
+        "skipped_duplicate": skipped_duplicate,
+        "errors": errors,
+    })
 
 
 @rules_bp.route("/rules/embedding-status", methods=["GET"])
