@@ -60,7 +60,10 @@ export default function ProfileDetailModal({
                 <div style={{ marginBottom: 6 }}>
                   <RarityBadge rarity={card.rarity} />
                 </div>
-                <div className="profile-modal-archetype-name">{card.display_name}</div>
+                <div className="profile-modal-archetype-name">
+                  <span style={{ opacity: 0.55, fontWeight: 500, marginRight: 4 }}>Type:</span>
+                  {card.display_name}
+                </div>
                 <div className="profile-modal-archetype-tagline">{card.tagline}</div>
               </div>
             )}

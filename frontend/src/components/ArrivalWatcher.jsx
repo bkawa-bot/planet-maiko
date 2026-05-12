@@ -113,6 +113,7 @@ export default function ArrivalWatcher() {
             <div className="arrival-watcher-name">{profile.display_name}</div>
             {card && (
               <div className="arrival-watcher-archetype">
+                <span style={{ opacity: 0.55, fontWeight: 500, marginRight: 4 }}>Type:</span>
                 {card.display_name}
                 {card.tagline ? <> · <em>{card.tagline}</em></> : null}
               </div>
