@@ -154,9 +154,9 @@
   --text: #2B2F42;
   --text-dim: #6B7280;
   --text-muted: #9CA3B5;
-  --pink: #FF9F70;          /* Sunrise Peach, warm horizon (primary accent) */
-  --pink-soft: rgba(255, 159, 112, 0.18);
-  --pink-glow: rgba(255, 159, 112, 0.08);
+  --pink: #FFAB88;          /* Soft Peach, warm horizon (primary accent) */
+  --pink-soft: rgba(255, 171, 136, 0.18);
+  --pink-glow: rgba(255, 171, 136, 0.08);
   --blue: #38C5E0;          /* Electric Cyan, counter-warm contrast */
   --blue-soft: rgba(56, 197, 224, 0.18);
   --mint: #A8FFD4;          /* Bio Mint Light */
@@ -167,21 +167,21 @@
   --lemon: #FFF3A3;         /* Butter Yellow, sunrise bloom */
   --urgent: #FF8095;
   --high: #FF8A7A;
-  --normal: #FF9F70;
+  --normal: #FFAB88;
   --low: #9CA3B5;
   --green: #C8EC5C;         /* Lime Glow */
   --border: #E5D5F0;
   --border-subtle: #F0E5F8;
-  --card-title: #FF8043;          /* Sunrise Orange, the warm horizon hero */
+  --card-title: #FF9560;          /* Peach Sunrise, the warm horizon hero */
   --card-border: rgba(56, 197, 224, 0.40);  /* Electric Cyan edge */
   --urgent-soft: rgba(255, 128, 149, 0.18); --urgent-faint: rgba(255, 128, 149, 0.08);
   --high-soft: rgba(255, 138, 122, 0.18); --high-faint: rgba(255, 138, 122, 0.08);
   --lemon-soft: rgba(255, 243, 163, 0.40); --lemon-faint: rgba(255, 243, 163, 0.18);
   --green-soft: rgba(200, 236, 92, 0.22); --green-faint: rgba(200, 236, 92, 0.10);
   --lavender-soft: rgba(196, 139, 255, 0.20); --lavender-faint: rgba(196, 139, 255, 0.10);
-  /* Sunrise blush: butter yellow to sunrise peach. Two stops keeps the
+  /* Sunrise blush: butter yellow to soft peach. Two stops keeps the
      dawn feeling warm without competing with the actual greeting. */
-  --topbar-gradient: linear-gradient(135deg, #FFF3A3 0%, #FF9F70 100%);
+  --topbar-gradient: linear-gradient(135deg, #FFF3A3 0%, #FFAB88 100%);
   --pane-bg: rgba(255, 255, 255, 0.55);
 }
 
