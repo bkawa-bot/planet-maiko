@@ -253,7 +253,7 @@ def _calendar_context():
         """Return past / now / upcoming based on event start time.
 
         The calendar poller writes event start under extra.start as an
-        ISO string — we compare against local-now (naive) after stripping
+        ISO string. We compare against local-now (naive) after stripping
         tz for apples-to-apples. Events without a parseable start fall
         back to "unknown" rather than misclassifying.
         """
@@ -265,7 +265,7 @@ def _calendar_context():
             return "unknown"
         if dt.tzinfo is not None:
             dt = dt.astimezone(now_local.tzinfo).replace(tzinfo=None) if now_local.tzinfo else dt.replace(tzinfo=None)
-        # Rough "in progress" window of 60 minutes — covers a standup
+        # Rough "in progress" window of 60 minutes, covers a standup
         # you're mid-way through so the LLM doesn't say it's "coming up".
         delta_min = (now_for_compare - dt).total_seconds() / 60.0
         if delta_min > 60:
@@ -274,10 +274,29 @@ def _calendar_context():
             return "now"
         return "upcoming"
 
+    def _local_time_str(start_iso):
+        """Format event start as the user's local time, e.g. "10:30 AM".
+
+        The LLM used to receive the event time as a UTC ISO string and
+        occasionally treated UTC as local (presenting a 10:30 AM Pacific
+        meeting as 5:30 PM). Pre-formatting in the user's tz removes
+        the ambiguity. Falls back to "" if the start is missing or
+        unparseable, so the LLM omits the time rather than printing junk.
+        """
+        if not start_iso:
+            return ""
+        try:
+            dt = _dt.fromisoformat(start_iso)
+        except Exception:
+            return ""
+        if dt.tzinfo is not None and now_local.tzinfo is not None:
+            dt = dt.astimezone(now_local.tzinfo)
+        return dt.strftime("%I:%M %p").lstrip("0")
+
     return [
         {
             "id": p.id,
-            "time": iso_utc(p.timestamp),
+            "time": _local_time_str((p.extra or {}).get("start")),
             "when": _classify((p.extra or {}).get("start")),
             "title": _trim(p.title, 300),
             "body": _trim(p.body or "", 400),
