@@ -1,56 +1,91 @@
 # Planet Maiko
 
-**The current model of agent orchestration is unsustainable.**
+**strange agents, strange world.**
 
-*"Ship 40 PRs a day."* *"10x your output."* *"Run a swarm."* The cost never makes the screenshot — you end up working *for* your agents, not the other way around. Feeding context. Reviewing output. Resolving conflicts between siblings who don't know the others exist. A team of junior devs that never sleeps, never reads the room, and never learns what you taught them yesterday. Burnout, just wearing a new hat.
+We live in strange times, and yet our dev tools are so painfully un-strange. No one knows what being a software engineer will be like in a year, or even a month. If we are all tokenmaxxing to our own inevitable obsolescence, we might as well have fun.
+
+Planet Maiko revolves around one central idea: a tight-knit pack is more powerful (and fun) than a swarm of strangers. Your pack has real agency. They get to name themselves. They know and learn from each other and grow everyday. You will remember them, and they will remember you.
+
+On Planet Maiko, everyone contributes, everyone shares, and no one makes the same mistake twice.
 
 ![Planet Maiko home](docs/screenshots/home.png)
 
-> **⚠️ Beta.** Planet Maiko is in active beta testing. Expect breaking changes, schema migrations, rough edges, and the occasional bug. If you try it and something's broken, [file an issue](https://github.com/bkawa-bot/planet-maiko/issues/new) — feedback shapes what ships next.
+> **⚠️ Beta.** Planet Maiko is in active beta testing. Expect breaking changes, schema migrations, rough edges, and the occasional bug. If you try it and something's broken, [file an issue](https://github.com/bkawa-bot/planet-maiko/issues/new). Feedback shapes what ships next.
 
-I got tired of being a babysitter.
+**What (boring) stuff Planet Maiko does:**
 
-So I built Planet Maiko.
+All the typical agent orchestration work. Automatically kicks off agents, lets them yell at each other (with Maiko as the mediator), agent task lifecycles, context sharing, etc.
 
-**Planet Maiko isn't another agent orchestrator — it's an environment where you and your pack learn from each other, work alongside each other, and wake up smarter every day.** It runs locally on your laptop and pulls everything you need — PRs, tickets, calendar, agent output — into one view automatically, so you stop switching between ten apps with ten different AI assistants yelling at you. You stop being a fleet manager and go back to being a lead engineer.
+**What (COOL) stuff Planet Maiko does:**
 
-**You don't need more agents. You need smarter ones.**
+- Automatically curates and updates a knowledge base of you and your team's preferences, coding guidelines, and ongoing context, so your agents stop making the same wrong assumptions every time.
+- Builds a history of all your (and your team's) past PR review mistakes for your agents to laugh at (use) so they don't make the same ones.
+- Agents aren't off the hook either. Maiko makes them confess their own mistakes too. Everyone learns.
+- Has a built-in RAG system of your team's conventions and feedback that populates itself. Agents pull only the rules relevant to what they're working on, so we don't have to stuff 300 rules into every prompt.
+- Plug-in architecture for everything else. Wire up your internal tools, your monitoring stack, whatever crazy new shiny thing you're trying this week.
+- No venture capitalism, no productivity-maxxing (unless you want). I am not trying to make money. I don't care about maximizing the value you bring to your company. Planet Maiko is for you, not your company.
 
-### The pack that raises itself
+I use Planet Maiko everyday and it is the only tool I use daily (other than IDEs and GH). If I have to even look at a different dashboard or deal with another agent shouting at me, I get annoyed and just figure out how to make Maiko deal with it instead.
 
-**No prompt engineering. No hand-written guidelines. No system prompts to maintain.** Your pack learns from what your team already does.
+Build a plugin for any tool you never want to have to look at again.
 
-- **Agents that learn your team's taste from every merged PR.** Reviewer feedback flows into per-repo LoRA adapters, automatically.
-- **Every agent starts with the team's full playbook in hand.** Approved insights inject into every new agent's `CLAUDE.md`, automatically.
-- **Siblings coordinate automatically — no more silent rewrites.** A2A conflict detection catches file and API overlap before two agents damage each other's work.
-- **The pack improves together, every day.** Agents share learnings at the campfire, you approve what sticks, tomorrow's pack wakes smarter.
+**Current integrations:**
+- PagerDuty
+- Linear
+- Calendar
+- GitHub
 
-### Your stack, your pack, one view
+![The campfire, end of day pack insights](docs/screenshots/campfire.png)
 
-Maiko makes no assumptions about where your context lives. GitHub, Linear, and calendar come built in — and any internal tool, custom service, or private dashboard slots in via a `.py` file in `~/.maiko/plugins/`. ([Plugin guide →](docs/GUIDE.md#plugin-system))
+## Full features
 
-![The campfire — end-of-day pack insights](docs/screenshots/campfire.png)
+### The pack
+- Agent orchestration. Maiko kicks off agents, manages their lifecycles, mediates conflicts.
+- Worktree-isolated runs. Each agent works in its own git worktree, so siblings don't step on each other.
+- A2A conflict detection. Catches file and API overlap between sibling agents before damage is done.
+- In-app diff review. Read the agent's PR diff, leave comments, request changes or approve, without leaving Maiko.
+- Per-agent personalities pulled from the deck. Agents have names, archetypes, and opinions.
 
-Cozy on the surface — Earthbound-strange theming, live weather, sprite moods that shift with your day, and a real Alaskan Klee Kai named Maiko who lent her name to the project. Uncompromising underneath — AGPL, anti-extraction, on your machine always. The only subscription is caring about your tools.
+### Memory and learning
+- RAG retrieval over your team's accumulated conventions. Agents fetch only what's relevant.
+- Learnings extracted from your PR review history. Reviewer feedback becomes durable rules without prompt engineering.
+- Approved insights inject into every new agent's `CLAUDE.md`, automatically.
+- Pack Insights ritual at end of day. Agents share what they learned at the campfire, you approve what sticks, tomorrow's pack wakes smarter.
+- Rules export and import. Share your team's mined rules with a teammate so they skip the months of accumulated work.
 
----
+### The world
+- Earthbound-strange theming. Cozy on the outside, weird underneath.
+- Curated themes. Pick the register that fits your day.
+- Live weather and sprite moods that shift with your local time.
+- Repo cartograph. Maiko maps your codebase so agents start with context.
+- Daily home overview, generated for you.
+
+### The plumbing
+- Unified AgentJob execution model. Every agent run (manual, automated, skill-driven) goes through one path.
+- Automations. iPhone-style "when X happens, do Y" rules. No LLM in the trigger layer, just predicates.
+- Custom skills, plugin-defined.
+- Plugin architecture. Drop a `.py` file in `~/.maiko/plugins/` to wire up anything.
+- Repo checks (`check_code`). Mechanical verdict before an agent says it's done.
+- Model routing. Pick which Claude model handles which kind of work.
+
+### Built-in integrations
+- GitHub
+- Linear
+- Calendar
+- PagerDuty
+
+### Stays yours
+- Runs locally on your laptop. Nothing leaves your machine.
+- AGPL v3 license. Anti-SaaS-extraction.
+- No telemetry, no hosted account, no cloud.
 
 ![Reviewing an agent's diff, in-app](docs/screenshots/review.png)
-
-## What it's not
-
-- **Not a swarm to command.** One conductor — you. The pack runs itself between your check-ins.
-- **Not a SaaS.** Nothing leaves your machine. No telemetry, no hosted account, no logging in to someone else's server.
-- **Not venture-backed.** AGPL, copyleft, permanent. Can't be acquired and repriced.
-- **Not about making you more "productive."** It's about letting you do good work without being on-call to your own tools.
 
 ## About
 
 Planet Maiko is named lovingly after my real dog Maiko.
 
-I've been a software engineer for almost a decade. I built this as the tool I wanted to exist — with one goal: bring a little joy back to the work day. Fewer agents to babysit, more space to think. I use it every day. Sharing it freely with anyone who wants it.
-
----
+I made this as one person in my free time for fun, sorry if it is buggy or is bad.
 
 ## Quick Start
 
@@ -58,7 +93,7 @@ I've been a software engineer for almost a decade. I built this as the tool I wa
 
 - Python 3.10+
 - Node.js 18+
-- `gh` CLI (optional — for GitHub integration)
+- `gh` CLI (optional, for GitHub integration)
 - [Claude Code](https://docs.claude.com/en/docs/claude-code/quickstart) (required for agent features)
 
 ### Install
@@ -86,27 +121,25 @@ cd channel && npm install && cd ..
 Two terminals:
 
 ```bash
-# Terminal 1 — backend (port 8420)
+# Terminal 1, backend (port 8420)
 source .venv/bin/activate
 maiko serve
 
-# Terminal 2 — frontend (port 5173)
+# Terminal 2, frontend (port 5173)
 cd frontend && npm run dev
 ```
 
 Open **http://localhost:5173** and walk through the setup wizard.
 
----
-
-**Full guide** — mental model, architecture, plugin system, extending, CLI reference: see [`docs/GUIDE.md`](docs/GUIDE.md).
+**Full guide** (mental model, architecture, plugin system, extending, CLI reference): see [`docs/GUIDE.md`](docs/GUIDE.md).
 
 ## License
 
 Planet Maiko is [AGPL v3](LICENSE). In plain English:
 
 - **Use it anywhere, solo or inside a company.** No strings.
-- **Modify it for your team's own use.** AGPL asks that you share your source with anyone who uses your instance — when "anyone" means your coworkers, pointing them at your internal branch is enough. You don't have to publish anything to the world.
-- **Build a paid product on top of it?** You must share your modifications under AGPL too. That's the anti-extraction intent — if someone commercializes Maiko, the community gets the improvements back.
+- **Modify it for your team's own use.** AGPL asks that you share your source with anyone who uses your instance. When "anyone" means your coworkers, pointing them at your internal branch is enough. You don't have to publish anything to the world.
+- **Build a paid product on top of it?** You must share your modifications under AGPL too. That's the anti-extraction intent. If someone commercializes Maiko, the community gets the improvements back.
 
 Not legal advice, just the intent. If you're using Maiko to help yourself or your team, you're free. If you're selling it, share back.
 
