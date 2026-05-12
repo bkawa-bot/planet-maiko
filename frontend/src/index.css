@@ -98,8 +98,10 @@
 /* === Light theme — bright daylight === */
 [data-theme="light"] {
   /* Daylight, alien noon. Iced sky bg through and through, with
-     electric cyan as the hero accent and bio mint as the fresh
-     beat against it. The light master palette in the design doc. */
+     electric cyan as the hero accent and sea glass as the body
+     beat (darker than bio mint so it reads on white cards). Bio
+     mint lives in the topbar gradient for the fresher brand sweep.
+     The light master palette in the design doc. */
   --bg: #E8F1FA;            /* Iced Sky */
   --bg-plain: #E8F1FA;      /* Iced Sky, no lavender fade */
   --bg-card: #FFFFFF;
@@ -109,9 +111,9 @@
   --text: #2B2F42;          /* Dark Slate */
   --text-dim: #6B7280;      /* Mid Gray */
   --text-muted: #9CA3B5;
-  --pink: #8FFFC9;          /* Bio Mint, fresh primary accent */
-  --pink-soft: rgba(143, 255, 201, 0.20);
-  --pink-glow: rgba(143, 255, 201, 0.10);
+  --pink: #5BB5BD;          /* Sea Glass, readable body accent on white */
+  --pink-soft: rgba(91, 181, 189, 0.18);
+  --pink-glow: rgba(91, 181, 189, 0.08);
   --blue: #38C5E0;          /* Electric Cyan */
   --blue-soft: rgba(56, 197, 224, 0.18);
   --mint: #A8FFD4;          /* Bio Mint Light */
@@ -122,7 +124,7 @@
   --lemon: #FFF3A3;         /* Butter Yellow */
   --urgent: #FF8095;        /* Hot Pink Soft */
   --high: #FF8A7A;          /* Plasma Coral Light */
-  --normal: #8FFFC9;        /* Bio Mint */
+  --normal: #5BB5BD;        /* Sea Glass */
   --low: #9CA3B5;
   --green: #C8EC5C;         /* Lime Glow */
   --border: #C8D8EC;
