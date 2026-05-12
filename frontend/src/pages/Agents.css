@@ -121,8 +121,12 @@
 
 .agent-card-body { display: flex; gap: 12px; padding: 14px 16px; }
 
+/* Frame around the avatar. Despite the legacy class name, the
+   rounded-square radius matches the avatar inside (CardAvatar uses
+   28%), so the frame and the avatar share corner roundness instead
+   of the frame being a circle around a rounded square. */
 .agent-avatar-circle {
-  width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0;
+  width: 42px; height: 42px; border-radius: 28%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   background: var(--pink-soft); border: 2px solid var(--pink);
   color: var(--pink);
@@ -327,9 +331,10 @@
   opacity: 0.5;
 }
 .profile-card-avatar {
-  width: 28px; height: 28px; flex-shrink: 0;
-  border-radius: 50%;
+  width: 36px; height: 36px; flex-shrink: 0;
+  border-radius: 28%;
   background: var(--pink-soft);
+  border: 2px solid var(--pink);
   color: var(--pink);
   display: flex; align-items: center; justify-content: center;
 }

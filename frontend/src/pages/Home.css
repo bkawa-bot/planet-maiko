@@ -598,15 +598,23 @@
 
 /* Avatar + state-dot wrapper. The dot is positioned-absolute against
    this so it always pins to the avatar's bottom-right regardless of
-   sprite size. */
+   sprite size. The box-shadow draws a pink ring around the avatar
+   without taking up layout space (border-box would shrink the content
+   area and clip the 40px avatar inside). Matches the rounded-square
+   shape used by the avatar itself. */
 .pack-square-avatar-wrap {
   position: relative;
   display: inline-flex;
+  border-radius: 28%;
+  background: var(--pink-soft);
+  box-shadow: 0 0 0 2px var(--pink);
 }
 .pack-square-state-dot {
   position: absolute;
-  right: -1px;
-  bottom: -1px;
+  /* Pushed out a touch so the dot sits cleanly outside the ring
+     rather than overlapping it. */
+  right: -3px;
+  bottom: -3px;
   width: 10px;
   height: 10px;
   border-radius: 50%;
