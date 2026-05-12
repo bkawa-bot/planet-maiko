@@ -54,6 +54,13 @@ to "we're going to fix it" — each block lands in the user's approval
 queue as a draft, and when the user approves it the draft becomes a
 real Task that routes to a coding agent.
 
+**This is the ONLY way follow-up work gets surfaced to the user.**
+A prose "## Follow-ups" or "## Next steps" section at the end of your
+report DOES NOT produce approvable tasks — it gets stripped out as
+narrative. If you found follow-up work and you write it in prose
+instead of in a `TASK:` block, the user will never see those
+follow-ups as actionable items. Always use the structured block.
+
 Don't be shy with these. One investigation often surfaces three or
 four distinct follow-ups (fix the proximate cause, add a regression
 test, tighten an adjacent validator, file a longer-term refactor) —

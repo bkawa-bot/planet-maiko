@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ClipboardCheck, FileText, GitPullRequest, Map, Inbox, Bot, Check, X,
+  ClipboardCheck, FileText, GitPullRequest, Inbox, Bot, Check, X,
   Bell, HelpCircle, ExternalLink, ChevronDown, ChevronRight, Plus, Rocket,
   Sparkles, MessageCircle,
 } from "lucide-react"; // MessageCircle still used in KIND_META.agent_message
@@ -47,12 +47,6 @@ const KIND_META = {
     cta: "Review diff",
     label: "Diff",
     tone: "review",
-  },
-  job_artifact: {
-    Icon: FileText,
-    cta: "Open report",
-    label: "Report",
-    tone: "artifact",
   },
   skill_result: {
     Icon: Sparkles,
@@ -164,30 +158,21 @@ export default function MemosPane() {
   if (loading) return null;
   if (items.length === 0) return null;
 
-  // Cartograph artifacts look enough like a Map that we lean into it;
-  // otherwise stick with the kind default.
   const iconFor = (item) => {
-    if (item.kind === "job_artifact" && item.title?.toLowerCase().includes("cartograph")) {
-      return Map;
-    }
     return KIND_META[item.kind]?.Icon || FileText;
   };
 
   // Dismiss: the memo-backed kinds go through /memos/<id>/dismiss; the
   // legacy pupdate + AgentJob kinds have their own dismiss paths.
-  // Review-diff rows are task-backed — "dismiss" for those means cancel
+  // Review-diff rows are task-backed; "dismiss" for those means cancel
   // the task (stops any running agent, cleans the worktree, deletes
-  // the row). Destructive, so we confirm first. Job-artifact rows are
-  // "I've seen this report" — flip extra.reviewed=true on the job so
-  // the home_api filter drops it from the pane.
+  // the row). Destructive, so we confirm first.
   const dismissItem = async (it) => {
     try {
       if (it.memo_id) {
         await api.dismissMemo(it.memo_id);
       } else if (it.kind === "pending_job" && it.job_id) {
         await api.cancelAgentJob(it.job_id);
-      } else if (it.kind === "job_artifact" && it.job_id) {
-        await api.ackAgentJob(it.job_id);
       } else if (it.kind === "review" && it.task_id) {
         const ok = window.confirm(
           `Cancel "${it.title || "this task"}"? Stops any running agent and discards the diff.`
@@ -447,14 +432,12 @@ export default function MemosPane() {
             );
           }
 
-          // job_artifact and skill_result rows render their body
-          // inline on expand — no useful deep-link target exists yet,
-          // so the click flips the <details> open instead of
-          // navigating away. The other default-rendered kinds (plan,
-          // review, agent_ready, agent_stuck) keep click-to-navigate.
-          // Both kinds share ArtifactRow because they're conceptually
-          // the same thing ("agent did a thing, here's the output").
-          if (it.kind === "job_artifact" || it.kind === "skill_result") {
+          // skill_result rows render their body inline on expand;
+          // no useful deep-link target exists yet, so the click flips
+          // the <details> open instead of navigating away. The other
+          // default-rendered kinds (plan, review, agent_ready,
+          // agent_stuck) keep click-to-navigate.
+          if (it.kind === "skill_result") {
             return (
               <ArtifactRow
                 key={`${it.kind}:${it.memo_id || it.job_id}`}
@@ -554,7 +537,7 @@ export default function MemosPane() {
                   )}
                 </details>
               )}
-              {(it.memo_id || (it.kind === "review" && it.task_id) || (it.kind === "job_artifact" && it.job_id)) && (
+              {(it.memo_id || (it.kind === "review" && it.task_id)) && (
                 <button
                   className="btn btn-sm btn-ghost memos-pane-dismiss"
                   onClick={() => dismissItem(it)}

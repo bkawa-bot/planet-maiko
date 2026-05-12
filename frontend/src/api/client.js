@@ -300,7 +300,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ max_age_days: maxAgeDays }),
     }),
-  ackAgentJob: (id) => request(`/agent-jobs/${id}/ack`, { method: "POST" }),
 
   // Insights (Team Playbook — tribal / operational notes injected into CLAUDE.md)
   getInsights: (params = {}) => {

@@ -138,6 +138,15 @@ def _write_claude_md(working_path, job_id, job_title, role="coding", maiko_port=
     if role_instructions_for_role:
         content += f"\n\n## Team instructions for {role} agents\n\n{role_instructions_for_role.strip()}\n"
 
+    # Character: who this agent is. Identity comes before operational
+    # context so the rest of the prompt is read in the agent's own
+    # voice. Without this section the agent has only its name (via the
+    # template's {agent_identity}) and no archetype guidance for every
+    # session past arrival.
+    character_block = _build_character_section(agent_profile_id)
+    if character_block:
+        content += f"\n\n{character_block}\n"
+
     # Active Insights for this repo (and globals). Unlike Learnings,
     # Insights aren't confidence-gated or trainable — they're the
     # "things every new agent in this repo should know" playbook:
@@ -174,6 +183,58 @@ def _build_playbook_section(parent_repo_path):
     """
     from planet_maiko.brain.learning.playbook import build_playbook
     return build_playbook(parent_repo_path)["playbook_md"]
+
+
+def _build_character_section(agent_profile_id):
+    """Render a "Your character" section so the agent has its full
+    personality available during every session, not just at arrival.
+
+    Pulls the agent's display_name, self-written tagline (flavor_text),
+    and the archetype's bio_seed (rich guidance about voice and posture).
+    Without this, the agent only knows its NAME from {agent_identity} in
+    the protocol template; the archetype that gives it its voice was
+    only used at arrival-time for bio-gen and never persisted into the
+    working session. Result: status replies, PR comments, and chat tone
+    all drift toward generic.
+
+    Best-effort: missing profile or unrecognized card returns "".
+    """
+    if not agent_profile_id:
+        return ""
+    try:
+        from planet_maiko.database import db
+        from planet_maiko.models.agent_profile import AgentProfile
+        from planet_maiko.agents.cards import get_card
+        profile = db.session.get(AgentProfile, agent_profile_id)
+        if not profile:
+            return ""
+        card = get_card(profile.avatar) if profile.avatar else None
+
+        lines = [
+            "## Your character",
+            "",
+            "This is who you are. Bring this voice to every reply, "
+            "every PR comment, every status update. It is not optional "
+            "flavor; it is the point of you.",
+            "",
+            f"**Your name:** {profile.display_name or 'unknown'}",
+        ]
+        if (profile.flavor_text or "").strip():
+            lines.append(f"**Your tagline:** \"{profile.flavor_text.strip()}\"")
+        if card:
+            rarity = card.get("rarity", "common")
+            lines.append(f"**Your archetype:** {card['display_name']} ({rarity})")
+            if card.get("tagline"):
+                lines.append(f"**Archetype tagline:** \"{card['tagline']}\"")
+            if (card.get("bio_seed") or "").strip():
+                lines.append("")
+                lines.append("**Archetype guidance** (the vibe that shaped you):")
+                lines.append("")
+                lines.append(card["bio_seed"].strip())
+        return "\n".join(lines)
+    except Exception as e:
+        logger.debug(f"[claude_md] character section skipped: {e}")
+        return ""
 
 
 def _build_agent_notes_section(agent_profile_id):

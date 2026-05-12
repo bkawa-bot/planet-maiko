@@ -182,65 +182,14 @@ def get_review_queue():
             "memo_id": m.id,
         })
 
-    # 3. Standalone AgentJobs with an artifact — cartograph walks,
-    #    investigation reports, etc. Scope to status=done + no linked
-    #    Task (linked ones are covered by case 1). Cap at 10 days old
-    #    so long-finished reports don't pile up; user can still find
-    #    them via the Agents page.
-    #
-    #    Restricted to "report-producing" kinds only. review/pr_review
-    #    were leaking through here when their source_task_id was null
-    #    (race conditions, deleted tasks, etc.), producing a "REPORT"
-    #    memo alongside the "READY FOR REVIEW" one from section 7 —
-    #    same job, two surfaces, confusing.
-    from datetime import timedelta
-    REPORT_KINDS = ("investigation", "repo_analysis", "cartograph")
-    cutoff = now - timedelta(days=10)
-    jobs = (
-        AgentJob.query
-        .filter(AgentJob.status == "done")
-        .filter(AgentJob.kind.in_(REPORT_KINDS))
-        .filter(AgentJob.source_task_id.is_(None))
-        .filter(AgentJob.artifact.isnot(None))
-        .filter(AgentJob.finished_at >= cutoff)
-        .order_by(AgentJob.finished_at.desc())
-        .limit(20)
-        .all()
-    )
-    for j in jobs:
-        extra = j.extra or {}
-        # Only surface once — the "seen" bit lives in extra.reviewed
-        # and can be flipped by the frontend via POST /agent-jobs/<id>/ack.
-        if extra.get("reviewed"):
-            continue
-        # Cartograph artifacts live on the Playbook tab. Everything
-        # else routes to /jobs/<id> — the unified report viewer with
-        # markdown render + chat for follow-ups. Replaces the old
-        # /agents fallback that dead-ended on the active-agents page.
-        if j.kind == "cartograph":
-            route = "/knowledge?tab=playbook"
-        else:
-            route = f"/jobs/{j.id}"
-        items.append({
-            "kind": "job_artifact",
-            "task_id": None,
-            "job_id": j.id,
-            "title": j.title,
-            "repo": j.scope_repo,
-            "agent_id": j.agent_profile_id,
-            "agent_name": _agent_name(j.agent_profile_id),
-            "route": route,
-            "age_seconds": _age(j.finished_at),
-            "timestamp": iso_utc(j.finished_at),
-            # Truncated artifact for inline rendering in MemosPane.
-            # 8K is enough for any realistic investigation / cartograph
-            # report's first screen — the user can still find the full
-            # output at /agents if they want it. Sending the whole
-            # artifact would balloon the home payload on busy days.
-            "body": (j.artifact or "")[:8000] if j.artifact else None,
-            "body_truncated": bool(j.artifact and len(j.artifact) > 8000),
-            "kind_label": j.kind,
-        })
+    # 3. (removed) Standalone AgentJobs with an artifact used to be
+    #    synthesized here as job_artifact items so finished investigation
+    #    and cartograph runs would show up in the pane. The agent_ready
+    #    memo path (agent_outbox.handle_job_ready_for_review) now creates
+    #    a canonical memo for every report-producing job, so the synthetic
+    #    path was just duplicating it. Removed entirely so each completed
+    #    investigation surfaces once, not twice. Artifacts remain
+    #    accessible at /jobs/<id>?view=report from the memo CTA.
 
     # 4. job_approval Memos — "ask me first" automations that used to
     #    create a pending_approval AgentJob now create a Memo carrying
