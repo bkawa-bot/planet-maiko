@@ -455,29 +455,20 @@ export default function MemosPane() {
           // review, agent_ready, agent_stuck, agent_message, plus
           // anything the catchall memo path surfaces.
           //
-          // Agent message rows render the body inline as a
-          // expand-on-click <details>. Stuck and user-directed
-          // (agent_message) rows additionally embed the inline
-          // reply box so the user can answer without leaving Home.
+          // agent_ready and agent_plan still render their body inline
+          // as a <details> expand so the user can scan the summary
+          // without leaving Home. agent_message and agent_stuck used
+          // to do the same, plus embed an inline reply box -- now they
+          // click-through to /jobs/<id>?view=chat where the read +
+          // reply happens in full context against the live thread.
           const cta = it.cta_label || meta.cta;
           const hasRoute = !!it.route;
           const isAgentMessage =
-            it.kind === "agent_ready" ||
-            it.kind === "agent_stuck" ||
-            it.kind === "agent_plan" ||
-            it.kind === "agent_message";
+            it.kind === "agent_ready" || it.kind === "agent_plan";
           const showInlineBody = isAgentMessage && !!(it.body && it.body.trim());
-          const showInlineReply =
-            (it.kind === "agent_stuck" || it.kind === "agent_message")
-            && !!(it.thread_id || it.task_id);
-          const replyTargetId =
-            it.thread_id || it.task_id || it.job_id || null;
-          // Summary label per kind. agent_message reuses the
-          // stuck wording — same interface, same affordance.
-          const summaryLabel =
-            (it.kind === "agent_stuck" || it.kind === "agent_message")
-              ? "Read & reply"
-              : "Read message";
+          const showInlineReply = false;
+          const replyTargetId = null;
+          const summaryLabel = "Read message";
           return (
             <div
               key={`${it.kind}:${it.task_id || it.job_id || it.memo_id}`}

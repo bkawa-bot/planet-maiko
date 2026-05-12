@@ -571,9 +571,13 @@ def emit_user_facing_signal(task_id, task, msg, data, message_type):
             "agent_plan": "plan",
         }.get(memo_kind)
         if memo_kind == "agent_stuck":
-            # Stuck routes to the agents page — there's no specific
-            # section to deep-link into when the agent's blocked.
-            cta = ("Help out", "open", "/agents")
+            # Stuck routes to the job's chat panel so the user can
+            # reply in-context. Falls back to /agents when there's no
+            # linked job (legacy task with no AgentJob).
+            if linked_job:
+                cta = ("Open chat", "open", f"/jobs/{linked_job.id}?view=chat")
+            else:
+                cta = ("Help out", "open", "/agents")
         elif linked_job and view_for_kind:
             label = "View report" if view_for_kind == "report" else (
                 "Review plan" if view_for_kind == "plan" else "Review diff"

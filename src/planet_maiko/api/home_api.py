@@ -360,16 +360,14 @@ def get_review_queue():
             # represents this user-owed work; a second row would just
             # clutter the pane.
             continue
-        # agent_stuck used to route to /tasks/<id> (a 404 — no React
-        # route exists for the bare task path). Newly-created memos
-        # set /agents in agents_api but legacy memos still point at
-        # the dead route. Defensive override at read time so old
-        # memos work too without a migration.
-        legacy_route = (m.extra or {}).get("review_url") or m.url
-        if m.kind == "agent_stuck":
+        # Newly-created memos carry the canonical /jobs/<id>?view=chat
+        # URL set at emit time. Legacy memos may still hold dead-route
+        # values (the bare /tasks/<id> path was a 404 for agent_stuck);
+        # for those we fall back to /agents so the user always lands
+        # somewhere. Otherwise honor the memo's own url.
+        route = m.url or (m.extra or {}).get("review_url")
+        if m.kind == "agent_stuck" and not route:
             route = "/agents"
-        else:
-            route = legacy_route
         items.append({
             "kind": m.kind,
             "task_id": m.source_task_id,

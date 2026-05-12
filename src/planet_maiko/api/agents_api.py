@@ -953,12 +953,20 @@ def _emit_user_memo(msg, *, job, task):
             title = f"Message from {profile.display_name}"
 
     body = msg.content or ""
+    # Deep-link to the chat panel on the job page. Post-unification
+    # the agent-side id IS the job id, so /jobs/<msg.task_id> resolves
+    # cleanly. View=chat lands the user on the live thread for an
+    # in-context reply rather than an inline reply box on the home pane.
+    chat_url = f"/jobs/{msg.task_id}?view=chat" if msg.task_id else None
     memo = create_memo(
         kind="agent_message",
         category="info",
         title=title,
         body=body[:1000],
         priority="normal",
+        url=chat_url,
+        cta_label="Open chat" if chat_url else None,
+        cta_action="open" if chat_url else None,
         source_agent_id=agent_profile_id,
         source_task_id=source_task_id,
         extra={
