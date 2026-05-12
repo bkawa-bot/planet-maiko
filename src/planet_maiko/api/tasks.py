@@ -410,7 +410,14 @@ def _enqueue_task_job(task, plan_first=False):
     repo_path = (task.extra or {}).get("repo_path")
     if not repo_path:
         repo_path = resolve_repo_path(scope_repo)
-    if role != "coding" and not repo_path:
+    # Kinds that genuinely need a worktree to do their work. Investigation,
+    # cartograph, and repo_analysis are report-producing: they take a repo
+    # as a hint but fall through to scratch mode when no clone exists.
+    # Aligns with execute_jobs._phase_dispatch_jobs's WORKTREE_REQUIRED_KINDS
+    # so a task and the AgentJob it spawns can't disagree about whether a
+    # repo is required.
+    WORKTREE_REQUIRED_TASK_TYPES = {"coding", "review", "pr_review"}
+    if task.type in WORKTREE_REQUIRED_TASK_TYPES and not repo_path:
         return {"success": False, "error": f"no local clone found for {scope_repo or 'this task'}"}
 
     job_extra_seed = {
