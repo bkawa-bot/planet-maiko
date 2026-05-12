@@ -97,11 +97,11 @@
 
 /* === Light theme — bright daylight === */
 [data-theme="light"] {
-  /* Daylight, alien noon. Iced sky bg with electric cyan as the
-     hero accent and sea glass as the calm-water beat against it.
-     The light master palette in the design doc. */
+  /* Daylight, alien noon. Iced sky bg through and through, with
+     electric cyan as the hero accent and bio mint as the fresh
+     beat against it. The light master palette in the design doc. */
   --bg: #E8F1FA;            /* Iced Sky */
-  --bg-plain: #F3EFFF;      /* Pastel Lavender Base, airy fade */
+  --bg-plain: #E8F1FA;      /* Iced Sky, no lavender fade */
   --bg-card: #FFFFFF;
   --bg-card-alt: #E0F4F7;   /* Frozen Wash */
   --bg-hover: #DAE8F5;
@@ -109,9 +109,9 @@
   --text: #2B2F42;          /* Dark Slate */
   --text-dim: #6B7280;      /* Mid Gray */
   --text-muted: #9CA3B5;
-  --pink: #5BB5BD;          /* Sea Glass, calm-water primary accent */
-  --pink-soft: rgba(91, 181, 189, 0.18);
-  --pink-glow: rgba(91, 181, 189, 0.08);
+  --pink: #8FFFC9;          /* Bio Mint, fresh primary accent */
+  --pink-soft: rgba(143, 255, 201, 0.20);
+  --pink-glow: rgba(143, 255, 201, 0.10);
   --blue: #38C5E0;          /* Electric Cyan */
   --blue-soft: rgba(56, 197, 224, 0.18);
   --mint: #A8FFD4;          /* Bio Mint Light */
@@ -122,7 +122,7 @@
   --lemon: #FFF3A3;         /* Butter Yellow */
   --urgent: #FF8095;        /* Hot Pink Soft */
   --high: #FF8A7A;          /* Plasma Coral Light */
-  --normal: #5BB5BD;        /* Sea Glass */
+  --normal: #8FFFC9;        /* Bio Mint */
   --low: #9CA3B5;
   --green: #C8EC5C;         /* Lime Glow */
   --border: #C8D8EC;
@@ -134,8 +134,8 @@
   --lemon-soft: rgba(255, 243, 163, 0.40); --lemon-faint: rgba(255, 243, 163, 0.18);
   --green-soft: rgba(200, 236, 92, 0.22); --green-faint: rgba(200, 236, 92, 0.10);
   --lavender-soft: rgba(196, 139, 255, 0.18); --lavender-faint: rgba(196, 139, 255, 0.08);
-  /* Soft daylight sweep: sea glass to electric cyan, shallow water to sky. */
-  --topbar-gradient: linear-gradient(135deg, #5BB5BD 0%, #38C5E0 100%);
+  /* Soft daylight sweep: bio mint to electric cyan, fresh meadow to sky. */
+  --topbar-gradient: linear-gradient(135deg, #8FFFC9 0%, #38C5E0 100%);
   --pane-bg: rgba(255, 255, 255, 0.55);
 }
 
