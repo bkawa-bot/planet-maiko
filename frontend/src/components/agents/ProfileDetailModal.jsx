@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import { formatRepo, useDefaultOrg } from "../../utils/repo";
 import CardArt from "../CardArt";
+import RarityBadge from "../RarityBadge";
 import { useCards } from "../../hooks/useCards";
 
 const ROLE_META = {
@@ -56,6 +57,9 @@ export default function ProfileDetailModal({
             <CardArt cardId={profile.avatar} className="profile-modal-card-art" />
             {card && (
               <div className="profile-modal-archetype">
+                <div style={{ marginBottom: 6 }}>
+                  <RarityBadge rarity={card.rarity} />
+                </div>
                 <div className="profile-modal-archetype-name">{card.display_name}</div>
                 <div className="profile-modal-archetype-tagline">{card.tagline}</div>
               </div>

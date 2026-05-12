@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Code2, Eye, Search, Map } from "lucide-react";
 import { api } from "../api/client";
 import CardArt from "./CardArt";
+import RarityBadge from "./RarityBadge";
 import ModalPortal from "./ModalPortal";
 import { useCards } from "../hooks/useCards";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
@@ -104,6 +105,11 @@ export default function ArrivalWatcher() {
             <CardArt cardId={profile.avatar} className="arrival-watcher-art" />
           </div>
           <div className="arrival-watcher-body">
+            {card?.rarity && (
+              <div style={{ marginBottom: 4 }}>
+                <RarityBadge rarity={card.rarity} size="lg" />
+              </div>
+            )}
             <div className="arrival-watcher-name">{profile.display_name}</div>
             {card && (
               <div className="arrival-watcher-archetype">
