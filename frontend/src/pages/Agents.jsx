@@ -155,8 +155,12 @@ export default function Agents() {
                 </label>
               </div>
               {specialties.length > 0 && (
-                <label className="agent-edit-full">
-                  Specialties (optional)
+                <div className="agent-edit-full">
+                  {/* NOT a <label>: a label wrapping multiple buttons
+                      auto-dispatches a click to the first one when the
+                      label area is clicked, silently selecting the
+                      first specialty without the user noticing. */}
+                  <div className="agent-edit-label">Specialties (optional)</div>
                   <div className="agent-specialty-grid">
                     {specialties.map((s) => {
                       const checked = createForm.specialty_ids.includes(s.id);
@@ -174,9 +178,9 @@ export default function Agents() {
                     })}
                   </div>
                   <span className="agent-edit-hint">
-                    Role drives how the agent runs. Specialties are extra context a run can layer on top — pick none, one, or many to attach.
+                    Role drives how the agent runs. Specialties are extra context a run can layer on top, pick none, one, or many to attach.
                   </span>
-                </label>
+                </div>
               )}
               <label className="agent-edit-full">
                 Starter instructions (optional, markdown)

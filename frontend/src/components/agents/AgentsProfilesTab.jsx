@@ -390,8 +390,12 @@ export default function AgentsProfilesTab({
                 </label>
               </div>
               {specialties.length > 0 && (
-                <label className="agent-edit-full">
-                  Specialties
+                <div className="agent-edit-full">
+                  {/* NOT a <label>: a label wrapping multiple buttons
+                      auto-dispatches a click to the first one when the
+                      label area is clicked, silently selecting the
+                      first specialty without the user noticing. */}
+                  <div className="agent-edit-label">Specialties</div>
                   <div className="agent-specialty-grid">
                     {specialties.map((s) => {
                       const checked = editForm.specialty_ids.includes(s.id);
@@ -411,7 +415,7 @@ export default function AgentsProfilesTab({
                   <span className="agent-edit-hint">
                     Extra context a run can layer on top of the role. A run with no specialty picked uses the base role protocol.
                   </span>
-                </label>
+                </div>
               )}
               <label className="agent-edit-full">
                 Flavor text
