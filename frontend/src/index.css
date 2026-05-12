@@ -140,13 +140,13 @@
 }
 
 /* === Dawn — arctic sunrise. The page itself reads as the snow
-   plane (icy near-white, top → bottom), and the actual sunrise
-   stripe lives up in the topbar (butter yellow → soft pink). That
-   way the body is pure arctic light and the warm beat is contained
-   in the brand bar where it belongs. */
+   plane (icy near-white, top to bottom), and the actual sunrise
+   stripe lives up in the topbar (butter yellow to sunrise peach).
+   That way the body is pure arctic light and the warm beat is
+   contained in the brand bar where it belongs. */
 [data-theme="morning"] {
-  --bg: #ECF4FB;            /* icy white-blue — the snow */
-  --bg-plain: #F6FAFD;      /* paler frost — keeps the body cool top-to-bottom */
+  --bg: #ECF4FB;            /* icy white-blue, the snow */
+  --bg-plain: #F6FAFD;      /* paler frost, keeps the body cool top-to-bottom */
   --bg-card: #FFFFFF;
   --bg-card-alt: #E0F4F7;   /* Frozen Wash */
   --bg-hover: #DCE7F2;
@@ -154,34 +154,34 @@
   --text: #2B2F42;
   --text-dim: #6B7280;
   --text-muted: #9CA3B5;
-  --pink: #FF9CC4;          /* Soft Pink — sunrise blush */
-  --pink-soft: rgba(255, 156, 196, 0.18);
-  --pink-glow: rgba(255, 156, 196, 0.08);
-  --blue: #38C5E0;          /* Electric Cyan — counter-warm contrast */
+  --pink: #FF9F70;          /* Sunrise Peach, warm horizon (primary accent) */
+  --pink-soft: rgba(255, 159, 112, 0.18);
+  --pink-glow: rgba(255, 159, 112, 0.08);
+  --blue: #38C5E0;          /* Electric Cyan, counter-warm contrast */
   --blue-soft: rgba(56, 197, 224, 0.18);
   --mint: #A8FFD4;          /* Bio Mint Light */
   --orange: #FF8A7A;        /* Plasma Coral Light */
-  --lavender: #C48BFF;      /* Lavender Purple — distinct from base */
+  --lavender: #C48BFF;      /* Lavender Purple, distinct from base */
   --peach: #FFB8E8;         /* Magenta Spark Light */
   --creamsicle: #FFC9A8;
-  --lemon: #FFF3A3;         /* Butter Yellow — sunrise bloom */
+  --lemon: #FFF3A3;         /* Butter Yellow, sunrise bloom */
   --urgent: #FF8095;
   --high: #FF8A7A;
-  --normal: #FF9CC4;
+  --normal: #FF9F70;
   --low: #9CA3B5;
   --green: #C8EC5C;         /* Lime Glow */
   --border: #E5D5F0;
   --border-subtle: #F0E5F8;
-  --card-title: #FF7AB8;          /* Light Magenta — the sunrise hero */
+  --card-title: #FF8043;          /* Sunrise Orange, the warm horizon hero */
   --card-border: rgba(56, 197, 224, 0.40);  /* Electric Cyan edge */
   --urgent-soft: rgba(255, 128, 149, 0.18); --urgent-faint: rgba(255, 128, 149, 0.08);
   --high-soft: rgba(255, 138, 122, 0.18); --high-faint: rgba(255, 138, 122, 0.08);
   --lemon-soft: rgba(255, 243, 163, 0.40); --lemon-faint: rgba(255, 243, 163, 0.18);
   --green-soft: rgba(200, 236, 92, 0.22); --green-faint: rgba(200, 236, 92, 0.10);
   --lavender-soft: rgba(196, 139, 255, 0.20); --lavender-faint: rgba(196, 139, 255, 0.10);
-  /* Sunrise blush: butter yellow → soft pink. Two stops keeps the
+  /* Sunrise blush: butter yellow to sunrise peach. Two stops keeps the
      dawn feeling warm without competing with the actual greeting. */
-  --topbar-gradient: linear-gradient(135deg, #FFF3A3 0%, #FF9CC4 100%);
+  --topbar-gradient: linear-gradient(135deg, #FFF3A3 0%, #FF9F70 100%);
   --pane-bg: rgba(255, 255, 255, 0.55);
 }
 
