@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, Check, Loader, FileText, MessageSquare, GitBranch,
   Sparkles, Clock, AlertTriangle, Activity, GitPullRequest, X,
+  PanelRightClose, PanelRightOpen,
 } from "lucide-react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
@@ -268,6 +269,11 @@ function DiffPanel({ jobId, job, task, onChanged }) {
   const inlineMarkerRefs = useRef({});
   const [focusedThreadKey, setFocusedThreadKey] = useState(null);
   const [focusedDiffKey, setFocusedDiffKey] = useState(null);
+  // Wide mode: hides the comments sidebar so the diff body gets the
+  // full width. Mirrored from the old ReviewDiff page where this
+  // toggle lived. Session-only state -- the user who wants wide for
+  // one file usually wants it for the whole review.
+  const [sidebarHidden, setSidebarHidden] = useState(false);
   const navigate = useNavigate();
 
   const refetch = useCallback(async () => {
@@ -467,7 +473,18 @@ function DiffPanel({ jobId, job, task, onChanged }) {
           </ul>
         </details>
       )}
-      <div className="agent-job-diff-grid">
+      <div className="agent-job-diff-toolbar">
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={() => setSidebarHidden((v) => !v)}
+          title={sidebarHidden ? "Show the comments sidebar" : "Hide the comments sidebar for a wider diff"}
+        >
+          {sidebarHidden ? <PanelRightOpen size={10} /> : <PanelRightClose size={10} />}
+          {sidebarHidden ? " show sidebar" : " wide"}
+        </button>
+      </div>
+      <div className={`agent-job-diff-grid ${sidebarHidden ? "wide" : ""}`}>
         <div className="agent-job-diff-main">
           {diff?.raw_diff ? (
             <DiffView
@@ -500,7 +517,7 @@ function DiffPanel({ jobId, job, task, onChanged }) {
             </div>
           )}
         </div>
-        <aside className="agent-job-diff-sidebar">
+        <aside className={`agent-job-diff-sidebar ${sidebarHidden ? "is-hidden" : ""}`}>
           <div className="diff-sidebar-title">
             <MessageSquare size={11} /> Comments
             <span className="diff-sidebar-count">{comments.length}</span>

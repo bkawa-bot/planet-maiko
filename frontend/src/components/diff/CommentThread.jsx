@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, Trash2, MessageSquare, Bot, User } from "lucide-react";
 import { renderMarkdown } from "../../utils/markdown";
+import "./CommentThread.css";
 
 /**
  * Rendered via DiffView's `widgets` prop — sits under a diff line and

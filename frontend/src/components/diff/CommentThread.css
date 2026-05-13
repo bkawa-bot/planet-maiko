@@ -1,0 +1,127 @@
+/* Comment thread styles for the unified diff page (and any other
+   surface that imports CommentThread.jsx). Previously these lived
+   only inside ReviewDiff.css, which the new AgentJobPage doesn't
+   import; the comments rendered as unstyled stacks of divs.
+   Co-locating with the component so future callers get the styling
+   for free. */
+
+.diff-comment-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.diff-comment-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.diff-comment {
+  padding: 6px 8px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-hover);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.diff-comment.author-user   { border-left: 3px solid var(--pink); }
+.diff-comment.author-agent  { border-left: 3px solid var(--lavender); background: var(--lavender-soft); }
+.diff-comment.is-draft      { border-style: dashed; opacity: 0.92; }
+.diff-comment.is-resolved   { opacity: 0.55; }
+
+.diff-comment.nested { margin-left: 12px; }
+
+.diff-comment-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.diff-comment-author { font-weight: 600; text-transform: capitalize; }
+
+.diff-comment-badge {
+  font-size: 9px;
+  padding: 0 4px;
+  border-radius: 2px;
+  font-weight: 500;
+}
+.diff-comment-badge.draft     { background: var(--lemon-soft);  color: var(--lemon); }
+.diff-comment-badge.submitted { background: var(--pink-soft);   color: var(--pink); }
+.diff-comment-badge.resolved  { background: var(--green-soft);  color: var(--green); }
+
+.diff-comment-body {
+  color: var(--text);
+  word-break: break-word;
+}
+.diff-comment-body p:first-child { margin-top: 0; }
+.diff-comment-body p:last-child  { margin-bottom: 0; }
+.diff-comment-body code {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 1px 4px;
+  background: var(--bg);
+  border-radius: 2px;
+}
+
+.diff-comment-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 10px;
+}
+
+.diff-comment-action {
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.diff-comment-action:hover { color: var(--text); }
+.diff-comment-action.danger:hover { color: var(--urgent); }
+
+.diff-comment-reply-btn {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-dim);
+  padding: 4px 8px;
+  border-radius: var(--radius-xs);
+  font-size: 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.diff-comment-reply-btn:hover { border-color: var(--pink); color: var(--pink); }
+
+.diff-comment-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+.diff-comment-editor textarea {
+  width: 100%;
+  min-height: 56px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  font-family: var(--font);
+  font-size: 11.5px;
+  background: var(--bg);
+  color: var(--text);
+  resize: vertical;
+}
+.diff-comment-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
