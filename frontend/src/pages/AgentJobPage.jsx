@@ -10,6 +10,7 @@ import { renderMarkdown } from "../utils/markdown";
 import PlanetSpinner from "../components/PlanetSpinner";
 import AgentChatThread from "../components/AgentChatThread";
 import CardAvatar from "../components/CardAvatar";
+import ProposalCard from "../components/ProposalCard";
 import DiffView from "../components/diff/DiffView";
 import CommentThread from "../components/diff/CommentThread";
 import { relativeTime, formatTime } from "../utils/dates";
@@ -727,11 +728,44 @@ function PlanPanel({ jobId, task, onChanged }) {
 
 function ReportPanel({ job, task }) {
   const artifact = job?.artifact || task?.metadata?.artifact;
+  // Proposals (PROPOSAL: / TASK: blocks) get parsed into agent_proposal
+  // memos by parse_and_apply_blocks at submission time. They surface on
+  // the home memos pane, but the user is usually here on the job page
+  // reading the report when they want to act on the follow-ups -- so
+  // we mirror them inline above the artifact. Approve / edit / dismiss
+  // route through ProposalCard exactly as they do on the home pane.
+  const [proposals, setProposals] = useState([]);
+  // Look up by source_task_id since that's what the parser stamps on
+  // each memo. Standalone jobs (no parent task) currently can't have
+  // proposals -- the parser's guard skips them -- so the fetch is a
+  // no-op there.
+  const sourceTaskId = job?.source_task_id || task?.id || null;
+  const refetchProposals = useCallback(async () => {
+    if (!sourceTaskId) {
+      setProposals([]);
+      return;
+    }
+    try {
+      const rows = await api.getMemos({
+        kind: "agent_proposal",
+        source_task_id: sourceTaskId,
+        status: ["pending", "seen"],
+      });
+      setProposals(Array.isArray(rows) ? rows : []);
+    } catch {
+      // Best-effort -- silent on transient failures; the home pane
+      // is still the source of truth.
+    }
+  }, [sourceTaskId]);
+  useEffect(() => {
+    refetchProposals();
+  }, [refetchProposals]);
+
   if (!artifact || !artifact.trim()) {
     return (
       <div className="agent-job-empty">
         {job?.status === "running"
-          ? "Agent is still working — report will appear here when they finish."
+          ? "Agent is still working -- report will appear here when they finish."
           : job?.status === "failed"
             ? `Job failed${job?.error ? `: ${job.error}` : "."}`
             : "No report on this job yet."}
@@ -739,8 +773,27 @@ function ReportPanel({ job, task }) {
     );
   }
   return (
-    <div className="agent-job-report markdown">
-      <div dangerouslySetInnerHTML={{ __html: renderMarkdown(artifact) }} />
+    <div className="agent-job-report-wrap">
+      {proposals.length > 0 && (
+        <div className="agent-job-report-proposals">
+          <div className="agent-job-report-proposals-header">
+            <Sparkles size={12} /> Proposed follow-ups
+            <span className="agent-job-report-proposals-count">
+              {proposals.length}
+            </span>
+          </div>
+          {proposals.map((p) => (
+            <ProposalCard
+              key={p.id}
+              proposal={p}
+              onAction={refetchProposals}
+            />
+          ))}
+        </div>
+      )}
+      <div className="agent-job-report markdown">
+        <div dangerouslySetInnerHTML={{ __html: renderMarkdown(artifact) }} />
+      </div>
     </div>
   );
 }

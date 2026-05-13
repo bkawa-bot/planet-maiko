@@ -644,6 +644,48 @@ button.diff-sidebar-anchor:hover code {
   line-height: 1.55;
 }
 
+/* Wrap that holds proposed-follow-up cards above the report markdown.
+   Keeps both pieces inside one column so the report still reads top-to-
+   bottom and the actionable items land in the user's eye line first. */
+.agent-job-report-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.agent-job-report-proposals {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+}
+
+.agent-job-report-proposals-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 4px;
+}
+
+.agent-job-report-proposals-count {
+  font-size: 10px;
+  background: var(--pink-soft);
+  color: var(--pink);
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-left: 4px;
+}
+
 /* Chat panel — activity-style cards + reply input -------------- */
 
 .agent-job-chat {
