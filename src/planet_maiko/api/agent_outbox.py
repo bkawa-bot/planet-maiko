@@ -320,14 +320,55 @@ def handle_agent_job_reply(job, msg, data, message_type):
             logger.warning(f"[outbox/job] insight save failed for {job.id}: {e}")
         return
 
+    if message_type == "feedback":
+        # Mirrors handle_session_feedback on the Task path. Without
+        # this branch, agents in unified-path sessions could submit
+        # reply(message_type="feedback") and the AgentMessage was
+        # recorded but no Signal got written. The pack-insights
+        # "Keep" flow then had nothing to keep, and the campfire
+        # buttons appeared to do nothing.
+        try:
+            from planet_maiko.models.signal import Signal
+            metadata = data.get("metadata") or {}
+            category = metadata.get("feedback_category", "pattern")
+            severity = metadata.get("feedback_severity", "suggestion")
+            recent = (
+                AgentMessage.query
+                .filter_by(task_id=job.id, direction="from_agent")
+                .order_by(AgentMessage.created_at.desc())
+                .first()
+            )
+            code_context = recent.content[:3000] if recent else None
+            signal = Signal(
+                category=category,
+                text=content,
+                source_type="session_feedback",
+                severity=severity,
+                repo=job.scope_repo,
+                file_path=metadata.get("file_path"),
+                code_context=code_context,
+                # The agent provided an explicit category; skip the
+                # synthesizer's re-classification step.
+                synthesized=True,
+                source_message_id=msg.id,
+            )
+            db.session.add(signal)
+            logger.info(
+                f"[outbox/job] feedback from {job.id} "
+                f"(repo={job.scope_repo or 'global'}, category={category})"
+            )
+        except Exception as e:
+            logger.warning(f"[outbox/job] feedback save failed for {job.id}: {e}")
+        return
+
     if message_type == "stuck":
         # Same log-only treatment as the Task path — the AgentMessage
         # row is enough to surface the stuck status in the UI.
         logger.info(f"[outbox/job] {job.id} stuck: {content[:100]}")
         return
 
-    # Anything else (status / feedback / summary / message) — just
-    # records the AgentMessage row we already added, nothing further.
+    # Anything else (status / summary / message) — just records the
+    # AgentMessage row we already added, nothing further.
 
 
 # ============================================================
