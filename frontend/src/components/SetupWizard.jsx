@@ -253,13 +253,13 @@ export default function SetupWizard({ onComplete }) {
           </div>
         )}
 
-        {/* Step 8: Tour — Automations */}
+        {/* Step 8: Tour — Automations + Specialties */}
         {step === 8 && (
           <div className="setup-step setup-step-centered">
             <div className="setup-step-icon tour-icon"><Zap size={36} /></div>
             <h3>Automations</h3>
-            <p>Small when→then rules that let Maiko handle the boring stuff. "When a PR I'm tagged on goes stale, leave me a memo." "When a coding agent finishes, ping me in chat." That kind of thing.</p>
-            <p className="setup-detail">Built-in templates live on the <strong>Automations</strong> page — fork one to start, or write your own from scratch.</p>
+            <p>Small when→then rules that let Maiko handle the boring stuff. "When a PR I'm tagged on goes stale, leave me a memo." "When a coding agent finishes, ping me in chat."</p>
+            <p className="setup-detail">A handful of defaults ship pre-wired — open <strong>Automations</strong> to tweak them or write your own. The same page is where <strong>Specialties</strong> live: role protocols an agent adopts for a particular kind of work (triage, analysis, brainstorming).</p>
             <div className="setup-actions">
               <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
               <button className="btn btn-primary" onClick={() => setStep(9)}>Next</button>
@@ -278,7 +278,8 @@ export default function SetupWizard({ onComplete }) {
               <li><strong>Backfill from PRs</strong> — head to Knowledge so Maiko can read your team's review style.</li>
               <li><strong>Spawn an agent</strong> — visit the Pack and click New Agent. Assign it a task from the Tasks page.</li>
               <li><strong>Pick a theme</strong> — open the palette in the topbar (gear menu) or build your own under Themes.</li>
-              <li><strong>End the day at the campfire</strong> — the shutdown ritual in the topbar wraps up what shipped, what's still in flight, and what the pack noticed.</li>
+              <li><strong>Gather the pack at the campfire</strong> — Pack → Pack Insights kicks off the end-of-day gathering where agents share what they noticed.</li>
+              <li><strong>Settle in for the night</strong> — the power button in the topbar tidies up the day's pupdates, stale worktrees, and dismissed memos.</li>
             </ul>
             <button className="btn btn-primary" onClick={finishSetup} style={{ marginTop: 16 }}>
               <Rocket size={14} /> Let's go
