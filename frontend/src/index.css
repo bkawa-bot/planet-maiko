@@ -411,6 +411,15 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* Form controls inherit the theme's text color by default. Without
+   this, inputs and textareas with their own `background: var(--bg)`
+   rule fall back to the browser's default text color (black), which
+   is invisible on dark themes. Component CSS that needs a different
+   color can still override. */
+input, textarea, select {
+  color: var(--text);
+}
+
 /* Label-y surfaces read as "callsigns" or "tab headers" — run them
    in --font-mono (Inconsolata) instead of Inter so the character
    shows up where it's welcome without stretching prose. Agent names
