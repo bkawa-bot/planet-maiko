@@ -230,8 +230,8 @@ export default function SetupWizard({ onComplete }) {
           <div className="setup-step setup-step-centered">
             <div className="setup-step-icon tour-icon"><Bot size={36} /></div>
             <h3>Meet the Pack</h3>
-            <p>Your agents are pups with personalities. Each carries a learning set tuned for a kind of work, and they run in their own isolated git worktrees off your clones.</p>
-            <p className="setup-detail">Stop one mid-flight and the worktree stays put — revive it from the Pack page and it picks up where it left off. Pups explore with random learnings; seniors specialize.</p>
+            <p>Your agents are pups with personalities. Each one runs in its own isolated git worktree off your local clones, so they never trample what you're working on.</p>
+            <p className="setup-detail">Stop one mid-flight and its worktree sticks around — revive it from the Pack page and it picks up where it left off.</p>
             <div className="setup-actions">
               <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
               <button className="btn btn-primary" onClick={() => setStep(7)}>Next</button>
@@ -244,8 +244,8 @@ export default function SetupWizard({ onComplete }) {
           <div className="setup-step setup-step-centered">
             <div className="setup-step-icon tour-icon"><Brain size={36} /></div>
             <h3>Knowledge</h3>
-            <p>Maiko learns coding patterns from your team's PR review comments and folds them into agent briefs so the work follows your conventions.</p>
-            <p className="setup-detail">Visit <strong>Knowledge</strong> and run <strong>Backfill from PRs</strong> to scan your history. Approve what you like; the rest stays out of the briefs.</p>
+            <p>Maiko reads your team's PR review comments and notices the patterns — things you tend to flag, conventions you keep nudging people toward. She folds those into the instructions she hands agents so their work follows your team's style.</p>
+            <p className="setup-detail">Visit <strong>Knowledge</strong> and run <strong>Backfill from PRs</strong> to scan your history. Approve the ones that match your team; the rest stays out of the way.</p>
             <div className="setup-actions">
               <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
               <button className="btn btn-primary" onClick={() => setStep(8)}>Next</button>
@@ -259,7 +259,7 @@ export default function SetupWizard({ onComplete }) {
             <div className="setup-step-icon tour-icon"><Zap size={36} /></div>
             <h3>Automations</h3>
             <p>Small when→then rules that let Maiko handle the boring stuff. "When a PR I'm tagged on goes stale, leave me a memo." "When a coding agent finishes, ping me in chat."</p>
-            <p className="setup-detail">A handful of defaults ship pre-wired — open <strong>Automations</strong> to tweak them or write your own. The same page is where <strong>Specialties</strong> live: role protocols an agent adopts for a particular kind of work (triage, analysis, brainstorming).</p>
+            <p className="setup-detail">A handful of defaults ship pre-wired — open <strong>Automations</strong> to tweak them or write your own. The same page is where <strong>Specialties</strong> live: pre-built playbooks an agent can follow for specific kinds of work (triage, analysis, brainstorming).</p>
             <div className="setup-actions">
               <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
               <button className="btn btn-primary" onClick={() => setStep(9)}>Next</button>
