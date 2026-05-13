@@ -870,12 +870,27 @@ def _request_agent_status_updates(timeout_s=20):
         from planet_maiko.models.agent_job import AgentJob
         from planet_maiko.models.agent_message import AgentMessage
         from planet_maiko.agents.wake import wake_agent, is_working
+        from planet_maiko.api.agent_outbox import FOLLOWUP_KINDS
     except Exception as e:
         logger.debug(f"[overview] agent imports failed: {e}")
         return 0
 
     threshold = datetime.now(timezone.utc)
-    running = AgentJob.query.filter_by(status="running").all()
+    # Alive = running agents OR FOLLOWUP_KINDS agents parked in `done`
+    # with their worktree preserved (review / investigation / cartograph
+    # post-ready_for_review). Without the latter, the most common case
+    # -- a finished one-shot agent waiting on the user -- never gets a
+    # status request, which is the bulk of the pack on a given day.
+    candidates = (
+        AgentJob.query
+        .filter(AgentJob.status.in_(("running", "done")))
+        .all()
+    )
+    running = [
+        j for j in candidates
+        if j.status == "running"
+        or (j.kind in FOLLOWUP_KINDS and j.worktree_path)
+    ]
     if not running:
         return 0
 
