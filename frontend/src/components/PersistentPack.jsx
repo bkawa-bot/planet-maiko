@@ -65,7 +65,20 @@ export default function PersistentPack() {
 
   const handleAvatarClick = (a) => {
     const id = a.job_id || a.task_id;
-    const next = { ...visitsRef.current, [id]: Date.now() };
+    // Snapshot the agent's current state at click time. The badge is
+    // a function of "has anything I haven't seen happened since I
+    // last opened this chat?", and we judge that by comparing the
+    // current state to this snapshot. Tracking last_message (the
+    // actual message body) is more accurate than a wall-clock
+    // timestamp, because last_seen ticks on every poll and would
+    // make any waiting/ready agent permanently unread.
+    const next = {
+      ...visitsRef.current,
+      [id]: {
+        message: a.last_message || "",
+        status: a.status || "active",
+      },
+    };
     visitsRef.current = next;
     saveVisits(next);
     navigate(`/jobs/${id}?view=chat`);
@@ -78,9 +91,13 @@ export default function PersistentPack() {
     // Plain "active" agents aren't blocked on the user.
     if (status !== "waiting" && status !== "ready") return false;
     const id = a.job_id || a.task_id;
-    const lastVisit = visitsRef.current[id] || 0;
-    const lastSeen = a.last_seen ? new Date(a.last_seen).getTime() : 0;
-    return lastSeen > lastVisit;
+    const snapshot = visitsRef.current[id];
+    // Never visited → badge shows.
+    if (!snapshot || typeof snapshot !== "object") return true;
+    // Visited, but the agent has spoken again since (last_message
+    // text differs from what we saw) → badge re-appears.
+    if ((a.last_message || "") !== (snapshot.message || "")) return true;
+    return false;
   };
 
   return (
@@ -111,7 +128,7 @@ export default function PersistentPack() {
             <span className="persistent-pack-avatar-wrap">
               <CardAvatar
                 agent={agentForAvatar}
-                size={expanded ? 40 : 32}
+                size={expanded ? 56 : 44}
               />
               <span
                 className={`persistent-pack-state-dot state-${status}`}

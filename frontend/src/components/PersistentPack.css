@@ -4,13 +4,16 @@
 
 .persistent-pack {
   position: fixed;
-  bottom: 16px;
+  /* The footer is fixed at bottom: 0 height: 28px z-index: 100.
+     Lift the dock above it (28 + 16 gap = 44px). Z-index above the
+     footer so the dock always wins on overlap. */
+  bottom: 44px;
   left: 16px;
-  z-index: 50;
+  z-index: 110;
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: flex-end;
-  padding: 10px 12px;
+  padding: 12px 14px;
   background: var(--pane-bg, rgba(26, 31, 74, 0.65));
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -21,7 +24,7 @@
 }
 
 .persistent-pack.expanded {
-  gap: 14px;
+  gap: 18px;
 }
 
 .persistent-pack-villager {
