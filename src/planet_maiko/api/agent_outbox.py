@@ -150,7 +150,6 @@ def handle_agent_job_reply(job, msg, data, message_type):
             logger.warning(f"[outbox/job] artifact save failed for {job.id}: {e}")
             job.artifact = content[:16000]
 
-        is_review = job.kind in ("review", "pr_review")
         job.status = "done"
         job.finished_at = datetime.now(timezone.utc)
         job.extra = extra
@@ -163,12 +162,12 @@ def handle_agent_job_reply(job, msg, data, message_type):
             # "done" stat reflects reality.
             ag.tasks_completed = (ag.tasks_completed or 0) + 1
 
-        # Sync the linked Task. Mirror the full set of parsed-block
-        # metadata (patterns, proposals, confidence, rules_considered)
-        # so TaskCard's inline artifact viewer shows the same chips
-        # the AgentJob report does — without this, the user opens the
-        # task and sees "View report" without the counts that tell
-        # them at a glance what the agent produced.
+        # Sync the linked Task. The agent's ready_for_review moves the
+        # task into "review" status regardless of kind — only the user
+        # can mark it "done" via /tasks/<id>/done. Why: setting "done"
+        # here triggered shutdown-ritual + complete_task worktree
+        # cleanup, and the user kept losing the working dir before
+        # they'd finished reviewing the agent's output.
         if job.source_task_id:
             t = db.session.get(_Task, job.source_task_id)
             if t:
@@ -187,27 +186,14 @@ def handle_agent_job_reply(job, msg, data, message_type):
                     if key in extra:
                         task_extra[key] = extra[key]
                 t.extra = task_extra
-                t.status = "review" if is_review else "done"
+                t.status = "review"
 
-        # Worktree retention by kind:
-        #   review / pr_review     — keep (user iterates with PATTERN /
-        #                            PROPOSAL discussions, asks follow-ups
-        #                            via wake_agent → claude --resume).
-        #   investigation /        — keep (same reason: user often has
-        #     repo_analysis         follow-up questions on the report;
-        #                            wake fails if the worktree is gone).
-        #   cartograph             — keep (cartographer's repo walk is
-        #                            useful state to query against).
-        #   coding (and anything   — clean up on done. The diff has been
-        #     else)                 captured on the artifact / pushed to
-        #                            the PR; the worktree is throwaway
-        #                            scratch from here on.
-        if job.kind not in FOLLOWUP_KINDS and job.worktree_path and job.branch:
-            try:
-                from planet_maiko.agents.runtime import cleanup
-                cleanup(job.worktree_path, job.branch)
-            except Exception as e:
-                logger.debug(f"[outbox/job] worktree cleanup skipped for {job.id}: {e}")
+        # Worktrees no longer get torn down here. The agent saying
+        # "ready_for_review" is a *suggestion* the user accepts via
+        # /tasks/<id>/done (which cleans up), reassign (which re-preps),
+        # or forget. Tasks that linger past their welcome are caught by
+        # the shutdown ritual's age-out sweep — see
+        # planet_maiko.agents.runtime.worktree.sweep_old_worktrees.
 
         # Emit the user-facing memo. The Task path does this via
         # emit_user_facing_signal but the AgentJob branch returns early
@@ -378,8 +364,14 @@ def handle_agent_job_reply(job, msg, data, message_type):
 
 def handle_task_ready_for_review(task_id, task, data):
     """Parse the agent's ready_for_review body, save artifact + verdict
-    onto task.extra, and update status. Cleans up the worktree for
-    non-review one-shots."""
+    onto task.extra, and move the task into "review" status awaiting
+    the user's verdict.
+
+    Worktrees aren't torn down here. The agent saying ready_for_review
+    is a *suggestion* — the user accepts (and triggers cleanup) by
+    clicking Done in the UI, reassigning, or forgetting. Aged-out
+    worktrees still get swept by the shutdown ritual.
+    """
     from planet_maiko.models.agent_profile import AgentProfile as _AgentProfile
     from planet_maiko.agents.brain_session import ONE_SHOT_ROLE_FOR_TYPE
     from planet_maiko.brain.learning.agent_output import parse_and_apply_blocks
@@ -417,29 +409,17 @@ def handle_task_ready_for_review(task_id, task, data):
         if parsed.get("confidence"):
             extra["confidence"] = parsed["confidence"]
 
-        is_review_task = task.type in ("review", "pr_review")
         extra["completed_at"] = datetime.now(timezone.utc).isoformat()
         task.extra = extra
-
-        # Reviews keep their worktree around so the user can load the
-        # diff + inline comments at /tasks/:id/review. Investigations
-        # and other one-shots clean up immediately.
-        task.status = "review" if is_review_task else "done"
+        task.status = "review"
 
         if ag:
             ag.last_active_at = datetime.now(timezone.utc)
         logger.info(
-            f"[outbox] {task.type} task {task_id} done — "
+            f"[outbox] {task.type} task {task_id} ready for review — "
             f"{parsed.get('patterns_emitted', 0)} patterns, "
             f"{parsed.get('proposals_emitted', 0)} proposals"
         )
-
-        if not is_review_task:
-            try:
-                from planet_maiko.agents.runtime import cleanup_task_worktree
-                cleanup_task_worktree(task)
-            except Exception as e:
-                logger.warning(f"[outbox] worktree cleanup failed for {task_id}: {e}")
     except Exception as e:
         logger.warning(f"[outbox] artifact save failed for {task_id}: {e}")
 

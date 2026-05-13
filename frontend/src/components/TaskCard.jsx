@@ -189,12 +189,12 @@ export default function TaskCard({
                 : ` ${agentName || "Agent"} is thinking…`}
             </span>
           )}
-          {isOneShotTask && t.status === "done" && hasArtifact && (
+          {isOneShotTask && (t.status === "done" || t.status === "review") && hasArtifact && (
             <span className="tag agent-done-chip">
               <FileText size={9} /> Report ready
             </span>
           )}
-          {isCartographTask && t.status === "done" && (
+          {isCartographTask && (t.status === "done" || t.status === "review") && (
             <Link
               to="/knowledge"
               className="tag agent-done-chip"

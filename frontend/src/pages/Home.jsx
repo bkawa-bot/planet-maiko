@@ -4,12 +4,10 @@ import SetupWizard from "../components/SetupWizard";
 import OverviewPane from "../components/OverviewPane";
 import MemosPane from "../components/MemosPane";
 import PackAskBox from "../components/PackAskBox";
-import CardAvatar from "../components/CardAvatar";
 import { formatTime, formatClock } from "../utils/dates";
-import { Brain, Calendar, Palette, Video, Sparkles, Users } from "lucide-react";
+import { Brain, Calendar, Palette, Video, Sparkles } from "lucide-react";
 import { showToast } from "../components/Toast";
 import FooterPendingPopover from "../components/FooterPendingPopover";
-import { useNavigate } from "react-router-dom";
 import "./Home.css";
 
 // Home polls sidebar data (scene, brain status, calendar, task stats).
@@ -42,35 +40,22 @@ function seasonPoem(season) {
 
 export default function Home() {
   const [scene, setScene] = useState(null);
-  // Currently-running AgentJobs. Lighter signal than "shipped today"
-  // (which surfaced 24h-old completions) — the widget is meant to
-  // answer "what's the pack actively chewing on right now" at a
-  // glance.
-  const [workingJobs, setWorkingJobs] = useState([]);
   const [brainStatus, setBrainStatus] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [homeConfig, setHomeConfig] = useState(null);
   const [cycling, setCycling] = useState(false);
   const [showPendingPopover, setShowPendingPopover] = useState(false);
-  const navigate = useNavigate();
 
   const fetchSidebar = async () => {
     try {
-      // Use /agents/activity (richer, includes last_message + status
-      // pill + linked agent profile) instead of raw /agent-jobs. The
-      // overview-generation flow now wakes every running agent for a
-      // fresh status before regenerating, so last_message reflects
-      // recent agent voice rather than initial heartbeat.
-      const [sc, activity, brain, cfg, pupdates] = await Promise.all([
+      const [sc, brain, cfg, pupdates] = await Promise.all([
         api.getScene(),
-        api.getAgentActivity().catch(() => []),
         api.getBrainStatus().catch(() => null),
         api.getConfig().catch(() => null),
         api.getPupdates(),
       ]);
       setScene(sc);
       setHomeConfig(cfg);
-      setWorkingJobs(Array.isArray(activity) ? activity : []);
       setBrainStatus(brain);
       // Today's events only. Calendar pupdates use a YYYY-MM-DD date in
       // their source_id, so yesterday's events linger in the DB as
@@ -216,62 +201,6 @@ export default function Home() {
                 ))}
               </div>
             </div>
-          </div>
-
-          <div className="home-widget pack-square-widget">
-            <div className="widget-header">
-              <Users size={12} /> Pack
-              {workingJobs.length > 0 && (
-                <span className="widget-count">{workingJobs.length}</span>
-              )}
-            </div>
-            {workingJobs.length > 0 ? (
-              <div className="pack-square">
-                {workingJobs.map((a) => {
-                  // task_id post-unification is the AgentJob.id, so
-                  // either field gets us to the unified job page.
-                  const id = a.job_id || a.task_id;
-                  const route = `/jobs/${id}`;
-                  const name = a.agent_name || "agent";
-                  const status = a.status || "active";
-                  // CardAvatar resolves agent.avatar -> sprite path; the
-                  // backend now drops agent_avatar onto each activity
-                  // entry so we don't need a separate profile fetch.
-                  const agentForAvatar = {
-                    avatar: a.agent_avatar,
-                    display_name: name,
-                  };
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      className={`pack-square-villager pack-status-${status}`}
-                      onClick={() => navigate(route)}
-                      title={`${name} — ${a.task_title || a.task_type || "working"}`}
-                    >
-                      <span className="pack-square-avatar-wrap">
-                        <CardAvatar agent={agentForAvatar} size={40} />
-                        <span
-                          className={`pack-square-state-dot state-${status}`}
-                          aria-label={`status: ${status}`}
-                        />
-                      </span>
-                      <span className="pack-square-bubble" role="tooltip">
-                        <span className="pack-square-bubble-name">{name}</span>
-                        {a.task_title && (
-                          <span className="pack-square-bubble-title">{a.task_title}</span>
-                        )}
-                        {a.last_message && (
-                          <span className="pack-square-bubble-msg">"{a.last_message}"</span>
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="widget-empty">The town square is quiet — nobody's out yet.</div>
-            )}
           </div>
 
           <div className="home-widget">
