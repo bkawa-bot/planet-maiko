@@ -54,20 +54,19 @@
   --lavender-soft: rgba(201, 166, 255, 0.15);
   --lavender-faint: rgba(201, 166, 255, 0.08);
 
-  /* Inter (loaded in index.html) for body; Inconsolata for anything
-     that wants "terminal label" character — agent names, in-page
-     tabs, top-nav pills. Warmer/rounder mono than JetBrains or SF
-     Mono so the labels feel inviting rather than industrial.
-     Bitcount is the pixel display font used only on section titles
-     ("TODAY'S FOCUS", "WAITING ON YOU", widget headers) so the
-     Home page has one loud typographic beat without the whole
-     surface going chunky. */
-  /* Body font. DM Sans is geometric with just-enough humanist quirk
-     to carry personality without distracting at 13px table/list sizes —
-     pairs with Geo (geometric display) up top. Swap to 'Nunito' for
-     a warmer, softer-rounded feel across the app, or 'Atkinson
-     Hyperlegible' for maximum readability with subtle character. */
-  --font: 'DM Sans', -apple-system, 'Segoe UI', 'Inter', sans-serif;
+  /* Body font. Atkinson Hyperlegible — designed by the Braille Institute
+     for low-vision readability. Distinct character shapes (the 1, l, I
+     look like three different letters; the tail on the lowercase a
+     curves up) give the type real personality without going weird, and
+     it sidesteps the "Vercel template" reading that Inter / DM Sans
+     would have hit. SIL Open Font License.
+     Inconsolata for "terminal label" character — agent names, in-page
+     tabs, top-nav pills. Warmer/rounder mono than JetBrains or SF Mono
+     so the labels feel inviting rather than industrial. Bitcount is the
+     pixel display font used only on section titles ("TODAY'S FOCUS",
+     "WAITING ON YOU", widget headers) so the Home page has one loud
+     typographic beat without the whole surface going chunky. */
+  --font: 'Atkinson Hyperlegible', -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'Inconsolata', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
   --font-display: 'Bitcount Prop Single', 'Inconsolata', monospace;
   /* Greeting font. Quicksand — rounded humanist sans, warm and

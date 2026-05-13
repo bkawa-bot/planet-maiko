@@ -5,20 +5,21 @@
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Fonts: Inter for body copy, Inconsolata for label-y mono spots
-         (agent names, tabs, nav pills). Inter was referenced in the
-         CSS stack before but never actually loaded, so Mac rendered
-         SF and Windows rendered Segoe UI — this makes both laptops
-         match. -->
+    <!-- Body: Atkinson Hyperlegible (Braille Institute, SIL OFL). Designed
+         for low-vision readability, which means actual character shape
+         distinctions (I, l, 1 are visibly different) — much more
+         personality than Inter / DM Sans without being weird. Inter and
+         DM Sans were the SaaS-default body fonts; pulling them keeps the
+         rest of the app from reading as "Vercel template."
+         Display: Quicksand for the home greeting (rounded humanist),
+         Fraunces as the warm-serif accent, Pixelify Sans for card-art
+         fallbacks, Bitcount Prop Single for pixel section titles,
+         Inconsolata for terminal-y labels (agent names, nav pills). -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Display fonts: Quicksand is the default greeting (rounded
-         humanist), Fraunces is the warm-serif fallback, Pixelify Sans
-         is the pixel face for card art, Bitcount Prop Single is the
-         pixel-display face for section titles. -->
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inconsolata:wght@400;500;600;700&family=Bitcount+Prop+Single:wght@400;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Pixelify+Sans:wght@400;500;600;700&family=Quicksand:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Inconsolata:wght@400;500;600;700&family=Bitcount+Prop+Single:wght@400;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Pixelify+Sans:wght@400;500;600;700&family=Quicksand:wght@400;500;600;700&display=swap"
     />
 
     <title>Planet Maiko</title>
