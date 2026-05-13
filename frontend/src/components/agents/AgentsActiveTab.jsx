@@ -134,6 +134,17 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles,
     }
   };
 
+  const handleCancelQueued = async (job) => {
+    try {
+      await api.cancelAgentJob(job.id);
+      showToast(`Cancelled "${job.title || job.id}" before kickoff`, "normal");
+      reloadJobLists();
+      onRefresh?.();
+    } catch (err) {
+      showToast(err.message || "Couldn't cancel", "high");
+    }
+  };
+
   const handleRetryFailed = async (job) => {
     try {
       await api.retryAgentJob(job.id);
@@ -572,6 +583,15 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles,
                           )}
                           <span className="agent-queue-age">{relativeTime(j.created_at)}</span>
                         </div>
+                      </div>
+                      <div className="agent-queue-actions">
+                        <button
+                          className="btn btn-sm btn-danger"
+                          onClick={() => handleCancelQueued(j)}
+                          title="Cancel before the cycle picks it up"
+                        >
+                          <X size={10} /> Cancel
+                        </button>
                       </div>
                     </div>
                   );
