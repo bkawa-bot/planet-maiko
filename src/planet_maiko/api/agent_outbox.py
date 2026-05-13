@@ -127,9 +127,18 @@ def handle_agent_job_reply(job, msg, data, message_type):
             extra["review_summary"] = summary
 
         ag = db.session.get(_AP, job.agent_profile_id) if job.agent_profile_id else None
+        # Pass the linked Task (when one exists) into the parser so
+        # PROPOSAL: / TASK: blocks become agent_proposal memos. The
+        # parser guards on `agent is not None and task is not None`,
+        # so task=None silently dropped every follow-up the agent
+        # emitted -- the most user-facing thing an investigation does.
+        source_task = (
+            db.session.get(_Task, job.source_task_id)
+            if job.source_task_id else None
+        )
         try:
             parsed = parse_and_apply_blocks(
-                content, agent=ag, task=None, repo=job.scope_repo,
+                content, agent=ag, task=source_task, repo=job.scope_repo,
             )
             cleaned = parsed.get("cleaned_output", content)
             job.artifact = cleaned[:16000]
