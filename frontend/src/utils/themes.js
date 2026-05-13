@@ -4,12 +4,11 @@
 // "custom:<id>".
 //
 // Body background is a vertical gradient sourced from the theme's --bg
-// and --bg-plain values (defined in index.css). The legacy
-// world_background SVG injection was removed when the built-in themes
-// switched from hill SVGs to gradients — custom themes inherit the
-// same gradient body rule. world_background still rides along on the
-// theme JSON for back-compat / future use, but the value is currently
-// inert in the runtime.
+// and --bg-plain values (defined in index.css). On top of that, the
+// .world-bg fixed layer in Layout.jsx reads --world-bg-image, which we
+// derive here from the theme's `world_background` field (e.g. "day" →
+// url("/world-day.svg")). A value of "none" emits `--world-bg-image:
+// none` so the body gradient stands alone.
 
 const STYLE_ID = "custom-theme-css";
 
@@ -30,6 +29,18 @@ const WORLD_PANE_BG = {
   day:       "rgba(242, 248, 242, 0.60)",
   morning:   "rgba(250, 246, 238, 0.62)",
   sunset:    "rgba(58, 34, 72, 0.52)",
+};
+
+// Map of `world_background` enum → public SVG URL. Kept in sync by hand
+// with what's in frontend/public/world-*.svg. New SVGs added there
+// should appear here plus in WORLD_OPTIONS in pages/Themes.jsx.
+const WORLD_BG_IMAGE = {
+  night:     'url("/world-night.svg")',
+  day:       'url("/world-day.svg")',
+  morning:   'url("/world-morning.svg")',
+  afternoon: 'url("/world-afternoon.svg")',
+  sunset:    'url("/world-sunset.svg")',
+  none:      "none",
 };
 
 // Theme keys that DON'T correspond to a real CSS var — they're just
@@ -105,6 +116,13 @@ export function themeToCss(theme) {
   }
   if (!effectiveColors.pane_bg && WORLD_PANE_BG[world]) {
     effectiveColors.pane_bg = WORLD_PANE_BG[world];
+  }
+  // Drive the .world-bg layer from the theme's declared world. Themes
+  // saved before this key existed default to "night" via the form
+  // initial values; "none" maps to the literal CSS keyword so the
+  // body gradient shows on its own.
+  if (world && WORLD_BG_IMAGE[world] !== undefined) {
+    effectiveColors.world_bg_image = WORLD_BG_IMAGE[world];
   }
 
   const varLines = Object.entries(effectiveColors)

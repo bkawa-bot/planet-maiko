@@ -93,6 +93,14 @@
      without the rainbow. */
   --topbar-gradient: linear-gradient(135deg, #FF6FAF 0%, #1FB5E5 100%);
   --pane-bg: rgba(26, 31, 74, 0.45);
+
+  /* World background SVG. Driven by the active theme so flipping
+     "Cosmic Nighttime" → "Daylight" swaps which hills sit at the
+     foot of the page. Each theme block below sets its own value;
+     custom themes can set it via the `world_background` field
+     (wired in utils/themes.js). Leave it as `none` to fall through
+     to just the body gradient. */
+  --world-bg-image: url("/world-night.svg");
 }
 
 /* === Light theme — bright daylight === */
@@ -139,6 +147,7 @@
   /* Soft daylight sweep: bio mint to electric cyan, fresh meadow to sky. */
   --topbar-gradient: linear-gradient(135deg, #8FFFC9 0%, #38C5E0 100%);
   --pane-bg: rgba(255, 255, 255, 0.55);
+  --world-bg-image: url("/world-day.svg");
 }
 
 /* === Dawn — arctic sunrise. The page itself reads as the snow
@@ -185,6 +194,7 @@
      dawn feeling warm without competing with the actual greeting. */
   --topbar-gradient: linear-gradient(135deg, #FFF3A3 0%, #FFAB88 100%);
   --pane-bg: rgba(255, 255, 255, 0.55);
+  --world-bg-image: url("/world-morning.svg");
 }
 
 /* === Twilight — civil dusk on the alien planet. Cosmic indigo sky,
@@ -228,6 +238,7 @@
   --lavender-soft: rgba(201, 166, 255, 0.16); --lavender-faint: rgba(201, 166, 255, 0.08);
   --topbar-gradient: linear-gradient(135deg, #1A1F4A 0%, #4A2050 35%, #FF6B5C 70%, #FFD36B 100%);
   --pane-bg: rgba(42, 34, 80, 0.55);
+  --world-bg-image: url("/world-sunset.svg");
 }
 
 /* ============================================================
@@ -407,6 +418,7 @@
   --lavender-soft: rgba(196, 139, 255, 0.20); --lavender-faint: rgba(196, 139, 255, 0.10);
   --topbar-gradient: linear-gradient(135deg, #E0F4F7 0%, #A8FFD4 40%, #38BFA6 100%);
   --pane-bg: rgba(255, 255, 255, 0.55);
+  --world-bg-image: url("/world-day.svg");
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -503,6 +515,41 @@ body {
 html[data-hills="off"] body {
   background: var(--bg-plain, var(--bg));
 }
+
+/* ========================================================================
+   World background — pixel-art hills SVG sitting at the foot of every
+   page, behind every overlay. Driven by --world-bg-image, which each
+   theme sets to its own /world-*.svg URL. Transparent regions in the
+   SVG let the body's vertical gradient (var(--bg) → var(--bg-plain))
+   show through, so a new SVG with a transparent sky reads as theme-
+   colored sky over theme-colored hills.
+
+   Sizing: 100% width, height proportional, anchored at the bottom.
+   On viewports taller than the SVG's aspect ratio (e.g. portrait
+   monitors), the body gradient fills the gap above the hills — which
+   is the intended effect, not a bug.
+
+   z-index -2 puts this *below* .sky-overlay (z-index -1) so weather
+   tints layer on top, and below all page content (which sits at
+   z-index auto / 0+).
+   ======================================================================== */
+.world-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image: var(--world-bg-image, none);
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: 100% auto;
+  transition: background-image 600ms ease;
+}
+
+/* Settings opt-out — the same toggle that flattens the body gradient
+   also hides the world layer entirely. Otherwise a "no hills" preference
+   would leave the pixel-art hills happily sitting at the foot of the
+   page, contradicting the setting. */
+html[data-hills="off"] .world-bg { display: none; }
 
 /* ========================================================================
    Sky overlays — tint the body sky based on scene.scene.sky from the

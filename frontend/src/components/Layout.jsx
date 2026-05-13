@@ -143,6 +143,7 @@ export default function Layout() {
 
   return (
     <div className="layout">
+      <div className="world-bg" aria-hidden="true" />
       {skyLabel && <div className={`sky-overlay sky-${skyLabel}`} aria-hidden="true" />}
       <WeatherOverlay scene={scene} enabled={weatherEnabled} />
       <Sidebar onOpenShutdown={() => setShowShutdown(true)} />
