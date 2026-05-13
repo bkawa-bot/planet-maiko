@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
-  Shield, Inbox as InboxIcon, FolderOpen, Brain, Palette,
-  GitBranch, Bot, Sparkles, Rocket, PawPrint,
+  Home as HomeIcon, FolderOpen, Brain, MapPin,
+  GitBranch, Bot, Sparkles, Rocket, PawPrint, Zap,
 } from "lucide-react";
 import { api } from "../api/client";
 
@@ -10,7 +10,8 @@ const TOTAL_STEPS = 10;
 /**
  * First-run setup wizard. Shown on Home when config.setup_complete is
  * false. Collects name + GitHub + repos + location, then walks through a
- * short tour of Inbox / Focus / Agents / Knowledge before marking setup done.
+ * short tour of Home / Pack / Knowledge / Automations before marking
+ * setup done.
  *
  * Props:
  *   onComplete — () => void, called after config is saved. Home reloads.
@@ -106,9 +107,10 @@ export default function SetupWizard({ onComplete }) {
           <div className="setup-step setup-step-centered">
             <img src="/icon.svg" alt="Maiko" className="setup-maiko-icon" />
             <h1>Welcome to Planet Maiko</h1>
-            <p className="setup-sub">Your personal engineering companion. Maiko monitors your PRs, triages notifications, and orchestrates coding agents that learn from your team.</p>
+            <p className="setup-sub"><em>Strange agents, strange world.</em></p>
+            <p className="setup-sub">A quiet companion for your engineering work. Maiko watches your PRs, holds the messy in-flight things, and runs small coding agents in their own worktrees so they never trample what you're doing.</p>
             <button className="btn btn-primary" onClick={() => setStep(1)} style={{ marginTop: 16 }}>
-              <Rocket size={14} /> Get Started
+              <Rocket size={14} /> Come in
             </button>
           </div>
         )}
@@ -118,7 +120,7 @@ export default function SetupWizard({ onComplete }) {
           <div className="setup-step">
             <div className="setup-step-icon"><PawPrint size={28} /></div>
             <h3>What should I call you?</h3>
-            <p>Maiko uses this name to greet you and reference you in briefs. First name or nickname is fine.</p>
+            <p>Maiko uses this name in the home greeting and the daily overview. First name or nickname is fine.</p>
             <input
               type="text"
               value={name}
@@ -138,8 +140,8 @@ export default function SetupWizard({ onComplete }) {
         {step === 2 && (
           <div className="setup-step">
             <div className="setup-step-icon"><GitBranch size={28} /></div>
-            <h3>Connect GitHub</h3>
-            <p>Enter your GitHub username so Maiko can monitor your PRs and reviews. Requires <code>gh auth login</code> first.</p>
+            <h3>Hook into GitHub</h3>
+            <p>Drop your GitHub username so Maiko can see your PRs and reviews. You'll need <code>gh auth login</code> set up first.</p>
             <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="your-github-username" />
             <div className="setup-actions">
               <button className="setup-skip" onClick={() => setStep(4)}>Skip</button>
@@ -152,8 +154,8 @@ export default function SetupWizard({ onComplete }) {
         {step === 3 && (
           <div className="setup-step">
             <div className="setup-step-icon"><FolderOpen size={28} /></div>
-            <h3>Your Repos</h3>
-            <p>Which repos should Maiko watch? Auto-discover from your recent activity, or type them manually.</p>
+            <h3>Which repos to watch</h3>
+            <p>Auto-discover from your recent activity, or type them in. Coding agents make their own worktrees off your local clones, so Maiko needs to know where the clones live on disk.</p>
             <button className="btn btn-discover" onClick={handleDiscoverRepos} disabled={discovering}>
               {discovering ? "Discovering..." : "Auto-Discover Repos"}
             </button>
@@ -172,7 +174,7 @@ export default function SetupWizard({ onComplete }) {
                 {discoverError.hint && <div className="setup-hint-warn-sub">{discoverError.hint}</div>}
               </div>
             )}
-            <p style={{ marginTop: 16 }}>Where do these repos live on disk? Coding agents make worktrees from your local clones.</p>
+            <p style={{ marginTop: 16 }}>Where do the clones live?</p>
             <input
               type="text"
               value={repoRoots.join(", ")}
@@ -189,9 +191,9 @@ export default function SetupWizard({ onComplete }) {
         {/* Step 4: Location */}
         {step === 4 && (
           <div className="setup-step">
-            <div className="setup-step-icon"><Palette size={28} /></div>
-            <h3>Your Location</h3>
-            <p>For live weather on your dashboard. Clouds drift across the page when it's overcast, rain falls when it's stormy.</p>
+            <div className="setup-step-icon"><MapPin size={28} /></div>
+            <h3>Where are you?</h3>
+            <p>For live weather on your dashboard. Clouds drift across the page when it's overcast, rain falls when it's stormy, stars come out at night.</p>
             <div className="setup-location-row">
               <input
                 type="text"
@@ -209,13 +211,13 @@ export default function SetupWizard({ onComplete }) {
           </div>
         )}
 
-        {/* Step 5: Tour — Inbox */}
+        {/* Step 5: Tour — Home + Memos */}
         {step === 5 && (
           <div className="setup-step setup-step-centered">
-            <div className="setup-step-icon tour-icon"><InboxIcon size={36} /></div>
-            <h3>Your Inbox</h3>
-            <p>All your notifications land here — PRs, calendar events, CI alerts, and whatever integrations you connect. Maiko triages them automatically.</p>
-            <p className="setup-detail">Tabs filter by type. You can dismiss, create tasks, or have Maiko investigate with one click.</p>
+            <div className="setup-step-icon tour-icon"><HomeIcon size={36} /></div>
+            <h3>Home is where the memos land</h3>
+            <p>PR pings, calendar events, agent updates, things waiting on you — they all surface as memos on Home. The overview pane up top is Maiko's narrative for the day; the feed below is everything else.</p>
+            <p className="setup-detail">Click any memo to act on it. Dismiss the ones that don't need you, or ask Maiko to look into something with the floating Ask box.</p>
             <div className="setup-actions">
               <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
               <button className="btn btn-primary" onClick={() => setStep(6)}>Next</button>
@@ -223,19 +225,13 @@ export default function SetupWizard({ onComplete }) {
           </div>
         )}
 
-        {/* Step 6: Tour — Focus Mode */}
+        {/* Step 6: Tour — The Pack */}
         {step === 6 && (
           <div className="setup-step setup-step-centered">
-            <div className="setup-step-icon tour-icon"><Shield size={36} /></div>
-            <h3>Focus Mode</h3>
-            <p>Control which notifications reach you based on how deep in the zone you are. Find it in the top-right of the nav bar.</p>
-            <ul className="setup-checklist">
-              <li><strong>Available</strong> — everything comes through</li>
-              <li><strong>Soft focus</strong> — only high priority and above</li>
-              <li><strong>Deep focus</strong> — only critical and urgent</li>
-              <li><strong>Away</strong> — minimal interruptions</li>
-            </ul>
-            <p className="setup-detail">Held notifications are collected and released as a digest when you switch back.</p>
+            <div className="setup-step-icon tour-icon"><Bot size={36} /></div>
+            <h3>Meet the Pack</h3>
+            <p>Your agents are pups with personalities. Each carries a learning set tuned for a kind of work, and they run in their own isolated git worktrees off your clones.</p>
+            <p className="setup-detail">Stop one mid-flight and the worktree stays put — revive it from the Pack page and it picks up where it left off. Pups explore with random learnings; seniors specialize.</p>
             <div className="setup-actions">
               <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
               <button className="btn btn-primary" onClick={() => setStep(7)}>Next</button>
@@ -243,13 +239,13 @@ export default function SetupWizard({ onComplete }) {
           </div>
         )}
 
-        {/* Step 7: Tour — Agents */}
+        {/* Step 7: Tour — Knowledge */}
         {step === 7 && (
           <div className="setup-step setup-step-centered">
-            <div className="setup-step-icon tour-icon"><Bot size={36} /></div>
-            <h3>Meet Your Agents</h3>
-            <p>Agents are coding assistants that each carry a personalized set of learnings tuned for specific task types. They work in isolated git worktrees.</p>
-            <p className="setup-detail">New agents ("pups") explore with random learnings. Through training, they specialize and rank up.</p>
+            <div className="setup-step-icon tour-icon"><Brain size={36} /></div>
+            <h3>Knowledge</h3>
+            <p>Maiko learns coding patterns from your team's PR review comments and folds them into agent briefs so the work follows your conventions.</p>
+            <p className="setup-detail">Visit <strong>Knowledge</strong> and run <strong>Backfill from PRs</strong> to scan your history. Approve what you like; the rest stays out of the briefs.</p>
             <div className="setup-actions">
               <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
               <button className="btn btn-primary" onClick={() => setStep(8)}>Next</button>
@@ -257,13 +253,13 @@ export default function SetupWizard({ onComplete }) {
           </div>
         )}
 
-        {/* Step 8: Tour — Knowledge + Training */}
+        {/* Step 8: Tour — Automations */}
         {step === 8 && (
           <div className="setup-step setup-step-centered">
-            <div className="setup-step-icon tour-icon"><Brain size={36} /></div>
-            <h3>Knowledge + Training</h3>
-            <p>Maiko learns coding patterns from your PR review comments. These get injected into agent briefs so they follow your team's conventions.</p>
-            <p className="setup-detail">Use <strong>Knowledge &gt; Backfill from PRs</strong> to scan your history. Then <strong>Training</strong> to teach agents on real merged PRs.</p>
+            <div className="setup-step-icon tour-icon"><Zap size={36} /></div>
+            <h3>Automations</h3>
+            <p>Small when→then rules that let Maiko handle the boring stuff. "When a PR I'm tagged on goes stale, leave me a memo." "When a coding agent finishes, ping me in chat." That kind of thing.</p>
+            <p className="setup-detail">Built-in templates live on the <strong>Automations</strong> page — fork one to start, or write your own from scratch.</p>
             <div className="setup-actions">
               <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
               <button className="btn btn-primary" onClick={() => setStep(9)}>Next</button>
@@ -275,13 +271,14 @@ export default function SetupWizard({ onComplete }) {
         {step === 9 && (
           <div className="setup-step setup-step-centered">
             <div className="setup-step-icon tour-icon"><Sparkles size={36} /></div>
-            <h3>You're All Set!</h3>
-            <p>Here's what to do next:</p>
+            <h3>You're settled in</h3>
+            <p>A few places to wander next:</p>
             <ul className="setup-checklist">
-              <li><strong>Connect integrations</strong> — Go to Settings to add Linear, Calendar, or other services. Agent tools (Bash, Read, Edit, etc.) are pre-configured — customize in Settings &gt; Agent Preferences.</li>
-              <li><strong>Backfill knowledge</strong> — Go to Knowledge and click "Backfill from PRs"</li>
-              <li><strong>Create an agent</strong> — Visit Agents and click "New Agent"</li>
-              <li><strong>Train it</strong> — Go to Training, pick a merged PR, and run a session</li>
+              <li><strong>Connect integrations</strong> — Linear, Calendar, and others live under Settings.</li>
+              <li><strong>Backfill from PRs</strong> — head to Knowledge so Maiko can read your team's review style.</li>
+              <li><strong>Spawn an agent</strong> — visit the Pack and click New Agent. Assign it a task from the Tasks page.</li>
+              <li><strong>Pick a theme</strong> — open the palette in the topbar (gear menu) or build your own under Themes.</li>
+              <li><strong>End the day at the campfire</strong> — the shutdown ritual in the topbar wraps up what shipped, what's still in flight, and what the pack noticed.</li>
             </ul>
             <button className="btn btn-primary" onClick={finishSetup} style={{ marginTop: 16 }}>
               <Rocket size={14} /> Let's go
