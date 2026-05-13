@@ -451,10 +451,15 @@ def get_review_queue():
             continue
         extra = m.extra or {}
         # Route heuristic: if the memo carries a task or job link,
-        # send the user there. Otherwise drop them on /agents (where
-        # the chat thread for agent-authored memos lives) or fall
-        # back to the memo's own url.
+        # send the user there. agent_message memos always deep-link
+        # to the job's chat panel (this beats whatever m.url says,
+        # since legacy agent_message memos were emitted without a
+        # url at all and fell through to /agents here).
         route = m.url
+        if m.kind == "agent_message":
+            job_id = extra.get("task_id")
+            if job_id:
+                route = f"/jobs/{job_id}?view=chat"
         if not route and m.source_task_id:
             # source_task_id may be either a Task id or an AgentJob
             # id post-unification — both render under /agents via
