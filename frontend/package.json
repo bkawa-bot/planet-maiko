@@ -13,6 +13,8 @@
     "tauri:build": "tauri build"
   },
   "dependencies": {
+    "@iconify-json/game-icons": "^1.2.4",
+    "@iconify/react": "^6.0.2",
     "gitdiff-parser": "^0.3.1",
     "lucide-react": "^1.7.0",
     "react": "^19.2.4",
