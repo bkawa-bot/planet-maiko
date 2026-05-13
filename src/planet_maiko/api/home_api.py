@@ -340,14 +340,19 @@ def get_review_queue():
             "pupdate_snapshot": extra.get("pupdate_snapshot"),
         })
 
-    # 7. Agent-ready / agent-stuck Memos. These fire when a one-shot
-    #    agent replies ready_for_review or stuck. They carry the task
-    #    link so the CTA routes straight to the diff or the task page.
-    #    Dedup against the #1 review-task entries — one memo per task
-    #    is enough, and the task row is the source-of-truth record.
+    # 7. Agent-ready Memos. These fire when a one-shot agent replies
+    #    ready_for_review. They carry the task link so the CTA routes
+    #    straight to the diff. Dedup against the #1 review-task entries
+    #    — one memo per task is enough, and the task row is the
+    #    source-of-truth record.
+    #
+    #    agent_stuck used to surface here too, but the persistent pack
+    #    dock now covers "agent is waiting on you" with an unread badge
+    #    + click-through to chat. Stripping it from the memos pane
+    #    avoids the two-surfaces-showing-the-same-thing problem.
     agent_signal_memos = (
         Memo.query
-        .filter(Memo.kind.in_(("agent_ready", "agent_stuck")))
+        .filter(Memo.kind == "agent_ready")
         .filter(Memo.status.in_(("pending", "seen")))
         .order_by(Memo.created_at.desc())
         .limit(50)
@@ -432,16 +437,22 @@ def get_review_queue():
         })
 
     # 9. Catchall — every other pending/seen Memo gets surfaced with
-    #    a generic shape so new kinds (agent_message, plus any plugin-
-    #    introduced kinds in the future) show up on the home pane
-    #    without needing this endpoint to grow another section. Only
-    #    appends memos NOT already represented above (dedup by
-    #    memo_id) so the kind-specific shaping wins for rich kinds
-    #    like agent_proposal / job_approval / agent_ready / etc.
+    #    a generic shape so plugin-introduced kinds show up on the
+    #    home pane without needing this endpoint to grow another
+    #    section. Only appends memos NOT already represented above
+    #    (dedup by memo_id) so the kind-specific shaping wins for
+    #    rich kinds like agent_proposal / job_approval / agent_ready.
+    #
+    #    Skips agent_message and agent_stuck: the persistent pack dock
+    #    surfaces both live with an unread badge and click-to-chat, so
+    #    duplicating them here just gives the user two places to
+    #    dismiss the same conversation.
     seen_memo_ids = {i.get("memo_id") for i in items if i.get("memo_id") is not None}
+    SUPPRESSED_KINDS_IN_CATCHALL = {"agent_message", "agent_stuck"}
     other_memos = (
         Memo.query
         .filter(Memo.status.in_(("pending", "seen")))
+        .filter(~Memo.kind.in_(SUPPRESSED_KINDS_IN_CATCHALL))
         .order_by(Memo.created_at.desc())
         .limit(200)
         .all()
@@ -451,15 +462,8 @@ def get_review_queue():
             continue
         extra = m.extra or {}
         # Route heuristic: if the memo carries a task or job link,
-        # send the user there. agent_message memos always deep-link
-        # to the job's chat panel (this beats whatever m.url says,
-        # since legacy agent_message memos were emitted without a
-        # url at all and fell through to /agents here).
+        # send the user there. Otherwise fall back to /agents.
         route = m.url
-        if m.kind == "agent_message":
-            job_id = extra.get("task_id")
-            if job_id:
-                route = f"/jobs/{job_id}?view=chat"
         if not route and m.source_task_id:
             # source_task_id may be either a Task id or an AgentJob
             # id post-unification — both render under /agents via
