@@ -1,4 +1,4 @@
-import { Loader, Layers, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader, Layers, CheckCircle2, AlertCircle } from "@icons";
 import "./BackfillProgress.css";
 
 /**

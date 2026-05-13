@@ -4,7 +4,7 @@ import {
   ArrowLeft, Check, Loader, FileText, MessageSquare, GitBranch,
   Sparkles, Clock, AlertTriangle, Activity, GitPullRequest, X,
   PanelRightClose, PanelRightOpen,
-} from "lucide-react";
+} from "@icons";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import { renderMarkdown } from "../utils/markdown";

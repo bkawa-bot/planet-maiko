@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from "@icons";
 
 /**
  * Home Overview — user-configurable add-on for the rolling LLM

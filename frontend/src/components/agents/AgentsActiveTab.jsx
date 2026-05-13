@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
   AlertTriangle, CheckSquare, ChevronDown, ChevronRight, Clock,
   ExternalLink, GitBranch, HeartPulse, Play, RotateCcw, Sparkles, X,
-} from "lucide-react";
+} from "@icons";
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";

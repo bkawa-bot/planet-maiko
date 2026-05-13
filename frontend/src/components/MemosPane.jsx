@@ -4,7 +4,7 @@ import {
   ClipboardCheck, FileText, GitPullRequest, Inbox, Bot, Check, X,
   Bell, HelpCircle, ExternalLink, ChevronDown, ChevronRight, Plus, Rocket,
   Sparkles, MessageCircle,
-} from "lucide-react"; // MessageCircle still used in KIND_META.agent_message
+} from "@icons"; // MessageCircle still used in KIND_META.agent_message
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { relativeTime } from "../utils/dates";

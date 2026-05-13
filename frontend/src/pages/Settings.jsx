@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
-import { BookOpen } from "lucide-react";
+import { BookOpen } from "@icons";
 import ConceptsModal from "../components/ConceptsModal";
 import IntegrationsSection from "../components/settings/IntegrationsSection";
 import AutopilotSection from "../components/settings/AutopilotSection";

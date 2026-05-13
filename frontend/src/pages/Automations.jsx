@@ -5,7 +5,7 @@ import {
   Zap, Wand2, Sunrise, Brain, Coffee, Search, GitFork,
   Rocket, Clipboard, X, Loader, Plus, Save, Eye, Pencil, Trash2,
   Compass, Pause, Play, ChevronDown, ChevronRight,
-} from "lucide-react";
+} from "@icons";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import { relativeTime } from "../utils/dates";
 import AutomationEditor from "../components/AutomationEditor";

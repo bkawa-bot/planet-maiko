@@ -1,4 +1,4 @@
-import { Brain, X } from "lucide-react";
+import { Brain, X } from "@icons";
 
 /**
  * Read-only project-plan modal — shows the plan markdown body for a

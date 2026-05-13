@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { api } from "../api/client";
-import { Send, X, Loader, ChevronDown, ChevronUp } from "lucide-react";
+import { Send, X, Loader, ChevronDown, ChevronUp } from "@icons";
 import PackTurn from "./PackTurn";
 import "./AskMaiko.css";
 

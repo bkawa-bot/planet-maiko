@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessageSquare, Send } from "lucide-react";
+import { MessageSquare, Send } from "@icons";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { formatTime } from "../utils/dates";

@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   Home as HomeIcon, FolderOpen, Brain, MapPin,
   GitBranch, Bot, Sparkles, Rocket, PawPrint, Zap,
-} from "lucide-react";
+} from "@icons";
 import { api } from "../api/client";
 
 const TOTAL_STEPS = 10;

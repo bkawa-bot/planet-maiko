@@ -7,7 +7,7 @@ import { relativeTime } from "../utils/dates";
 import {
   Sunrise, RefreshCw, FileText, X,
   MoreHorizontal, ListTodo, Search, ExternalLink,
-} from "lucide-react";
+} from "@icons";
 import TaskCard from "./TaskCard";
 import PlanetSpinner from "./PlanetSpinner";
 import ClosingCard from "./overview/ClosingCard";

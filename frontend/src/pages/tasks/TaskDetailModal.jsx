@@ -1,4 +1,4 @@
-import { FolderOpen, X, ExternalLink } from "lucide-react";
+import { FolderOpen, X, ExternalLink } from "@icons";
 
 /**
  * Read-only detail modal for a Task — shows description / url /

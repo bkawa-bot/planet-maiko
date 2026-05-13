@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
-import { Bot, Plus, Rocket, Code2, Eye, Search } from "lucide-react";
+import { Bot, Plus, Rocket, Code2, Eye, Search } from "@icons";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import CardAvatar from "./CardAvatar";
 import "./AssignAgentModal.css";

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Activity, Brain, Database, AlertCircle } from "lucide-react";
+import { Activity, Brain, Database, AlertCircle } from "@icons";
 import { api } from "../api/client";
 import { relativeTime } from "../utils/dates";
 import "./SystemHealth.css";

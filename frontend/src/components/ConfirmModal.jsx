@@ -1,4 +1,4 @@
-import { AlertTriangle, X, Loader } from "lucide-react";
+import { AlertTriangle, X, Loader } from "@icons";
 import "./ConfirmModal.css";
 
 /**

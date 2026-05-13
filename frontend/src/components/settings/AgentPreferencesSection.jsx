@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from "@icons";
 
 /**
  * Agent Preferences — role-specific instructions (reviewer/coder/

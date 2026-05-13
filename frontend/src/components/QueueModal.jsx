@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Inbox, Loader, RefreshCw, Sparkles, X } from "lucide-react";
+import { Inbox, Loader, RefreshCw, Sparkles, X } from "@icons";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { relativeTime } from "../utils/dates";

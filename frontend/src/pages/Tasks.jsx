@@ -10,7 +10,7 @@ import {
   CheckSquare, Plus, FolderPlus, FolderOpen, ExternalLink,
   ChevronDown, ChevronRight, Folder, Loader,
   Play, X, Download, Sparkles, Trash2, Pencil, Brain,
-} from "lucide-react";
+} from "@icons";
 import "./Tasks.css";
 import "./cards.css";
 

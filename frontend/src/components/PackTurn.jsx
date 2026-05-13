@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight } from "@icons";
 
 /**
  * Single dispatch turn from "Ask the pack" — shared between the

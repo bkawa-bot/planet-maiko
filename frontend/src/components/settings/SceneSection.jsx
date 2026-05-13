@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, MapPin, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, MapPin, Search } from "@icons";
 
 /**
  * Scene & Weather — location lookup (free Open-Meteo geocoding API)

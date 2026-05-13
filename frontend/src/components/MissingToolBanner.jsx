@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle } from "@icons";
 import { api } from "../api/client";
 import "./MissingToolBanner.css";
 

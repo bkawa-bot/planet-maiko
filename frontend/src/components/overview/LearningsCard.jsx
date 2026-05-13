@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Brain } from "lucide-react";
+import { Brain } from "@icons";
 
 /**
  * "N learnings waiting for your nod" call-out card. Click-through

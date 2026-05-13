@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Power, Moon, Loader, Check, X } from "lucide-react";
+import { Power, Moon, Loader, Check, X } from "@icons";
 import { api } from "../api/client";
 import "./ShutdownModal.css";
 

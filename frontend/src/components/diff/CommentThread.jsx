@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Trash2, MessageSquare, Bot, User } from "lucide-react";
+import { Check, Trash2, MessageSquare, Bot, User } from "@icons";
 import { renderMarkdown } from "../../utils/markdown";
 import "./CommentThread.css";
 

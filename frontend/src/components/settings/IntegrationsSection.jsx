@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Loader, FolderGit2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader, FolderGit2, AlertCircle, CheckCircle2 } from "@icons";
 import { api } from "../../api/client";
 import { relativeTime } from "../../utils/dates";
 

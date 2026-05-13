@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { GitBranch, AlertTriangle, X, Check } from "lucide-react";
+import { GitBranch, AlertTriangle, X, Check } from "@icons";
 
 /**
  * Surfaced when an approve action fails because the agent job's

@@ -5,7 +5,7 @@ import OverviewPane from "../components/OverviewPane";
 import MemosPane from "../components/MemosPane";
 import PackAskBox from "../components/PackAskBox";
 import { formatTime, formatClock } from "../utils/dates";
-import { Brain, Calendar, Palette, Video, Sparkles } from "lucide-react";
+import { Brain, Calendar, Palette, Video, Sparkles } from "@icons";
 import { showToast } from "../components/Toast";
 import FooterPendingPopover from "../components/FooterPendingPopover";
 import "./Home.css";

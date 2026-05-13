@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download, Upload } from "lucide-react";
+import { Download, Upload } from "@icons";
 import { api } from "../../api/client";
 
 /**

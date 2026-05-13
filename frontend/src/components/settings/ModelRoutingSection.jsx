@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from "@icons";
 
 // Each row picks a model tier (haiku/sonnet/opus) and a reasoning
 // effort (low/medium/high/max). Defaults track agents/routing.py:

@@ -5,7 +5,7 @@ import { renderMarkdown } from "../utils/markdown";
 import {
   Check, X, Edit3, Plus, RefreshCw, Clock, Loader, Map as MapIcon,
   ChevronDown, ChevronRight,
-} from "lucide-react";
+} from "@icons";
 import "./PlaybookTab.css";
 
 /**

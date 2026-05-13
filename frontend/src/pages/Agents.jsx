@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
-import { Plus, Flame, Target, X } from "lucide-react";
+import { Plus, Flame, Target, X } from "@icons";
 import InfoButton from "../components/InfoButton";
 import AgentsActiveTab from "../components/agents/AgentsActiveTab";
 import AgentsProfilesTab from "../components/agents/AgentsProfilesTab";

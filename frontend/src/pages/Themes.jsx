@@ -4,7 +4,7 @@ import { showToast } from "../components/Toast";
 import { applyCustomTheme, clearCustomTheme } from "../utils/themes";
 import {
   Palette, Plus, Trash2, Save, X, Eye,
-} from "lucide-react";
+} from "@icons";
 import "./Themes.css";
 
 // The fields the form exposes. Kept in the same order as the built-in

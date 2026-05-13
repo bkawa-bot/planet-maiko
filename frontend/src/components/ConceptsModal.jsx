@@ -1,4 +1,4 @@
-import { X, Inbox, CheckSquare, Bot, BookOpen, Brain, Zap, Compass } from "lucide-react";
+import { X, Inbox, CheckSquare, Bot, BookOpen, Brain, Zap, Compass } from "@icons";
 import "./ConceptsModal.css";
 
 /**

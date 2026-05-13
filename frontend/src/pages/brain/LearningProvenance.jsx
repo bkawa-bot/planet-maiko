@@ -1,4 +1,4 @@
-import { Loader } from "lucide-react";
+import { Loader } from "@icons";
 import { formatRepo } from "../../utils/repo";
 
 

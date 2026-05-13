@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, FileText } from "lucide-react";
+import { ArrowLeft, FileText } from "@icons";
 import { api } from "../api/client";
 import { renderMarkdown } from "../utils/markdown";
 import PlanetSpinner from "../components/PlanetSpinner";

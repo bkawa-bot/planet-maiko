@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, X, Pencil, Sparkles, Loader, ChevronDown, ChevronRight, Compass } from "lucide-react";
+import { Check, X, Pencil, Sparkles, Loader, ChevronDown, ChevronRight, Compass } from "@icons";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { formatRepo, useDefaultOrg } from "../utils/repo";

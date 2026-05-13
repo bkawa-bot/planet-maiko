@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Send, Loader, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Send, Loader, Trash2, ChevronDown, ChevronUp } from "@icons";
 import { api } from "../api/client";
 import PackTurn from "./PackTurn";
 import PlanetSpinner from "./PlanetSpinner";

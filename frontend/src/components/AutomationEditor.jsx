@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, Plus, Trash2, Loader, Save } from "lucide-react";
+import { X, Plus, Trash2, Loader, Save } from "@icons";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import "./AutomationEditor.css";

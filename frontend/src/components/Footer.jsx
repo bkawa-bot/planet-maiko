@@ -1,4 +1,4 @@
-import { Bug } from "lucide-react";
+import { Bug } from "@icons";
 import "./Footer.css";
 
 

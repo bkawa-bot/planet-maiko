@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Plug, AlertTriangle } from "lucide-react";
+import { ChevronDown, ChevronRight, Plug, AlertTriangle } from "@icons";
 import { api } from "../../api/client";
 
 /**

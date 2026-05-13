@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Trash2, RefreshCw } from "lucide-react";
+import { Trash2, RefreshCw } from "@icons";
 import { api } from "../../api/client";
 
 /**

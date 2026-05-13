@@ -3,7 +3,7 @@ import {
   CheckSquare, Square, FolderOpen, Pin, PinOff, ExternalLink,
   ChevronRight, GitBranch, Clock, Bot, Eye, Play,
   X, Pencil, Circle, Send, Loader, FileText, GitPullRequest, Zap, Map,
-} from "lucide-react";
+} from "@icons";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { showToast } from "./Toast";

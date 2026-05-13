@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Brain, CheckSquare, ChevronDown, ChevronRight, Plus,
   Target, X, Pencil, Save, Code2, Eye, Search, Map, Loader, Compass, Pause, Play,
-} from "lucide-react";
+} from "@icons";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
 import { formatRepo, useDefaultOrg, useConfiguredRepos } from "../../utils/repo";

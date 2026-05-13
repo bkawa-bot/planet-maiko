@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Brain, CheckSquare, X, Pencil, Code2, Eye, Search, Map, Sparkles,
-} from "lucide-react";
+} from "@icons";
 import { formatRepo, useDefaultOrg } from "../../utils/repo";
 import CardArt from "../CardArt";
 import RarityBadge from "../RarityBadge";

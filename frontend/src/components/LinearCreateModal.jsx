@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Loader, Send } from "lucide-react";
+import { X, Loader, Send } from "@icons";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import ModalPortal from "./ModalPortal";

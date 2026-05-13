@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, Loader, FileText, MessageSquare } from "lucide-react";
+import { ArrowLeft, Check, Loader, FileText, MessageSquare } from "@icons";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import { renderMarkdown } from "../utils/markdown";

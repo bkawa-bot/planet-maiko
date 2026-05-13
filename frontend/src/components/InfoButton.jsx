@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { HelpCircle, X } from "lucide-react";
+import { HelpCircle, X } from "@icons";
 
 export default function InfoButton({ title, children }) {
   const [open, setOpen] = useState(false);

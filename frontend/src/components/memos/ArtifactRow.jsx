@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight, X } from "lucide-react";
+import { ChevronDown, ChevronRight, X } from "@icons";
 import CardAvatar from "../CardAvatar";
 import { renderMarkdown } from "../../utils/markdown";
 import { formatRepo } from "../../utils/repo";

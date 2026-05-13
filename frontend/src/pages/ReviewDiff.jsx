@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, ExternalLink, GitPullRequest, Loader, MessageSquare, PanelRightClose, PanelRightOpen, Sparkles, X } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, GitPullRequest, Loader, MessageSquare, PanelRightClose, PanelRightOpen, Sparkles, X } from "@icons";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import DiffView from "../components/diff/DiffView";

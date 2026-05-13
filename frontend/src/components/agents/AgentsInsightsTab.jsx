@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import {
   Flame, Check, X, Loader, Moon, RefreshCw, MessageSquare,
   ChevronDown, ChevronRight,
-} from "lucide-react";
+} from "@icons";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
 import PlaybookTab from "../PlaybookTab";

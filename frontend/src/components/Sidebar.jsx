@@ -1,6 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Settings, Palette, Power, Leaf } from "lucide-react";
-import { Hearth, Scroll, Paw, Tome, Spark } from "../icons";
+import { Settings, Palette, Power, Leaf, Hearth, Scroll, Paw, Tome, Spark } from "@icons";
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api/client";
 import { applyCustomTheme, clearCustomTheme, hydrateCachedCustomTheme } from "../utils/themes";

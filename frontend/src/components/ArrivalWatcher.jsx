@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Code2, Eye, Search, Map } from "lucide-react";
+import { Code2, Eye, Search, Map } from "@icons";
 import { api } from "../api/client";
 import CardArt from "./CardArt";
 import RarityBadge from "./RarityBadge";
