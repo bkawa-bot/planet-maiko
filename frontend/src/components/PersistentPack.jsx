@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import CardAvatar from "./CardAvatar";
 import "./PersistentPack.css";
@@ -35,7 +35,6 @@ function saveVisits(map) {
 
 export default function PersistentPack() {
   const navigate = useNavigate();
-  const location = useLocation();
   const [activity, setActivity] = useState([]);
   const [expanded, setExpanded] = useState(false);
   const visitsRef = useRef(loadVisits());
@@ -57,9 +56,9 @@ export default function PersistentPack() {
     };
   }, []);
 
-  // /jobs/<id> already shows the chat — extra dock chrome there is
-  // noise, not signal.
-  if (location.pathname.startsWith("/jobs/")) return null;
+  // The dock stays visible on /jobs/<id> too -- the user wants to
+  // hop between agent conversations without going back home, which
+  // is the whole point of making it persistent.
 
   if (activity.length === 0) return null;
 

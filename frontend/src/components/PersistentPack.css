@@ -81,10 +81,10 @@
    ready AND there's been activity since the user last clicked through. */
 .persistent-pack-unread-dot {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 12px;
-  height: 12px;
+  top: -5px;
+  right: -5px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   border: 2px solid var(--bg);
   background: var(--urgent);
@@ -92,8 +92,8 @@
 }
 
 @keyframes persistent-pack-unread-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 85, 119, 0.45); }
-  50%      { box-shadow: 0 0 0 6px rgba(255, 85, 119, 0.0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 85, 119, 0.5); }
+  50%      { box-shadow: 0 0 0 8px rgba(255, 85, 119, 0.0); }
 }
 
 /* Speech bubble — only visible while the dock is expanded AND the
