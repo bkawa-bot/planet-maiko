@@ -119,14 +119,14 @@
 }
 .speech-time { font-size: 9px; color: var(--text-muted); margin-top: 4px; }
 
-.agent-card-body { display: flex; gap: 12px; padding: 14px 16px; }
+.agent-card-body { display: flex; gap: 12px; padding: 14px 16px 8px; }
 
 /* Frame around the avatar. Despite the legacy class name, the
    rounded-square radius matches the avatar inside (CardAvatar uses
    28%), so the frame and the avatar share corner roundness instead
    of the frame being a circle around a rounded square. */
 .agent-avatar-circle {
-  width: 42px; height: 42px; border-radius: 28%; flex-shrink: 0;
+  width: 52px; height: 52px; border-radius: 28%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   background: var(--pink-soft); border: 2px solid var(--pink);
   color: var(--pink);
@@ -200,7 +200,7 @@
   background: var(--blue-soft); border-radius: 3px;
 }
 
-.agent-actions { display: flex; gap: 4px; padding: 0 16px 12px; }
+.agent-actions { display: flex; gap: 4px; padding: 0 16px 10px; }
 
 /* === Profiles Grid === */
 .profiles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }

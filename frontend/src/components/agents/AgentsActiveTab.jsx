@@ -303,7 +303,7 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles,
                     </div>
                     <div className="agent-card-body">
                       <div className="agent-avatar-circle">
-                        <CardAvatar agent={profiles.find((p) => p.id === a.agent_id) || a} size={40} />
+                        <CardAvatar agent={profiles.find((p) => p.id === a.agent_id) || a} size={48} />
                       </div>
                       <div className="agent-info">
                         <div className="agent-name-row">
@@ -332,7 +332,7 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles,
                   <div className="agent-card-link agent-card-link-disabled">
                     <div className="agent-card-body">
                       <div className="agent-avatar-circle">
-                        <CardAvatar agent={a} size={40} />
+                        <CardAvatar agent={a} size={48} />
                       </div>
                       <div className="agent-info">
                         <div className="agent-name">
@@ -409,7 +409,7 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles,
                   </div>
                   <div className="agent-card-body">
                     <div className="agent-avatar-circle">
-                      <CardAvatar agent={profile || prepared} size={40} />
+                      <CardAvatar agent={profile || prepared} size={48} />
                     </div>
                     <div className="agent-info">
                       <div className="agent-name-row">
