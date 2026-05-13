@@ -1,0 +1,12 @@
+/* Maiko icon set — pixel art SVGs. Default rendering tweaks shared
+   across every icon so individual components don't repeat them. */
+.m-icon {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+  /* Pixelated upscale: when an icon renders bigger than its native 16px
+     viewBox, browsers smooth the pixels by default. Forcing pixelated
+     keeps the Earthbound chunky feel at every size. */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}

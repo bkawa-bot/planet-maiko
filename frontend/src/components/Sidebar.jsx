@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Home, CheckSquare, Bot, Brain, Zap, Settings, Palette, Power, Leaf } from "lucide-react";
+import { Settings, Palette, Power, Leaf } from "lucide-react";
+import { Hearth, Scroll, Paw, Tome, Spark } from "../icons";
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api/client";
 import { applyCustomTheme, clearCustomTheme, hydrateCachedCustomTheme } from "../utils/themes";
@@ -7,12 +8,16 @@ import SystemHealth from "./SystemHealth";
 import "./Sidebar.css";
 import "./ShutdownModal.css";
 
+// Nav icons come from the Maiko pixel-art set (icons/index.jsx) — paw
+// for the Pack, scroll for Tasks, etc. The rest of the topbar (gear,
+// power, palette, weekend leaf) still uses lucide while those surfaces
+// wait their turn for the pixel-art treatment.
 const NAV_ITEMS = [
-  { to: "/", icon: Home, label: "Home", end: true },
-  { to: "/tasks", icon: CheckSquare, label: "Tasks" },
-  { to: "/agents", icon: Bot, label: "Pack" },
-  { to: "/knowledge", icon: Brain, label: "Knowledge" },
-  { to: "/automations", icon: Zap, label: "Automations" },
+  { to: "/", icon: Hearth, label: "Home", end: true },
+  { to: "/tasks", icon: Scroll, label: "Tasks" },
+  { to: "/agents", icon: Paw, label: "Pack" },
+  { to: "/knowledge", icon: Tome, label: "Knowledge" },
+  { to: "/automations", icon: Spark, label: "Automations" },
 ];
 
 // Built-in theme palette. Each entry's `group` controls dropdown
