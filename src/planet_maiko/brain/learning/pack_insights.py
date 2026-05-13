@@ -73,10 +73,13 @@ def start_gathering():
 
     # Summary pupdate so the user has something to see in their own
     # inbox (and so the pack-insights API state loads on refresh).
+    # ID includes hour-minute-second so repeat runs on the same day
+    # don't trip the primary key (the date-only id collided every
+    # time the user re-ran the gathering).
     signal_pupdate = Pupdate(
-        id=f"pack-insights-signal-{now.strftime('%Y%m%d')}",
+        id=f"pack-insights-signal-{now.strftime('%Y%m%d-%H%M%S')}",
         source="maiko",
-        source_id=f"pack-insights/{now.strftime('%Y-%m-%d')}",
+        source_id=f"pack-insights/{now.strftime('%Y-%m-%dT%H:%M:%S')}",
         type="pack_insights_signal",
         priority="normal",
         title="Pack Insights: gathering from the pack",
