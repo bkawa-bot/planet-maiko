@@ -95,21 +95,22 @@ function CartographLauncher() {
 
 
 // Compact card. Clicking anywhere opens the full profile modal.
-// Surfaces only the agent's personal tagline (profile.flavor_text) —
+// Surfaces only the agent's personal tagline (profile.flavor_text) -
 // the archetype tagline (card.tagline) is the same line for every
 // Wandering Fox in town and adds noise here; it lives in the modal
-// where the user actually wants the type-level context.
+// where the user actually wants the type-level context. Stats
+// (done count, age) also live in the modal so the card stays focused
+// on identity at a glance.
 function ProfileCard({ profile, onOpen }) {
   const defaultOrg = useDefaultOrg();
   const personalTagline = (profile.flavor_text || "").trim();
-  const ageDays = ageInDays(profile.created_at);
   return (
     <button
       type="button"
       className={`profile-card-mini ${profile.archived ? "archived" : ""}`}
       onClick={onOpen}
     >
-      <div className="profile-card-avatar"><CardAvatar agent={profile} size="md" /></div>
+      <div className="profile-card-avatar"><CardAvatar agent={profile} size="lg" /></div>
       <div className="profile-card-body">
         <div className="profile-card-name">
           <span
@@ -128,12 +129,6 @@ function ProfileCard({ profile, onOpen }) {
             {personalTagline.length > 110 ? personalTagline.slice(0, 108).replace(/\s+\S*$/, "") + "…" : personalTagline}
           </div>
         )}
-        <div className="profile-card-stats">
-          <span title="Tasks completed">{profile.tasks_completed || 0} done</span>
-          {ageDays != null && (
-            <span title={`Joined ${profile.created_at}`}>{ageDays === 0 ? "new" : `${ageDays}d old`}</span>
-          )}
-        </div>
       </div>
     </button>
   );

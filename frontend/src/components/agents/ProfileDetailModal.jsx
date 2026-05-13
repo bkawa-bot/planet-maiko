@@ -40,6 +40,15 @@ export default function ProfileDetailModal({
   const RoleIcon = meta.icon;
   const cards = useCards();
   const card = cards.find((c) => c.id === profile.avatar);
+  // Days since created_at, floored. Null if missing or unparseable so
+  // the stat just doesn't render rather than showing NaN.
+  const ageDays = (() => {
+    if (!profile.created_at) return null;
+    const created = new Date(profile.created_at);
+    const ms = Date.now() - created.getTime();
+    if (Number.isNaN(ms) || ms < 0) return null;
+    return Math.floor(ms / (24 * 3600 * 1000));
+  })();
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -110,10 +119,17 @@ export default function ProfileDetailModal({
                 <div className="profile-modal-stat-value">{profile.tasks_completed}</div>
                 <div className="profile-modal-stat-label">done</div>
               </div>
-              <div className="profile-modal-stat">
-                <div className="profile-modal-stat-value">{profile.tasks_failed}</div>
-                <div className="profile-modal-stat-label">failed</div>
-              </div>
+              {ageDays != null && (
+                <div
+                  className="profile-modal-stat"
+                  title={`Joined ${profile.created_at}`}
+                >
+                  <div className="profile-modal-stat-value">{ageDays}</div>
+                  <div className="profile-modal-stat-label">
+                    {ageDays === 0 ? "new today" : ageDays === 1 ? "day old" : "days old"}
+                  </div>
+                </div>
+              )}
               <button
                 type="button"
                 className={`profile-modal-stat ${hasContextSet ? "clickable" : ""}`}

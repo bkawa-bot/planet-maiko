@@ -101,36 +101,50 @@ export default function ArrivalWatcher() {
       <div className="modal-overlay arrival-watcher-overlay" onClick={dismiss}>
         <div className="arrival-watcher-modal" onClick={(e) => e.stopPropagation()}>
           <div className="arrival-watcher-eyebrow">A new agent arrived</div>
-          <div className="arrival-watcher-card">
-            <CardArt cardId={profile.avatar} className="arrival-watcher-art" />
-          </div>
-          <div className="arrival-watcher-body">
-            {card?.rarity && (
-              <div style={{ marginBottom: 4 }}>
-                <RarityBadge rarity={card.rarity} size="lg" />
-              </div>
-            )}
-            <div className="arrival-watcher-name">{profile.display_name}</div>
-            {card && (
-              <div className="arrival-watcher-archetype">
-                <span style={{ opacity: 0.55, fontWeight: 500, marginRight: 4 }}>Type:</span>
-                {card.display_name}
-                {card.tagline ? <> · <em>{card.tagline}</em></> : null}
-              </div>
-            )}
-            {profile.flavor_text && (
-              <div className="arrival-watcher-flavor">"{profile.flavor_text}"</div>
-            )}
-            <div className="arrival-watcher-role">
-              <RoleIcon size={11} /> {meta.label}
-              <span className="arrival-watcher-scope">
-                {" · "}
-                {profile.scope_repo ? formatRepo(profile.scope_repo, defaultOrg) : "global"}
-              </span>
+          <div className="arrival-watcher-split">
+            {/* Left column: hero card art + archetype tagline below it,
+                mirroring the profile detail modal so the two surfaces
+                feel like the same family. */}
+            <div className="arrival-watcher-left">
+              <CardArt cardId={profile.avatar} className="arrival-watcher-art" />
+              {card?.tagline && (
+                <div className="arrival-watcher-archetype-tagline">
+                  {card.tagline}
+                </div>
+              )}
             </div>
-            <button className="btn btn-primary arrival-watcher-confirm" onClick={dismiss}>
-              Welcome {profile.display_name}
-            </button>
+            {/* Right column: identity, role, the agent's own voice
+                (flavor_text tagline + bio), confirm. The bio is the
+                agent's self-written intro -- usually 2-3 sentences
+                that establish character. */}
+            <div className="arrival-watcher-right">
+              {card?.rarity && (
+                <RarityBadge rarity={card.rarity} size="lg" />
+              )}
+              <div className="arrival-watcher-name">{profile.display_name}</div>
+              {card && (
+                <div className="arrival-watcher-archetype">
+                  <span className="arrival-watcher-archetype-label">Type:</span>
+                  {card.display_name}
+                </div>
+              )}
+              <div className="arrival-watcher-role">
+                <RoleIcon size={11} /> {meta.label}
+                <span className="arrival-watcher-scope">
+                  {" · "}
+                  {profile.scope_repo ? formatRepo(profile.scope_repo, defaultOrg) : "global"}
+                </span>
+              </div>
+              {profile.flavor_text && (
+                <div className="arrival-watcher-flavor">"{profile.flavor_text}"</div>
+              )}
+              {profile.instructions && (
+                <div className="arrival-watcher-bio">{profile.instructions}</div>
+              )}
+              <button className="btn btn-primary arrival-watcher-confirm" onClick={dismiss}>
+                Welcome {profile.display_name}
+              </button>
+            </div>
           </div>
         </div>
       </div>
