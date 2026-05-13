@@ -80,6 +80,7 @@ def pack_insights_gathering_replies():
         return jsonify({"status": state.get("status", "idle"), "started_at": None, "agents": []})
 
     from planet_maiko.database import db
+    from planet_maiko.models.agent_job import AgentJob
     from planet_maiko.models.task import Task
     from planet_maiko.models.agent_message import AgentMessage
     from planet_maiko.models.agent_profile import AgentProfile
@@ -101,9 +102,19 @@ def pack_insights_gathering_replies():
             "agents": [],
         })
 
-    tasks = {t.id: t for t in Task.query.filter(Task.id.in_(task_ids)).all()}
-    profile_ids = list({t.assigned_agent_id for t in tasks.values() if t.assigned_agent_id})
+    # Post-unification, AgentMessage.task_id holds the AgentJob.id, not
+    # the Task.id. Look up jobs first, then resolve to display info via
+    # the agent profile attached to each job. The Task table is only
+    # used as a fallback for the (rare) case where a job has a parent
+    # task with a richer title than the job itself.
+    jobs = {j.id: j for j in AgentJob.query.filter(AgentJob.id.in_(task_ids)).all()}
+    profile_ids = list({j.agent_profile_id for j in jobs.values() if j.agent_profile_id})
     profiles = {p.id: p for p in AgentProfile.query.filter(AgentProfile.id.in_(profile_ids)).all()}
+    parent_task_ids = list({j.source_task_id for j in jobs.values() if j.source_task_id})
+    parent_tasks = (
+        {t.id: t for t in Task.query.filter(Task.id.in_(parent_task_ids)).all()}
+        if parent_task_ids else {}
+    )
 
     reply_rows = (
         AgentMessage.query
@@ -121,11 +132,11 @@ def pack_insights_gathering_replies():
         replies_by_task.setdefault(r.task_id, []).append(r)
 
     agents = []
-    for tid, t in tasks.items():
-        if not t.assigned_agent_id:
+    for jid, job in jobs.items():
+        if not job.agent_profile_id:
             continue
-        prof = profiles.get(t.assigned_agent_id)
-        t_replies = replies_by_task.get(tid, [])
+        prof = profiles.get(job.agent_profile_id)
+        t_replies = replies_by_task.get(jid, [])
         substantive = [r for r in t_replies if r.message_type in ("feedback", "insight")]
         has_substance = bool(substantive)
         any_status = any(r.message_type == "status" for r in t_replies)
@@ -138,12 +149,18 @@ def pack_insights_gathering_replies():
             if r.message_type == "summary" and r.content:
                 summary = r.content.strip()
 
+        # Prefer the parent task's title when the job is task-linked --
+        # it usually reads more naturally than the job's auto-generated
+        # title. Standalone jobs fall back to the job's own title.
+        parent = parent_tasks.get(job.source_task_id) if job.source_task_id else None
+        title = (parent.title if parent else job.title) or job.id
+
         agents.append({
-            "agent_id": t.assigned_agent_id,
-            "display_name": prof.display_name if prof else t.assigned_agent_id,
+            "agent_id": job.agent_profile_id,
+            "display_name": prof.display_name if prof else job.agent_profile_id,
             "avatar": (prof.avatar if prof else "shiba"),
-            "task_id": tid,
-            "task_title": t.title,
+            "task_id": jid,
+            "task_title": title,
             "state": state_label,
             "summary": summary,
             "replies": [
