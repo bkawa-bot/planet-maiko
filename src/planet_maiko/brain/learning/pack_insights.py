@@ -54,8 +54,9 @@ def start_gathering():
     the inbox message on their next Stop-hook check, instead of
     waiting for the next time the user happens to interact.
     """
-    from planet_maiko.models.task import Task
+    from planet_maiko.models.agent_job import AgentJob
     from planet_maiko.models.agent_message import AgentMessage
+    from planet_maiko.api.agent_outbox import FOLLOWUP_KINDS
 
     global _pack_insights_state
     now = datetime.now(timezone.utc)
@@ -118,32 +119,48 @@ def start_gathering():
         "afterward."
     )
 
-    active_tasks = Task.query.filter(
-        Task.assigned_agent_id.isnot(None),
-        Task.status.in_(("new", "in_progress", "blocked", "review", "in_review")),
-    ).all()
+    # Alive = running AgentJobs OR FOLLOWUP_KINDS jobs in `done` with
+    # worktree still on disk (review / investigation / cartograph parked
+    # post-ready_for_review). The old query walked Task rows for tasks
+    # that have a working_path on task.extra, which the unified-model
+    # refactor stopped populating -- worktree state lives on AgentJob
+    # now. So that query was returning ~zero agents and the campfire
+    # quietly messaged nobody.
+    candidates = (
+        AgentJob.query
+        .filter(AgentJob.status.in_(("running", "done")))
+        .all()
+    )
+    alive = [
+        j for j in candidates
+        if j.status == "running"
+        or (j.kind in FOLLOWUP_KINDS and j.worktree_path)
+    ]
 
     messaged = 0
-    for t in active_tasks:
-        wp = (t.extra or {}).get("working_path")
-        if not wp:
-            continue  # No live worktree — agent has nothing to reply from
+    for job in alive:
+        # Post-unification, the agent's channel inbox is keyed off
+        # AgentJob.id (same value as MAIKO_JOB_ID), so AgentMessage.task_id
+        # holds the job id even though the column name is legacy.
         db.session.add(AgentMessage(
-            task_id=t.id,
+            task_id=job.id,
             direction="to_agent",
             sender="maiko",
             message_type="pack_insights_request",
             content=prompt,
         ))
-        _pack_insights_state["agents_messaged"].append(t.assigned_agent_id)
+        _pack_insights_state["agents_messaged"].append(
+            job.agent_profile_id or job.id
+        )
         messaged += 1
         # Best-effort: wake the agent so it reads the message now
         # instead of waiting for the next user interaction.
-        try:
-            from planet_maiko.api.diff_api import _resume_agent_with_review
-            _resume_agent_with_review(t.id, wp)
-        except Exception as e:
-            logger.debug(f"[pack_insights] Resume failed for {t.id}: {e}")
+        if job.worktree_path:
+            try:
+                from planet_maiko.api.diff_api import _resume_agent_with_review
+                _resume_agent_with_review(job.id, job.worktree_path)
+            except Exception as e:
+                logger.debug(f"[pack_insights] Resume failed for {job.id}: {e}")
 
     db.session.commit()
     logger.info(f"[pack_insights] Started gathering — messaged {messaged} active agent(s)")
