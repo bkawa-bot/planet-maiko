@@ -244,7 +244,7 @@ export default function SetupWizard({ onComplete }) {
           <div className="setup-step setup-step-centered">
             <div className="setup-step-icon tour-icon"><Brain size={36} /></div>
             <h3>Knowledge</h3>
-            <p>Maiko reads your team's PR review comments and notices the patterns — things you tend to flag, conventions you keep nudging people toward. She folds those into the instructions she hands agents so their work follows your team's style.</p>
+            <p>Maiko reads your team's PR review comments and notices the patterns — things you tend to flag, conventions you keep correcting. Approved patterns get pulled in when an agent reviews a PR, so the feedback aligns with your team's style.</p>
             <p className="setup-detail">Visit <strong>Knowledge</strong> and run <strong>Backfill from PRs</strong> to scan your history. Approve the ones that match your team; the rest stays out of the way.</p>
             <div className="setup-actions">
               <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>

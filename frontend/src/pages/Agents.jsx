@@ -221,11 +221,11 @@ export default function Agents() {
         </button>
         {tab === "profiles" && (
           <InfoButton title={<><Target size={16} /> Agent Profiles</>}>
-            <p>Each agent is a <em>context set</em> — a personalized selection of learnings tuned for specific repos and task types.</p>
-            <h4>Strengths</h4>
-            <p>Categories where the agent scores above 70%. When an agent is strong in a category, those learnings get deprioritized in its brief — it's already mastered them, so the brief focuses on other areas.</p>
-            <h4>Pup vs Senior</h4>
-            <p>New agents ("pups") explore with random learnings and get an exploration bonus in recommendations. As they complete tasks, they specialize and rank up. Seniors exploit their proven learning sets.</p>
+            <p>Each agent is a small character sheet — a name, an avatar, a role (coding, review, investigation, cartography), and a bio they wrote for themselves when they arrived. The bio rides along in every session, so the same agent feels like the same agent every time.</p>
+            <h4>How they're picked for a task</h4>
+            <p>When a task lands, Maiko looks for an agent matching (role, repo). First match wins; if nobody fits, a new pup arrives.</p>
+            <h4>What they carry in</h4>
+            <p>The team's playbook (active Insights from below), their own bio, the role's protocol, and an optional Specialty (a per-task playbook for things like triage or repo analysis). Agents don't carry personal learning sets — patterns from your team's PRs get retrieved on-the-fly when an agent reviews code.</p>
           </InfoButton>
         )}
 
