@@ -20,6 +20,7 @@ const COLOR_FIELDS = [
   { key: "text", label: "Text", required: true },
   { key: "text_dim", label: "Text (dim)" },
   { key: "text_muted", label: "Text (muted)" },
+  { key: "card_title", label: "Card title", hint: "the hero color on every card title (agent names, memo titles, task titles)" },
   { key: "pink", label: "Primary / pink" },
   { key: "blue", label: "Blue" },
   { key: "mint", label: "Mint" },
