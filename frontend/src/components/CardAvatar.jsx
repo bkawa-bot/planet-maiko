@@ -38,8 +38,14 @@ export default function CardAvatar({ agent, cardId, size = "md", className = "" 
   const px = typeof size === "number" ? size : SIZE_PX[size] || SIZE_PX.md;
   const [imgFailed, setImgFailed] = useState(false);
 
-  const label = card?.display_name || agent?.display_name || id || "Agent";
-  const initial = (label.trim()[0] || "?").toUpperCase();
+  // Hover label is the agent's own name, not the archetype/class.
+  // "Lantern Pup" on every Lantern-class avatar was noise; the agent's
+  // actual name ("Mote", "Wisp", etc.) is what the user wants to see.
+  // Falls back to the card name only when no agent was passed (raw
+  // cardId callers like the card art picker).
+  const label = agent?.display_name || card?.display_name || id || "Agent";
+  const initialSource = card?.display_name || agent?.display_name || id || "Agent";
+  const initial = (initialSource.trim()[0] || "?").toUpperCase();
   const hue = hueFromId(id || label);
 
   if (id && !imgFailed) {
