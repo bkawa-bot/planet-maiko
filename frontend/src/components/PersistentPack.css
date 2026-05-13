@@ -1,0 +1,143 @@
+/* Persistent pack dock — bottom-left, fixed, always-visible on every
+   page except /jobs/<id>. Collapsed it's a compact avatar stack;
+   hover expands the avatars and reveals the speech-bubble preview. */
+
+.persistent-pack {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 50;
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 10px 12px;
+  background: var(--pane-bg, rgba(26, 31, 74, 0.65));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  transition: gap 0.15s ease, padding 0.15s ease;
+}
+
+.persistent-pack.expanded {
+  gap: 14px;
+}
+
+.persistent-pack-villager {
+  position: relative;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+
+.persistent-pack-villager:hover {
+  transform: translateY(-2px);
+}
+
+.persistent-pack-villager:focus-visible {
+  outline: 2px solid var(--pink);
+  outline-offset: 3px;
+  border-radius: 28%;
+}
+
+/* Avatar + state-dot wrapper. Same ring treatment as the home
+   pack-square so the visual language is consistent across surfaces. */
+.persistent-pack-avatar-wrap {
+  position: relative;
+  display: inline-flex;
+  border-radius: 28%;
+  background: var(--pink-soft);
+  box-shadow: 0 0 0 2px var(--pink);
+}
+
+.persistent-pack-state-dot {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  background: var(--green);
+}
+
+.persistent-pack-state-dot.state-idle    { background: var(--lemon); }
+.persistent-pack-state-dot.state-stale   { background: var(--text-muted); }
+.persistent-pack-state-dot.state-ready   { background: var(--pink); }
+.persistent-pack-state-dot.state-waiting { background: var(--lavender, #b59dd8); }
+
+/* Unread badge — pulses softly to draw the eye without being a
+   notification klaxon. Visible only when the agent is waiting or
+   ready AND there's been activity since the user last clicked through. */
+.persistent-pack-unread-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  background: var(--urgent);
+  animation: persistent-pack-unread-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes persistent-pack-unread-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 85, 119, 0.45); }
+  50%      { box-shadow: 0 0 0 6px rgba(255, 85, 119, 0.0); }
+}
+
+/* Speech bubble — only visible while the dock is expanded AND the
+   villager itself is hovered. Floats above the avatar so it doesn't
+   clip against the bottom of the screen. */
+.persistent-pack-bubble {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: 8px 10px;
+  min-width: 180px;
+  max-width: 280px;
+  font-size: 11px;
+  color: var(--text);
+  display: none;
+  flex-direction: column;
+  gap: 3px;
+  pointer-events: none;
+  z-index: 1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.persistent-pack-villager:hover .persistent-pack-bubble,
+.persistent-pack-villager:focus-visible .persistent-pack-bubble {
+  display: flex;
+}
+
+.persistent-pack-bubble-name {
+  font-weight: 600;
+  color: var(--card-title, var(--text));
+  letter-spacing: 0.02em;
+}
+
+.persistent-pack-bubble-title {
+  color: var(--text-dim);
+  font-size: 10px;
+  font-style: italic;
+}
+
+.persistent-pack-bubble-msg {
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

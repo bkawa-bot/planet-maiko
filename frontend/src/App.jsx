@@ -4,6 +4,7 @@ import Layout from "./components/Layout";
 import ToastContainer from "./components/Toast";
 import AskMaiko from "./components/AskMaiko";
 import ArrivalWatcher from "./components/ArrivalWatcher";
+import PersistentPack from "./components/PersistentPack";
 // Eager: the four surfaces a user hits on almost every visit. Keeping
 // them in the main bundle avoids a suspense flicker on the critical
 // path.
@@ -86,6 +87,7 @@ export default function App() {
       <ToastContainer />
       <AskMaiko />
       <ArrivalWatcher />
+      <PersistentPack />
     </BrowserRouter>
   );
 }
