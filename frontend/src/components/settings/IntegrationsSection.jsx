@@ -25,6 +25,7 @@ export default function IntegrationsSection({
 }) {
   const [open, setOpen] = useState(openByDefault);
   const [discovering, setDiscovering] = useState(false);
+  const [discoverError, setDiscoverError] = useState(null);
   const [linearTeams, setLinearTeams] = useState([]);
   const [linearCycle, setLinearCycle] = useState(null);
   // Per-integration test-connection result shown inline next to the
@@ -50,6 +51,7 @@ export default function IntegrationsSection({
 
   const discoverRepos = async () => {
     setDiscovering(true);
+    setDiscoverError(null);
     try {
       const result = await api.discoverGithubRepos();
       if (result.repos?.length > 0) {
@@ -58,10 +60,18 @@ export default function IntegrationsSection({
         updateField("github", "repos", merged);
         onMessage(`Found ${result.repos.length} repo(s)`);
       } else {
-        onMessage("No repos found. Make sure gh CLI is authenticated.");
+        setDiscoverError({ message: "No repos found.", hint: "Check that gh CLI is authenticated for this username." });
       }
     } catch (err) {
-      onMessage(err.message || "Discovery failed");
+      // err.body is the parsed JSON from client.js — { error, hint, action }
+      // Surface the reason + hint right next to the button instead of
+      // relying on the top-of-page flash, which is off-screen when the
+      // user has scrolled down to the GitHub section.
+      const body = err.body || {};
+      setDiscoverError({
+        message: body.error || err.message || "Discovery failed",
+        hint: body.hint || null,
+      });
     }
     setDiscovering(false);
   };
@@ -201,6 +211,12 @@ export default function IntegrationsSection({
                     {discovering ? " Finding..." : " Auto-Discover"}
                   </button>
                 </div>
+                {discoverError && (
+                  <div className="discover-error">
+                    <div>{discoverError.message}</div>
+                    {discoverError.hint && <div className="discover-error-hint">{discoverError.hint}</div>}
+                  </div>
+                )}
                 <div className="repo-list">
                   {(config.github?.repos || []).map((repo, i) => (
                     <div key={i} className="repo-list-item">
