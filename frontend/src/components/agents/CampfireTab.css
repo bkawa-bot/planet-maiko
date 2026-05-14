@@ -303,10 +303,13 @@
 .campfire-modal-avatar {
   width: 44px; height: 44px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 26px;
   background: var(--bg-card-alt);
   border: 2px solid var(--peach);
   flex-shrink: 0;
+  /* Clip in case a future CardAvatar size prop disagrees with the
+     44px slot — without this, an oversized image leaks into the
+     adjacent name/title and the header looks broken. */
+  overflow: hidden;
 }
 .campfire-modal-identity { flex: 1; min-width: 0; }
 .campfire-modal-name {

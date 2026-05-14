@@ -56,7 +56,7 @@ export default function AgentsInsightsTab() {
     setStarting(true);
     try {
       await api.startPackInsights();
-      showToast("Gathering the pack around the fire… 🔥", "normal");
+      showToast("Gathering the pack around the lantern… 🕯️", "normal");
       setDecisions({});
       await fetchAll();
     } catch (err) {
@@ -154,7 +154,7 @@ export default function AgentsInsightsTab() {
 function IdleHero({ onStart, starting }) {
   return (
     <div className="campfire-idle">
-      <div className="campfire-fire campfire-fire-dim">🔥</div>
+      <div className="campfire-fire campfire-fire-dim">🕯️</div>
       <h3>Gather the pack around the fire</h3>
       <p>
         Maiko will message every active agent and ask what they noticed today —
@@ -181,7 +181,7 @@ function CampfireScene({ agents, decisions, onOpenAgent, onWrapUp, onReset, wrap
 
   return (
     <div className="campfire-scene">
-      <div className="campfire-fire campfire-fire-live">🔥</div>
+      <div className="campfire-fire campfire-fire-live">🕯️</div>
 
       <div className="campfire-ring">
         {agents.length === 0 ? (
@@ -296,7 +296,7 @@ function AgentGatherModal({ agent, decisions, onDecision, onClose }) {
       <div className="campfire-modal" onClick={(e) => e.stopPropagation()}>
         <div className="campfire-modal-header">
           <div className="campfire-modal-avatar">
-            <CardAvatar agent={agent} size="xl" />
+            <CardAvatar agent={agent} size={36} />
           </div>
           <div className="campfire-modal-identity">
             <div className="campfire-modal-name">{agent.display_name}</div>
