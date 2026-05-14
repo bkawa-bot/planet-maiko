@@ -68,7 +68,7 @@ Build a plugin for any tool you never want to have to look at again.
 - Custom skills, plugin-defined.
 - Plugin architecture. Drop a `.py` file in `~/.maiko/plugins/` to wire up anything.
 - Repo checks (`check_code`). Mechanical verdict before an agent says it's done.
-- Model routing. Pick which Claude model handles which kind of work.
+- Model + runtime routing. Pick which model and which runtime (headless Claude, interactive Claude in tmux, or a local Ollama-served model) handles which kind of work — internal tasks like the scene note default to local; coding agents stay on Claude.
 
 ### Built-in integrations
 - GitHub
@@ -112,7 +112,9 @@ pip install -e .
 # Frontend
 cd frontend && npm install && cd ..
 
-# Agent channel (real-time agent communication)
+# Agent channel (optional, MCP-backed agent comms; the `maiko` CLI
+# now covers the same operations and is the default since 5/14).
+# Skip this if you don't need the MCP path.
 cd channel && npm install && cd ..
 ```
 

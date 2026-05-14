@@ -91,7 +91,7 @@ const ACTION_SCHEMAS = {
     label: "Run an agent job (pack-owned)",
     group: "Do work",
     scopes: ["cycle"],
-    help: "Spawn an agent to do a one-shot task — cartograph a repo, investigate an incident, run a scheduled skill. Pack-owned: lands on the Agents page, not the Tasks list.",
+    help: "Spawn an agent to do a one-shot task — cartograph a repo, investigate an incident, run a scheduled skill. Pack-owned: lands on the Pack page, not the Tasks list.",
     fields: [
       { name: "kind", type: "select", label: "Kind", default: "cartograph", optionsKey: "agent_job_kinds" },
       { name: "ask_first", type: "bool", label: "Ask me before running", help: "when on, the job waits for your approval; off runs it directly." },

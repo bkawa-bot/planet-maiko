@@ -166,7 +166,7 @@ export default function Automations() {
 
       <div className="skills-section-header">
         <h3>Specialties</h3>
-        <p className="skills-section-sub">Role protocols agents adopt when doing a specific kind of work (analysis, triage, brainstorming). Run on-demand, on a cadence, or spawn a dedicated agent for a specialty from the Agents page. Running a specialty either uses an existing agent with that role or lazy-spawns one.</p>
+        <p className="skills-section-sub">Role protocols agents adopt when doing a specific kind of work (analysis, triage, brainstorming). Run on-demand, on a cadence, or spawn a dedicated agent for a specialty from the Pack page. Running a specialty either uses an existing agent with that role or lazy-spawns one.</p>
         <button className="btn btn-primary" onClick={openCreate} style={{ marginLeft: "auto" }}>
           <Plus size={12} /> New Specialty
         </button>
