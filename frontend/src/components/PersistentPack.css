@@ -23,11 +23,13 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-  /* Cap the dock at roughly the visible viewport so a pack of many
-     agents doesn't run off the bottom of the screen. Scrollbar shows
-     up inside the dock in that rare case. */
-  max-height: calc(100vh - 96px);
-  overflow-y: auto;
+  /* No `overflow` rule here on purpose. Setting overflow on either
+     axis (even just `overflow-y: auto`) makes the other axis stop
+     being `visible`, which clips the speech bubble where it
+     extends to the right of the dock. If a future user actually
+     runs >10 agents at once and the dock overflows the viewport,
+     the cleanest fix is portal the bubble into <body> rather than
+     re-introducing overflow here. */
   transition: gap 0.15s ease, padding 0.15s ease;
 }
 
