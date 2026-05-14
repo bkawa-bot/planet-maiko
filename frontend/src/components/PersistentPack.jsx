@@ -122,7 +122,7 @@ export default function PersistentPack() {
             onClick={() => handleAvatarClick(a)}
             onFocus={() => setExpanded(true)}
             onBlur={() => setExpanded(false)}
-            title={`${name} — ${a.task_title || a.task_type || "working"}`}
+            aria-label={`${name} — ${a.task_title || a.task_type || "working"}`}
           >
             <span className="persistent-pack-avatar-wrap">
               <CardAvatar
