@@ -435,10 +435,164 @@ class ClaudeCodeRuntime(AgentRuntime):
             "log_tail": _tail_log(log_path) if (log_path and crash_error) else None,
         }
 
+    def resume(
+        self,
+        working_dir,
+        session_id,
+        prompt,
+        *,
+        job_id=None,
+        log_path=None,
+        model=None,
+        effort=None,
+        permission_mode=None,
+        extra_env=None,
+        extra_args=None,
+    ):
+        """Continue an existing claude session with new input.
+
+        Maps to ``claude --print --resume <session_id>``. The
+        transcript at ~/.claude/projects/.../<session_id>.jsonl is
+        Claude's source of truth for prior conversation state — we
+        just point at it and let claude reconstruct the context.
+
+        See AgentRuntime.resume for the full contract.
+        """
+        if not prompt_has_text(prompt):
+            return _spawn_error("Empty prompt — nothing to send")
+
+        claude_path = self._find_claude()
+        if not claude_path:
+            return _spawn_error("claude CLI not found")
+
+        cmd = [
+            claude_path, "--print", "--output-format", "text",
+            "--resume", session_id,
+            "--dangerously-skip-permissions",
+        ]
+
+        if model:
+            cmd.extend(["--model", model])
+        if effort in ("low", "medium", "high", "max"):
+            cmd.extend(["--effort", effort])
+        if permission_mode:
+            cmd.extend(["--permission-mode", permission_mode])
+        if extra_args:
+            cmd.extend(extra_args)
+
+        spawn_env = dict(_os.environ)
+        if extra_env:
+            spawn_env.update(extra_env)
+        cache_env = self._build_subprocess_env()
+        if cache_env is not None:
+            spawn_env.update({k: v for k, v in cache_env.items() if k not in spawn_env})
+
+        log_file = None
+        popen = None
+        crash_error = None
+        try:
+            if log_path:
+                # Append to the existing agent.log — resumes are
+                # continuations of a session that already has a log.
+                log_file = open(log_path, "a", encoding="utf-8")
+                from datetime import datetime, timezone
+                log_file.write(
+                    f"\n\n# wake / resume at "
+                    f"{datetime.now(timezone.utc).isoformat()}\n\n"
+                )
+                log_file.flush()
+                stdout = log_file
+                stderr = subprocess.STDOUT
+            else:
+                stdout = subprocess.PIPE
+                stderr = subprocess.PIPE
+
+            popen = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=stdout,
+                stderr=stderr,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                cwd=working_dir,
+                env=spawn_env,
+            )
+
+            # Same cancellation hook as spawn — wake_agent flows pass
+            # a job_id; we register the Popen so stop_agent_session
+            # can terminate mid-resume.
+            if job_id:
+                try:
+                    from planet_maiko.agents.runtime.process import (
+                        register_running_process,
+                        unregister_running_process,
+                    )
+                    register_running_process(job_id, popen)
+                except Exception:
+                    pass
+
+            try:
+                popen.communicate(input=prompt)
+            finally:
+                if job_id:
+                    try:
+                        unregister_running_process(job_id)
+                    except Exception:
+                        pass
+
+            if popen.returncode not in (None, 0):
+                crash_error = (
+                    f"claude --resume exited {popen.returncode}: "
+                    + _tail_log(log_path) if log_path else
+                    f"claude --resume exited {popen.returncode}"
+                )
+        except Exception as e:
+            crash_error = f"resume failed: {e}"
+        finally:
+            if log_file is not None:
+                try:
+                    log_file.close()
+                except Exception:
+                    pass
+
+        pid = popen.pid if popen is not None else None
+        exit_code = popen.returncode if popen is not None else None
+        return {
+            "success": crash_error is None,
+            "pid": pid,
+            "exit_code": exit_code,
+            "error": crash_error,
+            "log_tail": _tail_log(log_path) if (log_path and crash_error) else None,
+        }
+
+    def session_transcript_path(self, session_id, working_dir=None):
+        """Locate the JSONL transcript Claude wrote for this session.
+
+        Claude Code stores transcripts at
+        ``~/.claude/projects/{escaped-path}/{session_id}.jsonl``, where
+        ``escaped-path`` replaces ``/``, ``\\``, and ``:`` with ``-``
+        (so ``C:\\Users\\foo`` becomes ``C--Users-foo`` on Windows).
+        Returns the first candidate that actually exists on disk, or
+        None if neither does.
+        """
+        if not session_id or not working_dir:
+            return None
+        abs_path = _os.path.abspath(working_dir)
+        escaped = abs_path.replace(":", "-").replace("\\", "-").replace("/", "-")
+        candidates = [
+            _os.path.expanduser(f"~/.claude/projects/{escaped}/{session_id}.jsonl"),
+            _os.path.expanduser(f"~/.config/claude/projects/{escaped}/{session_id}.jsonl"),
+        ]
+        for path in candidates:
+            if _os.path.isfile(path):
+                return path
+        return None
+
 
 # ---------------------------------------------------------------------------
-# Helpers used by spawn() — kept module-private so they don't leak into the
-# runtime class's public surface.
+# Helpers used by spawn() / resume() — kept module-private so they don't
+# leak into the runtime class's public surface.
 # ---------------------------------------------------------------------------
 
 def prompt_has_text(prompt):

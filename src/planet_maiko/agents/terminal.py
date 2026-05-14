@@ -85,21 +85,20 @@ def _launch_terminal(cmd):
 
 
 def _find_claude_session_file(working_path, session_id):
-    """Find the Claude Code session JSONL file for a given worktree + session ID.
+    """Find a session transcript on disk for a given worktree + session ID.
 
-    Claude stores sessions at ~/.claude/projects/{escaped-path}/{session_id}.jsonl
-    where escaped-path replaces /, \\, and : each independently with -.
-    On Windows, "C:\\Users\\foo" becomes "C--Users-foo" (double dash from : + \\).
+    Delegates to the active runtime's ``session_transcript_path``. For
+    Claude Code that lands at
+    ``~/.claude/projects/{escaped-path}/{session_id}.jsonl``; other
+    runtimes resolve to wherever their own transcripts live (or None
+    if the runtime doesn't preserve transcripts).
+
+    Kept as a module-level function for back-compat — agents_api.py
+    has called it from here since before the runtime abstraction
+    existed.
     """
-    if not working_path or not session_id:
+    try:
+        from planet_maiko.agents.brain_session import _get_runtime
+        return _get_runtime().session_transcript_path(session_id, working_path)
+    except Exception:
         return None
-    abs_path = os.path.abspath(working_path)
-    escaped = abs_path.replace(":", "-").replace("\\", "-").replace("/", "-")
-    candidates = [
-        os.path.expanduser(f"~/.claude/projects/{escaped}/{session_id}.jsonl"),
-        os.path.expanduser(f"~/.config/claude/projects/{escaped}/{session_id}.jsonl"),
-    ]
-    for path in candidates:
-        if os.path.isfile(path):
-            return path
-    return None

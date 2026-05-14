@@ -1,30 +1,31 @@
-"""Single entrypoint for resuming an agent's claude session.
+"""Single entrypoint for resuming an agent session.
 
-Every path that spawns `claude --print --resume <session_id>` funnels
-through wake_agent(). Without this, five independent daemon-thread
-spawns race on the same session JSONL file — and Claude Code's session
-format isn't safe for concurrent writers. Symptoms: the agent seemed
-to "die in the background", or spun on itself after a nudge landed
-while it was already working.
+Every wake (user chat reply, follow-up nudge, review iteration, plan
+revise) funnels through wake_agent(). The actual "continue a session
+with new input" call is delegated to ``runtime.resume()`` — Claude
+Code maps that to ``claude --print --resume <session_id>``; other
+backends do whatever their session model needs. wake.py only owns the
+orchestration: lock, queue, state machine.
 
-The orchestrator adds three things the direct spawns didn't:
+The orchestrator adds three things a direct runtime.resume() doesn't:
 
-  1. Per-task threading.Lock — no two claude processes ever run
-     against the same session_id at once.
+  1. Per-task threading.Lock — no two resumes ever run against the
+     same session_id at once. Critical because Claude Code's JSONL
+     transcript isn't safe for concurrent writers, and most other
+     runtimes have similar single-writer constraints on their session
+     state.
   2. Queue/drop policy per source — user-initiated messages wait
      their turn; redundant nudges are dropped silently.
   3. Agent.state bookkeeping (idle | working | stuck) so the UI can
      show a live indicator instead of guessing from last_active_at.
 
 Headless kickoffs (new sessions) still go through
-runtime._kickoff_agent_headless — those don't need the lock
-because a brand-new session_id can't collide with itself.
+runtime/kickoff.py — those build via runtime.spawn() instead of
+resume() because a brand-new session_id has no prior context to load.
 """
 
 import logging
 import os
-import shutil
-import subprocess
 import threading
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -137,9 +138,16 @@ def wake_agent(task_id, prompt, source, working_path=None, session_id=None, app=
     if not working_path or not os.path.isdir(working_path):
         logger.warning(f"[wake] no worktree for task {task_id} (source={source})")
         return False, "error"
-    claude_path = shutil.which("claude")
-    if not claude_path:
-        logger.warning(f"[wake] claude CLI missing (task={task_id})")
+
+    from planet_maiko.agents.brain_session import _get_runtime
+    runtime = _get_runtime()
+    if not runtime.is_available():
+        logger.warning(f"[wake] {runtime.name} runtime not available (task={task_id})")
+        return False, "error"
+    if not runtime.supports_resume():
+        logger.warning(
+            f"[wake] {runtime.name} runtime can't resume sessions (task={task_id})"
+        )
         return False, "error"
 
     lock = _lock_for(task_id)
@@ -167,46 +175,36 @@ def wake_agent(task_id, prompt, source, working_path=None, session_id=None, app=
                     + "\n\n".join(queued)
                 )
 
-            cmd = [
-                claude_path, "--print", "--output-format", "text",
-                "--resume", session_id,
-                "--dangerously-skip-permissions",
-            ]
-            # Propagate per-task model + effort to every resume.
-            # Without this, only the first kickoff gets the configured
-            # values and every subsequent wake (nudge, user message,
-            # check_inbox) silently drops to Claude Code's defaults —
-            # which is where multi-turn coding work actually lives,
-            # so the agent would spend most of its life on a different
-            # tier than the user configured.
+            # Propagate per-task model + effort on every resume. Without
+            # this, only the first kickoff gets the configured values
+            # and every subsequent wake silently drops to the runtime's
+            # defaults — which is where multi-turn coding work actually
+            # lives, so the agent would spend most of its life on a
+            # different tier than the user configured.
             try:
                 from planet_maiko.agents.routing import resolve_model, resolve_effort
                 model = resolve_model("coding_agent")
-                budget = resolve_effort("coding_agent") or "medium"
+                effort = resolve_effort("coding_agent") or "medium"
             except Exception:
                 model = None
-                budget = "medium"
-            if model:
-                cmd.extend(["--model", model])
-            if budget in ("low", "medium", "high", "max"):
-                cmd.extend(["--effort", budget])
-            if extra_args:
-                cmd.extend(extra_args)
+                effort = "medium"
+
             log_path = os.path.join(working_path, "agent.log")
-            with open(log_path, "a", encoding="utf-8") as log:
-                log.write(
-                    f"\n\n# wake source={source} "
-                    f"at={datetime.now(timezone.utc).isoformat()}\n\n"
-                )
-                log.flush()
-                subprocess.run(
-                    cmd,
-                    input=full_prompt,
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    text=True, encoding="utf-8", errors="replace",
-                    cwd=working_path,
-                )
+            runtime.resume(
+                working_path,
+                session_id,
+                full_prompt,
+                job_id=task_id,
+                log_path=log_path,
+                model=model,
+                effort=effort,
+                extra_args=list(extra_args) if extra_args else None,
+                # MAIKO_JOB_ID stays in the resumed env so the agent can
+                # keep calling `maiko reply / inbox / leave-comment`
+                # without rediscovering its identity. The wake event is
+                # logged into the agent.log by runtime.resume() itself.
+                extra_env={"MAIKO_JOB_ID": task_id, "MAIKO_WAKE_SOURCE": source},
+            )
         except Exception as e:
             logger.warning(f"[wake] run failed for {task_id}: {e}")
         finally:

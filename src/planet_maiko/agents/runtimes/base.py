@@ -212,3 +212,94 @@ class AgentRuntime(ABC):
         depends on an optional dependency).
         """
         return type(self).spawn is not AgentRuntime.spawn
+
+    # ----- Asynchronous resume — optional -----
+    # Continue an existing agent session with new input. Mirrors the
+    # spawn() shape but starts from prior conversation context instead
+    # of a cold start. This is the primitive that makes Maiko's
+    # "user chats with the agent and it picks up where it left off"
+    # loop work.
+    #
+    # Different runtimes do this very differently:
+    #   - claude-code: `claude --print --resume <session_id>` reloads
+    #     the JSONL transcript at ~/.claude/projects/.../<id>.jsonl.
+    #   - aider: re-invoke against `.aider.chat.history.md` with the
+    #     new input.
+    #   - local-Ollama loops: read a transcript Maiko itself maintains
+    #     and rebuild the context window manually.
+    #
+    # The wake_agent path expects the lock + queue mechanics to live
+    # ABOVE the runtime call (in wake.py); resume() just does the work.
+
+    def resume(
+        self,
+        working_dir: str,
+        session_id: str,
+        prompt: str,
+        *,
+        job_id: Optional[str] = None,
+        log_path: Optional[str] = None,
+        model: Optional[str] = None,
+        effort: Optional[str] = None,
+        permission_mode: Optional[str] = None,
+        extra_env: Optional[dict[str, str]] = None,
+        extra_args: Optional[list[str]] = None,
+    ) -> dict[str, Any]:
+        """Continue an existing session with `prompt` as new input.
+
+        Returns the same shape as ``spawn``::
+
+            {
+                "success": bool,
+                "pid": int | None,
+                "exit_code": int | None,
+                "error": str | None,
+                "log_tail": str | None,
+            }
+
+        Runtimes that don't have native resume can implement this by
+        replaying a Maiko-maintained transcript log + the new prompt
+        through ``spawn`` (the "Option B" fallback in
+        docs/AGENT_RUNTIME.md). Sync-only runtimes should leave this
+        raise so the caller falls back to a runtime that supports it.
+
+        ``extra_args`` covers runtime-specific one-off flags (e.g.
+        re-enabling claude's ``--permission-mode plan`` on a plan-
+        revise wake). Runtimes that don't recognize a flag should
+        silently drop it.
+        """
+        raise NotImplementedError(
+            f"{self.name} runtime does not support resume(); use a runtime "
+            f"that can continue agent sessions (e.g. claude-code) for "
+            f"wake_agent flows."
+        )
+
+    def supports_resume(self) -> bool:
+        """True when this runtime can resume an existing session.
+
+        Default: introspects whether ``resume`` was overridden. Same
+        pattern as ``supports_spawn``.
+        """
+        return type(self).resume is not AgentRuntime.resume
+
+    # ----- Transcript surfacing -----
+    # The UI's "View Session" link shows the user the full conversation.
+    # Claude-Code stores transcripts as JSONL under ~/.claude/projects/;
+    # other runtimes have their own (Aider: .aider.chat.history.md in
+    # the worktree; OpenHands: an event log; local loops: whatever
+    # Maiko's own transcript log captures). The runtime knows where
+    # its transcript lives — the UI asks here.
+
+    def session_transcript_path(
+        self,
+        session_id: str,
+        working_dir: Optional[str] = None,
+    ) -> Optional[str]:
+        """Filesystem path to a human-viewable transcript of the
+        session, or None if this runtime doesn't preserve one.
+
+        Callers (the View Session route) should treat None as "hide
+        the link" and pass any non-None path through their normal
+        access-control + file-streaming logic.
+        """
+        return None

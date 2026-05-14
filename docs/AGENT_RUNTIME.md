@@ -52,7 +52,7 @@ The runtime class today covers only the first pattern. The kickoff
 path still talks to `claude` directly. Migrating that into
 `runtime.spawn()` is the next step (Phase 2 below).
 
-## The class-level contract (Phase 1)
+## The class-level contract
 
 A new runtime subclasses `AgentRuntime` and implements:
 
@@ -62,8 +62,10 @@ A new runtime subclasses `AgentRuntime` and implements:
 | `get_info()` | inherited; override to add version | Settings UI |
 | `send(prompt, ...) -> {output, success, error}` | yes | skills, chat, brain triage |
 | `send_json(prompt, ...) -> {output, success, error, parsed}` | yes | structured-decision skills, eval/holdout |
-| `spawn(working_dir, initial_prompt, ...) -> {success, pid, ...}` | optional | future kickoff path |
-| `supports_spawn()` | inherited; default introspects `spawn` override | kickoff fallback |
+| `spawn(working_dir, initial_prompt, session_id, ...) -> {success, pid, exit_code, error, log_tail}` | optional but recommended | `runtime/kickoff.py` for headless agent launches |
+| `resume(working_dir, session_id, prompt, ...) -> {success, pid, exit_code, error, log_tail}` | optional | `agents/wake.py` for chat / nudge / review-iteration / plan-revise |
+| `session_transcript_path(session_id, working_dir=None) -> path \| None` | optional | View Session button + `tail -f` flows |
+| `supports_spawn()` / `supports_resume()` | inherited; default introspects whether the method was overridden | kickoff / wake guard before delegating |
 
 Caller contract:
 
@@ -269,16 +271,38 @@ references mostly describe behavior maiko orchestrates, not
 something the agent itself does). When we add a second runtime, we
 can decide whether to surgically remove or template the residue.
 
-**Phase 5 — second runtime as proof**
+**Phase 5 — session resume on the runtime — done**
+
+`AgentRuntime.resume()` and `AgentRuntime.session_transcript_path()`
+are now part of the contract. `ClaudeCodeRuntime.resume()` runs
+`claude --print --resume <id>`; `session_transcript_path()` resolves
+the JSONL path under `~/.claude/projects/...`. `agents/wake.py`
+delegates to `runtime.resume()` instead of building the
+subprocess inline. `terminal._find_claude_session_file` now proxies
+through the runtime so any "find the transcript" caller stays
+runtime-agnostic.
+
+What a non-claude runtime can do for resume:
+- If it has a native equivalent (Aider re-invocation, OpenHands event
+  replay), implement `resume()` directly.
+- If it doesn't, the fallback ("Option B" in the design doc):
+  maintain a Maiko-side transcript of every turn (a
+  `.maiko-transcript.jsonl` in the worktree) and have `resume()`
+  build a fresh prompt that includes the prior conversation, then
+  call `spawn()` internally. The agent gets cold-start state but
+  with full context.
+
+**Phase 6 — second runtime as proof**
 
 - Pick a target. Aider is the leading candidate: supports many models
   (including local via Ollama), has a stable CLI, has agent-loop
   semantics close to what Maiko already does. Codex CLI is OpenAI-only;
   Goose / OpenHands are options if Aider's loop doesn't fit.
 - Implement `AiderRuntime(AgentRuntime)` against the contract in
-  `agents/runtimes/aider.py`. The runtime's job is just `send` /
-  `send_json` / `spawn` — every protocol detail above already works
-  because the agent talks back via the `maiko` CLI.
+  `agents/runtimes/aider.py`. The runtime's job is `send` /
+  `send_json` / `spawn` / `resume` / `session_transcript_path` — every
+  protocol detail above already works because the agent talks back
+  via the `maiko` CLI.
 - Wire `_get_runtime()` to read the runtime choice from config /
   Settings → Model Routing, so flipping runtimes is one setting away.
 - Smoke test against a single coding task.
