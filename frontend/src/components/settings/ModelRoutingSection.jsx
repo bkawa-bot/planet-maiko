@@ -16,7 +16,7 @@ const ROUTING_RULES = [
   { key: "conflict_query", label: "Conflict detection", tier: "haiku", effort: "low", runtime: "" },
   { key: "skill", label: "Skills (default)", tier: "sonnet", effort: "medium", runtime: "" },
   { key: "skill:pr-review", label: "PR Review", tier: "sonnet", effort: "medium", runtime: "" },
-  { key: "skill:home-overview", label: "Home overview", tier: "opus", effort: "high", runtime: "ollama" },
+  { key: "skill:home-overview", label: "Home overview", tier: "opus", effort: "high", runtime: "" },
   { key: "project_plan", label: "Project planning", tier: "sonnet", effort: "medium", runtime: "" },
   { key: "profile_judge", label: "Task outcome judging", tier: "sonnet", effort: "medium", runtime: "" },
   { key: "training:entry", label: "Training entries", tier: "opus", effort: "high", runtime: "" },

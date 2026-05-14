@@ -117,8 +117,15 @@ DEFAULT_RUNTIME = {
     # the default runtime automatically.
     "scene":                "ollama",
     "agent_bio":            "ollama",
-    "skill:home-overview":  "ollama",
     "skill:theme":          "ollama",
+
+    # skill:home-overview stays on the default (claude) runtime —
+    # multi-source synthesis (calendar + pupdates + tasks + signals
+    # into a narrative paragraph) is exactly the kind of work Opus
+    # is meaningfully better at than llama 3.x. Reverted from
+    # Ollama default after real usage showed the output quality
+    # wasn't acceptable. User can still route it to Ollama
+    # explicitly via Settings → Model Routing if they want.
 
     # Everything else falls through to brain.runtime, which keeps
     # coding / review / investigation / cartograph on Claude.
