@@ -237,27 +237,37 @@ Concretely:
 - The Phase-3 / Phase-5 "OUTBOX.jsonl watcher + per-runtime protocol
   prompts" plan is **obsoleted** — the CLI replaces both.
 
-**Phase 3 — move kickoff into the runtime**
+**Phase 3 — move kickoff into the runtime — done**
 
-- Add `ClaudeCodeRuntime.spawn(working_dir, initial_prompt, ...)`
-  that contains today's `kickoff.py` logic.
-- Keep `agents/runtime/kickoff.py` as a thin caller that delegates to
-  `runtime.spawn()` and handles the database / state bookkeeping.
-- Now the entire "launch an autonomous agent in a worktree" flow
-  goes through `runtime.spawn()`. A new runtime can implement it
-  however its underlying tool works.
+`ClaudeCodeRuntime.spawn()` now contains the subprocess + cancellation
+logic. `agents/runtime/kickoff.py` shrunk to its actual job: build the
+role-specific initial prompt, hold the per-job lock, capture the
+Flask app context, run the daemon thread, and transition AgentJob
+state when the run finishes. The cmd-building, MCP-config path
+handling, env merging, Popen + communicate, and process-registry
+register/unregister all live on the runtime now. A new runtime that
+implements `spawn()` to its own contract drops in here without
+kickoff changing.
 
-**Phase 4 — protocol-prompt variants per runtime**
+The initial-prompt builder (`_initial_prompt_for(role, plan_first=...)`)
+stayed in kickoff.py because it's instructing the agent which `maiko`
+CLI commands to call — the wording is generic enough that all
+runtimes share it. If a future runtime needs different boot
+instructions, this becomes a per-runtime template.
 
-- Most of `prompts/agent-protocol.md` (and the role-specific siblings)
-  is already runtime-agnostic — the agent's job is the same regardless
-  of who's driving it. The remaining Claude-Code-isms (MCP tool
-  references, `--effort` / `--permission-mode plan` notes, Stop hook
-  expectations) can be conditionally rendered based on the runtime
-  the brief is being assembled for.
-- Goal: a single source of truth per role (coding, review, investigation,
-  cartographer), with `{% if runtime == "claude-code" %}` style
-  branching where the transport details differ.
+**Phase 4 — protocol-prompt variants per runtime — mostly done**
+
+The protocol prompts (`prompts/agent-protocol.md` and siblings) are
+now CLI-only — every transport instruction is `maiko reply` /
+`maiko inbox` / `maiko leave-comment` / `maiko check-code`, not MCP
+tool calls. A new runtime that supports those CLI commands inherits
+the protocol unchanged.
+
+What's left: the remaining claude-code-isms in the prompts are
+mostly inert for other runtimes (`--effort` / `--permission-mode plan`
+references mostly describe behavior maiko orchestrates, not
+something the agent itself does). When we add a second runtime, we
+can decide whether to surgically remove or template the residue.
 
 **Phase 5 — second runtime as proof**
 
@@ -265,11 +275,13 @@ Concretely:
   (including local via Ollama), has a stable CLI, has agent-loop
   semantics close to what Maiko already does. Codex CLI is OpenAI-only;
   Goose / OpenHands are options if Aider's loop doesn't fit.
-- Implement `AiderRuntime` against the contract.
-- Wire `_get_runtime()` to read the runtime choice from config.
-- Smoke test against a single coding task using the `maiko` CLI for
-  comms (the whole point of Phase 2 was making this trivial).
-- Add a runtime picker in Settings → Model Routing.
+- Implement `AiderRuntime(AgentRuntime)` against the contract in
+  `agents/runtimes/aider.py`. The runtime's job is just `send` /
+  `send_json` / `spawn` — every protocol detail above already works
+  because the agent talks back via the `maiko` CLI.
+- Wire `_get_runtime()` to read the runtime choice from config /
+  Settings → Model Routing, so flipping runtimes is one setting away.
+- Smoke test against a single coding task.
 
 ## Adding a new runtime — checklist
 

@@ -297,3 +297,172 @@ class ClaudeCodeRuntime(AgentRuntime):
             except Exception:
                 info["version"] = "unknown"
         return info
+
+    def spawn(
+        self,
+        working_dir,
+        initial_prompt,
+        session_id,
+        *,
+        job_id=None,
+        mcp_config_path=None,
+        log_path=None,
+        model=None,
+        effort=None,
+        permission_mode=None,
+        extra_env=None,
+    ):
+        """Run a `claude --print` agent process synchronously and wait
+        for it to exit. See AgentRuntime.spawn for the full contract.
+
+        The implementation is what used to live inline in
+        agents/runtime/kickoff.py — pulled out here so any caller (the
+        existing kickoff daemon thread, a future runtime-picker UI, a
+        test harness) can launch a claude agent without rebuilding the
+        flag set.
+        """
+        if not prompt_has_text(initial_prompt):
+            return _spawn_error("Empty initial prompt — nothing to send")
+
+        claude_path = self._find_claude()
+        if not claude_path:
+            return _spawn_error("claude CLI not found")
+
+        cmd = [
+            claude_path, "--print", "--output-format", "text",
+            "--session-id", session_id,
+            "--dangerously-skip-permissions",
+        ]
+
+        # Headless `claude --print` stopped auto-discovering .mcp.json
+        # reliably in recent CLI versions — without an explicit
+        # --mcp-config the worktree's project servers (Linear / GitHub /
+        # whatever the user inherited) silently don't load. Maiko's own
+        # comms no longer depend on MCP (CLI + hooks cover everything),
+        # but inherited project MCPs do.
+        if mcp_config_path and _os.path.exists(mcp_config_path):
+            cmd.extend(["--mcp-config", mcp_config_path])
+
+        if model:
+            cmd.extend(["--model", model])
+
+        if effort in ("low", "medium", "high", "max"):
+            cmd.extend(["--effort", effort])
+
+        if permission_mode:
+            cmd.extend(["--permission-mode", permission_mode])
+
+        spawn_env = dict(_os.environ)
+        if extra_env:
+            spawn_env.update(extra_env)
+        # ENABLE_PROMPT_CACHING_1H for long-running agent sessions when
+        # the user opted in via brain.prompt_cache_1h. Same path the
+        # synchronous send() uses.
+        cache_env = self._build_subprocess_env()
+        if cache_env is not None:
+            spawn_env.update({k: v for k, v in cache_env.items() if k not in spawn_env})
+
+        log_file = None
+        popen = None
+        crash_error = None
+        try:
+            if log_path:
+                log_file = open(log_path, "w", encoding="utf-8")
+                log_file.write(f"# Headless agent run\n# session_id: {session_id}\n\n")
+                log_file.flush()
+                stdout = log_file
+                stderr = subprocess.STDOUT
+            else:
+                stdout = subprocess.PIPE
+                stderr = subprocess.PIPE
+
+            popen = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=stdout,
+                stderr=stderr,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                cwd=working_dir,
+                env=spawn_env,
+            )
+
+            # Cancellation registry — optional. The kickoff path passes
+            # job_id so stop_agent_session can reach in and terminate;
+            # one-off harnesses can omit it.
+            if job_id:
+                try:
+                    from planet_maiko.agents.runtime.process import (
+                        register_running_process,
+                        unregister_running_process,
+                    )
+                    register_running_process(job_id, popen)
+                except Exception:
+                    pass
+
+            try:
+                popen.communicate(input=initial_prompt)
+            finally:
+                if job_id:
+                    try:
+                        unregister_running_process(job_id)
+                    except Exception:
+                        pass
+
+            if popen.returncode not in (None, 0):
+                crash_error = (
+                    f"claude exited {popen.returncode}: "
+                    + _tail_log(log_path) if log_path else
+                    f"claude exited {popen.returncode}"
+                )
+        except Exception as e:
+            crash_error = f"spawn failed: {e}"
+        finally:
+            if log_file is not None:
+                try:
+                    log_file.close()
+                except Exception:
+                    pass
+
+        pid = popen.pid if popen is not None else None
+        exit_code = popen.returncode if popen is not None else None
+        return {
+            "success": crash_error is None,
+            "pid": pid,
+            "exit_code": exit_code,
+            "error": crash_error,
+            "log_tail": _tail_log(log_path) if (log_path and crash_error) else None,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Helpers used by spawn() — kept module-private so they don't leak into the
+# runtime class's public surface.
+# ---------------------------------------------------------------------------
+
+def prompt_has_text(prompt):
+    return bool(prompt and prompt.strip())
+
+
+def _spawn_error(msg):
+    return {
+        "success": False,
+        "pid": None,
+        "exit_code": None,
+        "error": msg,
+        "log_tail": None,
+    }
+
+
+def _tail_log(path, max_chars=400):
+    """Return the last ~max_chars of a log file, or a friendly placeholder."""
+    if not path:
+        return None
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            data = f.read()
+        snippet = data[-max_chars:].strip()
+        return snippet or "(empty log)"
+    except Exception as e:
+        return f"(could not read log: {e})"

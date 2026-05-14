@@ -140,26 +140,58 @@ class AgentRuntime(ABC):
         working_dir: str,
         initial_prompt: str,
         session_id: str,
+        *,
+        job_id: Optional[str] = None,
         mcp_config_path: Optional[str] = None,
         log_path: Optional[str] = None,
         model: Optional[str] = None,
         effort: Optional[str] = None,
         permission_mode: Optional[str] = None,
+        extra_env: Optional[dict[str, str]] = None,
     ) -> dict[str, Any]:
         """Spawn an autonomous agent in `working_dir`. Optional.
 
-        The agent receives `initial_prompt`, runs against the working
-        directory, and reports progress through whatever back-channel
-        this runtime supports (MCP outbox, file watch, HTTP webhook).
-        The method returns once the process is launched — it does NOT
-        block until the agent finishes.
+        Encapsulates the "run the agent and wait for it to exit" loop.
+        Designed to be called from a daemon thread — the call BLOCKS
+        until the underlying subprocess settles. The user-facing
+        async behavior (return-immediately, work in background) is
+        provided by callers like ``agents/runtime/kickoff.py`` that
+        wrap spawn() in a thread.
+
+        Args:
+            working_dir: where the agent runs (its CWD)
+            initial_prompt: prompt fed to the agent on startup
+            session_id: persisted as the runtime's session id for resume
+            job_id: optional; if provided, the runtime registers the
+                subprocess with ``agents/runtime/process.py`` so
+                cancellation (``stop_agent_session``) can reach into
+                the running process and terminate it
+            mcp_config_path: passed to claude as ``--mcp-config`` when
+                non-None and the file exists; ignored by runtimes
+                that don't speak MCP
+            log_path: stdout + stderr teed here; if None, output is
+                captured in memory (less useful for long agent runs)
+            model: maps to the runtime's model flag (claude:
+                ``--model``)
+            effort: maps to ``--effort low/medium/high/max`` on
+                claude-code; runtimes that have no equivalent should
+                silently ignore
+            permission_mode: maps to ``--permission-mode`` on
+                claude-code (e.g. "plan" for read-only); runtimes
+                without an equivalent should silently ignore
+            extra_env: additional env vars merged into ``os.environ``
+                for the subprocess
 
         Return shape:
             {
                 "success": bool,
-                "session_id": str,
                 "pid": int | None,
+                "exit_code": int | None,
                 "error": str | None,
+                "log_tail": str | None,   # last ~400 chars of the log
+                                          # on failure, helps surface
+                                          # the why-it-crashed without
+                                          # needing log file access
             }
 
         Sync-only runtimes that don't drive multi-tool agents in a

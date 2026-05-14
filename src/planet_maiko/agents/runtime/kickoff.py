@@ -1,19 +1,25 @@
-"""Headless kickoff for any agent role — fires `claude --print` in a
-detached subprocess so the agent runs autonomously without a terminal.
-Talks to MCP via the channel server registered in .mcp.json."""
+"""Headless kickoff for any agent role.
+
+Spawns a detached background thread that runs an autonomous agent
+session in a prepared worktree. The actual subprocess (currently
+`claude --print` via ClaudeCodeRuntime; future backends like Aider /
+Codex / Goose plug in here via the same AgentRuntime.spawn()
+contract) is delegated to the runtime — this module only handles the
+parts that don't depend on the model: the role-specific initial
+prompt, the per-job concurrency lock, the daemon thread, the
+Flask-app-context dance for DB writes, and the AgentJob/Task state
+transitions when the run finishes.
+
+The subprocess + cancellation tracking + log capture now live on the
+runtime (agents/runtimes/claude_code.py:spawn). See
+docs/AGENT_RUNTIME.md for the migration plan.
+"""
 
 import logging
 import os
 import re
-import subprocess
 import threading
-import time as _time
 import uuid
-
-from planet_maiko.agents.runtime.process import (
-    register_running_process,
-    unregister_running_process,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -22,20 +28,6 @@ _SAFE_BRANCH_RE = re.compile(r"^[A-Za-z0-9_./-]+$")
 # Path validation: catch shell metacharacters but allow real path chars
 # (letters, digits, spaces, dot, dash, underscore, slash, backslash, colon, paren).
 _UNSAFE_PATH_CHARS = re.compile(r'[;&|`$<>!"*?\n\r]')
-
-
-def _tail_log(path, max_chars=400):
-    """Read the last ~max_chars of a log file. Used to capture a useful
-    excerpt of why claude exited so the AgentJob row carries context
-    instead of a bare exit code."""
-    try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            data = f.read()
-        snippet = data[-max_chars:].strip()
-        # Strip blank leading lines so the tail reads clean.
-        return snippet or "(empty log)"
-    except Exception as e:
-        return f"(could not read log: {e})"
 
 
 def _mark_kickoff_failed(app, kickoff_id, error):
@@ -115,16 +107,17 @@ def _kickoff_agent_headless(agent_id, worktree_path, job_id, branch_name=None, p
 
     Returns immediately after spawning the thread.
     """
-    import shutil
-    import threading
-
-    claude_path = shutil.which("claude")
-    if not claude_path:
-        return {"success": False, "error": "claude CLI not found"}
     if branch_name and not _SAFE_BRANCH_RE.match(branch_name):
         return {"success": False, "error": f"Unsafe branch name: {branch_name!r}"}
     if _UNSAFE_PATH_CHARS.search(worktree_path):
         return {"success": False, "error": f"Unsafe worktree path: {worktree_path!r}"}
+
+    from planet_maiko.agents.brain_session import _get_runtime
+    runtime = _get_runtime()
+    if not runtime.is_available():
+        return {"success": False, "error": f"{runtime.name} runtime not available"}
+    if not runtime.supports_spawn():
+        return {"success": False, "error": f"{runtime.name} runtime can't drive autonomous agents"}
 
     # Kickoff concurrency guard: if a wake or a prior kickoff is still
     # running for this job, don't overwrite the session registry
@@ -139,113 +132,31 @@ def _kickoff_agent_headless(agent_id, worktree_path, job_id, branch_name=None, p
     from planet_maiko.api.agents_api import _set_session
     _set_session(job_id, session_id, worktree_path)
 
-    if plan_first:
-        initial_prompt = (
-            "Read TASK.md and CLAUDE.md in this directory. Do NOT write "
-            "any code yet. Produce a detailed implementation plan "
-            "(markdown, 500 words max) covering: what you'll change, in "
-            "which files, in what order, and the key decisions / risks. "
-            "When the plan is ready, call reply(content=<your plan>, "
-            "message_type=\"plan_for_approval\") via the maiko-channel "
-            "MCP and exit. The user will approve or request changes; "
-            "Maiko will resume you with their decision."
-        )
-    elif role == "review":
-        initial_prompt = (
-            "Read TASK.md and CLAUDE.md in this directory. TASK.md "
-            "carries the PR review instructions and context — execute "
-            "them following the review-agent-protocol in CLAUDE.md. "
-            "When done, call reply(content=<your full review markdown, "
-            "including any PATTERN: / PROPOSAL: blocks>, "
-            "message_type=\"ready_for_review\") via the maiko-channel "
-            "MCP. The server parses PATTERN: / PROPOSAL: blocks out "
-            "of your content automatically — keep them inside the "
-            "reply, not in stdout. After replying, check_inbox for "
-            "any follow-up questions and iterate."
-        )
-    elif role == "investigation":
-        initial_prompt = (
-            "Read TASK.md and CLAUDE.md in this directory. TASK.md "
-            "carries the investigation instructions and context — "
-            "execute them following the investigation-agent-protocol "
-            "in CLAUDE.md. When done, call reply(content=<your full "
-            "investigation report markdown, including any PATTERN: / "
-            "PROPOSAL: / CONFIDENCE: blocks>, "
-            "message_type=\"ready_for_review\") via the maiko-channel "
-            "MCP. After replying, check_inbox for any follow-up "
-            "questions."
-        )
-    elif role == "cartographer":
-        initial_prompt = (
-            "Read CLAUDE.md in this directory — it carries the "
-            "cartographer-agent-protocol. TASK.md names the repo "
-            "you're mapping. Walk the tree (README, manifests, "
-            "top-level dirs, entry points, recent git log, a few "
-            "sample source files), then call reply(content=<your "
-            "overview markdown>, message_type=\"insight\") via the "
-            "maiko-channel MCP exactly once. The server auto-tags "
-            "cartographer insights — no need to pass tags yourself. "
-            "Read-only: do not commit, push, or modify anything. "
-            "Exit after the reply."
-        )
-    else:  # coding
-        initial_prompt = (
-            "Read TASK.md and CLAUDE.md in this directory. Begin "
-            "working on the task following the protocol. After your "
-            "first meaningful commit, call reply(content=\"<one-line "
-            "summary>\", message_type=\"ready_for_review\") via the "
-            "maiko-channel MCP and then use check_inbox to receive "
-            "any review feedback. Do not git push or open PRs — "
-            "Maiko handles that once the human approves."
-        )
-
-    # No --allowedTools alongside --dangerously-skip-permissions — the
-    # skip flag is the blanket bypass, and passing allowlists on top
-    # gets treated as restrictive scope filter that stalls on writes
-    # to unlisted paths and MCP subtools. Worktree isolation makes the
-    # nuclear option safe here.
-    cmd = [
-        claude_path, "--print", "--output-format", "text",
-        "--session-id", session_id,
-        "--dangerously-skip-permissions",
-    ]
-
-    # Headless `claude --print` stopped auto-discovering .mcp.json
-    # reliably in recent CLI versions — without an explicit
-    # --mcp-config the worktree's project servers (maiko-channel +
-    # whatever inherited from the parent repo) silently don't load.
-    # The agent then "can't connect to the Maiko MCP" because there
-    # IS no maiko-channel registered. Pointing at the worktree's
-    # .mcp.json explicitly is what the docs recommend post Feb 2026.
-    mcp_config_path = os.path.join(worktree_path, ".mcp.json")
-    if os.path.exists(mcp_config_path):
-        cmd.extend(["--mcp-config", mcp_config_path])
+    initial_prompt = _initial_prompt_for(role, plan_first=plan_first)
 
     # Model + effort routing: pull both from config so the agent runs
-    # on whatever the user picked in Settings → Model Routing rather
-    # than Claude Code's CLI default. All agent roles share the
-    # "coding_agent" key today (review / investigation / cartographer
-    # are long-running too); user can split them in routing.rules if
-    # they want different tiers per role.
+    # on whatever the user picked in Settings → Model Routing. All
+    # roles share the "coding_agent" key today; user can split in
+    # routing.rules if they want different tiers per role.
     try:
         from planet_maiko.agents.routing import resolve_model, resolve_effort
         model = resolve_model("coding_agent")
-        budget = resolve_effort("coding_agent") or "medium"
+        effort = resolve_effort("coding_agent") or "medium"
     except Exception:
         model = None
-        budget = "medium"
-    if model:
-        cmd.extend(["--model", model])
-    if budget in ("low", "medium", "high", "max"):
-        cmd.extend(["--effort", budget])
+        effort = "medium"
 
-    if plan_first or role == "cartographer":
-        # Claude's plan mode restricts the tool set to read-only
-        # (Read/Glob/Grep/etc.), so the agent can't write even if its
-        # prompt discipline slips. Reply via MCP still works since
-        # MCP tools aren't disk-modifying. Cartographers run read-only
-        # by design — no exceptions.
-        cmd.extend(["--permission-mode", "plan"])
+    # Cartographer + plan_first need read-only restrictions; the
+    # runtime maps "plan" to its underlying flag (claude-code:
+    # --permission-mode plan).
+    permission_mode = "plan" if (plan_first or role == "cartographer") else None
+
+    # If a .mcp.json was written for inherited project MCPs, point
+    # claude at it. With maiko-channel removed, this is only present
+    # when the user has Linear / GitHub / etc. configured.
+    mcp_config_path = os.path.join(worktree_path, ".mcp.json")
+    if not os.path.exists(mcp_config_path):
+        mcp_config_path = None
 
     log_path = os.path.join(worktree_path, "agent.log")
 
@@ -261,56 +172,33 @@ def _kickoff_agent_headless(agent_id, worktree_path, job_id, branch_name=None, p
     def _run():
         from planet_maiko.agents.wake import set_agent_state
         set_agent_state(_app, job_id, "working")
-        popen = None
-        crash_error = None  # captured to mark the AgentJob/Task failed
+        crash_error = None
         try:
-            with open(log_path, "w", encoding="utf-8") as log:
-                log.write(f"# Headless coding agent run\n# session_id: {session_id}\n\n")
-                log.flush()
-                # Popen (not subprocess.run) so stop_agent_session can
-                # reach into _running_processes and terminate in-flight
-                # when the user cancels a job. Communicate() still
-                # blocks this thread until the subprocess exits, so the
-                # set_agent_state("idle") + lock.release() happen at
-                # the right moment.
+            result = runtime.spawn(
+                worktree_path,
+                initial_prompt,
+                session_id,
+                job_id=job_id,
+                mcp_config_path=mcp_config_path,
+                log_path=log_path,
+                model=model,
+                effort=effort,
+                permission_mode=permission_mode,
                 # MAIKO_JOB_ID flows into the subprocess env so the
                 # agent can call `maiko reply / inbox / check-code /
                 # leave-comment` from inside its shell without passing
-                # --job every time. The same env var is what the MCP
-                # channel server reads, so both paths coexist.
-                spawn_env = dict(os.environ)
-                spawn_env["MAIKO_JOB_ID"] = job_id
-                popen = subprocess.Popen(
-                    cmd,
-                    stdin=subprocess.PIPE,
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    cwd=worktree_path,
-                    env=spawn_env,
-                )
-                register_running_process(job_id, popen)
-                try:
-                    popen.communicate(input=initial_prompt)
-                finally:
-                    unregister_running_process(job_id)
-            # Non-zero exit = claude crashed (MCP load failure, auth
-            # missing, network blip, etc). Capture the last bit of the
-            # log so the failure surfaces somewhere useful instead of
-            # vanishing into agent.log nobody reads.
-            if popen is not None and popen.returncode not in (None, 0):
-                crash_error = (
-                    f"claude exited {popen.returncode}: "
-                    + _tail_log(log_path, max_chars=400)
-                )
+                # --job every time.
+                extra_env={"MAIKO_JOB_ID": job_id},
+            )
+            if not result.get("success"):
+                crash_error = result.get("error") or "unknown spawn failure"
+                tail = result.get("log_tail")
+                if tail:
+                    crash_error = f"{crash_error} ({tail})"
         except Exception as e:
             crash_error = f"kickoff thread crashed: {e}"
             logger.warning(f"[agent] Headless run for {job_id} failed: {e}")
         finally:
-            if popen is not None:
-                unregister_running_process(job_id)
             set_agent_state(_app, job_id, "idle")
             lock.release()
             # If the subprocess died before the agent could report back,
@@ -320,8 +208,11 @@ def _kickoff_agent_headless(agent_id, worktree_path, job_id, branch_name=None, p
             if crash_error:
                 _mark_kickoff_failed(_app, job_id, crash_error)
 
-    threading.Thread(target=_run, daemon=True, name=f"coding-{job_id}").start()
-    logger.info(f"[agent] Headless coding agent launched for {agent_id} (session {session_id[:8]})")
+    threading.Thread(target=_run, daemon=True, name=f"agent-{job_id}").start()
+    logger.info(
+        f"[agent] Headless {role} agent launched for {agent_id} "
+        f"(session {session_id[:8]}, runtime {runtime.name})"
+    )
     return {
         "success": True,
         "working_path": worktree_path,
@@ -329,4 +220,66 @@ def _kickoff_agent_headless(agent_id, worktree_path, job_id, branch_name=None, p
         "mode": "headless",
         "log_path": log_path,
     }
+
+
+def _initial_prompt_for(role, plan_first=False):
+    """Build the role-specific initial prompt the agent receives at
+    boot. CLI-only — no MCP-tool references — matches the protocol
+    files in prompts/."""
+    if plan_first:
+        return (
+            "Read TASK.md and CLAUDE.md in this directory. Do NOT write "
+            "any code yet. Produce a detailed implementation plan "
+            "(markdown, 500 words max) covering: what you'll change, in "
+            "which files, in what order, and the key decisions / risks. "
+            "When the plan is ready, run `maiko reply \"<your plan>\" "
+            "--type plan_for_approval` and exit. The user will approve "
+            "or request changes; Maiko will resume you with their decision."
+        )
+    if role == "review":
+        return (
+            "Read TASK.md and CLAUDE.md in this directory. TASK.md "
+            "carries the PR review instructions and context — execute "
+            "them following the review-agent-protocol in CLAUDE.md. "
+            "When done, run `maiko reply \"<your full review markdown, "
+            "including any PATTERN: / PROPOSAL: blocks>\" "
+            "--type ready_for_review`. The server parses PATTERN: / "
+            "PROPOSAL: blocks out of your content automatically — keep "
+            "them inside the reply, not in stdout. The Stop hook will "
+            "auto-poll your inbox for any follow-up questions before "
+            "you settle."
+        )
+    if role == "investigation":
+        return (
+            "Read TASK.md and CLAUDE.md in this directory. TASK.md "
+            "carries the investigation instructions and context — "
+            "execute them following the investigation-agent-protocol "
+            "in CLAUDE.md. When done, run `maiko reply \"<your full "
+            "investigation report markdown, including any PATTERN: / "
+            "PROPOSAL: / CONFIDENCE: blocks>\" --type ready_for_review`. "
+            "The Stop hook will auto-poll your inbox for any follow-up "
+            "questions before you settle."
+        )
+    if role == "cartographer":
+        return (
+            "Read CLAUDE.md in this directory — it carries the "
+            "cartographer-agent-protocol. TASK.md names the repo "
+            "you're mapping. Walk the tree (README, manifests, "
+            "top-level dirs, entry points, recent git log, a few "
+            "sample source files), then run `maiko reply \"<your "
+            "overview markdown>\" --type insight` exactly once. The "
+            "server auto-tags cartographer insights — no need to pass "
+            "tags yourself. Read-only: do not commit, push, or modify "
+            "anything. Exit after the reply."
+        )
+    # coding (default)
+    return (
+        "Read TASK.md and CLAUDE.md in this directory. Begin working "
+        "on the task following the protocol. After your first "
+        "meaningful commit, run `maiko check-code` to verify the "
+        "mechanical checks are green, then run `maiko reply \"<one-line "
+        "summary>\" --type ready_for_review`. The Stop hook will auto-"
+        "poll your inbox for review feedback. Do not git push or open "
+        "PRs — Maiko handles that once the human approves."
+    )
 
