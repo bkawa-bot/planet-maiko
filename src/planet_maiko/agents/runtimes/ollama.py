@@ -49,6 +49,27 @@ logger = logging.getLogger(__name__)
 _DEFAULT_BASE_URL = "http://localhost:11434"
 _DEFAULT_MODEL = "llama3.1:8b"
 
+# Maiko's routing layer hands every send() a model name resolved from
+# the routing config — which today is keyed on Claude tier names
+# (haiku / sonnet / opus). When a Claude-routed task gets bounced over
+# to Ollama (e.g., user moved skill:home-overview to ollama in
+# runtime_rules but didn't add a matching ollama-tier model), the
+# call would otherwise fail with "model opus not found." Recognize
+# the Claude names and substitute our default instead. Same pattern
+# for any prefix we treat as Anthropic-specific. Long-term fix is
+# per-runtime model rules in routing config; this is the safety net.
+_CLAUDE_TIER_NAMES = frozenset({"haiku", "sonnet", "opus"})
+
+
+def _is_claude_model_name(model):
+    if not model:
+        return False
+    if model in _CLAUDE_TIER_NAMES:
+        return True
+    if model.startswith("claude-") or model.startswith("claude_"):
+        return True
+    return False
+
 # Claude's `--effort` knob controls extended thinking, which open-
 # source models don't expose. Map it to sampling temperature + a
 # token budget so the cheap/fast vs. richer/slower distinction
@@ -211,6 +232,18 @@ class OllamaRuntime(AgentRuntime):
 
     def _compose_body(self, prompt, *, model=None, effort=None):
         eff = _EFFORT_MAP.get(effort or "medium", _EFFORT_MAP["medium"])
+        # Map Claude-tier names (handed in by routing.resolve_model)
+        # to our default. Logs once at info level the first time it
+        # happens for a given tier so the user knows the routing
+        # config still resolves to Claude-side names somewhere.
+        if _is_claude_model_name(model):
+            logger.info(
+                f"[ollama] ignoring Claude-tier model {model!r}; using "
+                f"default {self._default_model()!r}. Add per-runtime model "
+                f"rules in routing.runtime_models if you want a "
+                f"different Ollama model per task."
+            )
+            model = None
         return {
             "model": model or self._default_model(),
             "messages": [{"role": "user", "content": prompt}],
