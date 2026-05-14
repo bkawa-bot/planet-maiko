@@ -331,8 +331,13 @@ def _schedule_bio_generation(agent_id, can_rename=True):
                 result = runtime.send(
                     prompt,
                     timeout=240,
-                    model=resolve_model("triage"),
-                    effort=resolve_effort("triage"),
+                    # runtime.name routes resolve_model through any
+                    # per-runtime model overrides the user set in
+                    # Settings → Model Routing.
+                    model=resolve_model("agent_bio", runtime.name)
+                          or resolve_model("triage", runtime.name),
+                    effort=resolve_effort("agent_bio")
+                           or resolve_effort("triage"),
                 )
                 success = bool(result and result.get("success"))
                 name, tagline, bio = (None, None, None)

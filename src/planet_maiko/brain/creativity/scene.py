@@ -251,9 +251,12 @@ def _refresh_creative_note(weather, season, time_bucket, mood):
             f"{weather} weather, {season}, {time_bucket}, mood: {mood}. "
             f"Be poetic and cozy, like a Studio Ghibli film narrator."
         )
+        # runtime.name lets resolve_model honor per-runtime model
+        # overrides (routing.runtime_models.<runtime>.scene = "...").
         result = runtime.send(
             prompt, timeout=15,
-            model=resolve_model("scene"), effort=resolve_effort("scene"),
+            model=resolve_model("scene", runtime.name),
+            effort=resolve_effort("scene"),
         )
         if result and result.get("success") and result.get("output"):
             text = result["output"].strip().strip('"')

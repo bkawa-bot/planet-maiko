@@ -720,7 +720,13 @@ def _run_home_overview_skill(prompt, working_dir):
     if not runtime.is_available():
         raise RuntimeError("Brain runtime not available")
 
-    model = resolve_model("skill:home-overview") or resolve_model("skill")
+    # resolve_model now takes runtime.name so users who set per-runtime
+    # model overrides (routing.runtime_models.ollama.skill:home-overview
+    # = "llama3.1:70b") get them honored. Without that override it
+    # falls through to the global rules → DEFAULT_ROUTING → the
+    # runtime's own default.
+    model = (resolve_model("skill:home-overview", runtime.name)
+             or resolve_model("skill", runtime.name))
     effort = resolve_effort("skill:home-overview") or resolve_effort("skill")
 
     # Release DB before the long call so SQLite writers aren't blocked

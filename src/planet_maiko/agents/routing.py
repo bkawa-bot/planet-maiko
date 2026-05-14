@@ -125,13 +125,42 @@ DEFAULT_RUNTIME = {
 }
 
 
-def resolve_model(task_type):
+def resolve_model(task_type, runtime_name=None):
     """Resolve which model to use for a given task type.
 
-    Checks config routing.rules first, falls back to DEFAULT_ROUTING,
-    then tries prefix match (e.g. "skill:morning-brief" -> "skill"),
-    then falls back to config default_model or None.
+    Precedence:
+      1. ``routing.runtime_models[runtime_name][task_type]``  — per-runtime
+         override; lets a user say "use llama3.1:70b for the overview
+         when it's routed to Ollama, but opus when it's routed to
+         Claude."
+      2. ``routing.runtime_models[runtime_name][prefix]`` — prefix match
+         inside the per-runtime override (e.g. ``skill`` covers
+         ``skill:home-overview``).
+      3. ``routing.rules[task_type]`` — global model rules.
+      4. ``routing.rules[prefix]``.
+      5. ``DEFAULT_ROUTING[task_type]`` / prefix.
+      6. ``routing.default_model``.
+      7. None — caller (or runtime) picks its own default.
+
+    The ``runtime_name`` arg is optional. Callers that don't pass it
+    get the old behavior (global rules only). Callers that pass it
+    benefit from per-runtime model namespaces — necessary because
+    Claude tier names (haiku / sonnet / opus) don't translate to
+    Ollama model names (llama3.1:8b / qwen2.5:32b / etc.).
     """
+    if runtime_name:
+        config = load_config()
+        routing = config.get("routing", {})
+        if not routing.get("enabled", True):
+            return None
+        per_runtime = (routing.get("runtime_models") or {}).get(runtime_name) or {}
+        if task_type in per_runtime:
+            return per_runtime[task_type]
+        if ":" in task_type:
+            prefix = task_type.split(":")[0]
+            if prefix in per_runtime:
+                return per_runtime[prefix]
+
     return _resolve(task_type, "rules", DEFAULT_ROUTING, "default_model")
 
 
