@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
-import Footer from "./Footer";
 import WeatherOverlay from "./WeatherOverlay";
 import ShutdownModal from "./ShutdownModal";
 import MissingToolBanner from "./MissingToolBanner";
@@ -151,7 +150,6 @@ export default function Layout() {
         <MissingToolBanner />
         <Outlet />
       </main>
-      <Footer />
 
       {showShutdown && <ShutdownModal onClose={() => setShowShutdown(false)} />}
 

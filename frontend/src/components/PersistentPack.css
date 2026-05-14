@@ -1,30 +1,38 @@
-/* Persistent pack dock — bottom-left, fixed, always-visible on every
-   page except /jobs/<id>. Collapsed it's a compact avatar stack;
-   hover expands the avatars and reveals the speech-bubble preview. */
+/* Persistent pack dock — vertical column pinned to the left edge,
+   just under the topbar. Hover expands the avatars and reveals a
+   speech bubble to the right of each one. Bubbles can stretch wider
+   in this orientation since they extend into the middle column
+   instead of stacking above the avatar. */
 
 .persistent-pack {
   position: fixed;
-  /* The footer is fixed at bottom: 0 height: 28px z-index: 100.
-     Lift the dock above it (28 + 16 gap = 44px). Z-index above the
-     footer so the dock always wins on overlap. */
-  bottom: 44px;
+  /* Topbar is fixed at top: 0, height: 48px, z-index: 100. The dock
+     sits below it with a small gap so it doesn't read as attached
+     chrome. */
+  top: 72px;
   left: 16px;
   z-index: 110;
   display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 10px;
-  align-items: flex-end;
-  padding: 12px 14px;
+  padding: 14px 12px;
   background: var(--pane-bg, rgba(26, 31, 74, 0.65));
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  /* Cap the dock at roughly the visible viewport so a pack of many
+     agents doesn't run off the bottom of the screen. Scrollbar shows
+     up inside the dock in that rare case. */
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
   transition: gap 0.15s ease, padding 0.15s ease;
 }
 
 .persistent-pack.expanded {
-  gap: 18px;
+  gap: 16px;
 }
 
 .persistent-pack-villager {
@@ -41,7 +49,9 @@
 }
 
 .persistent-pack-villager:hover {
-  transform: translateY(-2px);
+  /* Nudge sideways toward the bubble instead of up — the dock is
+     vertical, so the depth direction is horizontal. */
+  transform: translateX(2px);
 }
 
 .persistent-pack-villager:focus-visible {
@@ -96,28 +106,33 @@
   50%      { box-shadow: 0 0 0 8px rgba(255, 85, 119, 0.0); }
 }
 
-/* Speech bubble — only visible while the dock is expanded AND the
-   villager itself is hovered. Floats above the avatar so it doesn't
-   clip against the bottom of the screen. */
+/* Speech bubble — appears to the RIGHT of the avatar on hover. The
+   vertical dock has unused space stretching toward the page center,
+   so the bubble can be wider here than it ever could in the old
+   bottom-bar layout where it had to fit above an avatar. */
 .persistent-pack-bubble {
   position: absolute;
-  bottom: calc(100% + 10px);
-  left: 50%;
-  transform: translateX(-50%);
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-xs);
-  padding: 8px 10px;
-  min-width: 180px;
-  max-width: 280px;
-  font-size: 11px;
+  padding: 10px 14px;
+  min-width: 220px;
+  max-width: 400px;
+  font-size: 12px;
   color: var(--text);
   display: none;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   pointer-events: none;
   z-index: 1;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  /* Long agent messages should wrap rather than force a tooltip the
+     full width of the page. white-space normal + overflow-wrap
+     handles long single tokens (urls, file paths). */
+  white-space: normal;
 }
 
 .persistent-pack-villager:hover .persistent-pack-bubble,
@@ -133,14 +148,14 @@
 
 .persistent-pack-bubble-title {
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 11px;
   font-style: italic;
 }
 
 .persistent-pack-bubble-msg {
   color: var(--text-muted);
   font-style: italic;
-  line-height: 1.4;
+  line-height: 1.45;
   white-space: normal;
   overflow-wrap: anywhere;
 }

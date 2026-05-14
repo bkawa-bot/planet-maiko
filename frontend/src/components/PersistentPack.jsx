@@ -140,19 +140,17 @@ export default function PersistentPack() {
                 />
               )}
             </span>
-            {expanded && (
-              <span className="persistent-pack-bubble" role="tooltip">
-                <span className="persistent-pack-bubble-name">{name}</span>
-                {a.task_title && (
-                  <span className="persistent-pack-bubble-title">{a.task_title}</span>
-                )}
-                {a.last_message && (
-                  <span className="persistent-pack-bubble-msg">
-                    "{a.last_message}"
-                  </span>
-                )}
-              </span>
-            )}
+            <span className="persistent-pack-bubble" role="tooltip">
+              <span className="persistent-pack-bubble-name">{name}</span>
+              {a.task_title && (
+                <span className="persistent-pack-bubble-title">{a.task_title}</span>
+              )}
+              {a.last_message && (
+                <span className="persistent-pack-bubble-msg">
+                  "{a.last_message}"
+                </span>
+              )}
+            </span>
           </button>
         );
       })}
