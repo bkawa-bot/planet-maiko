@@ -111,18 +111,11 @@ DEFAULT_CONFIG = {
             ["batch_job_failing", "error_spike"],
             ["deploy_rollback", "batch_job_failing"],
         ],
-        # When the correlator fires an incident, Maiko auto-creates an
-        # investigation task. `dry_run` keeps the secondary safety on:
-        # task appears in your list with extra.auto_spawned=true, but no
-        # agent kickoff yet — flip dry_run off when you trust the
-        # trigger to not surprise you. `enabled=false` turns the whole
-        # feature off (no task, no agent). `daily_budget` hard-stops
-        # runaway loops when upstream signals spike.
-        "auto_investigate": {
-            "enabled": True,
-            "dry_run": False,
-            "daily_budget": 5,
-        },
+        # Retired: the correlator → auto-investigate pipeline was
+        # replaced by pupdate_match / pupdate_chain automations
+        # configured per-user on the Automations page. Defaults
+        # block kept removed; existing configs with auto_investigate
+        # set still load fine (the keys are just ignored).
         # Propagates ENABLE_PROMPT_CACHING_1H=1 to Claude Code subprocesses.
         # Anthropic shipped the 1-hour cache TTL on Apr 14 2026 — default
         # cache is 5m. Agent sessions here typically span 5-60 minutes and

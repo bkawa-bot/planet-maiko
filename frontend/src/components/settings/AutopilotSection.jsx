@@ -1,27 +1,20 @@
 /**
  * Autopilot — what Maiko does without asking you.
  *
- * Three knobs:
- *   - auto-investigate incidents (correlator → investigation task)
+ * Two knobs:
  *   - cartographer auto-proposals (stale repo overviews suggest
  *     refresh tasks)
  *   - 1h prompt cache (cost knob — Anthropic's longer cache TTL,
  *     usually wins on multi-turn agent runs)
+ *
+ * The old "auto-investigate incidents" subsection was retired with
+ * the correlator pipeline; pupdate_match / pupdate_chain automations
+ * cover that flow now (configure them in Automations, not here).
  */
 export default function AutopilotSection({ config, setConfig }) {
-  const auto = config.brain?.auto_investigate || {};
-  const autoEnabled = auto.enabled ?? true;
   const cartographer = config.brain?.role_autonomy?.cartographer || {};
   const cartographerEnabled = cartographer.enabled ?? true;
   const promptCache1h = !!config.brain?.prompt_cache_1h;
-
-  const updateAuto = (patch) => setConfig((c) => ({
-    ...c,
-    brain: {
-      ...(c.brain || {}),
-      auto_investigate: { ...(c.brain?.auto_investigate || {}), ...patch },
-    },
-  }));
 
   const updateCartographer = (patch) => setConfig((c) => ({
     ...c,
@@ -46,44 +39,6 @@ export default function AutopilotSection({ config, setConfig }) {
       </div>
       <div className="collapsible-body">
         <div className="integration-section">
-          <div className="setup-hint">
-            When the correlator detects an incident (CI fail + deploy rollback,
-            error spike chain, etc.), Maiko can auto-create an investigation
-            task and kick off an investigation agent on it. Turn this off to
-            require manual triage of every incident.
-          </div>
-          <div className="integration-fields">
-            <label>
-              <input
-                type="checkbox"
-                checked={autoEnabled}
-                onChange={(e) => updateAuto({ enabled: e.target.checked })}
-              />
-              Auto-investigate incidents
-            </label>
-            <label style={{ opacity: autoEnabled ? 1 : 0.5 }}>
-              <input
-                type="checkbox"
-                checked={auto.dry_run ?? false}
-                disabled={!autoEnabled}
-                onChange={(e) => updateAuto({ dry_run: e.target.checked })}
-              />
-              Dry-run only (create the task so you can see what would've fired, skip the agent kickoff)
-            </label>
-            <label>
-              Daily budget — hard stop after N auto-investigations per day
-              <input
-                type="number"
-                min="1"
-                max="50"
-                value={auto.daily_budget ?? 5}
-                onChange={(e) => updateAuto({ daily_budget: parseInt(e.target.value) || 5 })}
-              />
-            </label>
-          </div>
-        </div>
-
-        <div className="integration-section" style={{ marginTop: 18 }}>
           <div className="setup-hint">
             Cartographer auto-proposals — when a repo's overview goes stale,
             the cartographer agent proposes a refresh task into your inbox.
