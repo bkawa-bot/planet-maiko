@@ -32,28 +32,22 @@ agents default to whichever Claude-based runtime the user picked.
 from planet_maiko.config import load_config
 
 DEFAULT_ROUTING = {
-    # Haiku tier
+    # Haiku tier — cheap classification + creative one-liners
     "triage": "haiku",
     "classify": "haiku",
     "scene": "haiku",
-    "conflict_query": "haiku",
+    "agent_bio": "haiku",
 
-    # Sonnet tier
+    # Sonnet tier — general skill work + chat
     "chat": "sonnet",
     "skill": "sonnet",
-    "skill:home-overview": "opus",
-    "skill:brainstorm": "sonnet",
     "skill:investigate": "sonnet",
+    "skill:repo-analysis": "sonnet",
     "skill:pr-review": "sonnet",
-    "skill:plan": "sonnet",
     "project_plan": "sonnet",
-    "project_tasks": "sonnet",
-    "conflict_classify": "sonnet",
-    "profile_judge": "sonnet",
 
-    # Opus tier
-    "training:entry": "opus",
-    "training:judge": "opus",
+    # Opus tier — multi-source synthesis + real agent work
+    "skill:home-overview": "opus",
     "synthetic_data": "opus",
     "coding_agent": "opus",
 }
@@ -81,24 +75,18 @@ DEFAULT_EFFORT = {
     "triage": "low",
     "classify": "low",
     "scene": "low",
-    "conflict_query": "low",
+    "agent_bio": "low",
     "chat": "low",
 
     # General work — medium is the right middle
     "skill": "medium",
-    "skill:brainstorm": "medium",
     "skill:investigate": "medium",
+    "skill:repo-analysis": "medium",
     "skill:pr-review": "medium",
-    "skill:plan": "medium",
     "project_plan": "medium",
-    "project_tasks": "medium",
-    "conflict_classify": "medium",
-    "profile_judge": "medium",
 
     # Heavy lifting — pay for deeper thinking
     "skill:home-overview": "high",
-    "training:entry": "high",
-    "training:judge": "high",
     "synthetic_data": "high",
     "coding_agent": "high",
 }

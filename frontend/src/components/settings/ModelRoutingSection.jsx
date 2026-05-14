@@ -9,18 +9,23 @@ import { ChevronDown, ChevronRight } from "@icons";
 // override). Internal tasks default to ollama so they don't burn
 // Anthropic credit; everything else inherits the user's default.
 const ROUTING_RULES = [
+  // Cheap internal work
   { key: "triage", label: "Triage (pupdate classification)", tier: "haiku", effort: "low", runtime: "" },
-  { key: "classify", label: "Signal classification", tier: "haiku", effort: "low", runtime: "" },
+  { key: "classify", label: "Signal / learning classification", tier: "haiku", effort: "low", runtime: "" },
   { key: "scene", label: "Scene creative note", tier: "haiku", effort: "low", runtime: "ollama" },
   { key: "agent_bio", label: "Agent bio generation", tier: "haiku", effort: "low", runtime: "ollama" },
-  { key: "conflict_query", label: "Conflict detection", tier: "haiku", effort: "low", runtime: "" },
+  { key: "chat", label: "Ask Maiko (chat box)", tier: "sonnet", effort: "low", runtime: "" },
+
+  // Skills — the default plus specific skills users can tune individually
   { key: "skill", label: "Skills (default)", tier: "sonnet", effort: "medium", runtime: "" },
-  { key: "skill:pr-review", label: "PR Review", tier: "sonnet", effort: "medium", runtime: "" },
+  { key: "skill:investigate", label: "Investigate skill", tier: "sonnet", effort: "medium", runtime: "" },
+  { key: "skill:repo-analysis", label: "Repo Analysis skill", tier: "sonnet", effort: "medium", runtime: "" },
+  { key: "skill:pr-review", label: "PR Review skill", tier: "sonnet", effort: "medium", runtime: "" },
   { key: "skill:home-overview", label: "Home overview", tier: "opus", effort: "high", runtime: "" },
+
+  // Heavier work
   { key: "project_plan", label: "Project planning", tier: "sonnet", effort: "medium", runtime: "" },
-  { key: "profile_judge", label: "Task outcome judging", tier: "sonnet", effort: "medium", runtime: "" },
-  { key: "training:entry", label: "Training entries", tier: "opus", effort: "high", runtime: "" },
-  { key: "training:judge", label: "Training judging", tier: "opus", effort: "high", runtime: "" },
+  { key: "synthetic_data", label: "Training data synthesis", tier: "opus", effort: "high", runtime: "" },
   { key: "coding_agent", label: "Coding agents", tier: "opus", effort: "high", runtime: "" },
 ];
 
