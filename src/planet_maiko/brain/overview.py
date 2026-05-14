@@ -713,7 +713,10 @@ def _run_home_overview_skill(prompt, working_dir):
     from planet_maiko.agents.brain_session import _get_runtime
     from planet_maiko.agents.routing import resolve_model, resolve_effort
 
-    runtime = _get_runtime()
+    # task_type="skill:home-overview" routes to OllamaRuntime by
+    # default (cheaper than Opus for the daily prose). Falls back to
+    # the brain.runtime default if Ollama isn't running.
+    runtime = _get_runtime("skill:home-overview")
     if not runtime.is_available():
         raise RuntimeError("Brain runtime not available")
 

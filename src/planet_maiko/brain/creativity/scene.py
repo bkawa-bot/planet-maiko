@@ -233,7 +233,12 @@ def _refresh_creative_note(weather, season, time_bucket, mood):
     import time
     try:
         from planet_maiko.agents.brain_session import _get_runtime
-        runtime = _get_runtime()
+        # task_type="scene" routes through OllamaRuntime by default
+        # (see DEFAULT_RUNTIME in agents/routing.py). Falls back to
+        # the brain.runtime default automatically if Ollama isn't
+        # running, so a missing local server just sends this back
+        # through Claude same as before.
+        runtime = _get_runtime("scene")
         if not runtime or not runtime.is_available():
             # Negative-cache for 5 min so we don't keep checking
             # availability on every poll.

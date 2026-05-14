@@ -1,14 +1,32 @@
-"""Model + effort routing — picks model tier and reasoning depth per task type.
+"""Model + effort + runtime routing — picks the LLM tier, reasoning
+depth, and which AgentRuntime to use for a given task.
 
-Two parallel dicts: `routing.rules` chooses the model (haiku/sonnet/opus),
-`routing.effort_rules` chooses Claude's `--effort` budget (low/medium/high/max).
-Both are tunable from Settings → Model Routing.
+Three parallel dicts in config (all under ``routing``):
 
-Effort is *cost-conscious tuning*. Pure classifications and creative riffs
-(triage, scene, agent bio gen, theme generation) get "low" effort because
-deep reasoning doesn't help them. Real work (coding agents, training,
-synthesizing rules from real PRs) gets "high" or "max" because reasoning
-depth visibly improves output. Defaults below; user overrides win.
+  * ``routing.rules``         — model (haiku/sonnet/opus or
+                                runtime-specific like "llama3.1:8b").
+  * ``routing.effort_rules``  — reasoning budget (low/medium/high/max).
+                                Claude maps this to ``--effort``;
+                                Ollama maps it to temperature +
+                                max_tokens.
+  * ``routing.runtime_rules`` — which runtime serves this task
+                                ("claude-code" / "claude-code-tmux" /
+                                "ollama"). When unset, falls back to
+                                ``brain.runtime`` (the default
+                                runtime for spawn/resume).
+
+All three are tunable from Settings → Model Routing.
+
+Effort is *cost-conscious tuning*. Pure classifications and creative
+riffs (triage, scene, agent bio gen, theme generation) get "low"
+effort because deep reasoning doesn't help them. Real work (coding
+agents, training, synthesizing rules from real PRs) gets "high" or
+"max" because reasoning depth visibly improves output.
+
+Runtime routing is *cost-pool tuning*. Maiko's internal LLM calls
+(overview, scene note, agent bios) default to a local Ollama-served
+model so they don't burn Anthropic credit. Coding/review/etc.
+agents default to whichever Claude-based runtime the user picked.
 """
 
 from planet_maiko.config import load_config
@@ -86,6 +104,27 @@ DEFAULT_EFFORT = {
 }
 
 
+# Per-task runtime preference. None / not listed means "use the
+# default runtime configured in brain.runtime" — which is where the
+# Claude-based agent spawn/resume work goes. Listing a task here
+# routes its synchronous LLM calls (send / send_json) to a different
+# runtime. Use this for cheap internal work where Anthropic-tier
+# reasoning is overkill.
+DEFAULT_RUNTIME = {
+    # Internal Maiko work — local-model defaults so these don't burn
+    # Anthropic credit. The user has to actually have Ollama running
+    # for these to fire; if it's offline, _get_runtime falls back to
+    # the default runtime automatically.
+    "scene":                "ollama",
+    "agent_bio":            "ollama",
+    "skill:home-overview":  "ollama",
+    "skill:theme":          "ollama",
+
+    # Everything else falls through to brain.runtime, which keeps
+    # coding / review / investigation / cartograph on Claude.
+}
+
+
 def resolve_model(task_type):
     """Resolve which model to use for a given task type.
 
@@ -106,6 +145,50 @@ def resolve_effort(task_type):
     the runtime has baked in.
     """
     return _resolve(task_type, "effort_rules", DEFAULT_EFFORT, "thinking_budget")
+
+
+def resolve_runtime(task_type):
+    """Pick which runtime should handle a synchronous task.
+
+    Returns a runtime name ("claude-code" / "claude-code-tmux" /
+    "ollama"), or None when the task isn't explicitly routed — the
+    caller (``_get_runtime``) interprets None as "use the default
+    runtime from ``brain.runtime``."
+
+    Precedence:
+      1. ``routing.runtime_rules[task_type]`` (user config)
+      2. ``routing.runtime_rules[prefix]`` (prefix match in user config)
+      3. ``DEFAULT_RUNTIME[task_type]``
+      4. ``DEFAULT_RUNTIME[prefix]``
+      5. None (= use default runtime)
+
+    Unlike resolve_model / resolve_effort, the built-in defaults
+    here are sparse — they only cover Maiko's internal calls.
+    Everything else returns None so the default runtime applies.
+    """
+    config = load_config()
+    routing = config.get("routing", {})
+    if not routing.get("enabled", True):
+        return None
+
+    user_rules = routing.get("runtime_rules") or {}
+
+    # User-config rules win over built-in defaults.
+    if task_type in user_rules:
+        return user_rules[task_type]
+    if ":" in task_type:
+        prefix = task_type.split(":")[0]
+        if prefix in user_rules:
+            return user_rules[prefix]
+
+    if task_type in DEFAULT_RUNTIME:
+        return DEFAULT_RUNTIME[task_type]
+    if ":" in task_type:
+        prefix = task_type.split(":")[0]
+        if prefix in DEFAULT_RUNTIME:
+            return DEFAULT_RUNTIME[prefix]
+
+    return None
 
 
 def _resolve(task_type, rules_key, defaults, fallback_key):

@@ -269,7 +269,12 @@ def _schedule_bio_generation(agent_id, can_rename=True):
                 from planet_maiko.agents.brain_session import _get_runtime
                 from planet_maiko.agents.routing import resolve_model, resolve_effort
 
-                runtime = _get_runtime()
+                # task_type="agent_bio" routes to OllamaRuntime by
+                # default — bio generation is creative one-shot
+                # prose, doesn't need Anthropic-tier reasoning.
+                # Falls back to the brain.runtime default if Ollama
+                # isn't running.
+                runtime = _get_runtime("agent_bio")
                 if not runtime or not runtime.is_available():
                     return
 

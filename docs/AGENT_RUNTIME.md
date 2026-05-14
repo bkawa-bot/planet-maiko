@@ -348,7 +348,50 @@ Known caveats:
     Stuck-but-not-crashed agents are still handled by
     `wake.check_stuck_agents` on the existing timeout.
 
-**Phase 7 — another runtime as proof of the abstraction (Aider)**
+**Phase 7 — OllamaRuntime for internal LLM calls + per-task runtime routing — done**
+
+`agents/runtimes/ollama.py` ships a send-only runtime that targets
+local OpenAI-compatible model servers (Ollama by default; vLLM,
+llama.cpp's server, LM Studio also work — same wire protocol). The
+routing layer (`agents/routing.py`) grows a third axis: model,
+effort, and now runtime.
+
+What this unlocks: Maiko's internal LLM work (overview generation,
+scene notes, agent bios) routes to a local model by default, so the
+Anthropic credit pool only gets spent on actual coding agents.
+
+Wiring:
+
+  - `agents/routing.py` gets `resolve_runtime(task_type)` and a
+    sparse `DEFAULT_RUNTIME` table that lists the internal task
+    types (scene, agent_bio, skill:home-overview, skill:theme).
+    Tasks not in the table return None → caller uses the default
+    runtime configured at `brain.runtime`.
+  - `agents/brain_session._get_runtime()` now takes an optional
+    `task_type`. Without it: returns the default runtime (existing
+    behavior, no caller changes needed). With it: routes through
+    `resolve_runtime` first, falls back to the default if the
+    routed runtime is unavailable (e.g., Ollama isn't running).
+    Each runtime is cached as a singleton in `_runtimes[name]`.
+  - `brain/overview.py`, `brain/creativity/scene.py`, and
+    `agents/profiles.py` (agent bio generation) call
+    `_get_runtime("skill:home-overview")` /
+    `_get_runtime("scene")` / `_get_runtime("agent_bio")`. Other
+    internal callers can opt in by adding their task_type.
+  - Config knobs: `routing.runtime_rules` for user overrides;
+    `ollama.base_url` and `ollama.default_model` for server config.
+  - `OllamaRuntime` does NOT implement spawn / resume — it's
+    sync-only. Coding / review / etc. agents naturally stay on
+    Claude even if a user pushes Ollama too aggressively in their
+    routing config, because supports_spawn() / supports_resume()
+    short-circuit those code paths.
+
+Graceful degradation: a user who configures Ollama-for-X but
+hasn't started the Ollama server gets a one-line log message and
+the call routes through Claude as before. Nothing breaks; cost
+goes back up.
+
+**Phase 8 — another runtime as proof of the abstraction (Aider)**
 
 - Pick a target. Aider is the leading candidate: supports many models
   (including local via Ollama), has a stable CLI, has agent-loop

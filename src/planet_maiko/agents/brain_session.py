@@ -21,67 +21,122 @@ from planet_maiko.models.task import Task
 
 logger = logging.getLogger(__name__)
 
-# Lazy-loaded runtime instance
+# Legacy global, kept so any straggling reference doesn't NameError.
+# New code uses _runtimes (the per-name registry) below.
 _runtime = None
 
 
-def _get_runtime():
-    """Get the active agent runtime singleton.
+# Per-name runtime cache so we instantiate each class at most once
+# across the app's lifetime. _runtime (legacy) tracks the default
+# runtime for backward compat; _runtimes is the new per-name registry
+# that supports task-aware lookups.
+_runtimes = {}
 
-    Reads ``brain.runtime`` from config. Supported values:
-      "claude-code"       — headless `claude --print` (default, Agent
-                            SDK billing pool)
-      "claude-code-tmux"  — interactive `claude` inside a tmux pane
-                            (subscription billing pool, Mac only)
 
-    Falls back to claude-code if the configured runtime isn't
-    available on this machine (e.g., tmux requested but not installed).
+def _instantiate_runtime(name):
+    """Build a fresh runtime instance by name. Handles startup hooks
+    (tmux orphan cleanup) the same way the old _get_runtime did.
     """
-    global _runtime
-    if _runtime is None:
-        from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
-
+    from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
+    if name == "claude-code":
+        return ClaudeCodeRuntime()
+    if name == "claude-code-tmux":
         try:
-            cfg = load_config()
-            runtime_name = (cfg.get("brain") or {}).get("runtime", "claude-code")
+            from planet_maiko.agents.runtimes.tmux_claude import (
+                TmuxClaudeRuntime,
+                cleanup_orphan_sessions,
+            )
+            instance = TmuxClaudeRuntime()
+            if instance.is_available():
+                try:
+                    n = cleanup_orphan_sessions()
+                    if n:
+                        logger.info(f"[brain] cleaned {n} orphan tmux session(s) at startup")
+                except Exception as e:
+                    logger.debug(f"[brain] orphan tmux cleanup skipped: {e}")
+            return instance
+        except Exception as e:
+            logger.warning(f"[brain] couldn't load TmuxClaudeRuntime ({e})")
+            return None
+    if name == "ollama":
+        try:
+            from planet_maiko.agents.runtimes.ollama import OllamaRuntime
+            return OllamaRuntime()
+        except Exception as e:
+            logger.warning(f"[brain] couldn't load OllamaRuntime ({e})")
+            return None
+    logger.warning(f"[brain] unknown runtime name: {name!r}")
+    return None
+
+
+def _get_runtime_by_name(name):
+    if name not in _runtimes:
+        instance = _instantiate_runtime(name)
+        _runtimes[name] = instance
+    return _runtimes[name]
+
+
+def _default_runtime_name():
+    try:
+        cfg = load_config()
+        return (cfg.get("brain") or {}).get("runtime", "claude-code")
+    except Exception:
+        return "claude-code"
+
+
+def _get_runtime(task_type=None):
+    """Get the right agent runtime for ``task_type``.
+
+    Without ``task_type``: returns the default runtime configured at
+    ``brain.runtime`` (currently "claude-code" or "claude-code-tmux").
+    All existing callers that don't pass a task_type continue to get
+    the same behavior as before.
+
+    With ``task_type``: looks up ``routing.runtime_rules[task_type]``
+    (falling through to ``DEFAULT_RUNTIME`` and prefix-match in
+    routing.py). If a task-specific runtime is configured AND is
+    available on this machine, returns it. Otherwise falls back to
+    the default runtime — so a misconfigured Ollama (server down,
+    not installed) silently routes back to Claude rather than
+    failing the call.
+
+    Supported runtime names:
+      "claude-code"       — headless `claude --print` (Agent SDK pool)
+      "claude-code-tmux"  — interactive claude in tmux (subscription pool, Mac)
+      "ollama"            — local OpenAI-compatible server (no
+                            Anthropic spend; sync-only — can't
+                            drive coding agents)
+    """
+    default_name = _default_runtime_name()
+
+    if task_type:
+        try:
+            from planet_maiko.agents.routing import resolve_runtime
+            routed_name = resolve_runtime(task_type)
         except Exception:
-            runtime_name = "claude-code"
+            routed_name = None
 
-        if runtime_name == "claude-code-tmux":
-            try:
-                from planet_maiko.agents.runtimes.tmux_claude import (
-                    TmuxClaudeRuntime,
-                    cleanup_orphan_sessions,
-                )
-                _runtime = TmuxClaudeRuntime()
-                if _runtime.is_available():
-                    # One-shot cleanup of leftover tmux sessions from a
-                    # prior crashed Maiko process. Safe if tmux isn't
-                    # running (no-op) or if there's nothing to clean.
-                    try:
-                        n = cleanup_orphan_sessions()
-                        if n:
-                            logger.info(f"[brain] cleaned {n} orphan tmux session(s) at startup")
-                    except Exception as e:
-                        logger.debug(f"[brain] orphan tmux cleanup skipped: {e}")
-                else:
-                    logger.warning(
-                        "[brain] claude-code-tmux requested but tmux or claude "
-                        "isn't available; falling back to claude-code"
-                    )
-                    _runtime = ClaudeCodeRuntime()
-            except Exception as e:
-                logger.warning(
-                    f"[brain] couldn't load TmuxClaudeRuntime ({e}); "
-                    "falling back to claude-code"
-                )
-                _runtime = ClaudeCodeRuntime()
-        else:
-            _runtime = ClaudeCodeRuntime()
+        if routed_name and routed_name != default_name:
+            routed = _get_runtime_by_name(routed_name)
+            if routed is not None and routed.is_available():
+                return routed
+            logger.info(
+                f"[brain] {routed_name} unavailable for task '{task_type}'; "
+                f"falling back to {default_name}"
+            )
 
-        if not _runtime.is_available():
-            logger.warning(f"[brain] {_runtime.name} runtime is not available")
-    return _runtime
+    runtime = _get_runtime_by_name(default_name)
+    if runtime is None:
+        # Last-ditch: build a plain ClaudeCodeRuntime so the caller
+        # always gets back *something* with the right interface,
+        # even if its is_available is False. Mirrors the legacy
+        # behavior where _get_runtime never returned None.
+        from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
+        runtime = ClaudeCodeRuntime()
+        _runtimes[default_name] = runtime
+    if not runtime.is_available():
+        logger.warning(f"[brain] {runtime.name} runtime is not available")
+    return runtime
 
 
 def run_skill(skill_name, context=None, working_dir=None):
