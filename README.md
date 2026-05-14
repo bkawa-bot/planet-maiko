@@ -111,11 +111,6 @@ pip install -e .
 
 # Frontend
 cd frontend && npm install && cd ..
-
-# Agent channel (optional, MCP-backed agent comms; the `maiko` CLI
-# now covers the same operations and is the default since 5/14).
-# Skip this if you don't need the MCP path.
-cd channel && npm install && cd ..
 ```
 
 > **Mac users:** If you see SSL errors with Linear or other integrations, run `pip install --upgrade certifi`, then `open /Applications/Python\ 3.12/Install\ Certificates.command`.

@@ -221,7 +221,6 @@
   font-family: inherit;
 }
 
-/* === Scene widget === */
 /* === Page-level weather overlays === */
 .page-weather-overlay {
   position: fixed;
@@ -313,9 +312,6 @@
   50% { opacity: 1; }
 }
 
-.scene-weather { font-size: 11px; color: var(--text-dim); text-transform: capitalize; }
-.scene-info { display: flex; flex-direction: column; gap: 6px; }
-
 /* === Seasonal overlays === */
 
 /* Flowers (spring) */
@@ -395,19 +391,15 @@
   8% { transform: translate(-40vw, 15vh); opacity: 0; }
   100% { opacity: 0; }
 }
-.scene-weather-fallback {
-  font-size: 11px; color: var(--text-muted); padding: 4px 0;
-}
-.weather-fallback-text {
-  color: var(--blue); text-decoration: underline; text-decoration-style: dotted;
-  text-underline-offset: 2px;
-}
-.weather-fallback-text:hover { color: var(--pink); }
-.scene-creative-note { font-size: 11px; color: var(--pink); font-style: italic; line-height: 1.5; }
-.scene-tags { display: flex; gap: 4px; flex-wrap: wrap; }
-.scene-tag { font-size: 9px; padding: 1px 6px; background: var(--bg); border-radius: 3px; color: var(--text-muted); }
-
 /* === Calendar widget === */
+/* Small weather row tucked under the Today header — temp + conditions,
+   only shown when the scene API has a location to fetch against. */
+.today-weather {
+  font-size: 11px; color: var(--text-dim); text-transform: capitalize;
+  margin-bottom: 8px;
+}
+
+
 .calendar-list { display: flex; flex-direction: column; gap: 4px; }
 
 .calendar-event {

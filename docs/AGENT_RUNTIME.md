@@ -104,18 +104,12 @@ zero-config for the agent — `MAIKO_JOB_ID` is set in the spawn env
 (`agents/runtime/kickoff.py`), and `cli/_helpers.py:detect_job_id()`
 falls through env → TASK.md → `--job` flag.
 
-**B) MCP `maiko-channel` server (the Claude Code path):** A
-node-based MCP server at `channel/index.mjs`. Claude Code agents call
-`reply(content, message_type)`, `check_inbox()`, `check_code()`,
-`leave_comment(...)` and the server proxies to the same HTTP
-endpoints. The MCP path is faster (no process spawn per call) and
-gets the Claude Code `Stop` hook for auto-polling the inbox; the
-trade-off is that it only works with runtimes that speak MCP.
-
-Maiko's outbox parser (`api/agent_outbox.py`) is transport-agnostic —
-it consumes the same payload shape regardless of which transport
-delivered it. Adding a new runtime usually means writing a protocol
-prompt that points it at the CLI; the server side just works.
+Maiko's outbox parser (`api/agent_outbox.py`) is transport-agnostic.
+Adding a new runtime usually means writing a protocol prompt that
+points it at the CLI; the server side just works. Earlier versions
+of Maiko also shipped a `maiko-channel` MCP server alongside the
+CLI; it was retired in May 2026 once the CLI covered every operation
+and worked across every runtime, not just Claude Code.
 
 **Message types** are enforced at both transports:
 `message`, `status`, `feedback`, `insight`, `stuck`, `ready_for_review`,

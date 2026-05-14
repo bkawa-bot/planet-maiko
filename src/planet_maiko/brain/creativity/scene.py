@@ -162,158 +162,6 @@ SEASON_SPECIALS = {
 }
 
 
-import threading
-
-# In-memory cache for the LLM-generated atmospheric note.
-#   text       — last successful sentence (or None if we've never gotten one)
-#   expires    — when to refresh on the next request
-#   refreshing — guards against multiple background refreshes piling up
-#   next_retry — negative cache: when the last attempt failed, don't try
-#                again until this timestamp (avoids hammering Claude on
-#                every /api/scene poll if the runtime is down)
-# `text` and `expires` are persisted to <data_dir>/scene_note.json so a
-# `maiko serve` restart inherits the still-valid sentence instead of
-# paying for a fresh LLM generation every reboot. `refreshing` and
-# `next_retry` are runtime-only (a paused refresh from one process
-# shouldn't lock out the next one).
-_creative_note_cache = {
-    "text": None,
-    "expires": 0,
-    "refreshing": False,
-    "next_retry": 0,
-}
-
-
-def _scene_note_cache_path():
-    from planet_maiko.paths import data_dir
-    return os.path.join(data_dir(), "scene_note.json")
-
-
-def _load_persisted_cache():
-    """Restore (text, expires) from disk on module import.
-
-    Best-effort — a missing/corrupt file just means the next /api/scene
-    call kicks off a fresh refresh, the same as a true cold start.
-    """
-    import json as _json
-    try:
-        path = _scene_note_cache_path()
-        if not os.path.isfile(path):
-            return
-        with open(path, encoding="utf-8") as f:
-            data = _json.load(f)
-        if isinstance(data, dict) and isinstance(data.get("text"), str):
-            _creative_note_cache["text"] = data["text"]
-            _creative_note_cache["expires"] = float(data.get("expires") or 0)
-    except Exception as e:
-        logger.debug(f"[scene] cache load failed: {e}")
-
-
-def _persist_cache():
-    """Write the cache to disk after a successful refresh."""
-    import json as _json
-    try:
-        path = _scene_note_cache_path()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            _json.dump({
-                "text": _creative_note_cache["text"],
-                "expires": _creative_note_cache["expires"],
-            }, f)
-    except Exception as e:
-        logger.debug(f"[scene] cache persist failed: {e}")
-
-
-_load_persisted_cache()
-
-
-def _refresh_creative_note(weather, season, time_bucket, mood):
-    """Background worker that runs the LLM call and updates the cache.
-    Runs in a daemon thread so /api/scene can return instantly."""
-    import time
-    try:
-        from planet_maiko.agents.brain_session import _get_runtime
-        # task_type="scene" routes through OllamaRuntime by default
-        # (see DEFAULT_RUNTIME in agents/routing.py). Falls back to
-        # the brain.runtime default automatically if Ollama isn't
-        # running, so a missing local server just sends this back
-        # through Claude same as before.
-        runtime = _get_runtime("scene")
-        if not runtime or not runtime.is_available():
-            # Negative-cache for 5 min so we don't keep checking
-            # availability on every poll.
-            _creative_note_cache["next_retry"] = time.time() + 300
-            return
-
-        from planet_maiko.agents.routing import resolve_model, resolve_effort
-        prompt = (
-            f"Write a single atmospheric sentence (max 20 words) describing this scene: "
-            f"{weather} weather, {season}, {time_bucket}, mood: {mood}. "
-            f"Be poetic and cozy, like a Studio Ghibli film narrator."
-        )
-        # runtime.name lets resolve_model honor per-runtime model
-        # overrides (routing.runtime_models.<runtime>.scene = "...").
-        result = runtime.send(
-            prompt, timeout=15,
-            model=resolve_model("scene", runtime.name),
-            effort=resolve_effort("scene"),
-        )
-        if result and result.get("success") and result.get("output"):
-            text = result["output"].strip().strip('"')
-            _creative_note_cache["text"] = text
-            # 4h TTL, matched to the home overview's regen cadence
-            # (DEFAULT_MAX_AGE_HOURS in brain/overview.py). Scene note
-            # is decorative, not alerting, so syncing with the overview
-            # means one LLM call per overview cycle instead of two.
-            _creative_note_cache["expires"] = time.time() + 14400
-            _creative_note_cache["next_retry"] = 0
-            _persist_cache()
-        else:
-            # LLM responded but with no usable output — back off shorter
-            _creative_note_cache["next_retry"] = time.time() + 300
-    except Exception as e:
-        logger.debug(f"[scene] creative note refresh failed: {e}")
-        _creative_note_cache["next_retry"] = time.time() + 300
-    finally:
-        _creative_note_cache["refreshing"] = False
-
-
-def _generate_creative_note(weather, season, time_bucket, mood):
-    """Return the cached atmospheric sentence, kicking off a refresh
-    in a background thread when the cache is empty / expired.
-
-    Never blocks the caller — /api/scene is polled by every page in the
-    UI, and a 15s LLM call inline would (and did) flood the logs with
-    "Claude code timed out after 15s" every few seconds.
-    """
-    import time
-    now = time.time()
-    cached = _creative_note_cache["text"]
-
-    # Fresh cache — return as-is.
-    if cached and now < _creative_note_cache["expires"]:
-        return cached
-
-    # Cache stale or empty. Maybe schedule a refresh — but only one at a
-    # time, and not while we're in negative-cache cooldown.
-    if (
-        not _creative_note_cache["refreshing"]
-        and now >= _creative_note_cache["next_retry"]
-    ):
-        _creative_note_cache["refreshing"] = True
-        threading.Thread(
-            target=_refresh_creative_note,
-            args=(weather, season, time_bucket, mood),
-            daemon=True,
-            name="scene-creative-note",
-        ).start()
-
-    # Return the previous value if we have one (slightly stale beats
-    # blocking); otherwise None and the UI will fall back to the
-    # season poem.
-    return cached
-
-
 def generate(weather="clear", temperature_f=70, latitude=37.7, now=None):
     """Generate a scene descriptor.
 
@@ -406,9 +254,6 @@ def generate(weather="clear", temperature_f=70, latitude=37.7, now=None):
     # Mood
     mood = f"{weather} {season} {time_bucket}"
 
-    # Creative note via LLM tinting pass
-    creative_note = _generate_creative_note(weather, season, time_bucket, mood)
-
     return {
         "generated_at": now.isoformat() if isinstance(now, datetime) else str(now),
         "context": {
@@ -427,6 +272,5 @@ def generate(weather="clear", temperature_f=70, latitude=37.7, now=None):
             "specials": specials,
             "maiko_outfit": outfit,
             "mood": mood,
-            "creative_note": creative_note,
         },
     }

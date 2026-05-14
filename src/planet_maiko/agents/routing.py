@@ -35,7 +35,6 @@ DEFAULT_ROUTING = {
     # Haiku tier — cheap classification + creative one-liners
     "triage": "haiku",
     "classify": "haiku",
-    "scene": "haiku",
     "agent_bio": "haiku",
 
     # Sonnet tier — general skill work + chat
@@ -74,7 +73,6 @@ DEFAULT_EFFORT = {
     # Cheap creative / classification — low keeps these snappy and cheap
     "triage": "low",
     "classify": "low",
-    "scene": "low",
     "agent_bio": "low",
     "chat": "low",
 
@@ -103,7 +101,6 @@ DEFAULT_RUNTIME = {
     # Anthropic credit. The user has to actually have Ollama running
     # for these to fire; if it's offline, _get_runtime falls back to
     # the default runtime automatically.
-    "scene":                "ollama",
     "agent_bio":            "ollama",
     "skill:theme":          "ollama",
 

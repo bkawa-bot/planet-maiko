@@ -471,13 +471,11 @@ def open_terminal():
     if has_tmux_session:
         attach_cmd = f"tmux attach -t {session_name}"
     else:
-        allowed_tools = ["mcp__maiko-channel"]
         try:
             from planet_maiko.config import load_config
-            user_tools = load_config().get("brain", {}).get("allowed_tools", [])
-            allowed_tools.extend(user_tools)
+            allowed_tools = list(load_config().get("brain", {}).get("allowed_tools", []))
         except Exception:
-            pass
+            allowed_tools = []
         tools_flags = " ".join(f'--allowedTools "{t}"' for t in allowed_tools)
         checkout = f"git checkout {branch} && " if branch else ""
         initial_prompt = "Read TASK.md and CLAUDE.md in this directory. Begin working on the task following the protocol."

@@ -5,7 +5,7 @@ import OverviewPane from "../components/OverviewPane";
 import MemosPane from "../components/MemosPane";
 import PackAskBox from "../components/PackAskBox";
 import { formatTime, formatClock } from "../utils/dates";
-import { Brain, Calendar, Palette, Video, Sparkles } from "@icons";
+import { Brain, Calendar, Video, Sparkles } from "@icons";
 import { showToast } from "../components/Toast";
 import FooterPendingPopover from "../components/FooterPendingPopover";
 import "./Home.css";
@@ -15,12 +15,6 @@ import "./Home.css";
 // this page stays cheap — no more monstrous fan-out on every poll.
 const HOME_POLL_INTERVAL_MS = 60_000;
 
-const MOON_EMOJI = {
-  new: "🌑", waxing_crescent: "🌒", first_quarter: "🌓",
-  waxing_gibbous: "🌔", full: "🌕", waning_gibbous: "🌖",
-  last_quarter: "🌗", waning_crescent: "🌘",
-};
-
 function weatherEmoji(w) {
   if (w === "clear") return "☀️";
   if (w === "rain") return "🌧️";
@@ -28,14 +22,6 @@ function weatherEmoji(w) {
   if (w === "cloudy") return "☁️";
   if (w === "fog") return "🌫️";
   return "🌤️";
-}
-
-function seasonPoem(season) {
-  if (season === "spring") return "A peaceful spring day filled with vivid flowers on the field";
-  if (season === "summer") return "Warm sunlight blankets the hills as fireflies dance at dusk";
-  if (season === "autumn") return "Golden leaves drift quietly across the cooling hillside";
-  if (season === "winter") return "A crisp stillness hangs over the frost-kissed landscape";
-  return "The hills rest quietly under a gentle sky";
 }
 
 export default function Home() {
@@ -130,6 +116,12 @@ export default function Home() {
                 <span className="widget-count">{calendarEvents.length} meeting(s)</span>
               )}
             </div>
+            {scene?.context?.weather && homeConfig?.scene?.latitude && (
+              <div className="today-weather">
+                {weatherEmoji(scene.context.weather)} {scene.context.weather}
+                {scene.context.temperature_f != null && ` · ${scene.context.temperature_f}°F`}
+              </div>
+            )}
             {calendarEvents.length > 0 ? (
               <div className="calendar-list">
                 {calendarEvents.map((e) => {
@@ -164,43 +156,6 @@ export default function Home() {
             ) : (
               <div className="widget-empty">No meetings today</div>
             )}
-          </div>
-
-          <div className="home-widget scene-widget">
-            <div className="widget-header"><Palette size={12} /> Scene</div>
-            <div className="scene-info">
-              {homeConfig?.scene?.latitude ? (
-                scene?.context?.weather && (
-                  <div className="scene-weather">
-                    {weatherEmoji(scene.context.weather)} {scene.context.weather}
-                    {scene.context.temperature_f && ` · ${scene.context.temperature_f}°F`}
-                  </div>
-                )
-              ) : (
-                <div className="scene-weather-fallback" style={{ cursor: "default" }}>
-                  <span className="weather-fallback-text">Set your location for live weather</span>
-                </div>
-              )}
-              {scene?.scene?.creative_note ? (
-                <div className="scene-creative-note">"{scene.scene.creative_note}"</div>
-              ) : scene?.scene?.mood && (
-                <div className="scene-creative-note">{seasonPoem(scene.context?.season)}</div>
-              )}
-              <div className="scene-tags">
-                {scene?.context?.season && <span className="scene-tag">{scene.context.season}</span>}
-                {scene?.context?.moon_phase && (
-                  <span className="scene-tag">
-                    {MOON_EMOJI[scene.context.moon_phase] || "🌙"} {scene.context.moon_phase.replace("_", " ")}
-                  </span>
-                )}
-                {scene?.scene?.maiko_outfit && scene.scene.maiko_outfit !== "default" && (
-                  <span className="scene-tag">maiko: {scene.scene.maiko_outfit}</span>
-                )}
-                {scene?.scene?.specials?.map((s) => (
-                  <span key={s} className="scene-tag">{s}</span>
-                ))}
-              </div>
-            </div>
           </div>
 
           <div className="home-widget">

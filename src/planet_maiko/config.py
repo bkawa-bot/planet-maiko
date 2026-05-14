@@ -101,7 +101,7 @@ DEFAULT_CONFIG = {
     },
     "brain": {
         # Tools pre-approved for Claude Code sessions (avoids permission prompts)
-        "allowed_tools": ["Bash", "Read", "Edit", "Write", "Glob", "Grep", "mcp__maiko-channel"],
+        "allowed_tools": ["Bash", "Read", "Edit", "Write", "Glob", "Grep"],
         "correlation_window_minutes": 30,
         "incident_chains": [
             ["pr_ci_failed", "deploy_rollback", "error_spike"],

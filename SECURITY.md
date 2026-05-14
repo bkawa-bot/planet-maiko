@@ -32,36 +32,17 @@ The Flask API binds to `127.0.0.1` by default (`maiko serve --host
 override `--host` to bind to a LAN address, assume anyone on that network
 can reach the full API surface — Maiko does not ship user auth.
 
-The Node MCP servers in `channel/` connect over **stdio** — they are
-spawned as subprocesses by the Claude Code client that loads them and
-never open a listening socket.
+## Agent communication
 
-## MCP servers
+Agents talk to Maiko through the `maiko` CLI, which makes plain HTTP
+calls to the local Flask API. There is no MCP server bundled with Maiko
+anymore. Earlier versions shipped a `channel/` stdio MCP server alongside
+the CLI; that was retired in May 2026 once the CLI covered the same
+operations and worked for any runtime, not just Claude Code.
 
-Maiko ships two MCP servers in `channel/`:
-
-- `channel/index.mjs` — the per-agent push channel (spawned automatically
-  inside each worktree).
-- `channel/brain.mjs` — the external-consumer read surface (registered in
-  your own `.mcp.json` if you want other tools to query Maiko).
-
-**Both use the stdio transport.** In April 2026, [The Register reported a
-design flaw](https://www.theregister.com/2026/04/16/anthropic_mcp_design_flaw/)
-in how MCP clients can spawn stdio servers with attacker-controlled
-arguments — the attack is at the *client spawning untrusted servers*
-layer, not a vulnerability in any specific server. For Maiko's servers:
-
-- They take no command-line arguments. All configuration arrives via
-  environment variables (`MAIKO_TASK_ID`, `MAIKO_API_URL`, etc.).
-- They do not `exec`, `spawn`, or shell out to any OS command. They make
-  HTTP calls to the local Maiko API only.
-- They do not read or emit paths from untrusted input — no
-  `fs.readFileSync(someInput)` patterns.
-
-The practical guidance for users: do not add Maiko's MCP servers to
-an MCP client that's also being steered by an untrusted party. The
-servers themselves don't do anything unsafe, but you are still giving a
-client the ability to read your Maiko data.
+If you wire up an external MCP client of your own that talks to the
+Maiko HTTP API, the same loopback-binding boundary applies: anything
+that can reach `127.0.0.1:8420` can read your Maiko data.
 
 ## Agent permissions
 

@@ -12,7 +12,6 @@ const ROUTING_RULES = [
   // Cheap internal work
   { key: "triage", label: "Triage (pupdate classification)", tier: "haiku", effort: "low", runtime: "" },
   { key: "classify", label: "Signal / learning classification", tier: "haiku", effort: "low", runtime: "" },
-  { key: "scene", label: "Scene creative note", tier: "haiku", effort: "low", runtime: "ollama" },
   { key: "agent_bio", label: "Agent bio generation", tier: "haiku", effort: "low", runtime: "ollama" },
   { key: "chat", label: "Ask Maiko (chat box)", tier: "sonnet", effort: "low", runtime: "" },
 
