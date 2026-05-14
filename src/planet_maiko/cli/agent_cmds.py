@@ -172,6 +172,39 @@ def cmd_check_code(args):
         sys.exit(1)
 
 
+def cmd_session_report(args):
+    """Report the agent's underlying session ID to Maiko.
+
+    Mirrors what the maiko-channel MCP server used to do once at
+    startup: tell Maiko "this job_id is now running under this
+    session_id," so the View Session link in the UI knows where to
+    find the transcript file on disk. The agent (or a SessionStart
+    hook) calls this once per spawn.
+
+    Session ID defaults to $CLAUDE_SESSION_ID — Claude Code sets that
+    env var before spawning any hooks or child processes. Pass
+    --session-id explicitly for other runtimes.
+    """
+    import os as _os
+
+    task_id = args.task or detect_task_id()
+    if not task_id:
+        print("Error: No job ID provided and could not detect from TASK.md or MAIKO_JOB_ID env", file=sys.stderr)
+        sys.exit(1)
+
+    session_id = args.session_id or _os.environ.get("CLAUDE_SESSION_ID") or ""
+    if not session_id.strip():
+        print("Error: No session ID — pass --session-id or set CLAUDE_SESSION_ID", file=sys.stderr)
+        sys.exit(1)
+
+    api_request(
+        f"/agents/{task_id}/session",
+        method="POST",
+        data={"session_id": session_id.strip()},
+    )
+    print(f"Session {session_id.strip()} reported for {task_id}")
+
+
 def cmd_leave_comment(args):
     """Pin an inline comment to a specific diff line.
 
@@ -328,6 +361,12 @@ def register(subparsers):
         help="Set to 'user' to surface this message in the user's memos. Leave unset for in-thread chatter.",
     )
     p.set_defaults(func=cmd_reply)
+
+    # maiko session-report — link CLAUDE_SESSION_ID to the AgentJob
+    p = subparsers.add_parser("session-report", help="Report the agent's session ID to Maiko (replaces the MCP startup ping)")
+    p.add_argument("--session-id", help="Session ID (defaults to $CLAUDE_SESSION_ID)")
+    p.add_argument("--job", "--task", dest="task", help="Job ID (auto-detected from MAIKO_JOB_ID env or TASK.md if omitted)")
+    p.set_defaults(func=cmd_session_report)
 
     # maiko check-code — mechanical-checks gate before ready_for_review
     p = subparsers.add_parser("check-code", help="Run mechanical checks (tests / lint / typecheck) on the worktree")

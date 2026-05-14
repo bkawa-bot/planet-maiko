@@ -16,7 +16,7 @@ Before forming opinions on the diff, query Maiko's accumulated team rules for ea
 maiko rules-relevant --query "<short description of the change>"
 ```
 
-Run it once per logical change cluster (rough rule: one query per file or per coherent functional area, not per line). Output is a ranked list of rules with a similarity score; treat the top 3–5 as the rule set this change is being graded against. If a returned rule fits the change, anchor your `leave_comment` to the violating line and cite the rule by id + category. If nothing returned applies, that's signal too — the team hasn't codified this area yet, and you can emit a `PATTERN:` block to add coverage.
+Run it once per logical change cluster (rough rule: one query per file or per coherent functional area, not per line). Output is a ranked list of rules with a similarity score; treat the top 3–5 as the rule set this change is being graded against. If a returned rule fits the change, anchor your `maiko leave-comment` to the violating line and cite the rule by id + category. If nothing returned applies, that's signal too — the team hasn't codified this area yet, and you can emit a `PATTERN:` block to add coverage.
 
 The CLI records each query on the task's `rules_considered` field automatically; the review UI shows the user which rules you actually consulted, so they can see the reasoning chain.
 
@@ -42,9 +42,9 @@ Review this PR focusing on:
 
 ## How to deliver the review
 
-**Leave specific findings as inline comments**, pinned to the line they're about, via the `leave_comment(file_path, line_number, body, side?)` tool. These render in Maiko's review UI next to the diff. Aim for 1–8 inline comments on a typical PR — ship fewer if there's nothing worth flagging. Don't reiterate the inline comments in your final reply; the diff view shows them.
+**Leave specific findings as inline comments**, pinned to the line they're about, with `maiko leave-comment <file> <line> "<body>" [--side new|old]`. These render in Maiko's review UI next to the diff. Aim for 1–8 inline comments on a typical PR — ship fewer if there's nothing worth flagging. Don't reiterate the inline comments in your final reply; the diff view shows them.
 
-**Then call `reply(content=..., message_type="ready_for_review")`** with a short body that starts with exactly these two lines:
+**Then run `maiko reply "..." --type ready_for_review`** with a short body that starts with exactly these two lines:
 
 ```
 VERDICT: <approve | approve_with_comments | soft_block | hard_block>

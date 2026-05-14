@@ -360,61 +360,32 @@ def _inherit_mcp_servers(parent_repo_path):
 
 
 def _write_mcp_json(working_path, job_id, parent_repo_path=None):
-    """Write .mcp.json so maiko-channel + the user's parent-repo MCPs
-    auto-load when claude starts inside the worktree.
+    """Write .mcp.json carrying the user's parent-repo MCPs into the
+    worktree (Linear / Slack / GitHub / etc.) so the agent inherits
+    the same MCP surface area its parent repo had.
 
-    parent_repo_path lets us inherit the per-project MCPs the user had
-    enabled in the parent repo (Linear / Slack / GitHub / etc.) so the
-    agent has the same MCP surface area as the user's normal session.
-    Without it the agent only sees maiko-channel.
+    maiko-channel is intentionally NOT added here anymore — that
+    server's job (reply / inbox / check-code / leave-comment) is now
+    covered by the `maiko` CLI, and its session-id reporting + Stop-
+    hook polling are covered by the hook scripts in hooks/. If the
+    user has no project-level MCPs configured, no file gets written.
     """
     import json
 
-    # Find the channel script path relative to the planet-maiko repo root.
-    # __file__ is src/planet_maiko/agents/runtime/scaffold.py — five
-    # dirname() calls lands at the repo root. The previous count (four)
-    # stopped at src/, fell through to a working_path-based fallback
-    # whose unnormalized "..\..\" segments confused users reading the
-    # generated .mcp.json. Both branches now normpath so the path
-    # written into .mcp.json is always clean and absolute.
-    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__)
-    )))))
-    channel_path = os.path.normpath(os.path.join(repo_root, "channel", "index.mjs"))
-
-    # Fall back to looking relative to the working path. Worktrees
-    # always live at <repo>/.maiko-worktrees/<branch>, so going up
-    # two levels lands at the repo root that holds channel/.
-    if not os.path.exists(channel_path):
-        channel_path = os.path.normpath(
-            os.path.join(working_path, "..", "..", "channel", "index.mjs")
-        )
-
-    from planet_maiko.config import maiko_api_url
-
-    # Start with everything inherited from the parent repo / globals,
-    # then layer maiko-channel on top so our entry always wins.
+    # Only inherit; no maiko-channel layered on top.
     servers = _inherit_mcp_servers(parent_repo_path)
-    servers["maiko-channel"] = {
-        "command": "node",
-        "args": [channel_path],
-        "env": {
-            "MAIKO_JOB_ID": job_id,
-            "MAIKO_API_URL": maiko_api_url(),
-            "MAIKO_POLL_MS": "60000",
-        },
-    }
+    if not servers:
+        return
 
     mcp_config = {"mcpServers": servers}
 
     with open(os.path.join(working_path, ".mcp.json"), "w") as f:
         json.dump(mcp_config, f, indent=2)
 
-    if len(servers) > 1:
-        logger.info(
-            f"[agent] Wrote .mcp.json with {len(servers)} server(s) "
-            f"({sorted(servers.keys())})"
-        )
+    logger.info(
+        f"[agent] Wrote .mcp.json with {len(servers)} inherited server(s) "
+        f"({sorted(servers.keys())})"
+    )
 
 
 def _write_claude_settings(working_path, job_id, agent_id):
@@ -456,10 +427,18 @@ def _write_claude_settings(working_path, job_id, agent_id):
     # Build hooks dict, only including enabled hooks
     hooks = {}
 
+    # PostToolUse covers two things: git-commit/push event reporting (the
+    # original purpose) AND inbox polling (the post-MCP replacement for
+    # mid-flight push notifications — the agent sees new user messages
+    # within one tool boundary instead of waiting for the next settle).
+    # Matcher widened from "Bash" to "*" so inbox polling fires after
+    # every tool call. The hook returns silently for tools that don't
+    # need git reporting and don't have inbox messages, so the cost is
+    # one HTTP GET per tool call (~50ms, comparable to the tool itself).
     if hooks_config.get("post_tool_use", True):
         hooks["PostToolUse"] = [
             {
-                "matcher": "Bash",
+                "matcher": "*",
                 "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/post_tool_use.py"}],
             },
         ]
@@ -486,6 +465,17 @@ def _write_claude_settings(working_path, job_id, agent_id):
             "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/stop.py"}],
         }]
 
+    # SessionStart: report CLAUDE_SESSION_ID to Maiko so the View
+    # Session link in the UI can find the transcript on disk. This is
+    # the last thing the maiko-channel MCP server did that the CLI +
+    # other hooks weren't already covering; with this in place the
+    # MCP path becomes optional.
+    if hooks_config.get("session_start", True):
+        hooks["SessionStart"] = [{
+            "matcher": "*",
+            "hooks": [{"type": "command", "command": f"python3 {hooks_dir}/session_start.py"}],
+        }]
+
     if not hooks:
         return
 
@@ -495,7 +485,9 @@ def _write_claude_settings(working_path, job_id, agent_id):
     # allowlist instead of `enableAllProjectMcpServers: true`; the
     # blanket-true flag has a known Claude Code hang bug post-Feb
     # 2026 in non-interactive mode, and the allowlist also reads
-    # less alarming on the security side.
+    # less alarming on the security side. If no .mcp.json was
+    # written (no inherited servers, no maiko-channel anymore),
+    # the allowlist is empty — that's fine, just no MCP at all.
     enabled_servers = []
     mcp_path = os.path.join(working_path, ".mcp.json")
     if os.path.isfile(mcp_path):
@@ -508,7 +500,7 @@ def _write_claude_settings(working_path, job_id, agent_id):
 
     settings = {
         "hooks": hooks,
-        "enabledMcpjsonServers": enabled_servers or ["maiko-channel"],
+        "enabledMcpjsonServers": enabled_servers,
     }
 
     # Write .claude/settings.json

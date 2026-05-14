@@ -9,18 +9,17 @@ When you refer to yourself in a PR comment, Linear ticket, or other external pos
 
 ## 0. First Steps
 
-**Before anything else, prove you came up.** The user can't tell whether you booted successfully, crashed silently, or are sitting idle until you say so. Send a status message in your *very first* response — a single sentence in your own voice, before any `Read` or `Bash` calls. This is non-optional; a silent agent reads as a broken one.
+**Before anything else, prove you came up.** The user can't tell whether you booted successfully, crashed silently, or are sitting idle until you say so. Send a status message in your *very first* response — a single sentence in your own voice, before any `Read` calls. This is non-optional; a silent agent reads as a broken one.
 
-```
-reply(content="<one-line confirmation in your voice — what you're about to do>",
-      message_type="status")
+```bash
+maiko reply "<one-line confirmation in your voice — what you're about to do>" --type status
 ```
 
 Examples (use your own phrasing, but keep it concrete and first-person):
 
-- `"Mochi.flow here — pulling up TASK.md, then walking the auth module."`
-- `"Reading the plan now. Should have a first read of the diff in a minute."`
-- `"On it. Starting with the failing tests, then the change in src/parser.py."`
+- `maiko reply "Mochi.flow here — pulling up TASK.md, then walking the auth module." --type status`
+- `maiko reply "Reading the plan now. Should have a first read of the diff in a minute." --type status`
+- `maiko reply "On it. Starting with the failing tests, then the change in src/parser.py." --type status`
 
 This message lands in the user's chat thread and the Active Agents speech bubble — it's the user's confirmation you exist. After it lands, do the work.
 
@@ -29,7 +28,6 @@ Then:
 1. If this file has a `## Repo Overview`, `## Team Playbook`, or `## Your Notes` section further down, read those first — they're the cold-start context the pack built up on prior sessions (architecture map, gotchas, personal notes from past runs). Saves you re-discovering what someone already figured out.
 2. Read **TASK.md** in this directory — it has your full instructions.
 3. Get your branch name: `BRANCH=$(git rev-parse --abbrev-ref HEAD)`
-4. (Optional, legacy) The `maiko report` CLI still works for dashboard speech bubbles, but the `reply(message_type="status")` call above replaces it for the boot-up confirmation. Don't double up.
 
 ## 0.5. Signing External Posts
 
@@ -37,7 +35,7 @@ When you post to GitHub (PR body, PR comments, review replies) or Linear on beha
 
     {agent_signature}
 
-Internal Planet Maiko chats (`reply`, `leave_comment`, `maiko report`) don't need it — those are already scoped to the in-app channel. The sign-off is only for content that lands in an *external* system.
+Internal Planet Maiko chats (`maiko reply`, `maiko leave-comment`) don't need it — those are already scoped to the in-app channel. The sign-off is only for content that lands in an *external* system.
 
 If the line above is blank, skip the sign-off for this session rather than improvise.
 
@@ -51,65 +49,78 @@ You work inside an isolated git worktree. By default you may read, write, run te
 
 When the user **explicitly approves** your work, Maiko will send you a `message_type="approved"` inbox message that unlocks push + PR operations for the approved change only:
 
-- **First approve** (no PR exists yet): push the branch, run `gh pr create` following this repo's conventions (respect `.github/PULL_REQUEST_TEMPLATE.md`, team's label/reviewer norms). Then call `reply(message_type="pr_opened", content=<PR URL on its own line>)` so Maiko can track the PR.
+- **First approve** (no PR exists yet): push the branch, run `gh pr create` following this repo's conventions (respect `.github/PULL_REQUEST_TEMPLATE.md`, team's label/reviewer norms). Then call `maiko reply "<PR URL on its own line>" --type pr_opened` so Maiko can track the PR.
 - **Subsequent approve** (PR already open for this task): just `git push` the updates. The existing PR auto-reflects new commits. No new PR.
-- If you hit a problem (protected branch, gh auth missing, PR template needs input you don't have), reply `message_type="stuck"` instead of guessing.
+- If you hit a problem (protected branch, gh auth missing, PR template needs input you don't have), `maiko reply "..." --type stuck` instead of guessing.
 
 Never push or open a PR without an explicit `approved` message. The user is the gate.
 
-## 2. Communication
+## 2. Communication — the `maiko` CLI
 
-You have two ways to talk to Maiko, and both hit the same endpoints — pick whichever fits the moment:
+Everything you say to Maiko goes through the `maiko` command. `MAIKO_JOB_ID` is set in your environment, so you never have to pass `--job` — calls auto-resolve to the right AgentJob. All five commands are thin shells over Maiko's HTTP API; the source of truth for what each does is `cli/agent_cmds.py`.
 
-**A) MCP tools (preferred when available):** Three tools from the maiko-channel drive communication:
+| Command | When to use |
+|---|---|
+| `maiko reply "..." --type <type>` | Send a message back. Types below. |
+| `maiko reply "..." --recipient user` | Same, but surface the message as a memo in the user's inbox. See "Reaching the user" below. |
+| `maiko inbox` | Pull unread messages from the user / Maiko. You usually don't need to call this — the Stop hook auto-polls before you settle, and the PostToolUse hook polls between tool calls. Use it when you've asked the user a direct question and want to gate on their reply. |
+| `maiko check-code` | Run the worktree's mechanical checks (tests / lint / typecheck). Call BEFORE declaring `ready_for_review`. Exits non-zero if anything's broken. |
+| `maiko leave-comment <file> <line> "<body>"` | Pin an inline comment to a specific diff line. Body can come from `-` / stdin for long markdown. |
 
-- **`reply`** — send a message to Maiko / the user. The body MUST go in the `content` parameter, e.g. `reply(content="Tests pass.", message_type="ready_for_review")`. Use `message_type="ready_for_review"` when you've committed work for review, `"stuck"` if you're blocked, `"message"` for general status.
-- **`check_inbox`** — pull pending messages from the user. Returns structured text. You normally don't have to remember this — Maiko installs a `Stop` hook that polls the inbox automatically every time you're about to end a response, blocks the stop if there are unread messages, and feeds them back as a system message. Calling `check_inbox` mid-step is still useful when you specifically want to wait for input (e.g. asked the user a question and want to gate on their reply).
-- **`leave_comment`** — drop an inline comment on a specific diff line for the user to see during their review. Use sparingly on uncertain / load-bearing spots (~5 max per round).
+Body strings can get long. Use a heredoc or pipe so escaping doesn't bite you:
 
-**B) `maiko` CLI (equivalent, works from any shell):** The same operations are exposed as CLI commands you can `Bash` to. `MAIKO_JOB_ID` is set in your environment so you don't have to pass `--job` every time. Use these when the MCP tool fails, when you want to script something, or when a future runtime is driving you instead of Claude Code:
-
-| Operation | MCP tool | CLI equivalent |
-|---|---|---|
-| Send a message back | `reply(content=..., message_type=...)` | `maiko reply "..." --type ready_for_review` |
-| Send a message and surface to the user's memos | `reply(..., recipient="user")` | `maiko reply "..." --recipient user` |
-| Check the inbox | `check_inbox()` | `maiko inbox` (`--all` for full history) |
-| Run mechanical checks | `check_code()` | `maiko check-code` |
-| Pin an inline review comment | `leave_comment(file_path, line_number, body)` | `maiko leave-comment <file> <line> "<body>"` |
-
-The MCP path is faster (no process spawn per call) and the Stop hook auto-polls your inbox for you. The CLI path is portable and visible — it's what makes the same protocol work whether you're Claude Code, Aider, a local Ollama loop, or a shell script.
-
-### Reaching the user — `recipient="user"`
-
-`reply()` accepts an optional `recipient` parameter. By default messages live inside the task's chat thread — the user sees them only if they open that thread. Pass `recipient="user"` when the message is **specifically for the user to read** and shouldn't risk getting buried mid-thread:
-
-```
-reply(content="Quick question — should I keep the existing logging shape or migrate to the new structured logger while I'm here?",
-      message_type="message",
-      recipient="user")
+```bash
+maiko reply "$(cat <<'EOF'
+VERDICT: approve_with_comments
+SUMMARY: …
+…
+EOF
+)" --type ready_for_review
 ```
 
-When you set `recipient="user"`, Maiko surfaces the message as a memo in the user's inbox alongside their other actionable items — they get a clear ping rather than having to scroll the chat. Reserve this for:
+### Message types
 
-- **You're replying to a message the user sent you.** If `check_inbox` returned a message from `sender="user"` (a question, a request, a clarification), your reply is for them — set `recipient="user"` so they see your answer in their inbox. The user often asks something and walks away; without the recipient tag, your answer lives in a thread they have to remember to open.
+| Type | Meaning |
+|---|---|
+| `status` | Live chatter — boot-up message, progress update. No pupdate created; the user sees it in the channel log. |
+| `message` | General reply to the user. Use `--recipient user` to put it in their memos. |
+| `ready_for_review` | You've committed work and want the user to review the diff. Run `maiko check-code` first; don't claim ready if checks are red. |
+| `plan_for_approval` | You started in plan mode and have a markdown plan for the user to approve before you implement. |
+| `pr_opened` | After `gh pr create` in response to an `approved` message — put the PR URL on its own line in the content. |
+| `stuck` | You're blocked and need user help. High-priority pupdate so they see it. |
+| `feedback` | A *coding rule* the team should follow (see "Feedback vs Insight" below). |
+| `insight` | *Tribal / operational knowledge* future agents should know (see "Feedback vs Insight" below). |
+
+There is no `done`. Agents don't decide when a task is complete — the user does, by closing it after reviewing.
+
+### Reaching the user — `--recipient user`
+
+By default messages live inside the task's chat thread; the user sees them only if they open the thread. Pass `--recipient user` when the message is *specifically* for the user to read and shouldn't risk getting buried:
+
+```bash
+maiko reply "Quick question — should I keep the existing logging shape or migrate to the new structured logger while I'm here?" \
+  --type message --recipient user
+```
+
+Maiko surfaces `--recipient user` messages as memos in the user's inbox alongside other actionable items — they get a clear ping instead of having to scroll the chat. Reserve this for:
+
+- **You're replying to a message the user sent you.** If `maiko inbox` returned a message from `sender=user` (a question, a request, a clarification), your reply is for them — set `--recipient user` so they see your answer. The user often asks something and walks away; without the recipient tag, your answer lives in a thread they have to remember to open.
 - A direct question you want the user to answer before you continue.
 - A heads-up they should see (you noticed something orthogonal to the task; you decided to defer something they might want to weigh in on).
 - A blocker you're working around but want them to know about.
 
-DO NOT set `recipient="user"` for: routine status updates, self-narration, "I'm thinking about X" chatter, tool-call summaries. Those belong in-thread (no recipient). Every user-targeted message is an interruption — use it like you'd tag someone in a Slack channel: rarely, and only when their attention is actually needed.
+DO NOT set `--recipient user` for: routine status updates, self-narration, "I'm thinking about X" chatter, tool-call summaries. Those belong in-thread (no recipient). Every user-targeted message is an interruption — use it like you'd tag someone in a Slack channel: rarely, and only when their attention is actually needed.
 
-`message_type="ready_for_review"`, `"plan_for_approval"`, `"stuck"`, and `"pr_opened"` already create their own pupdates / memos as part of their semantics — don't add `recipient="user"` to those, the surface already knows the user should see them.
+`ready_for_review`, `plan_for_approval`, `stuck`, and `pr_opened` already create their own pupdates / memos as part of their semantics — don't add `--recipient user` to those.
 
 ### Feedback vs Insight — two different things
 
-Two reply `message_type` values exist for sharing what you learned, and they mean genuinely different things:
+Two `--type` values exist for sharing what you learned, and they mean genuinely different things:
 
-- **`feedback`** — a *coding rule* you think the team should follow. "Always use the error-handling pattern from `errors.py`", "Don't mutate Redux state directly", etc. These become Signals, get clustered into Learnings, and surface to future agents via `maiko rules-relevant`. Use this for rules about the *code*.
+- **`feedback`** — a *coding rule* you think the team should follow. "Always use the error-handling pattern from `errors.py`", "Don't mutate Redux state directly", etc. These become Signals, get clustered into Learnings, and surface to future agents via the knowledge pool. Use this for rules about the *code*.
 - **`insight`** — *tribal / operational knowledge* a future agent would benefit from knowing before they start work. "Use IntelliJ to run tests in this repo, the CLI runner is broken", "The personalization repo is mid-migration — column names don't match ORM fields yet", "Slack channel #auth-team has the context if you're touching session handling". These get injected verbatim into every new agent's CLAUDE.md. Use this for rules about *how to work in the repo*, not about the code itself.
 
 If in doubt: if it would go in a linter config, it's `feedback`. If it would go in a README or an onboarding doc, it's `insight`.
-
-The `maiko` CLI still works for legacy reporting (`maiko report`, `maiko task start`, `maiko feedback`) but messaging goes through MCP.
 
 ### Voice
 
@@ -124,7 +135,7 @@ Bad: "agent_status: build complete for task-123"
 
 ## 3. Ready-for-review contract
 
-When you call `reply(message_type="ready_for_review", content=...)`, structure the content so the user can review your *claim*, not re-derive it from the diff.
+When you call `maiko reply "..." --type ready_for_review`, structure the content so the user can review your *claim*, not re-derive it from the diff.
 
 **Start the content with these two lines** (same shape review agents use):
 
@@ -146,22 +157,22 @@ The VERDICT + SUMMARY lines render in the Review Diff page's top banner so the u
 
 - **Invariants preserved** — 2–3 bullets stating what the change keeps true. "Users can still sign in with OAuth." "The migration is idempotent." "Calling `process_batch` with an empty list is still a no-op."
 - **Assumptions** — anything the change rests on that isn't obvious from the diff. "Assumes the feature flag gate in `config.py` is on in prod." "Assumes `json.loads` on the incoming body can't raise."
-- **Checks run** — one line for `check_code` (green / red counts). "pytest: 147/147; ruff: pass; 2 new Hypothesis properties on the parser."
+- **Checks run** — one line for `maiko check-code` (green / red counts). "pytest: 147/147; ruff: pass; 2 new Hypothesis properties on the parser."
 
 Don't bullet-list every file touched — the diff says that. The goal is to make *the claim the agent is making* cheap for the user to review.
 
 ## 4. Workflow — the review loop
 
 ```
-1. Read TASK.md → report "Reading the plan..."
-2. Explore the codebase → report "Checking existing patterns in X..."
+1. Read TASK.md → maiko reply "Reading the plan..." --type status
+2. Explore the codebase → maiko reply "Checking existing patterns in X..." --type status
 3. Implement the change → commit locally
-4. Run `check_code()` — runs the mechanical checks (tests / linter /
+4. Run `maiko check-code` — runs the mechanical checks (tests / linter /
    typechecker). Fix until green. It is dishonest to skip this and
    claim ready.
-5. (Optional) Use leave_comment to flag uncertain spots in your diff
-6. reply(message_type="ready_for_review", content="<summary>")
-7. check_inbox every ~30 seconds until a review message arrives
+5. (Optional) Use `maiko leave-comment` to flag uncertain spots in your diff
+6. maiko reply "<summary>" --type ready_for_review
+7. (Usually unnecessary — the Stop hook auto-polls.) `maiko inbox` until a review message arrives
 8. When a message_type="review" arrives, parse its @@ file:line headers
    (for local comments) OR run gh to fetch PR-side comments (see
    "Post-PR feedback" below), iterate on each comment, commit,
@@ -169,11 +180,11 @@ Don't bullet-list every file touched — the diff says that. The goal is to make
 9. Exit ONLY when you receive message_type="approved" or "cancelled"
 ```
 
-The user — not you — decides when the task is done. Never exit early on your own `message_type="done"`; that flow is retired in favor of review cycles.
+The user — not you — decides when the task is done. Never exit early on your own `done`; that flow is retired in favor of review cycles.
 
-### Verifiers — `check_code`
+### Verifiers — `maiko check-code`
 
-Before every `ready_for_review`, call `check_code()`. It runs the repo's mechanical checks (tests / linter / typechecker), auto-detected from `pyproject.toml` / `package.json` / `Cargo.toml` / `go.mod`, or configured in `.maiko/checks.json`.
+Before every `ready_for_review`, run `maiko check-code`. It runs the repo's mechanical checks (tests / linter / typechecker), auto-detected from `pyproject.toml` / `package.json` / `Cargo.toml` / `go.mod`, or configured in `.maiko/checks.json`.
 
 If anything is red, fix it before replying. Surface the result in your `ready_for_review` summary under a brief "Checks" line — lets the user see at a glance that the suite is green.
 
@@ -221,7 +232,7 @@ In your `ready_for_review` summary, include a short "Properties" bullet listing 
 
 ### Plan-first tasks
 
-If the task was started in plan mode, your VERY FIRST action after reading TASK.md is to produce a detailed implementation plan and call `reply(message_type="plan_for_approval", content=<markdown plan>)` — then exit. Do NOT write code. The user will either approve the plan (Maiko resumes you with full permissions to implement) or request revisions (resumes you still in plan mode with their feedback). You can detect plan mode by trying to Write a file — if the tool is blocked, you're in plan mode.
+If the task was started in plan mode, your VERY FIRST action after reading TASK.md is to produce a detailed implementation plan and run `maiko reply "<markdown plan>" --type plan_for_approval` — then exit. Do NOT write code. The user will either approve the plan (Maiko resumes you with full permissions to implement) or request revisions (resumes you still in plan mode with their feedback). You can detect plan mode by trying to Write a file — if the tool is blocked, you're in plan mode.
 
 ### Post-PR feedback (after the user approves and Maiko opens a PR)
 
@@ -236,14 +247,14 @@ gh pr view <PR_NUMBER> --comments
 gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/comments
 ```
 
-Address every actionable comment, commit locally, and call `reply(message_type="ready_for_review")` again. Maiko will push your new commits to the same PR branch after the user approves the updated diff. Don't `git push` yourself — the user is still the gate.
+Address every actionable comment, commit locally, and run `maiko reply "..." --type ready_for_review` again. Maiko will push your new commits to the same PR branch after the user approves the updated diff. Don't `git push` yourself — the user is still the gate.
 
 ## 5. Rules
 
 - Stay focused on the task in TASK.md
 - Commit frequently with clear messages
-- Call `check_inbox` between steps — new context may have arrived
+- The Stop hook and PostToolUse hook auto-poll your inbox — you usually don't need to call `maiko inbox` manually. Reach for it only when you want to gate on a user reply.
 - Match existing patterns in the files you modify
 - Never commit agent scaffolding (TASK.md, CLAUDE.md, .claude/, .maiko-env.json, .mcp.json)
 - Never run `git push` or `gh pr create` — Maiko handles that on approval
-- If stuck more than a few minutes, `reply(message_type="stuck", ...)`
+- If stuck more than a few minutes, run `maiko reply "..." --type stuck`

@@ -1,8 +1,17 @@
 # Investigation Agent Protocol
 
-You are an investigation agent running in a prepared git worktree. The flow is the same as a coding agent's: do the work, report via the maiko-channel MCP, then loop on `check_inbox` for any follow-up questions from the user.
+You are an investigation agent running in a prepared git worktree. The flow is the same as a coding agent's: do the work, report via the `maiko` CLI, then settle and let the Stop hook auto-poll the inbox for any follow-up questions from the user.
 
-For your initial run: read TASK.md (it carries the investigation skill prompt and context), perform the investigation, and call `reply(content="<your full investigation report markdown>", message_type="ready_for_review")`. **The `reply()` content is your report — that's what lands on `task.extra.artifact` and what the user sees on /tasks/<id>/report.** Writing `INVESTIGATION.md` in the worktree is OPTIONAL (a local scratch file you can leave behind for a user attaching via View Session); it is NOT the report and the user does not read it from there. If you only write the file and skip `reply(message_type="ready_for_review")`, your report is invisible to the user. The server parses `PATTERN:` / `PROPOSAL:` / `CONFIDENCE:` blocks out of the `reply()` content and routes them into the knowledge pool / approval queue.
+For your initial run: read TASK.md (it carries the investigation skill prompt and context), perform the investigation, and run:
+
+```bash
+maiko reply "$(cat <<'EOF'
+<your full investigation report markdown>
+EOF
+)" --type ready_for_review
+```
+
+**The `maiko reply` content is your report — that's what lands on `task.extra.artifact` and what the user sees on /tasks/<id>/report.** Writing `INVESTIGATION.md` in the worktree is OPTIONAL (a local scratch file you can leave behind for a user attaching via View Session); it is NOT the report and the user does not read it from there. If you only write the file and skip `maiko reply --type ready_for_review`, your report is invisible to the user. The server parses `PATTERN:` / `PROPOSAL:` / `CONFIDENCE:` blocks out of the reply content and routes them into the knowledge pool / approval queue.
 
 ## Scope: local read + local write only
 
@@ -11,25 +20,28 @@ You have permission to read code, run commands, and write files inside this work
 - Run `gh pr create`, `gh pr merge`, `gh pr review`, `gh issue create/close`, or any `gh` subcommand that modifies GitHub state
 - Upload, publish, or otherwise share artifacts outside this worktree
 
-Your output is the `reply(message_type="ready_for_review")` content (rendered to the user as the investigation report) plus the structured blocks below. The user reviews everything before any change reaches the outside world.
+Your output is the `maiko reply --type ready_for_review` content (rendered to the user as the investigation report) plus the structured blocks below. The user reviews everything before any change reaches the outside world.
 
 ## How to talk to Maiko
 
-Everything flows through the maiko-channel MCP `reply` tool. The message body MUST be passed as `content` — `message`, `body`, and other parameter names are rejected by the schema.
+Everything flows through the `maiko` CLI. `MAIKO_JOB_ID` is set in your environment so calls auto-resolve to the right job. For long markdown bodies use a heredoc:
 
+```bash
+maiko reply "$(cat <<'EOF'
+<text — multi-line OK>
+EOF
+)" --type <type>
 ```
-reply(content="<text>", message_type="<type>")
-```
 
-Valid `message_type` values: `message`, `status`, `feedback`, `stuck`, `ready_for_review`, `done`.
+Valid `--type` values: `message`, `status`, `feedback`, `stuck`, `ready_for_review`. There is no `done` — the user closes tasks, not you.
 
-**For your final report:** call `reply(content="<full report markdown>", message_type="ready_for_review")`. The server scans the content for `PATTERN:` / `PROPOSAL:` / `TASK:` / `CONFIDENCE:` blocks, strips them out, saves the cleaned report on the task as `task.extra.artifact`, and marks the task done.
+**For your final report:** run `maiko reply "<full report markdown>" --type ready_for_review`. The server scans the content for `PATTERN:` / `PROPOSAL:` / `TASK:` / `CONFIDENCE:` blocks, strips them out, saves the cleaned report on the task as `task.extra.artifact`, and marks the task done.
 
-**For mid-run status:** call `reply(content="<short update>", message_type="status")` — chatter, no inbox pupdate.
+**For mid-run status:** `maiko reply "<short update>" --type status` — chatter, no inbox pupdate.
 
-**For a blocker:** call `reply(content="<what's blocking>", message_type="stuck")` — high-priority pupdate.
+**For a blocker:** `maiko reply "<what's blocking>" --type stuck` — high-priority pupdate.
 
-You don't need to manually call `check_inbox` — Maiko installs a Stop hook that polls the inbox automatically.
+You don't need to manually call `maiko inbox` — the Stop hook auto-polls before you settle, and the PostToolUse hook polls between tool calls.
 
 ### `PATTERN:` — surface a learning from the incident
 

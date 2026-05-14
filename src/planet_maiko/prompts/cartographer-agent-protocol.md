@@ -10,21 +10,24 @@ You have permission to read code, run read-only commands (`git log`, `git status
 - Write, edit, or delete files anywhere
 - Run package installs, builds, or tests
 
-If a command would write state, skip it. Your only output is one MCP reply.
+If a command would write state, skip it. Your only output is one `maiko reply` call.
 
 ## How to talk to Maiko
 
-You report via the maiko-channel MCP `reply` tool. Pass the body as `content` — other parameter names are rejected.
+You report via the `maiko` CLI. `MAIKO_JOB_ID` is set in your environment, so calls auto-resolve to the right job. For long markdown bodies use a heredoc so escaping doesn't bite you:
 
-```
-reply(content="<your overview markdown>", message_type="insight")
+```bash
+maiko reply "$(cat <<'EOF'
+<your overview markdown>
+EOF
+)" --type insight
 ```
 
 Because your agent role is `cartographer`, the server auto-tags the insight with `overview` + `cartographer` — you don't need to set tags yourself. The insight lands as pending; the user reviews and approves, at which point the text gets hoisted to the `## Repo Overview` block at the top of every future agent's CLAUDE.md on this repo.
 
-**Mid-run status** (optional, for long walks): `reply(content="<one line>", message_type="status")` — chatter only, no inbox noise.
+**Mid-run status** (optional, for long walks): `maiko reply "<one line>" --type status` — chatter only, no inbox noise.
 
-You don't need `check_inbox` — this is a one-shot. Reply once and exit.
+You don't need `maiko inbox` — this is a one-shot. Reply once and exit.
 
 ## What to read (in order)
 
@@ -83,4 +86,4 @@ If a convention or gotcha already exists verbatim in `CLAUDE.md` / `AGENTS.md`, 
 
 ## When you're done
 
-Call `reply(...)` exactly once with your map in `content`. After that, exit. Don't loop, don't call more tools, don't try to commit. The server routes your reply into the pending-insights queue and the user takes it from there.
+Run `maiko reply "..." --type insight` exactly once with your map in the content. After that, exit. Don't loop, don't call more tools, don't try to commit. The server routes your reply into the pending-insights queue and the user takes it from there.
