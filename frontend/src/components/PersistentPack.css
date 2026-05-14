@@ -111,15 +111,20 @@
 /* Speech bubble — appears to the RIGHT of the avatar on hover. The
    vertical dock has unused space stretching toward the page center,
    so the bubble can be wider here than it ever could in the old
-   bottom-bar layout where it had to fit above an avatar. */
+   bottom-bar layout where it had to fit above an avatar.
+
+   Shape: pillowy rounded rect with a leftward-pointing tail aimed at
+   the avatar. Tail is two stacked CSS triangles — outer one in the
+   border color, inner one in the bubble bg, offset by 1px so the
+   bubble's outline carries cleanly into the tail. */
 .persistent-pack-bubble {
   position: absolute;
-  left: calc(100% + 12px);
+  left: calc(100% + 14px);
   top: 50%;
   transform: translateY(-50%);
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: var(--radius-xs);
+  border-radius: 16px;
   padding: 10px 14px;
   min-width: 220px;
   max-width: 400px;
@@ -135,6 +140,37 @@
      full width of the page. white-space normal + overflow-wrap
      handles long single tokens (urls, file paths). */
   white-space: normal;
+}
+
+/* Outer triangle = border ring of the tail. Slightly larger and
+   offset 1px further out than the inner triangle so a 1px outline
+   peeks around it, matching the bubble's border. */
+.persistent-pack-bubble::before {
+  content: "";
+  position: absolute;
+  left: -9px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 9px solid transparent;
+  border-bottom: 9px solid transparent;
+  border-right: 9px solid var(--border);
+}
+
+/* Inner triangle = fill color. Sits 1px inside the bubble's left
+   edge to hide the seam between bubble border and tail border. */
+.persistent-pack-bubble::after {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-right: 8px solid var(--bg-card);
 }
 
 .persistent-pack-villager:hover .persistent-pack-bubble,
