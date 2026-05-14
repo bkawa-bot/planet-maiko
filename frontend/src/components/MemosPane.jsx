@@ -35,6 +35,43 @@ import "./RepoPickerModal.css";
 
 const POLL_MS = 30_000;
 
+// "Click into the agent" surfaces (Agents page + persistent pack) already
+// show these as a status on the agent's row, so the memo entry is
+// redundant noise. We hide them from the Memos list and toast once when
+// they first appear instead — the user gets the heads-up without the
+// permanent row sitting in the pane. localStorage keeps the "already
+// toasted" set across reloads so reopening the app doesn't re-toast
+// everything from history.
+const HIDDEN_KINDS = new Set(["review", "agent_ready"]);
+const TOAST_SEEN_KEY = "maiko.memos.toastedReadyIds";
+
+function loadToastedIds() {
+  try {
+    const raw = localStorage.getItem(TOAST_SEEN_KEY);
+    if (!raw) return new Set();
+    return new Set(JSON.parse(raw));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveToastedIds(set) {
+  try {
+    // Cap at 200 entries so the localStorage value can't grow unbounded.
+    const arr = Array.from(set).slice(-200);
+    localStorage.setItem(TOAST_SEEN_KEY, JSON.stringify(arr));
+  } catch {
+    /* non-fatal */
+  }
+}
+
+function itemSignature(it) {
+  // Memo-backed rows have memo_id; task-backed review rows don't,
+  // so fall back to task_id. Either is stable enough that a row
+  // doesn't re-toast on every poll.
+  return it.memo_id || it.task_id || it.job_id || it.title;
+}
+
 const KIND_META = {
   plan: {
     Icon: ClipboardCheck,
@@ -114,10 +151,34 @@ export default function MemosPane() {
   // re-fires approveMemo with { repo_path }.
   const [repoPicker, setRepoPicker] = useState(null);
 
-  const fetchQueue = async () => {
+  const fetchQueue = async (isInitial = false) => {
     try {
       const data = await api.getReviewQueue();
-      setItems(data?.items || []);
+      const next = data?.items || [];
+
+      // Toast newly-arrived ready / review rows once, then suppress them
+      // from the rendered list. localStorage tracks which signatures
+      // we've already toasted so a refresh doesn't re-fire. On the
+      // first fetch of a session we silently mark the current backlog
+      // as seen — toasting 5 "ready" rows from yesterday's work the
+      // moment the app loads would be noise, not signal.
+      const toasted = loadToastedIds();
+      let dirty = false;
+      for (const it of next) {
+        if (!HIDDEN_KINDS.has(it.kind)) continue;
+        const sig = itemSignature(it);
+        if (!sig || toasted.has(sig)) continue;
+        if (!isInitial) {
+          const who = it.agent_name || "an agent";
+          const what = it.kind === "review" ? "diff ready" : "ready for review";
+          showToast(`${who} ${what}: ${it.title || ""}`.trim(), "normal");
+        }
+        toasted.add(sig);
+        dirty = true;
+      }
+      if (dirty) saveToastedIds(toasted);
+
+      setItems(next);
     } catch {
       /* non-fatal — keep whatever was last loaded */
     }
@@ -125,10 +186,10 @@ export default function MemosPane() {
   };
 
   useEffect(() => {
-    fetchQueue();
+    fetchQueue(true); // initial: prime the "seen" set without toasting backlog
     api.getProfiles().then(setProfiles).catch(() => {});
-    const id = setInterval(fetchQueue, POLL_MS);
-    const onFocus = () => fetchQueue();
+    const id = setInterval(() => fetchQueue(false), POLL_MS);
+    const onFocus = () => fetchQueue(false);
     window.addEventListener("focus", onFocus);
     return () => {
       clearInterval(id);
@@ -155,8 +216,14 @@ export default function MemosPane() {
     );
   };
 
+  // Drop the rows that the persistent pack / Agents page already
+  // surfaces — the user toasts arrive separately when these first
+  // appear. Filter here (not in fetchQueue) so the toast-tracking
+  // loop above sees every newly-arrived row even when filtered out.
+  const visibleItems = items.filter((it) => !HIDDEN_KINDS.has(it.kind));
+
   if (loading) return null;
-  if (items.length === 0) return null;
+  if (visibleItems.length === 0) return null;
 
   const iconFor = (item) => {
     return KIND_META[item.kind]?.Icon || FileText;
@@ -192,10 +259,10 @@ export default function MemosPane() {
     <div className="review-queue memos-pane frost-pane">
       <div className="review-queue-header">
         <Inbox size={12} /> Memos
-        <span className="review-queue-count">{items.length}</span>
+        <span className="review-queue-count">{visibleItems.length}</span>
       </div>
       <div className="review-queue-list">
-        {items.map((it) => {
+        {visibleItems.map((it) => {
           const meta = KIND_META[it.kind] || KIND_META.review;
           const Icon = iconFor(it);
 
