@@ -56,7 +56,7 @@ export default function AgentsInsightsTab() {
     setStarting(true);
     try {
       await api.startPackInsights();
-      showToast("Gathering the pack around the lantern… 🕯️", "normal");
+      showToast("Gathering the pack by moonlight… 🌙", "normal");
       setDecisions({});
       await fetchAll();
     } catch (err) {
@@ -154,7 +154,7 @@ export default function AgentsInsightsTab() {
 function IdleHero({ onStart, starting }) {
   return (
     <div className="campfire-idle">
-      <div className="campfire-fire campfire-fire-dim">🕯️</div>
+      <div className="campfire-fire campfire-fire-dim">🌙</div>
       <h3>Gather the pack around the fire</h3>
       <p>
         Maiko will message every active agent and ask what they noticed today —
@@ -181,7 +181,7 @@ function CampfireScene({ agents, decisions, onOpenAgent, onWrapUp, onReset, wrap
 
   return (
     <div className="campfire-scene">
-      <div className="campfire-fire campfire-fire-live">🕯️</div>
+      <div className="campfire-fire campfire-fire-live">🌙</div>
 
       <div className="campfire-ring">
         {agents.length === 0 ? (
