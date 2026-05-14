@@ -139,8 +139,13 @@ def wake_agent(task_id, prompt, source, working_path=None, session_id=None, app=
         logger.warning(f"[wake] no worktree for task {task_id} (source={source})")
         return False, "error"
 
+    # Use the coding_agent task_type so a routing.runtime_rules override
+    # (Settings → Model Routing → Coding agents) actually applies on
+    # resume — without this, a user who picked tmux for coding agents
+    # would have their follow-up messages routed to brain.runtime and
+    # the resume would target the wrong session id space.
     from planet_maiko.agents.brain_session import _get_runtime
-    runtime = _get_runtime()
+    runtime = _get_runtime("coding_agent")
     if not runtime.is_available():
         logger.warning(f"[wake] {runtime.name} runtime not available (task={task_id})")
         return False, "error"

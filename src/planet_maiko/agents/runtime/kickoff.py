@@ -112,8 +112,12 @@ def _kickoff_agent_headless(agent_id, worktree_path, job_id, branch_name=None, p
     if _UNSAFE_PATH_CHARS.search(worktree_path):
         return {"success": False, "error": f"Unsafe worktree path: {worktree_path!r}"}
 
+    # Pass "coding_agent" so the Settings → Model Routing → Coding agents
+    # rule actually picks the runtime. Without this the spawn would
+    # always use brain.runtime and a user who set "Coding agents → tmux"
+    # via the per-task routing UI would silently still get the default.
     from planet_maiko.agents.brain_session import _get_runtime
-    runtime = _get_runtime()
+    runtime = _get_runtime("coding_agent")
     if not runtime.is_available():
         return {"success": False, "error": f"{runtime.name} runtime not available"}
     if not runtime.supports_spawn():

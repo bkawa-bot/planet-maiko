@@ -103,7 +103,10 @@ def chat():
     if not message:
         return jsonify({"error": "message required"}), 400
 
-    runtime = _get_runtime()
+    # "chat" task_type so a routing.runtime_rules.chat override picks
+    # the runtime — keeps this consistent with resolve_model("chat")
+    # below, which already honors the per-task routing.
+    runtime = _get_runtime("chat")
     if not runtime or not runtime.is_available():
         return jsonify({"error": "LLM runtime not available. Is Claude Code installed?"}), 503
 

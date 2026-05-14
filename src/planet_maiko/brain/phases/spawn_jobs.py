@@ -156,7 +156,9 @@ def _execute_lightweight_specialty(job, specialty):
         agent = maybe_spawn(specialty.id, job.scope_repo)
         job.agent_profile_id = agent.id
 
-    runtime = _get_runtime()
+    # Match the kickoff path: route through "coding_agent" so the user's
+    # Model Routing pick (tmux vs headless) applies to specialty jobs too.
+    runtime = _get_runtime("coding_agent")
     if not runtime or not runtime.is_available():
         job.status = "failed"
         job.error = "LLM runtime unavailable"

@@ -85,7 +85,10 @@ def dispatch(request: str, context: str = "", non_goals: str = "") -> dict:
     if not req:
         return {"status": "error", "error": "request is required"}
 
-    runtime = _get_runtime()
+    # "triage" task_type to match the resolve_model("triage") /
+    # resolve_effort("triage") calls below — without this, model + effort
+    # honor the routing rule but the runtime silently uses brain.runtime.
+    runtime = _get_runtime("triage")
     if not runtime or not runtime.is_available():
         return {"status": "error", "error": "LLM runtime not available. Is Claude Code installed?"}
 
