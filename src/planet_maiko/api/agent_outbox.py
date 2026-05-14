@@ -67,14 +67,31 @@ def _maybe_end_runtime_session(job_id, message_type):
     """Tell the active runtime to tear down the agent's current turn,
     if ``message_type`` is terminal. No-op for runtimes (like the
     headless ClaudeCodeRuntime) whose subprocess exits on its own at
-    the end of a turn."""
+    the end of a turn.
+
+    Fans out end_session across every already-instantiated runtime.
+    Each runtime's end_session is idempotent — claude-code's is a
+    no-op, tmux only kills its own bound session for this job_id.
+    Fan-out means we can't miss a teardown if the agent was kicked
+    off under one runtime (e.g. tmux via per-task routing) but the
+    default runtime resolves to another (e.g. claude-code). Letting
+    the tmux pane leak strands the kickoff thread on its
+    _wait_for_session_end and the next follow-up message ends up
+    behind a held lock.
+    """
     if message_type not in _TERMINAL_MESSAGE_TYPES:
         return
     try:
-        from planet_maiko.agents.brain_session import _get_runtime
-        _get_runtime().end_session(job_id)
+        from planet_maiko.agents import brain_session
+        for name, runtime in list(brain_session._runtimes.items()):
+            if runtime is None:
+                continue
+            try:
+                runtime.end_session(job_id)
+            except Exception as e:
+                logger.warning(f"[outbox] {name}.end_session({job_id}) failed: {e}")
     except Exception as e:
-        logger.warning(f"[outbox] runtime.end_session({job_id}) failed: {e}")
+        logger.warning(f"[outbox] runtime fan-out for {job_id} failed: {e}")
 
 logger = logging.getLogger(__name__)
 

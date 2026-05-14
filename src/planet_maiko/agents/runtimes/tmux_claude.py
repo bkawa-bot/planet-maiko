@@ -201,6 +201,17 @@ class TmuxClaudeRuntime(ClaudeCodeRuntime):
 
         env_kv = self._compose_env(extra_env)
 
+        # Defensive: if a same-named session is still alive from a
+        # previous turn whose end_session never fired (e.g. terminal
+        # reply routed to the wrong runtime, or claude crashed before
+        # the cleanup path ran), tmux new-session would fail with
+        # "duplicate session". Kill the stale one first; the agent's
+        # claude --resume below picks up the JSONL transcript from
+        # disk so no conversation state is lost.
+        if self._tmux_alive(sess):
+            logger.info(f"[tmux-claude] killing stale session {sess} before new turn")
+            self._tmux_kill(sess)
+
         created = self._tmux_create(
             sess=sess,
             working_dir=working_dir,
