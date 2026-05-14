@@ -80,32 +80,44 @@ Caller contract:
 Below this layer, Maiko leans on several Claude-Code-specific things.
 A real non-claude runtime needs to substitute or stub each one.
 
-### 1. MCP outbox — how agents talk back
+### 1. Outbox — how agents talk back
 
-Maiko ships a node-based MCP server at `channel/index.mjs` (the
-`maiko-channel` package). Agents call `reply(content, message_type)`
-and `check_inbox()` on it; the server posts back to Maiko's HTTP
-endpoint `/agents/<job_id>/outbox`. Every protocol prompt
-(`prompts/agent-protocol.md`, `prompts/review-agent-protocol.md`,
-etc.) instructs the agent in MCP-tool terms.
+Maiko exposes the agent outbox through two parallel transports, both
+hitting the same HTTP endpoints under the hood. New runtimes pick the
+transport that fits their model.
 
-**Coupling**: tight. The agent must speak MCP, and Maiko's outbox
-parser (`api/agent_outbox.py`) expects exact message_types
-(`ready_for_review`, `status`, `stuck`, `pr_opened`, `plan_for_approval`,
-`approved`).
+**A) `maiko` CLI (the portable path):** Any agent that can shell out
+can use these. `kickoff.py` sets `MAIKO_JOB_ID` in the agent's
+subprocess env so commands auto-resolve the job:
 
-**For a non-MCP runtime (Aider, Codex, local Ollama loop)**, two
-plausible substitutes:
+| Operation | CLI command | HTTP endpoint |
+|---|---|---|
+| Send a reply | `maiko reply "..." --type ready_for_review [--recipient user]` | `POST /agents/<job>/outbox` |
+| Check inbox | `maiko inbox [--all]` | `GET /agents/<job>/inbox` |
+| Run mechanical checks | `maiko check-code [--timeout 120]` | `POST /checks/run` |
+| Inline review comment | `maiko leave-comment <file> <line> "<body>" [--side old\|new]` | `POST /tasks/<job>/comments/agent` |
 
-- **File-based outbox.** Agent writes JSON lines to `OUTBOX.jsonl` in
-  the worktree; Maiko's brain cycle tails the file and calls the same
-  handlers in `agent_outbox.py`.
-- **HTTP webhook from the agent loop itself.** If the runtime is a
-  Python library (not a subprocess CLI), it can call into Maiko
-  directly. Same handlers, different transport.
+CLI commands live in `src/planet_maiko/cli/agent_cmds.py`. They are
+zero-config for the agent — `MAIKO_JOB_ID` is set in the spawn env
+(`agents/runtime/kickoff.py`), and `cli/_helpers.py:detect_job_id()`
+falls through env → TASK.md → `--job` flag.
 
-Either way, the protocol prompts have to be re-templated per runtime
-so the agent gets the right "this is how you report back" instructions.
+**B) MCP `maiko-channel` server (the Claude Code path):** A
+node-based MCP server at `channel/index.mjs`. Claude Code agents call
+`reply(content, message_type)`, `check_inbox()`, `check_code()`,
+`leave_comment(...)` and the server proxies to the same HTTP
+endpoints. The MCP path is faster (no process spawn per call) and
+gets the Claude Code `Stop` hook for auto-polling the inbox; the
+trade-off is that it only works with runtimes that speak MCP.
+
+Maiko's outbox parser (`api/agent_outbox.py`) is transport-agnostic —
+it consumes the same payload shape regardless of which transport
+delivered it. Adding a new runtime usually means writing a protocol
+prompt that points it at the CLI; the server side just works.
+
+**Message types** are enforced at both transports:
+`message`, `status`, `feedback`, `insight`, `stuck`, `ready_for_review`,
+`plan_for_approval`, `pr_opened`. Plus inbound: `approved`, `review`.
 
 ### 2. The Stop hook — inbox polling
 
@@ -197,7 +209,7 @@ interface.
 
 ## Migration plan
 
-**Phase 1 — done (this commit)**
+**Phase 1 — done**
 
 - `AgentRuntime` ABC in `agents/runtimes/base.py` documenting the
   synchronous side of the contract.
@@ -205,7 +217,27 @@ interface.
   `get_info`.
 - This document.
 
-**Phase 2 — move kickoff into the runtime**
+**Phase 2 — agent-comms portability via `maiko` CLI — done**
+
+The biggest non-runtime-class coupling was the MCP outbox: every
+protocol prompt told agents to call `reply()` / `check_inbox()` /
+`leave_comment()` / `check_code()` MCP tools, which only exist when
+Claude Code is the runtime. This phase added shell-callable
+equivalents — `maiko reply`, `maiko inbox`, `maiko leave-comment`,
+`maiko check-code` — that any agent can use from `Bash`. The MCP
+path stays available for runtimes that support it (Claude Code keeps
+the auto-polling Stop hook), but the contract no longer requires it.
+
+Concretely:
+
+- New CLI subcommands in `src/planet_maiko/cli/agent_cmds.py`.
+- `MAIKO_JOB_ID` set in the agent's subprocess env by `kickoff.py`.
+- `cli/_helpers.py:detect_job_id()` resolves env → TASK.md → `--job`.
+- `prompts/agent-protocol.md` updated to teach both transports.
+- The Phase-3 / Phase-5 "OUTBOX.jsonl watcher + per-runtime protocol
+  prompts" plan is **obsoleted** — the CLI replaces both.
+
+**Phase 3 — move kickoff into the runtime**
 
 - Add `ClaudeCodeRuntime.spawn(working_dir, initial_prompt, ...)`
   that contains today's `kickoff.py` logic.
@@ -215,35 +247,29 @@ interface.
   goes through `runtime.spawn()`. A new runtime can implement it
   however its underlying tool works.
 
-**Phase 3 — protocol pluggability**
+**Phase 4 — protocol-prompt variants per runtime**
 
-- Move the protocol-prompt loading
-  (`prompts/agent-protocol.md`, etc.) and the brief assembly into
-  per-runtime templates. Claude Code keeps the current `reply()` /
-  `check_inbox()` MCP-tool instructions; an Aider runtime gets a
-  variant that says "write a line to OUTBOX.jsonl with this shape
-  when you're done."
-- Replace the Stop-hook inbox-polling with an explicit poll loop the
-  agent runs every N turns. Claude Code can still use the Stop hook
-  internally (cleaner UX), but the *contract* with Maiko stops
-  depending on it.
+- Most of `prompts/agent-protocol.md` (and the role-specific siblings)
+  is already runtime-agnostic — the agent's job is the same regardless
+  of who's driving it. The remaining Claude-Code-isms (MCP tool
+  references, `--effort` / `--permission-mode plan` notes, Stop hook
+  expectations) can be conditionally rendered based on the runtime
+  the brief is being assembled for.
+- Goal: a single source of truth per role (coding, review, investigation,
+  cartographer), with `{% if runtime == "claude-code" %}` style
+  branching where the transport details differ.
 
-**Phase 4 — second runtime as proof**
+**Phase 5 — second runtime as proof**
 
 - Pick a target. Aider is the leading candidate: supports many models
   (including local via Ollama), has a stable CLI, has agent-loop
   semantics close to what Maiko already does. Codex CLI is OpenAI-only;
   Goose / OpenHands are options if Aider's loop doesn't fit.
 - Implement `AiderRuntime` against the contract.
-- Smoke test against a single coding task.
+- Wire `_get_runtime()` to read the runtime choice from config.
+- Smoke test against a single coding task using the `maiko` CLI for
+  comms (the whole point of Phase 2 was making this trivial).
 - Add a runtime picker in Settings → Model Routing.
-
-**Phase 5 — alternate agent-comms back-channel for non-MCP runtimes**
-
-- Stand up the file-based outbox (`OUTBOX.jsonl` watcher) as a parallel
-  path. The brain cycle tails it the same way it processes MCP outbox
-  posts today. Aider / Codex / local-Ollama runtimes use this; Claude
-  Code keeps MCP.
 
 ## Adding a new runtime — checklist
 

@@ -40,12 +40,24 @@ def api_request(path, method="GET", data=None):
 
 
 def detect_job_id():
-    """Try to detect the job ID from the current directory's TASK.md.
+    """Detect the current job ID, in order of preference.
 
-    Reads the new "**Job ID:**" line first; falls back to the older
-    "**Task ID:**" so worktrees written before the rename keep
-    working.
+    1. ``MAIKO_JOB_ID`` env var (set by the runtime when it spawns an
+       agent process — works for any runtime that can pass env vars).
+    2. ``MAIKO_TASK_ID`` env var (legacy alias kept for sessions that
+       were spawned before the rename).
+    3. The "**Job ID:**" / "**Task ID:**" line in ``TASK.md`` from the
+       current working directory (fallback for human use / scripts run
+       from inside the worktree).
+
+    Returns None if nothing matches.
     """
+    import os
+
+    env_id = os.environ.get("MAIKO_JOB_ID") or os.environ.get("MAIKO_TASK_ID")
+    if env_id:
+        return env_id.strip()
+
     try:
         with open("TASK.md") as f:
             for line in f:

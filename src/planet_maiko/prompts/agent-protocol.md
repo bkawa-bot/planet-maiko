@@ -59,11 +59,25 @@ Never push or open a PR without an explicit `approved` message. The user is the 
 
 ## 2. Communication
 
-Two MCP tools from the maiko-channel drive communication:
+You have two ways to talk to Maiko, and both hit the same endpoints — pick whichever fits the moment:
+
+**A) MCP tools (preferred when available):** Three tools from the maiko-channel drive communication:
 
 - **`reply`** — send a message to Maiko / the user. The body MUST go in the `content` parameter, e.g. `reply(content="Tests pass.", message_type="ready_for_review")`. Use `message_type="ready_for_review"` when you've committed work for review, `"stuck"` if you're blocked, `"message"` for general status.
 - **`check_inbox`** — pull pending messages from the user. Returns structured text. You normally don't have to remember this — Maiko installs a `Stop` hook that polls the inbox automatically every time you're about to end a response, blocks the stop if there are unread messages, and feeds them back as a system message. Calling `check_inbox` mid-step is still useful when you specifically want to wait for input (e.g. asked the user a question and want to gate on their reply).
 - **`leave_comment`** — drop an inline comment on a specific diff line for the user to see during their review. Use sparingly on uncertain / load-bearing spots (~5 max per round).
+
+**B) `maiko` CLI (equivalent, works from any shell):** The same operations are exposed as CLI commands you can `Bash` to. `MAIKO_JOB_ID` is set in your environment so you don't have to pass `--job` every time. Use these when the MCP tool fails, when you want to script something, or when a future runtime is driving you instead of Claude Code:
+
+| Operation | MCP tool | CLI equivalent |
+|---|---|---|
+| Send a message back | `reply(content=..., message_type=...)` | `maiko reply "..." --type ready_for_review` |
+| Send a message and surface to the user's memos | `reply(..., recipient="user")` | `maiko reply "..." --recipient user` |
+| Check the inbox | `check_inbox()` | `maiko inbox` (`--all` for full history) |
+| Run mechanical checks | `check_code()` | `maiko check-code` |
+| Pin an inline review comment | `leave_comment(file_path, line_number, body)` | `maiko leave-comment <file> <line> "<body>"` |
+
+The MCP path is faster (no process spawn per call) and the Stop hook auto-polls your inbox for you. The CLI path is portable and visible — it's what makes the same protocol work whether you're Claude Code, Aider, a local Ollama loop, or a shell script.
 
 ### Reaching the user — `recipient="user"`
 

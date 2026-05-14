@@ -98,18 +98,110 @@ def cmd_inbox(args):
 
 
 def cmd_reply(args):
-    """Send a message back to Planet Maiko."""
+    """Send a message back to Planet Maiko.
+
+    Mirrors the MCP `reply` tool: same endpoint, same payload shape.
+    Lets non-Claude runtimes (Aider, Codex, local Ollama loops, plain
+    shell scripts) talk back through the same outbox without needing
+    an MCP server in the worktree.
+    """
     task_id = args.task or detect_task_id()
     if not task_id:
-        print("Error: No task ID provided and could not detect from TASK.md", file=sys.stderr)
+        print("Error: No job ID provided and could not detect from TASK.md or MAIKO_JOB_ID env", file=sys.stderr)
         sys.exit(1)
 
     data = {
         "content": args.message,
         "message_type": args.type,
+        "sender": "agent",
+        # Only "user" is a meaningful recipient today (it surfaces the
+        # message in the user's memos). Anything else lands as in-thread
+        # chatter the user picks up by opening the job page.
+        "recipient": args.recipient or None,
     }
     api_request(f"/agents/{task_id}/outbox", method="POST", data=data)
     print(f"Sent reply for {task_id}")
+
+
+def cmd_check_code(args):
+    """Run the mechanical checks for the agent's worktree.
+
+    Mirrors the MCP `check_code` tool. Auto-detects tests / lint /
+    typecheck from the repo (pyproject.toml, package.json, Cargo.toml,
+    go.mod) or reads commands from .maiko/checks.json. The agent calls
+    this BEFORE declaring ready_for_review to honor the protocol's
+    "don't claim done if checks are red" rule.
+    """
+    task_id = args.task or detect_task_id()
+    if not task_id:
+        print("Error: No job ID provided and could not detect from TASK.md or MAIKO_JOB_ID env", file=sys.stderr)
+        sys.exit(1)
+
+    payload = {"job_id": task_id, "timeout": args.timeout}
+    data = api_request("/checks/run", method="POST", data=payload)
+    checks = data.get("checks") or []
+    summary = data.get("summary") or {}
+
+    if not checks:
+        print(
+            "Mechanical checks: none detected. Add a `.maiko/checks.json` "
+            "with the commands you want agents to run, or ensure the repo "
+            "has pyproject.toml + tests/, package.json with a test script, "
+            "Cargo.toml, or go.mod."
+        )
+        return
+
+    passed = summary.get("passed", 0)
+    total = summary.get("total", 0)
+    print(f"Mechanical checks: {passed}/{total} passed.")
+    for c in checks:
+        status = c.get("status", "?")
+        mark = "OK " if status == "pass" else "FAIL" if status == "fail" else "?"
+        bits = [status]
+        if c.get("exit_code") is not None:
+            bits.append(f"exit={c['exit_code']}")
+        print(f"  [{mark}] {c.get('name', '?')} ({', '.join(bits)})")
+        tail = c.get("output_tail") or ""
+        if status != "pass" and tail:
+            for line in tail.split("\n"):
+                print(f"      {line}")
+
+    if summary.get("blocked"):
+        print("")
+        print("Do NOT declare ready_for_review yet — address the failures first, then re-run.")
+        sys.exit(1)
+
+
+def cmd_leave_comment(args):
+    """Pin an inline comment to a specific diff line.
+
+    Mirrors the MCP `leave_comment` tool. Use sparingly (~5 max per
+    review round) on lines that are uncertain, load-bearing, or
+    deserve a second pair of eyes. Comments appear in the Review Diff
+    page alongside the user's own comments but styled distinctly.
+    """
+    task_id = args.task or detect_task_id()
+    if not task_id:
+        print("Error: No job ID provided and could not detect from TASK.md or MAIKO_JOB_ID env", file=sys.stderr)
+        sys.exit(1)
+
+    # Body can come from the positional arg or from stdin so the agent
+    # can pipe long markdown without escaping.
+    body = args.body
+    if body == "-" or body is None:
+        body = sys.stdin.read()
+    if not body or not body.strip():
+        print("Error: Empty comment body — pass as positional arg or pipe via stdin", file=sys.stderr)
+        sys.exit(1)
+
+    data = {
+        "file_path": args.file,
+        "line_number": args.line,
+        "side": args.side,
+        "body": body,
+    }
+    api_request(f"/tasks/{task_id}/comments/agent", method="POST", data=data)
+    print(f"Comment pinned to {args.file}:{args.line}")
 
 
 def cmd_feedback(args):
@@ -220,9 +312,41 @@ def register(subparsers):
     # maiko reply
     p = subparsers.add_parser("reply", help="Send a message back to Planet Maiko")
     p.add_argument("message", help="Reply message")
-    p.add_argument("--job", "--task", dest="task", help="Job ID (auto-detected if omitted; --task accepted for back-compat)")
-    p.add_argument("--type", default="message", help="Message type")
+    p.add_argument("--job", "--task", dest="task", help="Job ID (auto-detected from MAIKO_JOB_ID env or TASK.md if omitted; --task accepted for back-compat)")
+    p.add_argument(
+        "--type",
+        default="message",
+        choices=[
+            "message", "status", "feedback", "insight", "stuck",
+            "ready_for_review", "plan_for_approval", "pr_opened",
+        ],
+        help="Message type (matches the MCP reply tool's enum)",
+    )
+    p.add_argument(
+        "--recipient",
+        choices=["user"],
+        help="Set to 'user' to surface this message in the user's memos. Leave unset for in-thread chatter.",
+    )
     p.set_defaults(func=cmd_reply)
+
+    # maiko check-code — mechanical-checks gate before ready_for_review
+    p = subparsers.add_parser("check-code", help="Run mechanical checks (tests / lint / typecheck) on the worktree")
+    p.add_argument("--job", "--task", dest="task", help="Job ID (auto-detected from MAIKO_JOB_ID env or TASK.md if omitted)")
+    p.add_argument("--timeout", type=int, default=120, help="Per-check timeout in seconds (default: 120)")
+    p.set_defaults(func=cmd_check_code)
+
+    # maiko leave-comment — inline review comment
+    p = subparsers.add_parser("leave-comment", help="Pin an inline comment to a diff line")
+    p.add_argument("file", help="Path from the repo root (same as in the diff)")
+    p.add_argument("line", type=int, help="Line number in the file")
+    p.add_argument(
+        "body",
+        nargs="?",
+        help="Comment body (markdown supported). Use '-' or omit to read from stdin.",
+    )
+    p.add_argument("--side", choices=["old", "new"], default="new", help="Which side of the diff (default: new)")
+    p.add_argument("--job", "--task", dest="task", help="Job ID (auto-detected from MAIKO_JOB_ID env or TASK.md if omitted)")
+    p.set_defaults(func=cmd_leave_comment)
 
     # maiko feedback
     p = subparsers.add_parser("feedback", help="Send in-session feedback about agent work")

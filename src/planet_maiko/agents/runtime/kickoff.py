@@ -273,6 +273,13 @@ def _kickoff_agent_headless(agent_id, worktree_path, job_id, branch_name=None, p
                 # blocks this thread until the subprocess exits, so the
                 # set_agent_state("idle") + lock.release() happen at
                 # the right moment.
+                # MAIKO_JOB_ID flows into the subprocess env so the
+                # agent can call `maiko reply / inbox / check-code /
+                # leave-comment` from inside its shell without passing
+                # --job every time. The same env var is what the MCP
+                # channel server reads, so both paths coexist.
+                spawn_env = dict(os.environ)
+                spawn_env["MAIKO_JOB_ID"] = job_id
                 popen = subprocess.Popen(
                     cmd,
                     stdin=subprocess.PIPE,
@@ -282,6 +289,7 @@ def _kickoff_agent_headless(agent_id, worktree_path, job_id, branch_name=None, p
                     encoding="utf-8",
                     errors="replace",
                     cwd=worktree_path,
+                    env=spawn_env,
                 )
                 register_running_process(job_id, popen)
                 try:
