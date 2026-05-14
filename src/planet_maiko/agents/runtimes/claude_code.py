@@ -6,6 +6,10 @@ tool use, MCP integrations, and file system access.
 
 For the brain session, we use --print mode for quick prompt/response.
 For coding agents, we use full interactive sessions in git worktrees.
+
+Implements the AgentRuntime ABC in `base.py`. The async spawn path
+still lives in agents/runtime/kickoff.py for now; see AGENT_RUNTIME.md
+for the migration plan.
 """
 
 import json
@@ -14,15 +18,14 @@ import os as _os
 import shutil
 import subprocess
 
+from .base import AgentRuntime
+
 logger = logging.getLogger(__name__)
 
 
-class ClaudeCodeRuntime:
+class ClaudeCodeRuntime(AgentRuntime):
 
     name = "claude-code"
-
-    def get_info(self):
-        return {"name": self.name, "available": self.is_available()}
 
     def _find_claude(self):
         """Find the claude CLI, checking common install locations."""
