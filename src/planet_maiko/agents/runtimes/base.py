@@ -282,6 +282,23 @@ class AgentRuntime(ABC):
         """
         return type(self).resume is not AgentRuntime.resume
 
+    # ----- Session lifecycle hook -----
+    # Called by the outbox handler when an agent emits a terminal-typed
+    # reply (ready_for_review / stuck / plan_for_approval / pr_opened) —
+    # i.e. when "this turn is done." Runtimes that hold open
+    # subprocess / pane state for the duration of a turn use this to
+    # clean it up. Headless runtimes can no-op.
+
+    def end_session(self, job_id: str) -> None:
+        """Signal that the agent's current turn is complete.
+
+        Default is a no-op for runtimes whose subprocess naturally
+        exits at the end of a turn (any --print-based runtime).
+        Runtimes that keep state alive between maiko-reply calls
+        (e.g. interactive-in-tmux) override this to tear down.
+        """
+        return None
+
     # ----- Transcript surfacing -----
     # The UI's "View Session" link shows the user the full conversation.
     # Claude-Code stores transcripts as JSONL under ~/.claude/projects/;

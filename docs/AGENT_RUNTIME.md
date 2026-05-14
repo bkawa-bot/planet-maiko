@@ -292,7 +292,63 @@ What a non-claude runtime can do for resume:
   call `spawn()` internally. The agent gets cold-start state but
   with full context.
 
-**Phase 6 — second runtime as proof**
+**Phase 6 — TmuxClaudeRuntime as the first non-default runtime — done (first draft)**
+
+`agents/runtimes/tmux_claude.py` ships an interactive-claude-in-tmux
+variant. Same `claude` binary, no `--print` flag — the TUI runs
+inside a tmux pane so the request bills against the subscription
+pool instead of the Agent SDK $100/month credit. Mac-only for the
+first pass (tmux is reliably present via Homebrew; Linux/Windows
+support is straightforward but unscoped).
+
+How it works:
+
+  - Subclasses `ClaudeCodeRuntime` and overrides only `spawn` /
+    `resume`. `send` / `send_json` stay on `--print` because they're
+    short fire-and-forget skill / chat / triage calls — not worth the
+    tmux plumbing for the small volume.
+  - Per-turn session lifecycle: tmux session opens when a turn
+    starts (spawn or resume), gets killed when the agent emits a
+    terminal-typed `maiko reply` (`ready_for_review` / `stuck` /
+    `plan_for_approval` / `pr_opened`). Hooked into the outbox via
+    `_maybe_end_runtime_session` in `agent_outbox.py`.
+  - Session continuity comes from `claude --session-id` /
+    `claude --resume <id>` — same JSONL on disk as the headless path.
+    The tmux pane is just the UI for the running claude process; the
+    conversation state isn't in it.
+  - `kickoff.py` and `wake.py` need zero changes — they already call
+    `runtime.spawn()` / `runtime.resume()`. The blocking semantics
+    are preserved (`_wait_for_session_end` polls the tmux session
+    until it's gone, then returns).
+  - On startup, `cleanup_orphan_sessions()` walks the live tmux
+    session list and kills any `maiko-*` sessions whose AgentJob is
+    in a terminal state.
+
+How to opt in: set `brain.runtime: claude-code-tmux` in the config.
+Defaults to `claude-code` (headless). Falls back to claude-code if
+tmux isn't installed.
+
+Known caveats:
+
+  - **Anthropic might close the loophole.** If they classify
+    interactive-claude-driven-by-an-agent-controller as agentic and
+    route it to the credit pool regardless of `--print`, this stops
+    being useful overnight.
+  - **Output capture has ANSI codes.** `tmux pipe-pane` writes the
+    pane verbatim including escape sequences. `agent.log` for tmux
+    runs looks colorful. Not breaking, but a future cleanup is to
+    strip ANSI in the pipe.
+  - **`send()` is still on --print.** Skills / chat / triage still
+    consume Agent SDK credit. Probably acceptable given their
+    volume; if cost data later shows otherwise, the same per-turn
+    pattern works for `send()` too.
+  - **Crash detection is "tmux session disappears."** Using claude
+    as the tmux session's foreground command means a claude crash
+    naturally ends the session and unblocks `_wait_for_session_end`.
+    Stuck-but-not-crashed agents are still handled by
+    `wake.check_stuck_agents` on the existing timeout.
+
+**Phase 7 — another runtime as proof of the abstraction (Aider)**
 
 - Pick a target. Aider is the leading candidate: supports many models
   (including local via Ollama), has a stable CLI, has agent-loop
@@ -303,8 +359,8 @@ What a non-claude runtime can do for resume:
   `send_json` / `spawn` / `resume` / `session_transcript_path` — every
   protocol detail above already works because the agent talks back
   via the `maiko` CLI.
-- Wire `_get_runtime()` to read the runtime choice from config /
-  Settings → Model Routing, so flipping runtimes is one setting away.
+- Add a runtime picker in Settings → Model Routing so flipping
+  runtimes is one setting away.
 - Smoke test against a single coding task.
 
 ## Adding a new runtime — checklist

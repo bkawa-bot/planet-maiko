@@ -50,6 +50,32 @@ FOLLOWUP_KINDS = {
     "cartograph",
 }
 
+
+# Message types that signal "the agent is done with its current turn"
+# — the runtime can tear down any per-turn state it was holding open
+# (e.g. tmux-pane-based runtimes kill the pane here). Anything not in
+# this set is mid-flight chatter and leaves the session alone.
+_TERMINAL_MESSAGE_TYPES = {
+    "ready_for_review",
+    "stuck",
+    "plan_for_approval",
+    "pr_opened",
+}
+
+
+def _maybe_end_runtime_session(job_id, message_type):
+    """Tell the active runtime to tear down the agent's current turn,
+    if ``message_type`` is terminal. No-op for runtimes (like the
+    headless ClaudeCodeRuntime) whose subprocess exits on its own at
+    the end of a turn."""
+    if message_type not in _TERMINAL_MESSAGE_TYPES:
+        return
+    try:
+        from planet_maiko.agents.brain_session import _get_runtime
+        _get_runtime().end_session(job_id)
+    except Exception as e:
+        logger.warning(f"[outbox] runtime.end_session({job_id}) failed: {e}")
+
 logger = logging.getLogger(__name__)
 
 
@@ -259,6 +285,11 @@ def handle_agent_job_reply(job, msg, data, message_type):
         except Exception as e:
             logger.warning(f"[outbox/job] memo emission failed for {job.id}: {e}")
 
+        # Signal the runtime to tear down any per-turn state (kills
+        # the tmux pane on TmuxClaudeRuntime; no-op on the headless
+        # ClaudeCodeRuntime whose subprocess exited on its own).
+        _maybe_end_runtime_session(job.id, message_type)
+
         logger.info(f"[outbox/job] {job.kind} job {job.id} done")
         return
 
@@ -351,6 +382,7 @@ def handle_agent_job_reply(job, msg, data, message_type):
         # Same log-only treatment as the Task path — the AgentMessage
         # row is enough to surface the stuck status in the UI.
         logger.info(f"[outbox/job] {job.id} stuck: {content[:100]}")
+        _maybe_end_runtime_session(job.id, message_type)
         return
 
     # Anything else (status / summary / message) — just records the

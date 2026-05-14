@@ -26,13 +26,61 @@ _runtime = None
 
 
 def _get_runtime():
-    """Get the Claude Code runtime singleton."""
+    """Get the active agent runtime singleton.
+
+    Reads ``brain.runtime`` from config. Supported values:
+      "claude-code"       — headless `claude --print` (default, Agent
+                            SDK billing pool)
+      "claude-code-tmux"  — interactive `claude` inside a tmux pane
+                            (subscription billing pool, Mac only)
+
+    Falls back to claude-code if the configured runtime isn't
+    available on this machine (e.g., tmux requested but not installed).
+    """
     global _runtime
     if _runtime is None:
         from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
-        _runtime = ClaudeCodeRuntime()
+
+        try:
+            cfg = load_config()
+            runtime_name = (cfg.get("brain") or {}).get("runtime", "claude-code")
+        except Exception:
+            runtime_name = "claude-code"
+
+        if runtime_name == "claude-code-tmux":
+            try:
+                from planet_maiko.agents.runtimes.tmux_claude import (
+                    TmuxClaudeRuntime,
+                    cleanup_orphan_sessions,
+                )
+                _runtime = TmuxClaudeRuntime()
+                if _runtime.is_available():
+                    # One-shot cleanup of leftover tmux sessions from a
+                    # prior crashed Maiko process. Safe if tmux isn't
+                    # running (no-op) or if there's nothing to clean.
+                    try:
+                        n = cleanup_orphan_sessions()
+                        if n:
+                            logger.info(f"[brain] cleaned {n} orphan tmux session(s) at startup")
+                    except Exception as e:
+                        logger.debug(f"[brain] orphan tmux cleanup skipped: {e}")
+                else:
+                    logger.warning(
+                        "[brain] claude-code-tmux requested but tmux or claude "
+                        "isn't available; falling back to claude-code"
+                    )
+                    _runtime = ClaudeCodeRuntime()
+            except Exception as e:
+                logger.warning(
+                    f"[brain] couldn't load TmuxClaudeRuntime ({e}); "
+                    "falling back to claude-code"
+                )
+                _runtime = ClaudeCodeRuntime()
+        else:
+            _runtime = ClaudeCodeRuntime()
+
         if not _runtime.is_available():
-            logger.warning("[brain] Claude Code runtime is not available")
+            logger.warning(f"[brain] {_runtime.name} runtime is not available")
     return _runtime
 
 
