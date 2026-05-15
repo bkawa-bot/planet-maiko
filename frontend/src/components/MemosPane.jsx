@@ -15,7 +15,6 @@ import CardAvatar from "./CardAvatar";
 import "./ReviewQueue.css";
 import "./MemosPane.css";
 import ArtifactRow from "./memos/ArtifactRow";
-import StuckReplyBox from "./memos/StuckReplyBox";
 import PupdateSnapshot from "./memos/PupdateSnapshot";
 import RepoPickerModal from "./RepoPickerModal";
 import "./RepoPickerModal.css";
@@ -533,8 +532,6 @@ export default function MemosPane() {
           const isAgentMessage =
             it.kind === "agent_ready" || it.kind === "agent_plan";
           const showInlineBody = isAgentMessage && !!(it.body && it.body.trim());
-          const showInlineReply = false;
-          const replyTargetId = null;
           const summaryLabel = "Read message";
           return (
             <div
@@ -586,13 +583,6 @@ export default function MemosPane() {
                     className="markdown"
                     dangerouslySetInnerHTML={{ __html: renderMarkdown(it.body) }}
                   />
-                  {showInlineReply && (
-                    <StuckReplyBox
-                      taskId={replyTargetId}
-                      memoId={it.memo_id}
-                      onReplied={fetchQueue}
-                    />
-                  )}
                 </details>
               )}
               {(it.memo_id || (it.kind === "review" && it.task_id)) && (
