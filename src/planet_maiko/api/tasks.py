@@ -247,10 +247,10 @@ def cancel_task(task_id):
     happens via the shutdown ritual (worktree age-out) or an explicit
     forget call later.
 
-    Also cascades the cancel to any linked AgentJob — the active feed
-    keys visibility off job.status post-unification, so without this
-    the cancelled task would still show up as a running agent until
-    the next page refresh failed to find it.
+    Also cascades the cancel to any linked AgentJob. The active feed
+    keys visibility off job.status, so without this the cancelled
+    task would still show up as a running agent until the next page
+    refresh failed to find it.
     """
     from planet_maiko.agents.runtime import stop_agent_session
     from planet_maiko.models.agent_job import AgentJob

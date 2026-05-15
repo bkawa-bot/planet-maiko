@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 def _write_task_file(working_path, job_id, job_title, prompt):
     """Write TASK.md so the agent knows what to do.
 
-    The file name stays TASK.md (the agent's "task" in the colloquial
-    sense — the work in front of them), but the underlying ID is the
-    AgentJob.id post-unification.
+    The file name is TASK.md (the agent's "task" in the colloquial
+    sense, the work in front of them); the underlying ID is the
+    AgentJob.id.
     """
     # Human-readable file — show the user's local time, not UTC. Agents
     # and users both read this; a "Created: 23:30 UTC" line is confusing
