@@ -99,7 +99,12 @@ def get_agent_activity():
                 "last_message": None,
                 "last_message_body": None,
                 "last_message_type": None,
-                "last_seen": p.timestamp.isoformat(),
+                # iso_utc, not raw .isoformat(): p.timestamp comes back
+                # naive from SQLite, and a naive ISO string is parsed as
+                # LOCAL time by the browser, shifting "last seen" by the
+                # user's UTC offset. Every other timestamp here already
+                # uses iso_utc; this one slipped through.
+                "last_seen": iso_utc(p.timestamp),
                 "type": p.type,
                 "pupdate_count": 0,
                 "status": status,
