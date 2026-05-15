@@ -533,6 +533,9 @@ html[data-hills="off"] body {
    z-index auto / 0+).
    ======================================================================== */
 .world-bg {
+  /* TEMP: world SVGs hidden while the art's being redesigned. The
+     body gradient stands alone. To bring this back, drop `display: none`. */
+  display: none;
   position: fixed;
   inset: 0;
   z-index: -2;
