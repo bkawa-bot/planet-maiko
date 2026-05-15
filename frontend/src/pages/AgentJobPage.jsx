@@ -249,11 +249,6 @@ function JobTabs({ tabs, active, onChange }) {
 // ---------------------------------------------------------------------------
 
 function DiffPanel({ jobId, job, task, onChanged }) {
-  // Every /tasks/<id>/... endpoint accepts either Task.id or
-  // AgentJob.id post-canonicalization (_task_or_404 in diff_api.py
-  // resolves either). So the panel passes jobId through the API
-  // calls — no more awkward task?.id || jobId fallback shape, and
-  // the page is consistently job-keyed end-to-end.
   const id = jobId;
   const [diff, setDiff] = useState(null);
   const [comments, setComments] = useState([]);
@@ -280,7 +275,7 @@ function DiffPanel({ jobId, job, task, onChanged }) {
     setLoading(true);
     try {
       const [d, c] = await Promise.all([
-        api.getTaskDiff(id).catch((e) => ({ error: e.message })),
+        api.getJobDiff(id).catch((e) => ({ error: e.message })),
         api.listDiffComments(id).catch(() => []),
       ]);
       if (d?.error) showToast(d.error, "high");
@@ -640,9 +635,6 @@ function InlineMarker({ count, focused, onClick, registerRef }) {
 // ---------------------------------------------------------------------------
 
 function PlanPanel({ jobId, task, onChanged }) {
-  // Same canonicalization story as DiffPanel — the backend's
-  // /tasks/<id>/plan endpoints accept either Task.id or Job.id, so
-  // the panel just passes jobId through.
   const id = jobId;
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -653,7 +645,7 @@ function PlanPanel({ jobId, task, onChanged }) {
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const p = await api.getTaskPlan(id).catch(() => null);
+      const p = await api.getJobPlan(id).catch(() => null);
       setPlan(p);
     } finally { setLoading(false); }
   }, [id]);
@@ -663,7 +655,7 @@ function PlanPanel({ jobId, task, onChanged }) {
     if (approving) return;
     setApproving(true);
     try {
-      await api.approveTaskPlan(id);
+      await api.approveJobPlan(id);
       showToast("Plan approved — agent is implementing.", "normal");
       onChanged?.();
       refetch();
@@ -675,7 +667,7 @@ function PlanPanel({ jobId, task, onChanged }) {
     if (!feedback.trim() || revising) return;
     setRevising(true);
     try {
-      await api.reviseTaskPlan(id, feedback);
+      await api.reviseJobPlan(id, feedback);
       showToast("Revision requested.", "normal");
       setFeedback("");
       onChanged?.();

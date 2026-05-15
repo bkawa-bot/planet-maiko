@@ -223,9 +223,8 @@ def cmd_rules_relevant(args):
 
         # Persist rules_considered so the user can see what the agent
         # had in mind on the diff/report page. Anchored on the
-        # AgentJob (the agent's identity post-unification) — Task
-        # fallback for pre-rename worktrees that still hand us a
-        # Task.id. Append-only: every retrieval adds a record.
+        # AgentJob; Task fallback for worktrees that hand us a Task.id.
+        # Append-only: every retrieval adds a record.
         if task_id and matches:
             from planet_maiko.database import db
             from planet_maiko.models.task import Task

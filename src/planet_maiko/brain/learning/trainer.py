@@ -349,12 +349,7 @@ def _prepare_training_file(dataset_path, output_dir, config):
     """Convert our JSONL format to the chat format the training backend expects,
     splitting into train / validation so the eval set is actually held out.
 
-    Previously the full dataset was written to train.jsonl and the evaluator
-    ran a fresh random 20% split at eval time — which meant training had
-    already fit to those examples. Precision/recall looked great because the
-    model had memorized the "held-out" set.
-
-    Now:
+    Process:
       - Collect all pairs, shuffle deterministically (seeded), split 80/20.
       - Write train.jsonl + valid.jsonl in the backend's chat format. MLX
         and other backends pick up valid.jsonl automatically from --data.

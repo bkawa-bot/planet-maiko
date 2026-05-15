@@ -5,10 +5,8 @@ gets injected into CLAUDE.md at worktree prep time, and the same
 structured insight list via the read-surface HTTP endpoint so external
 orchestrators (Phase B) can feed their own agents the same context.
 
-Previously inlined in agents/runtime/__init__.py::_build_playbook_section;
-extracted here so the HTTP endpoint and the agent-prep path render
-from one source of truth. Distinct from Learnings — Insights are
-tribal / operational notes, no LoRA training, injected verbatim.
+Distinct from Learnings: Insights are tribal / operational notes, no
+LoRA training, injected verbatim.
 """
 
 import logging

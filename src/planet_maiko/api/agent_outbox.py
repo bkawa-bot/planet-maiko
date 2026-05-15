@@ -145,11 +145,11 @@ def parse_verdict_and_summary(content):
 
 
 # ============================================================
-# AgentJob path — Stage D one-shots
+# AgentJob path: one-shot runs
 # ============================================================
 
 def handle_agent_job_reply(job, msg, data, message_type):
-    """Route a Stage-D AgentJob reply to the right handler.
+    """Route an AgentJob reply to the right handler.
 
     Job-typed runs (review / cartograph / investigation / specialty)
     finish via this path; the route already saved the AgentMessage.

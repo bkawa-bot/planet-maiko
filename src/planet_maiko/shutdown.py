@@ -209,9 +209,9 @@ def stop_active_agents():
     don't wake back up. Session IDs stay in agent-sessions.json so a
     fresh "Resume" tomorrow still works.
 
-    Post–Stage D, pack-owned AgentJob runs (cartograph, investigation,
-    review) report to MCP with task_id == job.id — so we also need to
-    drop shutdown messages on AgentJob ids for the outbox handler to
+    Pack-owned AgentJob runs (cartograph, investigation, review)
+    report to MCP with task_id == job.id, so we also need to drop
+    shutdown messages on AgentJob ids for the outbox handler to
     route them correctly.
     """
     body = (
@@ -259,11 +259,11 @@ def stop_active_agents():
 def cleanup_worktrees():
     """Remove worktrees for tasks + AgentJobs that are terminally done.
 
-    Post–Stage D, pack-owned worktrees live on AgentJob.worktree_path
-    (not on a Task). Both paths matter: we clean up worktrees for
-    done/cancelled Tasks AND done/failed/cancelled AgentJobs, and the
-    orphan-directory sweep treats **active** AgentJob paths as
-    protected so it doesn't nuke a cartograph or investigation mid-run.
+    Pack-owned worktrees live on AgentJob.worktree_path (not on a
+    Task). Both paths matter: we clean up worktrees for done/cancelled
+    Tasks AND done/failed/cancelled AgentJobs, and the orphan-directory
+    sweep treats **active** AgentJob paths as protected so it doesn't
+    nuke a cartograph or investigation mid-run.
     """
     from planet_maiko.agents.runtime import cleanup_task_worktree, cleanup as _cleanup_worktree_paths
 

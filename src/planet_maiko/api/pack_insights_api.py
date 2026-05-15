@@ -102,11 +102,11 @@ def pack_insights_gathering_replies():
             "agents": [],
         })
 
-    # Post-unification, AgentMessage.task_id holds the AgentJob.id, not
-    # the Task.id. Look up jobs first, then resolve to display info via
-    # the agent profile attached to each job. The Task table is only
-    # used as a fallback for the (rare) case where a job has a parent
-    # task with a richer title than the job itself.
+    # AgentMessage.task_id holds the AgentJob.id, not the Task.id.
+    # Look up jobs first, then resolve to display info via the agent
+    # profile attached to each job. The Task table is only used as a
+    # fallback for the (rare) case where a job has a parent task with
+    # a richer title than the job itself.
     jobs = {j.id: j for j in AgentJob.query.filter(AgentJob.id.in_(task_ids)).all()}
     profile_ids = list({j.agent_profile_id for j in jobs.values() if j.agent_profile_id})
     profiles = {p.id: p for p in AgentProfile.query.filter(AgentProfile.id.in_(profile_ids)).all()}

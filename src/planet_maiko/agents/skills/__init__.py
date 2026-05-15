@@ -56,17 +56,11 @@ def seed_defaults():
     from planet_maiko.models.custom_skill import CustomSkill
     from planet_maiko.agents.skills.defaults import DEFAULT_SKILLS
 
-    # Retirement sweep: morning-brief + evening-wrap are gone
-    # (home-overview covers their terrain). pack-insights was
-    # renamed to evening-wrap in an earlier migration and is
-    # also retired. home-overview moved to engine-plumbing status —
-    # it's not a user-facing skill anymore, just an LLM call the
-    # overview pane makes internally. Drop any CustomSkill row for
-    # these so they stop appearing in the Specialties list.
+    # Retirement sweep: drop CustomSkill rows for skills that are no
+    # longer user-facing (home-overview is engine plumbing, not a
+    # skill) or never had a live invocation path (plan, team).
     for retired_id in (
         "pack-insights", "morning-brief", "evening-wrap", "home-overview",
-        # Digest defaults retired with ScheduledBriefings.jsx — no live
-        # invocation path remained, the UI was the only consumer.
         "plan", "team",
     ):
         row = db.session.get(CustomSkill, retired_id)

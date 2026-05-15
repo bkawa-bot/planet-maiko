@@ -2,9 +2,6 @@
 
 Backed by a JSON file in the Maiko data dir so mappings survive
 server restarts. Lazy-loaded on first read, flushed on every write.
-
-Lived inside agents_api.py originally — extracted so the kickoff
-path can `set_session()` without importing a Flask blueprint module.
 """
 
 import json

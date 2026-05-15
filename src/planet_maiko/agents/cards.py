@@ -73,7 +73,7 @@ def get_card(card_id):
 
 def known_card_ids():
     """Set of card ids currently defined. Used by backfill to detect
-    legacy `avatar` values (e.g. "shiba") that need re-rolling."""
+    free-form `avatar` values (e.g. "shiba") that need re-rolling."""
     return {c["id"] for c in load_cards()}
 
 

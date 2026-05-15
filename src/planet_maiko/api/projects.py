@@ -591,8 +591,7 @@ def approve_plan(project_id):
     db.session.flush()
 
     # Pair drafts with their tasks by position so we can honor
-    # explicit agent overrides + plan_first per task cleanly, without
-    # the old lookup-by-structural-equality footgun.
+    # explicit agent overrides + plan_first per task cleanly.
     for draft, task in zip(drafts, created):
         override = draft.get("assigned_agent_id")
         if override:

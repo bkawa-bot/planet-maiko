@@ -138,14 +138,12 @@ def _act_dismiss_pupdate(automation, config, pupdate=None, context=None):
 def _act_create_task_from_pupdate(automation, config, pupdate=None, context=None):
     """Rule-style create-a-task: use the pupdate's title/priority as the
     task seed, letting config override task_type and task_priority.
-    Mirrors _execute_create_task in the old processor.
 
-    Dedupes on (url, type) — GitHub's review-request source_id includes
-    the head SHA so every push to an open PR creates a fresh pupdate,
-    which used to spawn a new task each time. If an open task of the
-    same type already points at this PR, we skip and just link the new
-    pupdate to the existing task via source_pupdate_id so the thread
-    of activity stays together.
+    Dedupes on (url, type). GitHub's review-request source_id includes
+    the head SHA so every push to an open PR creates a fresh pupdate.
+    If an open task of the same type already points at this PR, we
+    skip and just link the new pupdate to the existing task via
+    source_pupdate_id so the thread of activity stays together.
     """
     if pupdate is None:
         return {"skipped": "create_task_from_pupdate requires pupdate context"}
@@ -199,12 +197,12 @@ def _act_create_task_from_pupdate(automation, config, pupdate=None, context=None
             if existing.status == "waiting":
                 existing.status = "new"
                 status_flipped = True
-                # Clear the old worktree pointer so the cycle's prep
+                # Clear the worktree pointer so the cycle's prep
                 # phase re-preps against the PR's current HEAD. The
-                # previous worktree's on an old SHA; the fresh review
-                # pass needs the new commits the author just pushed.
-                # cleanup_task_worktree tears down the old dir; the
-                # prep phase rebuilds.
+                # existing worktree's on an older SHA; the fresh
+                # review pass needs the new commits the author just
+                # pushed. cleanup_task_worktree tears down the old
+                # dir; the prep phase rebuilds.
                 extra = dict(existing.extra or {})
                 wp = extra.get("working_path")
                 branch = extra.get("branch")
@@ -295,15 +293,12 @@ def _act_create_task_from_pupdate(automation, config, pupdate=None, context=None
 
 def _act_complete_linked_task(automation, config, pupdate=None, context=None):
     """Close review / coding tasks whose url matches this pupdate's url.
-    Replaces the old ACTION_COMPLETE_TASK in rules.py — same cleanup
-    semantics, now living inside the Automation engine.
 
     Also cancels any queued/running AgentJob linked to those tasks
-    (the unified kickoff path means the worktree + session live on
-    AgentJob, not the Task), and dismisses every un-dismissed pupdate
-    pointing at the same URL so the overview and ReviewQueue stop
-    surfacing "reviewer requested" / "changes requested" cards for a
-    PR that's already closed.
+    (the worktree + session live on AgentJob, not the Task), and
+    dismisses every un-dismissed pupdate pointing at the same URL so
+    the overview and ReviewQueue stop surfacing "reviewer requested"
+    / "changes requested" cards for a PR that's already closed.
     """
     if pupdate is None or not pupdate.url:
         return {"skipped": "no url"}
@@ -318,15 +313,14 @@ def _act_complete_linked_task(automation, config, pupdate=None, context=None):
 
     def _cleanup_task(t):
         """Close the task, tear down any task-side worktree, and cancel
-        the linked AgentJob (which owns the real worktree + session
-        post-unification). Returns nothing — caller increments counters."""
+        the linked AgentJob (which owns the real worktree + session).
+        Returns nothing; caller increments counters."""
         nonlocal cancelled_jobs
         t.status = "done"
         t.updated_at = datetime.now(timezone.utc)
 
-        # Legacy Task-side worktree (pre-unification kickoffs left the
-        # path on task.extra). Still cleaned up here so older rows
-        # don't leak directories.
+        # Task-side worktree (path on task.extra). Cleaned up here so
+        # older rows don't leak directories.
         branch = (t.extra or {}).get("branch")
         wp = (t.extra or {}).get("working_path")
         if branch and wp and ".maiko-worktrees" in wp:

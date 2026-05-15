@@ -34,12 +34,12 @@ def list_profiles():
     if not profiles:
         return jsonify([])
 
-    # Bulk-fetch recent done work for every profile in one pass —
-    # union of user-owed Tasks (status=done) AND pack-owned AgentJobs
-    # (status=done). Post-Stage D most review/cartograph/investigation
-    # runs finish as AgentJobs, so if we only queried Tasks the recent
-    # section would look empty even on an agent who just landed five
-    # cartographs. Merge both, sort by finish time, keep 3 per agent.
+    # Bulk-fetch recent done work for every profile in one pass.
+    # Union of user-owed Tasks (status=done) AND pack-owned AgentJobs
+    # (status=done). Most review/cartograph/investigation runs finish
+    # as AgentJobs, so without the AgentJob branch the recent section
+    # would look empty for agents who only ran those. Sort by finish
+    # time, keep 3 per agent.
     from planet_maiko.models.agent_job import AgentJob
     ids = [p.id for p in profiles]
     recent_tasks = (

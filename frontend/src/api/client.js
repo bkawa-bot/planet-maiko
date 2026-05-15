@@ -164,26 +164,26 @@ export const api = {
     return request(`/signals/count${query ? `?${query}` : ""}`);
   },
 
-  // Diff review — feeds the ReviewDiff page
-  getTaskDiff: (taskId) => request(`/tasks/${taskId}/diff`),
-  listDiffComments: (taskId) => request(`/tasks/${taskId}/comments`),
-  createDiffComment: (taskId, data) =>
-    request(`/tasks/${taskId}/comments`, { method: "POST", body: JSON.stringify(data) }),
+  // Diff review (job-keyed)
+  getJobDiff: (jobId) => request(`/jobs/${jobId}/diff`),
+  listDiffComments: (jobId) => request(`/jobs/${jobId}/comments`),
+  createDiffComment: (jobId, data) =>
+    request(`/jobs/${jobId}/comments`, { method: "POST", body: JSON.stringify(data) }),
   updateDiffComment: (commentId, data) =>
     request(`/comments/${commentId}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteDiffComment: (commentId) =>
     request(`/comments/${commentId}`, { method: "DELETE" }),
-  requestDiffChanges: (taskId) =>
-    request(`/tasks/${taskId}/review/request-changes`, { method: "POST" }),
-  approveDiffReview: (taskId) =>
-    request(`/tasks/${taskId}/review/approve`, { method: "POST" }),
+  requestDiffChanges: (jobId) =>
+    request(`/jobs/${jobId}/review/request-changes`, { method: "POST" }),
+  approveDiffReview: (jobId) =>
+    request(`/jobs/${jobId}/review/approve`, { method: "POST" }),
 
-  // Plan mode (per-task)
-  getTaskPlan: (taskId) => request(`/tasks/${taskId}/plan`),
-  approveTaskPlan: (taskId) =>
-    request(`/tasks/${taskId}/plan/approve`, { method: "POST" }),
-  reviseTaskPlan: (taskId, feedback) =>
-    request(`/tasks/${taskId}/plan/revise`, {
+  // Plan mode (job-keyed)
+  getJobPlan: (jobId) => request(`/jobs/${jobId}/plan`),
+  approveJobPlan: (jobId) =>
+    request(`/jobs/${jobId}/plan/approve`, { method: "POST" }),
+  reviseJobPlan: (jobId, feedback) =>
+    request(`/jobs/${jobId}/plan/revise`, {
       method: "POST",
       body: JSON.stringify({ feedback }),
     }),

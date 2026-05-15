@@ -261,11 +261,11 @@ def get_agent_activity():
         if linked is not None and linked.status in ("done", "cancelled"):
             continue  # task closed out — don't keep its job around in active
 
-        # Pull the agent's latest from-agent message — the agent might
+        # Pull the agent's latest from-agent message. The agent might
         # have emitted a "starting up" status before any pupdate
         # landed, and we want the bubble to show "I'm reading TASK.md"
-        # rather than blank. Try both the bucket key (post-unification
-        # agents reply with task_id=<job.id>) and the source task id.
+        # rather than blank. Try both the bucket key (agents reply
+        # with task_id=<job.id>) and the source task id.
         last = None
         last_keys = [job.id]
         if job.source_task_id and job.source_task_id != job.id:

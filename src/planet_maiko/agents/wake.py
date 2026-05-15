@@ -118,10 +118,9 @@ def wake_agent(task_id, prompt, source, working_path=None, session_id=None, app=
         working_path = working_path or info.get("working_path")
 
     # Fallback for AgentJob-keyed sessions when the registry got
-    # cleared (server restart + validate_registry purge before the
-    # AgentJob branch was wired). The DB row is the source of truth
-    # for session_id post-unification; pull from there if the cache
-    # doesn't have it. Same fix shape as resume_session uses.
+    # cleared (server restart + validate_registry purge). The DB row
+    # is the source of truth for session_id; pull from there if the
+    # cache doesn't have it. Same fix shape as resume_session uses.
     if not session_id or not working_path:
         try:
             from planet_maiko.models.agent_job import AgentJob

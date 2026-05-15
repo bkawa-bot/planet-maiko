@@ -197,12 +197,12 @@ def approve_proposal_as_goal(pupdate_id):
     """Adopt a proposal as a standing Automation row.
 
     Gap-detector proposals carry a `proposed_goal` blob in extra with
-    the legacy (kind, scope_repo, trigger_kind, trigger_config,
-    action_kind, action_config) shape. We translate those known kinds
-    into the new when[] + then[] schema and install an Automation.
+    a (kind, scope_repo, trigger_kind, trigger_config, action_kind,
+    action_config) shape. We translate those known kinds into the
+    when[] + then[] schema and install an Automation.
 
-    Endpoint name kept as approve-as-goal for backward compat with the
-    ProposalCard frontend; the underlying object is an Automation now.
+    Endpoint name is approve-as-goal to match the ProposalCard
+    frontend.
     """
     from planet_maiko.models.automation import Automation
 
@@ -214,10 +214,10 @@ def approve_proposal_as_goal(pupdate_id):
     if not spec or not spec.get("kind"):
         return jsonify({"error": "proposal has no proposed_goal"}), 400
 
-    # Translate the legacy (kind, trigger_config) shape into a when[]
-    # entry. Only known kinds are supported; unknown kinds get an empty
-    # `when` so they never fire, which is a soft-fail rather than a hard
-    # refusal.
+    # Translate the (kind, trigger_config) shape into a when[] entry.
+    # Only known kinds are supported; unknown kinds get an empty
+    # `when` so they never fire (a soft-fail rather than a hard
+    # refusal).
     kind = spec["kind"]
     scope_repo = spec.get("scope_repo")
     trigger_config = spec.get("trigger_config") or {}

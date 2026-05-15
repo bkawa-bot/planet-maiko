@@ -131,16 +131,15 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None,
         progress_cb: optional callable for the async rule-gen endpoint to
             stream per-rule progress. Kwargs: total_rules, rules_processed,
             current_rule, pairs, errors.
-        max_workers: concurrent LLM calls. Default 5 (was 3 originally; 5
-            is comfortable on most Anthropic paid tiers and ~1.7× faster
-            for large rule sets). Going higher risks rate-limit hits or
+        max_workers: concurrent LLM calls. Default 5 (comfortable on
+            most Anthropic paid tiers, ~1.7× faster for large rule
+            sets than 3). Going higher risks rate-limit hits or
             spawning too many claude subprocesses; cap at 10 in the UI.
         style_anchor_repo: optional repo whose code patterns are injected
-            into the synth prompt — separate from `repo` (which filters
+            into the synth prompt (separate from `repo`, which filters
             rules). Use this to ground the synthetic code style on a
             representative repo even when generating data for global
-            rules. Falls back to `repo` when None, preserving the
-            previous behavior for repo-scoped runs.
+            rules. Falls back to `repo` when None.
 
     Pairs are written incrementally to `<path>.jsonl.partial` as each
     rule's LLM call returns, then the file is renamed to `<path>.jsonl`
@@ -170,9 +169,9 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None,
         query = query.filter(Learning.id.in_(rule_ids))
     if repo:
         # Include rules scoped to this repo + rules that have been
-        # promoted to global (observed across 3+ repos). Legacy rows
-        # with scope_repo=NULL and is_global=False (pre-migration)
-        # are also included as implicitly-global.
+        # promoted to global (observed across 3+ repos). Rows with
+        # scope_repo=NULL and is_global=False are treated as
+        # implicitly-global.
         query = query.filter(
             or_(
                 Learning.scope_repo == repo,
@@ -274,8 +273,8 @@ def generate_rule_dataset(examples_per_rule=EXAMPLES_PER_RULE, output_dir=None,
         # PASS is a 1-token output, VIOLATION is ~10-15 tokens, so
         # the model is implicitly rewarded for emitting PASS when
         # uncertain. Default violation_ratio=0.6 produces ~30 violations
-        # + ~20 passes per rule (vs the old 25/25 split). Real signals
-        # already count toward the violation budget.
+        # + ~20 passes per rule. Real signals already count toward the
+        # violation budget.
         ratio = max(0.3, min(0.85, float(violation_ratio)))
         target_violations = int(round(examples_per_rule * ratio))
         target_passes = examples_per_rule - target_violations

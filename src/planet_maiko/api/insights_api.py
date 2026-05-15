@@ -167,11 +167,6 @@ def cartograph_repo():
     cartographer) walks the tree, produces a structured overview, and
     replies via MCP as a pending insight tagged ["overview",
     "cartographer"]. User approves in the Playbook UI.
-
-    Previously spawned the agent synchronously through a Task row +
-    inline prepare/kickoff. Post-Stage-A, we queue an AgentJob and let
-    the cycle's execute phase handle the subprocess — user-facing
-    behavior is the same, internals simpler.
     """
     import uuid as _uuid
     from planet_maiko.models.agent_job import AgentJob

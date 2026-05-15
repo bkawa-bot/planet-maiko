@@ -451,8 +451,8 @@ def get_review_queue():
         route = m.url
         if not route and m.source_task_id:
             # source_task_id may be either a Task id or an AgentJob
-            # id post-unification — both render under /agents via
-            # the active-agents chat thread.
+            # id; both render under /agents via the active-agents
+            # chat thread.
             route = "/agents"
         items.append({
             "kind": m.kind,

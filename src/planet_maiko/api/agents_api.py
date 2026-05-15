@@ -819,8 +819,7 @@ def _emit_user_memo(msg, *, job, task):
     The memo's source_task_id keys off the linked Task (when the
     reply landed via a Task-driven flow) or the AgentJob's
     source_task_id; falls back to the message's task_id (which is
-    the AgentJob id post-unification) so the user can still
-    click-through to the chat.
+    the AgentJob id) so the user can still click-through to the chat.
 
     Logs at INFO so the boot trail records every user-targeted
     message that hits this path — makes "the message exists but
@@ -846,10 +845,10 @@ def _emit_user_memo(msg, *, job, task):
             title = f"Message from {profile.display_name}"
 
     body = msg.content or ""
-    # Deep-link to the chat panel on the job page. Post-unification
-    # the agent-side id IS the job id, so /jobs/<msg.task_id> resolves
-    # cleanly. View=chat lands the user on the live thread for an
-    # in-context reply rather than an inline reply box on the home pane.
+    # Deep-link to the chat panel on the job page. The agent-side id
+    # IS the job id, so /jobs/<msg.task_id> resolves cleanly. View=chat
+    # lands the user on the live thread for an in-context reply rather
+    # than an inline reply box on the home pane.
     chat_url = f"/jobs/{msg.task_id}?view=chat" if msg.task_id else None
     memo = create_memo(
         kind="agent_message",
@@ -915,7 +914,7 @@ def backfill_user_message_memos():
         if m.id in existing_msg_ids:
             continue
         # Resolve job/task to compose the memo. Same priority as the
-        # live path: AgentJob first (post-unification), then Task.
+        # live path: AgentJob first, then Task.
         job = db.session.get(AgentJob, m.task_id) if m.task_id else None
         task = None
         if job is None:

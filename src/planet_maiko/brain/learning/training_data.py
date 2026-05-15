@@ -268,8 +268,7 @@ def _extract_from_signals():
             else:
                 # Prefer the graduated rule text if this signal is tied
                 # to a learning. Falls back to the raw signal text only
-                # for orphan signals (no learning_id) — those are mostly
-                # legacy rows from before the rule system existed.
+                # for orphan signals (no learning_id).
                 learning = learnings_by_id.get(s.learning_id) if s.learning_id else None
                 label = learning.rule if learning else (s.text or "")
                 output = f"VIOLATION: [{s.category}] {label}"

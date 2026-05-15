@@ -16,10 +16,10 @@ Lifecycle:
     cancelled         — user stopped it or pulled the plug
 
 Sources:
-    automation_id  — if spawned by an Automation firing
-    source_task_id — if spawned by a Task (Stage D: coding task → coder job)
-    created_by = "user" — if a human kicked it off directly (e.g. Cartograph
-                          button in Playbook UI)
+    automation_id  if spawned by an Automation firing
+    source_task_id if spawned by a Task (coding task to coder job)
+    created_by = "user" if a human kicked it off directly (e.g. Cartograph
+                        button in Playbook UI)
 """
 
 from datetime import datetime, timezone

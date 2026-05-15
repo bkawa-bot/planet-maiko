@@ -1,21 +1,20 @@
-"""Diff review endpoints — diff rendering, inline comments, and the
+"""Diff review endpoints. Diff rendering, inline comments, and the
 request-changes / approve actions that drive the autonomous coding
 agent review loop.
 
 Shape of the flow:
   1. Coding agent works headlessly in a worktree, commits, and sends a
      `ready_for_review` message. A pupdate lands in the inbox.
-  2. The user opens the review page, fetches GET /tasks/<id>/diff and
-     GET /tasks/<id>/comments, drafts comments, then either:
-       - POST /tasks/<id>/review/request-changes → comments are posted
-         to the agent's inbox and the agent is woken up via a headless
-         `claude --resume` thread; agent iterates, commits, sends a
-         fresh ready_for_review.
-       - POST /tasks/<id>/review/approve → branch is pushed, `gh pr
-         create` runs, task is marked done, worktree cleaned up.
+  2. The user opens the review page, fetches GET /jobs/<id>/diff and
+     GET /jobs/<id>/comments, drafts comments, then either:
+       - POST /jobs/<id>/review/request-changes posts comments to the
+         agent's inbox and wakes the agent via a headless `claude --resume`
+         thread; the agent iterates, commits, sends a fresh ready_for_review.
+       - POST /jobs/<id>/review/approve hands the task back to the agent
+         to push the branch and open a PR.
 
 Agent-authored comments (from the leave_comment MCP tool) come in on
-POST /tasks/<id>/comments/agent.
+POST /jobs/<id>/comments/agent.
 """
 
 import logging
@@ -34,135 +33,36 @@ logger = logging.getLogger(__name__)
 diff_bp = Blueprint("diff", __name__)
 
 
-def _resolve_to_job_id(inbox_id):
-    """Translate an inbox id → the AgentJob.id that owns the diff.
-
-    DiffComments are anchored to AgentJobs (each agent run has its own
-    diff). This helper canonicalizes whatever the wire passed us:
-
-      1. Already an AgentJob.id → use it.
-      2. A Task.id → look up the most recent non-cancelled AgentJob
-         linked via source_task_id; one Task can spawn coding + review
-         + investigation jobs, and the most recent one is the diff
-         the user is currently looking at.
-      3. Anything else → return the input unchanged so the caller's
-         filter still has SOMETHING to query against (no comments
-         match, but the page renders cleanly).
-    """
-    from planet_maiko.models.agent_job import AgentJob
-    if db.session.get(AgentJob, inbox_id) is not None:
-        return inbox_id
-    if db.session.get(Task, inbox_id) is not None:
-        job = (
-            AgentJob.query
-            .filter_by(source_task_id=inbox_id)
-            .filter(AgentJob.status != "cancelled")
-            .order_by(AgentJob.created_at.desc())
-            .first()
-        )
-        if job is not None:
-            return job.id
-    return inbox_id
-
-
-# Back-compat alias — older imports / patches refer to the previous
-# name. _resolve_to_job_id replaced it; keep this around for one
-# release so churn elsewhere doesn't cascade into another rename pass.
-_resolve_task_id = _resolve_to_job_id
-
-
-def _canonical_inbox_id(any_id):
-    """Translate any URL id → the AgentJob.id the agent's MCP env
-    actually points at, so AgentMessage rows we write are visible
-    to the agent's check_inbox.
-
-    Accepts either:
-      - A Task.id  → looks up the most-recent non-cancelled linked job
-      - A Job.id   → returns it as-is
-
-    Falls back to the input id when nothing resolves so legacy
-    task-keyed flows (pre-unification, no AgentJob row) still work.
-    """
-    from planet_maiko.models.agent_job import AgentJob
-    # If the caller already handed us a Job.id, that IS the canonical
-    # inbox id — no lookup needed.
-    if db.session.get(AgentJob, any_id) is not None:
-        return any_id
-    job = (
-        AgentJob.query
-        .filter_by(source_task_id=any_id)
-        .filter(AgentJob.status != "cancelled")
-        .order_by(AgentJob.created_at.desc())
-        .first()
-    )
-    return job.id if job is not None else any_id
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _task_or_404(task_id):
-    """Resolve a request-id (URL param) to a Task row.
+def _job_and_task_or_404(job_id):
+    """Resolve a URL param (AgentJob.id) to (job, task, err).
 
-    Accepts either a Task.id directly OR an AgentJob.id whose
-    source_task_id points at a Task. Post-unification the AgentJobPage
-    passes jobId to every /tasks/<id>/* endpoint here; this lookup
-    canonicalizes so the entire diff_api surface is id-space agnostic.
-
-    Returns (task, None) on success, (None, error_response) on 404.
+    task is None when the job has no linked Task (cartograph runs,
+    auto-spawned jobs from automations). err is a tuple suitable for
+    Flask to return directly on 404.
     """
-    task = db.session.get(Task, task_id)
-    if task is not None:
-        return task, None
     from planet_maiko.models.agent_job import AgentJob
-    job = db.session.get(AgentJob, task_id)
-    if job is not None and job.source_task_id:
-        linked = db.session.get(Task, job.source_task_id)
-        if linked is not None:
-            return linked, None
-    return None, (jsonify({"error": f"Task {task_id} not found"}), 404)
+    job = db.session.get(AgentJob, job_id)
+    if job is None:
+        return None, None, (jsonify({"error": f"Job {job_id} not found"}), 404)
+    task = db.session.get(Task, job.source_task_id) if job.source_task_id else None
+    return job, task, None
 
 
-def _worktree_path(task):
-    """Resolve the agent's working dir for diff/review operations.
-
-    Two storage spots, in priority order:
-      1. task.extra.working_path — legacy task-keyed flow.
-      2. AgentJob.worktree_path on the most recent non-cancelled job
-         linked to this task — the unified path stores the worktree
-         here, NOT on task.extra. Without this fallback, coding
-         agents (which always run via the unified path post-Stage D)
-         have a working diff on disk but the diff endpoint can't
-         find it; the review page renders the agent's summary +
-         verdict (those land on task.extra) but no actual diff.
-
-    Returns None if both are unset or the path no longer exists.
-    """
-    wp = (task.extra or {}).get("working_path")
-    if wp and os.path.isdir(wp):
-        return wp
-    try:
-        from planet_maiko.models.agent_job import AgentJob
-        job = (
-            AgentJob.query
-            .filter_by(source_task_id=task.id)
-            .filter(AgentJob.worktree_path.isnot(None))
-            .filter(AgentJob.status != "cancelled")
-            .order_by(AgentJob.created_at.desc())
-            .first()
-        )
-        if job and job.worktree_path and os.path.isdir(job.worktree_path):
-            return job.worktree_path
-    except Exception as e:
-        logger.debug(f"[diff] AgentJob worktree fallback failed: {e}")
+def _worktree_path(job):
+    """Return the agent's worktree path or None if it isn't on disk."""
+    if job.worktree_path and os.path.isdir(job.worktree_path):
+        return job.worktree_path
     return None
 
 
 def _default_branch(worktree_path):
     """Resolve the default branch (main / master / trunk) of the parent
     repo so `git diff <base>..HEAD` compares against the right thing.
-    Falls back to "main" when we can't tell — picking wrong here just
+    Falls back to "main" when we can't tell. Picking wrong here just
     means the diff includes extra history.
     """
     try:
@@ -191,8 +91,8 @@ def _git(args, cwd, timeout=30):
 # GET diff
 # ---------------------------------------------------------------------------
 
-@diff_bp.route("/tasks/<task_id>/diff", methods=["GET"])
-def get_task_diff(task_id):
+@diff_bp.route("/jobs/<job_id>/diff", methods=["GET"])
+def get_job_diff(job_id):
     """Return the unified diff of the agent's worktree vs the default branch.
 
     Tries a chain of diff strategies and returns the first non-empty
@@ -201,27 +101,25 @@ def get_task_diff(task_id):
 
     Strategy order:
       1. git diff <merge-base(HEAD, origin/<default>)>
-         — most correct: shows only what the agent actually did,
+         most correct: shows only what the agent actually did,
          agnostic to upstream commits.
       2. git diff origin/<default>
-         — fallback when merge-base resolution failed (no origin ref,
-         no shared ancestor). Less correct (upstream commits look like
-         reverse-diffs) but better than nothing.
-      3. git diff <merge-base(HEAD, <default>)> using the local branch
-         — last-ditch when origin/<default> doesn't exist at all.
+         fallback when merge-base resolution failed (no origin ref,
+         no shared ancestor). Less correct but better than nothing.
+      3. git diff <merge-base(HEAD, <default>)> using the local branch.
 
     Always combines committed + uncommitted edits via `git diff <ref>`
     (no `..HEAD`). Untracked files surface separately so the user can
     nudge the agent to `git add` them.
     """
-    task, err = _task_or_404(task_id)
+    job, task, err = _job_and_task_or_404(job_id)
     if err:
         return err
-    worktree = _worktree_path(task)
+    worktree = _worktree_path(job)
     if not worktree:
         return jsonify({
-            "error": "No worktree for this task (yet)",
-            "diag": {"task_extra_working_path": (task.extra or {}).get("working_path")},
+            "error": "No worktree for this job (yet)",
+            "diag": {"job_worktree_path": job.worktree_path},
         }), 400
 
     base_branch = _default_branch(worktree)
@@ -287,7 +185,8 @@ def get_task_diff(task_id):
         untracked = [line for line in raw_u.splitlines() if line.strip()][:50]
 
     return jsonify({
-        "task_id": task_id,
+        "job_id": job_id,
+        "task_id": task.id if task else None,
         "base_branch": base_branch,
         "base_sha": base_sha,
         "head_sha": head_sha,
@@ -315,17 +214,9 @@ def get_task_diff(task_id):
 # Comment CRUD
 # ---------------------------------------------------------------------------
 
-@diff_bp.route("/tasks/<task_id>/comments", methods=["GET"])
-def list_comments(task_id):
-    """Return every diff comment for an agent run, ordered by file, line, time.
-
-    Route name kept for back-compat (`/tasks/<id>/comments` matches
-    the older URL); the path variable accepts either a Job.id or a
-    Task.id and canonicalizes to AgentJob.id internally.
-    """
-    job_id = _resolve_to_job_id(task_id)
-    if job_id is None:
-        return jsonify([])
+@diff_bp.route("/jobs/<job_id>/comments", methods=["GET"])
+def list_comments(job_id):
+    """Return every diff comment for an agent run, ordered by file, line, time."""
     comments = (
         DiffComment.query
         .filter_by(job_id=job_id)
@@ -339,8 +230,8 @@ def list_comments(task_id):
     return jsonify([c.to_dict() for c in comments])
 
 
-@diff_bp.route("/tasks/<task_id>/comments", methods=["POST"])
-def create_comment(task_id):
+@diff_bp.route("/jobs/<job_id>/comments", methods=["POST"])
+def create_comment(job_id):
     """Create a comment. Default status=draft, author=user."""
     data = request.get_json() or {}
     if not data.get("body"):
@@ -348,11 +239,6 @@ def create_comment(task_id):
     if "file_path" not in data or "line_number" not in data:
         return jsonify({"error": "file_path and line_number are required"}), 400
 
-    job_id = _resolve_to_job_id(task_id)
-    if job_id is None:
-        return jsonify({"error": "job not found"}), 404
-
-    # Validate parent_id belongs to the same job if provided
     parent_id = data.get("parent_id")
     if parent_id:
         parent = db.session.get(DiffComment, parent_id)
@@ -411,24 +297,19 @@ def delete_comment(comment_id):
 # Agent-authored comment (internal — called by the MCP channel)
 # ---------------------------------------------------------------------------
 
-@diff_bp.route("/tasks/<task_id>/comments/agent", methods=["POST"])
-def create_agent_comment(task_id):
+@diff_bp.route("/jobs/<job_id>/comments/agent", methods=["POST"])
+def create_agent_comment(job_id):
     """Internal endpoint for the leave_comment MCP tool.
 
     Always stores as author=agent, status=submitted. The agent anchors
     comments to the user's post-image (the "new" side) by default; they
     can override by passing side="old" explicitly.
-
-    The MCP tool calls this with MAIKO_JOB_ID — already an AgentJob.id
-    post-rename. Canonicalize via _resolve_to_job_id anyway in case
-    legacy callers still hand us a Task.id.
     """
     data = request.get_json() or {}
     if not data.get("body"):
         return jsonify({"error": "body is required"}), 400
     if "file_path" not in data or "line_number" not in data:
         return jsonify({"error": "file_path and line_number are required"}), 400
-    job_id = _resolve_to_job_id(task_id)
     comment = DiffComment(
         job_id=job_id,
         file_path=data["file_path"],
@@ -469,14 +350,11 @@ def _format_review_message(comments):
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _resume_agent_with_review(task_id, working_path):
+def _resume_agent_with_review(job_id, working_path):
     """Wake the agent so it can address the reviewer's comments.
 
-    Thin wrapper over wake_agent() — kept as a named helper so the
-    three historical callers (request_changes, PR-comment processor,
-    nudge endpoint) don't need to be rewritten everywhere. Returns
-    True when the wake was either spawned or queued behind a current
-    run; False on hard failure (no session, no worktree, no CLI).
+    Returns True when the wake was either spawned or queued behind a
+    current run, False on hard failure (no session, no worktree, no CLI).
     """
     from planet_maiko.agents.wake import wake_agent
     prompt = (
@@ -484,29 +362,23 @@ def _resume_agent_with_review(task_id, working_path):
         "address each comment, commit, and reply with "
         "message_type=\"ready_for_review\" when done."
     )
-    ok, _mode = wake_agent(task_id, prompt, source="feedback", working_path=working_path)
+    ok, _mode = wake_agent(job_id, prompt, source="feedback", working_path=working_path)
     return ok
 
 
-@diff_bp.route("/tasks/<task_id>/review/request-changes", methods=["POST"])
-def request_changes(task_id):
+@diff_bp.route("/jobs/<job_id>/review/request-changes", methods=["POST"])
+def request_changes(job_id):
     """Submit all draft comments and wake the agent up to iterate."""
-    task, err = _task_or_404(task_id)
+    job, task, err = _job_and_task_or_404(job_id)
     if err:
         return err
-    worktree = _worktree_path(task)
+    worktree = _worktree_path(job)
     if not worktree:
-        return jsonify({"error": "No worktree for this task"}), 400
+        return jsonify({"error": "No worktree for this job"}), 400
 
-    # The route param is whatever id the UI dropped in (Job.id or
-    # Task.id). DiffComments are stored against the canonical
-    # AgentJob.id; canonicalize before querying so the filter matches
-    # the list endpoint's filter (otherwise we'd return zero drafts
-    # while the UI is correctly showing some).
-    drafts_job_id = _resolve_to_job_id(task_id)
     drafts = (
         DiffComment.query
-        .filter_by(job_id=drafts_job_id, status="draft", author="user")
+        .filter_by(job_id=job_id, status="draft", author="user")
         .order_by(DiffComment.file_path.asc(), DiffComment.line_number.asc())
         .all()
     )
@@ -516,52 +388,42 @@ def request_changes(task_id):
     for c in drafts:
         c.status = "submitted"
 
-    # Same stale-pupdate cleanup as the approve path: the agent's old
-    # ready_for_review was already acted on, so PackStatusPane shouldn't
-    # keep advertising "ready for review" while the agent iterates.
-    from planet_maiko.models.pupdate import Pupdate
-    stale_reviews = (
-        Pupdate.query
-        .filter(Pupdate.type == "agent_ready_for_review")
-        .filter(Pupdate.dismissed == False)  # noqa: E712
-        .filter(Pupdate.tags.contains(task_id))
-        .all()
-    )
-    for p in stale_reviews:
-        p.dismissed = True
+    # Dismiss any stale "ready for review" pupdates so PackStatusPane
+    # stops advertising the old state while the agent iterates.
+    if task is not None:
+        from planet_maiko.models.pupdate import Pupdate
+        stale_reviews = (
+            Pupdate.query
+            .filter(Pupdate.type == "agent_ready_for_review")
+            .filter(Pupdate.dismissed == False)  # noqa: E712
+            .filter(Pupdate.tags.contains(task.id))
+            .all()
+        )
+        for p in stale_reviews:
+            p.dismissed = True
     db.session.commit()
 
-    # Post a single review message into the agent's inbox so it shows
-    # up as one cohesive round on check_inbox, not N scattered ones.
-    # Keyed by the canonical inbox id (the linked AgentJob.id) so the
-    # agent's check_inbox actually finds it — writing under task_id
-    # silently dropped the message into a parallel inbox the agent
-    # never reads.
     from planet_maiko.models.agent_message import AgentMessage
-    inbox_id = _canonical_inbox_id(task_id)
     review_body = _format_review_message(drafts)
-    inbox_msg = AgentMessage(
-        task_id=inbox_id,
+    db.session.add(AgentMessage(
+        task_id=job_id,
         direction="to_agent",
         sender="user",
         content=review_body,
         message_type="review",
-    )
-    db.session.add(inbox_msg)
+    ))
     db.session.commit()
 
     # Harvest each comment as a corrective-VIOLATION training pair.
     # The user's comment body is the violation the model should have
-    # caught; we pull a small code window from the worktree file so
-    # the pair has the code context the LoRA trains on. Best-effort —
-    # failures here don't block the review flow.
+    # caught; pull a small code window so the pair has context.
     try:
-        repo = (task.extra or {}).get("repo") or (task.extra or {}).get("repository")
+        repo = job.scope_repo or (task.extra or {}).get("repo") if task else job.scope_repo
         _harvest_comments_as_training_pairs(drafts, worktree, repo)
     except Exception as e:
-        logger.warning(f"[harvest] Local comment harvest failed for {task_id}: {e}")
+        logger.warning(f"[harvest] Local comment harvest failed for {job_id}: {e}")
 
-    resumed = _resume_agent_with_review(task_id, worktree)
+    resumed = _resume_agent_with_review(job_id, worktree)
 
     return jsonify({
         "submitted_comments": len(drafts),
@@ -666,25 +528,26 @@ def _build_pr_body(task, comments):
     return "\n".join(lines)
 
 
-@diff_bp.route("/tasks/<task_id>/plan", methods=["GET"])
-def get_plan(task_id):
+@diff_bp.route("/jobs/<job_id>/plan", methods=["GET"])
+def get_plan(job_id):
     """Return the latest plan_for_approval content the agent sent, plus
     the task's plan_approved_at timestamp so the UI can tell the user
     what state they're in.
     """
-    task, err = _task_or_404(task_id)
+    job, task, err = _job_and_task_or_404(job_id)
     if err:
         return err
     from planet_maiko.models.agent_message import AgentMessage
     latest = (
         AgentMessage.query
-        .filter_by(task_id=task_id, direction="from_agent", message_type="plan_for_approval")
+        .filter_by(task_id=job_id, direction="from_agent", message_type="plan_for_approval")
         .order_by(AgentMessage.created_at.desc())
         .first()
     )
-    extra = task.extra or {}
+    extra = (task.extra if task else {}) or {}
     return jsonify({
-        "task_id": task_id,
+        "job_id": job_id,
+        "task_id": task.id if task else None,
         "plan_first": bool(extra.get("plan_first")),
         "plan_approved_at": extra.get("plan_approved_at"),
         "plan": latest.content if latest else None,
@@ -692,68 +555,65 @@ def get_plan(task_id):
     })
 
 
-def _resume_for_plan(task_id, working_path, instruction, plan_mode):
+def _resume_for_plan(job_id, working_path, instruction, plan_mode):
     """Resume the agent so it can act on a plan approval or revision.
 
     Routes through the wake orchestrator so it acquires the same
-    per-task lock every other resume path uses. plan_mode=True
+    per-job lock every other resume path uses. plan_mode=True
     re-applies --permission-mode plan via extra_args so a requested
     revision stays read-only until another approval.
     """
     from planet_maiko.agents.wake import wake_agent
     extra_args = ["--permission-mode", "plan"] if plan_mode else None
     ok, _mode = wake_agent(
-        task_id, instruction, source="plan",
+        job_id, instruction, source="plan",
         working_path=working_path, extra_args=extra_args,
     )
     return ok
 
 
-@diff_bp.route("/tasks/<task_id>/plan/approve", methods=["POST"])
-def approve_plan(task_id):
-    """User approved the agent's proposed plan — resume without plan
+@diff_bp.route("/jobs/<job_id>/plan/approve", methods=["POST"])
+def approve_plan(job_id):
+    """User approved the agent's proposed plan: resume without plan
     mode so the agent can actually write code now.
     """
     from planet_maiko.models.agent_message import AgentMessage
 
-    task, err = _task_or_404(task_id)
+    job, task, err = _job_and_task_or_404(job_id)
     if err:
         return err
-    worktree = _worktree_path(task)
+    worktree = _worktree_path(job)
     if not worktree:
-        return jsonify({"error": "No worktree for this task"}), 400
+        return jsonify({"error": "No worktree for this job"}), 400
 
-    # Log the approval into the conversation so the transcript is
-    # complete, then resume without plan mode. Keyed by canonical
-    # inbox id so the agent's check_inbox sees it.
     db.session.add(AgentMessage(
-        task_id=_canonical_inbox_id(task_id),
+        task_id=job_id,
         direction="to_agent",
         sender="user",
-        content="Plan approved. Go implement it — make the changes, commit locally, and call reply(message_type='ready_for_review') when done.",
+        content="Plan approved. Go implement it. Make the changes, commit locally, and call reply(message_type='ready_for_review') when done.",
         message_type="plan_approved",
     ))
-    extra = dict(task.extra or {})
-    extra["plan_approved_at"] = datetime.now(timezone.utc).isoformat()
-    task.extra = extra
+    if task is not None:
+        extra = dict(task.extra or {})
+        extra["plan_approved_at"] = datetime.now(timezone.utc).isoformat()
+        task.extra = extra
 
-    # Same pattern as review/approve: dismiss the plan-approval
-    # pupdate so PackStatusPane stops rendering "plan ready for
-    # approval" after the user has already approved.
-    from planet_maiko.models.pupdate import Pupdate
-    stale_plans = (
-        Pupdate.query
-        .filter(Pupdate.type == "agent_plan_for_approval")
-        .filter(Pupdate.dismissed == False)  # noqa: E712
-        .filter(Pupdate.tags.contains(task_id))
-        .all()
-    )
-    for p in stale_plans:
-        p.dismissed = True
+        # Dismiss the plan-approval pupdate so PackStatusPane stops
+        # showing "plan ready for approval" after the user approved.
+        from planet_maiko.models.pupdate import Pupdate
+        stale_plans = (
+            Pupdate.query
+            .filter(Pupdate.type == "agent_plan_for_approval")
+            .filter(Pupdate.dismissed == False)  # noqa: E712
+            .filter(Pupdate.tags.contains(task.id))
+            .all()
+        )
+        for p in stale_plans:
+            p.dismissed = True
     db.session.commit()
 
     resumed = _resume_for_plan(
-        task_id, worktree,
+        job_id, worktree,
         instruction=(
             "Your plan was approved. Implement it now: follow the plan, "
             "commit your changes locally, and call "
@@ -762,20 +622,20 @@ def approve_plan(task_id):
         ),
         plan_mode=False,
     )
-    return jsonify({"task_id": task_id, "agent_resumed": resumed, "mode": "implementing"})
+    return jsonify({"job_id": job_id, "agent_resumed": resumed, "mode": "implementing"})
 
 
-@diff_bp.route("/tasks/<task_id>/plan/revise", methods=["POST"])
-def revise_plan(task_id):
+@diff_bp.route("/jobs/<job_id>/plan/revise", methods=["POST"])
+def revise_plan(job_id):
     """User wants the agent to revise the plan before implementing."""
     from planet_maiko.models.agent_message import AgentMessage
 
-    task, err = _task_or_404(task_id)
+    job, task, err = _job_and_task_or_404(job_id)
     if err:
         return err
-    worktree = _worktree_path(task)
+    worktree = _worktree_path(job)
     if not worktree:
-        return jsonify({"error": "No worktree for this task"}), 400
+        return jsonify({"error": "No worktree for this job"}), 400
 
     data = request.get_json(silent=True) or {}
     feedback = (data.get("feedback") or "").strip()
@@ -783,7 +643,7 @@ def revise_plan(task_id):
         return jsonify({"error": "feedback is required"}), 400
 
     db.session.add(AgentMessage(
-        task_id=_canonical_inbox_id(task_id),
+        task_id=job_id,
         direction="to_agent",
         sender="user",
         content=feedback,
@@ -792,7 +652,7 @@ def revise_plan(task_id):
     db.session.commit()
 
     resumed = _resume_for_plan(
-        task_id, worktree,
+        job_id, worktree,
         instruction=(
             "The user reviewed your plan and has feedback. Revise the "
             "plan based on their comments and call "
@@ -802,60 +662,55 @@ def revise_plan(task_id):
         ),
         plan_mode=True,
     )
-    return jsonify({"task_id": task_id, "agent_resumed": resumed, "mode": "revising"})
+    return jsonify({"job_id": job_id, "agent_resumed": resumed, "mode": "revising"})
 
 
-@diff_bp.route("/tasks/<task_id>/review/approve", methods=["POST"])
-def approve(task_id):
+@diff_bp.route("/jobs/<job_id>/review/approve", methods=["POST"])
+def approve(job_id):
     """Hand the task back to the agent with an 'approved' message so
     the agent can push + open a PR following the repo's own conventions.
 
-    Rationale for not running `gh pr create` from Maiko: PR creation
-    is loaded with repo-specific conventions (templates, required
-    labels, reviewers, draft vs. ready, release branch rules) that
-    Maiko can't reliably reproduce. The agent is already logged in
-    to `gh`, has access to `.github/PULL_REQUEST_TEMPLATE.md`, and
-    knows the team's patterns via its LoRA / instructions. Better to
-    say "approved, open the PR" and let it handle the nuance.
+    PR creation is repo-specific (templates, labels, reviewers, draft
+    vs. ready, release branch rules) so Maiko delegates instead of
+    trying to reproduce conventions. The agent is already authed to
+    `gh` and knows its team's patterns via its LoRA / instructions.
 
     Flow:
-      - First approve (no pr_url yet): agent pushes + gh pr create,
-        then reply(message_type="pr_opened", content=<url>)
-        which the outbox handler uses to set task.extra.pr_url.
-      - Subsequent approve (pr_url set): agent just pushes the
-        updates; GitHub reflects new commits on the open PR
-        automatically.
+      - First approve (no pr_url): agent pushes + gh pr create, then
+        replies pr_opened with the URL.
+      - Subsequent approve (pr_url set): agent just pushes; GitHub
+        reflects new commits on the open PR automatically.
 
     Tasks stay open (status=in_review) until the PR merges
     (github_poller → _complete_review_task).
     """
-    task, err = _task_or_404(task_id)
+    job, task, err = _job_and_task_or_404(job_id)
     if err:
         return err
-    worktree = _worktree_path(task)
+    if task is None:
+        return jsonify({"error": "Approve flow requires a linked Task"}), 400
+    worktree = _worktree_path(job)
     if not worktree:
-        return jsonify({"error": "No worktree for this task"}), 400
+        return jsonify({"error": "No worktree for this job"}), 400
 
     branch = (task.extra or {}).get("branch")
     if not branch:
         return jsonify({"error": "No branch tracked for this task"}), 400
 
     submitted = DiffComment.query.filter_by(
-        job_id=_resolve_to_job_id(task_id), status="submitted",
+        job_id=job_id, status="submitted",
     ).all()
     for c in submitted:
         c.status = "resolved"
 
     existing_pr_url = (task.extra or {}).get("pr_url")
 
-    # Build the instruction we hand to the agent. Different wording
-    # for first approve (open PR) vs subsequent (just push updates).
     if existing_pr_url:
         instruction = (
             f"Your updated changes are approved. Push branch "
             f"`{branch}` to origin so the existing PR ({existing_pr_url}) "
             f"picks up the new commits. You do NOT need to run "
-            f"`gh pr create` — the PR is already open. If the push "
+            f"`gh pr create`. The PR is already open. If the push "
             f"fails (protected branch, diverged remote), reply with "
             f"message_type='stuck' and describe the error."
         )
@@ -863,7 +718,7 @@ def approve(task_id):
         instruction = (
             f"Your work is approved. Time to open the PR:\n\n"
             f"1. Push branch `{branch}` to origin.\n"
-            f"2. Run `gh pr create` following this repo's conventions —"
+            f"2. Run `gh pr create` following this repo's conventions:"
             f" respect any PR template at .github/PULL_REQUEST_TEMPLATE.md,"
             f" use appropriate labels, assign reviewers per team norms.\n"
             f"3. Once the PR is open, call "
@@ -879,7 +734,7 @@ def approve(task_id):
 
     from planet_maiko.models.agent_message import AgentMessage
     db.session.add(AgentMessage(
-        task_id=_canonical_inbox_id(task_id),
+        task_id=job_id,
         direction="to_agent",
         sender="user",
         content=instruction,
@@ -892,30 +747,23 @@ def approve(task_id):
     extra["last_approved_at"] = datetime.now(timezone.utc).isoformat()
     task.extra = extra
 
-    # Dismiss the agent_ready_for_review pupdate(s) for this task so
-    # PackStatusPane stops showing "ready for review" after the user
-    # has already done the review. Without this the chip persists until
-    # the next agent pupdate (pr_opened) lands — which can be minutes
-    # away if the push is slow, or never if it fails.
     from planet_maiko.models.pupdate import Pupdate
     stale_reviews = (
         Pupdate.query
         .filter(Pupdate.type == "agent_ready_for_review")
         .filter(Pupdate.dismissed == False)  # noqa: E712
-        .filter(Pupdate.tags.contains(task_id))
+        .filter(Pupdate.tags.contains(task.id))
         .all()
     )
     for p in stale_reviews:
         p.dismissed = True
     db.session.commit()
 
-    # Resume the agent so it sees the approved message immediately.
-    # Wake against the canonical inbox id so the resume targets the
-    # session the agent is actually running on.
-    resumed = _resume_agent_with_review(_canonical_inbox_id(task_id), worktree)
+    resumed = _resume_agent_with_review(job_id, worktree)
 
     return jsonify({
-        "task_id": task_id,
+        "job_id": job_id,
+        "task_id": task.id,
         "branch": branch,
         "existing_pr_url": existing_pr_url,
         "agent_resumed": resumed,

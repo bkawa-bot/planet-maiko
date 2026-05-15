@@ -1,11 +1,10 @@
-"""Semantic clustering of signals → learnings.
+"""Semantic clustering of signals to learnings.
 
 The single semantic pass that turns cleaned signals into Learning rows.
-Subsumes what the old processor.py prefix-based aggregation did: for
-each batch of unaggregated signals, Claude decides whether each signal
-belongs to an existing Learning in the same category or starts a new
-cluster. Prefix matching is only a fallback for when the LLM runtime
-is unavailable.
+For each batch of unaggregated signals, Claude decides whether each
+signal belongs to an existing Learning in the same category or starts
+a new cluster. Prefix matching is only a fallback for when the LLM
+runtime is unavailable.
 
 Two public entry points:
   * cluster_signals_into_learnings() — the pipeline step called from
@@ -396,11 +395,11 @@ def _call_attach_llm(category, existing, signals, rejected=None):
     # caller (cluster_signals_into_learnings) is holding every Signal
     # in `signals` as attached ORM instances and relies on being able
     # to mutate them in the cluster loop after we return
-    # (signal.learning_id = learning.id). db.session.close() detaches
-    # them — the assignments succeed silently on detached objects and
-    # never hit the database, which is why backfilled learnings
-    # historically landed with zero linked signals. Connection hold
-    # during the 120s LLM call is acceptable; integrity isn't.
+    # (signal.learning_id = learning.id). db.session.close() would
+    # detach them; the assignments would succeed silently on detached
+    # objects and never hit the database, dropping the signal-to-
+    # learning links. Connection hold during the 120s LLM call is
+    # acceptable; integrity isn't.
     result = runtime.send_json(
         prompt, timeout=120,
         model=resolve_model("classify"), effort=resolve_effort("classify"),

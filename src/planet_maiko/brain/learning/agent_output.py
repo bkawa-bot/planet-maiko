@@ -177,12 +177,12 @@ def parse_and_apply_blocks(output, *, agent=None, task=None, repo=None,
         except Exception as e:
             logger.warning(f"[agent-output] Failed to persist PATTERN: {e}")
 
-    # PROPOSAL: / TASK: blocks → agent_proposal Memos (category=offer —
+    # PROPOSAL: / TASK: blocks → agent_proposal Memos (category=offer:
     # user approves to mint a routed Task, edits the draft in place,
-    # or dismisses). Previously emitted pupdates; memos are the new
-    # canonical surface for persistent user-owed items.
+    # or dismisses). Memos are the canonical surface for persistent
+    # user-owed items.
     #
-    # Skipped when there's no agent or task to attribute to —
+    # Skipped when there's no agent or task to attribute to;
     # proposals are accountable items that need a source agent and a
     # parent task, neither of which a stateless reviewer (RAG flow)
     # has. Stateless callers should only use PATTERN: blocks.

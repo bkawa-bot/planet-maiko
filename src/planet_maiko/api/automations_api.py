@@ -1,7 +1,7 @@
 """Automations CRUD + list endpoints.
 
-The unified when/then table. Replaces the old /goals surface. See
-brain/automations/engine.py for what the stored kinds mean.
+The unified when/then table. See brain/automations/engine.py for
+what the stored kinds mean.
 """
 
 from flask import Blueprint, jsonify, request

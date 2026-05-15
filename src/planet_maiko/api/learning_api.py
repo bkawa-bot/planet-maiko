@@ -98,13 +98,13 @@ def create_signal():
 
 def _actual_signal_counts(learning_ids):
     """Return {learning_id: actual linked-signal count} for the given
-    ids. Used to override the cached Learning.signal_count at read
-    time — the column is indexed + fast to write, but sundry code
-    paths (pack_insights, clustering merges, old signal prunes) have
-    drifted it out of sync with reality enough times that trusting
-    the cache here leads to the classic "card says 2 signals, click
-    shows zero" UX bug. Computing from the Signal table costs one
-    extra query on the list endpoint and is a no-op on singletons.
+    ids. Overrides the cached Learning.signal_count at read time:
+    the column is indexed + fast to write, but sundry code paths
+    (pack_insights, clustering merges, old signal prunes) drift it
+    out of sync with reality enough that trusting the cache leads to
+    the classic "card says 2 signals, click shows zero" UX bug.
+    Computing from the Signal table costs one extra query on the
+    list endpoint and is a no-op on singletons.
     """
     from planet_maiko.models.signal import Signal
     from sqlalchemy import func
@@ -432,10 +432,8 @@ def _run_backfill_job(app, limit, repo):
                     synth_error = str(e)
 
                 # Phase 3: cluster signals directly into Learnings.
-                # This replaces the old prefix-based aggregation +
-                # separate dedup pass — one semantic call that matches
-                # each new signal against existing rules or starts a
-                # new cluster.
+                # One semantic call that matches each new signal
+                # against existing rules or starts a new cluster.
                 update_backfill_progress(phase="clustering")
                 from planet_maiko.brain.learning.clustering import cluster_signals_into_learnings
                 learning_results = cluster_signals_into_learnings()

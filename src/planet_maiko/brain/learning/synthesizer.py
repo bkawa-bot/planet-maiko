@@ -6,9 +6,8 @@ decides whether it expresses a generalizable rule; if yes, it rewrites
 to a one-sentence rule + picks a category; if no, the row is marked
 non-actionable and deleted.
 
-Same logic previously lived inline in api/learning_api._run_backfill_job.
-Extracted so the brain cycle's self-healing phase can call it with a
-small budget per tick, without re-running the whole backfill.
+Lets the brain cycle's self-healing phase call this with a small
+budget per tick, without re-running the whole backfill.
 """
 
 import logging
@@ -213,8 +212,8 @@ Respond as JSON:
             return
 
         # LLMs occasionally return ids as strings ("1234") instead of
-        # ints, which used to silently drop the whole row. Coerce
-        # numeric strings and log anything we actually have to skip.
+        # ints. Coerce numeric strings and log anything we actually
+        # have to skip.
         returned_ids = []
         skipped_ids = 0
         for r in parsed_rules:
