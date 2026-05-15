@@ -880,9 +880,29 @@ def _request_agent_status_updates(timeout_s=20):
         from planet_maiko.models.agent_message import AgentMessage
         from planet_maiko.agents.wake import wake_agent, is_working
         from planet_maiko.api.agent_outbox import FOLLOWUP_KINDS
+        from planet_maiko.agents.brain_session import _get_runtime
     except Exception as e:
         logger.debug(f"[overview] agent imports failed: {e}")
         return 0
+
+    # Tmux-driven coding agents block their per-turn lock until the
+    # agent posts a TERMINAL-typed reply (ready_for_review / stuck /
+    # plan_for_approval / pr_opened). status_request's prompt asks
+    # for type='status', which isn't terminal — so on tmux the wake
+    # would acquire the lock, send the prompt, and sit forever
+    # waiting for a terminal reply the prompt never asked for.
+    # Every subsequent user chat message would queue behind it.
+    # Headless claude (--print) exits after one reply so the same
+    # ping is harmless there. Skip the whole sweep when coding agents
+    # route to tmux — they narrate themselves as they work, the
+    # overview will use their existing last_message.
+    try:
+        coding_runtime = _get_runtime("coding_agent")
+        if coding_runtime and coding_runtime.name == "claude-code-tmux":
+            logger.debug("[overview] skipping status_request sweep — coding agents are tmux-routed")
+            return 0
+    except Exception as e:
+        logger.debug(f"[overview] runtime probe failed, proceeding with sweep: {e}")
 
     threshold = datetime.now(timezone.utc)
     # Alive = running agents OR FOLLOWUP_KINDS agents parked in `done`
