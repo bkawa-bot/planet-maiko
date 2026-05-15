@@ -1,11 +1,11 @@
 # Planet Maiko
 
 #### **strange agents, strange world.**
-IMPORTANT 5/14 UPDATE FOR CLAUDE USERS: MAIKO CAN BE CONFIGURED TO USE INTERACTIVE CLAUDE SESSIONS. THIS MEANS IT WILL PULL FROM YOUR REGULAR SUBSCRIPTION, NOT AGENT SDK CREDITS.
-
-⚠️ Beta. Planet Maiko is in active beta testing. Expect breaking changes, schema migrations, rough edges, and bugs. If you try it and something's broken, file an issue.
-
 ![title](docs/screenshots/title.png)
+
+> **IMPORTANT 5/14 UPDATE FOR CLAUDE USERS: MAIKO CAN BE CONFIGURED TO USE _INTERACTIVE_ CLAUDE SESSIONS. THIS MEANS IT WILL PULL FROM YOUR REGULAR SUBSCRIPTION, NOT AGENT SDK CREDITS.**
+
+> **⚠️ Beta.** Planet Maiko is in active beta testing. Expect breaking changes, schema migrations, rough edges, and bugs. If you try it and something's broken, [file an issue](https://github.com/bkawa-bot/planet-maiko/issues/new).
 
 We live in strange times, and yet our dev tools are so painfully un-strange. No one knows what being a software engineer will be like in a year, or even a month. If we are all tokenmaxxing to our own inevitable obsolescence, we might as well have fun.
 
