@@ -328,6 +328,14 @@ export const api = {
   // Pupdate source registry — poller names + the "maiko"/"agent"
   // built-ins. Also drives the Automation editor's autocomplete.
   getPupdateSources: () => request("/pupdate-sources"),
+  // Automation-action registry — built-ins + anything plugins register
+  // via register_actions(). Drives the editor's "then" dropdown +
+  // per-action field forms (symmetric with getPupdateTypes on "when").
+  getAutomationActions: () => request("/automation-actions"),
+  // Run a plugin's user-triggered setup action (backfill, import, …).
+  // Fire-and-forget: backend returns 202 and drops a memo when done.
+  runPluginAction: (plugin, key) =>
+    request(`/plugins/${plugin}/actions/${key}`, { method: "POST" }),
 
   // Project plan orchestration
   approveProjectPlan: (projectId, tasks) =>

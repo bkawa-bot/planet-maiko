@@ -200,6 +200,29 @@ class LinearPlugin(PollerPlugin):
     def get_config_defaults(self):
         return {"linear": {"enabled": False, "poll_interval_minutes": 5, "api_key": "", "team_id": ""}}
 
+    def get_setup_actions(self):
+        return [{
+            "key": "import",
+            "label": "Import from Linear",
+            "description": "Pull your assigned issues in as tasks, plus any projects you lead.",
+        }]
+
+    def run_setup_action(self, key):
+        if key != "import":
+            return super().run_setup_action(key)
+        from planet_maiko.config import load_config
+        api_key = (load_config().get("linear") or {}).get("api_key")
+        if not api_key:
+            raise ValueError("Linear API key not configured. Set it in Settings.")
+        stats = LinearPlugin.import_issues(api_key)
+        try:
+            led = self.import_led_projects(api_key)
+            stats["projects_created"] = stats.get("projects_created", 0) + led.get("created", 0)
+            stats["projects_updated"] = stats.get("projects_updated", 0) + led.get("updated", 0)
+        except Exception as e:
+            stats["led_projects_note"] = f"led-project import failed: {e}"
+        return stats
+
     def _query(self, api_key, query, variables=None):
         """Execute a GraphQL query/mutation against the Linear API."""
         import certifi

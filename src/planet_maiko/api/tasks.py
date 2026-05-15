@@ -661,26 +661,16 @@ def send_task_to_linear(task_id):
 
 @tasks_bp.route("/tasks/import-linear", methods=["POST"])
 def import_from_linear():
-    """Import assigned issues from Linear as tasks, plus led projects.
+    """Synchronous Linear import for the Tasks-page quick button.
 
-    Two passes so both bring-in-what-you-own and bring-in-what-you-lead
-    happen from one click: issue import (creates tasks and member-role
-    projects) then led-project import (adds any projects the viewer
-    leads that don't show up via assigned issues).
+    Same work as the Settings → Linear → "Import from Linear" setup
+    action, just run inline so the button can show "N tasks came in"
+    immediately. Both paths delegate to LinearPlugin.run_setup_action
+    so the import logic lives in one place.
     """
-    from planet_maiko.config import load_config
-    config = load_config()
-    api_key = config.get("linear", {}).get("api_key")
-    if not api_key:
-        return jsonify({"error": "Linear API key not configured. Set it in Settings."}), 400
-
     from planet_maiko.plugins.builtin.linear import LinearPlugin
-    plugin = LinearPlugin()
-    stats = LinearPlugin.import_issues(api_key)
     try:
-        led = plugin.import_led_projects(api_key)
-        stats["projects_created"] = stats.get("projects_created", 0) + led.get("created", 0)
-        stats["projects_updated"] = stats.get("projects_updated", 0) + led.get("updated", 0)
-    except Exception as e:
-        stats["led_projects_note"] = f"Led-project import failed: {e}"
+        stats = LinearPlugin().run_setup_action("import")
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     return jsonify(stats)

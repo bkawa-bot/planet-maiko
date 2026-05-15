@@ -176,4 +176,33 @@ const ACTION_SCHEMAS = {
 };
 
 
-export { PUPDATE_TYPE_OPTIONS, PRIORITY_OPTIONS, TASK_TYPE_OPTIONS, CONDITION_SCHEMAS, ACTION_SCHEMAS };
+/**
+ * Convert the backend /api/automation-actions payload into the
+ * { kind: {label, group, scopes, help, fields} } shape the form-builder
+ * expects. The backend is the source of truth (built-ins + plugin
+ * actions); ACTION_SCHEMAS above is only the offline fallback when the
+ * fetch fails. `description` on the wire maps to `help` here.
+ */
+function actionSpecsToSchemaMap(specs) {
+  const out = {};
+  for (const s of specs || []) {
+    if (!s || !s.kind) continue;
+    out[s.kind] = {
+      label: s.label || s.kind,
+      group: s.group || "Other",
+      scopes: s.scopes || ["cycle"],
+      help: s.description || "",
+      fields: s.fields || [],
+    };
+  }
+  return out;
+}
+
+export {
+  PUPDATE_TYPE_OPTIONS,
+  PRIORITY_OPTIONS,
+  TASK_TYPE_OPTIONS,
+  CONDITION_SCHEMAS,
+  ACTION_SCHEMAS,
+  actionSpecsToSchemaMap,
+};

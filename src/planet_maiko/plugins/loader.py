@@ -309,6 +309,12 @@ def load_plugins(app):
             if isinstance(plugin_section, dict):
                 schema = _infer_schema_from_defaults(plugin_section)
 
+        try:
+            setup_actions = plugin.get_setup_actions() or []
+        except Exception as e:
+            logger.warning(f"[plugins] get_setup_actions failed for '{plugin.name}': {e}")
+            setup_actions = []
+
         for d in _discovered:
             if d["name"] == plugin.name:
                 d["config_schema"] = schema
@@ -318,6 +324,17 @@ def load_plugins(app):
                 # (their plugin name or similar); surface that here so
                 # the frontend knows where to write user edits.
                 d["config_key"] = next(iter(defaults.keys())) if defaults else plugin.name
+                # Setup-action buttons Settings renders under this plugin.
+                d["setup_actions"] = [
+                    {
+                        "key": a.get("key"),
+                        "label": a.get("label") or a.get("key"),
+                        "description": a.get("description") or "",
+                        "destructive": bool(a.get("destructive")),
+                    }
+                    for a in setup_actions
+                    if isinstance(a, dict) and a.get("key")
+                ]
                 break
 
     # Call on_startup, skipping plugins the user disabled in Settings.
@@ -355,6 +372,73 @@ def load_plugins(app):
         """
         from planet_maiko.pupdate_types import collect_all
         return jsonify(collect_all())
+
+    @plugins_bp.route("/automation-actions", methods=["GET"])
+    def list_automation_actions():
+        """Automation actions known to Maiko — built-ins + anything
+        plugins registered via `register_actions()`. Drives the
+        Automation editor's "then" dropdown + field forms. Symmetric
+        with /pupdate-types on the "when" side.
+        """
+        from planet_maiko.automation_actions import collect_all
+        return jsonify(collect_all())
+
+    @plugins_bp.route("/plugins/<name>/actions/<key>", methods=["POST"])
+    def run_plugin_setup_action(name, key):
+        """Run a plugin's user-triggered setup action in the background.
+
+        Returns 202 immediately; the work runs in a daemon thread and
+        drops a memo on completion (success or failure) so a slow
+        backfill / import doesn't block the request and the user gets
+        told when it's done.
+        """
+        import threading
+        from flask import current_app
+
+        plugin = next(
+            (p for p in get_plugins() if p.name == name), None
+        )
+        if plugin is None:
+            return jsonify({"error": f"Unknown plugin: {name}"}), 404
+        try:
+            actions = {a.get("key") for a in (plugin.get_setup_actions() or [])
+                       if isinstance(a, dict)}
+        except Exception:
+            actions = set()
+        if key not in actions:
+            return jsonify({"error": f"Unknown setup action: {key}"}), 404
+
+        app_obj = current_app._get_current_object()
+
+        def _run():
+            from planet_maiko.brain.memos import create_memo
+            with app_obj.app_context():
+                try:
+                    result = plugin.run_setup_action(key)
+                    detail = ""
+                    if isinstance(result, dict):
+                        detail = ", ".join(f"{k}: {v}" for k, v in result.items())
+                    create_memo(
+                        kind="notification",
+                        category="info",
+                        title=f"{name}: {key} finished",
+                        body=detail or "Done.",
+                        priority="normal",
+                    )
+                except Exception as e:
+                    logger.warning(f"[plugins] setup action {name}.{key} failed: {e}")
+                    create_memo(
+                        kind="notification",
+                        category="info",
+                        title=f"{name}: {key} failed",
+                        body=str(e)[:500],
+                        priority="high",
+                    )
+
+        threading.Thread(
+            target=_run, daemon=True, name=f"setup-{name}-{key}"
+        ).start()
+        return jsonify({"status": "started", "plugin": name, "action": key}), 202
 
     @plugins_bp.route("/pupdate-sources", methods=["GET"])
     def list_pupdate_sources():

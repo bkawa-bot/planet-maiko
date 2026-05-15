@@ -54,7 +54,7 @@ from planet_maiko.models.pupdate import Pupdate
 from .helpers import _safe_format
 from .conditions import CONDITIONS
 from .actions import (
-    ACTIONS,
+    resolve_action,
     _interpolate,
     _pupdate_snapshot,
     format_pupdate_for_context,
@@ -187,7 +187,7 @@ def _run_actions(automation, context=None, pupdate=None):
     results = []
     for action in (automation.then or []):
         kind = action.get("kind")
-        handler = ACTIONS.get(kind)
+        handler = resolve_action(kind)
         if handler is None:
             logger.warning(
                 f"[automation {automation.id}] unknown action kind {kind!r}; skipping"

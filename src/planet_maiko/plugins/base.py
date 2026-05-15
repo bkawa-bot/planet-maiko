@@ -225,6 +225,85 @@ class MaikoPlugin:
         """
         return []
 
+    def register_actions(self):
+        """Declare automation actions this plugin handles.
+
+        Symmetric with register_pupdate_types: that feeds the Automation
+        editor's "when" dropdown, this feeds the "then" dropdown. Each
+        entry both advertises the action to the editor and tells the
+        form-builder what config fields to render.
+
+        Each entry:
+            {
+                "kind":  "jira_transition",          # required, unique
+                "label": "Move the Jira issue",      # optional
+                "group": "Jira",                     # optional optgroup
+                "description": "…",                  # optional help text
+                "scopes": ["pupdate"],               # ["cycle"] | ["pupdate"]
+                                                     #   | both. Default ["cycle"].
+                "fields": [                          # optional; form-builder
+                    {"name": "state", "type": "string",
+                     "label": "Target state"},
+                ],
+            }
+
+        `kind` is what lands in `automation.then[].kind`. The engine
+        dispatches it via action_handlers(). Field dicts use the same
+        shape as the built-in ACTION_SCHEMAS the editor already renders
+        (name, type, label, default, options, advanced, help, …).
+        """
+        return []
+
+    def action_handlers(self):
+        """Map automation action `kind` -> handler callable.
+
+        Returns {kind: fn} where fn has the same signature as the
+        built-in _act_* handlers:
+
+            fn(automation, config, *, pupdate, context)
+              -> None | dict | {"error": str}
+
+        Every kind declared in register_actions() should have an entry
+        here. The automation engine builds one flat lookup at resolve
+        time: built-in ACTIONS first, then plugin maps, so a plugin
+        can't shadow a core action kind.
+        """
+        return {}
+
+    def get_setup_actions(self):
+        """Declare user-triggered setup actions, shown as buttons in
+        Settings under this plugin's section.
+
+        Distinct from automation actions: these are run by a human
+        clicking a button (backfill history, import existing data,
+        auto-configure), not by an automation rule firing.
+
+        Each entry:
+            {
+                "key":   "import_issues",            # required, unique per plugin
+                "label": "Import from Linear",       # required, button text
+                "description": "Pull assigned issues + led projects",
+                "destructive": False,                # optional, confirm-first
+            }
+
+        The button calls POST /api/plugins/<name>/actions/<key>, which
+        dispatches to run_setup_action(key) in a background thread and
+        drops a memo when it finishes.
+        """
+        return []
+
+    def run_setup_action(self, key):
+        """Execute the setup action identified by `key`.
+
+        Runs in a daemon thread inside an app context. Return a short
+        dict; it's surfaced in the completion memo. Raising is fine —
+        the failure is caught and reported in the memo. Default raises
+        for an unknown key so a typo in get_setup_actions() is loud.
+        """
+        raise NotImplementedError(
+            f"{self.name}: no run_setup_action handler for {key!r}"
+        )
+
     def register_default_automations(self):
         """Seed starter automations for this plugin.
 

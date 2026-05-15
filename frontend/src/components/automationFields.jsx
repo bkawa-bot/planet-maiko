@@ -81,15 +81,19 @@ export function ConditionRow({ condition, options, pupdateTypes, datalists, opti
 }
 
 
-export function ActionRow({ action, options, datalists, optionsMap, onChange, onRemove }) {
-  const schema = ACTION_SCHEMAS[action.kind];
+export function ActionRow({ action, options, schemas, datalists, optionsMap, onChange, onRemove }) {
+  // `schemas` is the editor's resolved action map (backend registry +
+  // plugin actions, falling back to hardcoded ACTION_SCHEMAS). Default
+  // to the hardcoded copy so a caller that doesn't pass it still works.
+  const map = schemas || ACTION_SCHEMAS;
+  const schema = map[action.kind];
   return (
     <div className="automation-entry-row">
       <div className="automation-entry-top">
         <select
           className="automation-entry-kind"
           value={action.kind}
-          onChange={(e) => onChange({ kind: e.target.value, config: defaultConfigFor(ACTION_SCHEMAS[e.target.value]) })}
+          onChange={(e) => onChange({ kind: e.target.value, config: defaultConfigFor(map[e.target.value]) })}
         >
           <option value="">Select an action…</option>
           <GroupedOptions options={options} />

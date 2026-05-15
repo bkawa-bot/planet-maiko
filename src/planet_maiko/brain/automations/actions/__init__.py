@@ -46,3 +46,34 @@ ACTIONS = {
     "complete_linked_task": _act_complete_linked_task,
     "skip": _act_skip,
 }
+
+
+def resolve_action(kind):
+    """Return the handler callable for an automation action `kind`,
+    or None if nothing owns it.
+
+    Built-in ACTIONS win; then plugin-contributed handlers from
+    plugin.action_handlers(). A plugin can't shadow a core kind
+    because the built-in lookup is checked first. Handlers share one
+    signature: fn(automation, config, *, pupdate, context).
+    """
+    handler = ACTIONS.get(kind)
+    if handler is not None:
+        return handler
+
+    try:
+        from planet_maiko.plugins.loader import get_plugins
+    except Exception:
+        return None
+
+    for plugin in get_plugins():
+        try:
+            if not plugin.is_enabled():
+                continue
+            mapping = plugin.action_handlers() or {}
+        except Exception:
+            continue
+        fn = mapping.get(kind)
+        if fn is not None:
+            return fn
+    return None

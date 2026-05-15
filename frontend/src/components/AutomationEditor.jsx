@@ -16,6 +16,7 @@ import {
   TASK_TYPE_OPTIONS,
   CONDITION_SCHEMAS,
   ACTION_SCHEMAS,
+  actionSpecsToSchemaMap,
 } from "./automationSchemas";
 
 
@@ -56,6 +57,10 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
   const [pupdateSources, setPupdateSources] = useState([]);
   const [configuredRepos, setConfiguredRepos] = useState([]);
   const [skills, setSkills] = useState([]);
+  // Backend is the source of truth for action specs (built-ins +
+  // plugin-registered). Seed with the hardcoded copy so the editor
+  // renders instantly + still works if the fetch fails.
+  const [actionSchemas, setActionSchemas] = useState(ACTION_SCHEMAS);
 
   // Fetch authoritative dropdown data once per editor open so plugins
   // and config changes propagate without a page reload. All failures
@@ -88,6 +93,12 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
       .then((list) => {
         if (cancelled || !Array.isArray(list)) return;
         setSkills(list);
+      })
+      .catch(() => {});
+    api.getAutomationActions()
+      .then((specs) => {
+        if (cancelled || !Array.isArray(specs) || !specs.length) return;
+        setActionSchemas(actionSpecsToSchemaMap(specs));
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -145,7 +156,7 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
 
   const conditionOptions = Object.entries(CONDITION_SCHEMAS)
     .map(([kind, s]) => ({ value: kind, label: s.label, group: s.group || "Other" }));
-  const actionOptions = Object.entries(ACTION_SCHEMAS)
+  const actionOptions = Object.entries(actionSchemas)
     .filter(([, s]) => s.scopes.includes(scope))
     .map(([kind, s]) => ({ value: kind, label: s.label, group: s.group || "Other" }));
 
@@ -154,7 +165,7 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
   // valid. Runs once when scope flips.
   useEffect(() => {
     setThen((rows) => rows.map((a) => {
-      const schema = ACTION_SCHEMAS[a.kind];
+      const schema = actionSchemas[a.kind];
       if (!schema || !schema.scopes.includes(scope)) {
         return { kind: "", config: {} };
       }
@@ -303,6 +314,7 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
                 key={idx}
                 action={a}
                 options={actionOptions}
+                schemas={actionSchemas}
                 datalists={datalists}
                 optionsMap={optionsMap}
                 onChange={(patch) => updateThen(idx, patch)}

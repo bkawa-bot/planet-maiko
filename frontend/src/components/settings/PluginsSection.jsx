@@ -76,6 +76,9 @@ export default function PluginsSection({ config, setConfig, plugins, setPlugins,
                       }}
                     />
                   )}
+                  {Array.isArray(p.setup_actions) && p.setup_actions.length > 0 && (
+                    <PluginSetupActions plugin={p} onMessage={onMessage} />
+                  )}
                 </div>
               ))}
             </div>
@@ -83,6 +86,47 @@ export default function PluginsSection({ config, setConfig, plugins, setPlugins,
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * User-triggered setup actions (backfill, import, auto-configure).
+ * Each fires POST /api/plugins/<name>/actions/<key>; the backend runs
+ * it in a daemon thread and drops a memo when done, so the button
+ * just kicks it off and tells the user it's running.
+ */
+function PluginSetupActions({ plugin, onMessage }) {
+  const [running, setRunning] = useState(null);
+  return (
+    <div className="plugin-setup-actions">
+      {plugin.setup_actions.map((a) => (
+        <div key={a.key} className="plugin-setup-action">
+          <button
+            className="btn btn-sm"
+            disabled={running === a.key}
+            onClick={async () => {
+              if (a.destructive && !window.confirm(`Run "${a.label}"? This can't be undone.`)) {
+                return;
+              }
+              setRunning(a.key);
+              try {
+                await api.runPluginAction(plugin.name, a.key);
+                onMessage(`"${a.label}" started — you'll get a memo when it finishes.`);
+              } catch (err) {
+                onMessage(`Couldn't start "${a.label}": ${err.message}`);
+              } finally {
+                setRunning(null);
+              }
+            }}
+          >
+            {running === a.key ? "Starting…" : a.label}
+          </button>
+          {a.description && (
+            <span className="plugin-setup-action-help">{a.description}</span>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 
