@@ -1,11 +1,7 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 from planet_maiko.brain.cycle import run, get_status
-from planet_maiko.brain.tasks.scheduler import (
-    compute_schedule, set_override, clear_override, get_override,
-)
 from planet_maiko.brain.guardrails import get_permission_level
 from planet_maiko.database import db
-from planet_maiko.models.task import Task
 
 brain_bp = Blueprint("brain", __name__)
 
@@ -22,56 +18,6 @@ def trigger_cycle():
     from flask import current_app
     results = run(current_app._get_current_object())
     return jsonify(results)
-
-
-@brain_bp.route("/brain/schedule", methods=["GET"])
-def get_schedule():
-    """Get the optimized task schedule."""
-    return jsonify(compute_schedule())
-
-
-@brain_bp.route("/brain/schedule/regenerate", methods=["POST"])
-def regenerate_schedule():
-    """Re-run the focus ordering with an extra free-text user directive.
-
-    Stores the result as an in-memory override (see scheduler.set_override).
-    Subsequent GETs to /brain/schedule return the overridden ordering until
-    cleared or expired.
-    """
-    data = request.get_json(silent=True) or {}
-    instructions = (data.get("instructions") or "").strip()
-    if not instructions:
-        return jsonify({"error": "instructions required"}), 400
-
-    tasks = Task.query.filter(Task.status.in_(["new", "in_progress"])).all()
-    if not tasks:
-        return jsonify({"error": "no active tasks to reorder"}), 400
-
-    task_dicts = [
-        {
-            "id": t.id,
-            "title": t.title,
-            "priority": t.priority,
-            "status": t.status,
-            "type": t.type,
-        }
-        for t in tasks
-    ]
-
-    from planet_maiko.agents.brain_session import reorder_tasks_with_hint
-    result = reorder_tasks_with_hint(task_dicts, instructions)
-    if not result["success"]:
-        return jsonify({"error": result.get("error") or "reorder failed"}), 500
-
-    set_override(instructions, result["ordered_ids"])
-    return jsonify(compute_schedule())
-
-
-@brain_bp.route("/brain/schedule/override", methods=["DELETE"])
-def delete_schedule_override():
-    """Clear any active focus ordering override."""
-    clear_override()
-    return jsonify(compute_schedule())
 
 
 @brain_bp.route("/today", methods=["GET"])

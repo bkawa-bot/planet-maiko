@@ -9,7 +9,7 @@ This module owns the "Home page overview" surface. The flow:
        sees is up to date — no "reviewer requested your review" cards
        that actually got handled 30 min ago.
     3. `generate_overview()` then aggregates state (memos, pupdates
-       where still meaningful, tasks, schedule, agents, pollers,
+       where still meaningful, tasks, agents, pollers,
        calendar, scene, the user's optional custom add-on prompt) and
        runs the `home-overview` skill as a full Claude Code agent with
        `skip_permissions=True` so every tool works without prompts.
@@ -206,16 +206,6 @@ def _tasks_context():
         }
         for t in rows
     ]
-
-
-def _schedule_context():
-    """Schedule / focus order — same thing /api/brain/schedule returns."""
-    try:
-        from planet_maiko.brain.tasks.scheduler import compute_schedule
-        return compute_schedule()
-    except Exception as e:
-        logger.debug(f"[overview] schedule fetch failed: {e}")
-        return {"blocks": [], "total_hours": 0, "task_count": 0}
 
 
 def _calendar_context():
@@ -486,7 +476,6 @@ def _build_context():
         "available_sprites": sprite_hint,
         "memos": json.dumps(_memos_context(), indent=2, default=str),
         "tasks": json.dumps(_tasks_context(), indent=2, default=str),
-        "schedule": json.dumps(_schedule_context(), indent=2, default=str),
         "calendar": json.dumps(_calendar_context(), indent=2, default=str),
         "agents": json.dumps(_agents_context(), indent=2, default=str),
         "pollers": json.dumps(_pollers_context(), indent=2, default=str),

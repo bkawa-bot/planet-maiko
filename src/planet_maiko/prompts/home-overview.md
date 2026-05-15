@@ -38,9 +38,6 @@ rendered). Pick `needs` items from this list.
 ### Tasks (status: new / in_progress / blocked)
 {tasks}
 
-### Schedule / focus order
-{schedule}
-
 ### Available Maiko sprite moods
 {available_sprites}
 
@@ -163,8 +160,8 @@ the JSON object, starting with `{` and ending with `}`.
   voice, not bullet-style.
 
 - **focus**: Pick **2-3** tasks that actually matter today. Prefer
-  in-progress tasks, tasks with imminent deadlines, and tasks the
-  schedule places high. Skip low-priority filler. Each `task_id` MUST
+  in-progress tasks, tasks with imminent deadlines, and high-priority
+  tasks. Skip low-priority filler. Each `task_id` MUST
   come from the provided tasks context — do not invent IDs. `why` is one
   sentence: why this specific task deserves attention today.
 

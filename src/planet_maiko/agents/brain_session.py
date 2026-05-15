@@ -1,15 +1,26 @@
-"""Brain session - the single persistent agent that handles all LLM reasoning.
+"""Runtime dispatch + synchronous LLM calls for Maiko itself.
 
-The brain session is responsible for:
-    1. Triage: deciding what to do with unmatched pupdates
-    2. Skills: running investigation, brainstorm, morning brief, etc.
-    3. Deciding when to spawn coding agents
+This module is the entry point everything in the app uses when Maiko (not
+a coding agent) needs to think. It owns three things:
 
-It uses the configured runtime (Claude Code by default) and communicates
-results back through the database (pupdates, tasks, etc.).
+1. The runtime registry — lazy-instantiates and caches ClaudeCodeRuntime /
+   TmuxClaudeRuntime / OllamaRuntime, and routes `_get_runtime(task_type)`
+   through `agents/routing.py` so per-task runtime rules apply.
+
+2. Skill execution — `run_skill` (generic) and `run_skill_as_agent` (with
+   agent persona, protocol, and team role instructions prepended). Used
+   for investigations, brainstorms, morning briefs, etc.
+
+3. One-shot task execution — `execute_one_shot_task` drives a single
+   review / investigation / repo_analysis / cartograph task end-to-end:
+   builds context, runs the skill, parses output blocks, writes the
+   result pupdate, marks the task done.
+
+Long-running coding agents do NOT go through here. They're driven by
+`agents/wake.py` (turn lifecycle) and `api/agent_outbox.py` (terminal
+reply handling), both of which call `_get_runtime` to pick a runtime.
 """
 
-import json
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -458,54 +469,6 @@ def execute_one_shot_task(task, working_dir=None):
         "proposals_emitted": parsed["proposals_emitted"],
         "confidence": parsed["confidence"],
     }
-
-
-def reorder_tasks_with_hint(tasks, instructions):
-    """Ask the brain to reorder tasks given a free-text user instruction.
-
-    Args:
-        tasks: list of dicts with keys id, title, priority, status, type
-        instructions: free-text hint from the user (e.g. "prioritize reliability work")
-
-    Returns:
-        dict with keys:
-            success: bool
-            ordered_ids: list[str] in the LLM's chosen order (or [] on failure)
-            error: str or None
-    """
-    runtime = _get_runtime()
-    if not runtime.is_available():
-        return {"success": False, "ordered_ids": [], "error": "Brain runtime not available"}
-
-    prompt = (
-        "You are reordering a personal task list based on a user's directive.\n\n"
-        f"User directive: {instructions}\n\n"
-        "Tasks:\n"
-        f"{json.dumps(tasks, indent=2)}\n\n"
-        "Return a JSON array of task IDs in the new priority order (most important first). "
-        "Include every task ID exactly once. No other keys, no commentary."
-    )
-
-    from planet_maiko.agents.routing import resolve_model, resolve_effort
-    db.session.close()
-    result = runtime.send_json(
-        prompt, timeout=90,
-        model=resolve_model("skill"), effort=resolve_effort("skill"),
-    )
-
-    if not result.get("success"):
-        return {"success": False, "ordered_ids": [], "error": result.get("error")}
-
-    parsed = result.get("parsed")
-    if not isinstance(parsed, list):
-        return {"success": False, "ordered_ids": [], "error": "LLM did not return a list"}
-
-    valid_ids = {t["id"] for t in tasks}
-    ordered = [x for x in parsed if isinstance(x, str) and x in valid_ids]
-    for t in tasks:
-        if t["id"] not in ordered:
-            ordered.append(t["id"])
-    return {"success": True, "ordered_ids": ordered, "error": None}
 
 
 def get_status():
