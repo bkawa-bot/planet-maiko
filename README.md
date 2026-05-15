@@ -2,7 +2,7 @@
 
 #### *strange agents, strange world.*
 
-### A local-first agent orchestrator where your AI agents are weird alien dogs that learn from your mistakes.
+### A local-first agent orchestrator where your AI agents are weird alien dogs that know a little too much.
 
 ![title](docs/screenshots/title.png)
 
@@ -16,11 +16,26 @@ We live in strange times, and yet our dev tools are so painfully un-strange. No 
 
 ![Planet Maiko home](docs/screenshots/home.png)
 
-Planet Maiko revolves around one central idea: **a tight-knit pack is more powerful (and fun) than a swarm of strangers.** Your pack has real agency. They get to name themselves. They know and learn from each other and grow everyday. You will remember them, and they will remember you.
-
 ![profiles](docs/screenshots/profiles.png)
 
+## How is Planet Maiko different from RinkStack, Mazino.ai, QuatroForce? (I just made all of those up).
+
+- #### Maiko has a unique self-maintaining memory system which builds a rule-book from you and your team's PR history and feedback. Internal knowledge and specific gotcha's are all automatically captured. No more manual write-ups of your team's guidelines needed.
+
+- #### Maiko uses unique methods to get agents what they need without shoving 100 rules into every prompt.
+
+- Semantically embeds learned guidelines keyed by what situations they are relevant to. Agents just need to describe what they are doing to get ONLY they need. This lets us have a pool of hundreds of very specific nits, rules, and context without overwhelming the agents.
+
+-(EXPERIMENTAL) trains a local LoRA model based on what YOUR code looks like so your preferences are automatically applied on top of your coding agents.
+-- This is experimental. I am still trying to figure out how to make it have less false positives. If you are smarter than me and this sounds interesting to you, lets talk!
+-- Honestly this was made because Anthropic doesn't allow us to fine-tune Claude (unless you are Amazon 😉).
+
+
+
+
 ![profies](docs/screenshots/sludge-pup.png)
+
+### **What (boring) stuff Planet Maiko does:**
 
 ### **What (boring) stuff Planet Maiko does:**
 
