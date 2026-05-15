@@ -123,7 +123,7 @@ export default function AgentJobPage() {
           <ReportPanel job={job} task={task} />
         )}
         {activeView === "chat" && (
-          <ChatPanel jobId={jobId} />
+          <ChatPanel jobId={jobId} agentName={profile?.display_name} />
         )}
       </div>
     </div>
@@ -816,11 +816,12 @@ function ReportPanel({ job, task }) {
 // a textarea + Send below for new replies.
 // ---------------------------------------------------------------------------
 
-function ChatPanel({ jobId }) {
+function ChatPanel({ jobId, agentName }) {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [userName, setUserName] = useState("");
   const endRef = useRef(null);
 
   const refetch = useCallback(async () => {
@@ -833,6 +834,20 @@ function ChatPanel({ jobId }) {
       setLoading(false);
     }
   }, [jobId]);
+
+  // Pull the user's configured display name once. Used to replace the
+  // raw "user" sender label on outgoing chat messages.
+  useEffect(() => {
+    api.getConfig()
+      .then((cfg) => setUserName((cfg?.user?.name || "").trim()))
+      .catch(() => {});
+  }, []);
+
+  const senderLabel = (sender) => {
+    if (sender === "user") return userName || "You";
+    if (sender === "agent") return agentName || "Agent";
+    return sender;
+  };
 
   // Initial load + 8s poll while the panel's open.
   useEffect(() => {
@@ -882,7 +897,7 @@ function ChatPanel({ jobId }) {
                 className={`activity-item dir-${m.direction} type-${m.message_type || "message"}`}
               >
                 <div className="activity-meta">
-                  <span className="activity-sender">{m.sender}</span>
+                  <span className="activity-sender">{senderLabel(m.sender)}</span>
                   {m.message_type && m.message_type !== "message" && (
                     <span className="activity-type">{m.message_type}</span>
                   )}
