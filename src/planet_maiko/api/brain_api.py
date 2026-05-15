@@ -185,20 +185,33 @@ def system_health():
         p = _shutil.which(name)
         tools[name] = {"available": bool(p), "path": p}
 
-    scheduler = current_app.config.get("SCHEDULER")
-    if scheduler is None:
-        return jsonify({
-            "scheduler_running": False,
-            "pollers": {},
-            "last_brain_cycle": None,
-            "latest_backup": None,
-            "tools": tools,
-        })
+    # Per-plugin poller state. Scheduler is the brain-cycle thread now;
+    # "running" means the thread was started in create_app(). Its
+    # stop_event lives in BACKGROUND_STOP; absence of that key means we
+    # never started the cycle thread.
+    from datetime import datetime as _dt, timezone as _tz
+    from planet_maiko.plugins.loader import get_plugins
+    from planet_maiko.plugins.helpers import PollerPlugin
+
+    pollers = {}
+    for p in get_plugins():
+        if not isinstance(p, PollerPlugin):
+            continue
+        last = p._last_polled
+        pollers[p.name] = {
+            "last_run_at": (
+                _dt.fromtimestamp(last, _tz.utc).isoformat()
+                if last else None
+            ),
+        }
+
+    stop_event = current_app.config.get("BACKGROUND_STOP")
+    cycle_running = stop_event is not None and not stop_event.is_set()
 
     return jsonify({
-        "scheduler_running": True,
-        "pollers": dict(scheduler.poller_status),
-        "last_brain_cycle": scheduler.last_brain_cycle,
+        "scheduler_running": cycle_running,
+        "pollers": pollers,
+        "last_brain_cycle": current_app.config.get("LAST_BRAIN_CYCLE"),
         "latest_backup": latest_backup(),
         "tools": tools,
     })
@@ -210,10 +223,10 @@ def shutdown():
     import threading
     from flask import current_app
 
-    # Stop the scheduler first
-    scheduler = current_app.config.get("SCHEDULER")
-    if scheduler:
-        scheduler.stop()
+    # Stop background threads (brain cycle + backup loop).
+    stop_event = current_app.config.get("BACKGROUND_STOP")
+    if stop_event:
+        stop_event.set()
 
     def _shutdown():
         import time, os, signal

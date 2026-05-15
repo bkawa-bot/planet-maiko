@@ -221,26 +221,40 @@ def discover_github_repos():
 
 @config_bp.route("/pollers/status", methods=["GET"])
 def poller_status():
-    """Get status of all pollers."""
-    from flask import current_app
-    scheduler = current_app.config.get("SCHEDULER")
-    if scheduler:
-        return jsonify(scheduler.get_status())
-    return jsonify({})
+    """Get status of all poller plugins."""
+    from planet_maiko.plugins.loader import get_plugins
+    from planet_maiko.plugins.helpers import PollerPlugin
+
+    out = {}
+    for p in get_plugins():
+        if not isinstance(p, PollerPlugin):
+            continue
+        cfg = load_config().get(p.config_key or p.name, {}) or {}
+        out[p.name] = {
+            "type": "poller",
+            "enabled": bool(cfg.get("enabled")),
+            "running": True,
+            "interval_minutes": cfg.get("poll_interval_minutes", 5),
+        }
+    return jsonify(out)
 
 
 @config_bp.route("/pollers/<name>/run", methods=["POST"])
 def run_poller(name):
-    """Manually trigger a specific poller."""
+    """Manually trigger a specific poller plugin."""
     from flask import current_app
-    scheduler = current_app.config.get("SCHEDULER")
-    if not scheduler:
-        return jsonify({"error": "Scheduler not running"}), 503
+    from planet_maiko.plugins.loader import get_plugins
+    from planet_maiko.plugins.helpers import PollerPlugin
 
+    plugin = next(
+        (p for p in get_plugins()
+         if isinstance(p, PollerPlugin) and p.name == name),
+        None,
+    )
+    if plugin is None:
+        return jsonify({"error": f"Unknown poller: {name}"}), 404
     try:
-        created = scheduler.run_once(name)
-        return jsonify({"status": "ok", "created": created})
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 404
+        plugin.force_poll(current_app._get_current_object())
+        return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500

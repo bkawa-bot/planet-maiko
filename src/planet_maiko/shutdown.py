@@ -410,11 +410,11 @@ def stop_server():
     """
     try:
         from flask import current_app
-        scheduler = current_app.config.get("SCHEDULER")
-        if scheduler:
-            scheduler.stop()
+        stop_event = current_app.config.get("BACKGROUND_STOP")
+        if stop_event:
+            stop_event.set()
     except Exception as e:
-        logger.debug(f"[shutdown] scheduler stop skipped: {e}")
+        logger.debug(f"[shutdown] background stop signal skipped: {e}")
 
     def _delayed_exit():
         time.sleep(0.5)
