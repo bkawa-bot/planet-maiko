@@ -98,9 +98,9 @@ def _write_claude_md(working_path, job_id, job_title, role="coding", maiko_port=
         pass
 
     # Load protocol from skill prompt (editable via Skills page).
-    # `task_title` / `task_id` template vars stayed for backwards compat
-    # with prompts the user may have customized; `job_title` / `job_id`
-    # are the new canonical names. Both resolve to the same values.
+    # `task_title` / `task_id` and `job_title` / `job_id` template
+    # vars both resolve to the same values, so user-customized
+    # prompts work with either spelling.
     content = None
     try:
         from planet_maiko.agents.skills import get_skill_prompt
@@ -148,9 +148,9 @@ def _write_claude_md(working_path, job_id, job_title, role="coding", maiko_port=
         content += f"\n\n{character_block}\n"
 
     # Active Insights for this repo (and globals). Unlike Learnings,
-    # Insights aren't confidence-gated or trainable — they're the
+    # Insights aren't confidence-gated or trainable. They're the
     # "things every new agent in this repo should know" playbook:
-    # tooling quirks, mid-migration state, team conventions that
+    # tooling quirks, in-flight migrations, team conventions that
     # aren't code rules. Insights tagged "overview" get promoted to
     # a Repo Overview block at the top; the rest render as the usual
     # Team Playbook bullets.

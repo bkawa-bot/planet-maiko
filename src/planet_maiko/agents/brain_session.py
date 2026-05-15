@@ -32,21 +32,16 @@ from planet_maiko.models.task import Task
 
 logger = logging.getLogger(__name__)
 
-# Legacy global, kept so any straggling reference doesn't NameError.
-# New code uses _runtimes (the per-name registry) below.
-_runtime = None
-
-
 # Per-name runtime cache so we instantiate each class at most once
-# across the app's lifetime. _runtime (legacy) tracks the default
-# runtime for backward compat; _runtimes is the new per-name registry
-# that supports task-aware lookups.
+# across the app's lifetime. _runtime tracks the default runtime;
+# _runtimes is the per-name registry that supports task-aware lookups.
+_runtime = None
 _runtimes = {}
 
 
 def _instantiate_runtime(name):
     """Build a fresh runtime instance by name. Handles startup hooks
-    (tmux orphan cleanup) the same way the old _get_runtime did.
+    (tmux orphan cleanup).
     """
     from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
     if name == "claude-code":
@@ -107,16 +102,16 @@ def _get_runtime(task_type=None):
     (falling through to ``DEFAULT_RUNTIME`` and prefix-match in
     routing.py). If a task-specific runtime is configured AND is
     available on this machine, returns it. Otherwise falls back to
-    the default runtime — so a misconfigured Ollama (server down,
-    not installed) silently routes back to Claude rather than
-    failing the call.
+    the default runtime, so a misconfigured Ollama (server down, not
+    installed) silently routes back to Claude rather than failing
+    the call.
 
     Supported runtime names:
-      "claude-code"       — headless `claude --print` (Agent SDK pool)
-      "claude-code-tmux"  — interactive claude in tmux (subscription pool, Mac)
-      "ollama"            — local OpenAI-compatible server (no
-                            Anthropic spend; sync-only — can't
-                            drive coding agents)
+      "claude-code"       headless `claude --print` (Agent SDK pool)
+      "claude-code-tmux"  interactive claude in tmux (subscription pool, Mac)
+      "ollama"            local OpenAI-compatible server (no
+                          Anthropic spend; sync-only, can't drive
+                          coding agents)
     """
     default_name = _default_runtime_name()
 
@@ -140,8 +135,8 @@ def _get_runtime(task_type=None):
     if runtime is None:
         # Last-ditch: build a plain ClaudeCodeRuntime so the caller
         # always gets back *something* with the right interface,
-        # even if its is_available is False. Mirrors the legacy
-        # behavior where _get_runtime never returned None.
+        # even if its is_available is False. _get_runtime never
+        # returns None.
         from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
         runtime = ClaudeCodeRuntime()
         _runtimes[default_name] = runtime
@@ -309,13 +304,13 @@ ONE_SHOT_ROLE_FOR_TYPE = {
     "repo_analysis": ("investigation", "repo-analysis"),
     "review": ("review", "pr-review"),
     "pr_review": ("review", "pr-review"),
-    # Cartograph tasks were previously kicked off only by the manual
-    # /insights/cartograph endpoint. Registering the type here lets the
-    # cycle's execute phase pick up cartograph tasks that enter via the
-    # proposal path (role_autonomy → agent_proposal → approve_proposal),
-    # using the same prepare + headless kickoff machinery as the manual
-    # route. The skill name "cartograph" is unused by the execute phase
-    # (which passes role, not skill), but kept here for symmetry.
+    # Registering cartograph here lets the cycle's execute phase pick
+    # up cartograph tasks that enter via the proposal path
+    # (role_autonomy → agent_proposal → approve_proposal), using the
+    # same prepare + headless kickoff machinery as the manual
+    # /insights/cartograph endpoint. The skill name "cartograph" is
+    # unused by the execute phase (which passes role, not skill), but
+    # kept here for symmetry.
     "cartograph": ("cartographer", "cartograph"),
 }
 

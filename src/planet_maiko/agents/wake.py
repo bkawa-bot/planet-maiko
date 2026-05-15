@@ -279,13 +279,13 @@ def prune_session(task_id):
 
 
 def validate_registry():
-    """Walk the registry and drop entries whose task no longer exists
-    or whose worktree is gone. Run once at app startup — otherwise
-    the file grows forever.
+    """Walk the registry and drop entries whose task is gone or whose
+    worktree is gone. Run once at app startup, otherwise the file
+    grows forever.
 
     Must run inside an app_context (caller's responsibility). Rolls
     back the implicit read tx on exit so the session is clean for the
-    next writer (reset_stale_working) — otherwise SQLAlchemy keeps the
+    next writer (reset_stale_working). Otherwise SQLAlchemy keeps the
     read tx open, each db.session.get extends it, and reset_stale_working
     piggybacks on a long-lived tx that triggers the slow-tx watcher
     (and, under concurrent startups, a real lock error).
@@ -300,11 +300,11 @@ def validate_registry():
         for task_id, info in list(sessions.items()):
             wp = info.get("working_path") if isinstance(info, dict) else None
             worktree_ok = bool(wp) and os.path.isdir(wp)
-            # Session keys are either a Task id (legacy) or an AgentJob
-            # id (post-unification — every review/investigation/coding
-            # agent kicked off via execute_jobs lands here). Probe both
-            # tables; an entry survives if EITHER row exists and isn't
-            # in a terminal state.
+            # Session keys are either a Task id or an AgentJob id
+            # (every review/investigation/coding agent kicked off via
+            # execute_jobs lands here). Probe both tables; an entry
+            # survives if EITHER row exists and isn't in a terminal
+            # state.
             task = db.session.get(Task, task_id)
             job = db.session.get(AgentJob, task_id) if task is None else None
             task_alive = task is not None and task.status not in ("done", "cancelled")
@@ -322,7 +322,7 @@ def validate_registry():
                 dropped.append(task_id)
         if dropped:
             _save_sessions()
-            logger.info(f"[wake] registry cleanup — dropped {len(dropped)} stale entries")
+            logger.info(f"[wake] registry cleanup: dropped {len(dropped)} stale entries")
     finally:
         # Read-only from the DB's perspective (writes only touch the
         # JSON file). Rollback closes the implicit tx that db.session.get
@@ -332,14 +332,14 @@ def validate_registry():
 
 def reset_stale_working():
     """Flip any Agent.state=='working' rows back to 'idle' on startup.
-    Previous run crashed / was killed; the in-memory lock is gone so
+    A prior run crashed or was killed; the in-memory lock is gone so
     the working flag is meaningless until set_agent_state writes again.
 
-    Bulk UPDATE rather than load-mutate-commit — holds the write lock
+    Bulk UPDATE rather than load-mutate-commit: holds the write lock
     for a single SQL statement instead of one per matching row. Matters
-    on crowded startups where another process is still committing the
-    migration tx; the previous load+iterate approach could block long
-    enough to hit SQLite's busy_timeout.
+    on crowded startups where another process is still committing a
+    migration tx and a load+iterate could block long enough to hit
+    SQLite's busy_timeout.
 
     Must run inside an app_context.
     """

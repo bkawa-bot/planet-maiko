@@ -28,9 +28,9 @@ class Signal(db.Model):
     language = db.Column(db.String(50), nullable=True)
     file_path = db.Column(db.String(512), nullable=True)
 
-    # First-seen code context. Kept for backward compat with readers
-    # that expect a single "primary" example on the row. The complete
-    # list of occurrences (including this one) lives in `examples`.
+    # First-seen code context. A single "primary" example on the row;
+    # the complete list of occurrences (including this one) lives in
+    # `examples`.
     code_context = db.Column(db.Text, nullable=True)
 
     # Every place this signal's text showed up, with its own diff hunk.

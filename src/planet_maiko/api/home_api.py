@@ -133,15 +133,18 @@ def get_review_queue():
     # 1. Tasks in review — agent finished work, user needs to look at the diff.
     for t in Task.query.filter(Task.status == "review").all():
         extra = t.extra or {}
+        job_id = extra.get("agent_job_id")
+        if not job_id:
+            continue
         items.append({
             "kind": "review",
             "task_id": t.id,
-            "job_id": None,
+            "job_id": job_id,
             "title": t.title,
             "repo": extra.get("repo") or extra.get("repository"),
             "agent_id": t.assigned_agent_id,
             "agent_name": _agent_name(t.assigned_agent_id),
-            "route": f"/tasks/{t.id}/review",
+            "route": f"/jobs/{job_id}?view=diff",
             "age_seconds": _age(t.updated_at),
             "timestamp": iso_utc(t.updated_at),
         })
@@ -168,34 +171,27 @@ def get_review_queue():
         if task is None or task.status in ("done", "cancelled"):
             continue
         task_extra = task.extra or {}
+        job_id = task_extra.get("agent_job_id")
+        if not job_id:
+            continue
         items.append({
             "kind": "plan",
             "task_id": task.id,
-            "job_id": None,
+            "job_id": job_id,
             "title": task.title,
             "repo": task_extra.get("repo") or task_extra.get("repository"),
             "agent_id": task.assigned_agent_id,
             "agent_name": _agent_name(task.assigned_agent_id),
-            "route": f"/tasks/{task.id}/plan",
+            "route": f"/jobs/{job_id}?view=plan",
             "age_seconds": _age(m.created_at),
             "timestamp": iso_utc(m.created_at),
             "memo_id": m.id,
         })
 
-    # 3. (removed) Standalone AgentJobs with an artifact used to be
-    #    synthesized here as job_artifact items so finished investigation
-    #    and cartograph runs would show up in the pane. The agent_ready
-    #    memo path (agent_outbox.handle_job_ready_for_review) now creates
-    #    a canonical memo for every report-producing job, so the synthetic
-    #    path was just duplicating it. Removed entirely so each completed
-    #    investigation surfaces once, not twice. Artifacts remain
-    #    accessible at /jobs/<id>?view=report from the memo CTA.
-
-    # 4. job_approval Memos — "ask me first" automations that used to
-    #    create a pending_approval AgentJob now create a Memo carrying
-    #    the job spec in extra.job_spec. Approve mints the real
-    #    AgentJob; dismiss just marks the memo done. No phantom jobs
-    #    in the DB until the user actually commits.
+    # 3. job_approval Memos. "Ask me first" automations create a Memo
+    #    carrying the job spec in extra.job_spec. Approve mints the
+    #    real AgentJob; dismiss just marks the memo done. No phantom
+    #    jobs in the DB until the user actually commits.
     job_approval_memos = (
         Memo.query
         .filter(Memo.kind == "job_approval")
@@ -222,9 +218,8 @@ def get_review_queue():
             "pupdate_snapshot": extra.get("pupdate_snapshot"),
         })
 
-    # Legacy: AgentJobs already in the DB with status=pending_approval
-    # from pre-memo-migration. Shown until the user approves/dismisses
-    # them through their existing approve endpoints.
+    # AgentJobs already in the DB with status=pending_approval. Shown
+    # until the user approves/dismisses them.
     pending_jobs = (
         AgentJob.query
         .filter(AgentJob.status == "pending_approval")
@@ -248,12 +243,12 @@ def get_review_queue():
             "description": j.description,
         })
 
-    # 5. Agent proposals — PROPOSAL:/TASK: blocks parsed out of
-    #    investigation / review agent output. Now kind=agent_proposal
-    #    Memos instead of pupdates. ProposalCard gets the full memo
-    #    dict inline — its shape (title, body, extra.draft,
-    #    extra.from_agent_id) mirrors the old pupdate dict close enough
-    #    that the component handles both with small detection logic.
+    # 4. Agent proposals. PROPOSAL:/TASK: blocks parsed out of
+    #    investigation / review agent output, surfaced as
+    #    kind=agent_proposal Memos. ProposalCard gets the full memo
+    #    dict inline; its shape (title, body, extra.draft,
+    #    extra.from_agent_id) is shared with the pupdate fallback below
+    #    so one component handles both with small detection logic.
     proposal_memos = (
         Memo.query
         .filter(Memo.kind == "agent_proposal")
@@ -278,9 +273,8 @@ def get_review_queue():
             "memo_id": m.id,
         })
 
-    # Legacy agent_proposal pupdates still in the DB (pre-Memo
-    # migration). Shown until they age out / get dismissed. Newer
-    # proposals come from memos above.
+    # agent_proposal pupdates still in the DB. Shown until they age
+    # out or get dismissed. New proposals come from memos above.
     proposals = (
         Pupdate.query
         .filter(Pupdate.type == "agent_proposal")
@@ -306,10 +300,8 @@ def get_review_queue():
             "proposal": p.to_dict(),
         })
 
-    # 6. Notifications — kind=notification Memos from the notify_me
+    # 5. Notifications. kind=notification Memos from the notify_me
     #    automation action. Info-category, dismissable, optional url.
-    #    Used to live in their own NotificationsPane; folded into the
-    #    unified Memos feed so there's one place to scan.
     notification_memos = (
         Memo.query
         .filter(Memo.kind == "notification")
@@ -340,16 +332,15 @@ def get_review_queue():
             "pupdate_snapshot": extra.get("pupdate_snapshot"),
         })
 
-    # 7. Agent-ready Memos. These fire when a one-shot agent replies
+    # 6. Agent-ready Memos. These fire when a one-shot agent replies
     #    ready_for_review. They carry the task link so the CTA routes
-    #    straight to the diff. Dedup against the #1 review-task entries
-    #    — one memo per task is enough, and the task row is the
+    #    straight to the diff. Dedup against the review-task entries
+    #    above so each task surfaces once, with the task row as the
     #    source-of-truth record.
     #
-    #    agent_stuck used to surface here too, but the persistent pack
-    #    dock now covers "agent is waiting on you" with an unread badge
-    #    + click-through to chat. Stripping it from the memos pane
-    #    avoids the two-surfaces-showing-the-same-thing problem.
+    #    agent_stuck is handled by the persistent pack dock (unread
+    #    badge + click-through to chat), not this pane, to avoid two
+    #    surfaces showing the same thing.
     agent_signal_memos = (
         Memo.query
         .filter(Memo.kind == "agent_ready")
@@ -365,11 +356,9 @@ def get_review_queue():
             # represents this user-owed work; a second row would just
             # clutter the pane.
             continue
-        # Newly-created memos carry the canonical /jobs/<id>?view=chat
-        # URL set at emit time. Legacy memos may still hold dead-route
-        # values (the bare /tasks/<id> path was a 404 for agent_stuck);
-        # for those we fall back to /agents so the user always lands
-        # somewhere. Otherwise honor the memo's own url.
+        # Memos carry the canonical /jobs/<id>?view=chat URL set at
+        # emit time. For agent_stuck memos with no url we fall back to
+        # /agents so the user always lands somewhere.
         route = m.url or (m.extra or {}).get("review_url")
         if m.kind == "agent_stuck" and not route:
             route = "/agents"
@@ -390,14 +379,10 @@ def get_review_queue():
             "memo_id": m.id,
         })
 
-    # 8. skill_result Memos — output from skills the user (or
-    #    automations) ran. Used to live in the dedicated Recent
-    #    Skills sidebar widget, but skill_result and job_artifact
-    #    are conceptually the same thing ("agent did a thing, here's
-    #    the output"). Folding into the unified Memos pane so there's
-    #    one surface for ambient agent output. Skips kinds that
-    #    self-render elsewhere (home-overview, scene, scene-mood —
-    #    they have their own surfaces and would just be noise here).
+    # 7. skill_result Memos. Output from skills the user (or
+    #    automations) ran. Skips kinds that self-render elsewhere
+    #    (home-overview, scene, scene-mood) since they have their own
+    #    surfaces and would just be noise here.
     skill_result_memos = (
         Memo.query
         .filter(Memo.kind == "skill_result")

@@ -53,8 +53,8 @@ def dataset_stats():
 def train_lora_endpoint():
     """Kick off a LoRA training job asynchronously.
 
-    LoRAs are scoped per-repo (or "global" when no repo is given) —
-    there is no longer a 1:1 between agents and adapters. Body fields:
+    LoRAs are scoped per-repo (or "global" when no repo is given);
+    there is no 1:1 between agents and adapters. Body fields:
       - repo: optional "org/name". Omitted → adapter name prefixed
         "lora-global-…" and treated as the fallback for any repo
         without a more specific adapter.
@@ -303,11 +303,8 @@ def rule_coverage():
 #
 # Generating training data calls Opus once per rule (plus synthesis for
 # violations/passes). 30+ rules can easily blow past the HTTP timeout
-# window, and the old synchronous handler left the browser staring at
-# a spinner while the work continued off in the void. Now we kick the
-# work to a background thread and expose
-# /training/generate-from-rules/progress so the UI can poll + show
-# live status.
+# window, so we kick the work to a background thread and expose
+# /training/generate-from-rules/progress for the UI to poll.
 
 import threading as _threading
 from datetime import datetime as _datetime, timezone as _tz

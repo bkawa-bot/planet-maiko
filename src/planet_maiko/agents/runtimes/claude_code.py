@@ -8,8 +8,7 @@ For the brain session, we use --print mode for quick prompt/response.
 For coding agents, we use full interactive sessions in git worktrees.
 
 Implements the AgentRuntime ABC in `base.py`. The async spawn path
-still lives in agents/runtime/kickoff.py for now; see AGENT_RUNTIME.md
-for the migration plan.
+lives in agents/runtime/kickoff.py; see AGENT_RUNTIME.md.
 """
 
 import json
@@ -315,11 +314,9 @@ class ClaudeCodeRuntime(AgentRuntime):
         """Run a `claude --print` agent process synchronously and wait
         for it to exit. See AgentRuntime.spawn for the full contract.
 
-        The implementation is what used to live inline in
-        agents/runtime/kickoff.py — pulled out here so any caller (the
-        existing kickoff daemon thread, a future runtime-picker UI, a
-        test harness) can launch a claude agent without rebuilding the
-        flag set.
+        Any caller (the existing kickoff daemon thread, a future
+        runtime-picker UI, a test harness) can launch a claude agent
+        through this without rebuilding the flag set.
         """
         if not prompt_has_text(initial_prompt):
             return _spawn_error("Empty initial prompt — nothing to send")
@@ -334,11 +331,11 @@ class ClaudeCodeRuntime(AgentRuntime):
             "--dangerously-skip-permissions",
         ]
 
-        # Headless `claude --print` stopped auto-discovering .mcp.json
-        # reliably in recent CLI versions — without an explicit
-        # --mcp-config the worktree's project servers (Linear / GitHub /
-        # whatever the user inherited) silently don't load. Maiko's own
-        # comms no longer depend on MCP (CLI + hooks cover everything),
+        # Headless `claude --print` doesn't auto-discover .mcp.json
+        # reliably in recent CLI versions. Without an explicit
+        # --mcp-config the worktree's project servers (Linear, GitHub,
+        # whatever the user inherited) silently don't load. Maiko's
+        # own comms don't depend on MCP (CLI + hooks cover everything),
         # but inherited project MCPs do.
         if mcp_config_path and _os.path.exists(mcp_config_path):
             cmd.extend(["--mcp-config", mcp_config_path])

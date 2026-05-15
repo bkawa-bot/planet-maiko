@@ -25,14 +25,11 @@ class DiffComment(db.Model):
     __tablename__ = "diff_comments"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    # An AgentJob.id — the diff this comment is pinned to belongs to a
-    # specific agent run. Originally stored Task.id (with a FK), then
-    # relaxed to a plain VARCHAR holding either id during the wire-
-    # rename transition; now canonicalized to the Job side because:
-    # (a) the agent that authored / receives the comment is keyed by
-    # job, (b) one task can spawn multiple jobs (coding + review) and
-    # storing on the Task ambiguates which diff the comment lives on.
-    # Existing DBs are migrated by app._rename_diff_comment_task_to_job.
+    # An AgentJob.id. The diff this comment is pinned to belongs to a
+    # specific agent run, keyed by job because (a) the agent that
+    # authored / receives the comment is keyed by job, (b) one task can
+    # spawn multiple jobs (coding + review) and storing on the Task
+    # ambiguates which diff the comment lives on.
     job_id = db.Column(db.String(128), nullable=False, index=True)
 
     file_path = db.Column(db.String(512), nullable=False)

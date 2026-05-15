@@ -1,39 +1,35 @@
-"""Agent runtime base class — the contract every backend implements.
+"""Agent runtime base class. The contract every backend implements.
 
-Maiko was originally scaffolded as runtime-pluggable (the
-`runtimes/` package, the `_get_runtime()` indirection in
-brain_session.py), but only `ClaudeCodeRuntime` ever shipped. With
-Anthropic splitting agentic from interactive usage starting June 15,
-2026, the project needs to be ready to swap or supplement claude-code
-with another backend (Aider, Codex CLI, Goose, a local-Ollama agent
-loop, or interactive Claude in a PTY to dodge the credit pool).
+Maiko is scaffolded as runtime-pluggable (the `runtimes/` package,
+the `_get_runtime()` indirection in brain_session.py) so it can swap
+or supplement the default backend with another (Aider, Codex CLI,
+Goose, a local-Ollama agent loop, or interactive Claude in a PTY).
 
 This module defines `AgentRuntime`, the abstract class every
 implementation subclasses. The contract has two sides:
 
-  1. **Synchronous one-shot** (send / send_json) — used by skills,
-     chat, brain triage, and short model judgments. Block the caller
+  1. **Synchronous one-shot** (send / send_json). Used by skills,
+     chat, brain triage, and short model judgments. Blocks the caller
      until the prompt returns a single response.
 
-  2. **Asynchronous spawn** (spawn) — used to launch a long-running
+  2. **Asynchronous spawn** (spawn). Launches a long-running
      coding / review / investigation / cartographer agent in a git
      worktree. Returns immediately; the agent runs in the background
-     and talks back through MCP (today) or whatever channel the
-     runtime exposes. Today this path lives in
-     agents/runtime/kickoff.py with claude wired in directly; the
-     intention is to move that logic into runtime.spawn() so the
-     kickoff phase is runtime-agnostic too. See AGENT_RUNTIME.md for
-     migration notes.
+     and talks back through MCP or whatever channel the runtime
+     exposes. Today this path lives in agents/runtime/kickoff.py with
+     claude wired in directly; the intention is to move that logic
+     into runtime.spawn() so the kickoff phase is runtime-agnostic
+     too. See AGENT_RUNTIME.md.
 
 A new runtime only HAS to implement the synchronous methods. The
-async spawn() is opt-in — sync-only backends raise NotImplementedError
+async spawn() is opt-in; sync-only backends raise NotImplementedError
 and Maiko falls back to ClaudeCodeRuntime for agent kickoff while the
 new backend handles skill / chat / triage runs.
 
 Beyond this class, AGENT_RUNTIME.md captures the *implicit* coupling
 that lives outside the runtime layer (MCP, the Stop hook, the
-CLAUDE.md prompt format, etc.) — those are the parts a real
-non-claude backend would have to substitute or stub.
+CLAUDE.md prompt format, etc.). Those are the parts a non-claude
+backend would have to substitute or stub.
 """
 
 from abc import ABC, abstractmethod
@@ -123,17 +119,16 @@ class AgentRuntime(ABC):
         `error` populated when the response wasn't valid JSON.
         """
 
-    # ----- Asynchronous agent spawn — optional -----
+    # ----- Asynchronous agent spawn (optional) -----
     # Used by the brain cycle's execute_jobs phase to launch a
     # long-running agent in an isolated working directory. The agent
     # is expected to call back via MCP / outbox / log file (whatever
-    # this runtime's protocol is — see AGENT_RUNTIME.md).
+    # this runtime's protocol is, see AGENT_RUNTIME.md).
     #
-    # Today the only implementation that supports this is
-    # ClaudeCodeRuntime, and the actual spawning still lives in
-    # agents/runtime/kickoff.py rather than the class. The contract
-    # is documented here so a new runtime knows what to fulfill when
-    # we finish migrating kickoff into runtime.spawn().
+    # The only implementation that supports this is ClaudeCodeRuntime,
+    # and the actual spawning lives in agents/runtime/kickoff.py
+    # rather than the class. The contract is documented here so a new
+    # runtime knows what to fulfill.
 
     def spawn(
         self,

@@ -19,10 +19,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const BrainView = lazy(() => import("./pages/BrainView"));
 const Automations = lazy(() => import("./pages/Automations"));
 const Themes = lazy(() => import("./pages/Themes"));
-// Unified agent-job surface — replaces JobReport / ReviewDiff / ReviewPlan
-// as separate pages. The old paths redirect into this with ?view=...
 const AgentJobPage = lazy(() => import("./pages/AgentJobPage"));
-const TaskRouteRedirect = lazy(() => import("./pages/TaskRouteRedirect"));
 import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
 
 
@@ -56,15 +53,8 @@ function AppRoutes() {
         <Route path="/training" element={<Navigate to="/knowledge" replace />} />
         <Route path="/themes" element={<Suspense fallback={<RouteFallback />}><Themes /></Suspense>} />
         <Route path="/settings" element={<Suspense fallback={<RouteFallback />}><Settings /></Suspense>} />
-        {/* Old per-task routes — kept so existing bookmarks /
-            cached memos resolve. TaskRouteRedirect resolves the
-            task's linked AgentJob and forwards to /jobs/<id>?view=...
-            so the unified page is the canonical destination. */}
-        <Route path="/tasks/:taskId/review" element={<Suspense fallback={<RouteFallback />}><TaskRouteRedirect view="diff" /></Suspense>} />
-        <Route path="/tasks/:taskId/plan" element={<Suspense fallback={<RouteFallback />}><TaskRouteRedirect view="plan" /></Suspense>} />
-        <Route path="/tasks/:taskId/report" element={<Suspense fallback={<RouteFallback />}><TaskRouteRedirect view="report" /></Suspense>} />
         <Route path="/jobs/:jobId" element={<Suspense fallback={<RouteFallback />}><AgentJobPage /></Suspense>} />
-        {/* Legacy routes */}
+        {/* Renamed pages — keep bookmarks working. */}
         <Route path="/skills" element={<Navigate to="/automations" replace />} />
         <Route path="/brain" element={<Navigate to="/knowledge" replace />} />
         <Route path="/learn" element={<Navigate to="/knowledge" replace />} />

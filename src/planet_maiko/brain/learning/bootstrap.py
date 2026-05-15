@@ -72,7 +72,7 @@ def fetch_comments_for_pr(repo, pr_number, timeout=60):
         cid = c.get("id")
         out.append({
             # Stringified so the DB column (VARCHAR) matches whatever
-            # GitHub emits (integer today, historically).
+            # GitHub emits (typically an integer).
             "id": str(cid) if cid is not None else None,
             "body": body,
             "author": (c.get("user") or {}).get("login", ""),

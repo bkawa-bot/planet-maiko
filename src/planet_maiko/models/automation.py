@@ -79,8 +79,7 @@ class Automation(db.Model):
     # - "pupdate": iterate over each unprocessed pupdate; evaluate
     #   conditions against that specific pupdate. Actions operate on
     #   the matched pupdate (dismiss_pupdate / create_task_from_pupdate /
-    #   complete_linked_task). First-match semantics — order by id.
-    #   Used by the rule-style matchers that used to live in rules.py.
+    #   complete_linked_task). First-match semantics, order by id.
     execution_scope = db.Column(db.String(20), nullable=False, default="cycle", index=True)
 
     # After a fire, wait this long before firing again even if the

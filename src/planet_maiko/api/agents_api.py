@@ -18,44 +18,6 @@ logger = logging.getLogger(__name__)
 agents_bp = Blueprint("agents", __name__)
 
 
-def _resolve_canonical_inbox_id(inbox_id):
-    """Inbox routing post-AgentJob unification.
-
-    Every agent kicked off via execute_jobs gets MAIKO_TASK_ID set to
-    its AgentJob.id (see brain/phases/execute_jobs.py: prepare(task_id=job.id)).
-    But Task-keyed UIs (ReviewPlan, anything navigating from /tasks/<id>)
-    open the chat with Task.id. Without translation, the user posts to
-    the Task.id inbox and the agent posts to the AgentJob.id inbox —
-    two parallel keys, never resolved.
-
-    Resolve to whichever id the agent's MCP env actually points at:
-    - If the id IS an AgentJob.id, it's already canonical.
-    - If the id is a Task.id with a non-cancelled AgentJob attached,
-      use the most recent job's id (where the agent really posts).
-    - Otherwise return the id as-is (legacy task-only flows, brand-new
-      tasks with no agent yet, etc).
-    """
-    from planet_maiko.models.task import Task
-    from planet_maiko.models.agent_job import AgentJob
-
-    if db.session.get(AgentJob, inbox_id) is not None:
-        return inbox_id
-
-    task = db.session.get(Task, inbox_id)
-    if task is not None:
-        job = (
-            AgentJob.query
-            .filter_by(source_task_id=inbox_id)
-            .filter(AgentJob.status != "cancelled")
-            .order_by(AgentJob.created_at.desc())
-            .first()
-        )
-        if job is not None:
-            return job.id
-
-    return inbox_id
-
-
 @agents_bp.route("/brain/session", methods=["GET"])
 def get_brain_session():
     """Get brain session status (runtime info)."""
@@ -296,65 +258,28 @@ def resume_session():
     import shutil
 
     data = request.get_json()
-    task_id = data.get("task_id", "")
-    session_info = _get_sessions().get(task_id)
+    job_id = data.get("job_id") or data.get("task_id", "")
+    if not job_id:
+        return jsonify({"error": "job_id required"}), 400
 
-    # Resolution order:
-    #   1. In-memory _get_sessions() cache. Lost across server restart.
-    #   2. AgentJob.session_id — canonical post-unification storage.
-    #      The id the frontend sends is the AgentJob id when the row
-    #      came from execute_jobs.py (review / investigation / coding
-    #      via the assign endpoint), so this catches the common case.
-    #   3. Linked Task.extra fallback (covers older one-shot rows
-    #      written before unification mirrored worktree onto the job).
-    #   4. Bare Task.extra by task_id (legacy Task-keyed kickoffs).
+    session_info = _get_sessions().get(job_id)
     if not session_info:
         from planet_maiko.models.agent_job import AgentJob
-        job = db.session.get(AgentJob, task_id) if task_id else None
-        if job and job.session_id:
-            session_info = {
-                "session_id": job.session_id,
-                "working_path": job.worktree_path or "",
-            }
-
-    if not session_info:
-        from planet_maiko.models.task import Task
-        from planet_maiko.models.agent_job import AgentJob
-        # Some flows pass the linked Task id even when the kickoff was
-        # AgentJob-driven; resolve to the job via source_task_id.
-        if task_id:
-            linked_job = (
-                AgentJob.query
-                .filter_by(source_task_id=task_id)
-                .filter(AgentJob.session_id.isnot(None))
-                .order_by(AgentJob.started_at.desc())
-                .first()
-            )
-            if linked_job:
-                session_info = {
-                    "session_id": linked_job.session_id,
-                    "working_path": linked_job.worktree_path or "",
-                }
-
-    if not session_info:
-        from planet_maiko.models.task import Task
-        task = db.session.get(Task, task_id) if task_id else None
-        if task and (task.extra or {}).get("session_id"):
-            extra = task.extra
-            session_info = {
-                "session_id": extra["session_id"],
-                "working_path": extra.get("working_path", ""),
-            }
-
-    if not session_info:
-        return jsonify({"error": "No session found. Launch the agent first."}), 404
+        job = db.session.get(AgentJob, job_id)
+        if not job:
+            return jsonify({"error": "job not found"}), 404
+        if not job.session_id:
+            return jsonify({"error": "No session found. Launch the agent first."}), 404
+        session_info = {
+            "session_id": job.session_id,
+            "working_path": job.worktree_path or "",
+        }
 
     session_id = session_info["session_id"]
     working_path = session_info.get("working_path", "")
 
-    # 1. Try tmux attach (best experience — full interactive view)
     tmux_path = shutil.which("tmux")
-    session_name = f"maiko-{task_id}"
+    session_name = f"maiko-{job_id}"
     has_tmux = False
     if tmux_path:
         result = subprocess.run(
@@ -369,7 +294,7 @@ def resume_session():
     # the user can watch what the agent is doing live, without
     # corrupting the session.
     from planet_maiko.agents.wake import is_working
-    agent_busy = is_working(task_id)
+    agent_busy = is_working(job_id)
 
     mode = None
     if has_tmux:
@@ -508,13 +433,12 @@ def run_skill_endpoint(skill_name):
         its memo / follow-up.
 
     Output lands as a skill_result Memo attributed to the lazy-
-    spawned specialty agent — visible on Home's Recent Skills and
+    spawned specialty agent. Visible on Home's Recent Skills and
     attributed to the agent on the Pack page.
 
-    Falls through to the legacy direct-run path for anything not
-    registered as a CustomSkill (internal engine calls like
-    home-overview / scene that still route through this endpoint
-    by name).
+    Falls through to a direct-run path for anything not registered as
+    a CustomSkill (internal engine calls like home-overview / scene
+    that route through this endpoint by name).
     """
     from planet_maiko.models.custom_skill import CustomSkill
     from planet_maiko.models.task import Task
@@ -526,9 +450,9 @@ def run_skill_endpoint(skill_name):
     specialty = db.session.get(CustomSkill, skill_name)
     data = request.get_json() or {}
 
-    # Legacy direct-run path for unregistered skills (home-overview
-    # and other engine-internal prompts that still get called by
-    # name). Keeps tests + internal callers working.
+    # Direct-run path for unregistered skills (home-overview and
+    # other engine-internal prompts called by name). Keeps tests +
+    # internal callers working.
     if specialty is None:
         result = run_skill(
             skill_name,
@@ -714,10 +638,6 @@ def cleanup_agent():
 def get_agent_inbox(job_id):
     """Get messages for an agent (channel polls this every ~15s).
 
-    `job_id` accepts either an AgentJob.id (post-rename canonical) or a
-    Task.id (transitional, for in-flight agent sessions whose hooks
-    haven't been upgraded). _resolve_canonical_inbox_id handles both.
-
     Query params:
         unread_only: "true" to only return unread messages (default: true)
         mark_read: "true" to auto-mark returned messages as read (default: true)
@@ -725,8 +645,7 @@ def get_agent_inbox(job_id):
     unread_only = request.args.get("unread_only", "true").lower() == "true"
     mark_read = request.args.get("mark_read", "true").lower() == "true"
 
-    canonical_id = _resolve_canonical_inbox_id(job_id)
-    query = AgentMessage.query.filter_by(task_id=canonical_id, direction="to_agent")
+    query = AgentMessage.query.filter_by(task_id=job_id, direction="to_agent")
     if unread_only:
         # Quick count check to avoid loading objects when nothing is unread
         count = query.filter_by(read=False).count()
@@ -748,18 +667,14 @@ def get_agent_inbox(job_id):
 def send_to_agent(job_id):
     """Send a message to an agent (from dashboard, brain, or user).
 
-    `job_id` accepts AgentJob.id (canonical) or Task.id (legacy);
-    _resolve_canonical_inbox_id picks the right side.
-
     When sender is "user", also auto-wake the agent so the message
-    actually gets read — otherwise it sits in the inbox until the
-    next external trigger. Other senders (system, brain) are wake-
-    free because they're usually paired with their own triggers.
+    actually gets read, otherwise it sits in the inbox until the next
+    external trigger. Other senders (system, brain) are wake-free
+    because they're usually paired with their own triggers.
     """
     data = request.get_json()
-    canonical_id = _resolve_canonical_inbox_id(job_id)
     msg = AgentMessage(
-        task_id=canonical_id,
+        task_id=job_id,
         direction="to_agent",
         sender=data.get("sender", "user"),
         content=data["content"],
@@ -770,27 +685,17 @@ def send_to_agent(job_id):
 
     woke_mode = "none"
     if msg.sender == "user":
-        # Always try wake_agent — it has its own resolution chain:
-        # session registry first, then AgentJob.session_id /
-        # worktree_path fallback. Don't gate on a local lookup of
-        # task.extra.working_path; that path is empty for plenty of
-        # legitimate cases (worktree was cleaned but session is still
-        # resumable, task.extra never got populated, the inbox id is
-        # an AgentJob id rather than a Task id). Letting wake_agent
-        # handle it means "Message saved to inbox" only fires when
-        # there really is no resumable session — not whenever the
-        # narrow lookup happens to come up empty.
         from planet_maiko.agents.wake import wake_agent
         chat_prompt = (
             "The user sent you a message. Call check_inbox to read it, "
             "then reply with your answer using recipient='user' so it "
-            "surfaces in their inbox as a memo — they often ask and walk "
+            "surfaces in their inbox as a memo. They often ask and walk "
             "away, so an in-thread-only reply gets buried. Use the default "
             "message_type (omit it, or 'message'); status is chatter and "
             "won't generate a memo. After replying, continue working."
         )
         _ok, woke_mode = wake_agent(
-            canonical_id, chat_prompt, source="chat",
+            job_id, chat_prompt, source="chat",
         )
 
     out = msg.to_dict()
@@ -798,45 +703,35 @@ def send_to_agent(job_id):
     return jsonify(out), 201
 
 
-@agents_bp.route("/agents/<task_id>/rerun", methods=["POST"])
-def rerun_agent(task_id):
-    """Re-fire the autonomous run for a task whose original kickoff
+@agents_bp.route("/agents/<job_id>/rerun", methods=["POST"])
+def rerun_agent(job_id):
+    """Re-fire the autonomous run for a job whose original kickoff
     silently died (claude crashed, MCP failed to load, network blip)
     and the agent never sent its first pupdate.
 
-    Re-queues the linked AgentJob — same row, status flipped back to
-    "queued" so the next brain cycle picks it up via the unified
-    execute path. Worktree + session_id are preserved on the job so
-    "View Session" stays valid.
+    Re-queues the AgentJob in place. Worktree + session_id are preserved
+    so "View Session" stays valid.
     """
     from planet_maiko.models.task import Task
     from planet_maiko.models.agent_job import AgentJob
 
-    task = db.session.get(Task, task_id)
-    if not task:
-        return jsonify({"error": "task not found"}), 404
-    if not task.assigned_agent_id:
-        return jsonify({"error": "task has no assigned agent"}), 400
-
-    job = AgentJob.query.filter_by(source_task_id=task.id).first()
+    job = db.session.get(AgentJob, job_id)
     if not job:
-        return jsonify({"error": "no AgentJob linked to this task — re-assign the agent to spawn one"}), 400
+        return jsonify({"error": "job not found"}), 404
 
-    # Re-queue: clear terminal state so execute_jobs picks it up next
-    # cycle. Worktree path stays so the existing prep doesn't redo
-    # itself; kickoff loop will re-fire against it.
     job.status = "queued"
     job.error = None
     job.started_at = None
     job.finished_at = None
-    if task.status == "in_progress":
+    task = db.session.get(Task, job.source_task_id) if job.source_task_id else None
+    if task and task.status == "in_progress":
         task.status = "new"
     db.session.commit()
 
     return jsonify({
         "status": "rerunning",
-        "task_id": task.id,
         "job_id": job.id,
+        "task_id": task.id if task else None,
         "working_path": job.worktree_path,
     }), 202
 
@@ -847,11 +742,11 @@ def rerun_agent(task_id):
 def agent_sends_message(task_id):
     """Agent sends a message back (alternative to pupdate-based reporting).
 
-    `task_id` is historical — post Stage D the incoming id may be an
-    AgentJob id (for cartograph / investigation / review runs) rather
-    than a Task id. We check AgentJob first, and if it resolves, route
-    through the job-aware handler. Otherwise fall through to the legacy
-    Task path (coding tasks + anything else still Task-driven).
+    The url param is named `task_id` but the incoming id may be an
+    AgentJob id (for cartograph / investigation / review runs) or a
+    Task id (coding tasks + anything else Task-driven). We check
+    AgentJob first, and if it resolves, route through the job-aware
+    handler. Otherwise fall through to the Task path.
     """
     from planet_maiko.api.agent_outbox import (
         emit_user_facing_signal,
@@ -1048,21 +943,12 @@ def _get_repo_for_task(task_id):
     return None
 
 
-@agents_bp.route("/agents/<task_id>/messages", methods=["GET"])
-def get_all_messages(task_id):
-    """Get full conversation history for a task (both directions).
-
-    Queries both the requested id and its canonical sibling so the
-    chat thread shows everything regardless of which side wrote where
-    (user from a Task-keyed UI, agent from its AgentJob.id env). For
-    historical / pre-unification rows that landed on Task.id, this
-    keeps them visible alongside new agent-side rows on AgentJob.id.
-    """
-    canonical_id = _resolve_canonical_inbox_id(task_id)
-    ids_to_query = {task_id, canonical_id}
+@agents_bp.route("/agents/<job_id>/messages", methods=["GET"])
+def get_all_messages(job_id):
+    """Get full conversation history for an agent (both directions)."""
     messages = (
         AgentMessage.query
-        .filter(AgentMessage.task_id.in_(ids_to_query))
+        .filter_by(task_id=job_id)
         .order_by(AgentMessage.created_at.asc())
         .all()
     )
@@ -1170,8 +1056,8 @@ def get_conflicts():
 def hook_post_tool_use():
     """Handle post-tool-use hook events (git commit, git push).
 
-    Accepts both `job_id` (canonical, post-rename) and `task_id`
-    (legacy, in case an agent's hooks haven't been upgraded yet).
+    Accepts both `job_id` (canonical) and `task_id` (alternate, for
+    agent hooks that send the older field name).
     """
     from datetime import datetime, timezone
     from planet_maiko.models.pupdate import Pupdate
@@ -1213,7 +1099,7 @@ def hook_post_tool_use():
 def hook_notification():
     """Handle notification hook: create milestone pupdate.
 
-    Accepts both `job_id` (canonical) and `task_id` (legacy fallback).
+    Accepts both `job_id` (canonical) and `task_id` (alternate fallback).
     """
     from datetime import datetime, timezone
     from planet_maiko.models.pupdate import Pupdate

@@ -113,8 +113,8 @@ _RULE_SEEDS = [
 
 
 def ensure_seed_rule_automations():
-    """Seed pupdate-scope Automations for the eight canonical matchers
-    that used to live in rules.py. Idempotent on (name, execution_scope).
+    """Seed pupdate-scope Automations for the eight canonical matchers.
+    Idempotent on (name, execution_scope).
     """
     created = 0
     for seed in _RULE_SEEDS:
@@ -148,16 +148,15 @@ def ensure_seed_rule_automations():
 def ensure_seed_automations():
     """Install the canonical "keep overviews current" automation.
 
-    Historically this seeded one row per configured repo — N repos gave
-    you N near-identical rows on the Automations page. Now it seeds
-    exactly one wildcard automation: overview_stale with no scope
-    iterates every configured repo each cycle, and run_agent_job's
-    repo fallback chain picks up the matched repo from context.
+    Seeds exactly one wildcard automation: overview_stale with no
+    scope iterates every configured repo each cycle, and
+    run_agent_job's repo fallback chain picks up the matched repo
+    from context.
 
-    Idempotent — the wildcard row has a stable name so re-runs are
-    no-ops. Existing per-repo seeds from an older boot are archived
-    by migrate_per_repo_overview_watches() on startup (separate
-    function so the user can opt out by editing one of them manually).
+    Idempotent: the wildcard row has a stable name so re-runs are
+    no-ops. Stray per-repo seeds are archived by
+    migrate_per_repo_overview_watches() on startup (separate function
+    so the user can opt out by editing one of them manually).
     """
     from planet_maiko.config import load_config
 

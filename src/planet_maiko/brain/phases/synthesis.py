@@ -13,10 +13,9 @@ def _phase_synthesis():
     """Phase 3.8: Self-healing synthesis.
 
     Drains the queue of synthesized=False pr_comment signals one small
-    batch at a time. Transient LLM failures during a backfill (timeout,
-    malformed JSON) used to leave signals orphaned — stuck forever
-    because nothing else re-synthesized them. This phase retries them
-    on every cycle tick until the queue is empty.
+    batch at a time. Retries on every cycle tick until the queue is
+    empty, so transient LLM failures during a backfill (timeout,
+    malformed JSON) don't leave signals orphaned.
 
     Capped at one batch (40 signals) per tick so the cycle stays
     snappy even when there's a big backlog.

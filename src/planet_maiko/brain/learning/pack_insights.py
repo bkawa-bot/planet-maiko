@@ -43,12 +43,9 @@ def start_gathering():
     """Begin the Pack Insights gathering process.
 
     Messages every active agent's channel inbox directly asking them
-    to report both coding-rule feedback (becomes Signals -> Learnings
-    -> LoRA) and operational insights (becomes pending Insights ->
-    Team Playbook). Previously this function just dropped a pupdate
-    into the user's inbox with a "(agents watch for this)" comment,
-    but nothing was actually watching — so the ritual quietly
-    collected almost nothing. Now the agents actually get asked.
+    to report both coding-rule feedback (becomes Signals to Learnings
+    to LoRA) and operational insights (becomes pending Insights to
+    Team Playbook).
 
     Also resumes each active agent's Claude session so they pick up
     the inbox message on their next Stop-hook check, instead of
@@ -123,12 +120,8 @@ def start_gathering():
     )
 
     # Alive = running AgentJobs OR FOLLOWUP_KINDS jobs in `done` with
-    # worktree still on disk (review / investigation / cartograph parked
-    # post-ready_for_review). The old query walked Task rows for tasks
-    # that have a working_path on task.extra, which the unified-model
-    # refactor stopped populating -- worktree state lives on AgentJob
-    # now. So that query was returning ~zero agents and the campfire
-    # quietly messaged nobody.
+    # worktree still on disk (review / investigation / cartograph
+    # parked post-ready_for_review). Worktree state lives on AgentJob.
     candidates = (
         AgentJob.query
         .filter(AgentJob.status.in_(("running", "done")))
@@ -142,9 +135,9 @@ def start_gathering():
 
     messaged = 0
     for job in alive:
-        # Post-unification, the agent's channel inbox is keyed off
-        # AgentJob.id (same value as MAIKO_JOB_ID), so AgentMessage.task_id
-        # holds the job id even though the column name is legacy.
+        # The agent's channel inbox is keyed off AgentJob.id (same
+        # value as MAIKO_JOB_ID), so AgentMessage.task_id holds the
+        # job id (despite the column name).
         db.session.add(AgentMessage(
             task_id=job.id,
             direction="to_agent",

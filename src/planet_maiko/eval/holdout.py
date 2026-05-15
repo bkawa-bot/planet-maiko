@@ -187,8 +187,8 @@ def _get_pr_base_branch(repo, pr_number):
 
 def _fetch_diff_at_sha(repo, base_branch, target_sha):
     """Fetch the diff between the PR's base branch and a specific commit
-    SHA. Used to recover the version of the code the human was actually
-    reviewing when they left their comments — not the post-fix final
+    SHA. Recovers the version of the code the human was actually
+    reviewing when they left their comments, not the post-fix final
     diff that `gh pr diff` returns."""
     try:
         result = subprocess.run(
@@ -225,19 +225,19 @@ def fetch_pr_files(pr: HoldoutPR):
     """Fetch per-file diffs for a PR at the version humans actually
     reviewed.
 
-    `gh pr diff` returns the *final* (merged) diff — for closed/merged
+    `gh pr diff` returns the *final* (merged) diff. For closed/merged
     PRs that's already the post-fix code, which makes scoring a model
     against the original review comments incoherent (the model would
-    be reviewing code that no longer contains the issues humans flagged).
+    be reviewing code that doesn't contain the issues humans flagged).
 
     Instead: pick the original_commit_id of the earliest review comment
-    on this PR — i.e., the SHA the first reviewer was looking at when
-    they wrote the first comment — and fetch the diff between the PR's
-    base branch and that SHA. That's the code the reviewer actually saw.
+    on this PR (the SHA the first reviewer was looking at when they
+    wrote the first comment) and fetch the diff between the PR's base
+    branch and that SHA. That's the code the reviewer actually saw.
 
-    Falls back to the legacy `gh pr diff` behavior when the PR has no
-    inline review comments tied to a commit (common for PRs with only
-    review-body summaries).
+    Falls back to `gh pr diff` when the PR has no inline review
+    comments tied to a commit (common for PRs with only review-body
+    summaries).
     """
     inline = _get_review_comments(pr.repo, pr.number) or []
     commit_ts_pairs = [

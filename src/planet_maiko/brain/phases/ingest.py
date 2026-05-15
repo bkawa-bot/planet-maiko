@@ -94,13 +94,12 @@ def _phase_awareness():
 
 
 def _phase_automations():
-    """Phase 3.2: Unified Automation engine — evaluates every active
+    """Phase 3.2: Unified Automation engine. Evaluates every active
     when/then row and fires actions.
 
-    Replaced the old role_autonomy phase (AgentGoal-based). The engine
-    reads from the Automation table; seeded + user-created watches all
-    run through here. Runs before pupdate processing so emitted
-    proposals get indexed the same cycle.
+    The engine reads from the Automation table; seeded + user-created
+    watches all run through here. Runs before pupdate processing so
+    emitted proposals get indexed the same cycle.
     """
     try:
         from planet_maiko.brain.automations import evaluate

@@ -135,10 +135,10 @@ def resolve_model(task_type, runtime_name=None):
       7. None — caller (or runtime) picks its own default.
 
     The ``runtime_name`` arg is optional. Callers that don't pass it
-    get the old behavior (global rules only). Callers that pass it
-    benefit from per-runtime model namespaces — necessary because
-    Claude tier names (haiku / sonnet / opus) don't translate to
-    Ollama model names (llama3.1:8b / qwen2.5:32b / etc.).
+    use global rules only. Callers that pass it benefit from
+    per-runtime model namespaces (necessary because Claude tier names
+    haiku / sonnet / opus don't translate to Ollama model names
+    llama3.1:8b / qwen2.5:32b / etc.).
     """
     if runtime_name:
         config = load_config()

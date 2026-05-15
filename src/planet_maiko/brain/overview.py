@@ -267,10 +267,9 @@ def _calendar_context():
     def _local_time_str(start_iso):
         """Format event start as the user's local time, e.g. "10:30 AM".
 
-        The LLM used to receive the event time as a UTC ISO string and
-        occasionally treated UTC as local (presenting a 10:30 AM Pacific
-        meeting as 5:30 PM). Pre-formatting in the user's tz removes
-        the ambiguity. Falls back to "" if the start is missing or
+        Pre-formatting in the user's tz avoids the LLM treating a UTC
+        ISO string as local time (presenting a 10:30 AM Pacific meeting
+        as 5:30 PM). Falls back to "" if the start is missing or
         unparseable, so the LLM omits the time rather than printing junk.
         """
         if not start_iso:

@@ -1,10 +1,8 @@
-"""Agent runtime — worktree + kickoff machinery for every role.
+"""Agent runtime. Worktree + kickoff machinery for every role.
 
-Originally this package was named `coding_agent` because it only
-handled coding tasks. Post-unification (every role goes through the
-same prepare → kickoff → AgentJob flow), it serves coding, review,
-investigation, cartographer, and specialty agents alike — the name
-was the last vestige of the split.
+Every role goes through the same prepare to kickoff to AgentJob
+flow: coding, review, investigation, cartographer, and specialty
+agents alike.
 
 Planet Maiko doesn't control the agent runtime. It controls the
 surrounding orchestration:
@@ -76,9 +74,8 @@ def prepare(job_id, job_title, prompt, repo_path, branch_prefix="maiko",
             pr_number=None):
     """Prepare a working directory for an agent to work on a job.
 
-    `job_id` is an AgentJob.id (post-unification, every agent's
-    MAIKO_JOB_ID is its AgentJob.id; the parameter used to be called
-    `task_id` from when Tasks were the only thing agents ran on).
+    `job_id` is an AgentJob.id. Every agent's MAIKO_JOB_ID is its
+    AgentJob.id.
 
     Two flavors, picked automatically by whether `repo_path` is set:
 
@@ -126,10 +123,9 @@ def prepare(job_id, job_title, prompt, repo_path, branch_prefix="maiko",
     else:
         # Build a descriptive branch name from the job title.
         # Suffix = last 5 digits of unix time + 4 hex chars of uuid. The
-        # short timestamp keeps branch names skim-readable; the uuid chars
-        # make collisions effectively impossible even when two jobs land
-        # on the same second with the same title (which used to silently
-        # land both agents on the same branch via a 4-digit timestamp).
+        # short timestamp keeps branch names skim-readable; the uuid
+        # chars make collisions effectively impossible even when two
+        # jobs land on the same second with the same title.
         import time as _time
         slug = _slugify(job_title, max_len=40)
         if not slug:
@@ -262,16 +258,12 @@ def list_prepared():
     """List prepared agent worktrees whose underlying job is still open.
 
     Filters out agent_ready pupdates that are dismissed, that point at
-    a job in done/cancelled/failed state, or whose job no longer
-    exists. Those are finished work, not active work — leaving them
+    a job in done/cancelled/failed state, or whose job doesn't exist
+    anymore. Those are finished work, not active work; leaving them
     on the Active tab buries the real signal.
 
-    Reads `extra.job_id` (current shape) with a fallback to the legacy
-    `extra.task_id` field for agent_ready rows from before the
-    rename. Looks up against AgentJob; the previous Task lookup was
-    a stale path that has been broken since the unification (every
-    job_id was queried against the Task table and silently filtered
-    out).
+    Reads `extra.job_id` with a fallback to `extra.task_id` for older
+    agent_ready rows. Looks up against AgentJob.
     """
     from planet_maiko.models.agent_job import AgentJob
     agents = Pupdate.query.filter_by(type="agent_ready", dismissed=False).all()

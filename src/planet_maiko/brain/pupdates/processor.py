@@ -229,10 +229,8 @@ def process():
         dict with counts: {processed, dismissed, read, tasks_created, skipped, unmatched}
     """
     # Grab just the IDs up front and re-fetch per iteration. The
-    # original motivation was the old LLM-triage path closing the DB
-    # session mid-loop (detaching rows); that's gone now, but the
-    # cheap re-fetch is harmless and defends against any future
-    # action handler that needs to release the session.
+    # cheap re-fetch defends against any action handler that needs
+    # to release the session mid-loop.
     pupdate_ids = [
         p.id for p in
         Pupdate.query
@@ -275,9 +273,8 @@ def process():
     db.session.commit()
 
     # Auto-dismiss: low-priority pupdates older than 24h that have
-    # already been processed. Previously this also required read=True,
-    # but the read flag has been removed; any low-priority informational
-    # pupdate that's been through the processor once is fair game.
+    # already been processed. Any low-priority informational pupdate
+    # that's been through the processor once is fair game.
     stale_threshold = datetime.now(timezone.utc) - timedelta(hours=24)
     stale = Pupdate.query.filter(
         Pupdate.dismissed == False,

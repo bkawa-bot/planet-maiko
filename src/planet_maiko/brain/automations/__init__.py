@@ -77,7 +77,7 @@ def _cooldown_active(automation):
 
 
 def _normalize_cond_result(result):
-    """Conditions can return bool (legacy) or {match, context} dict.
+    """Conditions can return bool or {match, context} dict.
     Normalize to a (bool, dict) tuple. Missing context defaults to {}.
     """
     if isinstance(result, dict):
@@ -89,7 +89,7 @@ def _evaluate_conditions(automation, pupdate=None):
     """Run all when[] entries. Returns (bool, merged_context, outcomes).
 
     When `pupdate` is supplied (pupdate-scope evaluation), each
-    condition handler gets it — handlers that don't care ignore the
+    condition handler gets it. Handlers that don't care ignore the
     kwarg; pupdate_match uses it to evaluate against that specific
     pupdate instead of scanning recent ones.
 
@@ -287,11 +287,10 @@ def evaluate():
         )
 
     # Pupdate-scope: iterate each unprocessed pupdate, first matching
-    # automation (ordered by id) claims it. Mirrors the old rules.py
-    # evaluate() semantic: one rule fires per pupdate, and the pupdate
-    # is marked brain_processed regardless (matched or not — the
-    # processor's focus gating + pr_review_commented path still runs
-    # in its own phase, but the rule dispatch happens here).
+    # automation (ordered by id) claims it. One rule fires per pupdate,
+    # and the pupdate is marked brain_processed regardless (matched or
+    # not; the processor's focus gating + pr_review_commented path
+    # still runs in its own phase, but the rule dispatch happens here).
     pupdate_automations = (
         Automation.query
         .filter(Automation.status == "active")
@@ -388,17 +387,8 @@ def evaluate():
     }
 
 
-# Seeding + migrations were extracted to keep this module focused on
-# the engine. Import here so existing call sites — `from
-# planet_maiko.brain.automations import ensure_seed_automations` — keep
-# resolving without churn.
-
-
-# Conditions / actions / shared helpers were imported at the top so
-# the engine functions above resolve them naturally — but the names
-# are still exposed at module scope for back-compat with
-# `from planet_maiko.brain.automations import format_pupdate_for_context`
-# (cycle.py, brain_session.py).
+# Seeding lives in seeding.py; re-export so callers can do
+# `from planet_maiko.brain.automations import ensure_seed_automations`.
 from .seeding import (  # noqa: E402,F401
     _RULE_SEEDS,
     ensure_seed_rule_automations,

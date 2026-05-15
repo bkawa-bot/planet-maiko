@@ -38,20 +38,14 @@ function resolveAction(m) {
   const jobId = m.extra?.job_id;
   const kind = m.kind;
 
-  // Prefer the unified /jobs/<id> page when we have a job id.
-  // Memos emitted post-consolidation include m.url directly; the
-  // legacy /tasks/<id>/{plan,review} fallback only fires for older
-  // memos that lack m.url, and even those route via TaskRouteRedirect.
-  if (kind === "agent_plan" && (jobId || taskId)) {
-    const fallback = jobId ? `/jobs/${jobId}?view=plan` : `/tasks/${taskId}/plan`;
-    return { label: m.cta_label || "Review plan", to: m.url || fallback };
+  if (kind === "agent_plan" && jobId) {
+    return { label: m.cta_label || "Review plan", to: m.url || `/jobs/${jobId}?view=plan` };
   }
-  if (kind === "agent_ready" && (jobId || taskId)) {
-    const fallback = jobId ? `/jobs/${jobId}?view=diff` : `/tasks/${taskId}/review`;
-    return { label: m.cta_label || "Review diff", to: m.url || fallback };
+  if (kind === "agent_ready" && jobId) {
+    return { label: m.cta_label || "Review diff", to: m.url || `/jobs/${jobId}?view=diff` };
   }
-  if (kind === "agent_stuck" && taskId) {
-    return { label: m.cta_label || "Help out", to: m.url || `/tasks/${taskId}` };
+  if (kind === "agent_stuck" && jobId) {
+    return { label: m.cta_label || "Help out", to: m.url || `/jobs/${jobId}?view=chat` };
   }
   if (kind === "job_approval") {
     // Inline approve on the Memos pane; no nav destination.

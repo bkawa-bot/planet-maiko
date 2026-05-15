@@ -141,9 +141,7 @@ def _count_done_worktrees():
 def _prunable_pupdates_query():
     action_list = list(ACTION_TYPES)
     cutoff = _strip_tz(_utc_now() - timedelta(hours=PUPDATE_MAX_AGE_HOURS))
-    # Previously required Pupdate.read == True; the read flag has been
-    # retired (there's no inbox). Any processed non-actionable pupdate
-    # past its TTL is fair game.
+    # Any processed non-actionable pupdate past its TTL is fair game.
     return Pupdate.query.filter(
         Pupdate.brain_processed.is_(True),
         ~Pupdate.type.in_(action_list),

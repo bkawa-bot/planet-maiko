@@ -39,9 +39,8 @@ def list_jobs():
     if scope_repo:
         q = q.filter(AgentJob.scope_repo == scope_repo)
 
-    # Filter to jobs linked to a specific task — used by the legacy
-    # /tasks/<id>/report redirect to find the unified /jobs/<id>
-    # destination.
+    # Filter to jobs linked to a specific task. Used by the
+    # /tasks/<id>/report redirect to find the /jobs/<id> destination.
     source_task_id = request.args.get("source_task_id")
     if source_task_id:
         q = q.filter(AgentJob.source_task_id == source_task_id)
@@ -76,11 +75,9 @@ def cancel_job(job_id):
     """Soft-cancel a job. Stops the subprocess but keeps the worktree
     and session_id around so the user can revive.
 
-    Worktree cleanup used to fire here on running jobs; the misclick
-    cost was high enough (a day of cartograph walking, an investigation
-    half-done) that we now defer cleanup to the shutdown ritual or an
-    explicit forget call. Revive flips status back to running so the
-    user can resume.
+    Worktree cleanup is deferred to the shutdown ritual or an
+    explicit forget call (the misclick cost on a long-running job is
+    high). Revive flips status back to running so the user can resume.
     """
     j = db.get_or_404(AgentJob, job_id)
     if j.status == "running":

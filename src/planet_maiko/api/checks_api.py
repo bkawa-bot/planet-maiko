@@ -42,9 +42,9 @@ def list_checks():
 def run_checks_route():
     """Run the worktree's checks (tests/lint/typecheck) plus LoRA.
 
-    Accepts both `job_id` (canonical) and `task_id` (legacy) on the
-    request body. The id is used to resolve a working_path when the
-    caller didn't pass one explicitly.
+    Accepts both `job_id` (canonical) and `task_id` (alternate) on
+    the request body. The id is used to resolve a working_path when
+    the caller didn't pass one explicitly.
     """
     data = request.get_json(silent=True) or {}
     repo_path = (data.get("repo_path") or "").strip()
@@ -53,7 +53,7 @@ def run_checks_route():
 
     if not repo_path and job_id:
         # Resolve via AgentJob first, fall back to Task. The id can be
-        # either post-unification — agents send their MAIKO_JOB_ID.
+        # either; agents send their MAIKO_JOB_ID.
         from planet_maiko.models.agent_job import AgentJob
         job = db.session.get(AgentJob, job_id)
         if job and job.worktree_path:

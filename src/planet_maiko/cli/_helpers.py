@@ -40,21 +40,16 @@ def api_request(path, method="GET", data=None):
 
 
 def detect_job_id():
-    """Detect the current job ID, in order of preference.
+    """Detect the current job ID.
 
-    1. ``MAIKO_JOB_ID`` env var (set by the runtime when it spawns an
-       agent process — works for any runtime that can pass env vars).
-    2. ``MAIKO_TASK_ID`` env var (legacy alias kept for sessions that
-       were spawned before the rename).
-    3. The "**Job ID:**" / "**Task ID:**" line in ``TASK.md`` from the
-       current working directory (fallback for human use / scripts run
-       from inside the worktree).
-
-    Returns None if nothing matches.
+    Reads ``MAIKO_JOB_ID`` from the env (set by the runtime when it
+    spawns the agent process), then falls back to the "**Job ID:**"
+    line in ``TASK.md`` for scripts run from inside the worktree.
+    Returns None if neither is present.
     """
     import os
 
-    env_id = os.environ.get("MAIKO_JOB_ID") or os.environ.get("MAIKO_TASK_ID")
+    env_id = os.environ.get("MAIKO_JOB_ID")
     if env_id:
         return env_id.strip()
 
@@ -63,13 +58,10 @@ def detect_job_id():
             for line in f:
                 if line.startswith("**Job ID:**"):
                     return line.split("**Job ID:**")[1].strip()
-                if line.startswith("**Task ID:**"):
-                    return line.split("**Task ID:**")[1].strip()
     except FileNotFoundError:
         pass
     return None
 
 
-# Back-compat alias — older imports from cli/agent_cmds.py and
-# cli/lora_cmds expect the old name.
+# Alias used by cli/agent_cmds.py and cli/lora_cmds.
 detect_task_id = detect_job_id

@@ -1,10 +1,6 @@
 """Cross-platform helpers for launching agents in a real terminal
 window and locating the Claude Code session log on disk. Used by the
 "open terminal" and "resume session" endpoints in agents_api.
-
-Originally inline in agents_api.py — extracted so the platform-
-specific shell-quoting paths live in one focused file instead of in
-the middle of a 1900-line route handler.
 """
 
 import os

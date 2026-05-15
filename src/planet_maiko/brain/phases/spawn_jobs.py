@@ -111,9 +111,9 @@ def _phase_spawn_jobs_for_tasks():
         return {"spawned": 0, "error": str(e)}
 
 
-# _bump_agent_failed moved to phases/_helpers.py since execute_jobs
-# also needs it. Re-exported here for backwards compat with any
-# import that landed before the move.
+# _bump_agent_failed lives in phases/_helpers.py since execute_jobs
+# also needs it. Re-exported here for callers that import it from
+# this module.
 from ._helpers import _bump_agent_failed  # noqa: F401
 
 

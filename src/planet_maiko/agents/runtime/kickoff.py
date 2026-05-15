@@ -10,9 +10,9 @@ prompt, the per-job concurrency lock, the daemon thread, the
 Flask-app-context dance for DB writes, and the AgentJob/Task state
 transitions when the run finishes.
 
-The subprocess + cancellation tracking + log capture now live on the
+The subprocess + cancellation tracking + log capture live on the
 runtime (agents/runtimes/claude_code.py:spawn). See
-docs/AGENT_RUNTIME.md for the migration plan.
+docs/AGENT_RUNTIME.md.
 """
 
 import logging
@@ -33,10 +33,9 @@ _UNSAFE_PATH_CHARS = re.compile(r'[;&|`$<>!"*?\n\r]')
 def _mark_kickoff_failed(app, kickoff_id, error):
     """Mark the AgentJob (or Task) tied to this kickoff as failed.
 
-    `kickoff_id` is what the caller passed as task_id — for the
-    unified path it's an AgentJob.id (`job-...`). For older Task-keyed
-    runs it's a Task.id. We try AgentJob first since that's the
-    canonical post-unification target.
+    `kickoff_id` is what the caller passed as task_id. Typically an
+    AgentJob.id (`job-...`); Task-keyed runs send a Task.id. We try
+    AgentJob first since that's the canonical target.
     """
     if app is None:
         return
@@ -65,7 +64,7 @@ def _mark_kickoff_failed(app, kickoff_id, error):
                 db.session.commit()
                 return
 
-            # Legacy Task-keyed kickoff path.
+            # Task-keyed kickoff path.
             task = db.session.get(Task, kickoff_id)
             if task and task.status == "in_progress":
                 task.status = "blocked"

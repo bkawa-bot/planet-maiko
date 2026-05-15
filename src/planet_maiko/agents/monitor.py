@@ -33,14 +33,13 @@ def get_agent_activity():
       - "idle"    → quiet for >IDLE_THRESHOLD_MINUTES but <STALE_THRESHOLD_DAYS
       - "stale"   → quiet for >STALE_THRESHOLD_DAYS
 
-    Stale rows used to be filtered out entirely; now they stay so the
-    user can see "Mochi.flow has been quiet for 9 days on the auth
-    refactor — was that supposed to wrap up?" instead of the row
-    silently vanishing.
+    Stale rows are kept on the list so the user can see "Mochi.flow
+    has been quiet for 9 days on the auth refactor" instead of the
+    row silently vanishing.
 
     Filters out:
       - Tasks the agent finished (done / cancelled)
-      - Tasks that no longer exist (deleted out from under the agent)
+      - Tasks that have been deleted out from under the agent
 
     Returns:
         list of dicts with agent_id, last_message, last_seen, status
@@ -73,14 +72,10 @@ def get_agent_activity():
     stale_cutoff = now - timedelta(days=STALE_THRESHOLD_DAYS)
 
     # Pupdates drive activity tracking (last_seen, pupdate_count,
-    # idle/active/stale status) — they include the post-tool-use hook
+    # idle/active/stale status). They include the post-tool-use hook,
     # which is the truest signal for "is this agent doing something
-    # right now". They do NOT drive the speech-bubble text; that
-    # used to read pupdate titles like "Agent ready: <task>" and
-    # filter out post-tool-use noise, but the result was a stale
-    # bubble parroting prepare-time state long after the agent had
-    # said real things via reply()/maiko report. The displayed
-    # message comes from AgentMessage below — the actual chat.
+    # right now". They do NOT drive the speech-bubble text; the
+    # displayed message comes from AgentMessage below (the actual chat).
     for p in agent_pupdates:
         agent_key = (p.tags or [None])[0] or p.id
 
@@ -156,30 +151,27 @@ def get_agent_activity():
 
     # Filter + enrich the agents dict for the active feed.
     #
-    # Post-unification, every agent's MAIKO_TASK_ID is its AgentJob.id
-    # — that's what the post-tool-use hook tags pupdates with, so the
-    # `agents` dict is keyed by job.id. Job-first lookup is the natural
-    # identity; the parent Task (if any) is looked up afterward for
-    # display metadata.
+    # `agents` is keyed by AgentJob.id (matches the agent's MAIKO_JOB_ID).
+    # The parent Task, if any, is looked up afterward for display metadata.
     #
     # Visibility rules:
-    #   - Job in queued / running / pending_approval — alive, keep.
-    #   - FOLLOWUP_KINDS job in done with worktree still on disk —
+    #   - Job in queued / running / pending_approval: alive, keep.
+    #   - FOLLOWUP_KINDS job in done with worktree still on disk:
     #     keep with status="ready" so the user sees "agent shipped, you
     #     can ask follow-ups" instead of the row vanishing the instant
     #     ready_for_review lands. Drops out once the worktree gets
     #     cleaned (shutdown ritual or pr_merged automation).
-    #   - Anything else (terminal job + no resumable worktree) — drop.
+    #   - Anything else (terminal job + no resumable worktree): drop.
     #
-    # Legacy fallback (no job, key is a Task.id): drop on done/cancelled
-    # like before. Coding worktrees get cleaned on completion so
-    # wake_agent wouldn't work anyway.
+    # Task fallback (no job, key is a Task.id): drop on done/cancelled.
+    # Coding worktrees get cleaned on completion so wake_agent wouldn't
+    # work anyway.
     from planet_maiko.models.agent_job import AgentJob
     from planet_maiko.api.agent_outbox import FOLLOWUP_KINDS
 
     keep = {}
     for key, a in agents.items():
-        # Job-first: post-unification, the agent-side id IS the job.id.
+        # Job-first: the agent-side id IS the job.id.
         job = db.session.get(AgentJob, key)
         if job is not None:
             is_active = job.status in ("queued", "running", "pending_approval")
@@ -200,8 +192,8 @@ def get_agent_activity():
             )
             a["kind"] = "task" if linked_task is not None else "job"
             a["job_id"] = job.id
-            # task_id stays the canonical inbox key (job.id post-unification)
-            # so chat / wake routing keep working; expose the real Task.id
+            # task_id stays the canonical inbox key (job.id) so chat /
+            # wake routing keep working. Expose the real Task.id
             # separately for surfaces that need to call /tasks/<id>/...
             # endpoints (cancel, forget, route to /tasks/<id>/review).
             if linked_task is not None:
@@ -223,9 +215,9 @@ def get_agent_activity():
             keep[key] = a
             continue
 
-        # Legacy fallback — key is a Task.id (pre-unification flow or
-        # tasks that never got an AgentJob row). Same drop-on-terminal
-        # rule as before; coding worktrees can't follow-up anyway.
+        # Task fallback: key is a Task.id (tasks that never got an
+        # AgentJob row). Drop on terminal status; coding worktrees
+        # can't follow-up anyway.
         task = db.session.get(Task, a["task_id"])
         if task is None:
             continue
@@ -245,11 +237,9 @@ def get_agent_activity():
     # Surface running / queued AgentJobs that don't yet have any
     # agent pupdate or message. Without this, a freshly-queued job
     # is invisible until its agent emits the first heartbeat (or
-    # never, if the kickoff fails). Keyed by job.id to match the
-    # keep loop above — post-unification, pupdate-driven entries are
-    # also keyed by job.id (the agent's MAIKO_TASK_ID), so a freshly-
-    # added entry here gets superseded by the richer pupdate-driven
-    # row on the next refresh once the agent emits its first heartbeat.
+    # never, if the kickoff fails). Keyed by job.id so a freshly-added
+    # entry here gets superseded by the richer pupdate-driven row on
+    # the next refresh once the agent emits its first heartbeat.
     pending_jobs = (
         AgentJob.query
         .filter(AgentJob.status.in_(["queued", "running"]))
@@ -417,12 +407,12 @@ def process_agent_pupdates():
         .all()
     )
 
-    # Agents no longer auto-close tasks. Only the user (via UI) or the
+    # Agents don't auto-close tasks. Only the user (via UI) or the
     # pr_merged automation (on PR landing) closes a coding task; review
     # and investigation jobs close their parent task via the
     # ready_for_review handler in brain_session.py. agent_done pupdates
-    # remain as record-only signals — we mark them processed so the
-    # pupdate processor doesn't re-handle them, but no task state changes.
+    # are record-only signals; we mark them processed so the pupdate
+    # processor doesn't re-handle them, but no task state changes.
     for p in agent_pupdates:
         p.brain_processed = True
 

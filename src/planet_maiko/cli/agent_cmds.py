@@ -43,11 +43,11 @@ def cmd_task(args):
 
     action = args.action
     if action == "done":
-        # Retired. The user decides when a task is complete (via the UI)
-        # or the pr_merged automation does (on PR landing). The legacy
-        # behavior here POSTed to /tasks/<id>/done, which deletes the
-        # task row outright — a foot-gun. Use `reply(message_type=
-        # "ready_for_review")` from inside the agent session instead.
+        # The user decides when a task is complete (via the UI) or the
+        # pr_merged automation does (on PR landing). Agents calling
+        # /tasks/<id>/done would delete the task row outright. Use
+        # `reply(message_type="ready_for_review")` from inside the
+        # agent session instead.
         print(
             "Refused: agents don't close tasks. Use "
             "reply(message_type='ready_for_review') and let the user "
@@ -175,13 +175,12 @@ def cmd_check_code(args):
 def cmd_session_report(args):
     """Report the agent's underlying session ID to Maiko.
 
-    Mirrors what the maiko-channel MCP server used to do once at
-    startup: tell Maiko "this job_id is now running under this
-    session_id," so the View Session link in the UI knows where to
-    find the transcript file on disk. The agent (or a SessionStart
-    hook) calls this once per spawn.
+    Tells Maiko "this job_id is now running under this session_id,"
+    so the View Session link in the UI knows where to find the
+    transcript file on disk. The agent (or a SessionStart hook)
+    calls this once per spawn.
 
-    Session ID defaults to $CLAUDE_SESSION_ID — Claude Code sets that
+    Session ID defaults to $CLAUDE_SESSION_ID. Claude Code sets that
     env var before spawning any hooks or child processes. Pass
     --session-id explicitly for other runtimes.
     """

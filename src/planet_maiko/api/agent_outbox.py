@@ -198,19 +198,17 @@ def handle_agent_job_reply(job, msg, data, message_type):
         job.extra = extra
         if ag:
             ag.last_active_at = datetime.now(timezone.utc)
-            # Post-Stage D, most work finishes as an AgentJob (not a
-            # Task), so AgentProfile.tasks_completed stopped moving —
-            # the number in the profile modal was frozen wherever the
-            # legacy one-shot Task path last left it. Bump here so the
-            # "done" stat reflects reality.
+            # Most work finishes as an AgentJob (not a Task), so bump
+            # AgentProfile.tasks_completed here. Otherwise the number
+            # in the profile modal stops moving.
             ag.tasks_completed = (ag.tasks_completed or 0) + 1
 
         # Sync the linked Task. The agent's ready_for_review moves the
-        # task into "review" status regardless of kind — only the user
-        # can mark it "done" via /tasks/<id>/done. Why: setting "done"
-        # here triggered shutdown-ritual + complete_task worktree
-        # cleanup, and the user kept losing the working dir before
-        # they'd finished reviewing the agent's output.
+        # task into "review" status regardless of kind. Only the user
+        # can mark it "done" via /tasks/<id>/done. Setting "done" here
+        # would trigger the shutdown ritual + complete_task worktree
+        # cleanup, losing the working dir before the user has finished
+        # reviewing the agent's output.
         if job.source_task_id:
             t = db.session.get(_Task, job.source_task_id)
             if t:
@@ -231,22 +229,21 @@ def handle_agent_job_reply(job, msg, data, message_type):
                 t.extra = task_extra
                 t.status = "review"
 
-        # Worktrees no longer get torn down here. The agent saying
+        # Worktrees aren't torn down here. The agent saying
         # "ready_for_review" is a *suggestion* the user accepts via
         # /tasks/<id>/done (which cleans up), reassign (which re-preps),
         # or forget. Tasks that linger past their welcome are caught by
-        # the shutdown ritual's age-out sweep — see
+        # the shutdown ritual's age-out sweep. See
         # planet_maiko.agents.runtime.worktree.sweep_old_worktrees.
 
         # Emit the user-facing memo. The Task path does this via
         # emit_user_facing_signal but the AgentJob branch returns early
-        # before that helper runs, so without this call review /
-        # investigation / cartograph completions never landed in the
-        # user's inbox — they only showed up on Active Agents and
-        # /jobs/<id>. The protocol tells agents NOT to set
-        # recipient="user" on ready_for_review specifically because
-        # "the surface already knows the user should see them"; this
-        # is the surface knowing.
+        # before that helper runs, so review / investigation /
+        # cartograph completions wouldn't otherwise land in the user's
+        # inbox. The protocol tells agents NOT to set recipient="user"
+        # on ready_for_review specifically because "the surface
+        # already knows the user should see them"; this is the surface
+        # knowing.
         try:
             from planet_maiko.brain.memos import create_memo
             agent_name = (ag.display_name if ag else None) or f"{job.kind} agent"
@@ -254,15 +251,15 @@ def handle_agent_job_reply(job, msg, data, message_type):
             if len(preview) > 80:
                 preview = preview[:77] + "…"
 
-            # Every memo CTA points at the unified /jobs/<id> page now.
+            # Every memo CTA points at the unified /jobs/<id> page.
             # The page renders the right section based on ?view=<...>:
             #   diff-producing kinds (coding, review, pr_review) →
             #     ?view=diff (DiffPanel)
             #   report-producing kinds (investigation, repo_analysis,
             #     cartograph) → ?view=report (ReportPanel)
-            # The legacy /tasks/<id>/review URL still resolves through
-            # TaskRouteRedirect, but new memos route directly so the
-            # user lands without the redirect hop.
+            # The /tasks/<id>/review URL still resolves through
+            # TaskRouteRedirect; new memos route directly so the user
+            # lands without the redirect hop.
             is_report_kind = job.kind in ("investigation", "repo_analysis", "cartograph")
             if not is_report_kind:
                 cta_label = "Review diff"
@@ -652,7 +649,7 @@ def emit_user_facing_signal(task_id, task, msg, data, message_type):
         if memo_kind == "agent_stuck":
             # Stuck routes to the job's chat panel so the user can
             # reply in-context. Falls back to /agents when there's no
-            # linked job (legacy task with no AgentJob).
+            # linked job.
             if linked_job:
                 cta = ("Open chat", "open", f"/jobs/{linked_job.id}?view=chat")
             else:
@@ -664,17 +661,7 @@ def emit_user_facing_signal(task_id, task, msg, data, message_type):
             cta_action = "open" if view_for_kind == "report" else "review"
             cta = (label, cta_action, f"/jobs/{linked_job.id}?view={view_for_kind}")
         else:
-            # No linked job (legacy task with no AgentJob) — fall
-            # back to the legacy task route so the redirect bridge
-            # at least lands the user somewhere.
-            cta = {
-                "agent_ready": (
-                    "View report" if is_report_task else "Review diff",
-                    "open" if is_report_task else "review",
-                    f"/tasks/{task_id}/{'report' if is_report_task else 'review'}",
-                ),
-                "agent_plan": ("Review plan", "review", f"/tasks/{task_id}/plan"),
-            }[memo_kind]
+            cta = ("Open", "open", "/agents")
         create_memo(
             kind=memo_kind,
             category="waiting",

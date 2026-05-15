@@ -355,14 +355,9 @@ export default function TaskCard({
                   <Play size={10} /> Launch
                 </button>
               )}
-              {/* Any task whose assigned agent has a worktree (coding
-                  agents that have auto-kicked off, review/investigation
-                  mid-run) gets a direct "Review diff" link — even if
-                  the agent never explicitly sent ready_for_review, the
-                  user can always find the diff. */}
-              {!isDone && t.assigned_agent_id && t.metadata?.working_path && (
+              {!isDone && t.assigned_agent_id && t.metadata?.working_path && t.metadata?.agent_job_id && (
                 <Link
-                  to={`/tasks/${t.id}/review`}
+                  to={`/jobs/${t.metadata.agent_job_id}?view=diff`}
                   className="btn btn-sm btn-primary"
                   onClick={(e) => e.stopPropagation()}
                   title="Review the agent's changes"

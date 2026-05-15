@@ -1,8 +1,4 @@
-"""Training subcommands for the maiko LoRA CLI.
-
-Originally lived in cli/lora_cmds.py — extracted into a per-family
-file so each command's imports + helpers stay close to it.
-"""
+"""Training subcommands for the maiko LoRA CLI."""
 
 import os
 import re

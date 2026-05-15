@@ -1,16 +1,15 @@
 """Generate "scenario" descriptions for each graduated rule, grounded
 in the team's actual PR-comment history.
 
-Despite the column name `violation_description` (kept for migration
-stability), the content these prompts produce is NOT a description of
-what violations look like — it's a description of the SCENARIOS where
-the rule applies. The kinds of code changes that should pull this rule
-into a reviewer's attention.
+Despite the column name `violation_description`, the content these
+prompts produce is NOT a description of what violations look like.
+It's a description of the SCENARIOS where the rule applies: the kinds
+of code changes that should pull this rule into a reviewer's attention.
 
 Why this distinction matters: at review time, Claude describes the
 diff it's looking at. If we asked Claude to describe violations and
 matched on that, we'd only retrieve rules when Claude had ALREADY
-spotted something off — which defeats the purpose of retrieval.
+spotted something off (which defeats the purpose of retrieval).
 Instead, the diff description says "this adds a new public endpoint"
 and we want to surface every rule whose scenario is "applies to new
 endpoints." Claude reasons about whether the rule was actually
@@ -545,10 +544,9 @@ def generate_diff_descriptions(diff_text):
     return descriptions
 
 
-# Backwards-compat alias so existing imports keep working. Returns
-# the FIRST description (typically the high-level intent) joined as
-# a single string for callers that need string semantics. New callers
-# should use generate_diff_descriptions().
+# Single-string alias. Returns the FIRST description (typically the
+# high-level intent) for callers that need string semantics. Prefer
+# generate_diff_descriptions() for new code.
 def generate_diff_description(diff_text):
     descriptions = generate_diff_descriptions(diff_text)
     return descriptions[0] if descriptions else None

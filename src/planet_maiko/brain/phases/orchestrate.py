@@ -88,9 +88,9 @@ def _phase_orchestrate():
                 routed += 1
                 logger.info(f"[cycle] Routed task {t.id} ({t.type}) -> {agent_id}")
             except Exception as e:
-                # Used to be debug — but if routing silently fails, the
-                # task sits forever with no agent and the user has no
-                # signal anything's wrong. Bump to warning.
+                # Warning, not debug: a silent routing failure leaves
+                # the task with no agent and the user has no signal
+                # anything's wrong.
                 logger.warning(f"[cycle] route() failed for {t.id}: {e}")
 
         if created or routed:

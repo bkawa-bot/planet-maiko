@@ -155,8 +155,8 @@ def _maybe_push_close_to_linear(task, target_state_type):
         return
     team_id = extra.get("linear_team_id")
     if not team_id:
-        # Fallback to the configured team — works when the issue was
-        # originally created against it (the common case).
+        # Fallback to the configured team. Works when the issue was
+        # created against it (the common case).
         from planet_maiko.config import load_config
         team_id = (load_config().get("linear") or {}).get("team_id")
     if not team_id:

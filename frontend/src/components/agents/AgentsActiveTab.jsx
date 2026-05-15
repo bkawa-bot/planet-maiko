@@ -184,10 +184,10 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles,
     }
   };
 
-  const handleRerun = async (taskId) => {
-    if (!taskId) return;
+  const handleRerun = async (jobId) => {
+    if (!jobId) return;
     try {
-      await api.rerunAgent(taskId);
+      await api.rerunAgent(jobId);
       showToast("Re-running agent — first message should land in a moment", "normal");
       onRefresh?.();
     } catch (err) {
@@ -365,7 +365,7 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles,
                   {isOneShot && jobLinkId && a.kind !== "job" && (
                     <button
                       className="btn btn-icon"
-                      onClick={() => handleRerun(a.linked_task_id || jobLinkId)}
+                      onClick={() => handleRerun(jobLinkId)}
                       title="Re-run the autonomous skill"
                     >
                       <Sparkles size={12} />

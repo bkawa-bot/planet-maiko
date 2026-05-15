@@ -1,15 +1,14 @@
-"""LoRA inference — `review_code` (single file) and `review_diff`
+"""LoRA inference. `review_code` (single file) and `review_diff`
 (per-hunk over a diff) plus the MLX session cache that keeps weights
 in-process between requests.
 
-Originally lived inside trainer.py — extracted because training
-orchestration and inference share almost nothing at runtime; an
-import that just wants `review_code` was pulling MLX training imports
-into memory unnecessarily.
+Split from trainer.py because training orchestration and inference
+share almost nothing at runtime; an import that just wants
+`review_code` shouldn't pull MLX training imports into memory.
 
 Shared helpers (chat-prompt builder, base-model resolver, system
-prompt) come from .trainer; the inference module is the only place
-where MLX session caching lives.
+prompt) come from .trainer; the inference module owns the MLX
+session cache.
 """
 
 import json

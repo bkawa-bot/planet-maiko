@@ -12,11 +12,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# Nullable columns added to existing models since launch. Each entry
-# is (table_name, column_name, sql_type). _ensure_new_columns walks
+# Nullable columns added to existing models. Each entry is
+# (table_name, column_name, sql_type). _ensure_new_columns walks
 # this list, checks PRAGMA table_info, and runs ALTER TABLE ADD
-# COLUMN for any missing one. Keep entries here until the project
-# does its first proper migration framework / fresh-DB-only release.
+# COLUMN for any missing one.
 # Format: column_type must be SQLite-valid (TEXT / INTEGER / etc.).
 _PATCH_COLUMNS = [
     ("agent_messages", "recipient", "VARCHAR(50)"),
@@ -24,12 +23,9 @@ _PATCH_COLUMNS = [
 ]
 
 
-# Columns that have been removed from a model and should be dropped from
-# existing DBs. SQLite supports DROP COLUMN since 3.35 (March 2021), and
-# the harness here is best-effort: if the drop fails (column doesn't
-# exist, table missing, old SQLite), we log and move on. Anything left
-# in the column after model removal is just dead data — the ORM stops
-# touching it the moment the model attribute is gone.
+# Columns to drop from existing DBs. SQLite supports DROP COLUMN
+# since 3.35 (March 2021). Best-effort: if the drop fails (column
+# doesn't exist, table missing, old SQLite), we log and move on.
 _DROP_COLUMNS = [
     ("custom_skills", "schedule_interval_minutes"),
     ("custom_skills", "creates_pupdates"),
@@ -37,10 +33,9 @@ _DROP_COLUMNS = [
 
 
 def _ensure_new_columns():
-    """Idempotent column-add for the small set of nullable columns
-    added between releases. Not a migration framework — just a band-
-    aid for the pre-launch churn period so users with an existing
-    DB don't hit "no such column" after a model change.
+    """Idempotent ALTER TABLE ADD COLUMN for the small set of
+    nullable columns added between releases, so existing user DBs
+    don't hit "no such column" after a model change.
 
     Anything destructive (drops, renames, type changes) still needs
     a fresh DB; this only handles the cheap "I added a nullable
@@ -82,7 +77,7 @@ def _ensure_new_columns():
                     f"[startup] Added {table}.{column} ({col_type}) to existing DB"
                 )
         logger.info(
-            f"[startup] Column-patch pass complete — added {added}, "
+            f"[startup] Column-patch pass complete. added {added}, "
             f"already-present {skipped}"
         )
     except Exception as e:
@@ -90,14 +85,13 @@ def _ensure_new_columns():
 
 
 def _drop_legacy_columns():
-    """Drop columns that have been removed from a model. Mirror of
+    """Drop columns the ORM no longer declares. Mirror of
     _ensure_new_columns: scans PRAGMA table_info, runs ALTER TABLE
-    DROP COLUMN for any column still present that the model no
-    longer declares.
+    DROP COLUMN for any column still present that the model doesn't
+    declare.
 
     Best-effort. SQLite < 3.35 doesn't support DROP COLUMN; if the
-    drop fails, the column just sits there as orphan data. The ORM
-    has already stopped reading/writing it.
+    drop fails, the column just sits there as orphan data.
     """
     from sqlalchemy import text
     if not _DROP_COLUMNS:
@@ -114,7 +108,7 @@ def _drop_legacy_columns():
                         f"ALTER TABLE {table} DROP COLUMN {column}"
                     ))
                     logger.info(
-                        f"[startup] Dropped legacy column {table}.{column}"
+                        f"[startup] Dropped column {table}.{column}"
                     )
                 except Exception as e:
                     logger.warning(
@@ -127,14 +121,12 @@ def _drop_legacy_columns():
 def _drop_diff_comment_task_fk():
     """One-shot: rebuild diff_comments without the FK to tasks.id.
 
-    Original schema: `task_id VARCHAR(128) NOT NULL REFERENCES tasks(id)`.
-    Now we want a plain text column so the row can hold either a Task.id
-    OR an AgentJob.id (review agents whose job has no source_task_id
-    can't insert otherwise — leave_comment 404s with "no task linked
-    to this agent"). SQLite can't drop a FK in place, so the standard
-    pattern is recreate-table-without-it.
+    The column holds either a Task.id OR an AgentJob.id (review agents
+    whose job has no source_task_id can't insert otherwise; leave_comment
+    404s with "no task linked to this agent"). SQLite can't drop a FK
+    in place, so the standard pattern is recreate-table-without-it.
 
-    Idempotent — checks pragma foreign_key_list first; subsequent
+    Idempotent: checks pragma foreign_key_list first; subsequent
     boots find no FK to drop and exit immediately. Wrapped in a
     transaction so a partial run can't strand data.
     """
@@ -143,7 +135,7 @@ def _drop_diff_comment_task_fk():
         with db.engine.begin() as conn:
             rows = conn.execute(text("PRAGMA table_info(diff_comments)")).all()
             if not rows:
-                return  # Table doesn't exist yet — fresh DB, model is FK-less.
+                return  # Table doesn't exist yet; fresh DB, model is FK-less.
             fks = conn.execute(text("PRAGMA foreign_key_list(diff_comments)")).all()
             # FK row format: (id, seq, table, from, to, on_update, on_delete, match)
             has_task_fk = any(r[2] == "tasks" and r[3] == "task_id" for r in fks)
@@ -153,7 +145,7 @@ def _drop_diff_comment_task_fk():
             # drop old. Indexes get recreated explicitly. PRAGMA
             # foreign_keys is connection-scoped; we toggle it off for
             # the rebuild so the COPY doesn't trip on existing rows
-            # whose task_id no longer points at a Task (orphaned during
+            # whose task_id doesn't point at a Task (orphaned during
             # review-job-without-task flows).
             conn.execute(text("PRAGMA foreign_keys=OFF"))
             conn.execute(text("ALTER TABLE diff_comments RENAME TO diff_comments_old"))
@@ -198,18 +190,16 @@ def _drop_diff_comment_task_fk():
 
 
 def _rename_diff_comment_task_to_job():
-    """One-shot: rename diff_comments.task_id → diff_comments.job_id and
-    backfill any rows that still hold a Task.id to the corresponding
-    AgentJob.id.
+    """One-shot: rename diff_comments.task_id to diff_comments.job_id
+    and backfill any rows that still hold a Task.id to the
+    corresponding AgentJob.id.
 
-    Background: comments used to be anchored to a Task because pre-
-    unification the Task was the agent's primary key. Now agents run
-    as AgentJobs (one Task can spawn coding + review + investigation
-    jobs, each with its own diff), so the comment belongs on the job
-    that owns the diff. SQLite can't rename a column in place on
-    older versions, so we rebuild the table.
+    Comments live on the AgentJob that owns the diff (one Task can
+    spawn coding + review + investigation jobs, each with its own
+    diff). SQLite can't rename a column in place on older versions,
+    so we rebuild the table.
 
-    Idempotent — checks if `job_id` already exists and exits if so.
+    Idempotent: checks if `job_id` already exists and exits if so.
     Best-effort: if the rebuild fails the column stays as-is and the
     code path falls back to whichever name SQLAlchemy reflection
     found.
@@ -219,7 +209,7 @@ def _rename_diff_comment_task_to_job():
         with db.engine.begin() as conn:
             rows = conn.execute(text("PRAGMA table_info(diff_comments)")).all()
             if not rows:
-                return  # Fresh DB — model already declares job_id.
+                return  # Fresh DB; model already declares job_id.
             cols = {r[1] for r in rows}
             if "job_id" in cols:
                 return  # Already renamed.
@@ -230,8 +220,8 @@ def _rename_diff_comment_task_to_job():
             # a Job.id), find the Job that owns the diff. Prefer the
             # most recent non-cancelled review/coding job linked to the
             # task. Rows where the id already IS a Job.id pass through
-            # unchanged. Rows where neither lookup hits stay on the old
-            # id — orphans, kept for history rather than dropped.
+            # unchanged. Rows where neither lookup hits stay on the
+            # original id (orphans, kept for history rather than dropped).
             agent_jobs = conn.execute(
                 text("SELECT id, source_task_id FROM agent_jobs")
             ).all() if "agent_jobs" in {
@@ -311,9 +301,9 @@ def _rename_diff_comment_task_to_job():
 
 def _retro_incubate_thin_pending():
     """One-shot: flip auto-created 1-signal pending learnings to
-    incubating so existing DBs match the new graduation gate.
+    incubating so existing DBs match the graduation gate.
 
-    Idempotent — after the first run there's nothing matching the
+    Idempotent: after the first run there's nothing matching the
     WHERE clause, so subsequent boots are a no-op. Manual additions
     (source!='auto') are skipped so a user-curated singleton rule
     stays visible in the approval queue.
@@ -378,11 +368,11 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.expertise_api import expertise_bp
     from planet_maiko.api.awareness_api import awareness_bp
     from planet_maiko.api.profiles_api import profiles_bp
-    # LoRA verifier + Training UI are currently parked (lora-park). The
+    # LoRA verifier + Training UI are parked (lora-park). The
     # training_bp / lora_bp blueprints + their underlying training and
-    # inference pipelines stay in the repo dormant for future revival;
-    # they're just not registered as routes so the API doesn't surface
-    # them. To revive: re-add the imports + register_blueprint calls.
+    # inference pipelines stay in the repo dormant; they're just not
+    # registered as routes. To revive: re-add the imports +
+    # register_blueprint calls.
     from planet_maiko.api.chat_api import chat_bp
     from planet_maiko.api.themes_api import themes_bp
     from planet_maiko.api.diff_api import diff_bp
@@ -448,14 +438,13 @@ def create_app(start_scheduler=False):
         # Fresh-DB shape: every model registered above gets its table
         # via SQLAlchemy.
         db.create_all()
-        # Pre-launch churn: SQLAlchemy's create_all only creates
-        # missing TABLES, not missing COLUMNS. When a model gains a
-        # nullable column between commits, existing user DBs hit
-        # "no such column" on first query. _ensure_new_columns runs
-        # idempotent ALTER TABLE statements for the small set of
-        # columns added since launch. NOT a migration framework —
-        # the rule stays "destructive schema changes need a fresh
-        # DB"; this is just for cheap nullable-column additions.
+        # SQLAlchemy's create_all only creates missing TABLES, not
+        # missing COLUMNS. When a model gains a nullable column
+        # between commits, existing user DBs hit "no such column" on
+        # first query. _ensure_new_columns runs idempotent ALTER
+        # TABLE statements for the small set of nullable columns
+        # added since launch. Destructive schema changes still
+        # require a fresh DB.
         _ensure_new_columns()
         _drop_legacy_columns()
         _drop_diff_comment_task_fk()
@@ -491,13 +480,13 @@ def create_app(start_scheduler=False):
         except Exception as e:
             logger.warning(f"[startup] Stale training-progress cleanup skipped: {e}")
 
-        # Wake-registry cleanup: the previous run may have crashed with
+        # Wake-registry cleanup: a prior run may have crashed with
         # agents flagged "working" and with session-registry entries
         # pointing at tasks that have since been cancelled or merged.
         # Neither survives a crash, so clear them before we start
         # accepting new triggers. Wrapped in try/except so a transient
         # SQLite lock (e.g. another maiko process still holding the DB)
-        # can't crash boot — the next cycle's stuck-check will catch up.
+        # can't crash boot. The next cycle's stuck-check will catch up.
         try:
             from planet_maiko.agents.wake import validate_registry, reset_stale_working
             validate_registry()
@@ -506,7 +495,7 @@ def create_app(start_scheduler=False):
             logger.warning(f"[startup] Wake-registry cleanup skipped: {e}")
 
         # Rescue any profiles still stuck on the Arriving placeholder
-        # from a previous-run LLM call that didn't complete.
+        # from a prior LLM call that didn't complete.
         try:
             from planet_maiko.agents.profiles import recover_stale_arrivals
             recover_stale_arrivals()
@@ -524,18 +513,16 @@ def create_app(start_scheduler=False):
         except Exception as e:
             logger.warning(f"[startup] User-message memo backfill skipped: {e}")
 
-        # Violation-description backfill is OPT-IN now. It used to fire
-        # on every boot, hammering the SQLite write lock with per-rule
-        # commits while the LLM round-trips ran. RAG retrieval is
-        # already gated on an embedding backend (offline by default
-        # until the user installs sentence-transformers / sets an API
-        # key), so generating descriptions before that's set up is
-        # wasted work. Triggers that still mint descriptions:
+        # Violation-description backfill is OPT-IN. RAG retrieval is
+        # gated on an embedding backend (offline by default until the
+        # user installs sentence-transformers / sets an API key), so
+        # generating descriptions before that's set up is wasted work.
+        # Triggers that mint descriptions:
         #   - Approving / editing a learning (learning_api hooks)
         #   - POST /api/rules/regenerate-descriptions (manual)
         #   - `maiko lora rules backfill` CLI command
         # If you want it back on boot, call backfill_in_background(app)
-        # here — but reset_stale_working at the top of this block
+        # here, but reset_stale_working at the top of this block
         # races it for the write lock and "database is locked" follows.
 
     # Serve pre-built frontend static files

@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _cond_cadence(automation, config, pupdate=None):
-    # Native unit is minutes so scheduled skill migrations (which come
-    # in at minute precision — 15, 30, 60, etc.) stay lossless.
+    # Native unit is minutes so scheduled skills stay lossless at
+    # minute precision (15, 30, 60, etc.).
     # interval_hours is accepted as a convenience alias.
     if "interval_minutes" in config:
         minutes = int(config["interval_minutes"])
@@ -39,7 +39,7 @@ def _cond_cadence(automation, config, pupdate=None):
         minutes = int(config.get("interval_hours", 24)) * 60
     last = automation.last_fired_at
     if last is None:
-        return True  # never fired yet — fire this cycle
+        return True  # never fired yet; fire this cycle
     if last.tzinfo is None:
         last = last.replace(tzinfo=timezone.utc)
     return (datetime.now(timezone.utc) - last) >= timedelta(minutes=minutes)

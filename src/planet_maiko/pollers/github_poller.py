@@ -451,16 +451,15 @@ class GitHubPoller(BasePoller):
         """For each merged PR in this poll, fetch inline review comments
         and create unsynthesized Signal rows with code_context. Dedupes
         per-repo against existing signals by external_id or
-        (file_path, diff_hunk) for legacy rows.
+        (file_path, diff_hunk) for rows missing external_id.
 
-        Three phases — read existing dedup keys, do all network calls
+        Three phases: read existing dedup keys, do all network calls
         with no DB activity, then a single fast write batch + commit.
-        Earlier the read / network / write were interleaved, which
-        held the SQLite write lock across slow per-PR API calls and
-        blocked every other writer in the process.
+        Keeps the SQLite write lock from being held across slow per-PR
+        API calls.
 
-        Signals land as synthesized=False — they flow through the normal
-        synthesis → clustering pipeline on the next brain cycle tick.
+        Signals land as synthesized=False, then flow through the normal
+        synthesis to clustering pipeline on the next brain cycle tick.
         """
         merged = raw_data.get("merged_prs") or []
         if not merged:
@@ -480,11 +479,11 @@ class GitHubPoller(BasePoller):
         # PHASE 1: read existing dedup keys per repo + check which PRs
         # we've already scraped. Skipping already-scraped PRs is the
         # difference between "scrape every PR every 5min forever" and
-        # "scrape each PR once after merge" — the merged-PR list
-        # itself has no time cursor (gh pr list returns the latest 5
-        # merged regardless of when), so we use the pr_merged Pupdate
-        # row as the cursor: if it carries comments_scraped_at on its
-        # extra, we've already pulled comments for that PR.
+        # "scrape each PR once after merge". The merged-PR list itself
+        # has no time cursor (gh pr list returns the latest 5 merged
+        # regardless of when), so we use the pr_merged Pupdate row as
+        # the cursor: if it carries comments_scraped_at on its extra,
+        # we've already pulled comments for that PR.
         from planet_maiko.models.pupdate import Pupdate
 
         existing_per_repo = {}
@@ -492,7 +491,7 @@ class GitHubPoller(BasePoller):
         for repo in by_repo:
             existing_ids = set()
             existing_legacy = set()  # (file_path, diff_hunk)
-            existing_text_keys = set()  # (file_path, body[:120]) — last-resort
+            existing_text_keys = set()  # (file_path, body[:120]) last-resort
             for s in Signal.query.filter_by(
                 repo=repo, source_type="pr_comment"
             ).all():
@@ -500,10 +499,9 @@ class GitHubPoller(BasePoller):
                     existing_ids.add(s.external_id)
                 if s.file_path and s.code_context:
                     existing_legacy.add((s.file_path, s.code_context))
-                # Text-based fallback for legacy rows missing both
-                # external_id and code_context. Synthesis mutates
-                # signal.text but original_text stays raw, so prefer
-                # that when present.
+                # Text-based fallback for rows missing both external_id
+                # and code_context. Synthesis mutates signal.text but
+                # original_text stays raw, so prefer that when present.
                 raw = (s.original_text or s.text or "")[:120]
                 if s.file_path and raw:
                     existing_text_keys.add((s.file_path, raw))
@@ -527,8 +525,8 @@ class GitHubPoller(BasePoller):
 
         # PHASE 2: network calls only. Build a list of Signal kwargs;
         # no DB activity in this loop. Per-PR API calls can run
-        # several seconds total — keeping them out of the write tx
-        # is the whole point of this rewrite.
+        # several seconds total, and keeping them out of the write tx
+        # is the whole point.
         new_rows = []
         scraped_now = []  # PRs we successfully pulled this poll
         for repo, prs in by_repo.items():
@@ -540,7 +538,7 @@ class GitHubPoller(BasePoller):
                 pup = scraped_pupdate_by_pr.get((repo, number))
                 if pup and (pup.extra or {}).get("comments_scraped_at"):
                     # Already pulled this PR's comments on a prior
-                    # poll. Merged PRs are typically frozen — re-scraping
+                    # poll. Merged PRs are typically frozen; re-scraping
                     # is pure waste.
                     continue
                 comments = fetch_comments_for_pr(repo, number)
@@ -551,12 +549,11 @@ class GitHubPoller(BasePoller):
                     file_path = entry.get("path") or None
                     diff_hunk = entry.get("diff_hunk") or None
 
-                    # Check ALL three dedup keys regardless of which
-                    # one the new entry carries. The earlier code
-                    # gated the legacy check on `not external_id`,
-                    # so a re-scrape that now has external_id
-                    # bypassed the (path, hunk) match against an
-                    # older row that only had legacy keys.
+                    # Check ALL three dedup keys regardless of which one
+                    # the new entry carries. Gating the (path, hunk)
+                    # check on `not external_id` would let a re-scrape
+                    # bypass it against an older row that only has
+                    # (path, hunk) keys.
                     if external_id and external_id in existing_ids:
                         continue
                     if (

@@ -9,10 +9,6 @@ def parse_pr_url(url):
 
     Accepts the canonical URL form (any GitHub host), and the short
     `org/repo#123` form. Returns `(None, None)` if neither matches.
-
-    Shared by the eval harness, CLI `maiko review --pr`, and the
-    training-data exclusion filter — these all used to keep their own
-    copy of the same regex pair.
     """
     if not url:
         return None, None

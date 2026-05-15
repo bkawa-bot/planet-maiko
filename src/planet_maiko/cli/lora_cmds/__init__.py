@@ -1,20 +1,18 @@
 """LoRA training, evaluation, and feedback CLI commands.
 
-Originally a 1100+ line single file. Split into four family modules:
+Split into four family modules:
 
-    .training — train, retrain, extract-training-data, generate-rules,
-                generate-synthetic
-    .review   — eval, eval-prs, review, review-rag
-    .feedback — lora-feedback, lora-miss, dedup, add-rule
-    .rules    — rules-regen, rule-show, rules-list, rules-relevant
+    .training: train, retrain, extract-training-data, generate-rules,
+               generate-synthetic
+    .review:   eval, eval-prs, review, review-rag
+    .feedback: lora-feedback, lora-miss, dedup, add-rule
+    .rules:    rules-regen, rule-show, rules-list, rules-relevant
 
-Re-exports every cmd_* by name so existing
-`from planet_maiko.cli.lora_cmds import cmd_train` calls continue
-to work without touching every import site.
+Re-exports every cmd_* by name so callers can do
+`from planet_maiko.cli.lora_cmds import cmd_train`.
 """
 
-# Re-exports — keep existing imports of `from .lora_cmds import cmd_X`
-# resolving without churn.
+# Re-exports for `from .lora_cmds import cmd_X` callers.
 from .training import (  # noqa: F401
     cmd_train,
     cmd_extract_training_data,
@@ -225,5 +223,5 @@ def register(subparsers):
                    help="Persist retrieval to task.extra.rules_considered. "
                         "Auto-detected from .maiko-env.json when run inside "
                         "an agent worktree, so agents normally don't pass it. "
-                        "(--task-id accepted for back-compat.)")
+                        "(--task-id accepted as an alias.)")
     p.set_defaults(func=cmd_rules_relevant)

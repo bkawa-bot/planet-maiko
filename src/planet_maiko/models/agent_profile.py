@@ -14,17 +14,15 @@ class AgentProfile(db.Model):
     id = db.Column(db.String(128), primary_key=True)
     display_name = db.Column(db.String(100), nullable=False)
     # Card id (matches a row in data/cards/cards.yaml). Set by
-    # create_profile via roll_card(); the model default is None
-    # because the breed-string default ("shiba") was a leftover
-    # from before the cards system, and CardAvatar's procedural
+    # create_profile via roll_card(). CardAvatar's procedural
     # fallback handles a missing card id gracefully.
     avatar = db.Column(db.String(50), nullable=True)
     flavor_text = db.Column(db.String(256), nullable=True)  # "Loves debugging. Afraid of CSS."
 
-    # Orchestration identity. Role picks what kind of work this agent takes
-    # ("coding" default for backward compat; "review" / "investigation" for
-    # the new roles). scope_repo narrows it to a single repo — null means
-    # "global" (e.g. the Detective for cross-repo incidents).
+    # Orchestration identity. Role picks what kind of work this agent
+    # takes ("coding", "review", "investigation"). scope_repo narrows
+    # it to a single repo; null means "global" (e.g. the Detective for
+    # cross-repo incidents).
     role = db.Column(db.String(32), default="coding", index=True)
     scope_repo = db.Column(db.String(256), nullable=True, index=True)
     # Markdown injected into every session this agent runs — the "soul" of

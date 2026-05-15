@@ -203,11 +203,11 @@ export const api = {
   getAgents: () => request("/agents"),
   getAgentActivity: () => request("/agents/activity"),
   getQueuedAgentTasks: () => request("/agents/queued"),
-  getAgentMessages: (taskId) => request(`/agents/${taskId}/messages`),
-  sendToAgent: (taskId, data) =>
-    request(`/agents/${taskId}/inbox`, { method: "POST", body: JSON.stringify(data) }),
-  rerunAgent: (taskId) =>
-    request(`/agents/${taskId}/rerun`, { method: "POST" }),
+  getAgentMessages: (jobId) => request(`/agents/${jobId}/messages`),
+  sendToAgent: (jobId, data) =>
+    request(`/agents/${jobId}/inbox`, { method: "POST", body: JSON.stringify(data) }),
+  rerunAgent: (jobId) =>
+    request(`/agents/${jobId}/rerun`, { method: "POST" }),
   getConflicts: () => request("/agents/conflicts"),
 
   // Skills

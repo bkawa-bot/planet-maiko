@@ -72,13 +72,10 @@ class PollerScheduler:
             thread.start()
             logger.info(f"[scheduler] Started {name} poller (every {interval}s)")
 
-        # Start the periodic brain cycle. This was previously
-        # event-driven only — the cycle ran whenever a poller created a
-        # pupdate. Without enabled pollers (or during quiet periods)
-        # the brain effectively stopped ticking, so phases like
-        # synthesis / clustering / scheduled skills stalled until the
-        # user manually hit POST /brain/cycle. Now there's a steady
-        # heartbeat regardless of poller activity.
+        # Start the periodic brain cycle. A steady heartbeat regardless
+        # of poller activity, so phases like synthesis / clustering /
+        # scheduled skills don't stall during quiet periods (or when
+        # all pollers are disabled).
         brain_interval = config.get("brain", {}).get("cycle_interval_minutes", 5) * 60
         brain_thread = threading.Thread(
             target=self._brain_cycle_loop,
