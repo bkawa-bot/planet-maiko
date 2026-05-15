@@ -9,7 +9,6 @@ import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import { renderMarkdown } from "../utils/markdown";
 import PlanetSpinner from "../components/PlanetSpinner";
-import AgentChatThread from "../components/AgentChatThread";
 import CardAvatar from "../components/CardAvatar";
 import ProposalCard from "../components/ProposalCard";
 import DiffView from "../components/diff/DiffView";
@@ -29,7 +28,7 @@ import "./AgentJobPage.css";
  *   - Diff       coding / review / pr_review (worktree exists)
  *   - Plan       coding plan-first when a plan reply has landed
  *   - Report     investigation / repo_analysis / cartograph (artifact)
- *   - Chat       always (AgentChatThread on the job's inbox)
+ *   - Chat       always (inline ChatPanel on the job's inbox)
  *   - Activity   always (chronological pupdates + messages)
  *
  * Each section's logic lives inline here for V1. Old per-page routes
@@ -835,8 +834,7 @@ function ChatPanel({ jobId }) {
     }
   }, [jobId]);
 
-  // Initial load + 8s poll while the panel's open. Same cadence
-  // AgentChatThread uses for its own polling.
+  // Initial load + 8s poll while the panel's open.
   useEffect(() => {
     refetch();
     const t = setInterval(refetch, 8000);
