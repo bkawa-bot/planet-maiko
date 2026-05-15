@@ -51,29 +51,61 @@
   transform: scale(1.06);
 }
 
-/* Announce broadcasts to the whole pack — secondary to send, so it's
-   outlined rather than filled to read as the less-default action. */
-.pack-ask-announce {
+/* Announce is its own labeled box below the ask box — a distinct
+   action (broadcast to everyone) so it gets its own affordance
+   rather than a button hiding in the dispatch input. */
+.pack-announce-box {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-subtle);
+}
+.pack-announce-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 5px;
+}
+.pack-announce-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.pack-announce-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-input, var(--bg-card));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 6px 9px;
+  font-size: 12px;
+  color: var(--text);
+}
+.pack-announce-input:focus {
+  outline: none;
+  border-color: var(--pink);
+}
+.pack-announce-send {
   width: 26px;
   height: 26px;
   flex-shrink: 0;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: var(--radius-xs);
-  background: transparent;
-  color: var(--text-dim);
+  background: var(--pink);
+  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, transform 0.15s;
+  transition: opacity 0.15s, transform 0.15s;
 }
-.pack-ask-announce:disabled {
+.pack-announce-send:disabled {
+  background: var(--bg-card);
   color: var(--text-muted);
   cursor: default;
 }
-.pack-ask-announce:not(:disabled):hover {
-  color: var(--pink);
-  border-color: var(--pink);
+.pack-announce-send:not(:disabled):hover {
   transform: scale(1.06);
 }
 

@@ -22,6 +22,11 @@ export default function PackAskBox() {
   const [turns, setTurns] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadSeconds, setLoadSeconds] = useState(0);
+  // Announce is its own thing — separate input + in-flight flag so it
+  // never shares state with the dispatch box (the combined megaphone
+  // button was confusing).
+  const [announceText, setAnnounceText] = useState("");
+  const [announcing, setAnnouncing] = useState(false);
 
   // Tick up while dispatch is in flight so the spinner can show a
   // "still thinking" hint past the point where instant responses stop.
@@ -73,14 +78,14 @@ export default function PackAskBox() {
 
   // Broadcast straight to every active agent — no routing, no LLM.
   // Different intent from dispatch: dispatch picks ONE agent for a
-  // task; announce tells the WHOLE pack something.
+  // task; announce tells the WHOLE pack something. Result still lands
+  // in the shared turns thread so the user sees confirmation inline.
   const announceNow = async () => {
-    const msg = text.trim();
-    if (!msg || loading) return;
+    const msg = announceText.trim();
+    if (!msg || announcing) return;
     setTurns((prev) => [...prev, { kind: "user", text: msg }]);
-    setText("");
-    setShowDetails(false);
-    setLoading(true);
+    setAnnounceText("");
+    setAnnouncing(true);
     try {
       const res = await api.announceToPack(msg);
       setTurns((prev) => [...prev, {
@@ -91,7 +96,7 @@ export default function PackAskBox() {
     } catch (err) {
       setTurns((prev) => [...prev, { kind: "error", text: err.message }]);
     }
-    setLoading(false);
+    setAnnouncing(false);
   };
 
   const onKey = (e) => {
@@ -119,15 +124,6 @@ export default function PackAskBox() {
         />
         <button
           type="button"
-          className="pack-ask-announce"
-          onClick={announceNow}
-          disabled={!text.trim() || loading}
-          title="Announce to every active agent"
-        >
-          <Megaphone size={12} />
-        </button>
-        <button
-          type="button"
           className="pack-ask-send"
           onClick={submit}
           disabled={!text.trim() || loading}
@@ -135,6 +131,37 @@ export default function PackAskBox() {
         >
           {loading ? <Loader size={12} className="spin" /> : <Send size={12} />}
         </button>
+      </div>
+
+      <div className="pack-announce-box">
+        <span className="pack-announce-label">
+          <Megaphone size={11} /> Announce to the whole pack
+        </span>
+        <div className="pack-announce-row">
+          <input
+            type="text"
+            value={announceText}
+            onChange={(e) => setAnnounceText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                announceNow();
+              }
+            }}
+            placeholder="Tell every active agent something…"
+            className="pack-announce-input"
+            disabled={announcing}
+          />
+          <button
+            type="button"
+            className="pack-announce-send"
+            onClick={announceNow}
+            disabled={!announceText.trim() || announcing}
+            title="Send to every active agent"
+          >
+            {announcing ? <Loader size={12} className="spin" /> : <Megaphone size={12} />}
+          </button>
+        </div>
       </div>
 
       <button
