@@ -70,14 +70,11 @@ def _maybe_end_runtime_session(job_id, message_type):
     the end of a turn.
 
     Fans out end_session across every already-instantiated runtime.
-    Each runtime's end_session is idempotent — claude-code's is a
-    no-op, tmux only kills its own bound session for this job_id.
-    Fan-out means we can't miss a teardown if the agent was kicked
-    off under one runtime (e.g. tmux via per-task routing) but the
-    default runtime resolves to another (e.g. claude-code). Letting
-    the tmux pane leak strands the kickoff thread on its
-    _wait_for_session_end and the next follow-up message ends up
-    behind a held lock.
+    Each runtime's end_session is idempotent: claude-code's is a no-op,
+    tmux only kills its own bound session for this job_id. Fan-out
+    covers the case where the agent kicked off under one runtime (e.g.
+    tmux via per-task routing) while the default runtime resolves to
+    another (e.g. claude-code).
     """
     if message_type not in _TERMINAL_MESSAGE_TYPES:
         return

@@ -294,6 +294,19 @@ class AgentRuntime(ABC):
         """
         return None
 
+    def is_persistent_session(self) -> bool:
+        """True when the runtime keeps the agent process alive across
+        turns. Headless runtimes (claude --print) return False because
+        the process exits after each reply. Tmux returns True because
+        the pane stays open and processes a stream of prompts.
+
+        Tells wake.py that resume() returns as soon as the prompt is
+        delivered (not when the turn finishes), so the lock can release
+        immediately and the agent's "working" state shouldn't auto-flip
+        back to idle when resume returns.
+        """
+        return False
+
     # ----- Transcript surfacing -----
     # The UI's "View Session" link shows the user the full conversation.
     # Claude-Code stores transcripts as JSONL under ~/.claude/projects/;

@@ -98,6 +98,9 @@ class TmuxClaudeRuntime(ClaudeCodeRuntime):
         info["tmux"] = shutil.which("tmux") is not None
         return info
 
+    def is_persistent_session(self):
+        return True
+
     # ----- spawn / resume -----
 
     def spawn(
@@ -189,6 +192,25 @@ class TmuxClaudeRuntime(ClaudeCodeRuntime):
             return _spawn_error("tmux not found (Homebrew: brew install tmux)")
 
         sess = _session_name(job_id)
+
+        # Fast path: pane already exists for this job. Just inject the
+        # new prompt into the running claude. tmux is persistent across
+        # wakes, so we don't tear down and recreate the session on every
+        # turn. Returning immediately lets wake.py release the lock
+        # without waiting for the agent's response — chat / review /
+        # nudge wakes all converge into the same shell.
+        if self._tmux_alive(sess):
+            with self._SESSIONS_GUARD:
+                self._SESSIONS[job_id] = sess
+            self._tmux_send(sess, prompt)
+            return {
+                "success": True,
+                "pid": None,
+                "exit_code": 0,
+                "error": None,
+                "log_tail": None,
+            }
+
         claude_cmd = self._compose_claude_cmd(
             session_id=session_id,
             mode=mode,
@@ -200,17 +222,6 @@ class TmuxClaudeRuntime(ClaudeCodeRuntime):
         )
 
         env_kv = self._compose_env(extra_env)
-
-        # Defensive: if a same-named session is still alive from a
-        # previous turn whose end_session never fired (e.g. terminal
-        # reply routed to the wrong runtime, or claude crashed before
-        # the cleanup path ran), tmux new-session would fail with
-        # "duplicate session". Kill the stale one first; the agent's
-        # claude --resume below picks up the JSONL transcript from
-        # disk so no conversation state is lost.
-        if self._tmux_alive(sess):
-            logger.info(f"[tmux-claude] killing stale session {sess} before new turn")
-            self._tmux_kill(sess)
 
         created = self._tmux_create(
             sess=sess,
@@ -224,40 +235,30 @@ class TmuxClaudeRuntime(ClaudeCodeRuntime):
         with self._SESSIONS_GUARD:
             self._SESSIONS[job_id] = sess
 
-        # Pipe pane → log file so we keep the existing agent.log
-        # surface. -o appends to existing output rather than
-        # truncating, so resumes don't clobber spawn's header.
+        # Pipe pane to log file so we keep the existing agent.log
+        # surface. -o appends rather than truncating, so resumes don't
+        # clobber spawn's header.
         if log_path:
             try:
                 self._tmux_pipe_pane(sess, log_path, append=(mode == "resume"))
             except Exception as e:
                 logger.warning(f"[tmux-claude] pipe-pane failed for {sess}: {e}")
 
-        # Wait for claude to draw its initial prompt before we feed
-        # input. Best-effort; we proceed on timeout because claude
-        # almost always is ready by then.
+        # Wait for claude to draw its initial prompt before feeding input.
+        # Best-effort; proceed on timeout because claude is almost always
+        # ready by then.
         ready = self._wait_for_ready(sess)
         if not ready and not self._tmux_alive(sess):
             self._cleanup(sess, job_id)
             return _spawn_error("claude crashed before becoming ready (see agent.log)")
 
-        # Send the prompt as if user typed it. -l = literal, so
-        # special chars in the prompt aren't interpreted as tmux
-        # keysyms ("C-c" etc).
+        # Send the prompt as if the user typed it (-l = literal so special
+        # chars aren't interpreted as tmux keysyms like "C-c").
         self._tmux_send(sess, prompt)
 
-        # Block until the session ends. The terminating event is
-        # either: outbox handler called end_session() because the
-        # agent posted a terminal-typed maiko reply, OR cancellation
-        # killed the session, OR claude crashed (session dies with
-        # the foreground process).
-        self._wait_for_session_end(sess)
-
-        # Best-effort cleanup in case end_session wasn't the path that
-        # killed us (e.g., claude crash).
-        with self._SESSIONS_GUARD:
-            self._SESSIONS.pop(job_id, None)
-
+        # Return now. The pane stays alive and the agent works async in
+        # the background; end_session() is the explicit teardown path
+        # (called on terminal-typed replies or task cancellation).
         return {
             "success": True,
             "pid": None,
@@ -459,19 +460,6 @@ class TmuxClaudeRuntime(ClaudeCodeRuntime):
             )):
                 return True
         return True  # claude is almost certainly ready by now
-
-    def _wait_for_session_end(self, sess):
-        """Block until the tmux session no longer exists.
-
-        Polling every _TURN_POLL_S keeps the daemon thread's wake
-        cadence cheap. The session ends when either:
-          (a) end_session() killed it after a terminal-typed reply
-          (b) cancellation killed it
-          (c) claude crashed (we used claude as the session's
-              foreground so the session dies with the process)
-        """
-        while self._tmux_alive(sess):
-            time.sleep(_TURN_POLL_S)
 
     def _cleanup(self, sess, job_id):
         with self._SESSIONS_GUARD:

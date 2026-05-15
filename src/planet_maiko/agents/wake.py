@@ -212,9 +212,16 @@ def wake_agent(task_id, prompt, source, working_path=None, session_id=None, app=
         except Exception as e:
             logger.warning(f"[wake] run failed for {task_id}: {e}")
         finally:
-            set_agent_state(app, task_id, "idle")
+            # For persistent-session runtimes (tmux), runtime.resume
+            # returns as soon as the prompt is delivered. The agent
+            # keeps working in the background, so don't flip state back
+            # to idle here. Headless runtimes' resume blocks until the
+            # process exits, so by the time we get here the agent
+            # really is idle.
+            if not runtime.is_persistent_session():
+                set_agent_state(app, task_id, "idle")
             lock.release()
-            # Anything queued while we ran — fire a follow-up wake so
+            # Anything queued while we ran. Fire a follow-up wake so
             # it doesn't sit until the next external trigger.
             with _PENDING_GUARD:
                 leftover = _PENDING_PROMPTS.pop(task_id, [])
