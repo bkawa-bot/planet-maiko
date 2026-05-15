@@ -79,6 +79,7 @@ export const Power = (p) => <MIcon icon="power-button" {...p} />;
 export const Palette = (p) => <MIcon icon="palette" {...p} />;
 export const Sparkles = (p) => <MIcon icon="sparkles" {...p} />;
 export const Bell = (p) => <MIcon icon="ringing-bell" {...p} />;
+export const Megaphone = (p) => <MIcon icon="megaphone" {...p} />;
 export const HelpCircle = (p) => <MIcon icon="help" {...p} />;
 export const MoreHorizontal = (p) => <MIcon icon="three-leaves" {...p} />;
 

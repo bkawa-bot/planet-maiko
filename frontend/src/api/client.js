@@ -423,6 +423,12 @@ export const api = {
         non_goals: non_goals || "",
       }),
     }),
+  // Broadcast a message to every active agent (no routing, no LLM).
+  announceToPack: (message) =>
+    request("/pack/announce", {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    }),
 
   // Agent profiles
   getProfiles: (params = {}) => {

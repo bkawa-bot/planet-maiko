@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 # Queue the prompt and fire it on the next wake. Losing a user chat or
 # review-iteration request is bad.
-_QUEUEING_SOURCES = {"chat", "feedback", "review", "plan", "queued"}
+_QUEUEING_SOURCES = {"chat", "feedback", "review", "plan", "queued", "announce"}
 # Drop silently — a second heartbeat while the agent is already working
 # is noise. status_request fires when the home overview regenerates and
 # wants every agent to post a fresh status; if the agent is mid-work

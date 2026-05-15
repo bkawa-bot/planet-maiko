@@ -51,6 +51,32 @@
   transform: scale(1.06);
 }
 
+/* Announce broadcasts to the whole pack — secondary to send, so it's
+   outlined rather than filled to read as the less-default action. */
+.pack-ask-announce {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, transform 0.15s;
+}
+.pack-ask-announce:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+.pack-ask-announce:not(:disabled):hover {
+  color: var(--pink);
+  border-color: var(--pink);
+  transform: scale(1.06);
+}
+
 /* Inline thread — dispatched-agent cards, clarifies, errors.
    Renders under the input so the conversation lives where it
    started instead of popping out to a corner panel. Styles reuse

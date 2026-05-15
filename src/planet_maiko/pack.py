@@ -378,3 +378,87 @@ def _friendly_confirmation(profile, task, role, launch_status, reasoning):
     if reasoning and reasoning.lower() not in head.lower():
         return f"{head} {reasoning}"
     return head
+
+
+def announce(message: str) -> dict:
+    """Broadcast a user message to every active agent.
+
+    The pack equivalent of a town-square announcement. Mirrors the
+    fan-out Maiko already does for status sweeps (overview's
+    _request_agent_status_updates), but user-initiated and with a
+    queueing wake source so a busy agent gets it on its next turn
+    instead of dropping it.
+
+    "Active" = running AgentJobs plus FOLLOWUP_KINDS jobs parked in
+    `done` with their worktree still on disk (review / investigation /
+    cartograph waiting on the user) — same liveness rule the status
+    sweep uses, so the announcement reaches exactly the agents the
+    Working-agents widget shows.
+
+    Returns {announced: int, agents: [display names], skipped: int}.
+    """
+    from planet_maiko.models.agent_job import AgentJob
+    from planet_maiko.models.agent_message import AgentMessage
+    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.agents.wake import wake_agent
+    from planet_maiko.api.agent_outbox import FOLLOWUP_KINDS
+
+    msg = (message or "").strip()
+    if not msg:
+        return {"announced": 0, "agents": [], "skipped": 0}
+
+    candidates = (
+        AgentJob.query
+        .filter(AgentJob.status.in_(("running", "done")))
+        .all()
+    )
+    alive = [
+        j for j in candidates
+        if j.status == "running"
+        or (j.kind in FOLLOWUP_KINDS and j.worktree_path)
+    ]
+    if not alive:
+        return {"announced": 0, "agents": [], "skipped": 0}
+
+    try:
+        from planet_maiko.config import load_config
+        user_name = (load_config().get("user") or {}).get("name") or "the user"
+    except Exception:
+        user_name = "the user"
+
+    wake_prompt = (
+        f"Pack-wide announcement from {user_name} (this went to every "
+        f"active agent, not just you):\n\n{msg}\n\n"
+        "Acknowledge in one line if it's relevant to what you're doing, "
+        "otherwise just take it into account and keep working."
+    )
+
+    announced = []
+    skipped = 0
+    for job in alive:
+        try:
+            db.session.add(AgentMessage(
+                task_id=job.id,
+                direction="to_agent",
+                sender="user",
+                content=msg,
+                message_type="announcement",
+            ))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.warning(f"[pack] announce: inbox write failed for {job.id}: {e}")
+            skipped += 1
+            continue
+        try:
+            wake_agent(job.id, wake_prompt, source="announce")
+        except Exception as e:
+            logger.debug(f"[pack] announce: wake failed for {job.id}: {e}")
+        name = None
+        if job.agent_profile_id:
+            prof = db.session.get(AgentProfile, job.agent_profile_id)
+            name = prof.display_name if prof else None
+        announced.append(name or job.kind or job.id)
+
+    logger.info(f"[pack] announced to {len(announced)} agent(s); {skipped} skipped")
+    return {"announced": len(announced), "agents": announced, "skipped": skipped}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Send, Loader, Trash2, ChevronDown, ChevronUp } from "@icons";
+import { Send, Loader, Trash2, ChevronDown, ChevronUp, Megaphone } from "@icons";
 import { api } from "../api/client";
 import PackTurn from "./PackTurn";
 import PlanetSpinner from "./PlanetSpinner";
@@ -71,6 +71,29 @@ export default function PackAskBox() {
     dispatchNow(ask, context.trim(), nonGoals.trim());
   };
 
+  // Broadcast straight to every active agent — no routing, no LLM.
+  // Different intent from dispatch: dispatch picks ONE agent for a
+  // task; announce tells the WHOLE pack something.
+  const announceNow = async () => {
+    const msg = text.trim();
+    if (!msg || loading) return;
+    setTurns((prev) => [...prev, { kind: "user", text: msg }]);
+    setText("");
+    setShowDetails(false);
+    setLoading(true);
+    try {
+      const res = await api.announceToPack(msg);
+      setTurns((prev) => [...prev, {
+        kind: "announced",
+        count: res.announced ?? 0,
+        agents: res.agents || [],
+      }]);
+    } catch (err) {
+      setTurns((prev) => [...prev, { kind: "error", text: err.message }]);
+    }
+    setLoading(false);
+  };
+
   const onKey = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -94,6 +117,15 @@ export default function PackAskBox() {
           className="pack-ask-input"
           disabled={loading}
         />
+        <button
+          type="button"
+          className="pack-ask-announce"
+          onClick={announceNow}
+          disabled={!text.trim() || loading}
+          title="Announce to every active agent"
+        >
+          <Megaphone size={12} />
+        </button>
         <button
           type="button"
           className="pack-ask-send"

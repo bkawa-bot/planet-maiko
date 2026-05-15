@@ -15,7 +15,7 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
-from planet_maiko.pack import dispatch
+from planet_maiko.pack import dispatch, announce
 
 logger = logging.getLogger(__name__)
 
@@ -42,3 +42,24 @@ def dispatch_route():
     if status == "error":
         return jsonify(result), 500
     return jsonify(result), 200
+
+
+@pack_bp.route("/pack/announce", methods=["POST"])
+def announce_route():
+    """Broadcast a message to every active agent.
+
+    Body: {"message": str}
+    Response: {"status": "announced", "announced": int, "agents": [...]}
+    """
+    data = request.get_json(silent=True) or {}
+    message = (data.get("message") or "").strip()
+    if not message:
+        return jsonify({"status": "error", "error": "message is required"}), 400
+
+    try:
+        result = announce(message)
+    except Exception as e:
+        logger.exception("[pack] announce crashed: %s", e)
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+    return jsonify({"status": "announced", **result}), 200

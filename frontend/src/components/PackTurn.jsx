@@ -11,6 +11,7 @@ import { ArrowRight } from "@icons";
  *   { kind: "user",       text, context?, nonGoals? }
  *   { kind: "clarify",    text }
  *   { kind: "error",      text }
+ *   { kind: "announced",  count, agents }
  *   { kind: "dispatched", agent, task, message, reasoning, launchStatus }
  */
 export default function PackTurn({ turn, onClose }) {
@@ -45,6 +46,20 @@ export default function PackTurn({ turn, onClose }) {
         <span className="ask-maiko-avatar">M</span>
         <div className="ask-maiko-msg-text ask-pack-error">
           Hmm, that didn't work. {turn.text}
+        </div>
+      </div>
+    );
+  }
+
+  if (turn.kind === "announced") {
+    return (
+      <div className="ask-maiko-msg maiko">
+        <span className="ask-maiko-avatar">M</span>
+        <div className="ask-maiko-msg-text">
+          {turn.count === 0
+            ? "No active agents to announce to right now."
+            : `Announced to ${turn.count} agent${turn.count === 1 ? "" : "s"}` +
+              (turn.agents?.length ? `: ${turn.agents.join(", ")}.` : ".")}
         </div>
       </div>
     );
