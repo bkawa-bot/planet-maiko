@@ -115,7 +115,7 @@ Integrations are plugins that fetch on a schedule. Subclass `PollerPlugin`,
 implement `poll()` and `to_pupdates()`, and register as a plugin entry point:
 
 ```python
-from planet_maiko.plugins.helpers import PollerPlugin
+from planet_maiko.plugins.poller import PollerPlugin
 
 class PagerDutyPlugin(PollerPlugin):
     name = "pagerduty"
@@ -132,8 +132,11 @@ class PagerDutyPlugin(PollerPlugin):
 pagerduty = "my_package:PagerDutyPlugin"
 ```
 
-The plugin fires inside the brain cycle's `on_brain_cycle` hook and gates
-on `poll_interval_minutes`. No threads to manage.
+The plugin runs inside the brain cycle's `on_cycle_tick` hook, gated on
+`poll_interval_minutes`. No threads to manage. For a non-poller plugin
+(react to events, add CLI commands, hook a specific phase) subclass
+`MaikoPlugin` directly and override the hooks you need; call
+`self.emit_pupdates(...)` to surface anything into the inbox.
 
 ### Swap the runtime
 

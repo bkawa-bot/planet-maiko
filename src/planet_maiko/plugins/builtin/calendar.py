@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 import requests
 from icalendar import Calendar
 
-from planet_maiko.plugins.helpers import PollerPlugin
+from planet_maiko.plugins.poller import PollerPlugin
 
 logger = logging.getLogger(__name__)
 

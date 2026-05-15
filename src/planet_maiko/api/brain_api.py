@@ -191,7 +191,7 @@ def system_health():
     # never started the cycle thread.
     from datetime import datetime as _dt, timezone as _tz
     from planet_maiko.plugins.loader import get_plugins
-    from planet_maiko.plugins.helpers import PollerPlugin
+    from planet_maiko.plugins.poller import PollerPlugin
 
     pollers = {}
     for p in get_plugins():

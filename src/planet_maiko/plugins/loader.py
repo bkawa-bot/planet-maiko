@@ -320,8 +320,15 @@ def load_plugins(app):
                 d["config_key"] = next(iter(defaults.keys())) if defaults else plugin.name
                 break
 
-    # Call on_startup
+    # Call on_startup, skipping plugins the user disabled in Settings.
+    # A disabled integration shouldn't register blueprints / commands /
+    # tables; consistent with fire_hook skipping its later hooks.
     for plugin in _plugins:
+        try:
+            if not plugin.is_enabled():
+                continue
+        except Exception:
+            pass
         try:
             plugin.on_startup(app)
         except Exception as e:
@@ -356,7 +363,7 @@ def load_plugins(app):
         editor's source autocomplete.
         """
         try:
-            from planet_maiko.plugins.helpers import PollerPlugin
+            from planet_maiko.plugins.poller import PollerPlugin
             poller_names = [
                 p.name for p in get_plugins()
                 if isinstance(p, PollerPlugin)
@@ -405,13 +412,23 @@ def get_plugins():
 
 
 def fire_hook(hook_name, *args, **kwargs):
-    """Call a hook on all loaded plugins, silently catching errors.
+    """Call a hook on all enabled plugins, silently catching errors.
+
+    Plugins the user turned off in Settings (is_enabled() is False) are
+    skipped entirely — a disabled integration shouldn't react to
+    anything. Re-enabling needs a restart (same as the loader's
+    disabled list).
 
     Args:
         hook_name: method name on MaikoPlugin (e.g. "on_pupdate_created")
         *args, **kwargs: passed to the hook method
     """
     for plugin in get_plugins():
+        try:
+            if not plugin.is_enabled():
+                continue
+        except Exception:
+            pass
         method = getattr(plugin, hook_name, None)
         if method:
             try:

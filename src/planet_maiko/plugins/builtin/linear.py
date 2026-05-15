@@ -17,7 +17,7 @@ import re
 import requests
 
 from planet_maiko.config import load_config, save_config
-from planet_maiko.plugins.helpers import PollerPlugin
+from planet_maiko.plugins.poller import PollerPlugin
 
 logger = logging.getLogger(__name__)
 

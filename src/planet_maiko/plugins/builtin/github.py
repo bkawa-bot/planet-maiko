@@ -12,7 +12,7 @@ import json
 import logging
 import subprocess
 
-from planet_maiko.plugins.helpers import PollerPlugin
+from planet_maiko.plugins.poller import PollerPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -439,7 +439,7 @@ class GitHubPlugin(PollerPlugin):
         # so we use the pr_merged Pupdate row as the cursor: if it carries
         # comments_scraped_at on its extra, we've already pulled comments.
         from planet_maiko.models.pupdate import Pupdate
-        from planet_maiko.plugins.helpers import _pupdate_id
+        from planet_maiko.plugins.base import _pupdate_id
 
         existing_per_repo = {}
         scraped_pupdate_by_pr = {}

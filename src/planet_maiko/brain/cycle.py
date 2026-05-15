@@ -123,10 +123,14 @@ def run(app):
             except Exception as e:
                 logger.warning(f"[cycle] post-phase rollback ({key}) skipped: {e}")
 
-        # Fire plugin hooks for all completed phases
+        # Fire plugin hooks. on_brain_cycle is per-phase (for plugins
+        # that care about a specific phase's output); on_cycle_tick
+        # fires exactly once per cycle (periodic work — pollers, sync,
+        # cleanup). fire_hook skips disabled plugins.
         from planet_maiko.plugins.loader import fire_hook
         for phase_name, phase_results in results.items():
             fire_hook("on_brain_cycle", phase_name, phase_results, app)
+        fire_hook("on_cycle_tick", app)
 
         _last_cycle = datetime.now(timezone.utc)
         _cycle_count += 1

@@ -1,6 +1,19 @@
 """Base class for Planet Maiko plugins.
 
-All methods are optional — only override what you need.
+All hook methods are optional, only override what you need:
+
+  - on_startup(app)            one-time setup (blueprints, tables)
+  - on_cycle_tick(app)         fires once per brain cycle. The right
+                               hook for periodic background work (poll
+                               an API, sync, cleanup).
+  - on_brain_cycle(phase, ...) fires once per cycle PHASE. Use only
+                               when you care about a specific phase's
+                               results.
+  - on_pupdate_created / on_task_created   react to a single event.
+
+Plugins that surface external data call self.emit_pupdates(...). The
+scheduled-fetch shape (poll on an interval) is the PollerPlugin
+subclass in plugins/poller.py.
 
 Example plugin (~/.maiko/plugins/my_plugin.py):
 
@@ -11,17 +24,133 @@ Example plugin (~/.maiko/plugins/my_plugin.py):
 
         def on_startup(self, app):
             print("Plugin loaded!")
-
-        def on_brain_cycle(self, phase, results, app):
-            if phase == "learning":
-                print(f"Learnings processed: {results}")
 """
+
+import hashlib
+import logging
+from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
+
+
+def _pupdate_id(plugin_name, source_id):
+    """Deterministic pupdate id from (plugin, source_id). Stable across
+    polls so the same source_id never double-inserts.
+    """
+    raw = f"{plugin_name}:{source_id}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:12]
 
 
 class MaikoPlugin:
     """Base class for all Planet Maiko plugins."""
 
     name = ""
+
+    #: Top-level config key this plugin's settings live under. Defaults
+    #: to `name`. is_enabled() reads `config[config_key].enabled`.
+    config_key = None
+
+    def is_enabled(self):
+        """True unless the user turned this plugin off in Settings.
+
+        Reads `config[config_key or name].enabled`. Plugins with no
+        config section (no enabled flag) default to enabled — a plugin
+        that's loaded but unconfigured still gets its hooks. fire_hook()
+        skips plugins where this returns False, so a disabled plugin is
+        fully inert until re-enabled (which needs a restart, same as
+        the loader's disabled list).
+        """
+        try:
+            from planet_maiko.config import load_config
+            key = self.config_key or self.name
+            section = load_config().get(key)
+            if not isinstance(section, dict) or "enabled" not in section:
+                return True
+            return bool(section.get("enabled"))
+        except Exception:
+            return True
+
+    def emit_pupdates(self, pupdate_dicts, signal_dicts=None, db_session=None):
+        """Dedup + insert pupdates (and optional signals) for this plugin.
+
+        Args:
+            pupdate_dicts: list of dicts. Each must have source_id, type,
+                title. Optional: priority, body, url, actionable,
+                action_hint, tags, metadata, expires_at.
+            signal_dicts: optional list for the learning system. Each
+                should have category, text, source_type; severity, repo,
+                language, file_path optional.
+            db_session: SQLAlchemy session. Defaults to the ambient
+                Flask-SQLAlchemy session.
+
+        Returns:
+            int: number of new pupdate rows created. Rows whose
+            source_id already exists are skipped.
+        """
+        from planet_maiko.models.pupdate import Pupdate
+
+        if db_session is None:
+            from planet_maiko.database import db
+            db_session = db.session
+
+        created = 0
+        for pd in pupdate_dicts or []:
+            pup_id = _pupdate_id(self.name, pd["source_id"])
+            if db_session.get(Pupdate, pup_id) is not None:
+                continue
+            pupdate = Pupdate(
+                id=pup_id,
+                timestamp=datetime.now(timezone.utc),
+                source=self.name,
+                source_id=pd["source_id"],
+                type=pd["type"],
+                priority=pd.get("priority", "normal"),
+                title=pd["title"],
+                body=pd.get("body"),
+                url=pd.get("url"),
+                actionable=pd.get("actionable", False),
+                action_hint=pd.get("action_hint"),
+                tags=pd.get("tags", []),
+                extra=pd.get("metadata", {}),
+            )
+            if pd.get("expires_at"):
+                pupdate.expires_at = datetime.fromisoformat(pd["expires_at"])
+            db_session.add(pupdate)
+            created += 1
+
+        signal_count = 0
+        if signal_dicts:
+            from planet_maiko.models.signal import Signal
+            for s in signal_dicts:
+                db_session.add(Signal(
+                    category=s.get("category", "domain_knowledge"),
+                    text=s["text"][:500],
+                    source_type=s.get("source_type", self.name),
+                    reviewer=s.get("reviewer"),
+                    severity=s.get("severity", "suggestion"),
+                    repo=s.get("repo"),
+                    language=s.get("language"),
+                    file_path=s.get("file_path"),
+                    synthesized=True,
+                ))
+                signal_count += 1
+
+        if created or signal_count:
+            db_session.commit()
+            if created:
+                logger.info(f"[{self.name}] {created} new pupdate(s)")
+            if signal_count:
+                logger.info(f"[{self.name}] {signal_count} learning signal(s)")
+
+        return created
+
+    def on_cycle_tick(self, app):
+        """Called exactly once per brain cycle.
+
+        The right hook for periodic background work that doesn't care
+        about phases: polling an external service, syncing, cleanup.
+        PollerPlugin implements this. Default is a no-op.
+        """
 
     def on_startup(self, app):
         """Called once during app creation.

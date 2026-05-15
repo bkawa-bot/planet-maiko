@@ -337,7 +337,7 @@ def _pollers_context():
     try:
         from flask import current_app
         from planet_maiko.plugins.loader import get_plugins
-        from planet_maiko.plugins.helpers import PollerPlugin
+        from planet_maiko.plugins.poller import PollerPlugin
         from datetime import datetime as _dt, timezone as _tz
 
         plugins = {}
@@ -816,7 +816,7 @@ def _prepoll_and_cycle(app):
     """
     import concurrent.futures
     from planet_maiko.plugins.loader import get_plugins
-    from planet_maiko.plugins.helpers import PollerPlugin
+    from planet_maiko.plugins.poller import PollerPlugin
     from planet_maiko.brain.cycle import run as run_brain_cycle
 
     to_run = [p for p in get_plugins() if isinstance(p, PollerPlugin)]

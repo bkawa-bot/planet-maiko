@@ -223,7 +223,7 @@ def discover_github_repos():
 def poller_status():
     """Get status of all poller plugins."""
     from planet_maiko.plugins.loader import get_plugins
-    from planet_maiko.plugins.helpers import PollerPlugin
+    from planet_maiko.plugins.poller import PollerPlugin
 
     out = {}
     for p in get_plugins():
@@ -244,7 +244,7 @@ def run_poller(name):
     """Manually trigger a specific poller plugin."""
     from flask import current_app
     from planet_maiko.plugins.loader import get_plugins
-    from planet_maiko.plugins.helpers import PollerPlugin
+    from planet_maiko.plugins.poller import PollerPlugin
 
     plugin = next(
         (p for p in get_plugins()

@@ -8,7 +8,7 @@ poll response means no dedup refresh).
 import logging
 
 from planet_maiko.integrations.clients.pagerduty_client import PagerDutyClient
-from planet_maiko.plugins.helpers import PollerPlugin
+from planet_maiko.plugins.poller import PollerPlugin
 
 logger = logging.getLogger(__name__)
 
