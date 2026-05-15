@@ -404,8 +404,7 @@ def handle_agent_job_reply(job, msg, data, message_type):
 
 
 # ============================================================
-# Task path — pre-Stage-D code path, plus coding tasks that
-# still finish here.
+# Task path: coding tasks that finish on the Task row directly.
 # ============================================================
 
 def handle_task_ready_for_review(task_id, task, data):

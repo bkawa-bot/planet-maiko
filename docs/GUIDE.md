@@ -111,21 +111,29 @@ Install with `pip install maiko-my-plugin` — auto-discovered on startup.
 
 ### Add an integration
 
-Subclass `BasePoller` and register as an entry point:
+Integrations are plugins that fetch on a schedule. Subclass `PollerPlugin`,
+implement `poll()` and `to_pupdates()`, and register as a plugin entry point:
 
 ```python
-from planet_maiko.pollers.base import BasePoller
+from planet_maiko.plugins.helpers import PollerPlugin
 
-class PagerDutyPoller(BasePoller):
+class PagerDutyPlugin(PollerPlugin):
     name = "pagerduty"
+
+    def get_config_defaults(self):
+        return {"pagerduty": {"enabled": False, "poll_interval_minutes": 5, "api_token": ""}}
+
     def poll(self, config): ...
     def to_pupdates(self, raw_data): ...
 ```
 
 ```toml
-[project.entry-points."planet_maiko.pollers"]
-pagerduty = "my_package:PagerDutyPoller"
+[project.entry-points."planet_maiko.plugins"]
+pagerduty = "my_package:PagerDutyPlugin"
 ```
+
+The plugin fires inside the brain cycle's `on_brain_cycle` hook and gates
+on `poll_interval_minutes`. No threads to manage.
 
 ### Swap the runtime
 

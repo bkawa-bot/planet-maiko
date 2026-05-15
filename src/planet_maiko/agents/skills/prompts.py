@@ -11,12 +11,12 @@ from pathlib import Path
 
 _PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent / "prompts"
 
-# Skill IDs that have prompt files. home-overview is excluded — it's
+# Skill IDs that have prompt files. home-overview is excluded; it's
 # engine plumbing (not a user-facing skill). Its prompt file still
 # lives at prompts/home-overview.md and gets loaded via the general
-# _load_prompt_file path when brain/overview.py asks for it; it just
+# _load_prompt_file path when brain/overview.py asks for it. It just
 # isn't advertised as a runnable skill in the registry or Specialties
-# UI. morning-brief + evening-wrap were retired entirely.
+# UI.
 _SKILL_IDS = [
     "investigate",
     "repo-analysis",

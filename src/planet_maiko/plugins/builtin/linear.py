@@ -1,19 +1,23 @@
-"""Linear poller - fetches assigned issues via the Linear GraphQL API.
+"""Linear plugin. Fetches assigned issues via the Linear GraphQL API.
 
 Generates pupdates for:
     - Issues assigned to you
     - Issues approaching their due date
-    - Issue status changes
+    - Issue status changes (synced back onto linked Maiko tasks)
     - @-mentions in issue bodies and comments
     - New comments on issues you're subscribed to
+
+Also exposes static helpers used by api/tasks.py for the
+manual create-issue / import flow.
 """
 
 import logging
 import re
+
 import requests
 
 from planet_maiko.config import load_config, save_config
-from planet_maiko.pollers.base import BasePoller
+from planet_maiko.plugins.helpers import PollerPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +32,11 @@ def _looks_like_uuid(value):
     return bool(value and isinstance(value, str) and _UUID_RE.match(value.lower()))
 
 
-# viewer.teams (NOT workspace-wide `teams`) returns teams the API-key
-# owner is a member of — more relevant for a single-user integration,
+# viewer.teams (not workspace-wide `teams`) returns teams the API-key
+# owner is a member of. More relevant for a single-user integration,
 # and avoids the unordered-pagination trap where the root `teams`
-# connection returns a 50-wide slice that doesn't include the user's
-# own team alphabetically. first: 250 is Linear's per-page max so the
-# picker covers workspaces up to that size without a pagination loop.
+# connection returns a 50-wide slice missing the user's own team.
+# first: 250 is Linear's per-page max.
 TEAMS_QUERY = """
 query {
   viewer {
@@ -44,8 +47,8 @@ query {
 }
 """
 
-# Maiko priority → Linear priority. Linear uses 0=No priority, 1=Urgent,
-# 2=High, 3=Normal/Medium, 4=Low. We pick 3 for "normal" so new issues land
+# Maiko priority -> Linear priority. Linear: 0=No priority, 1=Urgent,
+# 2=High, 3=Normal/Medium, 4=Low. "Normal" maps to 3 so new issues land
 # in the middle of the queue rather than on top.
 MAIKO_TO_LINEAR_PRIORITY = {"urgent": 1, "high": 2, "normal": 3, "low": 4}
 
@@ -58,10 +61,9 @@ mutation IssueCreate($input: IssueCreateInput!) {
 }
 """
 
-# `description` is Linear's short summary (one-liner shown under the
-# title); `content` is the full markdown body the user actually edits in
-# the project's description editor. We need `content` for /generate-plan
-# to have real material to plan against.
+# `content` is the full markdown body the user edits in Linear's
+# description editor; `description` is the one-liner shown under the
+# title. We need `content` for /generate-plan to plan against.
 LED_PROJECTS_QUERY = """
 query {
   projects(filter: { lead: { isMe: { eq: true } } }, first: 50) {
@@ -133,26 +135,19 @@ PRIORITY_MAP = {0: "normal", 1: "urgent", 2: "high", 3: "normal", 4: "low"}
 
 
 # Notification types we surface as their own pupdates. Issue assignment
-# is already covered by the assignedIssues pull above; status changes
-# come from sync_statuses. We only care here about the "someone said
-# something to/about you" types that the existing flow doesn't cover.
+# is already covered by assignedIssues; status changes flow via
+# sync_statuses. Here we only care about the "someone said something to
+# or about you" types.
 NOTIFICATION_KINDS_OF_INTEREST = {
-    "issueMention",          # @-mentioned in issue title/description
-    "issueCommentMention",   # @-mentioned in a comment
-    "issueNewComment",       # new comment on issue you're subscribed to
+    "issueMention",
+    "issueCommentMention",
+    "issueNewComment",
 }
 
 
-# Pull recent notifications. Stripped down to the most schema-stable
-# shape after a 400 from Linear with the previous filter+orderBy
-# variant. We fetch the most recent 50 and filter unread + types in
-# Python — slightly more bytes over the wire but immune to API
-# variations on filter/orderBy syntax.
-#
-# `... on IssueNotification` unwraps the issue + comment payload —
-# Linear's Notification is an interface with several implementations,
-# but only IssueNotification carries the issue+comment fields we
-# care about. Project / document mentions skipped for MVP.
+# Pull recent notifications. We fetch the most recent 50 and filter
+# unread + types in Python — slightly more bytes over the wire but
+# immune to Linear's filter/orderBy syntax variations.
 NOTIFICATIONS_QUERY = """
 query Notifications {
   notifications(first: 50) {
@@ -190,9 +185,6 @@ query Notifications {
 }
 """
 
-# Mark a single notification read so the next poll doesn't see it
-# again. Linear stores readAt as the timestamp the user read it —
-# the API expects it inline. We pass the current ISO time at call site.
 NOTIFICATION_MARK_READ_MUTATION = """
 mutation MarkNotificationRead($id: String!, $readAt: DateTime!) {
   notificationUpdate(id: $id, input: { readAt: $readAt }) {
@@ -202,11 +194,11 @@ mutation MarkNotificationRead($id: String!, $readAt: DateTime!) {
 """
 
 
-class LinearPoller(BasePoller):
+class LinearPlugin(PollerPlugin):
+    name = "linear"
 
-    @property
-    def name(self):
-        return "linear"
+    def get_config_defaults(self):
+        return {"linear": {"enabled": False, "poll_interval_minutes": 5, "api_key": "", "team_id": ""}}
 
     def _query(self, api_key, query, variables=None):
         """Execute a GraphQL query/mutation against the Linear API."""
@@ -236,33 +228,23 @@ class LinearPoller(BasePoller):
         data = self._query(api_key, ASSIGNED_ISSUES_QUERY)
         issues = data.get("viewer", {}).get("assignedIssues", {}).get("nodes", [])
 
-        # Push Linear state changes back onto any linked Maiko tasks.
-        # Runs best-effort so a sync hiccup doesn't break the whole poll.
         try:
             self.sync_statuses(issues)
         except Exception as e:
             logger.warning(f"[linear] Status sync failed: {e}")
 
-        # Pull projects the viewer leads (they won't necessarily show up
-        # through assigned issues). Best-effort.
         try:
             self.import_led_projects(api_key)
         except Exception as e:
             logger.warning(f"[linear] Led-project sync failed: {e}")
 
-        # Pull recent notifications and filter (in Python) to unread,
-        # the kinds we care about, with an issue payload. The previous
-        # version ran the filter + orderBy server-side which Linear
-        # 400'd on; the conservative fetch + Python filter is immune
-        # to API variation. Best-effort: a notifications-side error
-        # shouldn't break the main issue sync.
         notifications = []
         try:
             ndata = self._query(api_key, NOTIFICATIONS_QUERY)
             raw = ndata.get("notifications", {}).get("nodes", []) or []
             for n in raw:
                 if n.get("readAt"):
-                    continue  # already read in Linear
+                    continue
                 if n.get("type") not in NOTIFICATION_KINDS_OF_INTEREST:
                     continue
                 if not n.get("issue"):
@@ -278,8 +260,7 @@ class LinearPoller(BasePoller):
         """Mirror Linear issue state onto Maiko tasks linked by extra.linear_id.
 
         Only touches tasks currently in new/in_progress; done/cancelled tasks
-        are left alone on the assumption the user has moved on. Returns a
-        dict with the number of tasks updated.
+        are left alone. Returns {"updated": N}.
         """
         from planet_maiko.database import db
         from planet_maiko.models.task import Task
@@ -316,7 +297,7 @@ class LinearPoller(BasePoller):
 
             new_extra = dict(extra)
             if new_status and new_status != t.status:
-                logger.info(f"[linear] Task {t.id} status {t.status} → {new_status}")
+                logger.info(f"[linear] Task {t.id} status {t.status} -> {new_status}")
                 t.status = new_status
             if state.get("name"):
                 new_extra["state"] = state["name"]
@@ -340,16 +321,12 @@ class LinearPoller(BasePoller):
     def _upsert_project_from_linear(lp, role="member"):
         """Create or update a Maiko Project from a Linear project node.
 
-        Idempotent. Returns (project_id, action) where action is
-        "created" | "updated" | "skipped". Description is set ONLY on
-        first import — once a Maiko user (or /generate-plan) has
-        edited it, we never overwrite. Title, status, source_url, and
-        the linear_state / target_date / start_date hints in extra
-        always refresh so Linear-side changes flow through.
+        Idempotent. Description is set on first import only; once a user
+        (or /generate-plan) has edited it we never overwrite. Title, status,
+        source_url, linear_state, and date hints always refresh.
 
-        role: "lead" if the user leads the project on Linear,
-              "member" if they have an assigned issue under it.
-              Stored in extra.role for downstream display.
+        role: "lead" if the user leads the Linear project, "member" if they
+        have an assigned issue under it.
         """
         from planet_maiko.database import db
         from planet_maiko.models.project import Project
@@ -369,10 +346,8 @@ class LinearPoller(BasePoller):
         }
         new_status = state_to_status.get(linear_state, "planning")
 
-        # Linear splits the project description across two fields:
-        # `content` holds the full markdown body the user writes in the
-        # UI description editor; `description` is a short summary. Prefer
-        # content so /generate-plan has the real material to work against.
+        # `content` holds the full markdown body; `description` is the
+        # short summary. Prefer content so /generate-plan has real material.
         linear_body = (lp.get("content") or "").strip()
         linear_summary = (lp.get("description") or "").strip()
         linear_desc = linear_body or linear_summary or None
@@ -382,14 +357,10 @@ class LinearPoller(BasePoller):
             existing.title = name
             existing.status = new_status
             existing.source_url = lp.get("url") or existing.source_url
-            # Backfill description when we never had one. Safe — we
-            # still won't overwrite a description the user or
-            # /generate-plan has written.
             if linear_desc and not (existing.description or "").strip():
                 existing.description = linear_desc
             ex_extra = dict(existing.extra or {})
-            # Bump role to "lead" if the user is now the lead — never
-            # demote (lead is a strictly stronger relationship than member).
+            # Promote to "lead" if the user is now lead; never demote.
             if role == "lead" or not ex_extra.get("role"):
                 ex_extra["role"] = role
             ex_extra["linear_state"] = linear_state
@@ -419,11 +390,7 @@ class LinearPoller(BasePoller):
         return project_id, "created"
 
     def import_led_projects(self, api_key):
-        """Create / update Maiko projects for Linear projects the user leads.
-
-        Called on every Linear poll so new lead assignments show up without
-        a manual import. Idempotent.
-        """
+        """Upsert Maiko projects for Linear projects the user leads."""
         from planet_maiko.database import db
 
         data = self._query(api_key, LED_PROJECTS_QUERY)
@@ -443,15 +410,12 @@ class LinearPoller(BasePoller):
         return {"created": created, "updated": updated}
 
     def to_pupdates(self, raw_data):
-        # Skip issues that already have a Maiko task tracking them. Without
-        # this, every poll re-asserts "you have PROJ-123 assigned" as an
-        # actionable pupdate; the user dismisses it (task already exists),
-        # but because the task wasn't created from *this specific pupdate*
-        # (import flow / earlier poll / manual roundtrip), base.py's
-        # dismissal-resurrection lookup via source_pupdate_id misses it
-        # and the dismissed pupdate gets resurrected on the next poll.
-        # Matches the linear_id/identifier check in import_issues().
-        from planet_maiko.database import db
+        # Skip issues already tracked by a Maiko task. Without this, every
+        # poll re-asserts "you have PROJ-123 assigned" as an actionable
+        # pupdate; user dismisses it; but since the task wasn't created
+        # from *this specific pupdate*, the dismissal-resurrection lookup
+        # via source_pupdate_id misses it and resurrection fires on the
+        # next poll.
         from planet_maiko.models.task import Task
 
         tracked_linear_ids = set()
@@ -488,11 +452,9 @@ class LinearPoller(BasePoller):
                 "identifier": identifier,
                 "state": state_name,
                 "due_date": due_date,
-                # Carry the description through so when the pupdate
-                # is converted to a Task the body survives —
-                # TaskCard reads t.extra.description for the
-                # expanded view, otherwise tasks end up titled
-                # but blank.
+                # Carry the description through so the body survives the
+                # pupdate -> task conversion. TaskCard reads
+                # t.extra.description for the expanded view.
                 "description": issue.get("description") or "",
             }
             if cycle:
@@ -500,7 +462,6 @@ class LinearPoller(BasePoller):
                 metadata["linear_cycle_number"] = cycle.get("number")
                 metadata["linear_cycle_name"] = cycle.get("name")
 
-            # Main assignment pupdate
             pupdates.append({
                 "source_id": f"{identifier}/assigned",
                 "type": "linear_assigned",
@@ -514,7 +475,7 @@ class LinearPoller(BasePoller):
                 "metadata": metadata,
             })
 
-            # Due date warning (if due within 2 days)
+            # Due-date warning (if due within 2 days)
             if due_date:
                 from datetime import datetime, timezone, timedelta
                 try:
@@ -542,9 +503,8 @@ class LinearPoller(BasePoller):
                     pass
 
         # Notifications: @-mentions + new comments. source_id is the
-        # Linear notification id so dedup is precise across polls;
-        # _after_sync marks the matching notifications as read on
-        # Linear so the bell icon doesn't pile up on the user's side.
+        # Linear notification id for precise dedup. _after_sync marks
+        # them read on Linear so the bell icon doesn't pile up.
         for n in raw_data.get("notifications", []):
             issue = n.get("issue") or {}
             comment = n.get("comment") or {}
@@ -553,12 +513,8 @@ class LinearPoller(BasePoller):
             issue_title = issue.get("title", "")
             # Actor resolution: Linear puts the trigger on one of three
             # fields depending on who/what fired the notification.
-            #   actor              — Linear workspace user (most common)
-            #   botActor           — integration bot (Slack, GitHub, etc.)
-            #   externalUserActor  — non-Linear user via integration
             # Without checking all three, a bot-triggered or external-user
-            # notification falls through to a generic placeholder which
-            # reads as "unknown" / "someone" in the inbox.
+            # notification falls through to a generic "someone" placeholder.
             actor = n.get("actor") or n.get("externalUserActor") or n.get("botActor") or {}
             actor_name = (
                 actor.get("displayName")
@@ -566,9 +522,6 @@ class LinearPoller(BasePoller):
                 or "Someone"
             )
 
-            # Mentions are higher-stakes ("you were specifically tagged")
-            # than a generic new-comment notification on a subscribed
-            # issue. Bump priority accordingly.
             is_mention = ntype in ("issueMention", "issueCommentMention")
             priority = "high" if is_mention else "normal"
 
@@ -589,10 +542,6 @@ class LinearPoller(BasePoller):
                 body = (comment.get("body") or "")[:500] or f"New comment on {identifier}"
 
             url = comment.get("url") or issue.get("url", "")
-            # Title varies on what we actually got. Some notifications
-            # arrive without an issue title (deleted/renamed/permission
-            # gap); fall back gracefully so the inbox card never reads
-            # as broken with a trailing colon and nothing after.
             if identifier and issue_title:
                 title = f"{actor_name} {kind_label} {identifier}: {issue_title}"
             elif identifier:
@@ -626,15 +575,7 @@ class LinearPoller(BasePoller):
         return pupdates
 
     def _after_sync(self, raw_data, db_session):
-        """Mark the notifications we just ingested as read on Linear.
-
-        Only marks the ones that matched NOTIFICATION_KINDS_OF_INTEREST
-        — assignedToYou / statusChanged / etc. are handled elsewhere
-        and the user might be relying on Linear's own bell to track
-        them. Best-effort: a per-notification mark-read failure
-        doesn't fail the poll; the dedup via source_id keeps things
-        idempotent if the bell stays lit.
-        """
+        """Mark the notifications we just ingested as read on Linear."""
         from datetime import datetime as _dt, timezone as _tz
         api_key = raw_data.get("_api_key")
         notifications = raw_data.get("notifications") or []
@@ -660,11 +601,7 @@ class LinearPoller(BasePoller):
 
     @staticmethod
     def fetch_teams(api_key=None):
-        """Fetch the user's Linear teams.
-
-        Returns:
-            list of dicts with {id, name, key}.
-        """
+        """Fetch the user's Linear teams. Returns list of {id, name, key}."""
         import certifi
 
         config = load_config()
@@ -696,20 +633,13 @@ class LinearPoller(BasePoller):
 
         Args:
             task: a Task ORM instance (has title, priority, due_date).
-            description: markdown body for the Linear issue. Typically
-                sourced from the task's originating pupdate.
-            team_id: Linear team ID override. Falls back to
-                config.linear.team_id.
+            description: markdown body for the Linear issue.
+            team_id: Linear team UUID override. Falls back to config.linear.team_id.
             project_id: optional Linear project ID to assign the issue to.
-            api_key: optional API key override. Falls back to
-                config.linear.api_key.
+            api_key: optional override. Falls back to config.linear.api_key.
 
         Returns:
             dict with {id, identifier, url, title}.
-
-        Raises:
-            ValueError: if API key or team_id is missing.
-            RuntimeError: if the Linear API returns errors.
         """
         import certifi
 
@@ -720,13 +650,10 @@ class LinearPoller(BasePoller):
             raise ValueError("Linear API key not configured")
         team_id = team_id or linear_cfg.get("team_id", "")
 
-        # Linear's issueCreate wants a UUID. The older Settings hint
-        # pointed at the team *key* from the URL, so many configs hold
-        # a short code like "ENG" instead. Auto-recover: fetch teams,
-        # auto-pick if there's exactly one, and persist so we don't
-        # re-query.
+        # Linear's issueCreate wants a UUID. If the config has a short
+        # team key instead, fetch teams and auto-pick the only one.
         if not _looks_like_uuid(team_id):
-            teams = LinearPoller.fetch_teams(api_key=api_key)
+            teams = LinearPlugin.fetch_teams(api_key=api_key)
             if len(teams) == 1:
                 team_id = teams[0]["id"]
                 linear_cfg["team_id"] = team_id
@@ -734,7 +661,7 @@ class LinearPoller(BasePoller):
                 save_config(config)
             elif len(teams) > 1:
                 raise ValueError(
-                    "Pick your Linear team in Settings — we need the team UUID, not the key."
+                    "Pick your Linear team in Settings, we need the team UUID, not the key."
                 )
             else:
                 raise ValueError("No Linear teams found for this API key")
@@ -778,31 +705,20 @@ class LinearPoller(BasePoller):
     def import_issues(api_key):
         """Import Linear issues as tasks, with project associations.
 
-        Upserts Maiko projects for any Linear project the issues belong to
-        (via the shared _upsert_project_from_linear helper, so existing
-        projects get their title/status/dates refreshed instead of being
-        skipped), then creates one task per issue linked to that project.
-
-        Returns:
-            dict with counts: {projects_created, projects_updated,
-            tasks_created, tasks_skipped}
+        Returns {projects_created, projects_updated, tasks_created, tasks_skipped}.
         """
         from planet_maiko.database import db
         from planet_maiko.models.task import Task
 
-        poller = LinearPoller()
+        poller = LinearPlugin()
         data = poller._query(api_key, ASSIGNED_ISSUES_QUERY)
         issues = data.get("viewer", {}).get("assignedIssues", {}).get("nodes", [])
 
         stats = {"projects_created": 0, "projects_updated": 0, "tasks_created": 0, "tasks_skipped": 0}
 
-        # Pre-fetch all task.extra blobs once so the "already imported?"
-        # check is O(N + M) instead of O(N * M). The poll-driven flow
-        # creates tasks with IDs like task-<slug>-<pupdate_id_prefix>,
-        # so the manual-import check by `task-<identifier>` ID alone
-        # missed those — and we ended up with one task per Linear
-        # issue from each path. Look up by linear_id / identifier in
-        # extra instead.
+        # Pre-fetch task.extra blobs once so the "already imported?" check
+        # is O(N + M) instead of O(N * M). Look up by linear_id/identifier
+        # in extra to cover all three task-creation paths.
         existing_linear_ids = set()
         existing_identifiers = set()
         for t in Task.query.with_entities(Task.extra).all():
@@ -819,11 +735,6 @@ class LinearPoller(BasePoller):
             linear_id = issue.get("id")
             task_id = f"task-{identifier.lower()}"
 
-            # Skip if task already exists — by id, by linear_id, or by
-            # identifier (covers all three paths a task for this issue
-            # could have been created through: this importer, the
-            # auto-poll → rule pipeline, and a manual /tasks/<id>/linear
-            # roundtrip).
             already_present = (
                 db.session.get(Task, task_id) is not None
                 or (linear_id and linear_id in existing_linear_ids)
@@ -833,12 +744,10 @@ class LinearPoller(BasePoller):
                 stats["tasks_skipped"] += 1
                 continue
 
-            # Upsert the project via the shared helper so issue-path and
-            # led-path share state mapping + description semantics.
             project_id = None
             linear_project = issue.get("project")
             if linear_project and linear_project.get("id"):
-                project_id, action = LinearPoller._upsert_project_from_linear(
+                project_id, action = LinearPlugin._upsert_project_from_linear(
                     linear_project, role="member",
                 )
                 if action == "created":
@@ -846,7 +755,6 @@ class LinearPoller(BasePoller):
                 elif action == "updated":
                     stats["projects_updated"] += 1
 
-            # Map Linear state to Maiko status
             state_type = issue.get("state", {}).get("type", "")
             status_map = {
                 "backlog": "new", "unstarted": "new", "started": "in_progress",
@@ -854,7 +762,6 @@ class LinearPoller(BasePoller):
             }
             status = status_map.get(state_type, "new")
 
-            # Create task
             priority = PRIORITY_MAP.get(issue.get("priority", 0), "normal")
             labels = [l["name"] for l in issue.get("labels", {}).get("nodes", [])]
 

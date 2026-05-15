@@ -111,15 +111,10 @@ DEFAULT_CONFIG = {
             ["batch_job_failing", "error_spike"],
             ["deploy_rollback", "batch_job_failing"],
         ],
-        # Retired: the correlator → auto-investigate pipeline was
-        # replaced by pupdate_match / pupdate_chain automations
-        # configured per-user on the Automations page. Defaults
-        # block kept removed; existing configs with auto_investigate
-        # set still load fine (the keys are just ignored).
         # Propagates ENABLE_PROMPT_CACHING_1H=1 to Claude Code subprocesses.
-        # Anthropic shipped the 1-hour cache TTL on Apr 14 2026 — default
-        # cache is 5m. Agent sessions here typically span 5-60 minutes and
-        # re-read the same preamble (role protocol + TASK.md + skill
+        # Anthropic's 1-hour cache TTL (default cache is 5m). Agent
+        # sessions here typically span 5-60 minutes and re-read the
+        # same preamble (role protocol + TASK.md + skill
         # prompt), so 1h caching usually wins on cost after the second
         # read. Leave False if you're on a metered plan and want to
         # measure before committing.

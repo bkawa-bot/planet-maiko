@@ -333,16 +333,28 @@ def _agents_context():
 
 
 def _pollers_context():
-    """Snapshot of poller health, matching /api/system/health."""
+    """Snapshot of brain-cycle health for the system status pane."""
     try:
         from flask import current_app
-        scheduler = current_app.config.get("SCHEDULER")
-        if scheduler is None:
-            return {"scheduler_running": False, "pollers": {}, "last_brain_cycle": None}
+        from planet_maiko.plugins.loader import get_plugins
+        from planet_maiko.plugins.helpers import PollerPlugin
+        from datetime import datetime as _dt, timezone as _tz
+
+        plugins = {}
+        for p in get_plugins():
+            if not isinstance(p, PollerPlugin):
+                continue
+            last = p._last_polled
+            plugins[p.name] = {
+                "last_run_at": (
+                    _dt.fromtimestamp(last, _tz.utc).isoformat()
+                    if last else None
+                ),
+            }
         return {
             "scheduler_running": True,
-            "pollers": dict(scheduler.poller_status),
-            "last_brain_cycle": scheduler.last_brain_cycle,
+            "pollers": plugins,
+            "last_brain_cycle": current_app.config.get("LAST_BRAIN_CYCLE"),
         }
     except Exception as e:
         logger.debug(f"[overview] poller health fetch failed: {e}")
@@ -794,41 +806,30 @@ def _iso_is_stale(iso_str, max_age_hours):
 
 
 def _prepoll_and_cycle(app):
-    """Drain every enabled poller + run one brain cycle so generate
-    sees fresh state. Synchronous — overview regen is already a slow
-    op, and stale context is worse than a slower render.
+    """Force every enabled poller plugin to refresh, then run one brain
+    cycle so generate sees fresh state. Synchronous; overview regen is
+    already a slow op and stale context is worse than a slower render.
 
-    Pollers run in parallel (they hit distinct external services).
+    Plugins run in parallel (they hit distinct external services).
     Brain cycle runs after so synthesis/clustering/routing pull in
-    anything the pollers just landed. Failures log-and-continue —
-    one broken poller shouldn't block the overview.
+    anything the plugins just landed. Failures log-and-continue.
     """
     import concurrent.futures
-    from planet_maiko.pollers.scheduler import _get_pollers
-    from planet_maiko.config import load_config
+    from planet_maiko.plugins.loader import get_plugins
+    from planet_maiko.plugins.helpers import PollerPlugin
     from planet_maiko.brain.cycle import run as run_brain_cycle
 
-    config = load_config()
-    to_run = []
-    for name, poller in _get_pollers().items():
-        cfg = config.get(name, {}) or {}
-        if not cfg.get("enabled", False):
-            continue
-        to_run.append((name, poller, cfg))
-
-    def _one(name, poller, cfg):
-        with app.app_context():
-            return poller.run(cfg, db.session)
+    to_run = [p for p in get_plugins() if isinstance(p, PollerPlugin)]
 
     if to_run:
-        logger.info("[overview] pre-poll: %s", [n for (n, _, _) in to_run])
+        logger.info("[overview] pre-poll: %s", [p.name for p in to_run])
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=max(1, len(to_run)), thread_name_prefix="overview-prepoll"
         ) as ex:
-            futures = {ex.submit(_one, n, p, c): n for (n, p, c) in to_run}
-            # 90s total wall budget — any single poller that's stuck
-            # that long is stuck, and we'd rather regen overview with
-            # slightly-stale data from that one source than hang here.
+            futures = {ex.submit(p.force_poll, app): p.name for p in to_run}
+            # 90s overall budget. A single poller stuck longer than that
+            # is stuck, and we'd rather regen overview with slightly-stale
+            # data from one source than hang.
             try:
                 for future in concurrent.futures.as_completed(futures, timeout=90):
                     name = futures[future]

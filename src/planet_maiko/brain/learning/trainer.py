@@ -820,10 +820,10 @@ def check_requirements():
     return info
 
 
-# Inference (review_code, review_diff, MLX session) was extracted to
-# .inference — re-exported here so existing
+# Inference (review_code, review_diff, MLX session) lives in
+# .inference; re-exported here so
 # `from planet_maiko.brain.learning.trainer import review_code`
-# imports keep resolving without churn.
+# keeps resolving.
 from .inference import (  # noqa: E402,F401
     review_code,
     review_batch,

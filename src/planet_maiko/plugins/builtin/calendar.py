@@ -1,9 +1,6 @@
-"""Calendar poller - fetches events from iCal feeds.
+"""Calendar plugin. Fetches today's events from iCal feeds.
 
-Works with any standard iCal URL:
-    - Google Calendar (Settings > Calendar > Secret address in iCal format)
-    - Outlook/Office 365 (Publish calendar > ICS link)
-    - Any CalDAV server
+Works with any standard iCal URL (Google Calendar, Outlook, CalDAV).
 
 Generates pupdates for:
     - Upcoming events today
@@ -11,21 +8,21 @@ Generates pupdates for:
 """
 
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 
 import requests
 from icalendar import Calendar
 
-from planet_maiko.pollers.base import BasePoller
+from planet_maiko.plugins.helpers import PollerPlugin
 
 logger = logging.getLogger(__name__)
 
 
-class CalendarPoller(BasePoller):
+class CalendarPlugin(PollerPlugin):
+    name = "calendar"
 
-    @property
-    def name(self):
-        return "calendar"
+    def get_config_defaults(self):
+        return {"calendar": {"enabled": False, "poll_interval_minutes": 30, "ical_urls": []}}
 
     def poll(self, config):
         ical_urls = config.get("ical_urls", [])
@@ -35,8 +32,7 @@ class CalendarPoller(BasePoller):
 
         all_events = []
         # Use the user's timezone for "today" so evening meetings don't
-        # get filtered out as "tomorrow UTC". Honors user.timezone config
-        # when set; falls back to the system's local tz.
+        # get filtered out as "tomorrow UTC".
         from planet_maiko.config import user_now
         local_now = user_now()
         today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -57,13 +53,11 @@ class CalendarPoller(BasePoller):
                         continue
                     dt = dtstart.dt
 
-                    # Handle date vs datetime — use local TZ for naive values
                     if not isinstance(dt, datetime):
                         dt = datetime.combine(dt, datetime.min.time()).astimezone()
                     elif dt.tzinfo is None:
                         dt = dt.astimezone()
 
-                    # Only include today's events
                     if not (today_start <= dt < today_end):
                         continue
 
@@ -72,7 +66,6 @@ class CalendarPoller(BasePoller):
                     description = str(component.get("description", "")) if component.get("description") else ""
                     attendees = component.get("attendee")
 
-                    # Normalize attendees to a list
                     if attendees is None:
                         attendee_list = []
                     elif isinstance(attendees, list):
@@ -92,7 +85,6 @@ class CalendarPoller(BasePoller):
             except Exception as e:
                 logger.error(f"[calendar] Failed to fetch {url}: {e}")
 
-        # Sort by start time
         all_events.sort(key=lambda e: e["start"])
         return {"events": all_events}
 
@@ -106,7 +98,6 @@ class CalendarPoller(BasePoller):
             location = event.get("location", "")
             is_1on1 = len(attendees) == 2
 
-            # Build body
             body_parts = []
             try:
                 dt = datetime.fromisoformat(start)

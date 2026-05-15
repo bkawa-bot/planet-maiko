@@ -1,25 +1,27 @@
+"""GitHub plugin. Polls for PR activity via the gh CLI.
+
+Generates pupdates for:
+    - PRs where your review is requested
+    - Your PRs that received approvals
+    - Your PRs that received change requests
+    - Your PRs with failing CI checks
+    - New comments on PRs from Maiko-owned coding tasks
+"""
+
 import json
 import logging
 import subprocess
 
-from planet_maiko.pollers.base import BasePoller
+from planet_maiko.plugins.helpers import PollerPlugin
 
 logger = logging.getLogger(__name__)
 
 
-class GitHubPoller(BasePoller):
-    """Polls GitHub for PR activity using the gh CLI.
+class GitHubPlugin(PollerPlugin):
+    name = "github"
 
-    Generates pupdates for:
-        - PRs where your review is requested
-        - Your PRs that received approvals
-        - Your PRs that received change requests
-        - Your PRs with failing CI checks
-    """
-
-    @property
-    def name(self):
-        return "github"
+    def get_config_defaults(self):
+        return {"github": {"enabled": False, "poll_interval_minutes": 5, "username": "", "repos": []}}
 
     def _gh(self, args):
         """Run a gh CLI command and return parsed JSON."""
@@ -30,20 +32,13 @@ class GitHubPoller(BasePoller):
         return json.loads(result.stdout) if result.stdout.strip() else []
 
     def _get_review_requests(self, username):
-        """Get PRs where the user is *individually* tagged for review.
+        """PRs where the user is *individually* tagged for review.
 
-        The `--review-requested` flag (and the `review-requested:` query
-        qualifier it maps to) also matches team-level review requests
-        when the user is a member of that team. That was firing pupdates
-        for PRs the user wasn't personally tagged on, which the user
-        considered noise. `user-review-requested:` filters to direct
-        user tags only — team-level requests are filtered out.
-
-        Also: `gh search prs --json` does NOT accept `headRefOid` (that
-        field is only on `gh pr list` / `gh pr view` / graphql). We
-        fetch core PR data, then enrich each hit with its head SHA via
-        `gh pr view` so the dedup source_id can still include the SHA
-        and re-requests on new commits aren't silently swallowed.
+        Uses `user-review-requested:` (not `--review-requested`) so team-level
+        review requests don't fire pupdates on PRs the user isn't personally
+        tagged on. `gh search prs --json` doesn't accept headRefOid; enrich
+        each hit via `gh pr view` so source_id can include the SHA and
+        re-requests on new commits aren't dedup-swallowed.
         """
         prs = self._gh([
             "search", "prs",
@@ -68,13 +63,11 @@ class GitHubPoller(BasePoller):
                     if sha:
                         pr["headRefOid"] = sha
             except Exception:
-                # Best-effort. Missing SHA falls back to the plain
-                # review/repo#N source_id path already in to_pupdates.
+                # Missing SHA falls back to the plain review/repo#N source_id.
                 pass
         return prs
 
     def _get_my_prs(self, username):
-        """Get the user's open PRs with review status."""
         return self._gh([
             "search", "prs",
             "--author", username,
@@ -83,7 +76,6 @@ class GitHubPoller(BasePoller):
         ])
 
     def _get_merged_prs_for_repos(self, repos):
-        """Get recently merged PRs across all configured repos (for training)."""
         merged = []
         for repo in repos:
             try:
@@ -102,14 +94,12 @@ class GitHubPoller(BasePoller):
         return merged
 
     def _get_pr_reviews(self, repo, pr_number):
-        """Get reviews for a specific PR."""
         try:
             return self._gh([
                 "api", f"repos/{repo}/pulls/{pr_number}/reviews",
                 "--jq", ".",
             ])
         except Exception:
-            # Fallback: use pr view
             try:
                 result = subprocess.run(
                     ["gh", "pr", "view", str(pr_number),
@@ -125,7 +115,6 @@ class GitHubPoller(BasePoller):
             return []
 
     def _get_pr_checks(self, repo, pr_number):
-        """Get CI check status for a PR."""
         try:
             result = subprocess.run(
                 ["gh", "pr", "view", str(pr_number),
@@ -141,14 +130,9 @@ class GitHubPoller(BasePoller):
         return []
 
     def _get_pr_comments(self, repo, pr_number):
-        """Get review comments (inline code feedback) for a PR.
-
-        Fetches both issue-level comments and inline review comments
-        (which include file path information for language detection).
-        """
+        """Issue-level + inline review comments for a PR."""
         comments = []
 
-        # Issue-level comments (no file path)
         try:
             result = subprocess.run(
                 ["gh", "pr", "view", str(pr_number),
@@ -164,7 +148,6 @@ class GitHubPoller(BasePoller):
         except Exception:
             pass
 
-        # Inline review comments (have file path via the API)
         try:
             inline = self._gh([
                 "api", f"repos/{repo}/pulls/{pr_number}/comments",
@@ -183,7 +166,6 @@ class GitHubPoller(BasePoller):
         return comments
 
     def poll(self, config):
-        """Fetch all relevant GitHub data."""
         username = config.get("username", "")
         if not username:
             logger.warning("[github] No username configured, skipping poll")
@@ -194,11 +176,9 @@ class GitHubPoller(BasePoller):
         repos = config.get("repos", [])
         merged_prs = self._get_merged_prs_for_repos(repos)
 
-        # For each of the user's PRs, check review and CI status + comments.
-        # Open-PR comments feed the pr_review_commented pupdate (via
-        # _comment_count / _latest_comment_at stashed on the pr dict);
-        # they do NOT flow into Signals anymore — training data comes
-        # from merged PRs only via _after_sync().
+        # For each of the user's PRs, check review + CI + comments status.
+        # Open-PR comments drive the pr_review_commented pupdate; training
+        # signals come from merged PRs via _after_sync.
         for pr in my_prs:
             repo = pr.get("repository", {}).get("nameWithOwner", "")
             number = pr.get("number")
@@ -207,10 +187,8 @@ class GitHubPoller(BasePoller):
                 pr["_checks"] = self._get_pr_checks(repo, number)
                 comments = self._get_pr_comments(repo, number)
                 pr["_comments"] = comments
-                # Stash the latest comment timestamp on the pr so
-                # to_pupdates can use it as the source_id seed —
-                # changes when a genuinely new comment arrives, stays
-                # stable otherwise (so dedup works).
+                # Latest comment timestamp seeds source_id so dedup
+                # advances when a genuinely new comment arrives.
                 latest = ""
                 for c in comments:
                     ts = c.get("created_at") or c.get("updated_at") or ""
@@ -226,14 +204,11 @@ class GitHubPoller(BasePoller):
         }
 
     def to_pupdates(self, raw_data):
-        """Transform GitHub data into pupdates."""
         pupdates = []
 
-        # Build a lookup of open Maiko-coding-task PR URLs so we can
-        # emit pr_review_commented events targeting our own agent
-        # rather than treating those PRs like generic external feedback.
-        # We match either task.url or task.extra.pr_url since both are
-        # set by the approve flow.
+        # Look up open Maiko-coding-task PR URLs so we can target our own
+        # agent on pr_review_commented events instead of treating those
+        # PRs like generic external feedback.
         from planet_maiko.models.task import Task
         try:
             open_coding_tasks = Task.query.filter(
@@ -249,11 +224,10 @@ class GitHubPoller(BasePoller):
             if extra_url:
                 task_by_pr_url[extra_url.rstrip("/")] = t
 
-        # Review requests -> high priority pupdates. source_id includes
-        # the head SHA so a re-request on a new commit isn't dedup-swallowed
-        # by the base poller (see base.py:162-167 note). Falls back to the
-        # plain `review/repo#number` form if the SHA isn't present — keeps
-        # behavior stable for gh versions that don't return headRefOid.
+        # Review requests -> high priority pupdates. source_id includes the
+        # head SHA so a re-request on a new commit isn't dedup-swallowed.
+        # Falls back to the plain `review/repo#number` form when gh
+        # doesn't return headRefOid.
         for pr in raw_data.get("review_requests", []):
             repo = pr.get("repository", {}).get("nameWithOwner", "")
             number = pr.get("number")
@@ -282,7 +256,7 @@ class GitHubPoller(BasePoller):
                 },
             })
 
-        # My PRs - check for approvals, changes requested, CI failures
+        # My PRs: check for approvals, changes requested, CI failures
         for pr in raw_data.get("my_prs", []):
             repo = pr.get("repository", {}).get("nameWithOwner", "")
             number = pr.get("number")
@@ -290,7 +264,6 @@ class GitHubPoller(BasePoller):
             checks = pr.get("_checks", [])
             labels = [l.get("name", "") for l in pr.get("labels", [])]
 
-            # Always create a pupdate for open PRs (so the user sees them)
             author = pr.get("author", {}).get("login", "unknown")
             pupdates.append({
                 "source_id": f"open/{repo}#{number}",
@@ -308,7 +281,6 @@ class GitHubPoller(BasePoller):
                 },
             })
 
-            # Count review states
             approved = sum(1 for r in reviews if r.get("state") == "APPROVED")
             changes_requested = sum(
                 1 for r in reviews if r.get("state") == "CHANGES_REQUESTED"
@@ -350,7 +322,6 @@ class GitHubPoller(BasePoller):
                     },
                 })
 
-            # CI failures
             failed_checks = [
                 c for c in checks
                 if c.get("conclusion") == "FAILURE"
@@ -375,11 +346,10 @@ class GitHubPoller(BasePoller):
                     },
                 })
 
-            # PR comments on a Maiko-owned coding task → wake the agent
-            # to fetch + address them. Source_id includes the latest
-            # comment timestamp so each genuinely new batch fires once;
-            # the agent uses `gh pr view N --comments` to read the
-            # actual content rather than us shipping it.
+            # PR comments on a Maiko-owned coding task wake the agent to
+            # fetch + address them. source_id includes the latest comment
+            # timestamp so each genuinely new batch fires once; the agent
+            # uses `gh pr view N --comments` to read the actual content.
             pr_url = (pr.get("url") or "").rstrip("/")
             owning_task = task_by_pr_url.get(pr_url)
             comment_count = pr.get("_comment_count", 0)
@@ -405,7 +375,7 @@ class GitHubPoller(BasePoller):
                     },
                 })
 
-        # Merged PRs (from all configured repos — for training + task completion)
+        # Merged PRs across configured repos (training + task completion)
         for pr in raw_data.get("merged_prs", []):
             repo = pr.get("_repo", "")
             number = pr.get("number")
@@ -431,35 +401,24 @@ class GitHubPoller(BasePoller):
         return pupdates
 
     def to_signals(self, raw_data):
-        """Intentionally no-op — training signals come from merged PRs.
+        """No-op. Training signals come from merged PRs via _after_sync.
 
-        The earlier implementation emitted a fresh Signal for every
-        review comment on every OPEN PR, every poll, with no dedup.
-        Since the same comments appeared in raw_data every 5-minute
-        tick for as long as a PR was open, the Signal table filled
-        with exact duplicates indefinitely.
-
-        Training data should come from feedback the team actually
-        acted on — i.e. comments that survived to merge. `_after_sync()`
-        handles that: it scrapes inline comments from merged PRs and
-        dedupes them by (text, file_path, diff_hunk) against existing
-        Signal rows for the repo.
+        Emitting a Signal per review comment on every poll filled the
+        Signal table with exact duplicates indefinitely. _after_sync
+        scrapes inline comments from merged PRs only and dedupes per repo.
         """
         return []
 
     def _after_sync(self, raw_data, db_session):
-        """For each merged PR in this poll, fetch inline review comments
-        and create unsynthesized Signal rows with code_context. Dedupes
-        per-repo against existing signals by external_id or
-        (file_path, diff_hunk) for rows missing external_id.
+        """Scrape inline review comments from merged PRs and create
+        unsynthesized Signal rows for the learning pipeline.
 
-        Three phases: read existing dedup keys, do all network calls
-        with no DB activity, then a single fast write batch + commit.
-        Keeps the SQLite write lock from being held across slow per-PR
-        API calls.
+        Three phases: read existing dedup keys, do all network calls with
+        no DB activity, then a single fast write batch + commit. Keeps the
+        SQLite write lock from being held across slow per-PR API calls.
 
-        Signals land as synthesized=False, then flow through the normal
-        synthesis to clustering pipeline on the next brain cycle tick.
+        Signals land as synthesized=False, then flow through synthesis to
+        clustering on the next brain cycle tick.
         """
         merged = raw_data.get("merged_prs") or []
         if not merged:
@@ -468,7 +427,6 @@ class GitHubPoller(BasePoller):
         from planet_maiko.models.signal import Signal
         from planet_maiko.brain.learning.bootstrap import fetch_comments_for_pr
 
-        # Group merged PRs by repo so we can preload once per repo.
         by_repo = {}
         for pr in merged:
             repo = pr.get("_repo", "")
@@ -477,17 +435,14 @@ class GitHubPoller(BasePoller):
             by_repo.setdefault(repo, []).append(pr)
 
         # PHASE 1: read existing dedup keys per repo + check which PRs
-        # we've already scraped. Skipping already-scraped PRs is the
-        # difference between "scrape every PR every 5min forever" and
-        # "scrape each PR once after merge". The merged-PR list itself
-        # has no time cursor (gh pr list returns the latest 5 merged
-        # regardless of when), so we use the pr_merged Pupdate row as
-        # the cursor: if it carries comments_scraped_at on its extra,
-        # we've already pulled comments for that PR.
+        # have already been scraped. The merged-PR list has no time cursor
+        # so we use the pr_merged Pupdate row as the cursor: if it carries
+        # comments_scraped_at on its extra, we've already pulled comments.
         from planet_maiko.models.pupdate import Pupdate
+        from planet_maiko.plugins.helpers import _pupdate_id
 
         existing_per_repo = {}
-        scraped_pupdate_by_pr = {}  # (repo, number) -> Pupdate row
+        scraped_pupdate_by_pr = {}
         for repo in by_repo:
             existing_ids = set()
             existing_legacy = set()  # (file_path, diff_hunk)
@@ -499,9 +454,6 @@ class GitHubPoller(BasePoller):
                     existing_ids.add(s.external_id)
                 if s.file_path and s.code_context:
                     existing_legacy.add((s.file_path, s.code_context))
-                # Text-based fallback for rows missing both external_id
-                # and code_context. Synthesis mutates signal.text but
-                # original_text stays raw, so prefer that when present.
                 raw = (s.original_text or s.text or "")[:120]
                 if s.file_path and raw:
                     existing_text_keys.add((s.file_path, raw))
@@ -509,26 +461,21 @@ class GitHubPoller(BasePoller):
                 existing_ids, existing_legacy, existing_text_keys,
             )
 
-            # Look up the pr_merged pupdates for the PRs we'd otherwise
-            # scrape this poll. The id is deterministic from the
-            # source_id pattern this poller uses for merge events.
             for pr in by_repo[repo]:
                 number = pr.get("number")
                 if not number:
                     continue
                 source_id = f"merged/{repo}#{number}"
-                pup_id = self.generate_id(source_id)
+                pup_id = _pupdate_id(self.name, source_id)
                 pup = db_session.get(Pupdate, pup_id)
                 if pup:
                     scraped_pupdate_by_pr[(repo, number)] = pup
         db_session.rollback()
 
-        # PHASE 2: network calls only. Build a list of Signal kwargs;
-        # no DB activity in this loop. Per-PR API calls can run
-        # several seconds total, and keeping them out of the write tx
-        # is the whole point.
+        # PHASE 2: network calls. Build a list of Signal kwargs; no DB
+        # activity here.
         new_rows = []
-        scraped_now = []  # PRs we successfully pulled this poll
+        scraped_now = []
         for repo, prs in by_repo.items():
             existing_ids, existing_legacy, existing_text_keys = existing_per_repo[repo]
             for pr in prs:
@@ -537,9 +484,6 @@ class GitHubPoller(BasePoller):
                     continue
                 pup = scraped_pupdate_by_pr.get((repo, number))
                 if pup and (pup.extra or {}).get("comments_scraped_at"):
-                    # Already pulled this PR's comments on a prior
-                    # poll. Merged PRs are typically frozen; re-scraping
-                    # is pure waste.
                     continue
                 comments = fetch_comments_for_pr(repo, number)
                 scraped_now.append((repo, number))
@@ -549,11 +493,6 @@ class GitHubPoller(BasePoller):
                     file_path = entry.get("path") or None
                     diff_hunk = entry.get("diff_hunk") or None
 
-                    # Check ALL three dedup keys regardless of which one
-                    # the new entry carries. Gating the (path, hunk)
-                    # check on `not external_id` would let a re-scrape
-                    # bypass it against an older row that only has
-                    # (path, hunk) keys.
                     if external_id and external_id in existing_ids:
                         continue
                     if (
@@ -586,8 +525,6 @@ class GitHubPoller(BasePoller):
                         }] if diff_hunk else [],
                         "synthesized": False,
                     })
-                    # Update local dedup sets so duplicate comments
-                    # within this same poll don't double-insert.
                     if external_id:
                         existing_ids.add(external_id)
                     if file_path and diff_hunk:
@@ -595,11 +532,7 @@ class GitHubPoller(BasePoller):
                     if file_path:
                         existing_text_keys.add((file_path, body[:120]))
 
-        # PHASE 3: write batch + cursor flag, single commit. The
-        # comments_scraped_at flag goes on the pr_merged Pupdate so
-        # the next poll skips this PR up front. Without the flag,
-        # a PR that yields zero new signals (already deduped, or no
-        # inline comments) would re-trigger the API call every time.
+        # PHASE 3: write batch + cursor flag, single commit.
         if not new_rows and not scraped_now:
             return
 
@@ -612,12 +545,7 @@ class GitHubPoller(BasePoller):
         for (repo, number) in scraped_now:
             pup = scraped_pupdate_by_pr.get((repo, number))
             if pup is None:
-                # The pr_merged pupdate is created in the same run by
-                # to_pupdates(); it should be in the DB by now since
-                # base.run() commits pupdates before _after_sync. If
-                # we still can't find it, skip the flag — next poll's
-                # lookup will pick it up.
-                pup_id = self.generate_id(f"merged/{repo}#{number}")
+                pup_id = _pupdate_id(self.name, f"merged/{repo}#{number}")
                 pup = db_session.get(Pupdate, pup_id)
             if pup is not None:
                 extra = dict(pup.extra or {})

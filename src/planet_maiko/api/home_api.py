@@ -149,10 +149,9 @@ def get_review_queue():
             "timestamp": iso_utc(t.updated_at),
         })
 
-    # 2. Agent plan memos (waiting on user's nod). Source is Memo now
-    #    (kind=agent_plan) — pupdates of type agent_plan_for_approval
-    #    are retired. Dedup by source_task_id so multiple plan revisions
-    #    from the same agent don't double-list.
+    # 2. Agent plan memos (waiting on user's nod). Source is Memo
+    #    (kind=agent_plan). Dedup by source_task_id so multiple plan
+    #    revisions from the same agent don't double-list.
     from planet_maiko.models.memo import Memo
     plan_memos = (
         Memo.query

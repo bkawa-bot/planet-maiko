@@ -164,7 +164,7 @@ def _maybe_push_close_to_linear(task, target_state_type):
         return
 
     try:
-        from planet_maiko.pollers.linear_client import LinearClient
+        from planet_maiko.integrations.clients.linear_client import LinearClient
         client = LinearClient()
         meta = client.team_meta(team_id)
         target_state = next(
@@ -561,8 +561,8 @@ def send_task_to_linear(task_id):
       team_id, sync_close (bool — opt-in to close the Linear issue when
       this task closes; off by default).
     """
-    from planet_maiko.pollers.linear_client import LinearClient
-    from planet_maiko.pollers.linear_poller import MAIKO_TO_LINEAR_PRIORITY
+    from planet_maiko.integrations.clients.linear_client import LinearClient
+    from planet_maiko.plugins.builtin.linear import MAIKO_TO_LINEAR_PRIORITY
     from planet_maiko.config import load_config
 
     task = db.get_or_404(Task, task_id)
@@ -674,11 +674,11 @@ def import_from_linear():
     if not api_key:
         return jsonify({"error": "Linear API key not configured. Set it in Settings."}), 400
 
-    from planet_maiko.pollers.linear_poller import LinearPoller
-    poller = LinearPoller()
-    stats = LinearPoller.import_issues(api_key)
+    from planet_maiko.plugins.builtin.linear import LinearPlugin
+    plugin = LinearPlugin()
+    stats = LinearPlugin.import_issues(api_key)
     try:
-        led = poller.import_led_projects(api_key)
+        led = plugin.import_led_projects(api_key)
         stats["projects_created"] = stats.get("projects_created", 0) + led.get("created", 0)
         stats["projects_updated"] = stats.get("projects_updated", 0) + led.get("updated", 0)
     except Exception as e:

@@ -181,16 +181,71 @@ def _discover_from_local_dir(disabled):
     return plugins, results
 
 
+def _discover_builtin(disabled):
+    """Discover built-in plugins shipped under plugins/builtin/."""
+    from planet_maiko.plugins.base import MaikoPlugin
+
+    plugins = []
+    results = []
+    builtin_pkg = Path(__file__).parent / "builtin"
+    if not builtin_pkg.is_dir():
+        return plugins, results
+
+    import importlib
+
+    for path in sorted(builtin_pkg.glob("*.py")):
+        if path.name.startswith("_"):
+            continue
+        module_name = f"planet_maiko.plugins.builtin.{path.stem}"
+        info = {
+            "name": path.stem,
+            "source": "builtin",
+            "entry_point": None,
+            "file": str(path),
+            "status": "loaded",
+            "error": None,
+        }
+        if path.stem in disabled:
+            info["status"] = "disabled"
+            results.append(info)
+            continue
+        try:
+            module = importlib.import_module(module_name)
+            for attr_name in dir(module):
+                attr = getattr(module, attr_name)
+                if (
+                    isinstance(attr, type)
+                    and issubclass(attr, MaikoPlugin)
+                    and attr is not MaikoPlugin
+                    and attr.__module__ == module_name
+                ):
+                    plugin = attr()
+                    plugin._source = "builtin"
+                    plugin._file = str(path)
+                    info["name"] = plugin.name or path.stem
+                    plugins.append(plugin)
+                    logger.info(f"[plugins] Loaded built-in plugin: {plugin.name}")
+        except Exception as e:
+            info["status"] = "error"
+            info["error"] = traceback.format_exc()
+            logger.warning(f"[plugins] Failed to load built-in '{path.name}': {e}")
+        results.append(info)
+
+    return plugins, results
+
+
 def discover_plugins():
-    """Find all plugins from entry_points + local directory."""
+    """Find all plugins from built-ins + entry_points + local directory."""
     disabled = _get_disabled_list()
+    builtin_plugins, builtin_results = _discover_builtin(disabled)
     ep_plugins, ep_results = _discover_from_entry_points(disabled)
     local_plugins, local_results = _discover_from_local_dir(disabled)
 
-    plugins = ep_plugins + local_plugins
-    all_results = ep_results + local_results
+    plugins = builtin_plugins + ep_plugins + local_plugins
+    all_results = builtin_results + ep_results + local_results
 
-    # Deduplicate by name (entry_point takes precedence over local)
+    # Deduplicate by name. Order above is the precedence order:
+    # built-in < entry_point < local (a local plugin can override a built-in).
     seen = {}
     for p in plugins:
         if p.name in seen:
@@ -296,17 +351,18 @@ def load_plugins(app):
 
     @plugins_bp.route("/pupdate-sources", methods=["GET"])
     def list_pupdate_sources():
-        """Pupdate sources known to Maiko — built-ins (maiko, agent)
-        plus every discovered poller name. Drives the Automation
-        editor's source autocomplete so users don't have to type
-        "github" / "linear" / "calendar" from memory.
+        """Pupdate sources Maiko knows about: built-ins (maiko, agent)
+        plus every loaded PollerPlugin's name. Drives the Automation
+        editor's source autocomplete.
         """
         try:
-            from planet_maiko.pollers.scheduler import _get_pollers
-            poller_names = list(_get_pollers().keys())
+            from planet_maiko.plugins.helpers import PollerPlugin
+            poller_names = [
+                p.name for p in get_plugins()
+                if isinstance(p, PollerPlugin)
+            ]
         except Exception:
             poller_names = []
-        # Core sources that aren't pollers.
         core = ["maiko", "agent"]
         seen = set()
         out = []

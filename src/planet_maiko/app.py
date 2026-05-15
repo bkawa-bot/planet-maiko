@@ -1,5 +1,7 @@
 import os
 import logging
+from datetime import datetime, timezone
+
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 from planet_maiko.database import db
@@ -538,11 +540,45 @@ def create_app(start_scheduler=False):
             return send_from_directory(frontend_dir, "index.html")
         return "Frontend not built. Run: cd frontend && npm run build", 404
 
-    # Start background pollers
+    # Background threads: brain cycle ticker + nightly DB backups.
+    # Pollers used to have their own per-source threads; they're now
+    # plugins that fire inside the brain cycle's on_brain_cycle hook,
+    # so a single tick drives all polling. See plugins/builtin/.
     if start_scheduler:
-        from planet_maiko.pollers.scheduler import PollerScheduler
-        scheduler = PollerScheduler(app)
-        app.config["SCHEDULER"] = scheduler
-        scheduler.start()
+        import threading
+        import time
+        from planet_maiko.config import load_config
+        from planet_maiko.brain.cycle import run as run_brain_cycle
+        from planet_maiko.backups import run_daily_loop as backup_loop
+
+        cfg = load_config()
+        brain_interval = int(cfg.get("brain", {}).get("cycle_interval_minutes", 5)) * 60
+
+        stop_event = threading.Event()
+        app.config["BACKGROUND_STOP"] = stop_event
+        app.config["BRAIN_INTERVAL_SECONDS"] = brain_interval
+        # Tracks last successful brain-cycle timestamp for the home
+        # health pane. Single source instead of the old SCHEDULER blob.
+        app.config["LAST_BRAIN_CYCLE"] = None
+
+        def _brain_cycle_loop():
+            time.sleep(30)  # let the app fully come up before first tick
+            while not stop_event.is_set():
+                try:
+                    with app.app_context():
+                        run_brain_cycle(app)
+                    app.config["LAST_BRAIN_CYCLE"] = datetime.now(timezone.utc).isoformat()
+                except Exception as e:
+                    logger.error(f"[brain-cycle] tick failed: {e}")
+                for _ in range(brain_interval):
+                    if stop_event.is_set():
+                        break
+                    time.sleep(1)
+
+        threading.Thread(target=_brain_cycle_loop, daemon=True, name="brain-cycle").start()
+        logger.info(f"[brain-cycle] ticking every {brain_interval}s")
+
+        threading.Thread(target=backup_loop, args=(stop_event,), daemon=True, name="backups").start()
+        logger.info("[backups] daily loop started")
 
     return app

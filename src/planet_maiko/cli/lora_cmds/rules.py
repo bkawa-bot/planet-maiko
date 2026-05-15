@@ -140,8 +140,7 @@ def _detect_job_id_from_env():
     wrote .maiko-env.json with the job_id. Read it transparently so
     agents get rules-considered tracking without remembering a flag.
 
-    Falls back to the older `task_id` field for worktrees written
-    before the rename.
+    Falls back to the alternate `task_id` field.
     """
     import json as _json
     env_path = os.path.join(os.getcwd(), ".maiko-env.json")
