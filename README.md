@@ -1,12 +1,17 @@
 # Planet Maiko
 
-#### **strange agents, strange world.**
+#### *strange agents, strange world.*
+
+### A local-first agent orchestrator where your AI agents are weird alien dogs that learn from your mistakes.
+
 ![title](docs/screenshots/title.png)
 
+---
 > **IMPORTANT 5/14 UPDATE FOR CLAUDE USERS: MAIKO CAN BE CONFIGURED TO USE _INTERACTIVE_ CLAUDE SESSIONS. THIS MEANS IT WILL PULL FROM YOUR REGULAR SUBSCRIPTION, NOT AGENT SDK CREDITS.**
 
 > **⚠️ Beta.** Planet Maiko is in active beta testing. Expect breaking changes, schema migrations, rough edges, and bugs. If you try it and something's broken, [file an issue](https://github.com/bkawa-bot/planet-maiko/issues/new).
 
+---
 We live in strange times, and yet our dev tools are so painfully un-strange. No one knows what being a software engineer will be like in a year, or even a month. If we are all tokenmaxxing to our own inevitable obsolescence, we might as well have fun.
 
 ![Planet Maiko home](docs/screenshots/home.png)
@@ -16,11 +21,6 @@ Planet Maiko revolves around one central idea: **a tight-knit pack is more power
 ![profiles](docs/screenshots/profiles.png)
 
 ![profies](docs/screenshots/sludge-pup.png)
-
-
-> **IMPORTANT 5/14 UPDATE FOR CLAUDE USERS: MAIKO CAN BE CONFIGURED TO USE _INTERACTIVE_ CLAUDE SESSIONS. THIS MEANS IT WILL PULL FROM YOUR REGULAR SUBSCRIPTION, NOT AGENT SDK CREDITS.**
-
-> **⚠️ Beta.** Planet Maiko is in active beta testing. Expect breaking changes, schema migrations, rough edges, and bugs. If you try it and something's broken, [file an issue](https://github.com/bkawa-bot/planet-maiko/issues/new).
 
 ### **What (boring) stuff Planet Maiko does:**
 
