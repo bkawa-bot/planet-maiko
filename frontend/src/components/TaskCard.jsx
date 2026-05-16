@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  CheckSquare, Square, FolderOpen, Pin, PinOff, ExternalLink,
+  Check, CombinationLock, Square, FolderOpen, Pin, PinOff, ExternalLink,
   ChevronRight, GitBranch, Clock, Bot, Eye, Play,
   X, Pencil, Circle, Send, Loader, FileText, GitPullRequest, Zap, Map,
 } from "@icons";
@@ -20,8 +20,8 @@ const STATUS_COLORS = {
 
 const STATUS_ICONS = {
   new: Circle, in_progress: Square, waiting: Clock,
-  review: Eye, done: CheckSquare, cancelled: X,
-  blocked: Clock,
+  review: Eye, done: Check, cancelled: X,
+  blocked: CombinationLock,
 };
 
 /**

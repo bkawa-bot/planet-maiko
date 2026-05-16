@@ -91,6 +91,9 @@ export const Conversation = (p) => <MIcon icon="conversation" {...p} />;
 export const BowenKnot = (p) => <MIcon icon="bowen-knot" {...p} />;
 export const MoonTarot = (p) => <MIcon icon="tarot-18-the-moon" {...p} />;
 export const RadarSweep = (p) => <MIcon icon="radar-sweep" {...p} />;
+export const CombinationLock = (p) => <MIcon icon="combination-lock" {...p} />;
+export const Processor = (p) => <MIcon icon="processor" {...p} />;
+export const ChatBubble = (p) => <MIcon icon="chat-bubble" {...p} />;
 export const HelpCircle = (p) => <MIcon icon="help" {...p} />;
 export const MoreHorizontal = (p) => <MIcon icon="three-leaves" {...p} />;
 

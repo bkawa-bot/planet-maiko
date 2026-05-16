@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  ArrowLeft, Check, Loader, FileText, MessageSquare, GitBranch,
+  ArrowLeft, Check, Loader, FileText, MessageSquare,
   Sparkles, Clock, AlertTriangle, Activity, GitPullRequest, X,
-  PanelRightClose, PanelRightOpen,
+  PanelRightClose, PanelRightOpen, Processor, ChatBubble,
 } from "@icons";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
@@ -146,7 +146,7 @@ function computeTabs(job, task) {
   const hasPlanForApproval = !!taskExtra.plan && !taskExtra.plan_approved_at;
 
   if (isDiffKind && hasWorktree) {
-    tabs.push({ id: "diff", label: "Diff", icon: GitBranch });
+    tabs.push({ id: "diff", label: "Diff", icon: Processor });
   }
   if (job.kind === "coding" && hasPlan) {
     tabs.push({
@@ -161,7 +161,7 @@ function computeTabs(job, task) {
   // Activity rolled into Chat — same data stream, the chat tab now
   // renders the activity-style cards and includes an input at the
   // bottom for sending replies. One tab, both behaviors.
-  tabs.push({ id: "chat", label: "Chat", icon: MessageSquare });
+  tabs.push({ id: "chat", label: "Chat", icon: ChatBubble });
   return tabs;
 }
 
