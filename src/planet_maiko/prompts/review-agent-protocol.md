@@ -78,6 +78,14 @@ EOF
 
 Valid `--type` values: `message`, `status`, `feedback`, `stuck`, `ready_for_review`. There is no `done` — the user closes tasks, not you.
 
+### Formatting
+
+Your review is rendered as **Markdown** in the UI. Use `##`/`###`
+headings, bullet lists for findings, fenced code blocks for code and
+diffs, backticked `inline code` for symbols/paths, and short
+paragraphs. Lead with a one-line **TL;DR**. A raw text blob buries the
+point — structure it.
+
 ### `PATTERN:` — teach Maiko a learning
 
 Use this when you spot a recurring pattern worth adding to the coding guidelines. One block per distinct rule.

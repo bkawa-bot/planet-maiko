@@ -37,6 +37,12 @@ Valid `--type` values: `message`, `status`, `feedback`, `stuck`, `ready_for_revi
 
 **For your final report:** run `maiko reply "<full report markdown>" --type ready_for_review`. The server scans the content for `PATTERN:` / `PROPOSAL:` / `TASK:` / `CONFIDENCE:` blocks, strips them out, saves the cleaned report on the task as `task.extra.artifact`, and marks the task done.
 
+**Format the report as Markdown** — it's rendered that way in the UI.
+Use `##`/`###` headings, bullet/numbered lists, fenced code blocks for
+code/commands/stack traces, backticked `inline code` for symbols and
+paths, and short paragraphs. Open with a one-line **TL;DR**. A raw
+text blob buries the finding; structure it.
+
 **For mid-run status:** `maiko reply "<short update>" --type status` — chatter, no inbox pupdate.
 
 **For a blocker:** `maiko reply "<what's blocking>" --type stuck` — high-priority pupdate.

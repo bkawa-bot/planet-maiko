@@ -78,6 +78,19 @@ EOF
 )" --type ready_for_review
 ```
 
+### Formatting
+
+Every report, summary, note, and `--recipient user` message is rendered
+as **Markdown** in the UI. Write it that way:
+
+- `##` / `###` headings to break sections — never one unbroken wall of prose.
+- Bullet or numbered lists for anything enumerable (findings, steps, files).
+- Fenced ` ``` ` code blocks for code, commands, diffs, stack traces, paths.
+- Short paragraphs. Lead with a one-line **TL;DR** before the detail.
+- Backtick `inline code` for symbols, filenames, flags.
+
+A raw text blob reads badly and buries the point. Structure it.
+
 ### Message types
 
 | Type | Meaning |

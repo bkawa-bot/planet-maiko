@@ -11,6 +11,7 @@ import { formatDate } from "../utils/dates";
 import { renderMarkdown } from "../utils/markdown";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import LinearCreateModal from "./LinearCreateModal";
+import ModalPortal from "./ModalPortal";
 
 const STATUS_COLORS = {
   new: "var(--text-muted)", in_progress: "#60a5fa", waiting: "#fbbf24",
@@ -222,7 +223,7 @@ export default function TaskCard({
               className="agent-artifact-toggle"
               onClick={() => setShowArtifact((v) => !v)}
             >
-              {showArtifact ? "Hide" : "View"} {t.type === "review" || t.type === "pr_review" ? "review" : "report"}
+              View {t.type === "review" || t.type === "pr_review" ? "review" : "report"}
               {t.metadata?.patterns_emitted ? ` · ${t.metadata.patterns_emitted} pattern(s)` : ""}
               {t.metadata?.proposals_emitted ? ` · ${t.metadata.proposals_emitted} proposal(s)` : ""}
               {(() => {
@@ -244,10 +245,29 @@ export default function TaskCard({
               {t.metadata?.confidence && t.metadata.confidence !== "high" ? ` · ${t.metadata.confidence} confidence` : ""}
             </button>
             {showArtifact && (
-              <div
-                className="agent-artifact-body"
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(t.metadata.artifact) }}
-              />
+              <ModalPortal>
+                <div className="modal-overlay" onClick={() => setShowArtifact(false)}>
+                  <div className="brief-modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="brief-modal-header">
+                      <FileText size={18} />
+                      <span>{t.title || (t.type === "review" || t.type === "pr_review" ? "Review" : "Report")}</span>
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => setShowArtifact(false)}
+                        style={{ marginLeft: "auto" }}
+                      >
+                        Close
+                      </button>
+                    </div>
+                    <div className="brief-modal-body">
+                      <div
+                        className="brief-content"
+                        dangerouslySetInnerHTML={{ __html: renderMarkdown(t.metadata.artifact) }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </ModalPortal>
             )}
           </div>
         )}
