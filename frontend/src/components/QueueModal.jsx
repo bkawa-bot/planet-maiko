@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Inbox, Loader, RefreshCw, Sparkles, X } from "@icons";
+import { Inbox, Loader, RefreshCw, RadarSweep, X } from "@icons";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
 import { relativeTime } from "../utils/dates";
@@ -73,7 +73,7 @@ export default function QueueModal({ onClose }) {
               <RefreshCw size={10} /> Refresh
             </button>
             <button className="btn btn-primary btn-sm" onClick={handleCycle} disabled={cycling}>
-              {cycling ? <><Loader size={10} className="spin" /> Running…</> : <><Sparkles size={10} /> Run cycle now</>}
+              {cycling ? <><Loader size={10} className="spin" /> Running…</> : <><RadarSweep size={10} /> Run cycle now</>}
             </button>
             <button className="btn-ghost" onClick={onClose} title="Close">
               <X size={12} />

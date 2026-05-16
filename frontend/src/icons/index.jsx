@@ -92,6 +92,7 @@ export const LogicGateNot = (p) => <MIcon icon="logic-gate-not" {...p} />;
 export const Conversation = (p) => <MIcon icon="conversation" {...p} />;
 export const BowenKnot = (p) => <MIcon icon="bowen-knot" {...p} />;
 export const MoonTarot = (p) => <MIcon icon="crescent-moon" {...p} />;
+export const RadarSweep = (p) => <MIcon icon="radar-sweep" {...p} />;
 export const HelpCircle = (p) => <MIcon icon="help" {...p} />;
 export const MoreHorizontal = (p) => <MIcon icon="three-leaves" {...p} />;
 

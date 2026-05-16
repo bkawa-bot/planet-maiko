@@ -5,7 +5,7 @@ import OverviewPane from "../components/OverviewPane";
 import MemosPane from "../components/MemosPane";
 import PackAskBox from "../components/PackAskBox";
 import { formatTime, formatClock } from "../utils/dates";
-import { Brain, Sun, Video, Sparkles, Conversation } from "@icons";
+import { Brain, Sun, Video, RadarSweep, Conversation } from "@icons";
 import { showToast } from "../components/Toast";
 import FooterPendingPopover from "../components/FooterPendingPopover";
 import "./Home.css";
@@ -174,7 +174,7 @@ export default function Home() {
                 disabled={cycling}
                 title="Run a brain cycle now (route tasks, process pupdates, etc.)"
               >
-                <Sparkles size={10} className={cycling ? "spin" : ""} />
+                <RadarSweep size={10} className={cycling ? "spin" : ""} />
                 {cycling ? " running…" : " cycle now"}
               </button>
             </div>
