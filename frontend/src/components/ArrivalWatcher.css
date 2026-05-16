@@ -145,6 +145,9 @@
   margin-top: 12px;
   min-width: 180px;
   align-self: flex-start;
+  /* .btn is inline-flex with no justify-content; min-width makes the
+     box wider than the label so it'd otherwise pack left of center. */
+  justify-content: center;
 }
 @media (max-width: 540px) {
   .arrival-watcher-confirm {
