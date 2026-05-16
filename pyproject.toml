@@ -32,6 +32,9 @@ dev = [
 # Install with: pip install -e ".[rag]"
 rag = [
     "sentence-transformers>=2.2",
+    # Temporary: huggingface_hub 1.0 dropped/renamed APIs
+    # sentence-transformers still calls; pin until the stack catches up.
+    "huggingface_hub<1.0",
 ]
 
 [project.scripts]
