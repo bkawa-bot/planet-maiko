@@ -137,15 +137,20 @@ export default function AgentJobPage() {
 function computeTabs(job, task) {
   if (!job) return [];
   const tabs = [];
-  const isDiffKind = ["coding", "review", "pr_review"].includes(job.kind);
   const isReportKind = ["investigation", "repo_analysis", "cartograph"].includes(job.kind);
   const hasWorktree = !!job.worktree_path;
+  // Any non-report job with a worktree produces a diff — including
+  // todo/bug/feature tasks an agent coded on (job.kind mirrors
+  // task.type, so it's literally "todo" there, not "coding"). Gating
+  // the Diff tab on kind=="coding" hid those diffs entirely; gate on
+  // "has a worktree and isn't a written-report kind" instead.
+  const isDiffKind = hasWorktree && !isReportKind;
   const hasArtifact = !!(job.artifact || task?.metadata?.artifact);
   const taskExtra = task?.metadata || {};
   const hasPlan = !!taskExtra.plan;
   const hasPlanForApproval = !!taskExtra.plan && !taskExtra.plan_approved_at;
 
-  if (isDiffKind && hasWorktree) {
+  if (isDiffKind) {
     tabs.push({ id: "diff", label: "Diff", icon: Processor });
   }
   if (job.kind === "coding" && hasPlan) {
@@ -172,9 +177,10 @@ function resolveActiveView(requested, tabs, job, task) {
   if (job?.kind === "coding" && taskExtra.plan && !taskExtra.plan_approved_at) {
     return "plan";
   }
-  const isDiffKind = ["coding", "review", "pr_review"].includes(job?.kind);
-  if (isDiffKind && job?.worktree_path) return "diff";
   const isReportKind = ["investigation", "repo_analysis", "cartograph"].includes(job?.kind);
+  // Same rule as availableTabs: a worktree on a non-report job means
+  // there's a diff to land on, whatever the literal kind string is.
+  if (job?.worktree_path && !isReportKind) return "diff";
   if (isReportKind || job?.artifact || taskExtra.artifact) return "report";
   return "chat";
 }
