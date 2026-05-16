@@ -294,6 +294,12 @@
   --lavender-soft: rgba(180, 107, 255, 0.20); --lavender-faint: rgba(180, 107, 255, 0.10);
   --topbar-gradient: linear-gradient(135deg, #0F1A2A 0%, #059E8A 40%, #C4F542 100%);
   --pane-bg: rgba(31, 53, 56, 0.55);
+  /* Toxic Lime is too bright to carry white CTA text. Dark moss-teal
+     (matches --bg-plain / --border-subtle) gives a ~10:1 contrast
+     ratio while keeping the lime fill. Only this theme overrides it;
+     every other theme keeps the default white via the fallback in
+     .btn-primary. */
+  --btn-primary-text: #1F3838;
 }
 
 /* === Frozen — ice planet, cryo glow. Frozen cyan + electric ice as
@@ -731,7 +737,7 @@ a:hover { text-decoration: underline; }
 }
 .btn:hover { color: var(--text); border-color: var(--blue); background: rgba(137, 207, 240, 0.08); transform: translateY(-1px); }
 .btn:active { transform: translateY(0); }
-.btn-primary { background: var(--pink); color: #fff; border-color: var(--pink); font-weight: 600; }
+.btn-primary { background: var(--pink); color: var(--btn-primary-text, #fff); border-color: var(--pink); font-weight: 600; }
 .btn-primary:hover { opacity: 0.9; background: var(--pink); border-color: var(--pink); }
 .btn-danger, .btn-dismiss { color: var(--urgent); border-color: currentColor; }
 .btn-danger:hover, .btn-dismiss:hover { background: var(--urgent-faint); }
