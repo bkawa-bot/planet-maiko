@@ -165,10 +165,13 @@ export const CheckSquare = (p) => <MIcon icon="checklist" {...p} />;
 export const AlertCircle = (p) => <MIcon icon="hazard-sign" {...p} />;
 export const AlertTriangle = (p) => <MIcon icon="hazard-sign" {...p} />;
 
-// Arrows — game-icons has plain-arrow + arrow-cursor; rotate to
-// match the lucide direction.
-export const ArrowLeft = (p) => <MIcon icon="plain-arrow" rotate={3} {...p} />;
-export const ArrowRight = (p) => <MIcon icon="plain-arrow" rotate={1} {...p} />;
+// Arrows — game-icons `plain-arrow` points RIGHT by default. So
+// ArrowRight is the native glyph (no rotate) and ArrowLeft is a 180°
+// turn. The old rotate={3}/{1} pair was anchored to a wrong base and
+// rendered Left/Right pointing up/down — hence the backwards Back
+// button.
+export const ArrowLeft = (p) => <MIcon icon="plain-arrow" rotate={2} {...p} />;
+export const ArrowRight = (p) => <MIcon icon="plain-arrow" {...p} />;
 export const ExternalLink = (p) => <MIcon icon="arrow-cursor" {...p} />;
 export const PanelRightOpen = (p) => <MIcon icon="arrow-cursor" {...p} />;
 export const PanelRightClose = (p) => <MIcon icon="arrow-cursor" rotate={2} {...p} />;
