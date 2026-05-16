@@ -576,6 +576,24 @@ button.diff-sidebar-anchor:hover code {
   flex-direction: column;
   gap: 10px;
 }
+/* The textarea had no bg/color rule, so it fell back to the UA white
+   while inheriting the dark-theme light text — white-on-white. Match
+   .plan-revise textarea and pin the color explicitly. */
+.agent-job-new-comment textarea {
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12px;
+  resize: vertical;
+}
+.agent-job-new-comment textarea:focus {
+  outline: none;
+  border-color: var(--pink);
+}
 .new-comment-header code {
   background: var(--pink-soft);
   color: var(--pink);

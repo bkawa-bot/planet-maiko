@@ -181,21 +181,29 @@
   flex-direction: column;
   gap: 3px;
 }
+/* Clamp to a few lines instead of a hard one-line ellipsis — the
+   "what I'd look at first" cards were cutting titles/why-text the
+   moment they wrapped past line one. -webkit-box + line-clamp wraps
+   normally and only ellipsizes once it exceeds the line budget. */
 .overview-card-title {
   font-size: 13px;
   color: var(--text);
   font-weight: 500;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 .overview-card-why {
   font-size: 12px;
   color: var(--text-dim);
   line-height: 1.4;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow-wrap: anywhere;
 }
 .overview-card-meta {
   font-size: 11px;
