@@ -81,9 +81,7 @@ export const Sparkles = (p) => <MIcon icon="sparkles" {...p} />;
 export const Bell = (p) => <MIcon icon="ringing-bell" {...p} />;
 export const Megaphone = (p) => <MIcon icon="megaphone" {...p} />;
 // User-picked game-icons swaps (Automations, Knowledge, Today, RAG,
-// categories, action, ask-the-pack, gathering). game-icons has no
-// tarot set, so "Tarot 18 The Moon" uses crescent-moon as the
-// closest distinct moon — swap the id if a better match turns up.
+// categories, action, ask-the-pack, gathering).
 export const Crystal = (p) => <MIcon icon="crystal-shine" {...p} />;
 export const Sun = (p) => <MIcon icon="sun" {...p} />;
 export const SpellBook = (p) => <MIcon icon="spell-book" {...p} />;
@@ -91,7 +89,7 @@ export const CheckboxTree = (p) => <MIcon icon="checkbox-tree" {...p} />;
 export const LogicGateNot = (p) => <MIcon icon="logic-gate-not" {...p} />;
 export const Conversation = (p) => <MIcon icon="conversation" {...p} />;
 export const BowenKnot = (p) => <MIcon icon="bowen-knot" {...p} />;
-export const MoonTarot = (p) => <MIcon icon="crescent-moon" {...p} />;
+export const MoonTarot = (p) => <MIcon icon="tarot-18-the-moon" {...p} />;
 export const RadarSweep = (p) => <MIcon icon="radar-sweep" {...p} />;
 export const HelpCircle = (p) => <MIcon icon="help" {...p} />;
 export const MoreHorizontal = (p) => <MIcon icon="three-leaves" {...p} />;
