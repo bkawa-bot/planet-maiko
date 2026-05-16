@@ -74,8 +74,28 @@
 
 
 /* === Agent Grid === */
-.agent-card { padding: 0; overflow: hidden; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+.agent-card { padding: 0; overflow: hidden; position: relative; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
 .agent-card:hover { border-color: var(--pink); transform: translateY(-2px); box-shadow: 0 0 0 1px var(--pink-glow), 0 4px 16px rgba(0,0,0,0.2); }
+/* Stop X pinned to the card's top-right (by the tags) instead of in
+   its own bottom row — that row's padding was the dead space. */
+.agent-card-stop {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.agent-card-stop:hover { color: var(--urgent); background: var(--urgent-faint, rgba(255,85,119,0.12)); }
 
 .speech-bubble {
   padding: 10px 14px; font-size: 12px; color: var(--text-dim);

@@ -443,22 +443,16 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles,
                     </div>
                   </div>
                 </Link>
-                <div className="agent-actions">
-                  <button
-                    className="btn btn-icon"
-                    onClick={() => handleResume({ task_id: a.task_id, working_path: prepared?.working_path, branch: prepared?.branch })}
-                    title="Resume the agent's session in a terminal"
-                  >
-                    <ExternalLink size={12} />
-                  </button>
-                  <button
-                    className="btn btn-icon btn-danger"
-                    onClick={() => handleStop(a)}
-                    title="Stop the agent, clean up the worktree, and delete this job"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
+                {/* Stop pinned top-right by the tags instead of a
+                    separate actions row (that row's bottom padding was
+                    the dead space). Resume moved to the job page. */}
+                <button
+                  className="agent-card-stop"
+                  onClick={() => handleStop(a)}
+                  title="Stop the agent, clean up the worktree, and delete this job"
+                >
+                  <X size={12} />
+                </button>
               </div>
               );
             })}
