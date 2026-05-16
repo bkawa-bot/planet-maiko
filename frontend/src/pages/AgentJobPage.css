@@ -1,7 +1,10 @@
 /* Unified agent-job page — header + tabs + section body. */
 
 .agent-job-page {
-  max-width: 1280px;
+  /* Wider than the old 1280px: with the 320px comments rail open the
+     diff column was getting squeezed and long paths clipped. Scale
+     with the viewport on big monitors, cap so it doesn't sprawl. */
+  max-width: min(1680px, 96vw);
   margin: 0 auto;
   padding: 16px 20px 80px;
   display: flex;
@@ -138,6 +141,7 @@
   border: 1px solid var(--border);
   font-size: 13px;
 }
+.diff-verdict-banner.verdict-ready { border-left: 4px solid var(--blue, #89cff0); }
 .diff-verdict-banner.verdict-approve { border-left: 4px solid var(--mint, #4ade80); }
 .diff-verdict-banner.verdict-approve_with_comments { border-left: 4px solid var(--lemon, #f5d77a); }
 .diff-verdict-banner.verdict-soft_block { border-left: 4px solid var(--warm-coral, #c97a4a); }
@@ -314,8 +318,12 @@
 }
 .agent-job-diff .diff-file-path {
   flex: 1;
+  min-width: 0;
   color: var(--text);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  /* Wrap instead of right-ellipsizing — chopping the end of a path
+     hides the filename, which is the part you actually need. */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .agent-job-diff .diff-file-stats {
   display: inline-flex; gap: 8px; align-items: baseline;

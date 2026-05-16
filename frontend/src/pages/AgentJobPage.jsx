@@ -409,11 +409,21 @@ function DiffPanel({ jobId, job, task, onChanged }) {
   const summary = task?.metadata?.review_summary;
   const artifact = task?.metadata?.artifact;
 
+  // A coding agent reviewing its OWN diff will always "approve" — the
+  // verdict verb is meaningless on self-authored code. Show a neutral
+  // "ready for your review" instead. Review/pr_review agents are
+  // judging someone else's code, so their real verdict stays.
+  const isSelfDiff = job?.kind === "coding";
+  const verdictClass = isSelfDiff ? "ready" : (verdict || "neutral");
+  const verdictLabel = isSelfDiff
+    ? "ready for your review"
+    : (verdict ? verdict.replace(/_/g, " ") : null);
+
   return (
     <div className="agent-job-diff">
-      {(verdict || summary) && (
-        <div className={`diff-verdict-banner verdict-${verdict || "neutral"}`}>
-          {verdict && <span className="verdict-chip">{verdict.replace(/_/g, " ")}</span>}
+      {(verdictLabel || summary) && (
+        <div className={`diff-verdict-banner verdict-${verdictClass}`}>
+          {verdictLabel && <span className="verdict-chip">{verdictLabel}</span>}
           {summary && <span className="verdict-summary">{summary}</span>}
         </div>
       )}
