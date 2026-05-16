@@ -6,7 +6,7 @@ import { renderMarkdown } from "../utils/markdown";
 import { relativeTime } from "../utils/dates";
 import {
   Sunrise, RefreshCw, FileText, X,
-  MoreHorizontal, ListTodo, Search, ExternalLink,
+  MoreHorizontal, ListTodo, Search, ExternalLink, LogicGateNot,
 } from "@icons";
 import TaskCard from "./TaskCard";
 import PlanetSpinner from "./PlanetSpinner";
@@ -513,7 +513,7 @@ export default function OverviewPane() {
                   </div>
                   {action && (
                     <button className="btn btn-sm btn-primary" onClick={go}>
-                      {action.label}
+                      <LogicGateNot size={12} /> {action.label}
                     </button>
                   )}
                   <div className="overview-card-menu-wrap">

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
-import { Plus, Moon, Target, X } from "@icons";
+import { Plus, MoonTarot, Target, X } from "@icons";
 import InfoButton from "../components/InfoButton";
 import AgentsActiveTab from "../components/agents/AgentsActiveTab";
 import AgentsProfilesTab from "../components/agents/AgentsProfilesTab";
@@ -233,10 +233,10 @@ export default function Agents() {
           className={`inbox-tab ${tab === "insights" ? "active" : ""}`}
           onClick={() => setTab("insights")}
         >
-          <Moon size={10} /> Pack Insights
+          <MoonTarot size={10} /> Pack Insights
         </button>
         {tab === "insights" && (
-          <InfoButton title={<><Moon size={16} /> Pack Insights</>}>
+          <InfoButton title={<><MoonTarot size={16} /> Pack Insights</>}>
             <p>An end-of-day ritual: the pack gathers around the campfire and shares what they noticed today.</p>
             <h4>What agents share</h4>
             <ul>

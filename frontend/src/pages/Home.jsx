@@ -5,7 +5,7 @@ import OverviewPane from "../components/OverviewPane";
 import MemosPane from "../components/MemosPane";
 import PackAskBox from "../components/PackAskBox";
 import { formatTime, formatClock } from "../utils/dates";
-import { Brain, Calendar, Video, Sparkles } from "@icons";
+import { Brain, Sun, Video, Sparkles, Conversation } from "@icons";
 import { showToast } from "../components/Toast";
 import FooterPendingPopover from "../components/FooterPendingPopover";
 import "./Home.css";
@@ -111,7 +111,7 @@ export default function Home() {
         <div className="home-sidebar">
           <div className="home-widget">
             <div className="widget-header">
-              <Calendar size={12} /> Today
+              <Sun size={12} /> Today
               {calendarEvents.length > 0 && (
                 <span className="widget-count">{calendarEvents.length} meeting(s)</span>
               )}
@@ -160,7 +160,7 @@ export default function Home() {
 
           <div className="home-widget">
             <div className="widget-header">
-              <Sparkles size={12} /> Ask the pack
+              <Conversation size={12} /> Ask the pack
             </div>
             <PackAskBox />
           </div>

@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Settings, Palette, Power, Leaf, Hearth, Scroll, Paw, Tome, Spark } from "@icons";
+import { Settings, Palette, Power, Leaf, Hearth, Scroll, Paw, SpellBook, Crystal } from "@icons";
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api/client";
 import { applyCustomTheme, clearCustomTheme, hydrateCachedCustomTheme } from "../utils/themes";
@@ -15,8 +15,8 @@ const NAV_ITEMS = [
   { to: "/", icon: Hearth, label: "Home", end: true },
   { to: "/tasks", icon: Scroll, label: "Tasks" },
   { to: "/agents", icon: Paw, label: "Pack" },
-  { to: "/knowledge", icon: Tome, label: "Knowledge" },
-  { to: "/automations", icon: Spark, label: "Automations" },
+  { to: "/knowledge", icon: SpellBook, label: "Knowledge" },
+  { to: "/automations", icon: Crystal, label: "Automations" },
 ];
 
 // Built-in theme palette. Each entry's `group` controls dropdown

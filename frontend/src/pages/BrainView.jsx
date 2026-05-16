@@ -5,6 +5,7 @@ import { showToast } from "../components/Toast";
 import {
   BookOpen, Brain, Clock, Layers, Check, X, Edit3,
   ChevronDown, ChevronRight, Plus, Shield, Download, Loader, Sparkles,
+  CheckboxTree, BowenKnot,
 } from "@icons";
 import { relativeTime } from "../utils/dates";
 import InfoButton from "../components/InfoButton";
@@ -396,7 +397,7 @@ export default function BrainView() {
         <div className="knowledge-stats">
           <span className="kstat"><Brain size={12} /> {active.length} active</span>
           <span className="kstat"><Clock size={12} /> {pending.length} pending</span>
-          <span className="kstat"><Layers size={12} /> {Object.keys(byCategory).length} categories</span>
+          <span className="kstat"><CheckboxTree size={12} /> {Object.keys(byCategory).length} categories</span>
           {ragStatus !== null && (() => {
             // Three states: offline (no backend installed), partial
             // (backfill in flight), ready (every active rule has an
@@ -441,7 +442,7 @@ export default function BrainView() {
                 onClick={offline ? () => alert(ragSetupMessage) : undefined}
                 style={offline ? { cursor: "pointer" } : undefined}
               >
-                <Sparkles size={12} /> {label}
+                <BowenKnot size={12} /> {label}
               </span>
             );
           })()}
