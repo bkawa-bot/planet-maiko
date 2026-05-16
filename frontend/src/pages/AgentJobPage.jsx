@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, Check, Loader, FileText, MessageSquare,
   Sparkles, Clock, AlertTriangle, Activity, GitPullRequest, X,
-  PanelRightClose, PanelRightOpen, Processor, ChatBubble,
+  PanelRightClose, PanelRightOpen, Processor, ChatBubble, ExternalLink,
 } from "@icons";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
@@ -195,25 +195,62 @@ function JobHeader({ job, task, profile, onBack }) {
   };
   const tone = STATUS_TONE[job.status] || "muted";
   const title = task?.title || job.title || `Job ${job.id}`;
+  const kindLabel = KIND_LABEL[job.kind] || job.kind;
+  const [resuming, setResuming] = useState(false);
+  // Terminal pop-out (moved here from the active-agents card). The
+  // resume-session endpoint accepts job_id or task_id; jobId is the
+  // AgentJob id. Show it once the job has actually started — a queued
+  // job has no session/worktree to attach to yet.
+  const canResume = job.status === "running" || !!job.worktree_path;
+  const openSession = async () => {
+    if (resuming) return;
+    setResuming(true);
+    try {
+      const r = await api.resumeAgentSession(job.id);
+      showToast(
+        r?.mode === "tmux" ? "Attaching to the agent's tmux…"
+          : r?.mode === "resume" ? "Resuming the agent's session…"
+          : "Opening a live view…",
+        "normal",
+      );
+    } catch (err) {
+      showToast(err.message || "No live session to open", "high");
+    } finally {
+      setResuming(false);
+    }
+  };
   return (
     <div className="agent-job-header">
-      <button className="btn btn-sm" onClick={onBack}>
-        <ArrowLeft size={10} /> Back
-      </button>
-      {profile && (
-        <div className="agent-job-profile">
-          <CardAvatar agent={profile} size={28} />
-          <span className="agent-job-profile-name">{profile.display_name}</span>
+      <div className="agent-job-header-top">
+        <button className="btn btn-sm" onClick={onBack}>
+          <ArrowLeft size={10} /> Back
+        </button>
+        <span className="agent-job-header-spacer" />
+        <span className={`agent-job-kind kind-${job.kind}`}>{kindLabel}</span>
+        <span className={`agent-job-status status-${tone}`}>{job.status}</span>
+        {job.scope_repo && (
+          <span className="agent-job-repo">{job.scope_repo}</span>
+        )}
+        {canResume && (
+          <button className="btn btn-sm" onClick={openSession} disabled={resuming}
+            title="Attach to the agent's session in a terminal">
+            {resuming
+              ? <><Loader size={10} className="spin" /> Opening…</>
+              : <><ExternalLink size={10} /> View session</>}
+          </button>
+        )}
+      </div>
+      <div className="agent-job-identity">
+        {profile && <CardAvatar agent={profile} size={44} />}
+        <div className="agent-job-identity-text">
+          <h1 className="agent-job-title">{title}</h1>
+          {profile && (
+            <div className="agent-job-subtitle">
+              {kindLabel} · {profile.display_name}
+            </div>
+          )}
         </div>
-      )}
-      <div className="agent-job-title">{title}</div>
-      <span className={`agent-job-kind kind-${job.kind}`}>
-        {KIND_LABEL[job.kind] || job.kind}
-      </span>
-      <span className={`agent-job-status status-${tone}`}>{job.status}</span>
-      {job.scope_repo && (
-        <span className="agent-job-repo">{job.scope_repo}</span>
-      )}
+      </div>
     </div>
   );
 }
