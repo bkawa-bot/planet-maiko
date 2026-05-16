@@ -69,11 +69,15 @@
   --font: 'Atkinson Hyperlegible', -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'Inconsolata', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
   --font-display: 'Bitcount Prop Single', 'Inconsolata', monospace;
-  /* Greeting font. Quicksand — rounded humanist sans, warm and
-     readable at the 30px greeting size. Fraunces stays in the
-     fallback chain so a missed font-load keeps the warm character
-     instead of collapsing to a system default. */
-  --font-greeting: 'Quicksand', 'Fraunces', Georgia, serif;
+  /* Greeting font. Bricolage Grotesque — quirky humanist-grotesque
+     with irregular rhythm; loud at the 30px greeting size without
+     reading as a neutral startup grotesque. Quicksand + Fraunces stay
+     in the fallback chain so a missed font-load keeps the warm
+     character instead of collapsing to a system default.
+     To A/B: swap the first family for 'Darker Grotesque' (condensed,
+     surreal — needs ~700+ weight to hold up at greeting size). Both
+     are already loaded in index.html. */
+  --font-greeting: 'Bricolage Grotesque', 'Quicksand', 'Fraunces', Georgia, serif;
   /* Pixel-y display font for card art / avatar fallbacks where the
      blocky character is the whole point — split out from --font-greeting
      so the home H1 can be readable while the procedural card avatars
