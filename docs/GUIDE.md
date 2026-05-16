@@ -48,7 +48,7 @@ Brain Cycle (every 5 min)
 
 ### How agents work
 
-When you assign an agent to a task, Maiko prepares a git worktree with `TASK.md`, `CLAUDE.md` (role protocol + character + active team Insights + the agent's bio), and an optional `.mcp.json` carrying any project MCPs you have configured in the parent repo. Then the active agent runtime spawns the work — `claude --print` headless by default, or `claude` interactive in a tmux pane if you've flipped `brain.runtime` to `claude-code-tmux` (Mac only, bills against the subscription pool instead of the Agent SDK credit). See [AGENT_RUNTIME.md](AGENT_RUNTIME.md) for the runtime contract and how to add new backends.
+When you assign an agent to a task, Maiko prepares a git worktree with `TASK.md`, `CLAUDE.md` (role protocol + character + active team Insights + the agent's bio), and an optional `.mcp.json` carrying any project MCPs you have configured in the parent repo. Then the active agent runtime spawns the work — `claude --print` headless by default, or `claude` interactive in a tmux pane if you've flipped `brain.runtime` to `claude-code-tmux` (Mac only, bills against the subscription pool instead of the Agent SDK credit). See [ARCHITECTURE.md](ARCHITECTURE.md#6-tasks-agentjobs-and-the-agent-lifecycle) for the runtime contract and how to add new backends.
 
 The agent works, commits to its branch, and calls `maiko reply "<summary>" --type ready_for_review` from inside the worktree when it's done. The `maiko` CLI (and a small set of Claude Code hooks) is the talk-back path — agents post to Maiko via shell commands rather than MCP tools, which means the same agent loop works under non-Claude runtimes (Ollama for local-model loops, Aider, etc.) without rewiring. You see the diff in-app, leave inline comments, and either approve (Maiko pushes + opens the PR) or request changes (the agent auto-wakes via `claude --resume`, reads your comments, iterates). The wake orchestrator guarantees two triggers can't race — every resume goes through a single lock.
 
@@ -160,7 +160,7 @@ class MyRuntime(AgentRuntime):
     def session_transcript_path(self, session_id, working_dir=None): ...
 ```
 
-Wire it into the dispatch in `agents/brain_session._instantiate_runtime`, then point `brain.runtime` (or `routing.runtime_rules.<task_type>`) at it in config. See [AGENT_RUNTIME.md](AGENT_RUNTIME.md) for the full contract, including how protocol prompts stay runtime-agnostic via the `maiko` CLI.
+Wire it into the dispatch in `agents/brain_session._instantiate_runtime`, then point `brain.runtime` (or `routing.runtime_rules.<task_type>`) at it in config. See [ARCHITECTURE.md](ARCHITECTURE.md#6-tasks-agentjobs-and-the-agent-lifecycle) for the full contract, including how protocol prompts stay runtime-agnostic via the `maiko` CLI.
 
 ## CLI Reference
 
