@@ -4,7 +4,7 @@ import SetupWizard from "../components/SetupWizard";
 import OverviewPane from "../components/OverviewPane";
 import MemosPane from "../components/MemosPane";
 import PackAskBox from "../components/PackAskBox";
-import { formatTime, formatClock } from "../utils/dates";
+import { formatTime, formatClock, formatLongDate } from "../utils/dates";
 import { Brain, Sun, Video, RadarSweep, Conversation } from "@icons";
 import { showToast } from "../components/Toast";
 import FooterPendingPopover from "../components/FooterPendingPopover";
@@ -23,6 +23,20 @@ function weatherEmoji(w) {
   if (w === "fog") return "🌫️";
   return "🌤️";
 }
+
+// scene.context.moon_phase values come from brain/creativity/scene.py
+// (_moon_phase). Pure date math, so it's present regardless of whether
+// the user configured scene coordinates (unlike weather).
+const MOON = {
+  new: ["🌑", "New moon"],
+  waxing_crescent: ["🌒", "Waxing crescent"],
+  first_quarter: ["🌓", "First quarter"],
+  waxing_gibbous: ["🌔", "Waxing gibbous"],
+  full: ["🌕", "Full moon"],
+  waning_gibbous: ["🌖", "Waning gibbous"],
+  last_quarter: ["🌗", "Last quarter"],
+  waning_crescent: ["🌘", "Waning crescent"],
+};
 
 export default function Home() {
   const [scene, setScene] = useState(null);
@@ -114,6 +128,12 @@ export default function Home() {
               <Sun size={12} /> Today
               {calendarEvents.length > 0 && (
                 <span className="widget-count">{calendarEvents.length} meeting(s)</span>
+              )}
+            </div>
+            <div className="today-meta">
+              {formatLongDate(new Date())}
+              {MOON[scene?.context?.moon_phase] && (
+                <> · {MOON[scene.context.moon_phase][0]} {MOON[scene.context.moon_phase][1]}</>
               )}
             </div>
             {scene?.context?.weather && homeConfig?.scene?.latitude && (

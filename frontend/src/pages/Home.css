@@ -392,6 +392,13 @@
   100% { opacity: 0; }
 }
 /* === Calendar widget === */
+/* Date + moon-phase line. Always shown — date is pure and moon phase
+   is date-math from scene.context, so neither needs a configured
+   location (unlike the weather row below). */
+.today-meta {
+  font-size: 11px; color: var(--text-dim);
+  margin-bottom: 4px;
+}
 /* Small weather row tucked under the Today header — temp + conditions,
    only shown when the scene API has a location to fetch against. */
 .today-weather {

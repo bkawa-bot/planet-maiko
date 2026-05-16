@@ -42,6 +42,18 @@ export function formatDate(value) {
 }
 
 /**
+ * Friendly long date: "Fri, May 16". For ambient surfaces (the Today
+ * widget header) where a slashed numeric date reads as ops tooling.
+ * No year — the widget is always "today" so the year is noise.
+ */
+export function formatLongDate(value) {
+  const d = _toDate(value);
+  return d
+    ? d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })
+    : "";
+}
+
+/**
  * Full date + time: "4/9/2026, 2:23 PM". Used in pupdate card meta where
  * both pieces matter. No seconds — see formatTime for rationale.
  */
