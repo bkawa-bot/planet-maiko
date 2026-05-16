@@ -18,8 +18,11 @@ import "./cards.css";
 // hoisted here so the create form, edit form, and the generated-tasks
 // review modal all read the same source of truth. Keep in sync with
 // the backend's task type validator (Task model).
+// bug/feature were picker-only labels with no backend behavior — a
+// "bug" is just a coding task or a todo. Dropped from new-task pickers;
+// existing rows of those types still render fine (free-form string).
 const TASK_TYPES = [
-  "coding", "bug", "feature", "review", "investigation", "repo_analysis", "todo", "follow_up",
+  "coding", "review", "investigation", "repo_analysis", "todo", "follow_up",
 ];
 const TASK_PRIORITIES = ["urgent", "high", "normal", "low"];
 const ONE_SHOT_TASK_TYPES = new Set(["review", "investigation", "repo_analysis"]);
@@ -182,8 +185,6 @@ export default function Tasks() {
                   Type
                   <select value={taskForm.type} onChange={(e) => setTaskForm((f) => ({ ...f, type: e.target.value }))}>
                     <option value="coding">Coding</option>
-                    <option value="bug">Bug</option>
-                    <option value="feature">Feature</option>
                     <option value="review">Review</option>
                     <option value="investigation">Investigation</option>
                     <option value="repo_analysis">Repo Analysis</option>
@@ -701,8 +702,6 @@ export default function Tasks() {
                   Type
                   <select value={editForm.type} onChange={(e) => setEditForm((f) => ({ ...f, type: e.target.value }))}>
                     <option value="coding">Coding</option>
-                    <option value="bug">Bug</option>
-                    <option value="feature">Feature</option>
                     <option value="review">Review</option>
                     <option value="investigation">Investigation</option>
                     <option value="repo_analysis">Repo Analysis</option>

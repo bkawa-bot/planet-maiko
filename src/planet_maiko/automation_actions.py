@@ -32,8 +32,6 @@ _PRIORITY = [
 
 _TASK_TYPES = [
     {"value": "todo", "label": "todo (generic)"},
-    {"value": "bug", "label": "bug"},
-    {"value": "feature", "label": "feature"},
     {"value": "coding", "label": "coding (you'll assign an agent later)"},
     {"value": "review", "label": "review (you owe someone a review)"},
 ]
@@ -85,7 +83,7 @@ BUILTIN_AUTOMATION_ACTIONS = [
         "group": "Do work",
         "scopes": ["cycle"],
         "description": (
-            "Create a task you own: a todo / bug / feature that lives on "
+            "Create a task you own: a todo or coding task that lives on "
             "the Tasks page. Use this when the work surfaces to you, not "
             "the pack."
         ),
@@ -93,7 +91,7 @@ BUILTIN_AUTOMATION_ACTIONS = [
             {"name": "title", "type": "string", "label": "Title"},
             {"name": "type", "type": "select", "label": "Task type", "default": "todo", "options": _TASK_TYPES},
             {"name": "description", "type": "textarea", "label": "Description", "rows": 2},
-            {"name": "auto_launch", "type": "bool", "label": "Launch an agent immediately", "help": "For review/investigation/cartograph/repo_analysis types: skip manual Assign and spawn a linked agent job. No-op on todo/bug/feature."},
+            {"name": "auto_launch", "type": "bool", "label": "Launch an agent immediately", "help": "For review/investigation/cartograph/repo_analysis types: skip manual Assign and spawn a linked agent job. No-op on plain todos."},
             {"name": "repo", "type": "string", "label": "Repo", "placeholder": "org/repo", "advanced": True, "datalist": "repos"},
             {"name": "priority", "type": "select", "label": "Priority", "default": "normal", "options": _PRIORITY, "advanced": True},
         ],
