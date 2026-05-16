@@ -422,18 +422,12 @@ export default function BrainView() {
               title = `Backend: ${ragStatus.model}. All ${total} active rules indexed for retrieval.`;
             }
             const ragSetupMessage = (
-              "RAG (rule retrieval) needs an embedding backend. Three options:\n\n" +
-              "1. Local model (free, ~2GB download):\n" +
+              "RAG (rule retrieval) needs the local embedding model:\n\n" +
               "   pip install -e \".[rag]\"\n" +
               "   Restart `maiko serve`.\n\n" +
-              "2. Voyage (Anthropic-aligned):\n" +
-              "   pip install voyageai\n" +
-              "   export VOYAGE_API_KEY=your-key\n" +
-              "   Restart `maiko serve`.\n\n" +
-              "3. OpenAI:\n" +
-              "   pip install openai\n" +
-              "   export OPENAI_API_KEY=your-key\n" +
-              "   Restart `maiko serve`."
+              "Free, runs on CPU, no API key. ~2GB on first install " +
+              "(pulls torch); the model itself is ~335MB and caches " +
+              "to ~/.cache/huggingface."
             );
             return (
               <span

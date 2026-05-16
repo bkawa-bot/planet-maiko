@@ -328,13 +328,14 @@ def embedding_status():
     """Diagnostic: which embedding backend is active, and how many
     rules are ready for retrieval. Useful for the UI to show
     "RAG ready: 287/312 rules indexed" while backfill is running."""
-    from planet_maiko.brain.learning.embeddings import (
-        embedding_model_name,
-        _select_backend,
-    )
+    from planet_maiko.brain.learning.embeddings import embedding_model_name
     from planet_maiko.models.learning import Learning
 
-    backend = _select_backend()
+    # Single local backend now; model name is None when it couldn't
+    # load (not installed / cache empty). Frontend treats falsy backend
+    # as "RAG offline".
+    model = embedding_model_name()
+    backend = "sentence_transformers" if model else None
     rules_indexed = (
         Learning.query
         .filter_by(status="active")

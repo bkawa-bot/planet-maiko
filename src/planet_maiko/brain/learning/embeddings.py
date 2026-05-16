@@ -1,194 +1,130 @@
 """Text embeddings for RAG retrieval.
 
-Multi-backend with graceful fallback so this works across environments
-without forcing a specific dependency:
+Local-only via `sentence-transformers` (no API cost, no per-call
+network, code stays local). Default model: bge-small-en-v1.5, ~335MB
+on disk, ~768-dim vectors, cached to ~/.cache/huggingface on first
+use. If sentence-transformers isn't installed (`pip install -e
+".[rag]"`), retrieval is disabled and the rest of Maiko runs fine.
 
-  1. Local via `sentence-transformers` (preferred — no API cost, no
-     network, code stays local). Default model: bge-small-en-v1.5,
-     ~335MB on disk, ~768-dim vectors.
-  2. Voyage API (`voyageai` SDK + VOYAGE_API_KEY) — Anthropic's
-     recommended embedding partner; voyage-code-2 is code-aware.
-  3. OpenAI API (`openai` SDK + OPENAI_API_KEY) — text-embedding-3-small,
-     fast and cheap.
+Voyage / OpenAI backends were removed: no one asked for them and the
+multi-backend selection + clients were complexity we didn't need.
 
-The chosen backend is sticky for the process lifetime once selected.
-The embedding-model name is returned alongside the vector so callers
-can detect when stored embeddings are stale (different model = vectors
+The embedding-model name is returned alongside vectors so callers can
+detect when stored embeddings are stale (different model = vectors
 not comparable).
 """
 
 import logging
 import math
-import os
 
 logger = logging.getLogger(__name__)
 
-
-# Module-level cache. Set once on first call to embed_text().
-_backend = None  # "sentence_transformers" | "voyage" | "openai" | None
+# Module-level cache. Set once on first call.
+_backend = None  # "sentence_transformers" | None  (None = unavailable)
 _model_name = None
-_st_model = None  # sentence-transformers Model instance, lazy-loaded
-_voyage_client = None
-_openai_client = None
+_st_model = None  # lazy-loaded SentenceTransformer instance
+_load_attempted = False
+
+_MODEL_ID = "BAAI/bge-small-en-v1.5"
 
 
-def _try_load_sentence_transformers():
-    """Best-effort load of a small local embedding model. Returns
-    True on success."""
-    global _st_model, _model_name
+def _load_model():
+    """Best-effort one-time load of the local embedding model.
+
+    Tries a normal load first so a cold machine still downloads the
+    model. If that raises (the usual culprit is huggingface_hub's
+    update/etag HEAD request failing — hub API churn, offline, flaky
+    network), retry with local_files_only=True, which skips that
+    check entirely and uses whatever's already in the HF cache. Sets
+    _backend to "sentence_transformers" on success, None otherwise.
+    """
+    global _st_model, _model_name, _backend, _load_attempted
+    if _load_attempted:
+        return
+    _load_attempted = True
+
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError:
-        logger.debug("[embeddings] sentence-transformers not installed")
-        return False
+        logger.debug("[embeddings] sentence-transformers not installed — RAG disabled")
+        _backend = None
+        return
+
     try:
-        # bge-small is the sweet spot for our scale: ~335MB, fast on
-        # CPU, comparable quality to OpenAI's text-embedding-3-small
-        # for short text. Caches to ~/.cache/huggingface on first use.
-        model = SentenceTransformer("BAAI/bge-small-en-v1.5")
-        _st_model = model
-        _model_name = "BAAI/bge-small-en-v1.5"
-        logger.info("[embeddings] loaded local sentence-transformers model bge-small-en-v1.5")
-        return True
+        _st_model = SentenceTransformer(_MODEL_ID)
     except Exception as e:
-        logger.warning(f"[embeddings] sentence-transformers load failed: {e}")
-        return False
+        # The etag/update check is the common failure. Fall back to the
+        # cached copy and skip the network entirely.
+        logger.warning(
+            f"[embeddings] online model load failed ({e}); "
+            "retrying from local HF cache (local_files_only)"
+        )
+        try:
+            _st_model = SentenceTransformer(_MODEL_ID, local_files_only=True)
+        except Exception as e2:
+            logger.warning(
+                f"[embeddings] cached load also failed: {e2} — RAG disabled. "
+                'Run once with network to populate the cache (pip install -e ".[rag]").'
+            )
+            _backend = None
+            return
+
+    _model_name = _MODEL_ID
+    _backend = "sentence_transformers"
+    logger.info(f"[embeddings] loaded local model {_MODEL_ID}")
 
 
-def _try_load_voyage():
-    """Initialize Voyage client if VOYAGE_API_KEY is set."""
-    global _voyage_client, _model_name
-    if not os.environ.get("VOYAGE_API_KEY"):
-        return False
-    try:
-        import voyageai
-        _voyage_client = voyageai.Client(api_key=os.environ["VOYAGE_API_KEY"])
-        _model_name = "voyage-code-2"
-        logger.info("[embeddings] using Voyage voyage-code-2")
-        return True
-    except ImportError:
-        logger.debug("[embeddings] voyageai not installed")
-        return False
-    except Exception as e:
-        logger.warning(f"[embeddings] voyage init failed: {e}")
-        return False
-
-
-def _try_load_openai():
-    """Initialize OpenAI client if OPENAI_API_KEY is set."""
-    global _openai_client, _model_name
-    if not os.environ.get("OPENAI_API_KEY"):
-        return False
-    try:
-        from openai import OpenAI
-        _openai_client = OpenAI()  # picks up OPENAI_API_KEY from env
-        _model_name = "text-embedding-3-small"
-        logger.info("[embeddings] using OpenAI text-embedding-3-small")
-        return True
-    except ImportError:
-        logger.debug("[embeddings] openai not installed")
-        return False
-    except Exception as e:
-        logger.warning(f"[embeddings] openai init failed: {e}")
-        return False
-
-
-def _select_backend():
-    """Pick a backend on first use. Order: sentence-transformers (local,
-    free), Voyage (Anthropic-aligned), OpenAI (universal fallback).
-    Returns the backend name, or None if nothing's available."""
-    global _backend
-    if _backend:
-        return _backend
-    for name, loader in (
-        ("sentence_transformers", _try_load_sentence_transformers),
-        ("voyage", _try_load_voyage),
-        ("openai", _try_load_openai),
-    ):
-        if loader():
-            _backend = name
-            return name
-    logger.warning(
-        "[embeddings] No embedding backend available. Install one of: "
-        "`pip install sentence-transformers` (local), "
-        "`pip install voyageai` (with VOYAGE_API_KEY), or "
-        "`pip install openai` (with OPENAI_API_KEY)."
-    )
-    _backend = None
-    return None
+def _ready():
+    if not _load_attempted:
+        _load_model()
+    return _backend is not None
 
 
 def embedding_model_name():
-    """Name of the active embedding model. Stored alongside vectors so
-    we can detect mismatches when the backend changes — vectors from
-    different models aren't directly comparable."""
-    if _backend is None:
-        _select_backend()
+    """Name of the active embedding model, or None if RAG is disabled.
+    Stored alongside vectors so we can detect mismatches if the model
+    ever changes — vectors from different models aren't comparable."""
+    _ready()
     return _model_name
 
 
 def embed_text(text):
-    """Embed a single string. Returns list[float] or None if no backend
-    is available.
-
-    For consistency, callers should always store `embedding_model_name()`
-    alongside the vector. At retrieval time, only compare vectors with
-    matching model names.
-    """
+    """Embed a single string. Returns list[float], or None if RAG is
+    unavailable. Callers should store embedding_model_name() alongside
+    the vector and only compare vectors with a matching model name."""
     if not text or not text.strip():
         return None
-    backend = _select_backend()
-    if backend is None:
+    if not _ready():
         return None
     try:
-        if backend == "sentence_transformers":
-            vec = _st_model.encode(text, normalize_embeddings=True)
-            return [float(x) for x in vec]
-        if backend == "voyage":
-            res = _voyage_client.embed([text], model=_model_name, input_type="document")
-            return list(res.embeddings[0])
-        if backend == "openai":
-            res = _openai_client.embeddings.create(input=text, model=_model_name)
-            return list(res.data[0].embedding)
+        vec = _st_model.encode(text, normalize_embeddings=True)
+        return [float(x) for x in vec]
     except Exception as e:
-        logger.warning(f"[embeddings] embed failed via {backend}: {e}")
+        logger.warning(f"[embeddings] embed failed: {e}")
         return None
 
 
 def embed_batch(texts):
-    """Batch-embed a list of strings. Where the backend supports batched
-    requests we use them (faster + cheaper); otherwise we fall back to
-    per-item embed_text. Returns a list aligned with the input —
-    None for any item that failed."""
+    """Batch-embed a list of strings (encoded as one tensor — much
+    faster than per-item). Returns a list aligned with the input;
+    None for any item if RAG is unavailable / the batch failed."""
     if not texts:
         return []
-    backend = _select_backend()
-    if backend is None:
+    if not _ready():
         return [None] * len(texts)
     try:
-        if backend == "sentence_transformers":
-            # Encodes batch as a tensor; way faster than per-item.
-            vecs = _st_model.encode(list(texts), normalize_embeddings=True, batch_size=16)
-            return [[float(x) for x in v] for v in vecs]
-        if backend == "voyage":
-            res = _voyage_client.embed(list(texts), model=_model_name, input_type="document")
-            return [list(e) for e in res.embeddings]
-        if backend == "openai":
-            res = _openai_client.embeddings.create(input=list(texts), model=_model_name)
-            # OpenAI returns embeddings in input order.
-            return [list(d.embedding) for d in res.data]
+        vecs = _st_model.encode(list(texts), normalize_embeddings=True, batch_size=16)
+        return [[float(x) for x in v] for v in vecs]
     except Exception as e:
-        logger.warning(f"[embeddings] batch embed failed via {backend}: {e} — falling back to per-item")
-        return [embed_text(t) for t in texts]
+        logger.warning(f"[embeddings] batch embed failed: {e}")
+        return [None] * len(texts)
 
 
 def cosine_similarity(vec_a, vec_b):
     """Standard cosine similarity. Both vectors must have the same
-    dimension (otherwise we'd be comparing across embedding models).
-    Returns a float in [-1, 1] — higher = more similar.
-
-    Handles the edge case of either vector being all-zero (returns 0.0)
-    so a malformed embedding doesn't propagate NaN through the scorer.
+    dimension. Returns a float in [-1, 1] — higher = more similar.
+    Returns 0.0 for an all-zero vector so a malformed embedding
+    doesn't propagate NaN through the scorer.
     """
     if not vec_a or not vec_b or len(vec_a) != len(vec_b):
         return 0.0

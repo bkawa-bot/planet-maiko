@@ -538,11 +538,12 @@ pane showing the real reviewer comment (`original_text`), and `data/coding-guide
 "Describe what you're doing, get only the rules that matter" instead of stuffing 300
 rules into every prompt.
 
-**Embeddings** (`brain/learning/embeddings.py`): a three-tier sticky backend,
-preferring the local free `sentence-transformers` model `BAAI/bge-small-en-v1.5`,
-falling back to Voyage or OpenAI if an API key is set. Embedding is **opt-in**: RAG
-stays dark until a backend is available, which is why the violation-description
-backfill is not run at boot by default.
+**Embeddings** (`brain/learning/embeddings.py`): the local free
+`sentence-transformers` model `BAAI/bge-small-en-v1.5` (loaded once, cached
+to `~/.cache/huggingface`; falls back to a cache-only load if the hub
+update/etag check fails). Embedding is **opt-in**: RAG stays dark until
+`pip install -e ".[rag]"` provides the model, which is why the
+violation-description backfill is not run at boot by default.
 
 **What is embedded is not the violation.** `intent_extraction.py` generates a
 *scenario description* for each active Learning: "the kind of change that should pull
