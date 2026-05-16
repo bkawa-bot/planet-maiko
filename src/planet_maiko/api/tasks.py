@@ -164,7 +164,7 @@ def _maybe_push_close_to_linear(task, target_state_type):
         return
 
     try:
-        from planet_maiko.integrations.clients.linear_client import LinearClient
+        from planet_maiko.plugins.clients.linear_client import LinearClient
         client = LinearClient()
         meta = client.team_meta(team_id)
         target_state = next(
@@ -561,7 +561,7 @@ def send_task_to_linear(task_id):
       team_id, sync_close (bool — opt-in to close the Linear issue when
       this task closes; off by default).
     """
-    from planet_maiko.integrations.clients.linear_client import LinearClient
+    from planet_maiko.plugins.clients.linear_client import LinearClient
     from planet_maiko.plugins.builtin.linear import MAIKO_TO_LINEAR_PRIORITY
     from planet_maiko.config import load_config
 

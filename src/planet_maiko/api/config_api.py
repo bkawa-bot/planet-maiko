@@ -79,7 +79,7 @@ def test_integration(integration):
             return jsonify({"status": "error", "message": str(e)}), 400
 
     elif integration == "pagerduty":
-        from planet_maiko.integrations.clients.pagerduty_client import PagerDutyClient
+        from planet_maiko.plugins.clients.pagerduty_client import PagerDutyClient
         try:
             client = PagerDutyClient()
         except ValueError as e:
@@ -116,7 +116,7 @@ def linear_team_meta():
     ?team_id= for ad-hoc lookups (e.g. a team-switch picker); falls
     back to config.linear.team_id for the default case.
     """
-    from planet_maiko.integrations.clients.linear_client import LinearClient
+    from planet_maiko.plugins.clients.linear_client import LinearClient
 
     team_id = request.args.get("team_id")
     if not team_id:
