@@ -77,10 +77,50 @@ def create_task():
     db.session.add(task)
     db.session.commit()
 
+    # auto_launch: for agent-runnable one-shot types, route an agent and
+    # queue a job inline so the work actually starts. Without this, a
+    # type=investigation task with no assigned agent just sits on the
+    # Tasks page (spawn_jobs requires assigned_agent_id) — which made
+    # the overview's "Investigate with an agent" a no-op. Mirrors
+    # _act_create_task's auto_launch path.
+    auto_launched = False
+    AGENT_RUNNABLE = {"review", "pr_review", "investigation", "repo_analysis", "cartograph"}
+    if data.get("auto_launch") and task.type in AGENT_RUNNABLE:
+        try:
+            from planet_maiko.orchestration import route
+            route(task)
+        except Exception as e:
+            _log.warning(f"[tasks] auto_launch route({task.id}) failed: {e}")
+        if task.assigned_agent_id:
+            import uuid as _uuid
+            from datetime import datetime as _dt, timezone as _tz
+            from planet_maiko.models.agent_job import AgentJob
+            job = AgentJob(
+                id=f"job-{_uuid.uuid4().hex[:10]}",
+                kind=task.type,
+                title=task.title,
+                description=(task.extra or {}).get("description") or "",
+                scope_repo=(task.extra or {}).get("repo") or None,
+                priority=task.priority or "normal",
+                created_by="user",
+                source_task_id=task.id,
+                agent_profile_id=task.assigned_agent_id,
+                requires_approval=False,
+                approved_by="auto",
+                approved_at=_dt.now(_tz.utc),
+                status="queued",
+                extra={"from_task": task.id},
+            )
+            db.session.add(job)
+            db.session.commit()
+            auto_launched = True
+
     from planet_maiko.plugins.loader import fire_hook
     fire_hook("on_task_created", task)
 
-    return jsonify(task.to_dict()), 201
+    out = task.to_dict()
+    out["auto_launched"] = auto_launched
+    return jsonify(out), 201
 
 
 @tasks_bp.route("/tasks/<task_id>", methods=["PATCH"])

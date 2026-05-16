@@ -233,19 +233,26 @@ export default function OverviewPane() {
       const toastMsg = type === "investigation"
         ? "Investigation queued 🐾"
         : "Task created 🐾";
-      await api.createTask({
+      const res = await api.createTask({
         title: memo.title || "New task",
         type,
         priority: memo.priority || "normal",
         url: memo.url || "",
         tags: ["from_memo"],
+        // Investigation should actually run, not just land unassigned
+        // on the Tasks page. auto_launch routes an agent + queues the
+        // job inline (backend no-ops it for plain todos).
+        auto_launch: type === "investigation",
         metadata: {
           description: memo.body || "",
           repo: repo || "",
           from_memo_id: memo.id,
         },
       });
-      showToast(toastMsg, "normal");
+      const launchedMsg = type === "investigation" && res?.auto_launched === false
+        ? "Investigation task created (no investigator agent available to auto-run it)"
+        : toastMsg;
+      showToast(launchedMsg, "normal");
       await api.dismissMemo(memo.id).catch(() => {});
       setMemos((prev) => prev.filter((m) => m.id !== memo.id));
       if (overview?.needs) {
