@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft, Check, Loader, FileText, MessageSquare,
   Sparkles, Clock, AlertTriangle, Activity, GitPullRequest, X,
-  PanelRightClose, PanelRightOpen, Processor, ChatBubble, ExternalLink,
+  PanelRightClose, PanelRightOpen, CheckboxTree, ChatBubble, ExternalLink,
 } from "@icons";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
@@ -151,7 +151,7 @@ function computeTabs(job, task) {
   const hasPlanForApproval = !!taskExtra.plan && !taskExtra.plan_approved_at;
 
   if (isDiffKind) {
-    tabs.push({ id: "diff", label: "Diff", icon: Processor });
+    tabs.push({ id: "diff", label: "Diff", icon: CheckboxTree });
   }
   if (job.kind === "coding" && hasPlan) {
     tabs.push({
