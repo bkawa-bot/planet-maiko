@@ -2,7 +2,9 @@
 
 #### *strange agents, strange world.*
 
-### A local-first agent orchestrator where your AI agents are weird alien dogs that know a little too much.
+### A local-first agent orchestrator where your AI agents are weird alien dogs that know a little too much. 
+
+### Free forever, no paid tiers or subscriptions. Made by one dev for other devs.
 
 ![title](docs/screenshots/title.png)
 
