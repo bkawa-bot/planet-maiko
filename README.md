@@ -14,7 +14,7 @@
 > **⚠️ Beta.** Planet Maiko is in active beta testing. Expect breaking changes, schema migrations, rough edges, and bugs. If you try it and something's broken, [file an issue](https://github.com/bkawa-bot/planet-maiko/issues/new).
 
 ---
-We live in strange times, and yet our dev tools are so painfully un-strange. No one knows what being a software engineer will be like in a year, or even a month. If we are all tokenmaxxing to our own inevitable obsolescence, we might as well have fun.
+We live in strange times, and yet our dev tools are so painfully un-strange. No one knows what being a software engineer will be like in a year, or even a month. If we are all headed to our own inevitable obsolescence, we might as well have fun.
 
 ![Planet Maiko home](docs/screenshots/home.png)
 
@@ -68,7 +68,7 @@ I can no longer tolerate opening an app and having another new agent start yelli
 - Runs locally on your laptop. Nothing leaves your machine.
 - No telemetry, no hosted account, no cloud.
 
-No venture capitalism, no productivity-maxxing (unless you want). I am not trying to make money. I don't care about maximizing the value you bring to your company. Planet Maiko is for you, not your company.
+Open source, free forever, no paid tiers or subscriptions.
 
 #### Most importantly: agents are weird alien dogs, cause why not?
 ![Avatars](docs/screenshots/avatars.png)
