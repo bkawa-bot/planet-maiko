@@ -1,6 +1,6 @@
 # Planet Maiko
 
-#### *strange agents, strange world.*
+#### *These alien dogs want to live in your computer. Would you let them in?*
 
 ### A local-first agent orchestrator where your AI agents are weird alien dogs that know a little too much. 
 
