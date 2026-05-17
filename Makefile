@@ -17,6 +17,12 @@ help:
 # ~/.zprofile / ~/.zshenv, not ~/.zshrc). pipx gives a stable PATH
 # both Finder and the login shell see. Prefer this over a bare venv.
 backend:
+	@command -v pipx >/dev/null 2>&1 || { \
+	  echo "pipx not found. Install it first:"; \
+	  echo "  brew install pipx && pipx ensurepath"; \
+	  echo "Then add this to ~/.zprofile (the app uses the login shell):"; \
+	  echo '  export PATH="$$HOME/.local/bin:$$PATH"'; \
+	  exit 1; }
 	pipx install --force -e .
 	@echo "Installed. Check: zsh -lc 'which maiko'"
 

@@ -10,6 +10,7 @@ the `maiko` command has to be findable.
 - Xcode command line tools: `xcode-select --install`
 - Rust toolchain: install via rustup (rustup.rs)
 - Node 18+
+- pipx: `brew install pipx && pipx ensurepath`
 
 ## 1. Install the backend
 
@@ -17,14 +18,25 @@ the `maiko` command has to be findable.
 make backend
 ```
 
-This `pipx install`s the `maiko` CLI. The reason pipx and not a bare
-venv: the app launches `maiko` through the login shell (`zsh -l`),
-which reads `~/.zprofile` and `~/.zshenv` but **not** `~/.zshrc`.
-pipx puts `maiko` on a PATH that both Finder and the login shell see,
-so the app reliably finds it. If you insist on a venv, add its `bin`
-directory to `~/.zprofile` yourself.
+This `pipx install`s the `maiko` CLI into `~/.local/bin`. pipx is
+preferred over a bare venv because it gives a stable, project
+independent path for the command.
 
-Sanity check: `zsh -lc 'which maiko'` should print a path.
+The catch: the app launches `maiko` through the **login** shell
+(`zsh -l`), which reads `~/.zprofile` and `~/.zshenv` but **not**
+`~/.zshrc`. `pipx ensurepath` only adds `~/.local/bin` to the
+*interactive* config (`~/.zshrc`), so the app still would not see it.
+Add this line to `~/.zprofile` once:
+
+```
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+(If you use a venv instead of pipx, put that venv's `bin` directory
+on `~/.zprofile` the same way.)
+
+Open a new terminal, then sanity check the exact way the app resolves
+it: `zsh -lc 'which maiko'` should print a path.
 
 ## 2. Build the app
 
