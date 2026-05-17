@@ -43,11 +43,11 @@
     <p class="sub">
       Maiko is a small Flask brain, a SQLite memory, and a React face,
       all running on your laptop. Agents are subprocesses in their own
-      git worktrees. Here is how the pieces move.
+      git worktrees. Here is how the pieces move. Click any bar to fold it.
     </p>
   </header>
 
-  <section class="win" style="--tilt:-0.7deg;">
+  <section class="win c-teal" style="--tilt:-0.7deg;">
     <div class="win-bar">
       <span class="win-dots"><i></i><i></i><i></i></span>
       <span class="win-title">the-shape-of-it</span>
@@ -83,7 +83,7 @@
     <span class="scrawl tr">no server. it is all in here.</span>
   </section>
 
-  <section class="win" id="cycle" style="--tilt:0.8deg;">
+  <section class="win c-pink" id="cycle" style="--tilt:0.8deg;">
     <div class="win-bar">
       <span class="win-dots"><i></i><i></i><i></i></span>
       <span class="win-title">brain-cycle :: heartbeat</span>
@@ -130,58 +130,59 @@
     <span class="scrawl bl">it never stops. even now.</span>
   </section>
 
-  <section class="win narrow" style="--tilt:-0.5deg;">
-    <div class="win-bar">
-      <span class="win-dots"><i></i><i></i><i></i></span>
-      <span class="win-title">pupdates :: the substrate</span>
-      <span class="win-x" title="close">&#10005;</span>
-    </div>
-    <div class="win-body">
-      <p class="section-kicker">// everything that happened</p>
-      <h2>Pupdates</h2>
-      <p style="color:var(--text-dim);">
-        A pupdate is the one event type. A PR went stale, a build broke,
-        a calendar block is starting, an agent finished, you left a
-        comment: all of it lands as a pupdate. Pollers and plugins emit
-        them; the cycle triages them; automations match on them. Because
-        there is exactly one substrate, a new integration only has to
-        answer one question: <em>what pupdates do you make?</em> Everything
-        downstream already knows what to do with them.
-      </p>
-    </div>
-    <span class="scrawl br">one kind of event. that's the trick.</span>
-  </section>
+  <div class="row">
+    <section class="win c-lemon" style="--tilt:-0.5deg;">
+      <div class="win-bar">
+        <span class="win-dots"><i></i><i></i><i></i></span>
+        <span class="win-title">pupdates :: the substrate</span>
+        <span class="win-x" title="close">&#10005;</span>
+      </div>
+      <div class="win-body">
+        <p class="section-kicker">// everything that happened</p>
+        <h2>Pupdates</h2>
+        <p style="color:var(--text-dim);">
+          A pupdate is the one event type. A PR went stale, a build broke,
+          a calendar block is starting, an agent finished, you left a
+          comment: all of it lands as a pupdate. Pollers and plugins emit
+          them; the cycle triages them; automations match on them. Because
+          there is exactly one substrate, a new integration only has to
+          answer one question: <em>what pupdates do you make?</em> Everything
+          downstream already knows what to do with them.
+        </p>
+      </div>
+      <span class="scrawl br">one kind of event. that's the trick.</span>
+    </section>
 
-  <section class="win narrow" style="--tilt:0.6deg;">
-    <div class="win-bar">
-      <span class="win-dots"><i></i><i></i><i></i></span>
-      <span class="win-title">automations :: when &rarr; then</span>
-      <span class="win-x" title="close">&#10005;</span>
-    </div>
-    <div class="win-body">
-      <p class="section-kicker">// the trigger layer is deliberately dumb</p>
-      <h2>Automations route, they do not think</h2>
-      <p style="color:var(--text-dim); margin-bottom:24px;">
-        A rule is a predicate over pupdates ("a PR I am tagged on went
-        stale") and an action ("leave me a memo", "wake the reviewer").
-        No model runs to decide whether a rule fired, so it is fast,
-        legible, and never surprises you. Actions are a registry:
-        built-ins plus anything a plugin adds.
-      </p>
-      <div class="grid">
-        <div class="card">
-          <h3>The predicate</h3>
-          <p>Pure matching on pupdate fields. Same input, same answer, every time. You can read a rule and know exactly when it goes off.</p>
-        </div>
-        <div class="card">
-          <h3>The action</h3>
-          <p>Resolved from a name to a handler: memo, task, wake an agent, or a custom one a plugin registered. The editor lists whatever is installed.</p>
+    <section class="win c-lavender" style="--tilt:0.6deg;">
+      <div class="win-bar">
+        <span class="win-dots"><i></i><i></i><i></i></span>
+        <span class="win-title">automations :: when &rarr; then</span>
+        <span class="win-x" title="close">&#10005;</span>
+      </div>
+      <div class="win-body">
+        <p class="section-kicker">// the trigger layer is deliberately dumb</p>
+        <h2>Automations route, they do not think</h2>
+        <p style="color:var(--text-dim); margin-bottom:22px;">
+          A rule is a predicate over pupdates ("a PR I am tagged on went
+          stale") and an action ("leave me a memo", "wake the reviewer").
+          No model runs to decide whether a rule fired, so it is fast,
+          legible, and never surprises you.
+        </p>
+        <div class="grid">
+          <div class="card">
+            <h3>The predicate</h3>
+            <p>Pure matching on pupdate fields. Same input, same answer, every time. You can read a rule and know exactly when it goes off.</p>
+          </div>
+          <div class="card">
+            <h3>The action</h3>
+            <p>Resolved from a name to a handler: memo, task, wake an agent, or a custom one a plugin registered.</p>
+          </div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
+  </div>
 
-  <section class="win" style="--tilt:-0.8deg;">
+  <section class="win c-mint" style="--tilt:-0.8deg;">
     <div class="win-bar">
       <span class="win-dots"><i></i><i></i><i></i></span>
       <span class="win-title">agent-lifecycle</span>
@@ -231,7 +232,7 @@
     <span class="scrawl tr">one job id. one lock. no races.</span>
   </section>
 
-  <section class="win" style="--tilt:0.5deg;">
+  <section class="win c-peach" style="--tilt:0.5deg;">
     <div class="win-bar">
       <span class="win-dots"><i></i><i></i><i></i></span>
       <span class="win-title">runtime-seam</span>
@@ -262,7 +263,7 @@
     </div>
   </section>
 
-  <section class="win narrow" style="--tilt:-0.6deg;">
+  <section class="win narrow c-teal" style="--tilt:-0.6deg;">
     <div class="win-bar">
       <span class="win-dots"><i></i><i></i><i></i></span>
       <span class="win-title">knowledge :: the rulebook</span>
@@ -291,7 +292,7 @@
     <span class="scrawl bl">it keeps the lessons. you keep the say.</span>
   </section>
 
-  <section class="win" style="--tilt:0.7deg;">
+  <section class="win c-pink" style="--tilt:0.7deg;">
     <div class="win-bar">
       <span class="win-dots"><i></i><i></i><i></i></span>
       <span class="win-title">plugins :: the seam</span>
@@ -328,7 +329,7 @@
     <span class="scrawl br">teach it once. never look again.</span>
   </section>
 
-  <section class="win narrow" style="--tilt:-0.4deg;">
+  <section class="win narrow c-lavender" style="--tilt:-0.4deg;">
     <div class="win-bar">
       <span class="win-dots"><i></i><i></i><i></i></span>
       <span class="win-title">deeper/</span>
@@ -417,7 +418,8 @@
     // Closing a window. Only the ones that can be closed. The rest just
     // flinch, because they are load bearing and they know it.
     document.querySelectorAll('.win-x').forEach(function (x) {
-      x.addEventListener('click', function () {
+      x.addEventListener('click', function (e) {
+        e.stopPropagation();
         var win = x.closest('.win');
         if (!win) return;
         if (win.hasAttribute('data-closable')) {
@@ -431,11 +433,29 @@
         }
       });
     });
+
+    // Window-shade: a title-bar click rolls a window up to its bar.
+    document.querySelectorAll('.win-bar').forEach(function (bar) {
+      bar.addEventListener('click', function () {
+        var win = bar.closest('.win');
+        if (win && !win.classList.contains('closed')) win.classList.toggle('rolled');
+      });
+    });
+
     document.querySelectorAll('[data-closable]').forEach(function (win) {
       win.addEventListener('click', function () {
         if (win.classList.contains('closed')) win.classList.remove('closed');
       });
     });
+
+    // A deep link unrolls the window it points at.
+    function openHash() {
+      if (!location.hash) return;
+      var t = document.querySelector(location.hash);
+      if (t && t.classList && t.classList.contains('win')) t.classList.remove('rolled');
+    }
+    openHash();
+    window.addEventListener('hashchange', openHash);
   })();
   </script>
 

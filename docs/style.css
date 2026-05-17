@@ -72,7 +72,7 @@ h2 {
 
 /* ------------------------------------------------------------------ */
 /*  maiko.os : a strange machine, last booted a long time ago.         */
-/*  Chrome is Windows-95-by-way-of-Hypnospace. Every window its own    */
+/*  Chrome is late-90s-OS-meets-garish-old-web. Every window its own   */
 /*  loud color, because one indigo is a crime.                         */
 /* ------------------------------------------------------------------ */
 
@@ -133,7 +133,7 @@ h2 {
   display: inline-block; white-space: nowrap;
   font-family: var(--mono); font-size: 0.8rem;
   color: var(--lemon); padding-left: 100%;
-  animation: marquee 22s linear infinite;
+  animation: marquee 52s linear infinite;
 }
 @keyframes marquee {
   from { transform: translateX(0); }
@@ -183,13 +183,25 @@ h2 {
 .desk-icons a:hover .glyph { transform: translateY(-2px) rotate(-6deg); }
 @media (min-width: 1280px) { .desk-icons { display: flex; } }
 
-/* Per-window color. Auto-cycled. No two neighbors share a hue. */
-section.win:nth-of-type(6n+1) { --accent: var(--pink); }
-section.win:nth-of-type(6n+2) { --accent: var(--teal); }
-section.win:nth-of-type(6n+3) { --accent: var(--lemon); }
-section.win:nth-of-type(6n+4) { --accent: var(--lavender); }
-section.win:nth-of-type(6n+5) { --accent: var(--mint); }
-section.win:nth-of-type(6n+6) { --accent: var(--peach); }
+/* Per-window color. Set explicitly so it survives any nesting. */
+.c-pink     { --accent: var(--pink); }
+.c-teal     { --accent: var(--teal); }
+.c-lemon    { --accent: var(--lemon); }
+.c-lavender { --accent: var(--lavender); }
+.c-mint     { --accent: var(--mint); }
+.c-peach    { --accent: var(--peach); }
+
+/* Side by side, so it is not one endless column. Stacks when narrow. */
+.row {
+  max-width: 1010px; margin: 42px auto; padding: 0 8px;
+  display: grid; gap: 22px;
+  grid-template-columns: 1fr 1fr; align-items: start;
+}
+.row.cols-3 { max-width: 1010px; grid-template-columns: 1fr 1fr 1fr; }
+.row > .win { max-width: none; margin: 0; }
+@media (max-width: 880px) {
+  .row, .row.cols-3 { grid-template-columns: 1fr; }
+}
 
 /* Windows: hard-edged, beveled, dropped with a flat shadow. */
 .win {
@@ -198,13 +210,24 @@ section.win:nth-of-type(6n+6) { --accent: var(--peach); }
   background: #23274f;
   border-radius: 0;
   box-shadow: var(--raise), 7px 7px 0 rgba(0,0,0,0.45);
-  transform: rotate(var(--tilt, 0deg));
+  transform: rotate(0deg);
   transition: transform 0.3s steps(6);
   padding: 4px;
 }
-.win:hover { transform: rotate(0deg); }
+.win:hover { transform: rotate(var(--tilt, 0deg)); }
 .win.wide { max-width: 1000px; }
 .win.narrow { max-width: 680px; }
+
+/* Window-shade: rolled up to its title bar. Click the bar to toggle. */
+.win-bar { cursor: inherit; }
+.win:not(.closed) .win-title::after {
+  content: " \25BE"; color: var(--ink); opacity: 0.55;
+  font-size: 0.85em;
+}
+.win.rolled .win-title::after { content: " \25B8"; }
+.win.rolled { box-shadow: var(--raise), 5px 5px 0 rgba(0,0,0,0.4); }
+.win.rolled .win-body { display: none; }
+.win.rolled .win-bar { box-shadow: var(--raise); }
 .win-bar {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 6px 6px 0;

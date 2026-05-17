@@ -31,13 +31,14 @@
   <div class="boot"><span>maiko.os &middot; the pack is awake &middot; strange agents, strange world. &middot; do not close the campfire one &middot; it boots faster than it should &middot; the dogs say hello &middot; </span></div>
 
   <div class="desk-icons" aria-hidden="true">
-    <a href="#pack"><span class="glyph">🐾</span> the pack</a>
+    <a href="#look"><span class="glyph">🖼</span> photos</a>
     <a href="#campfire"><span class="glyph">☾</span> campfire</a>
     <a href="https://github.com/bkawa-bot/planet-maiko"><span class="glyph">◐</span> source</a>
+    <a href="sludge.html"><span class="glyph">🐛</span> sludge_pup</a>
   </div>
 
   <header class="desktop-title">
-    <div class="paw">🐾</div>
+    <div class="paw" id="emblem" title="">🐾</div>
     <h1>Planet Maiko</h1>
     <p class="tagline">strange agents, strange world.</p>
     <p class="sub">
@@ -46,41 +47,88 @@
     </p>
   </header>
 
-  <section class="win" style="--tilt:-0.8deg;">
+  <div class="row">
+    <section class="win c-pink" style="--tilt:-1deg;">
+      <div class="win-bar">
+        <span class="win-dots"><i></i><i></i><i></i></span>
+        <span class="win-title">title.png</span>
+        <span class="win-x" title="close">&#10005;</span>
+      </div>
+      <div class="win-body">
+        <img class="shot" src="screenshots/title.png" alt="Planet Maiko">
+        <p class="shot-cap">screenshot. captured by something that was here first.</p>
+        <div class="cta-row" style="justify-content:center; margin-top:18px;">
+          <a class="btn btn-primary" href="https://github.com/bkawa-bot/planet-maiko">open the source</a>
+          <a class="btn btn-ghost" href="#start">boot it yourself</a>
+        </div>
+      </div>
+      <span class="scrawl tr">i think this is where it keeps us</span>
+    </section>
+
+    <section class="win c-teal" style="--tilt:1deg;">
+      <div class="win-bar">
+        <span class="win-dots"><i></i><i></i><i></i></span>
+        <span class="win-title">readme.txt</span>
+        <span class="win-x" title="close">&#10005;</span>
+      </div>
+      <div class="win-body">
+        <p class="lede-quote">
+          We live in strange times, and yet our dev tools are so painfully
+          un-strange. No one knows what being a software engineer will be
+          like in a year, or even a month. <span>If we are all tokenmaxxing
+          to our own inevitable obsolescence, we might as well have fun.</span>
+        </p>
+      </div>
+      <span class="scrawl bl">it wrote this part itself, i think</span>
+    </section>
+  </div>
+
+  <section class="win wide c-lemon" id="look" style="--tilt:-0.6deg;">
     <div class="win-bar">
       <span class="win-dots"><i></i><i></i><i></i></span>
-      <span class="win-title">title.png</span>
+      <span class="win-title">home.png</span>
       <span class="win-x" title="close">&#10005;</span>
     </div>
     <div class="win-body">
-      <img class="shot" src="screenshots/title.png" alt="Planet Maiko">
-      <p class="shot-cap">screenshot. captured by something that was here first.</p>
-      <div class="cta-row" style="justify-content:center; margin-top:18px;">
-        <a class="btn btn-primary" href="https://github.com/bkawa-bot/planet-maiko">open the source</a>
-        <a class="btn btn-ghost" href="#start">boot it yourself</a>
+      <img class="shot" src="screenshots/home.png" alt="The Home page: pack requests, a generated overview, the scene and weather">
+      <p class="shot-cap">the front door. it greets you, then tells you what it would look at first.</p>
+    </div>
+  </section>
+
+  <section class="win wide c-peach" style="--tilt:0.5deg;">
+    <div class="win-bar">
+      <span class="win-dots"><i></i><i></i><i></i></span>
+      <span class="win-title">photos/</span>
+      <span class="win-x" title="close">&#10005;</span>
+    </div>
+    <div class="win-body">
+      <div class="gallery">
+        <figure>
+          <img src="screenshots/profiles.png" alt="Agent profiles">
+          <figcaption>Each agent is a character sheet: name, avatar, role, a bio it wrote when it arrived.</figcaption>
+        </figure>
+        <figure>
+          <img src="screenshots/active.png" alt="Active agents">
+          <figcaption>The active pack with live state, what each one's chewing on, and the diff waiting for you.</figcaption>
+        </figure>
+        <figure>
+          <img src="screenshots/rule.png" alt="A learned rule">
+          <figcaption>A rule the system extracted from review history, with the scenarios it applies to.</figcaption>
+        </figure>
+        <figure>
+          <img src="screenshots/avatars.png" alt="Agent avatars">
+          <figcaption>The agents are weird alien dogs. Because why not.</figcaption>
+        </figure>
       </div>
     </div>
-    <span class="scrawl tr">i think this is where it keeps us</span>
+    <span class="scrawl br">the dogs. yes, they are like that.</span>
   </section>
 
-  <section class="win narrow" style="--tilt:0.9deg;">
-    <div class="win-bar">
-      <span class="win-dots"><i></i><i></i><i></i></span>
-      <span class="win-title">readme.txt</span>
-      <span class="win-x" title="close">&#10005;</span>
-    </div>
-    <div class="win-body">
-      <p class="lede-quote">
-        We live in strange times, and yet our dev tools are so painfully
-        un-strange. No one knows what being a software engineer will be
-        like in a year, or even a month. <span>If we are all tokenmaxxing
-        to our own inevitable obsolescence, we might as well have fun.</span>
-      </p>
-    </div>
-    <span class="scrawl bl">it wrote this part itself, i think</span>
-  </section>
+  <p style="text-align:center; font-family:var(--mono); font-size:0.82rem; color:var(--text-muted); margin:46px 0 -8px;">
+    // the tech is folded up. click a bar to read it.
+  </p>
 
-  <section class="win" id="pack" style="--tilt:-0.5deg;">
+  <section class="win rolled c-lavender" id="pack" style="--tilt:-0.5deg;">
     <div class="win-bar">
       <span class="win-dots"><i></i><i></i><i></i></span>
       <span class="win-title">mental-model :: six things</span>
@@ -123,7 +171,7 @@
     <span class="scrawl br">six. then it gets quiet again</span>
   </section>
 
-  <section class="win" id="campfire" style="--tilt:0.6deg;">
+  <section class="win rolled c-mint" id="campfire" style="--tilt:0.6deg;">
     <div class="win-bar">
       <span class="win-dots"><i></i><i></i><i></i></span>
       <span class="win-title">how-the-pack-works</span>
@@ -166,19 +214,7 @@
     <span class="scrawl bl">do not close the campfire one</span>
   </section>
 
-  <section class="win wide" style="--tilt:-0.7deg;">
-    <div class="win-bar">
-      <span class="win-dots"><i></i><i></i><i></i></span>
-      <span class="win-title">home.png</span>
-      <span class="win-x" title="close">&#10005;</span>
-    </div>
-    <div class="win-body">
-      <img class="shot" src="screenshots/home.png" alt="The Home page: pack requests, a generated overview, the scene and weather">
-      <p class="shot-cap">the front door. it greets you, then tells you what it would look at first.</p>
-    </div>
-  </section>
-
-  <section class="win" style="--tilt:0.8deg;">
+  <section class="win rolled c-pink" style="--tilt:0.8deg;">
     <div class="win-bar">
       <span class="win-dots"><i></i><i></i><i></i></span>
       <span class="win-title">why-its-different</span>
@@ -209,80 +245,36 @@
     <span class="scrawl tr">it learns the way you nag</span>
   </section>
 
-  <section class="win narrow" data-closable data-closed="( a note was here. you closed it. it does not mind. )" style="--tilt:1.4deg;">
-    <div class="win-bar">
-      <span class="win-dots"><i></i><i></i><i></i></span>
-      <span class="win-title">do_not_open.txt</span>
-      <span class="win-x" title="close">&#10005;</span>
-    </div>
-    <div class="win-body">
-      <p style="color:var(--text-dim); font-family:var(--mono); font-size:0.95rem; line-height:1.8;">
-        you opened it.<br>
-        that's alright. most of them do.<br>
-        the dogs say hello. they have been waiting,<br>
-        which is a strange thing for software to do.
-      </p>
-    </div>
-  </section>
-
-  <section class="win wide" style="--tilt:-0.4deg;">
-    <div class="win-bar">
-      <span class="win-dots"><i></i><i></i><i></i></span>
-      <span class="win-title">photos/</span>
-      <span class="win-x" title="close">&#10005;</span>
-    </div>
-    <div class="win-body">
-      <div class="gallery">
-        <figure>
-          <img src="screenshots/profiles.png" alt="Agent profiles">
-          <figcaption>Each agent is a character sheet: name, avatar, role, a bio it wrote when it arrived.</figcaption>
-        </figure>
-        <figure>
-          <img src="screenshots/active.png" alt="Active agents">
-          <figcaption>The active pack with live state, what each one's chewing on, and the diff waiting for you.</figcaption>
-        </figure>
-        <figure>
-          <img src="screenshots/rule.png" alt="A learned rule">
-          <figcaption>A rule the system extracted from review history, with the scenarios it applies to.</figcaption>
-        </figure>
-        <figure>
-          <img src="screenshots/avatars.png" alt="Agent avatars">
-          <figcaption>The agents are weird alien dogs. Because why not.</figcaption>
-        </figure>
+  <div class="row">
+    <section class="win c-teal" style="--tilt:0.5deg;">
+      <div class="win-bar">
+        <span class="win-dots"><i></i><i></i><i></i></span>
+        <span class="win-title">stays.yours</span>
+        <span class="win-x" title="close">&#10005;</span>
       </div>
-    </div>
-    <span class="scrawl br">the dogs. yes, they are like that.</span>
-  </section>
+      <div class="win-body">
+        <p class="section-kicker">// for you, not your company</p>
+        <h2>It stays yours</h2>
+        <ul class="stays-list">
+          <li><strong>Runs locally on your laptop.</strong> Nothing leaves your machine.</li>
+          <li><strong>No telemetry, no hosted account, no cloud.</strong></li>
+          <li><strong>No venture capitalism, no productivity-maxxing</strong> (unless you want). Not trying to make money, not trying to maximize the value you bring to your employer.</li>
+          <li><strong>AGPL v3.</strong> Yours to read, fork, and keep.</li>
+        </ul>
+      </div>
+      <span class="scrawl bl">no one is watching this. for once.</span>
+    </section>
 
-  <section class="win narrow" style="--tilt:0.5deg;">
-    <div class="win-bar">
-      <span class="win-dots"><i></i><i></i><i></i></span>
-      <span class="win-title">stays.yours</span>
-      <span class="win-x" title="close">&#10005;</span>
-    </div>
-    <div class="win-body">
-      <p class="section-kicker">// for you, not your company</p>
-      <h2>It stays yours</h2>
-      <ul class="stays-list">
-        <li><strong>Runs locally on your laptop.</strong> Nothing leaves your machine.</li>
-        <li><strong>No telemetry, no hosted account, no cloud.</strong></li>
-        <li><strong>No venture capitalism, no productivity-maxxing</strong> (unless you want). Not trying to make money, not trying to maximize the value you bring to your employer.</li>
-        <li><strong>AGPL v3.</strong> Yours to read, fork, and keep.</li>
-      </ul>
-    </div>
-    <span class="scrawl bl">no one is watching this. for once.</span>
-  </section>
-
-  <section class="win" id="start" style="--tilt:-0.6deg;">
-    <div class="win-bar">
-      <span class="win-dots"><i></i><i></i><i></i></span>
-      <span class="win-title">first-boot.sh</span>
-      <span class="win-x" title="close">&#10005;</span>
-    </div>
-    <div class="win-body">
-      <p class="section-kicker">// two terminals, no account</p>
-      <h2>Boot it yourself</h2>
-      <p style="color:var(--text-dim); margin-bottom:18px;">Prerequisites: macOS, Python 3.10+, Node 18+, the <code>gh</code> CLI.</p>
+    <section class="win c-lemon" id="start" style="--tilt:-0.6deg;">
+      <div class="win-bar">
+        <span class="win-dots"><i></i><i></i><i></i></span>
+        <span class="win-title">first-boot.sh</span>
+        <span class="win-x" title="close">&#10005;</span>
+      </div>
+      <div class="win-body">
+        <p class="section-kicker">// two terminals, no account</p>
+        <h2>Boot it yourself</h2>
+        <p style="color:var(--text-dim); margin-bottom:16px; font-size:0.95rem;">Prerequisites: macOS, Python 3.10+, Node 18+, the <code>gh</code> CLI.</p>
 <pre>git clone https://github.com/bkawa-bot/planet-maiko.git
 cd planet-maiko
 
@@ -292,23 +284,37 @@ source .venv/bin/activate
 pip install -e .
 
 # Frontend
-cd frontend &amp;&amp; npm install &amp;&amp; cd ..</pre>
-      <p style="color:var(--text-dim); margin:20px 0 8px;">Then, two terminals:</p>
-<pre># Terminal 1: backend (port 8420)
-source .venv/bin/activate
-maiko serve
+cd frontend &amp;&amp; npm install &amp;&amp; cd ..
 
-# Terminal 2: frontend (port 5173)
-cd frontend &amp;&amp; npm run dev</pre>
-      <p class="install-note">
-        Open <code>http://localhost:5173</code> and walk through the setup
-        wizard. The full field guide (mental model, architecture, plugin
-        system, CLI reference) lives in
-        <a href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/GUIDE.md">docs/GUIDE.md</a>.
-      </p>
-      <div class="beta">beta. expect breaking changes, schema patches, rough edges, and bugs.</div>
+# Two terminals
+maiko serve            # backend, port 8420
+cd frontend &amp;&amp; npm run dev   # frontend, port 5173</pre>
+        <p class="install-note">
+          Open <code>http://localhost:5173</code> and walk the setup
+          wizard. The full field guide lives in
+          <a href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/GUIDE.md">docs/GUIDE.md</a>.
+        </p>
+        <div class="beta">beta. breaking changes, schema patches, rough edges, bugs.</div>
+      </div>
+      <span class="scrawl tr">it boots faster than it should</span>
+    </section>
+  </div>
+
+  <section class="win narrow c-lavender" data-closable data-closed="( a note was here. you closed it. it does not mind. )" style="--tilt:1.4deg;">
+    <div class="win-bar">
+      <span class="win-dots"><i></i><i></i><i></i></span>
+      <span class="win-title">do_not_open.txt</span>
+      <span class="win-x" title="close">&#10005;</span>
     </div>
-    <span class="scrawl tr">it boots faster than it should</span>
+    <div class="win-body">
+      <p style="color:var(--text-dim); font-family:var(--mono); font-size:0.95rem; line-height:1.8;">
+        you opened it.<br>
+        that's alright. most of them do.<br>
+        the dogs say hello. one of them keeps a
+        <a href="sludge.html" style="color:inherit; text-decoration:none; border-bottom:1px dotted rgba(255,255,255,0.28);">page</a>.<br>
+        they have been waiting, which is a strange thing for software to do.
+      </p>
+    </div>
   </section>
 
   <footer>
@@ -356,7 +362,8 @@ cd frontend &amp;&amp; npm run dev</pre>
     // Closing a window. Only the ones that can be closed. The rest just
     // flinch, because they are load bearing and they know it.
     document.querySelectorAll('.win-x').forEach(function (x) {
-      x.addEventListener('click', function () {
+      x.addEventListener('click', function (e) {
+        e.stopPropagation();
         var win = x.closest('.win');
         if (!win) return;
         if (win.hasAttribute('data-closable')) {
@@ -370,11 +377,35 @@ cd frontend &amp;&amp; npm run dev</pre>
         }
       });
     });
-    // A closed window can be reopened. It was only resting.
+
+    // Window-shade: a title-bar click rolls a window up to its bar.
+    document.querySelectorAll('.win-bar').forEach(function (bar) {
+      bar.addEventListener('click', function () {
+        var win = bar.closest('.win');
+        if (win && !win.classList.contains('closed')) win.classList.toggle('rolled');
+      });
+    });
+
+    // A closed note can be reopened. It was only resting.
     document.querySelectorAll('[data-closable]').forEach(function (win) {
       win.addEventListener('click', function () {
         if (win.classList.contains('closed')) win.classList.remove('closed');
       });
+    });
+
+    // A deep link unrolls the window it points at.
+    function openHash() {
+      if (!location.hash) return;
+      var t = document.querySelector(location.hash);
+      if (t && t.classList && t.classList.contains('win')) t.classList.remove('rolled');
+    }
+    openHash();
+    window.addEventListener('hashchange', openHash);
+
+    // It knows when you are looking too hard at it.
+    var taps = 0, emblem = document.getElementById('emblem');
+    if (emblem) emblem.addEventListener('click', function () {
+      if (++taps >= 3) location.href = 'sludge.html';
     });
   })();
   </script>
