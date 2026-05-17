@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planet Maiko · Architecture</title>
+  <meta name="description" content="How Planet Maiko actually turns: the brain cycle, pupdates, automations, the agent lifecycle, knowledge, and plugins.">
+  <meta property="og:title" content="Planet Maiko · Architecture">
+  <meta property="og:description" content="How the planet turns: the brain cycle, pupdates, automations, the agent lifecycle, knowledge, and plugins.">
+  <meta property="og:image" content="screenshots/title.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'&gt;&lt;text y='14' font-size='14'&gt;🐾&lt;/text&gt;&lt;/svg&gt;">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Inconsolata:wght@400;600&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <nav class="sitenav">
+    <a class="brand" href="index.html"><span>🐾</span> Planet Maiko</a>
+    <span class="spacer"></span>
+    <a class="navlink" href="index.html">Home</a>
+    <a class="navlink" href="architecture.html" aria-current="page">Architecture</a>
+    <a class="navlink" href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/GUIDE.md">Guide &#8599;</a>
+    <a class="navlink" href="https://github.com/bkawa-bot/planet-maiko">GitHub</a>
+  </nav>
+
+  <header class="pagehead">
+    <div class="paw">🐾</div>
+    <h1>Architecture</h1>
+    <p class="tagline">how the planet turns.</p>
+    <p class="lead">
+      Maiko is a small Flask brain, a SQLite memory, and a React app, all
+      running on your laptop. Agents are subprocesses in their own git
+      worktrees. Here is how the pieces move.
+    </p>
+  </header>
+
+  <section>
+    <div class="wrap">
+      <p class="section-kicker">The shape of it</p>
+      <h2>One process, no cloud</h2>
+      <p style="color:var(--text-dim); max-width:660px; margin-bottom:26px;">
+        Nothing here is a service you call. It is one machine talking to
+        itself, with the model doing the parts that need judgement and
+        plain code doing everything that does not.
+      </p>
+      <div class="grid">
+        <div class="card">
+          <h3>The brain</h3>
+          <p>A Flask app with a background loop. It holds the API, the brain cycle, and the plugin host. It never blocks the UI to think.</p>
+        </div>
+        <div class="card">
+          <h3>The memory</h3>
+          <p>One SQLite file. Pupdates, tasks, jobs, agents, insights, learnings, memos. Schema changes land as idempotent column patches, not migrations you have to run.</p>
+        </div>
+        <div class="card">
+          <h3>The face</h3>
+          <p>A Vite + React app, also wrapped as a desktop shell. It reads the same API a curl command would. The world (scene, weather, the pack) is a view, not the state.</p>
+        </div>
+        <div class="card">
+          <h3>The pack</h3>
+          <p>Agents are coding subprocesses, each in an isolated worktree with its own <code>CLAUDE.md</code>. They talk back to the brain over a CLI, not a socket.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <p class="section-kicker">The heartbeat</p>
+      <h2>The brain cycle</h2>
+      <p style="color:var(--text-dim); max-width:660px; margin-bottom:26px;">
+        A loop wakes on a cadence and walks a fixed set of phases. Each
+        phase is allowed to notice things, decide things, and hand work
+        off. Plugins hook into it instead of running their own timers.
+      </p>
+      <div class="flow">
+        <div class="flow-step">
+          <div class="flow-num">01</div>
+          <div>
+            <h3>Gather</h3>
+            <p>Pollers and plugins fold in what changed since last tick. One <code>on_cycle_tick</code> per cycle, so a plugin never has to own a thread.</p>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">02</div>
+          <div>
+            <h3>Triage</h3>
+            <p>New pupdates get sorted: ignore, surface as a memo, or become a task. Automations get their chance to fire here on plain predicates.</p>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">03</div>
+          <div>
+            <h3>Narrate</h3>
+            <p>The home overview is regenerated: a short, voiced read of what is going on and what you would probably look at first. It is a greeting, not a dump.</p>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">04</div>
+          <div>
+            <h3>Tend</h3>
+            <p>Stuck jobs, awareness checks (two agents about to collide, who knows this area), and the end-of-day campfire when it is time.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <p class="section-kicker">The substrate</p>
+      <h2>Pupdates: everything that happened</h2>
+      <p style="color:var(--text-dim); max-width:680px;">
+        A pupdate is the one event type. A PR went stale, a build broke,
+        a calendar block is starting, an agent finished, you left a
+        comment: all of it lands as a pupdate. Pollers and plugins emit
+        them; the cycle triages them; automations match on them. Because
+        there is exactly one substrate, a new integration only has to
+        answer one question: <em>what pupdates do you make?</em> Everything
+        downstream already knows what to do with them.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <p class="section-kicker">when &rarr; then</p>
+      <h2>Automations route, they do not think</h2>
+      <p style="color:var(--text-dim); max-width:680px; margin-bottom:26px;">
+        The trigger layer is deliberately dumb. A rule is a predicate over
+        pupdates ("a PR I am tagged on went stale") and an action ("leave
+        me a memo", "wake the reviewer"). No model runs to decide whether
+        a rule fired, so it is fast, legible, and never surprises you.
+        Actions are a registry: built-ins plus anything a plugin adds.
+      </p>
+      <div class="grid">
+        <div class="card">
+          <h3>The predicate</h3>
+          <p>Pure matching on pupdate fields. Same input, same answer, every time. You can read a rule and know exactly when it goes off.</p>
+        </div>
+        <div class="card">
+          <h3>The action</h3>
+          <p>Resolved from a name to a handler: memo, task, wake an agent, or a custom one a plugin registered. The automation editor lists whatever is installed.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <p class="section-kicker">How agents actually run</p>
+      <h2>Task &rarr; job &rarr; worktree &rarr; back to you</h2>
+      <p style="color:var(--text-dim); max-width:680px; margin-bottom:26px;">
+        A task is the thing to finish. An <code>AgentJob</code> is the one
+        identity for a run: every session, automation kickoff, skill, and
+        UI launch routes through it, so there is a single place that knows
+        what an agent is doing and a single lock that stops two triggers
+        from racing.
+      </p>
+      <div class="flow">
+        <div class="flow-step">
+          <div class="flow-num">01</div>
+          <div>
+            <h3>Spawn</h3>
+            <p>Maiko cuts a git worktree and writes <code>TASK.md</code> and a <code>CLAUDE.md</code> (role protocol, the agent's character, the team's active insights). Siblings cannot step on each other.</p>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">02</div>
+          <div>
+            <h3>Work, then talk back</h3>
+            <p>The agent commits to its branch and runs <code>maiko reply</code> from inside the worktree. Talk-back is shell commands, not MCP tools, on purpose.</p>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">03</div>
+          <div>
+            <h3>Monitor</h3>
+            <p>The brain watches job state instead of trusting it blindly. Stuck or silent jobs get noticed and nudged on the next cycle.</p>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">04</div>
+          <div>
+            <h3>Review and iterate</h3>
+            <p>You read the diff in-app and leave inline comments. Request changes and the same job wakes, reads the comments, and goes again.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <p class="section-kicker">The runtime seam</p>
+      <h2>One loop, three ways to run a model</h2>
+      <p style="color:var(--text-dim); max-width:680px; margin-bottom:26px;">
+        Because an agent talks back over the CLI, the thing running the
+        model is swappable behind one interface. The lifecycle above does
+        not change when you change the runtime.
+      </p>
+      <div class="grid">
+        <div class="card">
+          <h3>Headless</h3>
+          <p>One-shot <code>claude --print</code>. The default. Fire, work, talk back, done.</p>
+        </div>
+        <div class="card">
+          <h3>Interactive in tmux</h3>
+          <p>A persistent pane you can attach to and watch. New prompts inject into the live session instead of starting cold.</p>
+        </div>
+        <div class="card">
+          <h3>Local model</h3>
+          <p>An Ollama runtime for the parts you would rather keep entirely on the machine. Same job, same talk-back.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <p class="section-kicker">The memory that maintains itself</p>
+      <h2>Signals become a rulebook</h2>
+      <p style="color:var(--text-dim); max-width:680px;">
+        Review feedback and an agent's own confessed mistakes are signals.
+        They graduate into two durable things: <em>insights</em> (short
+        tribal notes that go in the playbook and inject into every new
+        agent) and <em>learnings</em> (coding rules mined from your PR
+        review history). Learnings are embedded locally and retrieved by
+        relevance: an agent says what it is about to do and gets back only
+        the handful of rules that apply, so hundreds of nits never drown a
+        prompt. Embeddings run on a local model. Nothing is sent out to
+        score it.
+      </p>
+      <p style="color:var(--text-dim); max-width:680px; margin-top:16px;">
+        At the end of the day the pack gathers at the campfire and shares
+        what it learned. You approve what sticks. Tomorrow's pack wakes up
+        with it. That ritual is a feature, not decoration.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <p class="section-kicker">The seam you extend</p>
+      <h2>Plugins, for anything you never want to look at again</h2>
+      <p style="color:var(--text-dim); max-width:680px; margin-bottom:26px;">
+        A plugin is one Python class. Drop a file in
+        <code>~/.maiko/plugins/</code> or ship it as a pip package that
+        registers an entry point. It is discovered on startup and can opt
+        into any of these without owning a single timer or thread.
+      </p>
+      <div class="grid">
+        <div class="card">
+          <h3>Poll something</h3>
+          <p>Subclass the poller and define what you fetch and what pupdates it becomes. The cycle drives the interval.</p>
+        </div>
+        <div class="card">
+          <h3>Add an action</h3>
+          <p>Register a named handler and it shows up in the automation editor next to the built-ins.</p>
+        </div>
+        <div class="card">
+          <h3>A setup button</h3>
+          <p>Expose a one-time bootstrap action (import this, connect that) as a button in Settings.</p>
+        </div>
+        <div class="card">
+          <h3>Hook the cycle</h3>
+          <p>Run on a brain phase or once per tick. The instant another tool starts yelling at you, make Maiko deal with it instead.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <p class="section-kicker">Read the long version</p>
+      <h2>Go deeper</h2>
+      <p style="color:var(--text-dim); max-width:640px; margin-bottom:22px;">
+        This page is the map. The full write-up has the corners: data and
+        persistence, the pupdate substrate in detail, A2A and the
+        <code>maiko</code> CLI, RAG retrieval, the parked LoRA experiment,
+        awareness, guardrails, and the sharp edges.
+      </p>
+      <ul class="deeper">
+        <li>
+          <a href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/ARCHITECTURE.md">
+            <span class="n">&#9656;</span>
+            <span><strong>ARCHITECTURE.md</strong> &nbsp; the full twenty-section reference, top to bottom</span>
+          </a>
+        </li>
+        <li>
+          <a href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/GUIDE.md">
+            <span class="n">&#9656;</span>
+            <span><strong>GUIDE.md</strong> &nbsp; the mental model, the CLI reference, writing a plugin</span>
+          </a>
+        </li>
+        <li>
+          <a href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/FEATURES.md">
+            <span class="n">&#9656;</span>
+            <span><strong>FEATURES.md</strong> &nbsp; what every page and surface actually does</span>
+          </a>
+        </li>
+        <li>
+          <a href="https://github.com/bkawa-bot/planet-maiko">
+            <span class="n">&#9656;</span>
+            <span><strong>The source</strong> &nbsp; it is one person's repo, read it like a book</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      Planet Maiko is named lovingly after a real dog named Maiko.<br>
+      Made by one person, in their free time, for fun.
+    </p>
+    <p style="margin-top:12px;">
+      <a href="index.html">Home</a> &middot;
+      <a href="https://github.com/bkawa-bot/planet-maiko">GitHub</a> &middot;
+      <a href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/GUIDE.md">Guide</a> &middot;
+      AGPL v3
+    </p>
+  </footer>
+
+</body>
+</html>
