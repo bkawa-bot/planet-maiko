@@ -2,131 +2,159 @@
   /* Pulled from the app's night theme tokens so the site reads as
      the same world, not a marketing skin bolted on. */
   --bg: #1A1F4A;
-  --bg-2: #12163a;
+  --bg-2: #14173a;
   --bg-card: rgba(255, 255, 255, 0.04);
   --border: rgba(255, 255, 255, 0.10);
   --border-soft: rgba(255, 255, 255, 0.06);
   --text: #F4F0E8;
   --text-dim: #B8B3D6;
-  --text-muted: #7C7AA8;
+  --text-muted: #8784b3;
   --pink: #FF8FB3;
   --teal: #6FD6C9;
   --lemon: #F5D77A;
   --lavender: #B59DD8;
   --mint: #8FE0B0;
   --peach: #FFB38A;
+  --ink: #211a33;
+  --face: #d8d9ec;       /* the system gray of an old OS */
   --font: 'Atkinson Hyperlegible', -apple-system, 'Segoe UI', sans-serif;
   --display: 'Bricolage Grotesque', var(--font);
   --mono: 'Inconsolata', ui-monospace, monospace;
+  --accent: var(--lavender);
+  /* Chunky 3D bevels. The whole point of the era. */
+  --raise: inset 2px 2px 0 rgba(255,255,255,0.55),
+           inset -2px -2px 0 rgba(0,0,0,0.46),
+           inset 3px 3px 0 rgba(255,255,255,0.16),
+           inset -3px -3px 0 rgba(0,0,0,0.24);
+  --sink: inset 2px 2px 0 rgba(0,0,0,0.5),
+          inset -2px -2px 0 rgba(255,255,255,0.28);
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body {
   background:
-    radial-gradient(900px 600px at 80% -10%, rgba(181,157,216,0.16), transparent 60%),
-    radial-gradient(800px 600px at 10% 10%, rgba(255,143,179,0.10), transparent 55%),
-    radial-gradient(1200px 900px at 50% 120%, rgba(0,0,0,0.45), transparent 60%),
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.022) 0 2px, transparent 2px 9px),
+    repeating-linear-gradient(-45deg, rgba(0,0,0,0.06) 0 2px, transparent 2px 9px),
+    radial-gradient(900px 600px at 78% -8%, rgba(111,214,201,0.18), transparent 60%),
+    radial-gradient(820px 600px at 8% 8%, rgba(255,143,179,0.15), transparent 55%),
+    radial-gradient(720px 520px at 60% 110%, rgba(245,215,122,0.10), transparent 60%),
     linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
   background-attachment: fixed;
   color: var(--text);
   font-family: var(--font);
   font-size: 17px;
-  line-height: 1.65;
+  line-height: 1.62;
   -webkit-font-smoothing: antialiased;
-  padding-top: 38px; /* room for the fixed menubar */
+  padding-top: 62px; /* menubar + marquee */
+  cursor: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='28'%20height='28'%20viewBox='0%200%2028%2028'%3E%3Cg%20fill='%23F4F0E8'%20stroke='%2323203A'%20stroke-width='1.6'%3E%3Cellipse%20cx='14'%20cy='19'%20rx='6.5'%20ry='5'/%3E%3Cellipse%20cx='7'%20cy='12'%20rx='2.7'%20ry='3.2'/%3E%3Cellipse%20cx='12'%20cy='8'%20rx='2.7'%20ry='3.4'/%3E%3Cellipse%20cx='18'%20cy='8'%20rx='2.7'%20ry='3.4'/%3E%3Cellipse%20cx='22'%20cy='12'%20rx='2.7'%20ry='3.2'/%3E%3C/g%3E%3C/svg%3E") 12 16, auto;
 }
 a { color: var(--teal); text-decoration: none; }
 a:hover { text-decoration: underline; }
 code, .mono { font-family: var(--mono); }
 code {
-  background: rgba(255,255,255,0.07);
-  padding: 2px 7px; border-radius: 5px;
-  font-size: 0.92em; color: var(--peach);
+  background: rgba(0,0,0,0.32);
+  padding: 1px 6px; border-radius: 0;
+  box-shadow: var(--sink);
+  font-size: 0.9em; color: var(--peach);
 }
 .wrap { max-width: 940px; margin: 0 auto; padding: 0 24px; }
 h2 {
   font-family: var(--display);
-  font-size: 1.8rem; font-weight: 700;
+  font-size: 1.78rem; font-weight: 700;
   letter-spacing: 0.01em; margin-bottom: 8px;
 }
 .section-kicker {
   font-family: var(--mono);
-  font-size: 0.78rem; letter-spacing: 0.16em;
-  text-transform: lowercase; color: var(--text-muted);
-  margin-bottom: 22px;
+  font-size: 0.78rem; letter-spacing: 0.12em;
+  text-transform: lowercase;
+  color: var(--accent); margin-bottom: 20px;
 }
 
 /* ------------------------------------------------------------------ */
-/*  maiko.os : the site is a strange machine you found, still running. */
+/*  maiko.os : a strange machine, last booted a long time ago.         */
+/*  Chrome is Windows-95-by-way-of-Hypnospace. Every window its own    */
+/*  loud color, because one indigo is a crime.                         */
 /* ------------------------------------------------------------------ */
 
-/* The menubar. Always there, like it has been on for years. */
+/* The menubar: a beveled system strip, not part of the night sky. */
 .menubar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 80;
-  display: flex; align-items: center; gap: 4px;
-  height: 38px; padding: 0 12px;
+  display: flex; align-items: center; gap: 5px;
+  height: 34px; padding: 0 8px;
   font-family: var(--mono); font-size: 0.82rem;
-  color: var(--text-dim);
-  background: rgba(10, 12, 38, 0.82);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border-soft);
+  color: var(--ink);
+  background: var(--face);
+  box-shadow: var(--raise);
 }
 .menubar .brand {
   display: flex; align-items: center; gap: 7px;
-  color: var(--text); font-weight: 600;
-  padding: 4px 10px 4px 6px;
+  color: var(--ink); font-weight: 700;
+  padding: 4px 12px; margin-right: 4px;
+  background: var(--face); box-shadow: var(--raise);
 }
+.menubar .brand:active { box-shadow: var(--sink); }
 .menubar .brand:hover { text-decoration: none; }
 .menubar .menu {
-  color: var(--text-dim); padding: 4px 9px; border-radius: 6px;
+  color: var(--ink); padding: 5px 11px;
 }
 .menubar .menu:hover {
-  text-decoration: none; color: var(--text);
-  background: rgba(255,255,255,0.07);
+  text-decoration: none; color: #fff;
+  background: #3a2a78;
 }
-.menubar .menu[aria-current="page"] { color: var(--pink); }
+.menubar .menu[aria-current="page"] {
+  color: #fff; background: #5a3aa8;
+}
 .menubar .spacer { flex: 1; }
 .menubar .planet-mood {
-  color: var(--text-muted); white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; max-width: 46vw;
+  color: var(--ink); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 42vw;
+  padding: 4px 10px; background: var(--face);
+  box-shadow: var(--sink);
 }
-.menubar .planet-mood b { color: var(--lavender); font-weight: 600; }
+.menubar .planet-mood b { color: #7a2f8f; font-weight: 700; }
 .menubar .clock {
-  color: var(--text); padding: 4px 10px; margin-left: 6px;
-  border-left: 1px solid var(--border-soft);
+  color: var(--ink); padding: 4px 10px; margin-left: 5px;
+  background: var(--face); box-shadow: var(--sink);
+  font-weight: 700;
 }
 @media (max-width: 760px) {
   .menubar .menu { display: none; }
-  .menubar .planet-mood { max-width: 38vw; }
+  .menubar .planet-mood { max-width: 40vw; }
 }
 
-/* A boot whisper that fades on its own. Pure CSS, never blocks content. */
+/* A real marquee, because of course. Scrolls forever, like it always did. */
 .boot {
-  position: fixed; top: 38px; left: 0; right: 0; z-index: 70;
-  text-align: center; font-family: var(--mono); font-size: 0.78rem;
-  color: var(--text-muted); padding: 6px;
-  pointer-events: none;
-  animation: bootfade 4.5s ease forwards;
+  position: fixed; top: 34px; left: 0; right: 0; z-index: 70;
+  height: 26px; overflow: hidden;
+  background: #0c0e2c; box-shadow: var(--sink);
+  display: flex; align-items: center;
 }
-@keyframes bootfade {
-  0%, 55% { opacity: 1; }
-  100% { opacity: 0; visibility: hidden; }
+.boot span {
+  display: inline-block; white-space: nowrap;
+  font-family: var(--mono); font-size: 0.8rem;
+  color: var(--lemon); padding-left: 100%;
+  animation: marquee 22s linear infinite;
+}
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .boot { animation: none; opacity: 0; visibility: hidden; }
+  .boot span { animation: none; padding-left: 16px; }
 }
 
-/* The desktop label. Not a window, it is painted on the wallpaper. */
-.desktop-title { text-align: center; padding: 64px 24px 26px; }
+/* The desktop label, painted on the wallpaper. */
+.desktop-title { text-align: center; padding: 60px 24px 24px; }
 .desktop-title .paw { font-size: 2.4rem; }
 .desktop-title h1 {
   font-family: var(--display);
   font-size: clamp(2.5rem, 7vw, 4.2rem);
   font-weight: 700; margin: 8px 0 6px;
-  text-shadow: 0 2px 30px rgba(0,0,0,0.5);
+  color: #fff;
+  text-shadow: 3px 3px 0 #d4438a, 6px 6px 0 rgba(0,0,0,0.4);
 }
 .desktop-title .tagline {
-  font-style: italic; color: var(--lavender);
+  font-style: italic; color: var(--lemon);
   font-size: 1.12rem; letter-spacing: 0.02em;
 }
 .desktop-title .sub {
@@ -136,125 +164,160 @@ h2 {
 
 /* Faint desktop shortcuts down the left edge. Wide screens only. */
 .desk-icons {
-  position: fixed; left: 16px; top: 90px; z-index: 20;
-  display: none; flex-direction: column; gap: 22px;
+  position: fixed; left: 14px; top: 96px; z-index: 20;
+  display: none; flex-direction: column; gap: 20px;
 }
 .desk-icons a {
   display: flex; flex-direction: column; align-items: center; gap: 5px;
-  width: 76px; color: var(--text-muted);
+  width: 78px; color: #fff;
   font-family: var(--mono); font-size: 0.72rem; text-align: center;
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.6);
 }
-.desk-icons a:hover { color: var(--text); text-decoration: none; }
+.desk-icons a:hover { text-decoration: none; }
+.desk-icons a:hover span:last-child {
+  background: #3a2a78; outline: 1px dotted #fff; outline-offset: 2px;
+}
 .desk-icons .glyph {
-  font-size: 1.5rem; filter: grayscale(0.2);
-  transition: transform 0.2s ease;
+  font-size: 1.7rem; transition: transform 0.15s steps(2);
 }
-.desk-icons a:hover .glyph { transform: translateY(-2px) rotate(-4deg); }
+.desk-icons a:hover .glyph { transform: translateY(-2px) rotate(-6deg); }
 @media (min-width: 1280px) { .desk-icons { display: flex; } }
 
-/* Windows. Hand placed, slightly off, like someone set them down. */
+/* Per-window color. Auto-cycled. No two neighbors share a hue. */
+section.win:nth-of-type(6n+1) { --accent: var(--pink); }
+section.win:nth-of-type(6n+2) { --accent: var(--teal); }
+section.win:nth-of-type(6n+3) { --accent: var(--lemon); }
+section.win:nth-of-type(6n+4) { --accent: var(--lavender); }
+section.win:nth-of-type(6n+5) { --accent: var(--mint); }
+section.win:nth-of-type(6n+6) { --accent: var(--peach); }
+
+/* Windows: hard-edged, beveled, dropped with a flat shadow. */
 .win {
   position: relative;
-  max-width: 880px; margin: 40px auto;
-  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 22px 60px rgba(0,0,0,0.5), 0 2px 0 rgba(255,255,255,0.03) inset;
+  max-width: 880px; margin: 42px auto;
+  background: #23274f;
+  border-radius: 0;
+  box-shadow: var(--raise), 7px 7px 0 rgba(0,0,0,0.45);
   transform: rotate(var(--tilt, 0deg));
-  transition: transform 0.35s cubic-bezier(.2,.7,.2,1);
-  overflow: visible;
+  transition: transform 0.3s steps(6);
+  padding: 4px;
 }
 .win:hover { transform: rotate(0deg); }
 .win.wide { max-width: 1000px; }
 .win.narrow { max-width: 680px; }
 .win-bar {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 14px;
-  border-bottom: 1px solid var(--border-soft);
-  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.01));
-  border-radius: 12px 12px 0 0;
-  font-family: var(--mono);
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 6px 6px 0;
+  font-family: var(--display); font-weight: 700;
+  background: linear-gradient(180deg,
+    var(--accent),
+    color-mix(in srgb, var(--accent) 58%, #160f2e));
+  box-shadow: var(--raise);
 }
-.win-dots { display: flex; gap: 7px; flex: none; }
-.win-dots i {
-  width: 11px; height: 11px; border-radius: 50%; display: block;
-  background: var(--border);
-}
-.win-dots i:nth-child(1) { background: var(--pink); }
-.win-dots i:nth-child(2) { background: var(--lemon); }
-.win-dots i:nth-child(3) { background: var(--mint); }
-.win-title {
-  flex: 1; text-align: center;
-  font-size: 0.84rem; color: var(--text-dim);
-  letter-spacing: 0.03em;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.win-x {
-  flex: none; width: 22px; height: 22px; border-radius: 6px;
+.win-bar::before {
+  content: "🐾"; flex: none;
+  width: 26px; height: 22px; margin-left: 4px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--text-muted); font-size: 0.9rem; cursor: pointer;
-  user-select: none; transition: background 0.15s ease, color 0.15s ease;
+  font-size: 0.95rem;
+  background: rgba(255,255,255,0.5); box-shadow: var(--raise);
 }
-.win-x:hover { background: rgba(255,143,179,0.18); color: var(--pink); }
-.win-body { padding: 30px 32px 34px; }
-@media (max-width: 620px) { .win-body { padding: 22px 18px 26px; } }
+.win-title {
+  flex: 1; order: 2; text-align: left;
+  font-size: 0.96rem; color: var(--ink);
+  letter-spacing: 0.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-shadow: 1px 1px 0 rgba(255,255,255,0.3);
+}
+.win-bar::before { order: 1; }
+/* The [_][o][x] cluster. The dots became real buttons. */
+.win-dots { order: 3; display: flex; gap: 4px; flex: none; }
+.win-dots i {
+  width: 21px; height: 19px; display: flex;
+  align-items: center; justify-content: center;
+  background: var(--face); box-shadow: var(--raise);
+  color: var(--ink); font-family: var(--mono);
+  font-size: 0.8rem; font-style: normal; line-height: 1;
+}
+.win-dots i::after { content: "_"; transform: translateY(-3px); }
+.win-dots i:nth-child(2)::after { content: "▢"; transform: none; }
+.win-dots i:nth-child(3) { display: none; }
+.win-x {
+  order: 4; flex: none;
+  width: 21px; height: 19px; margin-right: 4px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--face); box-shadow: var(--raise);
+  color: var(--ink); font-size: 0.74rem; cursor: inherit;
+  user-select: none;
+}
+.win-x:active, .win-dots i:active { box-shadow: var(--sink); }
+.win-x:hover { color: #b3122f; }
+.win-body {
+  padding: 28px 30px 32px;
+  background: #1c1f43; box-shadow: var(--sink);
+  border-top: 3px solid color-mix(in srgb, var(--accent) 70%, #000);
+}
+@media (max-width: 620px) { .win-body { padding: 20px 16px 24px; } }
 
-/* A window someone closed. Left behind as a faded sticky note. */
-.win.closed { transform: none; box-shadow: none; }
+/* A window someone closed. Left as a beveled, minimized tab. */
+.win.closed {
+  transform: none; box-shadow: var(--raise); padding: 0;
+  max-width: 360px; background: var(--face);
+}
 .win.closed .win-bar, .win.closed .win-body { display: none; }
 .win.closed::after {
   content: attr(data-closed);
   display: block; text-align: center;
-  font-family: var(--mono); font-size: 0.82rem;
-  color: var(--text-muted); font-style: italic;
-  padding: 14px; border: 1px dashed var(--border-soft);
-  border-radius: 10px; cursor: pointer;
+  font-family: var(--mono); font-size: 0.8rem;
+  color: var(--ink); font-style: italic;
+  padding: 10px 14px; cursor: inherit;
 }
-.win.closed:hover::after { color: var(--text-dim); }
 
-/* Marginalia. Something has been annotating its own machine. */
+/* Marginalia. The annotations got more colorful too. */
 .scrawl {
   position: absolute; z-index: 5;
   font-family: var(--font); font-style: italic;
-  font-size: 0.92rem; color: var(--lavender);
-  opacity: 0.72; max-width: 230px; line-height: 1.4;
+  font-size: 0.92rem; color: var(--accent);
+  opacity: 0.92; max-width: 230px; line-height: 1.35;
   transform: rotate(-3deg); pointer-events: none;
-  text-shadow: 0 1px 8px rgba(0,0,0,0.5);
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.7);
 }
-.scrawl::before { content: "\21AA\00A0"; color: var(--text-muted); }
-.scrawl.tr { top: -22px; right: -30px; transform: rotate(3deg); }
-.scrawl.br { bottom: -26px; right: -24px; transform: rotate(-2deg); }
-.scrawl.bl { bottom: -26px; left: -20px; transform: rotate(2deg); }
-.scrawl.tl { top: -24px; left: -18px; transform: rotate(-3deg); }
+.scrawl::before { content: "\21AA\00A0"; color: #fff; }
+.scrawl.tr { top: -26px; right: -34px; transform: rotate(3deg); }
+.scrawl.br { bottom: -30px; right: -26px; transform: rotate(-2deg); }
+.scrawl.bl { bottom: -30px; left: -22px; transform: rotate(2deg); }
+.scrawl.tl { top: -28px; left: -20px; transform: rotate(-3deg); }
 .scrawl.plain::before { content: ""; }
 @media (max-width: 1100px) { .scrawl { display: none; } }
 
 /* ------------------------------------------------------------------ */
-/*  Window contents reuse these. Unchanged building blocks.            */
+/*  Window contents. Same blocks, now wearing the era's clothes.       */
 /* ------------------------------------------------------------------ */
 
 .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
 .btn {
   display: inline-flex; align-items: center; gap: 7px;
-  padding: 12px 22px; border-radius: 12px;
-  font-family: var(--font); font-weight: 700; font-size: 0.98rem;
-  cursor: pointer; transition: transform 0.15s ease, background 0.15s ease;
-  border: 1px solid transparent;
+  padding: 11px 22px; border-radius: 0;
+  font-family: var(--font); font-weight: 700; font-size: 0.97rem;
+  cursor: inherit; box-shadow: var(--raise);
+  color: var(--ink);
 }
-.btn:hover { text-decoration: none; transform: translateY(-1px); }
-.btn-primary { background: var(--pink); color: #2a1730; }
-.btn-ghost { background: var(--bg-card); color: var(--text); border-color: var(--border); }
-.btn-ghost:hover { border-color: var(--pink); }
+.btn:active { box-shadow: var(--sink); transform: translateY(1px); }
+.btn:hover { text-decoration: none; }
+.btn-primary { background: var(--pink); }
+.btn-ghost { background: var(--face); }
 
-.shot { display: block; width: 100%; height: auto; border-radius: 8px; }
+.shot {
+  display: block; width: 100%; height: auto;
+  box-shadow: var(--sink); padding: 4px; background: #0c0e2c;
+}
 .shot-cap {
-  font-family: var(--mono); font-size: 0.82rem;
+  font-family: var(--mono); font-size: 0.8rem;
   color: var(--text-muted); margin-top: 12px; text-align: center;
 }
 
 .lede-quote {
-  font-size: 1.18rem; line-height: 1.7; color: var(--text);
-  border-left: 3px solid var(--pink); padding-left: 20px;
+  font-size: 1.16rem; line-height: 1.7; color: var(--text);
+  border-left: 4px solid var(--accent); padding-left: 18px;
 }
 .lede-quote span { color: var(--text-muted); }
 
@@ -263,29 +326,34 @@ h2 {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 .card {
-  background: var(--bg-card); border: 1px solid var(--border-soft);
-  border-radius: 12px; padding: 20px;
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  background: #20244a; box-shadow: var(--sink);
+  border-left: 4px solid var(--accent);
+  padding: 18px 18px 18px 20px;
 }
-.card:hover { border-color: var(--border); transform: translateY(-2px); }
 .card h3 {
-  font-size: 1.04rem; margin-bottom: 6px;
+  font-size: 1.03rem; margin-bottom: 6px;
   display: flex; align-items: baseline; gap: 8px;
 }
-.card h3 .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.card h3 .dot {
+  width: 9px; height: 9px; flex: none;
+  box-shadow: 1px 1px 0 rgba(0,0,0,0.6);
+}
 .card p { color: var(--text-dim); font-size: 0.95rem; }
 .card em { color: var(--text); font-style: italic; }
 .card p + p { margin-top: 10px; }
 
 .flow { display: flex; flex-direction: column; gap: 0; }
 .flow-step {
-  display: flex; gap: 16px; padding: 16px 0;
-  border-bottom: 1px dashed var(--border-soft);
+  display: flex; gap: 16px; padding: 15px 0;
+  border-bottom: 2px dotted rgba(255,255,255,0.14);
 }
 .flow-step:last-child { border-bottom: none; }
 .flow-num {
-  font-family: var(--mono); font-size: 0.85rem; font-weight: 600;
-  color: var(--teal); flex: none; width: 28px; padding-top: 2px;
+  font-family: var(--mono); font-size: 0.95rem; font-weight: 700;
+  color: var(--ink); background: var(--accent);
+  box-shadow: var(--raise);
+  flex: none; width: 30px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
 }
 .flow-step h3 { font-size: 1.0rem; margin-bottom: 3px; }
 .flow-step p { color: var(--text-dim); font-size: 0.95rem; }
@@ -295,19 +363,18 @@ h2 {
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
 }
 .gallery figure {
-  background: var(--bg-card); border: 1px solid var(--border-soft);
-  border-radius: 10px; overflow: hidden;
+  background: #0c0e2c; box-shadow: var(--raise); padding: 4px;
 }
 .gallery img { width: 100%; height: auto; display: block; }
 .gallery figcaption {
-  padding: 11px 15px; font-size: 0.88rem; color: var(--text-dim);
+  padding: 10px 13px; font-size: 0.87rem; color: var(--text-dim);
 }
 
 pre {
-  background: rgba(0,0,0,0.34); border: 1px solid var(--border-soft);
-  padding: 16px 18px; border-radius: 10px;
+  background: #0a0c26; box-shadow: var(--sink);
+  padding: 16px 18px; border-radius: 0;
   font-family: var(--mono); font-size: 0.9rem;
-  color: var(--text-dim); overflow-x: auto; line-height: 1.7;
+  color: var(--mint); overflow-x: auto; line-height: 1.7;
 }
 .install-note {
   margin-top: 14px; font-size: 0.92rem; color: var(--text-muted);
@@ -315,39 +382,48 @@ pre {
 
 .stays-list { list-style: none; display: grid; gap: 10px; }
 .stays-list li {
-  padding-left: 24px; position: relative; color: var(--text-dim);
+  padding-left: 26px; position: relative; color: var(--text-dim);
 }
 .stays-list li::before {
-  content: "\1F43E"; position: absolute; left: 0; font-size: 0.9rem;
+  content: "🐾"; position: absolute; left: 0; font-size: 0.9rem;
 }
 .stays-list strong { color: var(--text); }
 
 .deeper {
-  list-style: none; display: grid; gap: 2px;
-  border: 1px solid var(--border-soft); border-radius: 10px;
-  padding: 8px 6px; background: rgba(0,0,0,0.18);
+  list-style: none; display: grid; gap: 4px;
+  background: #0a0c26; box-shadow: var(--sink);
+  padding: 8px;
 }
 .deeper li a {
-  display: flex; gap: 12px; padding: 11px 14px; border-radius: 8px;
-  color: var(--text-dim);
+  display: flex; gap: 12px; padding: 10px 13px;
+  color: var(--text-dim); background: #20244a;
+  box-shadow: var(--raise);
 }
 .deeper li a:hover {
-  background: rgba(255,255,255,0.04); color: var(--text);
-  text-decoration: none;
+  text-decoration: none; color: var(--text);
+  background: #2b2f5e;
 }
+.deeper li a:active { box-shadow: var(--sink); }
 .deeper .n {
-  font-family: var(--mono); color: var(--text-muted);
+  font-family: var(--mono); color: var(--accent);
   font-size: 0.85rem; flex: none; width: 18px;
 }
 
 footer {
-  text-align: center; padding: 46px 24px 60px;
-  color: var(--text-muted); font-size: 0.9rem;
+  text-align: center; padding: 40px 24px 56px;
+  color: var(--text-muted); font-size: 0.88rem;
   font-family: var(--mono);
 }
 footer a { color: var(--text-dim); }
 .beta {
   display: inline-block; margin-top: 16px; padding: 6px 14px;
-  border: 1px solid var(--border); border-radius: 999px;
-  font-size: 0.82rem; color: var(--lemon); font-family: var(--mono);
+  background: var(--lemon); color: var(--ink); font-weight: 700;
+  box-shadow: var(--raise);
+  font-size: 0.8rem; font-family: var(--mono);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .win, .desk-icons .glyph { transition: none; }
+  .win { transform: none; }
+  html { scroll-behavior: auto; }
 }
