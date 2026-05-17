@@ -39,7 +39,7 @@
       "icons/icon.ico"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "Strange agents, strange world.",
-    "longDescription": "Planet Maiko — a self-hosted pack of AI agents for your engineering work. Wellbeing-first design, runs locally, never on a SaaS dashboard."
+    "shortDescription": "strange agents, strange world.",
+    "longDescription": "Planet Maiko: a self-hosted pack of AI agents for your engineering work. Wellbeing-first design, runs locally, never on a SaaS dashboard."
   }
 }
