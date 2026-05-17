@@ -287,7 +287,7 @@ export default function Tasks() {
                   </div>
                   {project.description && project.description.length > 50 && (
                     <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); setViewingPlan(project); }} title="View project plan">
-                      <FolderOpen size={10} /> Plan
+                      <FolderOpen size={10} /> View
                     </button>
                   )}
                   <button className="btn btn-sm btn-action" onClick={async (e) => {
@@ -303,7 +303,7 @@ export default function Tasks() {
                     }
                     setPlanning(null);
                   }} disabled={planning === project.id}>
-                    <Brain size={10} /> {planning === project.id ? "Planning..." : "Plan"}
+                    <Brain size={10} /> {planning === project.id ? "Planning..." : (project.description && project.description.length > 50 ? "Re-plan" : "Plan")}
                   </button>
                   <button className="btn btn-sm btn-action" onClick={async (e) => {
                     e.stopPropagation();
