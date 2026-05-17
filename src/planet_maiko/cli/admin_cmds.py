@@ -76,6 +76,122 @@ def cmd_serve(args):
     app.run(host=args.host, port=args.port, debug=args.debug, use_reloader=False)
 
 
+def cmd_up(args):
+    """One command to bring the whole thing up.
+
+    `maiko up` is `maiko serve` plus the Vite frontend dev server plus
+    opening the browser for you, so you don't babysit two terminals.
+    Ctrl+C takes both down. If there's no `frontend/` (running from an
+    installed package) or no npm, it falls back to serving the bundled
+    UI straight from the backend.
+    """
+    import os
+    import sys
+    import time
+    import signal
+    import shutil
+    import subprocess
+    import webbrowser
+    import urllib.request
+    from pathlib import Path
+
+    host = args.host
+    backend_port = args.port
+    web_port = args.web_port
+
+    # src/planet_maiko/cli/admin_cmds.py -> repo root is parents[3].
+    repo_root = Path(__file__).resolve().parents[3]
+    frontend_dir = repo_root / "frontend"
+    have_frontend = (frontend_dir / "package.json").exists()
+    npm = shutil.which("npm")
+
+    procs = []
+
+    def _spawn(cmd, cwd=None):
+        kwargs = {}
+        if os.name == "nt":
+            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            kwargs["start_new_session"] = True  # own process group to kill cleanly
+        p = subprocess.Popen(cmd, cwd=cwd, **kwargs)
+        procs.append(p)
+        return p
+
+    def _shutdown():
+        for p in procs:
+            if p.poll() is not None:
+                continue
+            try:
+                if os.name == "nt":
+                    # /T kills the child tree (vite spawns esbuild/node).
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(p.pid)],
+                        capture_output=True,
+                    )
+                else:
+                    os.killpg(os.getpgid(p.pid), signal.SIGTERM)
+            except Exception:
+                try:
+                    p.terminate()
+                except Exception:
+                    pass
+        for p in procs:
+            try:
+                p.wait(timeout=8)
+            except Exception:
+                try:
+                    p.kill()
+                except Exception:
+                    pass
+
+    # Backend via the same interpreter so PATH doesn't matter.
+    print(f"[up] backend  http://{host}:{backend_port}")
+    _spawn(
+        [sys.executable, "-m", "planet_maiko.cli.main",
+         "serve", "--host", host, "--port", str(backend_port)],
+        cwd=str(repo_root),
+    )
+
+    if have_frontend and npm:
+        print(f"[up] frontend http://localhost:{web_port}  (vite)")
+        _spawn([npm, "run", "dev"], cwd=str(frontend_dir))
+        open_url = f"http://localhost:{web_port}"
+    else:
+        why = "no frontend/ dir" if not have_frontend else "npm not found"
+        print(f"[up] {why}; serving the bundled UI from the backend")
+        open_url = f"http://{host}:{backend_port}"
+
+    try:
+        if not args.no_open:
+            deadline = time.time() + 90
+            while time.time() < deadline:
+                if any(p.poll() is not None for p in procs):
+                    break  # something died early; don't open a dead URL
+                try:
+                    urllib.request.urlopen(open_url, timeout=1)
+                    break
+                except Exception:
+                    time.sleep(1)
+            if all(p.poll() is None for p in procs):
+                print(f"[up] opening {open_url}")
+                try:
+                    webbrowser.open(open_url)
+                except Exception:
+                    pass
+
+        while True:
+            for p in procs:
+                rc = p.poll()
+                if rc is not None:
+                    print(f"[up] a process exited (code {rc}); shutting down")
+                    return
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        print("\n[up] stopping...")
+    finally:
+        _shutdown()
+
+
 def cmd_backup(args):
     """Take a one-off snapshot of the DB."""
     from planet_maiko.backups import create_backup
@@ -277,6 +393,18 @@ def register(subparsers):
     p.add_argument("--port", type=int, default=MAIKO_PORT, help="Port to listen on")
     p.add_argument("--debug", action="store_true", help="Enable debug mode")
     p.set_defaults(func=cmd_serve)
+
+    # maiko up : backend + frontend + open the browser, one command
+    p = subparsers.add_parser(
+        "up", help="Start backend + frontend and open the browser (one command)"
+    )
+    p.add_argument("--host", default="127.0.0.1", help="Backend host to bind to")
+    p.add_argument("--port", type=int, default=MAIKO_PORT, help="Backend port")
+    p.add_argument("--web-port", type=int, default=5173,
+                   help="Vite dev server port (default 5173)")
+    p.add_argument("--no-open", action="store_true",
+                   help="Don't open the browser")
+    p.set_defaults(func=cmd_up)
 
     # maiko backup
     p = subparsers.add_parser("backup", help="Take a DB snapshot now")

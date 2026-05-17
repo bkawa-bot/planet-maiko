@@ -1,5 +1,9 @@
 # Building the Planet Maiko desktop app
 
+> **Status: experimental, currently buggy, parked.** The supported
+> launch is the terminal flow: `maiko up` (see the README). This file
+> is kept for whenever the desktop shell gets picked back up.
+
 For local use on **macOS only**. This produces a normal double-click
 app. It is a thin window shell: it runs `maiko serve` (the Python
 backend) as a child process, so the backend has to be installed and

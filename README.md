@@ -79,53 +79,46 @@ No venture capitalism, no productivity-maxxing (unless you want). I am not tryin
 
 ## Install
 
-macOS only. This gets you a real double-click app.
-
 ### Prerequisites
 
-- macOS
-- Xcode command line tools: `xcode-select --install`
-- [Homebrew](https://brew.sh), then `brew install node gh pipx`
-- Rust, to compile the app shell: [rustup.rs](https://rustup.rs)
+- macOS (or Linux/Windows for development)
+- Python 3.10+
+- Node.js 18+
+- `gh` CLI
 - Claude Code (the agent runtime), installed and on your PATH
 
-### Build the app
+### Install
 
 ```bash
 git clone https://github.com/bkawa-bot/planet-maiko.git
 cd planet-maiko
 
-# The app launches `maiko` through the login shell, which reads
-# ~/.zprofile (NOT ~/.zshrc). Put pipx's bin dir on that PATH:
-pipx ensurepath
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zprofile
-# now open a fresh terminal
-
-make backend     # pipx-installs the maiko CLI
-gh auth login    # GitHub: repo discovery + worktrees
-make app         # builds Planet Maiko.app + a .dmg
-```
-
-Drag `Planet Maiko.app` to `/Applications`. First launch is unsigned, so right-click it and choose **Open** once. It creates its own database and config on first run, then opens a setup wizard. Nothing leaves your machine.
-
-Full build steps and troubleshooting: [`BUILD.md`](BUILD.md).
-
-> **SSL errors** with Linear or other integrations? `pip install --upgrade certifi`, then `open /Applications/Python\ 3.12/Install\ Certificates.command`.
-
-### Develop (no app build, two terminals)
-
-```bash
 python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e .
 cd frontend && npm install && cd ..
 
-# terminal 1, backend (port 8420)
-maiko serve
-# terminal 2, frontend (port 5173)
-cd frontend && npm run dev
+gh auth login    # GitHub: repo discovery + worktrees
 ```
 
-Open **http://localhost:5173** and walk through the setup wizard.
+> **SSL errors** with Linear or other integrations? `pip install --upgrade certifi`, then `open /Applications/Python\ 3.12/Install\ Certificates.command`.
+
+### Run
+
+One command:
+
+```bash
+maiko up
+```
+
+That starts the backend, starts the frontend, and opens
+`http://localhost:5173` for you. Ctrl+C stops both. First run creates
+its own database and config, then shows a setup wizard.
+
+Prefer two terminals? `maiko serve` (backend, port 8420) and, in
+another, `cd frontend && npm run dev` (frontend, port 5173).
+
+> There's an experimental Tauri desktop shell (`make app`), but it's
+> currently buggy. The terminal launch above is the supported path.
 
 **Full guide** (mental model, architecture, plugin system, extending, CLI reference): see [`docs/GUIDE.md`](docs/GUIDE.md).
 

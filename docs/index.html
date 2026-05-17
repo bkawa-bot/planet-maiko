@@ -272,26 +272,22 @@
         <span class="win-x" title="close">&#10005;</span>
       </div>
       <div class="win-body">
-        <p class="section-kicker">// macOS. one app. no terminal to babysit.</p>
+        <p class="section-kicker">// one command. it opens itself.</p>
         <h2>Boot it yourself</h2>
-        <p style="color:var(--text-dim); margin-bottom:16px; font-size:0.95rem;">Needs: macOS, Xcode tools, Homebrew, Node, Rust, pipx, Claude Code.</p>
+        <p style="color:var(--text-dim); margin-bottom:16px; font-size:0.95rem;">Needs: macOS, Python 3.10+, Node 18+, the <code>gh</code> CLI, Claude Code.</p>
 <pre>git clone https://github.com/bkawa-bot/planet-maiko.git
 cd planet-maiko
 
-# the app finds `maiko` via the login shell (~/.zprofile)
-pipx ensurepath
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zprofile
-# open a fresh terminal
+python3 -m venv .venv &amp;&amp; source .venv/bin/activate
+pip install -e .
+cd frontend &amp;&amp; npm install &amp;&amp; cd ..
 
-make backend     # installs the maiko CLI
-gh auth login    # GitHub: repos + worktrees
-make app         # builds Planet Maiko.app + a .dmg</pre>
+gh auth login
+maiko up</pre>
         <p class="install-note">
-          Drag <code>Planet Maiko.app</code> to <code>/Applications</code>,
-          right-click &gt; Open the first time. It makes its own database
-          and walks you through setup. Full steps in
-          <a href="https://github.com/bkawa-bot/planet-maiko/blob/main/BUILD.md">BUILD.md</a>,
-          the rest in
+          <code>maiko up</code> starts the backend, starts the frontend,
+          and opens the window for you. First run makes its own database
+          and walks you through setup. The rest lives in
           <a href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/GUIDE.md">the field guide</a>.
         </p>
         <div class="beta">beta. breaking changes, schema patches, rough edges, bugs.</div>
