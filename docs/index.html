@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Planet Maiko · strange agents, strange world.</title>
-  <meta name="description" content="A local-first agent orchestrator where your AI agents are weird alien dogs that know a little too much.">
+  <title>maiko.os</title>
+  <meta name="description" content="A local-first agent orchestrator where your AI agents are weird alien dogs that know a little too much. You found it still running.">
   <meta property="og:title" content="Planet Maiko">
   <meta property="og:description" content="strange agents, strange world. A local-first agent orchestrator where your AI agents are weird alien dogs that know a little too much.">
   <meta property="og:image" content="screenshots/title.png">
@@ -17,35 +17,59 @@
 </head>
 <body>
 
-  <nav class="sitenav">
-    <a class="brand" href="index.html"><span>🐾</span> Planet Maiko</a>
+  <nav class="menubar">
+    <a class="brand" href="index.html"><span>🐾</span> maiko.os</a>
+    <a class="menu" href="index.html" aria-current="page">the pack</a>
+    <a class="menu" href="architecture.html">how it turns</a>
+    <a class="menu" href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/GUIDE.md">field guide</a>
+    <a class="menu" href="https://github.com/bkawa-bot/planet-maiko">source</a>
     <span class="spacer"></span>
-    <a class="navlink" href="index.html" aria-current="page">Home</a>
-    <a class="navlink" href="architecture.html">Architecture</a>
-    <a class="navlink" href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/GUIDE.md">Guide &#8599;</a>
-    <a class="navlink" href="https://github.com/bkawa-bot/planet-maiko">GitHub</a>
+    <span class="planet-mood">the planet is currently: <b id="mood">waking</b></span>
+    <span class="clock" id="clock">--:--</span>
   </nav>
 
-  <header class="hero">
+  <div class="boot">maiko.os &middot; waking the pack &hellip; ok</div>
+
+  <div class="desk-icons" aria-hidden="true">
+    <a href="#pack"><span class="glyph">🐾</span> the pack</a>
+    <a href="#campfire"><span class="glyph">☾</span> campfire</a>
+    <a href="https://github.com/bkawa-bot/planet-maiko"><span class="glyph">◐</span> source</a>
+  </div>
+
+  <header class="desktop-title">
     <div class="paw">🐾</div>
     <h1>Planet Maiko</h1>
     <p class="tagline">strange agents, strange world.</p>
-    <p class="hero-lede">
+    <p class="sub">
       A local-first agent orchestrator where your AI agents are weird
-      alien dogs that know a little too much.
+      alien dogs that know a little too much. You found it still running.
     </p>
-    <div class="cta-row">
-      <a class="btn btn-primary" href="https://github.com/bkawa-bot/planet-maiko">View on GitHub</a>
-      <a class="btn btn-ghost" href="#start">Get started</a>
-    </div>
   </header>
 
-  <div class="shot-wrap">
-    <img class="shot" src="screenshots/title.png" alt="Planet Maiko">
-  </div>
+  <section class="win" style="--tilt:-0.8deg;">
+    <div class="win-bar">
+      <span class="win-dots"><i></i><i></i><i></i></span>
+      <span class="win-title">title.png</span>
+      <span class="win-x" title="close">&#10005;</span>
+    </div>
+    <div class="win-body">
+      <img class="shot" src="screenshots/title.png" alt="Planet Maiko">
+      <p class="shot-cap">screenshot. captured by something that was here first.</p>
+      <div class="cta-row" style="justify-content:center; margin-top:18px;">
+        <a class="btn btn-primary" href="https://github.com/bkawa-bot/planet-maiko">open the source</a>
+        <a class="btn btn-ghost" href="#start">boot it yourself</a>
+      </div>
+    </div>
+    <span class="scrawl tr">i think this is where it keeps us</span>
+  </section>
 
-  <section>
-    <div class="wrap">
+  <section class="win narrow" style="--tilt:0.9deg;">
+    <div class="win-bar">
+      <span class="win-dots"><i></i><i></i><i></i></span>
+      <span class="win-title">readme.txt</span>
+      <span class="win-x" title="close">&#10005;</span>
+    </div>
+    <div class="win-body">
       <p class="lede-quote">
         We live in strange times, and yet our dev tools are so painfully
         un-strange. No one knows what being a software engineer will be
@@ -53,23 +77,25 @@
         to our own inevitable obsolescence, we might as well have fun.</span>
       </p>
     </div>
+    <span class="scrawl bl">it wrote this part itself, i think</span>
   </section>
 
-  <div class="shot-wrap">
-    <img class="shot" src="screenshots/home.png" alt="The Home page: pack requests, a generated overview, the scene and weather">
-  </div>
-
-  <section>
-    <div class="wrap">
-      <p class="section-kicker">The mental model</p>
+  <section class="win" id="pack" style="--tilt:-0.5deg;">
+    <div class="win-bar">
+      <span class="win-dots"><i></i><i></i><i></i></span>
+      <span class="win-title">mental-model :: six things</span>
+      <span class="win-x" title="close">&#10005;</span>
+    </div>
+    <div class="win-body">
+      <p class="section-kicker">// learn these six. the rest is weather.</p>
       <h2>Six things, and how they move</h2>
-      <p style="color:var(--text-dim); max-width:640px; margin-bottom:26px;">
-        Maiko shuffles data between a few core concepts. Knowing which
-        is which makes every page legible.
+      <p style="color:var(--text-dim); max-width:600px; margin-bottom:24px;">
+        Maiko shuffles data between a few core concepts. Knowing which is
+        which makes every page legible.
       </p>
       <div class="grid">
         <div class="card">
-          <h3><span class="dot" style="background:var(--blue,#89cff0)"></span>Pupdates</h3>
+          <h3><span class="dot" style="background:#89cff0"></span>Pupdates</h3>
           <p><em>Things to notice.</em> Notifications from your pollers (GitHub, Linear, Calendar, PagerDuty) plus internal events. The brain cycle triages them into everything below.</p>
         </div>
         <div class="card">
@@ -90,29 +116,35 @@
         </div>
         <div class="card">
           <h3><span class="dot" style="background:var(--teal)"></span>Automations</h3>
-          <p><em>when &rarr; then rules.</em> "When a PR I'm tagged on goes stale, leave me a memo." No LLM in the trigger layer, just predicates.</p>
+          <p><em>when &rarr; then rules.</em> "When a PR I'm tagged on goes stale, leave me a memo." No model in the trigger layer, just predicates.</p>
         </div>
       </div>
     </div>
+    <span class="scrawl br">six. then it gets quiet again</span>
   </section>
 
-  <section>
-    <div class="wrap">
-      <p class="section-kicker">How agents work</p>
-      <h2>Hand off a task, read a diff, never open a terminal</h2>
+  <section class="win" id="campfire" style="--tilt:0.6deg;">
+    <div class="win-bar">
+      <span class="win-dots"><i></i><i></i><i></i></span>
+      <span class="win-title">how-the-pack-works</span>
+      <span class="win-x" title="close">&#10005;</span>
+    </div>
+    <div class="win-body">
+      <p class="section-kicker">// hand off a task, read a diff, never open a terminal</p>
+      <h2>How the pack works</h2>
       <div class="flow">
         <div class="flow-step">
           <div class="flow-num">01</div>
           <div>
             <h3>Worktree-isolated kickoff</h3>
-            <p>Assign an agent and Maiko prepares a git worktree with <code>TASK.md</code>, a <code>CLAUDE.md</code> (role protocol + character + active team insights), and the project's MCPs. Siblings never step on each other.</p>
+            <p>Assign an agent and Maiko prepares a git worktree with <code>TASK.md</code>, a <code>CLAUDE.md</code> (role protocol, character, active team insights), and the project's MCPs. Siblings never step on each other.</p>
           </div>
         </div>
         <div class="flow-step">
           <div class="flow-num">02</div>
           <div>
             <h3>It works, then talks back over the CLI</h3>
-            <p>The agent commits to its branch and calls <code>maiko reply</code> from inside the worktree. The talk-back path is shell commands, not MCP tools, so the same loop runs under headless Claude, interactive Claude in tmux, or a local Ollama model.</p>
+            <p>The agent commits to its branch and calls <code>maiko reply</code> from inside the worktree. Talk-back is shell, not MCP, so the same loop runs under headless Claude, interactive Claude in tmux, or a local model.</p>
           </div>
         </div>
         <div class="flow-step">
@@ -131,20 +163,34 @@
         </div>
       </div>
     </div>
+    <span class="scrawl bl">do not close the campfire one</span>
   </section>
 
-  <div class="shot-wrap">
-    <img class="shot" src="screenshots/knowledge.png" alt="The Knowledge page: learned rules with approve/dismiss and the insights playbook">
-  </div>
+  <section class="win wide" style="--tilt:-0.7deg;">
+    <div class="win-bar">
+      <span class="win-dots"><i></i><i></i><i></i></span>
+      <span class="win-title">home.png</span>
+      <span class="win-x" title="close">&#10005;</span>
+    </div>
+    <div class="win-body">
+      <img class="shot" src="screenshots/home.png" alt="The Home page: pack requests, a generated overview, the scene and weather">
+      <p class="shot-cap">the front door. it greets you, then tells you what it would look at first.</p>
+    </div>
+  </section>
 
-  <section>
-    <div class="wrap">
-      <p class="section-kicker">Why it's different</p>
-      <h2>A memory that maintains itself</h2>
+  <section class="win" style="--tilt:0.8deg;">
+    <div class="win-bar">
+      <span class="win-dots"><i></i><i></i><i></i></span>
+      <span class="win-title">why-its-different</span>
+      <span class="win-x" title="close">&#10005;</span>
+    </div>
+    <div class="win-body">
+      <p class="section-kicker">// a memory that maintains itself</p>
+      <h2>It remembers so you don't have to</h2>
       <div class="grid">
         <div class="card">
           <h3>A rulebook from your PR history</h3>
-          <p>Reviewer feedback and agents' own confessed mistakes graduate into durable rules. No manual write-ups of your team's guidelines. Internal knowledge and specific gotchas are captured automatically.</p>
+          <p>Reviewer feedback and agents' own confessed mistakes graduate into durable rules. No manual write-ups of your team's guidelines. Internal knowledge and specific gotchas get captured automatically.</p>
         </div>
         <div class="card">
           <h3>Only the rules that matter</h3>
@@ -152,7 +198,7 @@
         </div>
         <div class="card">
           <h3>Local LoRA (experimental)</h3>
-          <p>Optionally trains a small local adapter on what <em>your</em> code looks like, so your preferences ride on top of the coding agents. Experimental, opt-in, still fighting false positives. Honestly: because Anthropic won't let us fine-tune Claude.</p>
+          <p>Optionally trains a small local adapter on what <em>your</em> code looks like, so your preferences ride on top of the coding agents. Opt-in, parked, still fighting false positives. Honestly: because Anthropic won't let us fine-tune Claude.</p>
         </div>
         <div class="card">
           <h3>A plugin for anything you never want to look at again</h3>
@@ -160,12 +206,32 @@
         </div>
       </div>
     </div>
+    <span class="scrawl tr">it learns the way you nag</span>
   </section>
 
-  <section>
-    <div class="wrap">
-      <p class="section-kicker">A look around</p>
-      <h2>The pack</h2>
+  <section class="win narrow" data-closable data-closed="( a note was here. you closed it. it does not mind. )" style="--tilt:1.4deg;">
+    <div class="win-bar">
+      <span class="win-dots"><i></i><i></i><i></i></span>
+      <span class="win-title">do_not_open.txt</span>
+      <span class="win-x" title="close">&#10005;</span>
+    </div>
+    <div class="win-body">
+      <p style="color:var(--text-dim); font-family:var(--mono); font-size:0.95rem; line-height:1.8;">
+        you opened it.<br>
+        that's alright. most of them do.<br>
+        the dogs say hello. they have been waiting,<br>
+        which is a strange thing for software to do.
+      </p>
+    </div>
+  </section>
+
+  <section class="win wide" style="--tilt:-0.4deg;">
+    <div class="win-bar">
+      <span class="win-dots"><i></i><i></i><i></i></span>
+      <span class="win-title">photos/</span>
+      <span class="win-x" title="close">&#10005;</span>
+    </div>
+    <div class="win-body">
       <div class="gallery">
         <figure>
           <img src="screenshots/profiles.png" alt="Agent profiles">
@@ -185,12 +251,18 @@
         </figure>
       </div>
     </div>
+    <span class="scrawl br">the dogs. yes, they are like that.</span>
   </section>
 
-  <section>
-    <div class="wrap">
-      <p class="section-kicker">Stays yours</p>
-      <h2>For you, not your company</h2>
+  <section class="win narrow" style="--tilt:0.5deg;">
+    <div class="win-bar">
+      <span class="win-dots"><i></i><i></i><i></i></span>
+      <span class="win-title">stays.yours</span>
+      <span class="win-x" title="close">&#10005;</span>
+    </div>
+    <div class="win-body">
+      <p class="section-kicker">// for you, not your company</p>
+      <h2>It stays yours</h2>
       <ul class="stays-list">
         <li><strong>Runs locally on your laptop.</strong> Nothing leaves your machine.</li>
         <li><strong>No telemetry, no hosted account, no cloud.</strong></li>
@@ -198,12 +270,18 @@
         <li><strong>AGPL v3.</strong> Yours to read, fork, and keep.</li>
       </ul>
     </div>
+    <span class="scrawl bl">no one is watching this. for once.</span>
   </section>
 
-  <section id="start">
-    <div class="wrap">
-      <p class="section-kicker">Get started</p>
-      <h2>Two terminals, no account</h2>
+  <section class="win" id="start" style="--tilt:-0.6deg;">
+    <div class="win-bar">
+      <span class="win-dots"><i></i><i></i><i></i></span>
+      <span class="win-title">first-boot.sh</span>
+      <span class="win-x" title="close">&#10005;</span>
+    </div>
+    <div class="win-body">
+      <p class="section-kicker">// two terminals, no account</p>
+      <h2>Boot it yourself</h2>
       <p style="color:var(--text-dim); margin-bottom:18px;">Prerequisites: macOS, Python 3.10+, Node 18+, the <code>gh</code> CLI.</p>
 <pre>git clone https://github.com/bkawa-bot/planet-maiko.git
 cd planet-maiko
@@ -214,22 +292,23 @@ source .venv/bin/activate
 pip install -e .
 
 # Frontend
-cd frontend && npm install && cd ..</pre>
+cd frontend &amp;&amp; npm install &amp;&amp; cd ..</pre>
       <p style="color:var(--text-dim); margin:20px 0 8px;">Then, two terminals:</p>
 <pre># Terminal 1: backend (port 8420)
 source .venv/bin/activate
 maiko serve
 
 # Terminal 2: frontend (port 5173)
-cd frontend && npm run dev</pre>
+cd frontend &amp;&amp; npm run dev</pre>
       <p class="install-note">
-        Open <code>http://localhost:5173</code> and walk through the
-        setup wizard. The full guide (mental model, architecture,
-        plugin system, CLI reference) lives in
+        Open <code>http://localhost:5173</code> and walk through the setup
+        wizard. The full field guide (mental model, architecture, plugin
+        system, CLI reference) lives in
         <a href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/GUIDE.md">docs/GUIDE.md</a>.
       </p>
-      <div class="beta">Beta. Expect breaking changes, schema migrations, rough edges, and bugs.</div>
+      <div class="beta">beta. expect breaking changes, schema patches, rough edges, and bugs.</div>
     </div>
+    <span class="scrawl tr">it boots faster than it should</span>
   </section>
 
   <footer>
@@ -238,12 +317,67 @@ cd frontend && npm run dev</pre>
       Made by one person, in their free time, for fun.
     </p>
     <p style="margin-top:12px;">
-      <a href="https://github.com/bkawa-bot/planet-maiko">GitHub</a> &middot;
-      <a href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/GUIDE.md">Guide</a> &middot;
-      <a href="https://github.com/bkawa-bot">Brigitte Kawaguchi</a> &middot;
+      <a href="architecture.html">how it turns</a> &middot;
+      <a href="https://github.com/bkawa-bot/planet-maiko">source</a> &middot;
+      <a href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/GUIDE.md">field guide</a> &middot;
       AGPL v3
     </p>
   </footer>
+
+  <script>
+  (function () {
+    // The clock. HH:MM only. This machine does not believe in seconds.
+    var clock = document.getElementById('clock');
+    function tick() {
+      var d = new Date();
+      var h = ('0' + d.getHours()).slice(-2);
+      var m = ('0' + d.getMinutes()).slice(-2);
+      if (clock) clock.textContent = h + ':' + m;
+    }
+    tick();
+    setInterval(tick, 15000);
+
+    // The planet has moods. None of them are normal.
+    var moods = [
+      'humid, a little anxious', 'dreaming of the campfire',
+      'between thoughts', 'warm, and slightly wrong', 'listening',
+      'three dogs deep', 'quietly recompiling', 'fine. probably fine.',
+      'missing someone it never met', 'low, like a held breath'
+    ];
+    var mood = document.getElementById('mood');
+    var i = Math.floor(Math.random() * moods.length);
+    function drift() {
+      if (mood) mood.textContent = moods[i % moods.length];
+      i++;
+    }
+    drift();
+    setInterval(drift, 5500);
+
+    // Closing a window. Only the ones that can be closed. The rest just
+    // flinch, because they are load bearing and they know it.
+    document.querySelectorAll('.win-x').forEach(function (x) {
+      x.addEventListener('click', function () {
+        var win = x.closest('.win');
+        if (!win) return;
+        if (win.hasAttribute('data-closable')) {
+          win.classList.add('closed');
+        } else {
+          win.animate(
+            [{ transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' },
+             { transform: 'translateX(0)' }],
+            { duration: 180 }
+          );
+        }
+      });
+    });
+    // A closed window can be reopened. It was only resting.
+    document.querySelectorAll('[data-closable]').forEach(function (win) {
+      win.addEventListener('click', function () {
+        if (win.classList.contains('closed')) win.classList.remove('closed');
+      });
+    });
+  })();
+  </script>
 
 </body>
 </html>
