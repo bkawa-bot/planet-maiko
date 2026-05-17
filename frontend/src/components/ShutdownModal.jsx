@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Power, Moon, Loader, Check, X } from "@icons";
 import { api } from "../api/client";
+import ModalPortal from "./ModalPortal";
 import "./ShutdownModal.css";
 
 // Each step has a running line ("putting agents to bed…") and a
@@ -170,6 +171,7 @@ export default function ShutdownModal({ onClose }) {
   };
 
   return (
+    <ModalPortal>
     <div className="modal-overlay" onClick={stage === "running" ? undefined : onClose}>
       <div className={`shutdown-modal stage-${stage}`} onClick={(e) => e.stopPropagation()}>
         {stage === "loading" && (
@@ -206,6 +208,7 @@ export default function ShutdownModal({ onClose }) {
         )}
       </div>
     </div>
+    </ModalPortal>
   );
 }
 

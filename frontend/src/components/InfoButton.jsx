@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { HelpCircle, X } from "@icons";
+import ModalPortal from "./ModalPortal";
 
 export default function InfoButton({ title, children }) {
   const [open, setOpen] = useState(false);
@@ -10,6 +11,7 @@ export default function InfoButton({ title, children }) {
         <HelpCircle size={14} />
       </button>
       {open && (
+        <ModalPortal>
         <div className="modal-overlay" onClick={() => setOpen(false)}>
           <div className="info-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -22,6 +24,7 @@ export default function InfoButton({ title, children }) {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </>
   );

@@ -7,6 +7,7 @@ import { api } from "../../api/client";
 import { showToast } from "../Toast";
 import PlaybookTab from "../PlaybookTab";
 import CardAvatar from "../CardAvatar";
+import ModalPortal from "../ModalPortal";
 import "./CampfireTab.css";
 
 // Poll interval during the gather — fast enough that speech bubbles
@@ -292,6 +293,7 @@ function AgentGatherModal({ agent, decisions, onDecision, onClose }) {
   const decisionOf = (id) => decisions[id] || "keep";
 
   return (
+    <ModalPortal>
     <div className="modal-overlay" onClick={onClose}>
       <div className="campfire-modal" onClick={(e) => e.stopPropagation()}>
         <div className="campfire-modal-header">
@@ -367,6 +369,7 @@ function AgentGatherModal({ agent, decisions, onDecision, onClose }) {
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 

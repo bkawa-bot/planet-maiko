@@ -10,6 +10,7 @@ import { relativeTime } from "../../utils/dates";
 import CardAvatar from "../CardAvatar";
 import CardArt from "../CardArt";
 import ProfileDetailModal from "./ProfileDetailModal";
+import ModalPortal from "../ModalPortal";
 
 const ROLE_META = {
   coding: { icon: Code2, label: "Coder", color: "var(--pink)" },
@@ -345,6 +346,7 @@ export default function AgentsProfilesTab({
       )}
 
       {editing && (
+        <ModalPortal>
         <div className="modal-overlay" onClick={() => !editSaving && setEditing(null)}>
           <div className="agent-edit-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -439,6 +441,7 @@ export default function AgentsProfilesTab({
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
     </div>

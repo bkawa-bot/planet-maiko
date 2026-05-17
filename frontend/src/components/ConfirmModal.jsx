@@ -1,4 +1,5 @@
 import { AlertTriangle, X, Loader } from "@icons";
+import ModalPortal from "./ModalPortal";
 import "./ConfirmModal.css";
 
 /**
@@ -33,6 +34,7 @@ export default function ConfirmModal({
 }) {
   if (!open) return null;
   return (
+    <ModalPortal>
     <div className="modal-overlay" onClick={() => !busy && onCancel?.()}>
       <div className={`confirm-modal confirm-${severity}`} onClick={(e) => e.stopPropagation()}>
         <div className="confirm-banner">
@@ -61,5 +63,6 @@ export default function ConfirmModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

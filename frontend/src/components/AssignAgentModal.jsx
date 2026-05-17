@@ -4,6 +4,7 @@ import { showToast } from "./Toast";
 import { Bot, Plus, Rocket, Code2, Eye, Search } from "@icons";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import CardAvatar from "./CardAvatar";
+import ModalPortal from "./ModalPortal";
 import "./AssignAgentModal.css";
 
 // Role chip metadata so the modal can show at-a-glance what each
@@ -171,6 +172,7 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
   const isCoding = expectedRole === "coding";
 
   return (
+    <ModalPortal>
     <div className="modal-overlay" onClick={onClose}>
       <div className="assign-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
@@ -357,5 +359,6 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

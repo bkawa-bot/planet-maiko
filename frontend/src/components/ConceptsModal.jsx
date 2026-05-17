@@ -1,4 +1,5 @@
 import { X, Inbox, CheckSquare, Bot, BookOpen, Brain, Zap } from "@icons";
+import ModalPortal from "./ModalPortal";
 import "./ConceptsModal.css";
 
 /**
@@ -11,6 +12,7 @@ import "./ConceptsModal.css";
  */
 export default function ConceptsModal({ onClose }) {
   return (
+    <ModalPortal>
     <div className="modal-overlay" onClick={onClose}>
       <div className="concepts-modal" onClick={(e) => e.stopPropagation()}>
         <div className="concepts-header">
@@ -97,6 +99,7 @@ export default function ConceptsModal({ onClose }) {
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 

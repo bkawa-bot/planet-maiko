@@ -9,6 +9,7 @@ import {
   MoreHorizontal, ListTodo, Search, ExternalLink, LogicGateNot,
 } from "@icons";
 import TaskCard from "./TaskCard";
+import ModalPortal from "./ModalPortal";
 import PlanetSpinner from "./PlanetSpinner";
 import ClosingCard from "./overview/ClosingCard";
 import LearningsCard from "./overview/LearningsCard";
@@ -624,6 +625,7 @@ export default function OverviewPane() {
       )}
 
       {artifactModal && (
+        <ModalPortal>
         <div className="modal-overlay" onClick={() => setArtifactModal(null)}>
           <div className="brief-modal" onClick={(e) => e.stopPropagation()}>
             <div className="brief-modal-header">
@@ -649,6 +651,7 @@ export default function OverviewPane() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

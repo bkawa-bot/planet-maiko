@@ -1,4 +1,5 @@
 import { Brain, X } from "@icons";
+import ModalPortal from "../../components/ModalPortal";
 
 /**
  * Read-only project-plan modal — shows the plan markdown body for a
@@ -7,6 +8,7 @@ import { Brain, X } from "@icons";
 export default function ViewPlanModal({ plan, onClose }) {
   if (!plan) return null;
   return (
+    <ModalPortal>
     <div className="modal-overlay" onClick={onClose}>
       <div
         className="info-modal"
@@ -39,5 +41,6 @@ export default function ViewPlanModal({ plan, onClose }) {
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

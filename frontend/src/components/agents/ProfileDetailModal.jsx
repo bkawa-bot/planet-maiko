@@ -6,6 +6,7 @@ import { formatRepo, useDefaultOrg } from "../../utils/repo";
 import CardArt from "../CardArt";
 import RarityBadge from "../RarityBadge";
 import { useCards } from "../../hooks/useCards";
+import ModalPortal from "../ModalPortal";
 
 const ROLE_META = {
   coding: { icon: Code2, label: "Coder", color: "var(--pink)" },
@@ -51,6 +52,7 @@ export default function ProfileDetailModal({
   })();
 
   return (
+    <ModalPortal>
     <div className="modal-overlay" onClick={onClose}>
       <div className="profile-detail-modal" onClick={(e) => e.stopPropagation()}>
         <button className="btn btn-sm modal-close-btn profile-modal-close-floating" onClick={onClose}>
@@ -216,5 +218,6 @@ export default function ProfileDetailModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

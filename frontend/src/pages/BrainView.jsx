@@ -10,6 +10,7 @@ import {
 import { relativeTime } from "../utils/dates";
 import InfoButton from "../components/InfoButton";
 import ConfirmModal from "../components/ConfirmModal";
+import ModalPortal from "../components/ModalPortal";
 import BackfillProgress from "../components/BackfillProgress";
 import ClusterProgress from "../components/ClusterProgress";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
@@ -721,6 +722,7 @@ export default function BrainView() {
 
       {/* Backfill modal */}
       {showBackfillModal && (
+        <ModalPortal>
         <div className="modal-overlay" onClick={() => setShowBackfillModal(false)}>
           <div className="generated-tasks-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -774,6 +776,7 @@ export default function BrainView() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       <ConfirmModal

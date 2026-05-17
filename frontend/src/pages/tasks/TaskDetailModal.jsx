@@ -1,4 +1,5 @@
 import { FolderOpen, X, ExternalLink } from "@icons";
+import ModalPortal from "../../components/ModalPortal";
 
 /**
  * Read-only detail modal for a Task — shows description / url /
@@ -8,6 +9,7 @@ import { FolderOpen, X, ExternalLink } from "@icons";
 export default function TaskDetailModal({ task, onClose }) {
   if (!task) return null;
   return (
+    <ModalPortal>
     <div className="modal-overlay" onClick={onClose}>
       <div className="info-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
@@ -50,5 +52,6 @@ export default function TaskDetailModal({ task, onClose }) {
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

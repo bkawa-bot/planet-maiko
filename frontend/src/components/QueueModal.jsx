@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Inbox, Loader, RefreshCw, RadarSweep, X } from "@icons";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
+import ModalPortal from "./ModalPortal";
 import { relativeTime } from "../utils/dates";
 import "./QueueModal.css";
 
@@ -61,6 +62,7 @@ export default function QueueModal({ onClose }) {
   const sourceKeys = Object.keys(bySource).sort();
 
   return (
+    <ModalPortal>
     <div className="modal-overlay" onClick={onClose}>
       <div className="queue-modal" onClick={(e) => e.stopPropagation()}>
         <div className="queue-modal-header">
@@ -122,5 +124,6 @@ export default function QueueModal({ onClose }) {
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
