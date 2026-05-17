@@ -3,587 +3,419 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Planet Maiko — Your Engineering Companion</title>
-  <meta name="description" content="A personal engineering companion that unifies notifications, triages with AI, and orchestrates self-specializing coding agents.">
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <title>Planet Maiko · strange agents, strange world.</title>
+  <meta name="description" content="A local-first agent orchestrator where your AI agents are weird alien dogs that know a little too much.">
+  <meta property="og:title" content="Planet Maiko">
+  <meta property="og:description" content="strange agents, strange world. A local-first agent orchestrator where your AI agents are weird alien dogs that know a little too much.">
+  <meta property="og:image" content="screenshots/title.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'&gt;&lt;text y='14' font-size='14'&gt;🐾&lt;/text&gt;&lt;/svg&gt;">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Inconsolata:wght@400;600&display=swap">
   <style>
     :root {
-      --bg: #1e2529;
-      --bg-card: #2d363c;
-      --text: #e8ecf0;
-      --text-dim: #8b9da8;
-      --text-muted: #5f7280;
-      --pink: #F891B4;
-      --teal: #5EC4C8;
-      --orange: #FF975B;
-      --mint: #7DDBA3;
-      --blue: #89CFF0;
-      --lavender: #C3A6E8;
-      --lemon: #F9E07F;
-      --border: #374148;
+      /* Pulled from the app's night theme tokens so the site reads as
+         the same world, not a marketing skin bolted on. */
+      --bg: #1A1F4A;
+      --bg-2: #12163a;
+      --bg-card: rgba(255, 255, 255, 0.04);
+      --border: rgba(255, 255, 255, 0.10);
+      --border-soft: rgba(255, 255, 255, 0.06);
+      --text: #F4F0E8;
+      --text-dim: #B8B3D6;
+      --text-muted: #7C7AA8;
+      --pink: #FF8FB3;
+      --teal: #6FD6C9;
+      --lemon: #F5D77A;
+      --lavender: #B59DD8;
+      --mint: #8FE0B0;
+      --peach: #FFB38A;
+      --font: 'Atkinson Hyperlegible', -apple-system, 'Segoe UI', sans-serif;
+      --display: 'Bricolage Grotesque', var(--font);
+      --mono: 'Inconsolata', ui-monospace, monospace;
     }
-
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
+    html { scroll-behavior: smooth; }
     body {
-      background: var(--bg);
+      background:
+        radial-gradient(900px 600px at 80% -10%, rgba(181,157,216,0.16), transparent 60%),
+        radial-gradient(800px 600px at 10% 10%, rgba(255,143,179,0.10), transparent 55%),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+      background-attachment: fixed;
       color: var(--text);
-      font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
-      font-size: 16px;
-      line-height: 1.6;
-      overflow-x: hidden;
+      font-family: var(--font);
+      font-size: 17px;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
     }
-
     a { color: var(--teal); text-decoration: none; }
     a:hover { text-decoration: underline; }
-    code { font-family: 'SF Mono', 'Fira Code', monospace; background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
-
-    /* === Hero === */
-    .hero {
-      text-align: center;
-      padding: 80px 24px 60px;
-      max-width: 800px;
-      margin: 0 auto;
+    code, .mono { font-family: var(--mono); }
+    code {
+      background: rgba(255,255,255,0.07);
+      padding: 2px 7px; border-radius: 5px;
+      font-size: 0.92em; color: var(--peach);
     }
-    .hero-logo {
-      width: 80px;
-      height: 80px;
-      border-radius: 20px;
-      image-rendering: pixelated;
+    .wrap { max-width: 940px; margin: 0 auto; padding: 0 24px; }
+    section { padding: 64px 0; }
+    h2 {
+      font-family: var(--display);
+      font-size: 1.9rem; font-weight: 700;
+      letter-spacing: 0.01em; margin-bottom: 8px;
+    }
+    .section-kicker {
+      font-family: var(--mono);
+      font-size: 0.78rem; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--text-muted);
       margin-bottom: 24px;
     }
+
+    /* Hero */
+    .hero { text-align: center; padding: 96px 24px 40px; }
+    .hero .paw { font-size: 2.4rem; }
     .hero h1 {
-      font-size: 2.8em;
-      font-weight: 900;
-      letter-spacing: -0.02em;
-      margin-bottom: 8px;
+      font-family: var(--display);
+      font-size: clamp(2.6rem, 7vw, 4.4rem);
+      font-weight: 700; letter-spacing: 0.005em;
+      margin: 10px 0 6px;
     }
-    .hero h1 span {
-      background: linear-gradient(90deg, var(--pink), var(--orange), var(--teal));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+    .tagline {
+      font-style: italic; color: var(--lavender);
+      font-size: 1.15rem; letter-spacing: 0.02em;
+      margin-bottom: 22px;
     }
-    .hero-sub {
-      font-size: 1.2em;
-      color: var(--text-dim);
-      margin-bottom: 32px;
-      max-width: 600px;
-      margin-left: auto;
-      margin-right: auto;
+    .hero-lede {
+      max-width: 620px; margin: 0 auto 30px;
+      color: var(--text-dim); font-size: 1.12rem;
     }
-    .hero-badges {
-      display: flex;
-      gap: 8px;
-      justify-content: center;
-      flex-wrap: wrap;
-      margin-bottom: 40px;
-    }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 0.8em;
-      font-weight: 600;
-      border: 1px solid var(--border);
-      color: var(--text-dim);
-    }
-    .badge-pink { border-color: rgba(248,145,180,0.3); color: var(--pink); }
-    .badge-teal { border-color: rgba(94,196,200,0.3); color: var(--teal); }
-    .badge-orange { border-color: rgba(255,151,91,0.3); color: var(--orange); }
-    .badge-mint { border-color: rgba(125,219,163,0.3); color: var(--mint); }
-
-    .hero-cta {
-      display: flex;
-      gap: 12px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
+    .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
     .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 12px 24px;
-      border-radius: 12px;
-      font-size: 0.95em;
-      font-weight: 600;
-      border: none;
-      cursor: pointer;
-      transition: all 0.2s;
-      text-decoration: none;
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 12px 22px; border-radius: 12px;
+      font-family: var(--font); font-weight: 700; font-size: 0.98rem;
+      cursor: pointer; transition: transform 0.15s ease, background 0.15s ease;
+      border: 1px solid transparent;
     }
-    .btn-primary {
-      background: var(--teal);
-      color: #1e2529;
-    }
-    .btn-primary:hover { opacity: 0.9; text-decoration: none; transform: translateY(-1px); }
-    .btn-secondary {
-      background: var(--bg-card);
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
-    .btn-secondary:hover { border-color: var(--teal); text-decoration: none; }
+    .btn:hover { text-decoration: none; transform: translateY(-1px); }
+    .btn-primary { background: var(--pink); color: #2a1730; }
+    .btn-ghost { background: var(--bg-card); color: var(--text); border-color: var(--border); }
+    .btn-ghost:hover { border-color: var(--pink); }
 
-    /* === Screenshot === */
-    .screenshot-section {
-      max-width: 1000px;
-      margin: 0 auto 80px;
-      padding: 0 24px;
+    .shot {
+      display: block; width: 100%; height: auto;
+      border-radius: 16px; border: 1px solid var(--border);
+      box-shadow: 0 18px 60px rgba(0,0,0,0.45);
     }
-    .screenshot-placeholder {
-      width: 100%;
-      aspect-ratio: 16/9;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-muted);
-      font-size: 0.9em;
-      box-shadow: 0 8px 40px rgba(0,0,0,0.3);
-    }
-    .screenshot-placeholder img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      border-radius: 16px;
-    }
+    .shot-wrap { max-width: 1000px; margin: 0 auto; padding: 0 24px; }
 
-    /* === Features === */
-    .features {
-      max-width: 1000px;
-      margin: 0 auto 80px;
-      padding: 0 24px;
+    .lede-quote {
+      font-size: 1.22rem; line-height: 1.7; color: var(--text);
+      border-left: 3px solid var(--pink); padding-left: 20px;
+      max-width: 720px;
     }
-    .features h2 {
-      text-align: center;
-      font-size: 2em;
-      margin-bottom: 40px;
-    }
-    .feature-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 16px;
-    }
-    .feature-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 24px;
-      transition: all 0.2s;
-    }
-    .feature-card:hover {
-      border-color: var(--teal);
-      transform: translateY(-2px);
-      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-    }
-    .feature-icon {
-      font-size: 1.6em;
-      margin-bottom: 12px;
-    }
-    .feature-card h3 {
-      font-size: 1.05em;
-      margin-bottom: 8px;
-    }
-    .feature-card p {
-      color: var(--text-dim);
-      font-size: 0.9em;
-      line-height: 1.5;
-    }
+    .lede-quote span { color: var(--text-muted); }
 
-    /* === Architecture === */
-    .architecture {
-      max-width: 800px;
-      margin: 0 auto 80px;
-      padding: 0 24px;
+    /* Concept grid (mental model) */
+    .grid {
+      display: grid; gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     }
-    .architecture h2 {
-      text-align: center;
-      font-size: 2em;
-      margin-bottom: 16px;
+    .card {
+      background: var(--bg-card); border: 1px solid var(--border-soft);
+      border-radius: 14px; padding: 22px;
+      transition: border-color 0.15s ease, transform 0.15s ease;
     }
-    .architecture-sub {
-      text-align: center;
-      color: var(--text-dim);
-      margin-bottom: 40px;
+    .card:hover { border-color: var(--border); transform: translateY(-2px); }
+    .card h3 {
+      font-size: 1.05rem; margin-bottom: 6px;
+      display: flex; align-items: baseline; gap: 8px;
     }
-    .arch-block {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 24px;
-      margin-bottom: 16px;
+    .card h3 .dot {
+      width: 8px; height: 8px; border-radius: 50%; flex: none;
     }
-    .arch-block h3 {
-      font-size: 1em;
-      margin-bottom: 8px;
-      color: var(--teal);
-    }
-    .arch-block p {
-      color: var(--text-dim);
-      font-size: 0.9em;
-    }
-    .arch-pipeline {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 12px;
-    }
-    .pipe-step {
-      padding: 4px 12px;
-      border-radius: 8px;
-      font-size: 0.8em;
-      font-weight: 600;
-      background: rgba(94,196,200,0.1);
-      color: var(--teal);
-      border: 1px solid rgba(94,196,200,0.2);
-    }
+    .card p { color: var(--text-dim); font-size: 0.96rem; }
+    .card em { color: var(--text); font-style: italic; }
 
-    /* === Tech Stack === */
-    .stack {
-      max-width: 800px;
-      margin: 0 auto 80px;
-      padding: 0 24px;
+    /* Flow steps */
+    .flow { display: flex; flex-direction: column; gap: 0; }
+    .flow-step {
+      display: flex; gap: 16px; padding: 18px 0;
+      border-bottom: 1px dashed var(--border-soft);
     }
-    .stack h2 {
-      text-align: center;
-      font-size: 2em;
-      margin-bottom: 32px;
+    .flow-step:last-child { border-bottom: none; }
+    .flow-num {
+      font-family: var(--mono); font-size: 0.85rem; font-weight: 600;
+      color: var(--teal); flex: none; width: 28px; padding-top: 2px;
     }
-    .stack-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 12px;
-    }
-    .stack-item {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 16px;
-      text-align: center;
-    }
-    .stack-item strong {
-      display: block;
-      margin-bottom: 4px;
-    }
-    .stack-item span {
-      color: var(--text-muted);
-      font-size: 0.85em;
-    }
+    .flow-step h3 { font-size: 1.02rem; margin-bottom: 3px; }
+    .flow-step p { color: var(--text-dim); font-size: 0.96rem; }
 
-    /* === Install === */
-    .install {
-      max-width: 700px;
-      margin: 0 auto 80px;
-      padding: 0 24px;
-    }
-    .install h2 {
-      text-align: center;
-      font-size: 2em;
-      margin-bottom: 32px;
-    }
-    .install-steps {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      overflow: hidden;
-    }
-    .install-step {
-      padding: 20px 24px;
-      border-bottom: 1px solid var(--border);
-    }
-    .install-step:last-child { border-bottom: none; }
-    .install-step-num {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      background: var(--teal);
-      color: #1e2529;
-      font-size: 0.8em;
-      font-weight: 700;
-      margin-right: 10px;
-    }
-    .install-step h4 {
-      display: inline;
-      font-size: 0.95em;
-    }
-    .install-step pre {
-      margin-top: 10px;
-      background: rgba(0,0,0,0.2);
-      padding: 12px 16px;
-      border-radius: 8px;
-      font-size: 0.85em;
-      overflow-x: auto;
-      color: var(--text-dim);
-      font-family: 'SF Mono', 'Fira Code', monospace;
-    }
-
-    /* === Footer === */
-    .footer {
-      text-align: center;
-      padding: 40px 24px;
-      border-top: 1px solid var(--border);
-      color: var(--text-muted);
-      font-size: 0.85em;
-    }
-    .footer a { color: var(--text-dim); }
-
-    /* === Screenshots Gallery === */
+    /* Gallery */
     .gallery {
-      max-width: 1000px;
-      margin: 0 auto 80px;
-      padding: 0 24px;
+      display: grid; gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     }
-    .gallery h2 {
-      text-align: center;
-      font-size: 2em;
-      margin-bottom: 32px;
+    .gallery figure {
+      background: var(--bg-card); border: 1px solid var(--border-soft);
+      border-radius: 14px; overflow: hidden;
     }
-    .gallery-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 16px;
+    .gallery img { width: 100%; height: auto; display: block; }
+    .gallery figcaption {
+      padding: 12px 16px; font-size: 0.9rem; color: var(--text-dim);
     }
-    .gallery-item {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      overflow: hidden;
+
+    /* Install */
+    pre {
+      background: rgba(0,0,0,0.28); border: 1px solid var(--border-soft);
+      padding: 16px 18px; border-radius: 12px;
+      font-family: var(--mono); font-size: 0.9rem;
+      color: var(--text-dim); overflow-x: auto; line-height: 1.7;
     }
-    .gallery-item img {
-      width: 100%;
-      aspect-ratio: 16/10;
-      object-fit: cover;
+    .install-note {
+      margin-top: 14px; font-size: 0.92rem; color: var(--text-muted);
     }
-    .gallery-caption {
-      padding: 12px 16px;
-      font-size: 0.85em;
-      color: var(--text-dim);
+
+    .stays-list { list-style: none; display: grid; gap: 10px; }
+    .stays-list li {
+      padding-left: 24px; position: relative; color: var(--text-dim);
     }
-    .gallery-placeholder {
-      width: 100%;
-      aspect-ratio: 16/10;
-      background: rgba(255,255,255,0.03);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-muted);
-      font-size: 0.85em;
+    .stays-list li::before {
+      content: "🐾"; position: absolute; left: 0; font-size: 0.9rem;
+    }
+    .stays-list strong { color: var(--text); }
+
+    footer {
+      text-align: center; padding: 50px 24px;
+      border-top: 1px solid var(--border-soft);
+      color: var(--text-muted); font-size: 0.92rem;
+    }
+    footer a { color: var(--text-dim); }
+    .beta {
+      display: inline-block; margin-top: 14px; padding: 6px 14px;
+      border: 1px solid var(--border); border-radius: 999px;
+      font-size: 0.82rem; color: var(--lemon);
     }
   </style>
 </head>
 <body>
 
-  <!-- Hero -->
-  <section class="hero">
-    <img src="../frontend/public/icon.png" alt="Planet Maiko" class="hero-logo">
-    <h1><span>Planet Maiko</span></h1>
-    <p class="hero-sub">
-      A personal engineering companion that unifies your notifications, triages with AI, and orchestrates self-specializing coding agents.
+  <header class="hero">
+    <div class="paw">🐾</div>
+    <h1>Planet Maiko</h1>
+    <p class="tagline">strange agents, strange world.</p>
+    <p class="hero-lede">
+      A local-first agent orchestrator where your AI agents are weird
+      alien dogs that know a little too much.
     </p>
-    <div class="hero-badges">
-      <span class="badge badge-teal">Self-Learning</span>
-      <span class="badge badge-pink">Focus Mode</span>
-      <span class="badge badge-orange">Agent Orchestration</span>
-      <span class="badge badge-mint">Open Source</span>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/bkawa-bot/planet-maiko">View on GitHub</a>
+      <a class="btn btn-ghost" href="#start">Get started</a>
     </div>
-    <div class="hero-cta">
-      <a href="https://github.com/bkawa-bot/planet-maiko" class="btn btn-primary">View on GitHub</a>
-      <a href="#install" class="btn btn-secondary">Get Started</a>
+  </header>
+
+  <div class="shot-wrap">
+    <img class="shot" src="screenshots/title.png" alt="Planet Maiko">
+  </div>
+
+  <section>
+    <div class="wrap">
+      <p class="lede-quote">
+        We live in strange times, and yet our dev tools are so painfully
+        un-strange. No one knows what being a software engineer will be
+        like in a year, or even a month. <span>If we are all tokenmaxxing
+        to our own inevitable obsolescence, we might as well have fun.</span>
+      </p>
     </div>
   </section>
 
-  <!-- Main Screenshot -->
-  <section class="screenshot-section">
-    <div class="screenshot-placeholder">
-      <!-- Replace with: <img src="screenshots/home.png" alt="Planet Maiko Dashboard"> -->
-      Screenshot: Home Dashboard
-    </div>
-  </section>
+  <div class="shot-wrap">
+    <img class="shot" src="screenshots/home.png" alt="The Home page: pack requests, a generated overview, the scene and weather">
+  </div>
 
-  <!-- Features -->
-  <section class="features">
-    <h2>Features</h2>
-    <div class="feature-grid">
-      <div class="feature-card">
-        <div class="feature-icon" style="color: var(--blue)">&#9993;</div>
-        <h3>Unified Inbox</h3>
-        <p>GitHub PRs, Linear issues, Calendar events, and agent updates in one stream. Smart filtering by source, priority, and type.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon" style="color: var(--teal)">&#9881;</div>
-        <h3>CPU-Style Brain</h3>
-        <p>5-phase processing pipeline: agent monitoring, conflict detection, incident correlation, rule-based triage, and learning. Rules handle 80% for free.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon" style="color: var(--lavender)">&#9733;</div>
-        <h3>Self-Specializing Agents</h3>
-        <p>Agents are context strategies, not personas. Pups explore with random learning sets, seniors exploit proven ones. Context sets graduate via LoRA-eval scoring against merged PR code.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon" style="color: var(--mint)">&#10003;</div>
-        <h3>Self-Learning System</h3>
-        <p>Signals from PR comments graduate into active rules. Per-repo LoRA adapters train on the accumulated rules. Context optimization tracks what actually works.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon" style="color: var(--pink)">&#9829;</div>
-        <h3>Focus Mode</h3>
-        <p>Gate notifications by your state: available, soft focus, deep focus, away. Held items escalate over time. Maiko respects your attention.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon" style="color: var(--orange)">&#9883;</div>
-        <h3>Configurable Skills</h3>
-        <p>Morning briefs, brainstorms, investigations, repo analysis. Schedule skills to run automatically. Results become notifications from Maiko.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon" style="color: var(--lemon)">&#9788;</div>
-        <h3>Live Scene Engine</h3>
-        <p>Dynamic pixel-art backgrounds based on real weather, time of day, season, and holidays. Live weather via Open-Meteo. Maiko changes outfits.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon" style="color: var(--blue)">&#9875;</div>
-        <h3>Pluggable Everything</h3>
-        <p>Pollers, runtimes, rules, and skills are all plugin-based via Python entry points. Default runtime is Claude Code. Bring your own brain.</p>
+  <section>
+    <div class="wrap">
+      <p class="section-kicker">The mental model</p>
+      <h2>Six things, and how they move</h2>
+      <p style="color:var(--text-dim); max-width:640px; margin-bottom:26px;">
+        Maiko shuffles data between a few core concepts. Knowing which
+        is which makes every page legible.
+      </p>
+      <div class="grid">
+        <div class="card">
+          <h3><span class="dot" style="background:var(--blue,#89cff0)"></span>Pupdates</h3>
+          <p><em>Things to notice.</em> Notifications from your pollers (GitHub, Linear, Calendar, PagerDuty) plus internal events. The brain cycle triages them into everything below.</p>
+        </div>
+        <div class="card">
+          <h3><span class="dot" style="background:var(--lemon)"></span>Tasks</h3>
+          <p><em>Things to finish.</em> Typed in, created from actionable pupdates, or spawned by automation rules. An agent can be assigned.</p>
+        </div>
+        <div class="card">
+          <h3><span class="dot" style="background:var(--pink)"></span>Agents</h3>
+          <p><em>Your pack.</em> Characters with a name, an avatar, a role, and a scope. They run in isolated git worktrees with their own <code>CLAUDE.md</code>.</p>
+        </div>
+        <div class="card">
+          <h3><span class="dot" style="background:var(--mint)"></span>Insights</h3>
+          <p><em>Tribal knowledge your agents inherit.</em> Short notes like "the CLI test runner is broken, use the IDE." Approved ones inject into every new agent.</p>
+        </div>
+        <div class="card">
+          <h3><span class="dot" style="background:var(--lavender)"></span>Learnings</h3>
+          <p><em>Coding rules, retrieved when relevant.</em> Extracted from your PR review history. Review agents pull only the ones relevant to the diff in front of them.</p>
+        </div>
+        <div class="card">
+          <h3><span class="dot" style="background:var(--teal)"></span>Automations</h3>
+          <p><em>when &rarr; then rules.</em> "When a PR I'm tagged on goes stale, leave me a memo." No LLM in the trigger layer, just predicates.</p>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- Screenshots Gallery -->
-  <section class="gallery">
-    <h2>Screenshots</h2>
-    <div class="gallery-grid">
-      <div class="gallery-item">
-        <div class="gallery-placeholder">Home (Night Theme)</div>
-        <div class="gallery-caption">Dashboard with focus tasks, notifications, live weather, and calendar</div>
-      </div>
-      <div class="gallery-item">
-        <div class="gallery-placeholder">Inbox</div>
-        <div class="gallery-caption">Unified notification stream with From Maiko suggestions</div>
-      </div>
-      <div class="gallery-item">
-        <div class="gallery-placeholder">Tasks</div>
-        <div class="gallery-caption">Projects and tasks with AI generation and agent assignment</div>
-      </div>
-      <div class="gallery-item">
-        <div class="gallery-placeholder">Agents</div>
-        <div class="gallery-caption">Active agents, profiles, message threads, and Pack Insights</div>
-      </div>
-      <div class="gallery-item">
-        <div class="gallery-placeholder">Brain (Knowledge)</div>
-        <div class="gallery-caption">Learned rules with confidence scores and approval workflow</div>
-      </div>
-      <div class="gallery-item">
-        <div class="gallery-placeholder">Sunset Theme</div>
-        <div class="gallery-caption">Civil twilight periwinkle theme with pixel-art dusk scene</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Architecture -->
-  <section class="architecture">
-    <h2>Architecture</h2>
-    <p class="architecture-sub">Modeled on a CPU — each brain cycle processes through a pipeline</p>
-
-    <div class="arch-block">
-      <h3>Brain Cycle (every 5 min)</h3>
-      <div class="arch-pipeline">
-        <span class="pipe-step">Agent Monitor</span>
-        <span class="pipe-step">Conflict Detection</span>
-        <span class="pipe-step">Correlator</span>
-        <span class="pipe-step">Pupdate Processor</span>
-        <span class="pipe-step">Learning</span>
-      </div>
-    </div>
-
-    <div class="arch-block">
-      <h3>Agent Context Loop</h3>
-      <p>Task arrives &rarr; compile learning brief for agent's specialization &rarr; agent works with personalized context &rarr; outcome recorded &rarr; specialization scores update &rarr; next task gets better-targeted learnings.</p>
-    </div>
-
-    <div class="arch-block">
-      <h3>Self-Learning Pipeline</h3>
-      <p>PR comments become signals &rarr; signals aggregate into learnings &rarr; learnings graduate at confidence thresholds &rarr; active rules compiled into agent briefs.</p>
-    </div>
-  </section>
-
-  <!-- Tech Stack -->
-  <section class="stack">
-    <h2>Tech Stack</h2>
-    <div class="stack-grid">
-      <div class="stack-item">
-        <strong>Backend</strong>
-        <span>Flask + SQLAlchemy + SQLite</span>
-      </div>
-      <div class="stack-item">
-        <strong>Frontend</strong>
-        <span>React 19 + Vite</span>
-      </div>
-      <div class="stack-item">
-        <strong>AI Runtime</strong>
-        <span>Claude Code (pluggable)</span>
-      </div>
-      <div class="stack-item">
-        <strong>Integrations</strong>
-        <span>GitHub, Linear, Calendar</span>
-      </div>
-      <div class="stack-item">
-        <strong>Weather</strong>
-        <span>Open-Meteo (free, no key)</span>
-      </div>
-      <div class="stack-item">
-        <strong>License</strong>
-        <span>LGPL v2.1</span>
+  <section>
+    <div class="wrap">
+      <p class="section-kicker">How agents work</p>
+      <h2>Hand off a task, read a diff, never open a terminal</h2>
+      <div class="flow">
+        <div class="flow-step">
+          <div class="flow-num">01</div>
+          <div>
+            <h3>Worktree-isolated kickoff</h3>
+            <p>Assign an agent and Maiko prepares a git worktree with <code>TASK.md</code>, a <code>CLAUDE.md</code> (role protocol + character + active team insights), and the project's MCPs. Siblings never step on each other.</p>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">02</div>
+          <div>
+            <h3>It works, then talks back over the CLI</h3>
+            <p>The agent commits to its branch and calls <code>maiko reply</code> from inside the worktree. The talk-back path is shell commands, not MCP tools, so the same loop runs under headless Claude, interactive Claude in tmux, or a local Ollama model.</p>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">03</div>
+          <div>
+            <h3>Review the diff in-app</h3>
+            <p>Read the diff, leave inline comments, approve or request changes. Request changes and the agent auto-wakes, reads your comments, and iterates. A single lock guarantees two triggers can't race.</p>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">04</div>
+          <div>
+            <h3>The campfire</h3>
+            <p>At end of day the pack gathers and shares what it learned. Feedback becomes Learnings, insights become the playbook. You approve what sticks. Tomorrow's pack wakes smarter.</p>
+          </div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- Install -->
-  <section class="install" id="install">
-    <h2>Get Started</h2>
-    <div class="install-steps">
-      <div class="install-step">
-        <span class="install-step-num">1</span>
-        <h4>Clone & install</h4>
-        <pre>git clone https://github.com/bkawa-bot/planet-maiko.git
+  <div class="shot-wrap">
+    <img class="shot" src="screenshots/knowledge.png" alt="The Knowledge page: learned rules with approve/dismiss and the insights playbook">
+  </div>
+
+  <section>
+    <div class="wrap">
+      <p class="section-kicker">Why it's different</p>
+      <h2>A memory that maintains itself</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>A rulebook from your PR history</h3>
+          <p>Reviewer feedback and agents' own confessed mistakes graduate into durable rules. No manual write-ups of your team's guidelines. Internal knowledge and specific gotchas are captured automatically.</p>
+        </div>
+        <div class="card">
+          <h3>Only the rules that matter</h3>
+          <p>Learnings are semantically embedded and keyed by the situations they apply to. An agent describes what it's doing and gets back just what's relevant, so a pool of hundreds of nits never overwhelms a prompt.</p>
+        </div>
+        <div class="card">
+          <h3>Local LoRA (experimental)</h3>
+          <p>Optionally trains a small local adapter on what <em>your</em> code looks like, so your preferences ride on top of the coding agents. Experimental, opt-in, still fighting false positives. Honestly: because Anthropic won't let us fine-tune Claude.</p>
+        </div>
+        <div class="card">
+          <h3>A plugin for anything you never want to look at again</h3>
+          <p>Drop a <code>.py</code> file in <code>~/.maiko/plugins/</code>. Pollers, automation actions, setup buttons, brain-cycle hooks. The instant another tool starts yelling at you, make Maiko deal with it instead.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <p class="section-kicker">A look around</p>
+      <h2>The pack</h2>
+      <div class="gallery">
+        <figure>
+          <img src="screenshots/profiles.png" alt="Agent profiles">
+          <figcaption>Each agent is a character sheet: name, avatar, role, a bio it wrote when it arrived.</figcaption>
+        </figure>
+        <figure>
+          <img src="screenshots/active.png" alt="Active agents">
+          <figcaption>The active pack with live state, what each one's chewing on, and the diff waiting for you.</figcaption>
+        </figure>
+        <figure>
+          <img src="screenshots/rule.png" alt="A learned rule">
+          <figcaption>A rule the system extracted from review history, with the scenarios it applies to.</figcaption>
+        </figure>
+        <figure>
+          <img src="screenshots/avatars.png" alt="Agent avatars">
+          <figcaption>The agents are weird alien dogs. Because why not.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <p class="section-kicker">Stays yours</p>
+      <h2>For you, not your company</h2>
+      <ul class="stays-list">
+        <li><strong>Runs locally on your laptop.</strong> Nothing leaves your machine.</li>
+        <li><strong>No telemetry, no hosted account, no cloud.</strong></li>
+        <li><strong>No venture capitalism, no productivity-maxxing</strong> (unless you want). Not trying to make money, not trying to maximize the value you bring to your employer.</li>
+        <li><strong>AGPL v3.</strong> Yours to read, fork, and keep.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="start">
+    <div class="wrap">
+      <p class="section-kicker">Get started</p>
+      <h2>Two terminals, no account</h2>
+      <p style="color:var(--text-dim); margin-bottom:18px;">Prerequisites: macOS, Python 3.10+, Node 18+, the <code>gh</code> CLI.</p>
+<pre>git clone https://github.com/bkawa-bot/planet-maiko.git
 cd planet-maiko
-pip install -e .</pre>
-      </div>
-      <div class="install-step">
-        <span class="install-step-num">2</span>
-        <h4>Install frontend</h4>
-        <pre>cd frontend
-npm install
-cd ..</pre>
-      </div>
-      <div class="install-step">
-        <span class="install-step-num">3</span>
-        <h4>Run (two terminals)</h4>
-        <pre># Terminal 1
+
+# Backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+
+# Frontend
+cd frontend && npm install && cd ..</pre>
+      <p style="color:var(--text-dim); margin:20px 0 8px;">Then, two terminals:</p>
+<pre># Terminal 1: backend (port 8420)
+source .venv/bin/activate
 maiko serve
 
-# Terminal 2
+# Terminal 2: frontend (port 5173)
 cd frontend && npm run dev</pre>
-      </div>
-      <div class="install-step">
-        <span class="install-step-num">4</span>
-        <h4>Open & configure</h4>
-        <pre>Open http://localhost:5173
-Go to Settings to connect GitHub, Linear, Calendar, and weather.</pre>
-      </div>
+      <p class="install-note">
+        Open <code>http://localhost:5173</code> and walk through the
+        setup wizard. The full guide (mental model, architecture,
+        plugin system, CLI reference) lives in
+        <a href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/GUIDE.md">docs/GUIDE.md</a>.
+      </p>
+      <div class="beta">Beta. Expect breaking changes, schema migrations, rough edges, and bugs.</div>
     </div>
   </section>
 
-  <!-- Footer -->
-  <footer class="footer">
+  <footer>
     <p>
-      Created by <a href="https://github.com/bkawa-bot">Brigitte Kawaguchi</a> &middot;
+      Planet Maiko is named lovingly after a real dog named Maiko.<br>
+      Made by one person, in their free time, for fun.
+    </p>
+    <p style="margin-top:12px;">
       <a href="https://github.com/bkawa-bot/planet-maiko">GitHub</a> &middot;
-      LGPL v2.1
+      <a href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/GUIDE.md">Guide</a> &middot;
+      <a href="https://github.com/bkawa-bot">Brigitte Kawaguchi</a> &middot;
+      AGPL v3
     </p>
   </footer>
 
