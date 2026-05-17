@@ -238,11 +238,12 @@ h2 {
   box-shadow: var(--raise);
 }
 .win-bar::before {
-  content: "🐾"; flex: none;
+  content: ""; flex: none;
   width: 26px; height: 22px; margin-left: 4px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.95rem;
-  background: rgba(255,255,255,0.5); box-shadow: var(--raise);
+  background: rgba(255,255,255,0.5)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='6' fill='%23FF8FB3'/%3E%3Cellipse cx='12' cy='12' rx='10.5' ry='3.6' fill='none' stroke='%23F5D77A' stroke-width='1.7' transform='rotate(-22 12 12)'/%3E%3C/svg%3E")
+    center / 15px no-repeat;
+  box-shadow: var(--raise);
 }
 .win-title {
   flex: 1; order: 2; text-align: left;
@@ -408,7 +409,10 @@ pre {
   padding-left: 26px; position: relative; color: var(--text-dim);
 }
 .stays-list li::before {
-  content: "🐾"; position: absolute; left: 0; font-size: 0.9rem;
+  content: ""; position: absolute; left: 0; top: 3px;
+  width: 15px; height: 15px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='6' fill='%23FF8FB3'/%3E%3Cellipse cx='12' cy='12' rx='10.5' ry='3.6' fill='none' stroke='%23F5D77A' stroke-width='1.7' transform='rotate(-22 12 12)'/%3E%3C/svg%3E")
+    center / contain no-repeat;
 }
 .stays-list strong { color: var(--text); }
 
