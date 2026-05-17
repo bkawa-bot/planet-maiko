@@ -780,10 +780,17 @@ a:hover { text-decoration: underline; }
 .mono { font-family: var(--font-mono); }
 
 /* === Modals (global) === */
+/* Anchored near the top of the viewport, not centered. Centering put
+   the modal in the middle of a tall page/pane, which on a long list
+   sat very low or off screen. Top + padding keeps it reachable; the
+   overlay scrolls if a modal is taller than the viewport. (Modals
+   also need ModalPortal so `position: fixed` resolves to the viewport
+   and not a backdrop-filtered pane.) */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.5);
-  z-index: 500; display: flex; align-items: center; justify-content: center;
-  padding: 20px; animation: fadeIn 0.15s ease;
+  z-index: 500; display: flex; align-items: flex-start; justify-content: center;
+  padding: 64px 20px 24px; animation: fadeIn 0.15s ease;
+  overflow-y: auto;
 }
 
 .modal-overlay > div {

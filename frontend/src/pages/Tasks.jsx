@@ -5,6 +5,7 @@ import AssignAgentModal from "../components/AssignAgentModal";
 import TaskCard from "../components/TaskCard";
 import ViewPlanModal from "./tasks/ViewPlanModal";
 import TaskDetailModal from "./tasks/TaskDetailModal";
+import ModalPortal from "../components/ModalPortal";
 import { formatRepo, useDefaultOrg, useConfiguredRepos } from "../utils/repo";
 import {
   CheckSquare, Plus, FolderPlus, FolderOpen, ExternalLink,
@@ -160,6 +161,7 @@ export default function Tasks() {
 
       {/* Task creation modal */}
       {showTaskForm && (
+        <ModalPortal>
         <div className="modal-overlay" onClick={() => setShowTaskForm(false)}>
           <div className="generated-tasks-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -222,10 +224,12 @@ export default function Tasks() {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Project creation modal */}
       {showProjectForm && (
+        <ModalPortal>
         <div className="modal-overlay" onClick={() => setShowProjectForm(false)}>
           <div className="generated-tasks-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -249,6 +253,7 @@ export default function Tasks() {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {activeTasks.length === 0 && !showTaskForm && !showProjectForm ? (
@@ -381,6 +386,7 @@ export default function Tasks() {
 
       {/* Plan editor — review + edit generated tasks before approval */}
       {generatedTasks && (
+        <ModalPortal>
         <div className="modal-overlay" onClick={() => setGeneratedTasks(null)}>
           <div className="plan-editor" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -639,10 +645,12 @@ export default function Tasks() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Edit task modal */}
       {editingTask && (
+        <ModalPortal>
         <div className="modal-overlay" onClick={() => setEditingTask(null)}>
           <div className="generated-tasks-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -754,6 +762,7 @@ export default function Tasks() {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       <ViewPlanModal plan={viewingPlan} onClose={() => setViewingPlan(null)} />

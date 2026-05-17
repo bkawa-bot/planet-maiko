@@ -9,6 +9,7 @@ import {
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import { relativeTime } from "../utils/dates";
 import AutomationEditor from "../components/AutomationEditor";
+import ModalPortal from "../components/ModalPortal";
 import "./Automations.css";
 
 const ICON_MAP = {
@@ -174,6 +175,7 @@ export default function Automations() {
 
       {/* Create modal */}
       {showCreate && (
+        <ModalPortal>
         <div className="modal-overlay" onClick={() => setShowCreate(false)}>
           <div className="specialty-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
@@ -211,6 +213,7 @@ export default function Automations() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       <div className="specialties-grid">
@@ -230,6 +233,7 @@ export default function Automations() {
       </div>
 
       {selected && (
+        <ModalPortal>
         <div className="modal-overlay" onClick={() => { setSelected(null); setResult(null); }}>
           <div className="specialty-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -297,6 +301,7 @@ export default function Automations() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

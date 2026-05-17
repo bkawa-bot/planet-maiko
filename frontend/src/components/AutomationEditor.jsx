@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { X, Plus, Trash2, Loader, Save } from "@icons";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
+import ModalPortal from "./ModalPortal";
 import "./AutomationEditor.css";
 import {
   GroupedOptions,
@@ -235,6 +236,7 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
   };
 
   return (
+    <ModalPortal>
     <div className="modal-overlay" onClick={onClose}>
       <div className="automation-editor" onClick={(e) => e.stopPropagation()}>
         <div className="automation-editor-header">
@@ -389,6 +391,7 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
