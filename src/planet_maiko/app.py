@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 _PATCH_COLUMNS = [
     ("agent_messages", "recipient", "VARCHAR(50)"),
     ("custom_skills", "deleted_at", "DATETIME"),
+    ("custom_skills", "user_edited", "BOOLEAN DEFAULT 0"),
+    ("custom_skills", "needs_worktree", "BOOLEAN DEFAULT 0"),
+    ("custom_skills", "last_run_at", "DATETIME"),
 ]
 
 
