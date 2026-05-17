@@ -79,40 +79,49 @@ No venture capitalism, no productivity-maxxing (unless you want). I am not tryin
 
 ## Install
 
+macOS only. This gets you a real double-click app.
+
 ### Prerequisites
 
-- Mac OS
-- Python 3.10+
-- Node.js 18+
-- `gh` CLI
+- macOS
+- Xcode command line tools: `xcode-select --install`
+- [Homebrew](https://brew.sh), then `brew install node gh pipx`
+- Rust, to compile the app shell: [rustup.rs](https://rustup.rs)
+- Claude Code (the agent runtime), installed and on your PATH
 
-### Install
+### Build the app
 
 ```bash
 git clone https://github.com/bkawa-bot/planet-maiko.git
 cd planet-maiko
 
-# Backend
-python3 -m venv .venv
-source .venv/bin/activate    # Windows: .venv\Scripts\activate
-pip install -e .
+# The app launches `maiko` through the login shell, which reads
+# ~/.zprofile (NOT ~/.zshrc). Put pipx's bin dir on that PATH:
+pipx ensurepath
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zprofile
+# now open a fresh terminal
 
-# Frontend
-cd frontend && npm install && cd ..
+make backend     # pipx-installs the maiko CLI
+gh auth login    # GitHub: repo discovery + worktrees
+make app         # builds Planet Maiko.app + a .dmg
 ```
 
-> **Mac users:** If you see SSL errors with Linear or other integrations, run `pip install --upgrade certifi`, then `open /Applications/Python\ 3.12/Install\ Certificates.command`.
+Drag `Planet Maiko.app` to `/Applications`. First launch is unsigned, so right-click it and choose **Open** once. It creates its own database and config on first run, then opens a setup wizard. Nothing leaves your machine.
 
-### Run
+Full build steps and troubleshooting: [`BUILD.md`](BUILD.md).
 
-Two terminals:
+> **SSL errors** with Linear or other integrations? `pip install --upgrade certifi`, then `open /Applications/Python\ 3.12/Install\ Certificates.command`.
+
+### Develop (no app build, two terminals)
 
 ```bash
-# Terminal 1, backend (port 8420)
-source .venv/bin/activate
-maiko serve
+python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e .
+cd frontend && npm install && cd ..
 
-# Terminal 2, frontend (port 5173)
+# terminal 1, backend (port 8420)
+maiko serve
+# terminal 2, frontend (port 5173)
 cd frontend && npm run dev
 ```
 
