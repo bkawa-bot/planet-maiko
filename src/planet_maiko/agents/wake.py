@@ -194,21 +194,85 @@ def wake_agent(task_id, prompt, source, working_path=None, session_id=None, app=
                 effort = "medium"
 
             log_path = os.path.join(working_path, "agent.log")
-            runtime.resume(
-                working_path,
-                session_id,
-                full_prompt,
-                job_id=task_id,
-                log_path=log_path,
-                model=model,
-                effort=effort,
-                extra_args=list(extra_args) if extra_args else None,
-                # MAIKO_JOB_ID stays in the resumed env so the agent can
-                # keep calling `maiko reply / inbox / leave-comment`
-                # without rediscovering its identity. The wake event is
-                # logged into the agent.log by runtime.resume() itself.
-                extra_env={"MAIKO_JOB_ID": task_id, "MAIKO_WAKE_SOURCE": source},
+
+            # `claude --resume` resolves the conversation from a JSONL
+            # under ~/.claude keyed by the worktree's path. That file is
+            # NOT in the repo or our DB, so a wiped ~/.claude, a different
+            # machine, a restored DB, or an original run that never
+            # bucketed here leaves a session_id Claude can't find ("No
+            # conversation found with session ID"). Detect that and start
+            # a fresh session seeded with a recap instead of dead-ending.
+            transcript_missing = (
+                hasattr(runtime, "session_transcript_path")
+                and hasattr(runtime, "spawn")
+                and runtime.session_transcript_path(session_id, working_path) is None
             )
+
+            if transcript_missing:
+                import uuid as _uuid
+                new_sid = str(_uuid.uuid4())
+                logger.warning(
+                    f"[wake] no Claude transcript for session "
+                    f"{session_id[:8]} (task={task_id}); prior conversation "
+                    f"unrecoverable. Starting fresh session {new_sid[:8]} "
+                    f"with a recap."
+                )
+                recap = _build_session_recap(app, task_id)
+                seeded_prompt = (
+                    "Your previous session's conversation could not be "
+                    "recovered (the transcript was lost: a wiped ~/.claude, "
+                    "a different machine, or a restored database). Nothing "
+                    "you committed is lost, only the chat history is. "
+                    "Re-read TASK.md and CLAUDE.md in your working "
+                    "directory for full context. Recap:\n\n"
+                    f"{recap}\n\n"
+                    "--- Continue the task. Current request ---\n\n"
+                    f"{full_prompt}"
+                )
+                try:
+                    from planet_maiko.api.agents_api import _set_session
+                    _set_session(task_id, new_sid, working_path)
+                    if app is not None:
+                        with app.app_context():
+                            from planet_maiko.models.agent_job import AgentJob
+                            j = db.session.get(AgentJob, task_id)
+                            if j is not None:
+                                j.session_id = new_sid
+                                db.session.commit()
+                except Exception as e:
+                    logger.warning(
+                        f"[wake] couldn't persist new session id for "
+                        f"{task_id}: {e}"
+                    )
+                mcp_cfg = os.path.join(working_path, ".mcp.json")
+                runtime.spawn(
+                    working_path,
+                    seeded_prompt,
+                    new_sid,
+                    job_id=task_id,
+                    mcp_config_path=mcp_cfg if os.path.isfile(mcp_cfg) else None,
+                    log_path=log_path,
+                    model=model,
+                    effort=effort,
+                    extra_env={"MAIKO_JOB_ID": task_id, "MAIKO_WAKE_SOURCE": source},
+                )
+            else:
+                runtime.resume(
+                    working_path,
+                    session_id,
+                    full_prompt,
+                    job_id=task_id,
+                    log_path=log_path,
+                    model=model,
+                    effort=effort,
+                    extra_args=list(extra_args) if extra_args else None,
+                    # MAIKO_JOB_ID stays in the resumed env so the agent
+                    # can keep calling `maiko reply / inbox /
+                    # leave-comment` without rediscovering its identity.
+                    # The wake event is logged into the agent.log by
+                    # runtime.resume() itself.
+                    extra_env={"MAIKO_JOB_ID": task_id, "MAIKO_WAKE_SOURCE": source},
+                )
         except Exception as e:
             logger.warning(f"[wake] run failed for {task_id}: {e}")
         finally:
@@ -259,6 +323,57 @@ def set_agent_state(app, task_id, state):
             db.session.commit()
     except Exception as e:
         logger.debug(f"[wake] state write skipped for {task_id}: {e}")
+
+
+def _build_session_recap(app, task_id, max_messages=8):
+    """Short recap so a fresh session can pick the thread back up when
+    the prior transcript was lost. Task title/details plus the last few
+    agent messages. Best-effort: the worktree still has TASK.md /
+    CLAUDE.md, so this is a nudge, not the whole context."""
+    def _inner():
+        from planet_maiko.models.task import Task
+        from planet_maiko.models.agent_job import AgentJob
+        from planet_maiko.models.agent_message import AgentMessage
+        lines = []
+        job = db.session.get(AgentJob, task_id)
+        task = db.session.get(Task, task_id)
+        title = (
+            getattr(task, "title", None)
+            or getattr(job, "title", None)
+            or task_id
+        )
+        lines.append(f"Task: {title}")
+        desc = None
+        if task is not None and getattr(task, "extra", None):
+            desc = (task.extra or {}).get("description")
+        desc = desc or getattr(task, "description", None)
+        if desc:
+            lines.append(f"Details: {str(desc).strip()[:800]}")
+        msgs = (
+            AgentMessage.query
+            .filter_by(task_id=task_id)
+            .order_by(AgentMessage.created_at.desc())
+            .limit(max_messages)
+            .all()
+        )
+        if msgs:
+            lines.append("\nRecent conversation (oldest first):")
+            for m in reversed(msgs):
+                who = "you" if m.direction == "from_agent" else "user/maiko"
+                body = (m.content or "").strip().replace("\n", " ")
+                if len(body) > 300:
+                    body = body[:300] + "..."
+                lines.append(f"- [{who}] {body}")
+        return "\n".join(lines)
+
+    try:
+        if app is not None:
+            with app.app_context():
+                return _inner()
+        return _inner()
+    except Exception as e:
+        logger.warning(f"[wake] recap build failed for {task_id}: {e}")
+        return f"Task id: {task_id}. (Could not rebuild a detailed recap.)"
 
 
 # --- Cleanup --------------------------------------------------------------
