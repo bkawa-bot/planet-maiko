@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { api } from "../api/client";
 import { BookOpen } from "@icons";
 import ConceptsModal from "../components/ConceptsModal";
@@ -24,7 +24,10 @@ import "./Settings.css";
 export default function Settings() {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
+  const savedRef = useRef(null);   // last successfully-persisted config
+  const saveTimer = useRef(null);  // debounce handle
+  const savingRef = useRef(false); // a PUT /config is in flight
   const [pollerStatus, setPollerStatus] = useState({});
   const [message, setMessage] = useState("");
   const [showConcepts, setShowConcepts] = useState(false);
@@ -42,6 +45,8 @@ export default function Settings() {
       api.getPlugins().catch(() => []),
     ]).then(([cfg, status, pluginList]) => {
       setConfig(cfg);
+      // Baseline so the autosave effect only fires on real edits.
+      savedRef.current = JSON.parse(JSON.stringify(cfg || {}));
       setPollerStatus(status);
       setPlugins(pluginList);
       if (cfg?.scene?.location_name && cfg?.scene?.latitude && cfg?.scene?.longitude) {
@@ -56,20 +61,61 @@ export default function Settings() {
     });
   }, []);
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await api.updateConfig(config);
-      invalidateDefaultOrg();
-      if (config?.scene?.latitude && config?.scene?.longitude) {
-        await api.refreshScene().catch(() => {});
+  // Debounced per-section autosave. PUT /config reloads from disk and
+  // shallow-merges per top-level section (skipping redacted ***), so
+  // sending only the sections that changed is safe and won't clobber
+  // the rest or backend-written state. No manual Save button.
+  useEffect(() => {
+    if (!config || !savedRef.current) return;
+
+    const changedKeys = Object.keys(config).filter(
+      (k) => JSON.stringify(config[k]) !== JSON.stringify(savedRef.current[k]),
+    );
+    if (changedKeys.length === 0) return;
+
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      if (savingRef.current) {
+        // A save is in flight — re-poke so we retry after it lands,
+        // rather than double-submitting.
+        setConfig((c) => ({ ...c }));
+        return;
       }
-      flash("Settings saved! Restart the server to apply poller changes.");
-    } catch (err) {
-      flash("Failed to save: " + err.message);
-    }
-    setSaving(false);
-  };
+      const snapshot = JSON.parse(JSON.stringify(config));
+      const patch = {};
+      for (const k of changedKeys) patch[k] = snapshot[k];
+
+      savingRef.current = true;
+      setSaveState("saving");
+      try {
+        await api.updateConfig(patch);
+        // Mark exactly the sent sections as saved, using the snapshot
+        // we sent so edits made mid-request still count as unsaved.
+        const base = savedRef.current
+          ? JSON.parse(JSON.stringify(savedRef.current))
+          : {};
+        for (const k of changedKeys) base[k] = snapshot[k];
+        savedRef.current = base;
+        setSaveState("saved");
+        if (changedKeys.includes("github")) invalidateDefaultOrg();
+        if (
+          changedKeys.includes("scene") &&
+          snapshot.scene?.latitude &&
+          snapshot.scene?.longitude
+        ) {
+          api.refreshScene().catch(() => {});
+        }
+      } catch (err) {
+        setSaveState("error");
+      } finally {
+        savingRef.current = false;
+      }
+    }, 700);
+
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [config]);
 
   const handleRunPoller = async (name) => {
     try {
@@ -189,9 +235,23 @@ export default function Settings() {
         onMessage={flash}
       />
 
-      <button className="btn-save" onClick={handleSave} disabled={saving}>
-        {saving ? "Saving..." : "Save Settings"}
-      </button>
+      <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 4 }}>
+        <span style={{
+          fontSize: 13,
+          color: saveState === "error" ? "var(--urgent)" : "var(--text-muted)",
+        }}>
+          {saveState === "saving"
+            ? "Saving..."
+            : saveState === "saved"
+            ? "All changes saved"
+            : saveState === "error"
+            ? "Couldn't save (will retry on your next change)"
+            : "Changes save automatically"}
+        </span>
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          Poller and integration changes apply after a server restart.
+        </span>
+      </div>
     </div>
   );
 }
