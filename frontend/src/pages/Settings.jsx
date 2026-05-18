@@ -136,7 +136,7 @@ export default function Settings() {
                   type="text"
                   value={config.user?.name || ""}
                   onChange={(e) => setConfig((c) => ({ ...c, user: { ...(c.user || {}), name: e.target.value } }))}
-                  placeholder="e.g. Brigitte"
+                  placeholder="your first name"
                 />
               </label>
             </div>

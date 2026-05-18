@@ -109,8 +109,8 @@
   .inbox-sidebar { display: none; }
 }
 
-/* Action strip — the calm top band that surfaces pupdates blocking
-   on Brigitte's hands. Activity tabs below show everything else. */
+/* Action strip: the calm top band that surfaces pupdates blocking
+   on the user. Activity tabs below show everything else. */
 .action-strip {
   margin-bottom: 14px;
   padding: 10px 12px;

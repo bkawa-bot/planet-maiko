@@ -3,7 +3,7 @@ from sqlalchemy import event
 from planet_maiko.database import db, iso_utc
 
 
-# Pupdate types that block on Brigitte's hands vs. everything else
+# Pupdate types that block on the user vs. everything else
 # (running work, FYIs, ambient signals). Keep this list in sync with
 # the Home "Also Waiting" WAITING_TYPES — the inbox Action strip and
 # the home surface pull from the same decision.
@@ -23,7 +23,7 @@ ACTION_TYPES = frozenset({
 
 
 def categorize(type_):
-    """Map a pupdate type to 'action' (Brigitte needs to do something)
+    """Map a pupdate type to 'action' (the user needs to do something)
     or 'activity' (FYI / the pack is chattering). Returns 'activity'
     for unknown types — noisy defaults are better than silent misses,
     and explicit types should be added to ACTION_TYPES when they need
@@ -41,7 +41,7 @@ class Pupdate(db.Model):
     source_id = db.Column(db.String(256), nullable=True)  # dedup key from the source
     type = db.Column(db.String(100), nullable=False)  # e.g. "pr_review_requested", "linear_assigned"
     priority = db.Column(db.String(20), default="normal", index=True)  # low, normal, high, urgent
-    # Whether this pupdate blocks on Brigitte — drives the inbox Action
+    # Whether this pupdate blocks on the user. Drives the inbox Action
     # strip and Home "Also Waiting". Computed from `type` at insert time.
     category = db.Column(db.String(16), default="activity", index=True)
     title = db.Column(db.String(512), nullable=False)
