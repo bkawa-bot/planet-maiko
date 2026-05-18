@@ -213,6 +213,8 @@ def export_rules():
         plus globals. Without it, exports every active rule.
     """
     from planet_maiko.models.learning import Learning
+    from planet_maiko.models.signal import Signal
+    from planet_maiko.database import iso_utc
     from sqlalchemy import or_
 
     repo = (request.args.get("repo") or "").strip() or None
@@ -224,7 +226,7 @@ def export_rules():
     rules = query.order_by(Learning.category, Learning.id).all()
 
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "exported_from_repo": repo,
         "rule_count": len(rules),
@@ -237,6 +239,28 @@ def export_rules():
                 "is_global": bool(r.is_global),
                 "violation_description": r.violation_description,
                 "signal_count": r.signal_count or 0,
+                # The signals behind this rule. Provenance only, no
+                # machine-specific FKs (task / agent / message ids),
+                # so they re-link cleanly on the importer's side.
+                "signals": [
+                    {
+                        "category": s.category,
+                        "text": s.text,
+                        "original_text": s.original_text,
+                        "source_type": s.source_type,
+                        "reviewer": s.reviewer,
+                        "severity": s.severity,
+                        "repo": s.repo,
+                        "language": s.language,
+                        "file_path": s.file_path,
+                        "code_context": s.code_context,
+                        "examples": s.examples or [],
+                        "external_id": s.external_id,
+                        "synthesized": bool(s.synthesized),
+                        "created_at": iso_utc(s.created_at),
+                    }
+                    for s in Signal.query.filter_by(learning_id=r.id).all()
+                ],
             }
             for r in rules
         ],
@@ -255,11 +279,12 @@ def import_rules():
     from flask import current_app
     from planet_maiko.database import db
     from planet_maiko.models.learning import Learning
+    from planet_maiko.models.signal import Signal
     from planet_maiko.brain.learning.violation_backfill import backfill_in_background
 
     data = request.get_json(silent=True) or {}
     schema_version = data.get("schema_version", 1)
-    if schema_version != 1:
+    if schema_version not in (1, 2):
         return jsonify({"error": f"unsupported schema_version: {schema_version}"}), 400
 
     rules_in = data.get("rules") or []
@@ -320,6 +345,42 @@ def import_rules():
             # violation_embedding stays null — backfill regenerates locally.
         )
         db.session.add(learning)
+        db.session.flush()  # need learning.id to link signals
+
+        sigs_in = r.get("signals")
+        if isinstance(sigs_in, list) and sigs_in:
+            n_sig = 0
+            for s in sigs_in:
+                if not isinstance(s, dict):
+                    continue
+                s_text = (s.get("text") or "").strip()
+                if not s_text:
+                    continue
+                db.session.add(Signal(
+                    category=(s.get("category") or category),
+                    text=s_text,
+                    original_text=s.get("original_text"),
+                    source_type=(s.get("source_type") or "imported"),
+                    reviewer=s.get("reviewer"),
+                    severity=(s.get("severity") or "suggestion"),
+                    repo=s.get("repo"),
+                    language=s.get("language"),
+                    file_path=s.get("file_path"),
+                    code_context=s.get("code_context"),
+                    examples=s.get("examples") or [],
+                    external_id=s.get("external_id"),
+                    synthesized=bool(s.get("synthesized", True)),
+                    # Already represented by this imported rule, so mark
+                    # aggregated: the processor only mines un-aggregated
+                    # signals, and we don't want these to spawn a second
+                    # learning.
+                    aggregated=True,
+                    learning_id=learning.id,
+                ))
+                n_sig += 1
+            if n_sig:
+                learning.signal_count = n_sig
+
         imported += 1
 
     db.session.commit()
