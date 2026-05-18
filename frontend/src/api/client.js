@@ -234,6 +234,10 @@ export const api = {
   // and how many active rules have a current embedding ready for
   // cosine matching. Drives the BrainView status pill.
   getRagStatus: () => request("/rules/embedding-status"),
+  // Kick the violation-description + embedding backfill so rules get
+  // indexed for retrieval (background; returns immediately).
+  regenerateRuleEmbeddings: () =>
+    request("/rules/regenerate-descriptions", { method: "POST" }),
   // Rules sharing — export the team's active rules as a JSON payload
   // (excludes embeddings; importer regenerates them locally). Import
   // adds non-duplicate rules and kicks off the backfill to fill in

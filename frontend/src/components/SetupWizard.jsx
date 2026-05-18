@@ -1,17 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Home as HomeIcon, FolderOpen, Brain, MapPin,
   GitBranch, Bot, Sparkles, Rocket, PawPrint, Zap,
 } from "@icons";
 import { api } from "../api/client";
 
-const TOTAL_STEPS = 10;
+const TOTAL_STEPS = 11;
 
 /**
  * First-run setup wizard. Shown on Home when config.setup_complete is
- * false. Collects name + GitHub + repos + location, then walks through a
- * short tour of Home / Pack / Knowledge / Automations before marking
- * setup done.
+ * false. Collects name + GitHub + repos + RAG + location, then walks
+ * through a short tour of Home / Pack / Knowledge / Automations before
+ * marking setup done.
  *
  * Props:
  *   onComplete — () => void, called after config is saved. Home reloads.
@@ -27,6 +27,22 @@ export default function SetupWizard({ onComplete }) {
   const [location, setLocation] = useState("");
   const [locationResolved, setLocationResolved] = useState("");
   const [latLon, setLatLon] = useState(null);
+  // RAG step. ragStatus stays null until we've asked the backend;
+  // {backend, model, ...} after. backend falsy = deps not installed.
+  const [ragStatus, setRagStatus] = useState(null);
+  const [ragWarming, setRagWarming] = useState(false);
+  const [ragMsg, setRagMsg] = useState("");
+
+  // Ask the backend whether RAG is available when the user reaches that
+  // step. RAG is purely "is sentence-transformers installed" — there's
+  // no config toggle, so this is detect-and-guide, not a switch.
+  useEffect(() => {
+    if (step === 4 && ragStatus === null) {
+      api.getRagStatus()
+        .then((s) => setRagStatus(s || { backend: null }))
+        .catch(() => setRagStatus({ backend: null }));
+    }
+  }, [step, ragStatus]);
 
   const finishSetup = async () => {
     const config = {};
@@ -91,6 +107,17 @@ export default function SetupWizard({ onComplete }) {
     } catch (e) {
       // Best effort — geocoding is optional
     }
+  };
+
+  const warmRag = async () => {
+    setRagWarming(true);
+    try {
+      await api.regenerateRuleEmbeddings();
+      setRagMsg("Embedding started — it runs in the background.");
+    } catch (e) {
+      setRagMsg("Couldn't start it: " + (e?.message || "error"));
+    }
+    setRagWarming(false);
   };
 
   return (
@@ -189,8 +216,46 @@ export default function SetupWizard({ onComplete }) {
           </div>
         )}
 
-        {/* Step 4: Location */}
+        {/* Step 4: RAG (local rule retrieval) */}
         {step === 4 && (
+          <div className="setup-step">
+            <div className="setup-step-icon"><Brain size={28} /></div>
+            <h3>Local rule retrieval</h3>
+            <p>Maiko can embed your learned rules locally so agents pull only the ones relevant to what they're doing, instead of stuffing every rule into every prompt. It runs entirely on your machine, no API cost. This is a big part of how Maiko stays sharp without drowning agents.</p>
+            {ragStatus === null && (
+              <p className="setup-detail">Checking if it's available…</p>
+            )}
+            {ragStatus && ragStatus.backend && (
+              <>
+                <div className="setup-hint-good">
+                  Available ({ragStatus.model || ragStatus.backend}). It's on.
+                </div>
+                <p className="setup-detail">Embed your rules now so retrieval works from day one, or let it fill in gradually as rules graduate.</p>
+                <button className="btn" onClick={warmRag} disabled={ragWarming}>
+                  {ragWarming ? "Starting…" : "Embed my rules now"}
+                </button>
+                {ragMsg && <div className="setup-hint-good">{ragMsg}</div>}
+              </>
+            )}
+            {ragStatus && !ragStatus.backend && (
+              <div className="setup-hint-warn">
+                <div>Not installed yet.</div>
+                <div className="setup-hint-warn-sub">
+                  One-time setup: <code>pip install -e ".[rag]"</code> (pulls
+                  ~2GB of ML deps). Maiko runs fine without it; you can enable
+                  it later from the Knowledge page.
+                </div>
+              </div>
+            )}
+            <div className="setup-actions">
+              <button className="setup-skip" onClick={() => setStep(5)}>Skip</button>
+              <button className="btn btn-primary" onClick={() => setStep(5)}>Next</button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 5: Location */}
+        {step === 5 && (
           <div className="setup-step">
             <div className="setup-step-icon"><MapPin size={28} /></div>
             <h3>Where are you?</h3>
@@ -206,14 +271,14 @@ export default function SetupWizard({ onComplete }) {
             </div>
             {locationResolved && <div className="setup-hint-good">{locationResolved}</div>}
             <div className="setup-actions">
-              <button className="setup-skip" onClick={() => setStep(5)}>Skip</button>
-              <button className="btn btn-primary" onClick={() => setStep(5)}>Next</button>
+              <button className="setup-skip" onClick={() => setStep(6)}>Skip</button>
+              <button className="btn btn-primary" onClick={() => setStep(6)}>Next</button>
             </div>
           </div>
         )}
 
-        {/* Step 5: Tour — Home + Memos */}
-        {step === 5 && (
+        {/* Step 6: Tour — Home + Memos */}
+        {step === 6 && (
           <div className="setup-step setup-step-centered">
             <div className="setup-step-icon tour-icon"><HomeIcon size={36} /></div>
             <h3>Home is where the memos land</h3>
@@ -221,13 +286,13 @@ export default function SetupWizard({ onComplete }) {
             <p className="setup-detail">Click any memo to act on it. Dismiss the ones that don't need you, or ask Maiko to look into something with the floating Ask box.</p>
             <div className="setup-actions">
               <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
-              <button className="btn btn-primary" onClick={() => setStep(6)}>Next</button>
+              <button className="btn btn-primary" onClick={() => setStep(7)}>Next</button>
             </div>
           </div>
         )}
 
-        {/* Step 6: Tour — The Pack */}
-        {step === 6 && (
+        {/* Step 7: Tour — The Pack */}
+        {step === 7 && (
           <div className="setup-step setup-step-centered">
             <div className="setup-step-icon tour-icon"><Bot size={36} /></div>
             <h3>Meet the Pack</h3>
@@ -235,13 +300,13 @@ export default function SetupWizard({ onComplete }) {
             <p className="setup-detail">Stop one mid-flight and its worktree sticks around — revive it from the Pack page and it picks up where it left off.</p>
             <div className="setup-actions">
               <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
-              <button className="btn btn-primary" onClick={() => setStep(7)}>Next</button>
+              <button className="btn btn-primary" onClick={() => setStep(8)}>Next</button>
             </div>
           </div>
         )}
 
-        {/* Step 7: Tour — Knowledge */}
-        {step === 7 && (
+        {/* Step 8: Tour — Knowledge */}
+        {step === 8 && (
           <div className="setup-step setup-step-centered">
             <div className="setup-step-icon tour-icon"><Brain size={36} /></div>
             <h3>Knowledge</h3>
@@ -249,13 +314,13 @@ export default function SetupWizard({ onComplete }) {
             <p className="setup-detail">Visit <strong>Knowledge</strong> and run <strong>Backfill from PRs</strong> to scan your history. Approve the ones that match your team; the rest stays out of the way.</p>
             <div className="setup-actions">
               <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
-              <button className="btn btn-primary" onClick={() => setStep(8)}>Next</button>
+              <button className="btn btn-primary" onClick={() => setStep(9)}>Next</button>
             </div>
           </div>
         )}
 
-        {/* Step 8: Tour — Automations + Specialties */}
-        {step === 8 && (
+        {/* Step 9: Tour — Automations + Specialties */}
+        {step === 9 && (
           <div className="setup-step setup-step-centered">
             <div className="setup-step-icon tour-icon"><Zap size={36} /></div>
             <h3>Automations</h3>
@@ -263,13 +328,13 @@ export default function SetupWizard({ onComplete }) {
             <p className="setup-detail">A handful of defaults ship pre-wired — open <strong>Automations</strong> to tweak them or write your own. The same page is where <strong>Specialties</strong> live: pre-built playbooks an agent can follow for specific kinds of work (triage, analysis, brainstorming).</p>
             <div className="setup-actions">
               <button className="setup-skip" onClick={finishSetup}>Skip Tour</button>
-              <button className="btn btn-primary" onClick={() => setStep(9)}>Next</button>
+              <button className="btn btn-primary" onClick={() => setStep(10)}>Next</button>
             </div>
           </div>
         )}
 
-        {/* Step 9: Tour — Done */}
-        {step === 9 && (
+        {/* Step 10: Tour — Done */}
+        {step === 10 && (
           <div className="setup-step setup-step-centered">
             <div className="setup-step-icon tour-icon"><Sparkles size={36} /></div>
             <h3>You're settled in</h3>
