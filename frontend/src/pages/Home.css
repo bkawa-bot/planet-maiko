@@ -314,17 +314,6 @@
 
 /* === Seasonal overlays === */
 
-/* Flowers (spring) */
-.page-flower {
-  position: absolute; width: 12px;
-  image-rendering: pixelated; opacity: 0.25;
-  animation: flowerSway 4s ease-in-out infinite;
-}
-@keyframes flowerSway {
-  0%, 100% { transform: rotate(-3deg); }
-  50% { transform: rotate(3deg); }
-}
-
 /* Fireflies (summer nights) */
 .page-firefly {
   position: absolute;

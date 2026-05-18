@@ -80,16 +80,6 @@ export default function WeatherOverlay({ scene, enabled = true }) {
       {/* Seasonal overlays */}
       {season && (
         <div className="page-weather-overlay">
-          {season === "spring" && Array.from({ length: 5 }).map((_, i) => (
-            <img
-              key={`fl-${i}`}
-              src={i % 2 === 0 ? "/flower1.svg" : "/flower2.svg"}
-              className="page-flower"
-              style={{ left: `${10 + i * 18}%`, bottom: 32 }}
-              alt=""
-            />
-          ))}
-
           {season === "summer" && timeBucket !== "day" && Array.from({ length: 12 }).map((_, i) => (
             <div
               key={`ff-${i}`}
