@@ -283,12 +283,26 @@ def import_rules():
         scope_repo = r.get("scope_repo") or None
         scope_language = r.get("scope_language") or None
 
-        # Recompute aggregation_key the same way processor.py does, so
-        # dedup matches whether the rule was mined locally or imported.
         text_prefix = rule_text[:80].lower().strip()
         agg_key = f"{category}|{scope_repo or '_global'}|{scope_language or '_any'}|{text_prefix}"
 
-        if Learning.query.filter_by(aggregation_key=agg_key).first():
+        # Dedup on the normalized rule text + scope, NOT aggregation_key.
+        # A locally-mined Learning derives aggregation_key from the
+        # ORIGINATING SIGNAL's text, colon-joined (processor.py
+        # _make_aggregation_key); recomputing it here from the rule text,
+        # pipe-joined, never matched a mined row, so even byte-identical
+        # rules imported as duplicates. Matching the rule text directly
+        # is format-agnostic and actually catches exact dupes.
+        norm_rule = rule_text.strip().lower()
+        dup = (
+            Learning.query
+            .filter(Learning.category == category)
+            .filter(Learning.scope_repo == scope_repo)
+            .filter(Learning.scope_language == scope_language)
+            .filter(db.func.lower(db.func.trim(Learning.rule)) == norm_rule)
+            .first()
+        )
+        if dup:
             skipped_duplicate += 1
             continue
 
