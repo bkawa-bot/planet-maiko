@@ -146,12 +146,18 @@ h2 {
 /* The desktop label, painted on the wallpaper. */
 .desktop-title { text-align: center; padding: 60px 24px 24px; }
 .desktop-title .paw { font-size: 2.4rem; }
+.desktop-title .eyebrow {
+  font-family: var(--mono); font-size: 0.82rem;
+  letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--lavender); margin-bottom: 14px;
+}
 .desktop-title h1 {
   font-family: var(--display);
-  font-size: clamp(2.5rem, 7vw, 4.2rem);
-  font-weight: 700; margin: 8px 0 6px;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 700; line-height: 1.12;
+  margin: 0 auto 16px; max-width: 880px;
   color: #fff;
-  text-shadow: 3px 3px 0 #d4438a, 6px 6px 0 rgba(0,0,0,0.4);
+  text-shadow: 2px 2px 0 #d4438a, 4px 4px 0 rgba(0,0,0,0.4);
 }
 .desktop-title .tagline {
   font-style: italic; color: var(--lemon);
@@ -392,6 +398,32 @@ h2 {
 .gallery img { width: 100%; height: auto; display: block; }
 .gallery figcaption {
   padding: 10px 13px; font-size: 0.87rem; color: var(--text-dim);
+}
+
+/* Click-through screenshot gallery. */
+.carousel {
+  display: flex; align-items: center; gap: 10px;
+}
+.carousel .car-img { flex: 1; min-width: 0; }
+.car-nav {
+  flex: none; width: 38px; height: 38px;
+  background: var(--face); box-shadow: var(--raise);
+  color: var(--ink); font-size: 1.3rem; line-height: 1;
+  cursor: inherit; display: flex; align-items: center; justify-content: center;
+}
+.car-nav:active { box-shadow: var(--sink); }
+.car-meta { margin-top: 14px; display: grid; gap: 4px; }
+.car-count {
+  font-family: var(--mono); font-size: 0.78rem;
+  letter-spacing: 0.12em; color: var(--accent);
+}
+.car-title {
+  font-family: var(--display); font-weight: 700;
+  font-size: 1.05rem; color: var(--text);
+}
+.car-desc { color: var(--text-dim); font-size: 0.95rem; }
+@media (max-width: 620px) {
+  .car-nav { width: 32px; height: 32px; font-size: 1.1rem; }
 }
 
 pre {

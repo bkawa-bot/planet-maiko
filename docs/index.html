@@ -38,12 +38,9 @@
   </div>
 
   <header class="desktop-title">
-    <h1>Planet Maiko</h1>
+    <p class="eyebrow">Planet Maiko</p>
+    <h1>A local-first agent orchestrator where your AI agents are weird alien dogs that know a little too much.</h1>
     <p class="tagline">strange agents, strange world.</p>
-    <p class="sub">
-      A local-first agent orchestrator where your AI agents are weird
-      alien dogs that know a little too much. You found it still running.
-    </p>
   </header>
 
   <div class="row">
@@ -97,30 +94,35 @@
   <section class="win wide c-peach" style="--tilt:0.5deg;">
     <div class="win-bar">
       <span class="win-dots"><i></i><i></i><i></i></span>
-      <span class="win-title">photos/</span>
+      <span class="win-title">the pack</span>
       <span class="win-x" title="close">&#10005;</span>
     </div>
     <div class="win-body">
-      <div class="gallery">
-        <figure>
-          <img src="screenshots/profiles.png" alt="Agent profiles">
-          <figcaption>Each agent is a character sheet: name, avatar, role, a bio it wrote when it arrived.</figcaption>
-        </figure>
-        <figure>
-          <img src="screenshots/active.png" alt="Active agents">
-          <figcaption>The active pack with live state, what each one's chewing on, and the diff waiting for you.</figcaption>
-        </figure>
-        <figure>
-          <img src="screenshots/rule.png" alt="A learned rule">
-          <figcaption>A rule the system extracted from review history, with the scenarios it applies to.</figcaption>
-        </figure>
-        <figure>
-          <img src="screenshots/avatars.png" alt="Agent avatars">
-          <figcaption>The agents are weird alien dogs. Because why not.</figcaption>
-        </figure>
-      </div>
+      <img class="shot" src="screenshots/profiles.png" alt="The pack: agent profiles">
+      <p class="shot-cap">every agent is a character sheet: a name, an avatar, a role, and a bio it wrote when it arrived.</p>
     </div>
     <span class="scrawl br">the dogs. yes, they are like that.</span>
+  </section>
+
+  <section class="win wide c-mint" id="gallery" style="--tilt:-0.4deg;">
+    <div class="win-bar">
+      <span class="win-dots"><i></i><i></i><i></i></span>
+      <span class="win-title">gallery</span>
+      <span class="win-x" title="close">&#10005;</span>
+    </div>
+    <div class="win-body">
+      <div class="carousel">
+        <button class="car-nav" id="carPrev" type="button" aria-label="Previous">&#8249;</button>
+        <img class="shot car-img" id="carImg" src="screenshots/knowledge.png" alt="">
+        <button class="car-nav" id="carNext" type="button" aria-label="Next">&#8250;</button>
+      </div>
+      <div class="car-meta">
+        <span class="car-count" id="carCount"></span>
+        <span class="car-title" id="carTitle"></span>
+        <span class="car-desc" id="carDesc"></span>
+      </div>
+    </div>
+    <span class="scrawl br">show, don't tell.</span>
   </section>
 
   <p style="text-align:center; font-family:var(--mono); font-size:0.82rem; color:var(--text-muted); margin:46px 0 -8px;">
@@ -397,11 +399,46 @@ maiko up</pre>
     openHash();
     window.addEventListener('hashchange', openHash);
 
-    // It knows when you are looking too hard at it.
-    var taps = 0, emblem = document.getElementById('emblem');
-    if (emblem) emblem.addEventListener('click', function () {
-      if (++taps >= 3) location.href = 'sludge.html';
-    });
+    // Click-through screenshot gallery. To add a shot: drop the file
+    // in docs/screenshots/ and add a line to SHOTS below.
+    var SHOTS = [
+      { src: "screenshots/knowledge.png", title: "Knowledge",
+        desc: "Rules mined from your PR review history, with the situations they apply to." },
+      { src: "screenshots/rule.png", title: "A learned rule",
+        desc: "One rule, its provenance, and the scenarios that pull it into an agent's prompt." },
+      { src: "screenshots/active.png", title: "The active pack",
+        desc: "Every running agent, what it's chewing on, and the diff waiting for you." },
+      { src: "screenshots/queue.png", title: "The queue",
+        desc: "What the brain cycle is about to triage, before any of it becomes tasks." },
+      { src: "screenshots/missed-tick.png", title: "It noticed",
+        desc: "Maiko catches its own missed beats and tells you instead of hiding it." },
+      { src: "screenshots/avatars.png", title: "The dogs",
+        desc: "Weird alien dogs. Because why not." }
+    ];
+    (function gallery() {
+      var img = document.getElementById('carImg');
+      if (!img) return;
+      var titleEl = document.getElementById('carTitle');
+      var descEl = document.getElementById('carDesc');
+      var countEl = document.getElementById('carCount');
+      var i = 0;
+      function render() {
+        var s = SHOTS[i];
+        img.src = s.src;
+        img.alt = s.title;
+        titleEl.textContent = s.title;
+        descEl.textContent = s.desc;
+        countEl.textContent = (i + 1) + ' / ' + SHOTS.length;
+      }
+      function go(n) { i = (i + n + SHOTS.length) % SHOTS.length; render(); }
+      document.getElementById('carPrev').addEventListener('click', function () { go(-1); });
+      document.getElementById('carNext').addEventListener('click', function () { go(1); });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowLeft') go(-1);
+        else if (e.key === 'ArrowRight') go(1);
+      });
+      render();
+    })();
   })();
   </script>
 
