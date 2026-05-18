@@ -48,8 +48,9 @@ export default function SetupWizard({ onComplete }) {
       await api.updateConfig({ github: { username, enabled: true } });
       const result = await api.discoverGithubRepos();
       if (result.repos?.length) {
+        // Don't auto-advance: the repo-roots input lives on this same
+        // step and the user still needs to fill it in.
         setRepos(result.repos);
-        setTimeout(() => setStep(4), 800);
       } else {
         setDiscoverError({
           message: "No repos found for that username.",
@@ -105,7 +106,7 @@ export default function SetupWizard({ onComplete }) {
         {/* Step 0: Welcome */}
         {step === 0 && (
           <div className="setup-step setup-step-centered">
-            <img src="/icon.svg" alt="Maiko" className="setup-maiko-icon" />
+            <img src="/sprites/maiko-greeting.png" alt="Maiko" className="setup-maiko-icon" />
             <h1>Welcome to Planet Maiko</h1>
             <p className="setup-sub"><em>Strange agents, strange world.</em></p>
             <p className="setup-sub">A quiet companion for your engineering work. Maiko watches your PRs, holds the messy in-flight things, and runs small coding agents in their own worktrees so they never trample what you're doing.</p>
@@ -174,12 +175,12 @@ export default function SetupWizard({ onComplete }) {
                 {discoverError.hint && <div className="setup-hint-warn-sub">{discoverError.hint}</div>}
               </div>
             )}
-            <p style={{ marginTop: 16 }}>Where do the clones live?</p>
+            <p style={{ marginTop: 16 }}>Where do the clones live? Use the full path, a leading <code>~</code> can be unreliable.</p>
             <input
               type="text"
               value={repoRoots.join(", ")}
               onChange={(e) => setRepoRoots(e.target.value.split(",").map(s => s.trim()).filter(Boolean))}
-              placeholder="~/src, ~/projects"
+              placeholder="/Users/you/src, /Users/you/code"
             />
             <div className="setup-actions">
               <button className="setup-skip" onClick={() => setStep(2)}>Back</button>

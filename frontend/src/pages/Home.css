@@ -491,7 +491,7 @@
 .setup-checklist li:last-child { border-bottom: none; }
 .setup-checklist strong { color: var(--text); }
 
-.setup-maiko-icon { width: 72px; border-radius: 16px; image-rendering: pixelated; }
+.setup-maiko-icon { width: 112px; image-rendering: pixelated; margin-bottom: 4px; }
 .setup-hint-good { font-size: 12px; color: var(--green); margin-top: 4px; }
 .setup-hint-warn {
   font-size: 12px;
