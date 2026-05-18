@@ -45,7 +45,6 @@ from .phases.synthesis import (  # noqa: E402
     _phase_learning,
 )
 from .phases.health import (  # noqa: E402
-    _phase_nudge_quiet_agents,
     _phase_stuck_check,
     _phase_stuck_escalation,
     _phase_worktree_sweep,
@@ -74,9 +73,6 @@ _PHASES = [
     ("pupdates", _phase_pupdates),
     ("synthesis", _phase_synthesis),
     ("learning", _phase_learning),
-    # Order matters: nudge first so quiet agents get a chance to
-    # re-engage and stamp last_active_at before stuck_check flags them.
-    ("nudge_quiet_agents", _phase_nudge_quiet_agents),
     ("stuck_check", _phase_stuck_check),
     ("projects", _phase_projects),
     ("orchestrate", _phase_orchestrate),
