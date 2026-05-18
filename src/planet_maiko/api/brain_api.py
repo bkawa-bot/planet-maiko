@@ -198,11 +198,17 @@ def system_health():
         if not isinstance(p, PollerPlugin):
             continue
         last = p._last_polled
+        last_iso = (
+            _dt.fromtimestamp(last, _tz.utc).isoformat() if last else None
+        )
         pollers[p.name] = {
-            "last_run_at": (
-                _dt.fromtimestamp(last, _tz.utc).isoformat()
-                if last else None
-            ),
+            # PollerPlugin only tracks _last_polled (a poll cycle ran).
+            # The UI shows last_success_at, so without this every
+            # working poller read as "waiting…" forever. Per-poll error
+            # tracking isn't wired on the plugin yet, so run == success
+            # here; revisit if pollers grow real error state.
+            "last_run_at": last_iso,
+            "last_success_at": last_iso,
         }
 
     stop_event = current_app.config.get("BACKGROUND_STOP")
