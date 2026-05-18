@@ -22,32 +22,27 @@ We live in strange times, and yet our dev tools are so painfully un-strange. No 
 
 ![profiles](docs/screenshots/profiles.png)
 
-## How is Planet Maiko different from RinkStack, Mazino.ai, QuatroForce? (I just made all of those up)
+## What does Planet Maiko do? 
+
+All the required agent orchestration work. Automatically kicks off agents, lets them yell at each other (with Maiko as the mediator), agent task lifecycles, context sharing... but also some more interesting features as well such as conflict detection, fine-tuning models, self-curated shared memory and insights etc
+
+## How is Planet Maiko different from RinkStack, Mazino.ai, or QuatroForce? (I just made all of those up)
 
 - **Maiko has a unique self-maintaining memory system** which builds a rule-book from you and your team's PR history and feedback. Internal knowledge and specific gotchas are all automatically captured. No more manual write-ups of your team's guidelines needed.
-- **Maiko uses unique methods to get agents what they need without shoving 100 rules into every prompt.**
-  - Semantically embeds learned guidelines keyed by what situations they are relevant to. Agents just need to describe what they are doing to get ONLY what they need. This lets us have a pool of hundreds of very specific nits, rules, and context without overwhelming the agents.
-  - **(Experimental)** trains a local LoRA model based on what YOUR code looks like so your preferences are automatically applied on top of your coding agents.
-    - This is experimental. I am still trying to figure out how to make it have less false positives. If you are smarter than me and this sounds interesting to you, let's talk!
-    - Honestly this was made because Anthropic doesn't allow us to fine-tune Claude (unless you are Amazon 😉).
 
-![Sludge Pup](docs/screenshots/sludge-pup.png)
+![Rule](docs/screenshots/rule-3.png)
+(A PR reviewer left this same comment multiple times, we tracked it down ahead of time so our agents don't make the same mistake).
 
-## What (boring) stuff Planet Maiko does
+- **Maiko uses semantic embeddings to get agents what they need without shoving 100 rules into every prompt.**
+  - Agents just need to describe what they are doing to get ONLY what they need. This lets us have a pool of hundreds of very specific nits, rules, and context without overwhelming the agents.
 
-All the typical agent orchestration work. Automatically kicks off agents, lets them yell at each other (with Maiko as the mediator), agent task lifecycles, context sharing, etc.
-
-## What (COOL) stuff Planet Maiko does
-
-**Builds a rulebook from all your (and your team's) past PR review mistakes** for your agents to laugh at (use) so they don't make the same ones. Backed by a local built-in RAG system using semantic embeddings. Agents just need to describe what they are doing in order to pull the relevant rules, so we don't have to stuff 300 rules into every prompt.
-
-![Rule](docs/screenshots/rule.png)
-
-![Knowledge](docs/screenshots/knowledge.png)
+![Rules-retrieved](docs/screenshots/agent-rules-searched.png)
 
 **Maiko makes agents confess their own mistakes too.** Everyone learns.
 
-**Build a plugin for any tool you never want to have to look at again.** I can no longer tolerate opening an app and having another new agent start yelling at me. I just figure out how to make Maiko deal with it instead.
+![Insights](docs/screenshots/insights.png)
+
+**Build a plugin for any tool you never want to have to look at again.**
 
 **Current integrations:**
 
@@ -63,9 +58,14 @@ All the typical agent orchestration work. Automatically kicks off agents, lets t
 
 Open source, free forever, no paid tiers or subscriptions.
 
+## In-app diff review, agent chat view (no terminal needed), cost-aware model routing, automations, and more!
+![Diff](docs/screenshots/diff2.png)
+
+![Model-routing](docs/screenshots/model-routing.png)
+
 ## Most importantly: agents are weird alien dogs, cause why not?
 
-![Avatars](docs/screenshots/avatars.png)
+![Biolumen](docs/screenshots/biolumen.png)
 
 **[Full feature list](docs/FEATURES.md)**
 
