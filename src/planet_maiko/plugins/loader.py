@@ -412,6 +412,7 @@ def load_plugins(app):
 
         def _run():
             from planet_maiko.brain.memos import create_memo
+            from planet_maiko.database import db
             with app_obj.app_context():
                 try:
                     result = plugin.run_setup_action(key)
@@ -425,8 +426,16 @@ def load_plugins(app):
                         body=detail or "Done.",
                         priority="normal",
                     )
+                    # create_memo (and anything run_setup_action wrote,
+                    # e.g. an importer's new tasks) only persists if the
+                    # caller commits — this thread is the caller. Without
+                    # this the work silently vanished on thread exit.
+                    db.session.commit()
                 except Exception as e:
                     logger.warning(f"[plugins] setup action {name}.{key} failed: {e}")
+                    # Drop any half-written state from the failed action
+                    # so the failure memo saves cleanly, then persist it.
+                    db.session.rollback()
                     create_memo(
                         kind="notification",
                         category="info",
@@ -434,6 +443,7 @@ def load_plugins(app):
                         body=str(e)[:500],
                         priority="high",
                     )
+                    db.session.commit()
 
         threading.Thread(
             target=_run, daemon=True, name=f"setup-{name}-{key}"
