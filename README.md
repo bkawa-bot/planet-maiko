@@ -20,7 +20,7 @@ We live in strange times, and yet our dev tools are so painfully un-strange. No 
 
 ![Planet Maiko home](docs/screenshots/home.png)
 
-![profiles](docs/screenshots/profiles.png)
+![profiles](docs/screenshots/profiles2.png)
 
 ## What does Planet Maiko do? 
 
@@ -40,9 +40,11 @@ All the required agent orchestration work. Automatically kicks off agents, lets 
 
 **Maiko makes agents confess their own mistakes too.** Everyone learns.
 
-![Insights](docs/screenshots/insights.png)
+![Insights](docs/screenshots/insights2.png)
 
-**Build a plugin for any tool you never want to have to look at again.**
+## Build a plugin for any tool you never want to have to look at again.
+
+Plug in any data you need by building 1 python class. Internal tools, big names, whatever shiny new GSD task manager you are trying this week.
 
 **Current integrations:**
 
