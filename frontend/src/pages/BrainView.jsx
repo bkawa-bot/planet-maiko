@@ -16,6 +16,7 @@ import ClusterProgress from "../components/ClusterProgress";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import "./Knowledge.css";
 import LearningProvenance from "./brain/LearningProvenance";
+import TeamRulesSection from "../components/settings/TeamRulesSection";
 
 const CATEGORY_ICONS = {
   null_safety: Shield, error_handling: Shield, performance: Clock,
@@ -551,6 +552,8 @@ export default function BrainView() {
             <p>Active learnings are retrieved by agents at task kickoff via <code>maiko rules-relevant</code> — relevant patterns surface in the agent's context so they can apply the team's accumulated knowledge from past PR reviews.</p>
           </InfoButton>
         </div>
+
+        <TeamRulesSection />
 
         {baseVisible.length > 0 && (
           <div className="scope-filter-row">

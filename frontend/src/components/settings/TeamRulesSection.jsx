@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Download, Upload } from "@icons";
 import { api } from "../../api/client";
+import "../../pages/Settings.css"; // carries its own card styling wherever it's mounted
 
 /**
  * Team rules sharing — export your active rules to a JSON file so a
