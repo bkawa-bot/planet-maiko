@@ -74,15 +74,23 @@ def _phase_spawn_jobs_for_tasks():
             # re-requested review after pushing new commits, the task
             # went "waiting" â†’ "new", and we want another review pass
             # against the updated diff.
-            existing = (
+            # Skip if the task's MOST RECENT job is still active or
+            # failed. Active is obvious. Failed is the important one:
+            # a failed job (e.g. no local clone) isn't "active", so
+            # this phase used to re-spawn it every cycle forever and
+            # spam Recent Failures. We no longer auto-retry; the user
+            # relaunches with the Launch button once the cause is
+            # fixed. A done/cancelled latest still re-spawns, so a
+            # re-requested review pass (task goes new again) still works.
+            latest = (
                 AgentJob.query
                 .filter_by(source_task_id=task.id)
-                .filter(AgentJob.status.in_([
-                    "pending_approval", "queued", "running",
-                ]))
+                .order_by(AgentJob.created_at.desc())
                 .first()
             )
-            if existing:
+            if latest and latest.status in (
+                "pending_approval", "queued", "running", "failed",
+            ):
                 continue
 
             extra = task.extra or {}

@@ -88,3 +88,37 @@ def _emit_missing_clone_pupdate(task, repo):
     )
     db.session.add(p)
     db.session.flush()
+
+
+def _memo_job_failed(job):
+    """Surface a failed AgentJob as a memo so the failure isn't silent.
+
+    Failed jobs no longer auto-retry (see _phase_spawn_jobs_for_tasks),
+    so the user needs a visible nudge to fix the cause and relaunch
+    instead of the failure just sitting in Recent Failures. Caller is
+    responsible for committing the session.
+    """
+    try:
+        from planet_maiko.brain.memos import create_memo
+        label = (job.title or job.kind or "agent job")
+        body = (job.error or "No error detail.").strip()[:1000]
+        if job.scope_repo:
+            body += f"\n\nRepo: {job.scope_repo}"
+        body += (
+            "\n\nThis won't retry on its own. Fix the cause, then "
+            "relaunch the task."
+        )
+        create_memo(
+            kind="notification",
+            category="waiting",
+            title=f"Agent job failed: {label[:120]}",
+            body=body,
+            priority=(job.priority or "normal"),
+            source_agent_id=job.agent_profile_id,
+            source_task_id=job.source_task_id,
+        )
+    except Exception as e:
+        logger.warning(
+            f"[cycle] job-failed memo skipped for "
+            f"{getattr(job, 'id', '?')}: {e}"
+        )

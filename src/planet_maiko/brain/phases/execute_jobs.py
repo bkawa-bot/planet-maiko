@@ -9,7 +9,7 @@ import logging
 import re
 from datetime import datetime, timezone
 
-from ._helpers import _bump_agent_failed
+from ._helpers import _bump_agent_failed, _memo_job_failed
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +146,7 @@ def _phase_execute_agent_jobs():
                 job.error = f"No local clone found for {job.scope_repo}"
                 job.finished_at = datetime.now(timezone.utc)
                 _bump_agent_failed(job.agent_profile_id)
+                _memo_job_failed(job)
                 db.session.commit()
                 continue
             if job.scope_repo and not local_path:
@@ -302,6 +303,7 @@ def _phase_execute_agent_jobs():
                     job.error = str(e)[:500]
                     job.finished_at = datetime.now(timezone.utc)
                     _bump_agent_failed(job.agent_profile_id)
+                    _memo_job_failed(job)
                     db.session.commit()
                     continue
                 if not prep:
@@ -343,6 +345,7 @@ def _phase_execute_agent_jobs():
                 job.error = kickoff.get("error") or "kickoff failed"
                 job.finished_at = datetime.now(timezone.utc)
                 _bump_agent_failed(job.agent_profile_id)
+                _memo_job_failed(job)
                 logger.warning(
                     f"[cycle] kickoff failed for agent_job {job.id}: {kickoff.get('error')}"
                 )
