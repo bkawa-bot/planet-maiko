@@ -63,7 +63,7 @@ Open source, free forever, no paid tiers or subscriptions.
 ## In-app diff review, agent chat view (no terminal needed), cost-aware model routing, automations, and more!
 ![Diff](docs/screenshots/diff2.png)
 
-![Model-routing](docs/screenshots/model-routing.png)
+![Automations](docs/screenshots/automations.png)
 
 ## Most importantly: agents are weird alien dogs, cause why not?
 
