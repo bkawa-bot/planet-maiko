@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Settings, Palette, Power, Leaf, Hearth, Scroll, Paw, SpellBook, Crystal } from "@icons";
+import { Settings, Palette, Power, Leaf, Hearth, ListTodo, Paw, SpellBook, Crystal } from "@icons";
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api/client";
 import { applyCustomTheme, clearCustomTheme, hydrateCachedCustomTheme } from "../utils/themes";
@@ -13,7 +13,7 @@ import "./ShutdownModal.css";
 // wait their turn for the pixel-art treatment.
 const NAV_ITEMS = [
   { to: "/", icon: Hearth, label: "Home", end: true },
-  { to: "/tasks", icon: Scroll, label: "Tasks" },
+  { to: "/tasks", icon: ListTodo, label: "Tasks" },
   { to: "/agents", icon: Paw, label: "Pack" },
   { to: "/knowledge", icon: SpellBook, label: "Knowledge" },
   { to: "/automations", icon: Crystal, label: "Automations" },
