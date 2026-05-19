@@ -844,32 +844,23 @@ a:hover { text-decoration: underline; }
   padding: 20px 24px;
 }
 
-/* === Card list backdrop. Sits inside .frost-pane (which already
-   blurs), so this layer is now a flat translucent fill, no double
-   blur. Anti-slop dial-back: one frosted surface per page, not two
-   stacked. === */
+/* === Card list backdrop. Sits inside .frost-pane (which provides
+   the translucent layer already), so this container is just a
+   bordered list-area with no fill of its own. Filling it created
+   three stacked near-identical surfaces in some themes ("just a
+   bunch of borders"). The outline alone defines "this is the list,"
+   the pane provides the surface, the cards sit clearly on top. === */
 .card-list-container {
-  background: rgba(45, 54, 60, 0.4);
+  background: transparent;
   border: 2px solid var(--border-subtle);
   border-radius: var(--radius);
   padding: 8px;
 }
 
-[data-theme="light"] .card-list-container {
-  background: rgba(255, 255, 255, 0.5);
-}
-[data-theme="morning"] .card-list-container {
-  background: rgba(255, 253, 248, 0.5);
-}
-[data-theme="sunset"] .card-list-container {
-  background: rgba(58, 34, 72, 0.5);
-}
-/* Light themes use a near-white frosted backdrop so the default
-   dark-mode rgba doesn't punch a navy hole in a pastel page. */
-[data-theme="morning"] .card-list-container,
-[data-theme="mint-meadow"] .card-list-container {
-  background: rgba(255, 255, 255, 0.55);
-}
+/* Cards inside a frost-pane shift to the alt surface so they read
+   as a step distinct from the pane's translucent layer, which was
+   collapsing to the same near-white / near-black in some themes. */
+.frost-pane .card { background: var(--bg-card-alt); }
 
 /* Cards inside glass container get tighter margins */
 .card-list-container .card,
