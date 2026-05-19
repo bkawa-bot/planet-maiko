@@ -127,9 +127,10 @@ export const api = {
   updateConfig: (data) =>
     request("/config", { method: "PUT", body: JSON.stringify(data) }),
 
+  // Still used by the setup wizard (repo discovery) and the
+  // send-to-Linear modal (team meta). Integration test / team-list
+  // are gone — those moved into plugin sync setup actions.
   discoverGithubRepos: () => request("/github/discover", { method: "POST" }),
-  testIntegration: (name) => request(`/config/test/${name}`, { method: "POST" }),
-  getLinearTeams: () => request("/config/linear/teams"),
   getLinearTeamMeta: (teamId) => {
     const q = teamId ? `?team_id=${encodeURIComponent(teamId)}` : "";
     return request(`/config/linear/team-meta${q}`);
@@ -336,8 +337,11 @@ export const api = {
   // via register_actions(). Drives the editor's "then" dropdown +
   // per-action field forms (symmetric with getPupdateTypes on "when").
   getAutomationActions: () => request("/automation-actions"),
-  // Run a plugin's user-triggered setup action (backfill, import, …).
-  // Fire-and-forget: backend returns 202 and drops a memo when done.
+  // Run a plugin's user-triggered setup action. Returns the parsed
+  // body. Sync actions (test connection, discover, fetch options)
+  // resolve with {ok, message, config_patch?, options?}; async ones
+  // (backfills/imports) resolve with {status:"started"} and drop a
+  // memo when done.
   runPluginAction: (plugin, key) =>
     request(`/plugins/${plugin}/actions/${key}`, { method: "POST" }),
 

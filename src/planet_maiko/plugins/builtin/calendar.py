@@ -24,6 +24,19 @@ class CalendarPlugin(PollerPlugin):
     def get_config_defaults(self):
         return {"calendar": {"enabled": False, "poll_interval_minutes": 30, "ical_urls": []}}
 
+    def get_config_schema(self):
+        return {
+            "enabled": {"type": "bool", "label": "Enabled"},
+            "ical_urls": {
+                "type": "list", "label": "iCal URLs",
+                "placeholder": "https://calendar.google.com/...",
+                "help": "iCal/ICS URLs. Google: Settings → your calendar → Secret address in iCal format.",
+            },
+            "poll_interval_minutes": {
+                "type": "number", "label": "Poll interval (minutes)",
+            },
+        }
+
     def poll(self, config):
         ical_urls = config.get("ical_urls", [])
         if not ical_urls:

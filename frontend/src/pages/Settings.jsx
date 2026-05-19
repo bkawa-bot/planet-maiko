@@ -2,7 +2,6 @@ import { useEffect, useState, useRef } from "react";
 import { api } from "../api/client";
 import { BookOpen } from "@icons";
 import ConceptsModal from "../components/ConceptsModal";
-import IntegrationsSection from "../components/settings/IntegrationsSection";
 import AutopilotSection from "../components/settings/AutopilotSection";
 import HomeOverviewSection from "../components/settings/HomeOverviewSection";
 import RepoChecksSection from "../components/settings/RepoChecksSection";
@@ -195,14 +194,6 @@ export default function Settings() {
       <HomeOverviewSection config={config} updateField={updateField} />
       <RepoChecksSection />
 
-      <IntegrationsSection
-        config={config}
-        updateField={updateField}
-        pollerStatus={pollerStatus}
-        onRunPoller={handleRunPoller}
-        onMessage={flash}
-      />
-
       <AgentPreferencesSection
         config={config}
         setConfig={setConfig}
@@ -230,6 +221,8 @@ export default function Settings() {
         plugins={plugins}
         setPlugins={setPlugins}
         onMessage={flash}
+        pollerStatus={pollerStatus}
+        onRunPoller={handleRunPoller}
       />
 
       <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 4 }}>

@@ -41,9 +41,13 @@ def update_config():
     return jsonify({"status": "ok"})
 
 
-@config_bp.route("/config/test/<integration>", methods=["POST"])
-def test_integration(integration):
-    """Test if an integration is working."""
+def _test_integration_payload(integration):
+    """Connectivity check for one integration. Returns (payload, status).
+
+    The single source of truth shared by the /config/test route and the
+    builtin plugins' `test_connection` setup actions, so there's one
+    implementation of "is this integration reachable" rather than two.
+    """
     import subprocess
 
     if integration == "github":
@@ -53,16 +57,16 @@ def test_integration(integration):
                 capture_output=True, text=True, timeout=10,
             )
             if result.returncode == 0:
-                return jsonify({"status": "ok", "user": result.stdout.strip()})
-            return jsonify({"status": "error", "message": result.stderr[:200]}), 400
+                return {"status": "ok", "user": result.stdout.strip()}, 200
+            return {"status": "error", "message": result.stderr[:200]}, 400
         except FileNotFoundError:
-            return jsonify({"status": "error", "message": "gh CLI not installed"}), 400
+            return {"status": "error", "message": "gh CLI not installed"}, 400
 
-    elif integration == "linear":
+    if integration == "linear":
         config = load_config()
         api_key = config.get("linear", {}).get("api_key", "")
         if not api_key:
-            return jsonify({"status": "error", "message": "No API key configured"}), 400
+            return {"status": "error", "message": "No API key configured"}, 400
         try:
             import urllib.request
             req = urllib.request.Request(
@@ -74,24 +78,31 @@ def test_integration(integration):
                 import json
                 data = json.loads(resp.read())
                 name = data.get("data", {}).get("viewer", {}).get("name", "unknown")
-                return jsonify({"status": "ok", "user": name})
+                return {"status": "ok", "user": name}, 200
         except Exception as e:
-            return jsonify({"status": "error", "message": str(e)}), 400
+            return {"status": "error", "message": str(e)}, 400
 
-    elif integration == "pagerduty":
+    if integration == "pagerduty":
         from planet_maiko.plugins.clients.pagerduty_client import PagerDutyClient
         try:
             client = PagerDutyClient()
         except ValueError as e:
-            return jsonify({"status": "error", "message": str(e)}), 400
+            return {"status": "error", "message": str(e)}, 400
         try:
             me = client.fetch_me()
             name = me.get("name") or me.get("email") or "unknown"
-            return jsonify({"status": "ok", "user": name})
+            return {"status": "ok", "user": name}, 200
         except Exception as e:
-            return jsonify({"status": "error", "message": str(e)}), 400
+            return {"status": "error", "message": str(e)}, 400
 
-    return jsonify({"status": "error", "message": f"Unknown integration: {integration}"}), 400
+    return {"status": "error", "message": f"Unknown integration: {integration}"}, 400
+
+
+@config_bp.route("/config/test/<integration>", methods=["POST"])
+def test_integration(integration):
+    """Test if an integration is working."""
+    payload, status = _test_integration_payload(integration)
+    return jsonify(payload), status
 
 
 @config_bp.route("/config/linear/teams", methods=["GET"])
@@ -136,46 +147,47 @@ def linear_team_meta():
     return jsonify(meta)
 
 
-@config_bp.route("/github/discover", methods=["POST"])
-def discover_github_repos():
-    """Discover recent repos the user has committed to via gh CLI."""
+def _gh_discover_payload(username):
+    """Discover repos the user recently pushed to via the gh CLI.
+
+    Returns (payload, status). Shared by the /github/discover route
+    (setup wizard) and the github plugin's `discover_repos` setup
+    action, so the gh preflight + fallback logic lives in one place.
+    """
     import subprocess
     import json as _json
     import shutil as _shutil
 
-    config = load_config()
-    username = config.get("github", {}).get("username", "")
-
     if not username:
-        return jsonify({"error": "GitHub username not configured"}), 400
+        return {"error": "GitHub username not configured"}, 400
 
     # Explicit preflight so the setup wizard can show a clean next step
     # instead of a generic "discovery failed" when the real issue is a
     # missing binary or a logged-out session.
     if not _shutil.which("gh"):
-        return jsonify({
+        return {
             "error": "gh CLI not found",
             "hint": "Install it from https://cli.github.com, then re-run",
             "action": "install",
-        }), 400
+        }, 400
     try:
         auth_check = subprocess.run(
             ["gh", "auth", "status"], capture_output=True, text=True, timeout=5,
         )
         if auth_check.returncode != 0:
-            return jsonify({
+            return {
                 "error": "gh CLI isn't authenticated",
                 "hint": "Run: gh auth login",
                 "action": "auth",
-            }), 400
+            }, 400
     except subprocess.TimeoutExpired:
-        return jsonify({"error": "gh auth status timed out"}), 500
+        return {"error": "gh auth status timed out"}, 500
     except FileNotFoundError:
-        return jsonify({
+        return {
             "error": "gh CLI not found",
             "hint": "Install it from https://cli.github.com",
             "action": "install",
-        }), 400
+        }, 400
 
     try:
         # Get repos the user recently pushed to (last 60 days). Computed
@@ -195,9 +207,9 @@ def discover_github_repos():
                 capture_output=True, text=True, timeout=15,
             )
             if result.returncode != 0:
-                return jsonify({"error": f"gh CLI failed: {result.stderr[:200]}"}), 500
+                return {"error": f"gh CLI failed: {result.stderr[:200]}"}, 500
             repos = [r.strip() for r in result.stdout.strip().split("\n") if r.strip()]
-            return jsonify({"repos": repos[:10], "source": "repo_list"})
+            return {"repos": repos[:10], "source": "repo_list"}, 200
 
         data = _json.loads(result.stdout)
         # Extract unique repo names from commit search
@@ -209,14 +221,22 @@ def discover_github_repos():
                 seen.add(repo_name)
                 repos.append(repo_name)
 
-        return jsonify({"repos": repos[:10], "source": "recent_commits"})
+        return {"repos": repos[:10], "source": "recent_commits"}, 200
 
     except FileNotFoundError:
-        return jsonify({"error": "gh CLI not found. Install it and run 'gh auth login'"}), 500
+        return {"error": "gh CLI not found. Install it and run 'gh auth login'"}, 500
     except subprocess.TimeoutExpired:
-        return jsonify({"error": "gh CLI timed out"}), 500
+        return {"error": "gh CLI timed out"}, 500
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return {"error": str(e)}, 500
+
+
+@config_bp.route("/github/discover", methods=["POST"])
+def discover_github_repos():
+    """Discover recent repos the user has committed to via gh CLI."""
+    username = load_config().get("github", {}).get("username", "")
+    payload, status = _gh_discover_payload(username)
+    return jsonify(payload), status
 
 
 @config_bp.route("/pollers/status", methods=["GET"])

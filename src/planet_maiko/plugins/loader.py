@@ -331,6 +331,11 @@ def load_plugins(app):
                         "label": a.get("label") or a.get("key"),
                         "description": a.get("description") or "",
                         "destructive": bool(a.get("destructive")),
+                        # Sync actions (test connection, discover, fetch
+                        # options) run inline and return a result the
+                        # form shows immediately; async ones (backfills)
+                        # return 202 and drop a memo when done.
+                        "sync": bool(a.get("sync")),
                     }
                     for a in setup_actions
                     if isinstance(a, dict) and a.get("key")
@@ -385,12 +390,17 @@ def load_plugins(app):
 
     @plugins_bp.route("/plugins/<name>/actions/<key>", methods=["POST"])
     def run_plugin_setup_action(name, key):
-        """Run a plugin's user-triggered setup action in the background.
+        """Run a plugin's user-triggered setup action.
 
-        Returns 202 immediately; the work runs in a daemon thread and
-        drops a memo on completion (success or failure) so a slow
-        backfill / import doesn't block the request and the user gets
-        told when it's done.
+        Two shapes, chosen by the action's `sync` flag:
+
+          - sync (test connection, discover repos, fetch options): runs
+            inline inside the request and returns 200 with the action's
+            result dict ({ok, message, config_patch?, options?}) so the
+            Settings form can show the outcome and apply it right away.
+          - async (backfills, imports): returns 202, runs in a daemon
+            thread, drops a completion memo. A slow import shouldn't
+            block the request.
         """
         import threading
         from flask import current_app
@@ -401,12 +411,29 @@ def load_plugins(app):
         if plugin is None:
             return jsonify({"error": f"Unknown plugin: {name}"}), 404
         try:
-            actions = {a.get("key") for a in (plugin.get_setup_actions() or [])
-                       if isinstance(a, dict)}
+            action_list = [a for a in (plugin.get_setup_actions() or [])
+                           if isinstance(a, dict)]
         except Exception:
-            actions = set()
-        if key not in actions:
+            action_list = []
+        action = next((a for a in action_list if a.get("key") == key), None)
+        if action is None:
             return jsonify({"error": f"Unknown setup action: {key}"}), 404
+
+        if action.get("sync"):
+            # Inline: the user is waiting on the result (a connection
+            # test, a discovered list). No thread, no memo. A raise
+            # becomes {ok: false} so the form renders the reason next
+            # to the button instead of surfacing a 500.
+            try:
+                result = plugin.run_setup_action(key)
+            except Exception as e:
+                logger.info(f"[plugins] sync action {name}.{key} failed: {e}")
+                return jsonify({"ok": False, "message": str(e)[:500]})
+            if not isinstance(result, dict):
+                result = {"message": str(result) if result else "Done."}
+            result.setdefault("ok", True)
+            result.setdefault("message", "Done.")
+            return jsonify(result)
 
         app_obj = current_app._get_current_object()
 

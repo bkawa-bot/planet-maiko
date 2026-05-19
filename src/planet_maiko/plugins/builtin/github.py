@@ -21,7 +21,127 @@ class GitHubPlugin(PollerPlugin):
     name = "github"
 
     def get_config_defaults(self):
-        return {"github": {"enabled": False, "poll_interval_minutes": 5, "username": "", "repos": []}}
+        return {"github": {"enabled": False, "poll_interval_minutes": 5,
+                           "username": "", "repos": [], "repo_roots": []}}
+
+    def get_config_schema(self):
+        return {
+            "enabled": {"type": "bool", "label": "Enabled"},
+            "username": {
+                "type": "string", "label": "GitHub username",
+                "placeholder": "your-github-username",
+                "help": "Requires the gh CLI installed and authenticated (gh auth login).",
+            },
+            "repos": {
+                "type": "list", "label": "Repos",
+                "placeholder": "org/repo, org/other-repo",
+                "help": "Repos watched for merged-PR signals. Use Discover to fill from recent activity.",
+            },
+            "repo_roots": {
+                "type": "list", "label": "Repository roots",
+                "placeholder": "~/src, ~/projects",
+                "help": "Local paths where your repos live on disk. Used for agent worktrees.",
+            },
+            "poll_interval_minutes": {
+                "type": "number", "label": "Poll interval (minutes)",
+            },
+        }
+
+    def get_setup_actions(self):
+        return [
+            {"key": "test_connection", "label": "Test connection", "sync": True,
+             "description": "Check the gh CLI is installed and authenticated."},
+            {"key": "discover_repos", "label": "Discover repos", "sync": True,
+             "description": "Find repos you've pushed to recently and add them above."},
+        ]
+
+    def run_setup_action(self, key):
+        if key == "test_connection":
+            return {"ok": True, "message": f"Connected as {self._gh_user()}"}
+        if key == "discover_repos":
+            return self._discover_repos()
+        return super().run_setup_action(key)
+
+    @staticmethod
+    def _gh_user():
+        """Authenticated gh login, or raise with a reason the form shows."""
+        try:
+            result = subprocess.run(
+                ["gh", "api", "user", "--jq", ".login"],
+                capture_output=True, text=True, timeout=10,
+            )
+        except FileNotFoundError:
+            raise RuntimeError(
+                "gh CLI not installed. Install it from https://cli.github.com"
+            )
+        if result.returncode != 0:
+            raise RuntimeError(
+                result.stderr.strip()[:200]
+                or "gh auth check failed. Run: gh auth login"
+            )
+        login = result.stdout.strip()
+        if not login:
+            raise RuntimeError("gh returned no user. Run: gh auth login")
+        return login
+
+    def _discover_repos(self):
+        """Find repos the user pushed to recently; merge into config.repos."""
+        import shutil as _shutil
+        from datetime import datetime, timezone, timedelta
+
+        cfg = self._get_config()
+        username = cfg.get("username", "")
+        if not username:
+            raise RuntimeError("Set your GitHub username first, then discover.")
+        if not _shutil.which("gh"):
+            raise RuntimeError(
+                "gh CLI not found. Install it from https://cli.github.com"
+            )
+        auth = subprocess.run(
+            ["gh", "auth", "status"], capture_output=True, text=True, timeout=5,
+        )
+        if auth.returncode != 0:
+            raise RuntimeError("gh CLI isn't authenticated. Run: gh auth login")
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=60)).strftime("%Y-%m-%d")
+        found = []
+        result = subprocess.run(
+            ["gh", "api",
+             f"/search/commits?q=author:{username}+committer-date:>{cutoff}"
+             "&sort=committer-date&per_page=30"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0:
+            data = json.loads(result.stdout or "{}")
+            seen = set()
+            for item in data.get("items", []):
+                repo_name = (item.get("repository") or {}).get("full_name", "")
+                if repo_name and repo_name not in seen:
+                    seen.add(repo_name)
+                    found.append(repo_name)
+            found = found[:10]
+        else:
+            fallback = subprocess.run(
+                ["gh", "repo", "list", username, "--limit", "20",
+                 "--json", "nameWithOwner", "--jq", ".[].nameWithOwner"],
+                capture_output=True, text=True, timeout=15,
+            )
+            if fallback.returncode != 0:
+                raise RuntimeError(
+                    f"gh CLI failed: {fallback.stderr.strip()[:200]}"
+                )
+            found = [r.strip() for r in fallback.stdout.strip().split("\n") if r.strip()][:10]
+
+        if not found:
+            return {"ok": False, "message": "No repos found from recent activity."}
+        existing = list(cfg.get("repos") or [])
+        merged = existing + [r for r in found if r not in existing]
+        added = len(merged) - len(existing)
+        return {
+            "ok": True,
+            "message": f"Found {len(found)} repo(s), {added} new.",
+            "config_patch": {"repos": merged},
+        }
 
     def _gh(self, args):
         """Run a gh CLI command and return parsed JSON."""

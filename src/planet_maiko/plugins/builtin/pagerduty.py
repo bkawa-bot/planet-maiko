@@ -22,6 +22,35 @@ class PagerDutyPlugin(PollerPlugin):
     def get_config_defaults(self):
         return {"pagerduty": {"enabled": False, "poll_interval_minutes": 5, "api_token": ""}}
 
+    def get_config_schema(self):
+        return {
+            "enabled": {"type": "bool", "label": "Enabled"},
+            "api_token": {
+                "type": "string", "label": "API token", "secret": True,
+                "placeholder": "u+...",
+                "help": "PagerDuty → My Profile → User Settings → API Access → Create token.",
+            },
+            "poll_interval_minutes": {
+                "type": "number", "label": "Poll interval (minutes)",
+            },
+        }
+
+    def get_setup_actions(self):
+        return [{
+            "key": "test_connection", "label": "Test connection", "sync": True,
+            "description": "Verify the API token and show who you are.",
+        }]
+
+    def run_setup_action(self, key):
+        if key != "test_connection":
+            return super().run_setup_action(key)
+        token = self._get_config().get("api_token", "")
+        if not token:
+            raise ValueError("PagerDuty API token not configured.")
+        me = PagerDutyClient(api_token=token).fetch_me()
+        name = me.get("name") or me.get("email") or "unknown"
+        return {"ok": True, "message": f"Connected as {name}"}
+
     def poll(self, config):
         api_token = config.get("api_token", "")
         if not api_token:

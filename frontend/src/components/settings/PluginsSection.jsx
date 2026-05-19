@@ -1,13 +1,20 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Plug, AlertTriangle } from "@icons";
+import { ChevronDown, ChevronRight, Plug, AlertTriangle, CheckCircle2, AlertCircle, Loader } from "@icons";
 import { api } from "../../api/client";
 
 /**
- * Plugins — list of discovered plugins (local files in ~/.maiko/plugins
- * or pip packages registered via the planet_maiko.plugins entry point)
- * plus their declared config_schema rendered as form fields.
+ * Plugins — every discovered plugin (builtin first-party integrations,
+ * local files in ~/.maiko/plugins, or pip packages registered via the
+ * planet_maiko.plugins entry point) with its declared config_schema
+ * rendered as a form, its setup actions as buttons, and a poll-status
+ * line for pollers. This is the single home for integration config;
+ * the first-party ones (GitHub, Linear, Calendar, PagerDuty) drive
+ * test-connection / discovery / team-pick through sync setup actions.
  */
-export default function PluginsSection({ config, setConfig, plugins, setPlugins, onMessage }) {
+export default function PluginsSection({
+  config, setConfig, plugins, setPlugins, onMessage,
+  pollerStatus = {}, onRunPoller,
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -27,59 +34,16 @@ export default function PluginsSection({ config, setConfig, plugins, setPlugins,
           ) : (
             <div className="plugins-list">
               {plugins.map((p) => (
-                <div key={p.name} className={`plugin-card ${p.status}`}>
-                  <div className="plugin-card-header">
-                    <Plug size={14} className={`plugin-icon status-${p.status}`} />
-                    <div className="plugin-info">
-                      <span className="plugin-name">{p.name}</span>
-                      <span className="plugin-source">
-                        {p.source === "local" ? p.file : `entry_point: ${p.entry_point}`}
-                      </span>
-                    </div>
-                    <div className="plugin-status-area">
-                      <span className={`badge ${p.status === "loaded" ? "active" : p.status === "disabled" ? "cancelled" : p.status === "pending_restart" ? "in_progress" : "urgent"}`}>
-                        {p.status === "pending_restart" ? "restart needed" : p.status}
-                      </span>
-                      <label className="plugin-toggle">
-                        <input
-                          type="checkbox"
-                          checked={p.status !== "disabled"}
-                          onChange={async () => {
-                            try {
-                              const result = await api.togglePlugin(p.name);
-                              onMessage(`Plugin "${p.name}" ${result.status}. Restart the server to apply.`);
-                              const updated = await api.getPlugins();
-                              setPlugins(updated);
-                            } catch (err) {
-                              onMessage("Failed to toggle plugin: " + err.message);
-                            }
-                          }}
-                        />
-                        <span className="toggle-slider" />
-                      </label>
-                    </div>
-                  </div>
-                  {p.status === "error" && p.error && (
-                    <div className="plugin-error">
-                      <AlertTriangle size={10} /> {p.error.split("\n").pop() || p.error}
-                    </div>
-                  )}
-                  {p.config_schema && Object.keys(p.config_schema).length > 0 && (
-                    <PluginConfigForm
-                      plugin={p}
-                      config={config}
-                      onChange={(field, value) => {
-                        const key = p.config_key || p.name;
-                        const section = { ...(config[key] || {}) };
-                        section[field] = value;
-                        setConfig({ ...config, [key]: section });
-                      }}
-                    />
-                  )}
-                  {Array.isArray(p.setup_actions) && p.setup_actions.length > 0 && (
-                    <PluginSetupActions plugin={p} onMessage={onMessage} />
-                  )}
-                </div>
+                <PluginCard
+                  key={p.name}
+                  p={p}
+                  config={config}
+                  setConfig={setConfig}
+                  setPlugins={setPlugins}
+                  onMessage={onMessage}
+                  poller={pollerStatus[p.name]}
+                  onRunPoller={onRunPoller}
+                />
               ))}
             </div>
           )}
@@ -89,55 +53,185 @@ export default function PluginsSection({ config, setConfig, plugins, setPlugins,
   );
 }
 
-/**
- * User-triggered setup actions (backfill, import, auto-configure).
- * Each fires POST /api/plugins/<name>/actions/<key>; the backend runs
- * it in a daemon thread and drops a memo when done, so the button
- * just kicks it off and tells the user it's running.
- */
-function PluginSetupActions({ plugin, onMessage }) {
-  const [running, setRunning] = useState(null);
+function PluginCard({ p, config, setConfig, setPlugins, onMessage, poller, onRunPoller }) {
+  // Result text shown inline next to each sync action button.
+  // { [actionKey]: { status: "ok"|"error"|"running", text } }
+  const [actionState, setActionState] = useState({});
+  // Options harvested from a sync action's `options` payload, keyed by
+  // the config field they populate (drives `options_from` selects).
+  const [dynamicOptions, setDynamicOptions] = useState({});
+  const [pollerBusy, setPollerBusy] = useState(false);
+
+  const configKey = p.config_key || p.name;
+
+  const applyConfigPatch = (patch) => {
+    setConfig({
+      ...config,
+      [configKey]: { ...(config[configKey] || {}), ...patch },
+    });
+  };
+
+  const runAction = async (a) => {
+    if (a.destructive && !window.confirm(`Run "${a.label}"? This can't be undone.`)) {
+      return;
+    }
+    if (a.sync) {
+      setActionState((s) => ({ ...s, [a.key]: { status: "running", text: "Working…" } }));
+      try {
+        const r = await api.runPluginAction(p.name, a.key);
+        const ok = r?.ok !== false;
+        setActionState((s) => ({
+          ...s,
+          [a.key]: { status: ok ? "ok" : "error", text: r?.message || (ok ? "Done." : "Failed") },
+        }));
+        if (ok && r?.config_patch) applyConfigPatch(r.config_patch);
+        if (r?.options) setDynamicOptions((o) => ({ ...o, ...r.options }));
+      } catch (err) {
+        setActionState((s) => ({
+          ...s,
+          [a.key]: { status: "error", text: err.message || "Failed" },
+        }));
+      }
+      return;
+    }
+    // Async: fire-and-forget, backend drops a memo when it finishes.
+    try {
+      await api.runPluginAction(p.name, a.key);
+      onMessage(`"${a.label}" started — you'll get a memo when it finishes.`);
+    } catch (err) {
+      onMessage(`Couldn't start "${a.label}": ${err.message}`);
+    }
+  };
+
+  const hasSchema = p.config_schema && Object.keys(p.config_schema).length > 0;
+  const actions = Array.isArray(p.setup_actions) ? p.setup_actions : [];
+
   return (
-    <div className="plugin-setup-actions">
-      {plugin.setup_actions.map((a) => (
-        <div key={a.key} className="plugin-setup-action">
-          <button
-            className="btn btn-sm"
-            disabled={running === a.key}
-            onClick={async () => {
-              if (a.destructive && !window.confirm(`Run "${a.label}"? This can't be undone.`)) {
-                return;
-              }
-              setRunning(a.key);
-              try {
-                await api.runPluginAction(plugin.name, a.key);
-                onMessage(`"${a.label}" started — you'll get a memo when it finishes.`);
-              } catch (err) {
-                onMessage(`Couldn't start "${a.label}": ${err.message}`);
-              } finally {
-                setRunning(null);
-              }
-            }}
-          >
-            {running === a.key ? "Starting…" : a.label}
-          </button>
-          {a.description && (
-            <span className="plugin-setup-action-help">{a.description}</span>
-          )}
+    <div className={`plugin-card ${p.status}`}>
+      <div className="plugin-card-header">
+        <Plug size={14} className={`plugin-icon status-${p.status}`} />
+        <div className="plugin-info">
+          <span className="plugin-name">{p.name}</span>
+          <span className="plugin-source">
+            {p.source === "local"
+              ? p.file
+              : p.source === "builtin"
+                ? "built-in"
+                : `entry_point: ${p.entry_point}`}
+          </span>
         </div>
-      ))}
+        <div className="plugin-status-area">
+          <span className={`badge ${p.status === "loaded" ? "active" : p.status === "disabled" ? "cancelled" : p.status === "pending_restart" ? "in_progress" : "urgent"}`}>
+            {p.status === "pending_restart" ? "restart needed" : p.status}
+          </span>
+          <label className="plugin-toggle">
+            <input
+              type="checkbox"
+              checked={p.status !== "disabled"}
+              onChange={async () => {
+                try {
+                  const result = await api.togglePlugin(p.name);
+                  onMessage(`Plugin "${p.name}" ${result.status}. Restart the server to apply.`);
+                  const updated = await api.getPlugins();
+                  setPlugins(updated);
+                } catch (err) {
+                  onMessage("Failed to toggle plugin: " + err.message);
+                }
+              }}
+            />
+            <span className="toggle-slider" />
+          </label>
+        </div>
+      </div>
+
+      {p.status === "error" && p.error && (
+        <div className="plugin-error">
+          <AlertTriangle size={10} /> {p.error.split("\n").pop() || p.error}
+        </div>
+      )}
+
+      {hasSchema && (
+        <PluginConfigForm
+          plugin={p}
+          config={config}
+          dynamicOptions={dynamicOptions}
+          onChange={(field, value) => {
+            setConfig({
+              ...config,
+              [configKey]: { ...(config[configKey] || {}), [field]: value },
+            });
+          }}
+        />
+      )}
+
+      {actions.length > 0 && (
+        <div className="plugin-setup-actions">
+          {actions.map((a) => {
+            const r = actionState[a.key];
+            return (
+              <div key={a.key} className="plugin-setup-action">
+                <button
+                  className="btn btn-sm"
+                  disabled={r?.status === "running"}
+                  onClick={() => runAction(a)}
+                >
+                  {r?.status === "running" ? "Working…" : a.label}
+                </button>
+                {a.description && (
+                  <span className="plugin-setup-action-help">{a.description}</span>
+                )}
+                {r && r.status !== "running" && (
+                  <span className={`test-result test-result-${r.status}`}>
+                    {r.status === "ok"
+                      ? <CheckCircle2 size={11} />
+                      : <AlertCircle size={11} />}
+                    {" "}{r.text}
+                  </span>
+                )}
+                {r && r.status === "running" && (
+                  <span className="test-result test-result-testing">
+                    <Loader size={11} className="spin" /> {r.text}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {poller && (
+        <div className="poller-status poller-status-ok">
+          <div className="poller-status-row">
+            <span>
+              {poller.enabled ? "Enabled" : "Disabled"}
+              {" · polls every "}{poller.interval_minutes || 5} min
+            </span>
+            {onRunPoller && (
+              <button
+                disabled={pollerBusy}
+                onClick={async () => {
+                  setPollerBusy(true);
+                  try { await onRunPoller(p.name); } finally { setPollerBusy(false); }
+                }}
+              >
+                {pollerBusy ? "Running…" : "Run Now"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 /**
  * Renders a plugin's declared config_schema as editable fields. Reads
- * the current values from config[plugin.config_key] and writes through
- * onChange(field, value). Supports string, bool, number, and list (CSV).
- * Intentionally thin — more complex shapes (nested, dependent fields)
- * can be added as plugins request them.
+ * current values from config[plugin.config_key] and writes through
+ * onChange(field, value). Supports string, bool, number, list (CSV),
+ * and select (static `options` or `options_from` a sync setup action,
+ * whose results arrive via the `dynamicOptions` prop).
  */
-function PluginConfigForm({ plugin, config, onChange }) {
+function PluginConfigForm({ plugin, config, onChange, dynamicOptions = {} }) {
   const key = plugin.config_key || plugin.name;
   const section = config?.[key] || {};
   const schema = plugin.config_schema || {};
@@ -157,6 +251,27 @@ function PluginConfigForm({ plugin, config, onChange }) {
               />
               <span>{label}</span>
               {meta.help && <span className="plugin-config-help">— {meta.help}</span>}
+            </label>
+          );
+        }
+        if (type === "select") {
+          const fetched = dynamicOptions[field];
+          let options = meta.options || fetched || [];
+          // No options yet but a value is saved: show it as the sole
+          // choice so a configured field survives a reload until the
+          // user re-runs the populating action.
+          if ((!options || options.length === 0) && value) {
+            options = [{ value, label: String(value) }];
+          }
+          return (
+            <label key={field} className="plugin-config-field">
+              <span>{label}{meta.help && <span className="plugin-config-help"> — {meta.help}</span>}</span>
+              <select value={value ?? ""} onChange={(e) => onChange(field, e.target.value)}>
+                <option value="">— none —</option>
+                {options.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
             </label>
           );
         }

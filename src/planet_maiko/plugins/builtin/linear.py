@@ -200,17 +200,59 @@ class LinearPlugin(PollerPlugin):
     def get_config_defaults(self):
         return {"linear": {"enabled": False, "poll_interval_minutes": 5, "api_key": "", "team_id": ""}}
 
+    def get_config_schema(self):
+        return {
+            "enabled": {"type": "bool", "label": "Enabled"},
+            "api_key": {
+                "type": "string", "label": "API key", "secret": True,
+                "placeholder": "lin_api_...",
+                "help": "Linear → Settings → API → Personal API keys → Create key.",
+            },
+            "team_id": {
+                "type": "select", "label": "Team",
+                "options_from": "fetch_teams",
+                "help": "Run Fetch teams to pick yours. Issues Maiko creates land here.",
+            },
+            "poll_interval_minutes": {
+                "type": "number", "label": "Poll interval (minutes)",
+            },
+        }
+
     def get_setup_actions(self):
-        return [{
-            "key": "import",
-            "label": "Import from Linear",
-            "description": "Pull your assigned issues in as tasks, plus any projects you lead.",
-        }]
+        return [
+            {"key": "test_connection", "label": "Test connection", "sync": True,
+             "description": "Verify the API key works."},
+            {"key": "fetch_teams", "label": "Fetch teams", "sync": True,
+             "description": "Load your Linear teams so you can pick one above."},
+            {"key": "import", "label": "Import from Linear",
+             "description": "Pull your assigned issues in as tasks, plus any projects you lead."},
+        ]
 
     def run_setup_action(self, key):
+        if key == "test_connection":
+            api_key = (load_config().get("linear") or {}).get("api_key")
+            if not api_key:
+                raise ValueError("Linear API key not configured. Set it in Settings.")
+            data = self._query(api_key, "{ viewer { name } }")
+            name = (data.get("viewer") or {}).get("name") or "unknown"
+            return {"ok": True, "message": f"Connected as {name}"}
+
+        if key == "fetch_teams":
+            teams = LinearPlugin.fetch_teams()
+            if not teams:
+                return {"ok": False, "message": "No teams found for this API key."}
+            return {
+                "ok": True,
+                "message": f"Found {len(teams)} team(s). Pick yours above.",
+                "options": {"team_id": [
+                    {"value": t["id"],
+                     "label": t["name"] + (f" ({t['key']})" if t.get("key") else "")}
+                    for t in teams if t.get("id")
+                ]},
+            }
+
         if key != "import":
             return super().run_setup_action(key)
-        from planet_maiko.config import load_config
         api_key = (load_config().get("linear") or {}).get("api_key")
         if not api_key:
             raise ValueError("Linear API key not configured. Set it in Settings.")

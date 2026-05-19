@@ -284,21 +284,44 @@ class MaikoPlugin:
                 "label": "Import from Linear",       # required, button text
                 "description": "Pull assigned issues + led projects",
                 "destructive": False,                # optional, confirm-first
+                "sync": False,                       # optional, see below
             }
 
-        The button calls POST /api/plugins/<name>/actions/<key>, which
-        dispatches to run_setup_action(key) in a background thread and
-        drops a memo when it finishes.
+        The button calls POST /api/plugins/<name>/actions/<key>.
+
+        With sync=False (default) the work runs in a background thread
+        and drops a completion memo. Right for slow backfills/imports.
+
+        With sync=True the action runs inline and its return value is
+        handed straight back to the form. Right for fast, interactive
+        actions (test a connection, discover repos, fetch a picker's
+        options) where the user is waiting on the result.
         """
         return []
 
     def run_setup_action(self, key):
         """Execute the setup action identified by `key`.
 
-        Runs in a daemon thread inside an app context. Return a short
-        dict; it's surfaced in the completion memo. Raising is fine —
-        the failure is caught and reported in the memo. Default raises
-        for an unknown key so a typo in get_setup_actions() is loud.
+        Async actions (sync=False) run in a daemon thread inside an app
+        context; the returned dict is summarized into the completion
+        memo. Raising is fine, the failure is reported in the memo.
+
+        Sync actions (sync=True) run inline; return a dict the Settings
+        form consumes directly:
+            {
+              "ok": True,                       # optional, default True
+              "message": "Connected as octocat",# shown next to the button
+              "config_patch": {"repos": [...]}, # optional; merged into
+                                                #   this plugin's config
+                                                #   section (field->value)
+              "options": {"team_id": [          # optional; populates a
+                {"value": "id", "label": "..."} #   select field whose
+              ]},                               #   options_from names
+            }                                   #   this action's key
+        A raise from a sync action is caught and shown as {ok: false}.
+
+        Default raises for an unknown key so a typo in
+        get_setup_actions() is loud.
         """
         raise NotImplementedError(
             f"{self.name}: no run_setup_action handler for {key!r}"
@@ -342,14 +365,25 @@ class MaikoPlugin:
         Supported field shapes (any unspecified keys are ignored):
           {
             "<field_name>": {
-              "type": "string" | "bool" | "number" | "list",
+              "type": "string" | "bool" | "number" | "list" | "select",
               "label": "Human-facing label",       # optional, defaults to field_name
               "help":  "One-sentence explanation", # optional
               "secret": True,                      # optional, masks the input
               "placeholder": "org/repo",           # optional hint for string fields
+              "options": [                         # select: static choices
+                {"value": "a", "label": "Option A"},
+              ],
+              "options_from": "fetch_teams",       # select: choices come
+                                                   #   from the sync setup
+                                                   #   action with this key
+                                                   #   (its `options` map)
             },
             ...
           }
+
+        A `select` with `options_from` renders an empty picker until the
+        user runs that setup action; the saved value still shows as the
+        raw value with a hint, so a configured field survives a reload.
 
         Returns:
             dict keyed by field name as above. Default: empty (no form shown).
