@@ -1,58 +1,58 @@
 /* Planet Maiko — Cosmic palette */
 
 :root {
-  /* Cosmic Nighttime: the master dark palette. Near-black backgrounds,
-     Frozen Cyan primary as a neon pop against the black, neon pink as
-     the secondary accent, icy-blue card titles, Bio Mint box outlines,
-     Toxic Lime as the green accent. Per-token values pick a hue from
-     the palette rather than improvising. */
-  --bg: #08080C;            /* Near-Black (gradient top) */
-  --bg-plain: #0D0D14;      /* Near-Black (barely-there lift) */
-  --bg-card: #101015;       /* Black Card */
-  --bg-card-alt: #16161E;   /* Black Card (alt) */
-  --bg-hover: #1C1C26;
-  --bg-selected: #2A1730;   /* Deep Pink-Plum (pink lives in the selection) */
-  --text: #E4FAF2;          /* Soft Mint-White */
-  --text-dim: #93C6BC;      /* Seafoam Gray */
-  --text-muted: #7E7A98;
+  /* Cosmic Nighttime: the master dark palette. This is the original
+     reference mock applied verbatim: dark indigo background fading to
+     a near-black backdrop, hot-pink primary, electric-cyan secondary,
+     neon mint / lavender / lemon sparks, deep-violet outlines. Token
+     values are taken straight from the design, not improvised. */
+  --bg: #21213B;            /* Background */
+  --bg-plain: #0F0B14;      /* Page backdrop (the near-black foot) */
+  --bg-card: #141420;       /* Card */
+  --bg-card-alt: #1A1A2C;   /* Card (alt) */
+  --bg-hover: #201E34;      /* Hover */
+  --bg-selected: #2C1832;   /* Selected */
+  --text: #D6FFEE;          /* Text */
+  --text-dim: #8BC1B6;      /* Text (dim) */
+  --text-muted: #A19CBF;    /* Text (muted) */
 
-  --pink: #6FE0E8;          /* Frozen Cyan (primary accent, the cryo glow) */
-  --pink-soft: rgba(111, 224, 232, 0.16);
-  --pink-glow: rgba(111, 224, 232, 0.09);
-  --blue: #FF6FAF;          /* Neon Pink (the secondary accent) */
-  --blue-soft: rgba(255, 111, 175, 0.16);
-  --mint: #4DFFC4;          /* Bio Mint (toxic glow) */
-  --orange: #FF7A4D;        /* Plasma Coral */
-  --lavender: #C9A6FF;      /* Soft Lavender Glow */
-  --peach: #FF7EB8;         /* Pink Spark (demoted pink, now a warm beat) */
-  --creamsicle: #FF8FE0;    /* Magenta Spark */
-  --lemon: #FFE66D;         /* Star Yellow */
+  --pink: #FF2D95;          /* Primary / pink */
+  --pink-soft: rgba(255, 45, 149, 0.16);
+  --pink-glow: rgba(255, 45, 149, 0.09);
+  --blue: #00CFFF;          /* Blue */
+  --blue-soft: rgba(0, 207, 255, 0.16);
+  --mint: #38FFBD;          /* Mint */
+  --orange: #FF6B2D;        /* Orange */
+  --lavender: #C44DFF;      /* Lavender */
+  --peach: #FF7EB8;         /* Peach */
+  --creamsicle: #FF8FE0;    /* Magenta Spark (between pink and lavender) */
+  --lemon: #DFFF3C;         /* Lemon */
 
-  --urgent: #FF4D6E;        /* Hot Magenta Red */
-  --high: #FF8A3D;          /* Ember Orange */
-  --normal: #8C86A8;        /* Muted Lilac-Gray (no longer the pink primary) */
-  --low: #5C5878;
-  --green: #C4F542;         /* Toxic Lime (bioluminescent success) */
-  --border: rgba(143, 255, 201, 0.30);      /* Bio Mint glow on modal/pane edges */
-  --border-subtle: rgba(143, 255, 201, 0.12);
+  --urgent: #FF1A4B;        /* Urgent */
+  --high: #FF8A1A;          /* High */
+  --normal: #8884A0;        /* Normal */
+  --low: #585472;           /* Low */
+  --green: #00FF7F;         /* Green / success */
+  --border: #491566;        /* Border */
+  --border-subtle: #02323B; /* Border (subtle) */
 
   /* Card title + border accents — pulled per theme so cards stop
      reading as one-note. */
-  --card-title: #5FD1EB;          /* Icy Blue (glacier title pop) */
-  --card-border: rgba(143, 255, 201, 0.42);
+  --card-title: #D6FFEE;          /* unset in the mock: titles use the text color */
+  --card-border: rgba(255, 45, 149, 0.40);
 
   /* Themed tint backgrounds — track the active theme so badges/pills
      stay coherent. */
-  --urgent-soft: rgba(255, 77, 110, 0.16);
-  --urgent-faint: rgba(255, 77, 110, 0.08);
-  --high-soft: rgba(255, 138, 61, 0.16);
-  --high-faint: rgba(255, 138, 61, 0.08);
-  --lemon-soft: rgba(255, 230, 109, 0.15);
-  --lemon-faint: rgba(255, 230, 109, 0.06);
-  --green-soft: rgba(196, 245, 66, 0.16);
-  --green-faint: rgba(196, 245, 66, 0.08);
-  --lavender-soft: rgba(201, 166, 255, 0.15);
-  --lavender-faint: rgba(201, 166, 255, 0.08);
+  --urgent-soft: rgba(255, 26, 75, 0.16);
+  --urgent-faint: rgba(255, 26, 75, 0.08);
+  --high-soft: rgba(255, 138, 26, 0.16);
+  --high-faint: rgba(255, 138, 26, 0.08);
+  --lemon-soft: rgba(223, 255, 60, 0.15);
+  --lemon-faint: rgba(223, 255, 60, 0.06);
+  --green-soft: rgba(0, 255, 127, 0.16);
+  --green-faint: rgba(0, 255, 127, 0.08);
+  --lavender-soft: rgba(196, 77, 255, 0.15);
+  --lavender-faint: rgba(196, 77, 255, 0.08);
 
   /* Body font. Atkinson Hyperlegible — designed by the Braille Institute
      for low-vision readability. Distinct character shapes (the 1, l, I
@@ -93,11 +93,10 @@
   /* Surface backgrounds — theme-controllable. Custom themes can
      override via `topbar_gradient` and `pane_bg` in their colors
      dict; otherwise they inherit these defaults (night look). */
-  /* Topbar gradient. The full signature gradient lives on the palette
-     reference; on the nav strip it's noise. Cosmic Nighttime runs a
-     near-black sweep with a faint bio-mint corner. */
-  --topbar-gradient: linear-gradient(135deg, #08080C 0%, #0E1414 55%, #143828 100%);
-  --pane-bg: rgba(13, 13, 17, 0.55);
+  /* Topbar gradient. The signature hot-pink to electric-cyan sweep
+     from the mock, the two hero colors. */
+  --topbar-gradient: linear-gradient(135deg, #FF2D95 0%, #00CFFF 100%);
+  --pane-bg: rgba(20, 20, 32, 0.55);
 
   /* World background SVG. Driven by the active theme so flipping
      "Cosmic Nighttime" → "Daylight" swaps which hills sit at the
