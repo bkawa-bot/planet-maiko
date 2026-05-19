@@ -248,7 +248,7 @@
 
 /* ============================================================
    Curated extended themes — built from the new master palette.
-     Night:    bioluminescent, frozen, aurora
+     Night:    bioluminescent, frozen
      Day:      mint-meadow
    The remaining themes (cosmic default, sunset twilight, dawn
    morning, daylight light) live above. Each picks a primary
@@ -344,49 +344,6 @@
   --lavender-soft: rgba(201, 166, 255, 0.20); --lavender-faint: rgba(201, 166, 255, 0.10);
   --topbar-gradient: linear-gradient(135deg, #0B1830 0%, #1A3D8F 40%, #1FB5E5 75%, #6FE0E8 100%);
   --pane-bg: rgba(18, 36, 72, 0.55);
-}
-
-/* === Aurora — northern lights over a violet plane. Lavender + magenta
-   spark + soft lavender glow on a deep-indigo bg. Star yellow as the
-   single warm beat (the lone moon). Heavier on the highlights/sparkles
-   palette than the original aurora; less mint-teal, more witching. */
-[data-theme="aurora"] {
-  --bg: #0E1230;            /* deep cosmos */
-  --bg-plain: #2A2250;      /* Midnight Purple */
-  --bg-card: #1A1F4A;
-  --bg-card-alt: #2A2250;
-  --bg-hover: #3A2D6A;
-  --bg-selected: #4A3878;
-  --text: #F4F7FF;
-  --text-dim: #C9A6FF;      /* Soft Lavender Glow */
-  --text-muted: #7B6BAA;    /* Dusk Lavender */
-  --pink: #C9A6FF;          /* Soft Lavender Glow — primary */
-  --pink-soft: rgba(201, 166, 255, 0.18);
-  --pink-glow: rgba(201, 166, 255, 0.10);
-  --blue: #B46BFF;          /* Violet Purple */
-  --blue-soft: rgba(180, 107, 255, 0.18);
-  --mint: #8FFFC9;          /* Bio Mint */
-  --orange: #FF8FE0;        /* Magenta Spark */
-  --lavender: #C9A6FF;
-  --peach: #FF8FE0;
-  --creamsicle: #FF8FE0;
-  --lemon: #FFE66D;         /* Star Yellow — the lone moon */
-  --urgent: #FF5577;
-  --high: #FF8FE0;
-  --normal: #C9A6FF;
-  --low: #7B6BAA;
-  --green: #C4F542;
-  --border: #3A2D6A;
-  --border-subtle: #2A2250;
-  --card-title: #FFE66D;          /* Star Yellow — warm pop on cool aurora */
-  --card-border: rgba(201, 166, 255, 0.55);
-  --urgent-soft: rgba(255, 85, 119, 0.16); --urgent-faint: rgba(255, 85, 119, 0.08);
-  --high-soft: rgba(255, 143, 224, 0.18); --high-faint: rgba(255, 143, 224, 0.08);
-  --lemon-soft: rgba(255, 230, 109, 0.20); --lemon-faint: rgba(255, 230, 109, 0.10);
-  --green-soft: rgba(196, 245, 66, 0.16); --green-faint: rgba(196, 245, 66, 0.08);
-  --lavender-soft: rgba(201, 166, 255, 0.22); --lavender-faint: rgba(201, 166, 255, 0.12);
-  --topbar-gradient: linear-gradient(135deg, #0E1230 0%, #B46BFF 50%, #C9A6FF 100%);
-  --pane-bg: rgba(26, 31, 74, 0.55);
 }
 
 /* === Mint Meadow — alien meadow at noon. Frozen wash bg, sea teal as
