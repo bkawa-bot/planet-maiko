@@ -70,8 +70,6 @@ export const Upload = (p) => <MIcon icon="cloud-upload" {...p} />;
 export const RefreshCw = (p) => <MIcon icon="cycle" {...p} />;
 export const RotateCcw = (p) => <MIcon icon="cycle" {...p} />;
 export const Loader = (p) => <MIcon icon="spinning-top" {...p} />;
-export const Pin = (p) => <MIcon icon="pin" {...p} />;
-export const PinOff = (p) => <MIcon icon="pin" {...p} />;
 
 // Topbar / chrome
 export const Settings = (p) => <MIcon icon="cog" {...p} />;

@@ -62,8 +62,6 @@
 }
 .pupdate-card:hover .task-quick-actions,
 .pupdate-card.expanded .task-quick-actions { opacity: 1; }
-.task-quick-actions .pinned { opacity: 1 !important; }
-.btn-pin.pinned { opacity: 1; }
 
 .btn-ghost {
   border: none; background: none; cursor: pointer;
@@ -72,7 +70,6 @@
   transition: all 0.15s;
 }
 .btn-ghost:hover { background: var(--bg-hover); color: var(--text); }
-.btn-pin.pinned { color: var(--pink); }
 .btn-quick-start:hover { color: var(--green); }
 .btn-quick-done:hover { color: var(--green); }
 .task-title { font-size: 13px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

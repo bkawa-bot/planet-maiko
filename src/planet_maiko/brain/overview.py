@@ -202,7 +202,6 @@ def _tasks_context():
             "url": t.url,
             "assigned_agent_id": t.assigned_agent_id,
             "repo": (t.extra or {}).get("repo"),
-            "pinned": bool((t.extra or {}).get("pinned")),
         }
         for t in rows
     ]

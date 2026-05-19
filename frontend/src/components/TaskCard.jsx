@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Check, CombinationLock, Square, FolderOpen, Pin, PinOff, ExternalLink,
+  Check, CombinationLock, Square, FolderOpen, ExternalLink,
   ChevronRight, GitBranch, Clock, Bot, Eye, Play,
   X, Pencil, Circle, Send, Loader, FileText, GitPullRequest, Zap, Map,
 } from "@icons";
@@ -37,7 +37,6 @@ const STATUS_ICONS = {
  *   onAction            — (e, taskId, action) => void, for status transitions
  *   onAssignAgent       — (task) => void, opens the assign modal
  *   onEdit              — (task, editForm) => void, opens edit modal
- *   onShowDetail        — (task) => void, opens task detail modal
  *   onRefresh           — () => void, called after mutations
  *   projects            — Project[] for the project dropdown
  *   agentNames          — { [agentId]: displayName }
@@ -49,7 +48,6 @@ export default function TaskCard({
   onAction,
   onAssignAgent,
   onEdit,
-  onShowDetail,
   onRefresh,
   projects,
   agentNames,
@@ -59,19 +57,11 @@ export default function TaskCard({
   const StatusIcon = STATUS_ICONS[t.status] || Circle;
   const priorityClass = t.priority || "normal";
   const isDone = t.status === "done" || t.status === "cancelled";
-  const isPinned = !!(t.metadata?.pinned);
 
   const handleSourceIconClick = (e) => {
     e.stopPropagation();
     if (t.status === "new") onAction(e, t.id, "start");
     else if (t.status === "in_progress") onAction(e, t.id, "done");
-  };
-
-  const handleTogglePin = async () => {
-    const extra = { ...(t.metadata || {}), pinned: !isPinned };
-    await api.updateTask(t.id, { extra });
-    showToast(extra.pinned ? "Pinned to focus" : "Unpinned", "normal");
-    onRefresh();
   };
 
   const handleDueDateChange = async (e) => {
@@ -305,11 +295,6 @@ export default function TaskCard({
                   <Eye size={10} /> Review PR
                 </a>
               )}
-              {(t.metadata?.description || t.body) && (
-                <button className="btn btn-sm btn-action" onClick={() => onShowDetail(t)}>
-                  <FolderOpen size={10} /> Details
-                </button>
-              )}
               {linearIdentifier ? (
                 linearUrl ? (
                   <a
@@ -435,13 +420,6 @@ export default function TaskCard({
         )}
       </div>
       <div className="card-right" onClick={(e) => e.stopPropagation()}>
-        <button
-          className={`btn-ghost btn-pin ${isPinned ? "pinned" : ""}`}
-          onClick={handleTogglePin}
-          title={isPinned ? "Unpin from focus" : "Pin to focus"}
-        >
-          {isPinned ? <PinOff size={12} /> : <Pin size={12} />}
-        </button>
         <ChevronRight size={14} className={`card-chevron ${isExpanded ? "open" : ""}`} />
       </div>
       {showLinearModal && (

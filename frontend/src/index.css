@@ -812,11 +812,12 @@ a:hover { text-decoration: underline; }
   padding: 20px 24px;
 }
 
-/* === Card list backdrop — frosted glass container === */
+/* === Card list backdrop. Sits inside .frost-pane (which already
+   blurs), so this layer is now a flat translucent fill, no double
+   blur. Anti-slop dial-back: one frosted surface per page, not two
+   stacked. === */
 .card-list-container {
   background: rgba(45, 54, 60, 0.4);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   border: 2px solid var(--border-subtle);
   border-radius: var(--radius);
   padding: 8px;

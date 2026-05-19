@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Plug, AlertTriangle, CheckCircle2, AlertCircle, Loader } from "@icons";
 import { api } from "../../api/client";
+import { relativeTime } from "../../utils/dates";
 
 /**
  * Plugins — every discovered plugin (builtin first-party integrations,
@@ -205,6 +206,7 @@ function PluginCard({ p, config, setConfig, setPlugins, onMessage, poller, onRun
             <span>
               {poller.enabled ? "Enabled" : "Disabled"}
               {" · polls every "}{poller.interval_minutes || 5} min
+              {poller.last_run_at && <> · last ran {relativeTime(poller.last_run_at)}</>}
             </span>
             {onRunPoller && (
               <button

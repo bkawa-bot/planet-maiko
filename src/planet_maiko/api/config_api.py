@@ -242,6 +242,7 @@ def discover_github_repos():
 @config_bp.route("/pollers/status", methods=["GET"])
 def poller_status():
     """Get status of all poller plugins."""
+    from datetime import datetime as _dt, timezone as _tz
     from planet_maiko.plugins.loader import get_plugins
     from planet_maiko.plugins.poller import PollerPlugin
 
@@ -250,11 +251,18 @@ def poller_status():
         if not isinstance(p, PollerPlugin):
             continue
         cfg = load_config().get(p.config_key or p.name, {}) or {}
+        # PollerPlugin sets `_last_polled` (Unix seconds) on every poll;
+        # surface as ISO so the Settings strip can render "last ran X ago".
+        last = getattr(p, "_last_polled", 0) or 0
+        last_iso = (
+            _dt.fromtimestamp(last, _tz.utc).isoformat() if last > 0 else None
+        )
         out[p.name] = {
             "type": "poller",
             "enabled": bool(cfg.get("enabled")),
             "running": True,
             "interval_minutes": cfg.get("poll_interval_minutes", 5),
+            "last_run_at": last_iso,
         }
     return jsonify(out)
 

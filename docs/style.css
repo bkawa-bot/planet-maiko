@@ -357,8 +357,8 @@ h2 {
 }
 .card {
   background: #20244a; box-shadow: var(--sink);
-  border-left: 4px solid var(--accent);
-  padding: 18px 18px 18px 20px;
+  border-top: 6px solid var(--accent);
+  padding: 18px;
 }
 .card h3 {
   font-size: 1.03rem; margin-bottom: 6px;
