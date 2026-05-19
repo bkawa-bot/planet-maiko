@@ -241,9 +241,11 @@ export default function SetupWizard({ onComplete }) {
               <div className="setup-hint-warn">
                 <div>Not installed yet.</div>
                 <div className="setup-hint-warn-sub">
-                  One-time setup: <code>pip install -e ".[rag]"</code> (pulls
-                  ~2GB of ML deps). Maiko runs fine without it; you can enable
-                  it later from the Knowledge page.
+                  One-time setup: from your planet-maiko clone, run{" "}
+                  <code>pip install -e ".[rag]"</code> (pulls ~2GB of ML
+                  deps), then restart with <code>maiko up</code>. Maiko
+                  runs fine without it; you can enable it later from the
+                  Knowledge page.
                 </div>
               </div>
             )}

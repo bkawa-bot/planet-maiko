@@ -424,9 +424,10 @@ export default function BrainView() {
               title = `Backend: ${ragStatus.model}. All ${total} active rules indexed for retrieval.`;
             }
             const ragSetupMessage = (
-              "RAG (rule retrieval) needs the local embedding model:\n\n" +
-              "   pip install -e \".[rag]\"\n" +
-              "   Restart `maiko serve`.\n\n" +
+              "RAG (rule retrieval) needs the local embedding model.\n\n" +
+              "From your planet-maiko clone, run:\n" +
+              "   pip install -e \".[rag]\"\n\n" +
+              "Then restart with `maiko up`.\n\n" +
               "Free, runs on CPU, no API key. ~2GB on first install " +
               "(pulls torch); the model itself is ~335MB and caches " +
               "to ~/.cache/huggingface."
