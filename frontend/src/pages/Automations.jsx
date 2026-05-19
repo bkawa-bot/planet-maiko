@@ -44,6 +44,7 @@ export default function Automations() {
   const [result, setResult] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newSpecialty, setNewSpecialty] = useState({ id: "", name: "", description: "", prompt: "", mcps: "", needs_worktree: false });
+  const [activeTab, setActiveTab] = useState("automations");
 
   const fetchSpecialties = () => api.getSkills()
     .then((list) => setSpecialties(list.filter((s) => !HIDDEN_SPECIALTY_IDS.has(s.id))))
@@ -158,13 +159,28 @@ export default function Automations() {
 
   return (
     <div className="specialties-page frost-pane">
-      <div className="specialties-header">
-        <Zap size={18} />
-        <h2>Automations</h2>
+      <div className="page-tabs" role="tablist">
+        <button
+          role="tab"
+          aria-selected={activeTab === "automations"}
+          className={`page-tab ${activeTab === "automations" ? "active" : ""}`}
+          onClick={() => setActiveTab("automations")}
+        >
+          Automations
+        </button>
+        <button
+          role="tab"
+          aria-selected={activeTab === "specialties"}
+          className={`page-tab ${activeTab === "specialties" ? "active" : ""}`}
+          onClick={() => setActiveTab("specialties")}
+        >
+          Specialties
+        </button>
       </div>
 
-      <AutomationsList />
+      {activeTab === "automations" && <AutomationsList />}
 
+      {activeTab === "specialties" && (
       <div className="skills-section-header">
         <h3>Specialties</h3>
         <p className="skills-section-sub">Role protocols agents adopt when doing a specific kind of work (analysis, triage, brainstorming). Run on-demand, on a cadence, or spawn a dedicated agent for a specialty from the Pack page. Running a specialty either uses an existing agent with that role or lazy-spawns one.</p>
@@ -172,6 +188,7 @@ export default function Automations() {
           <Plus size={12} /> New Specialty
         </button>
       </div>
+      )}
 
       {/* Create modal */}
       {showCreate && (
@@ -216,6 +233,7 @@ export default function Automations() {
         </ModalPortal>
       )}
 
+      {activeTab === "specialties" && (
       <div className="specialties-grid">
         {specialties.map((s) => {
           const Icon = ICON_MAP[s.icon] || Wand2;
@@ -231,6 +249,7 @@ export default function Automations() {
           );
         })}
       </div>
+      )}
 
       {selected && (
         <ModalPortal>
