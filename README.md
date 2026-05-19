@@ -27,18 +27,43 @@ All the required agent orchestration work. Automatically kicks off agents, lets 
 ## How is Planet Maiko different from RinkStack, Mazino.ai, or QuatroForce? (I just made all of those up)
 
 - **Maiko has a unique self-maintaining memory system** which builds a rule-book from you and your team's PR history and feedback. Internal knowledge and specific gotchas are all automatically captured. No more manual write-ups of your team's guidelines needed.
+- **Maiko uses semantic embeddings to get agents what they need without shoving 100 rules into every prompt.** Agents just describe what they're doing and get ONLY the rules that matter, so you can keep a pool of hundreds of very specific nits and context without drowning every prompt.
+- **The dogs confess their own mistakes too.** When one gets something wrong it writes down what it learned, and the whole pack reads it.
 
-![Rule](docs/screenshots/rule-3.png)
-(A PR reviewer left this same comment multiple times, we tracked it down ahead of time so our agents don't make the same mistake).
+### How it actually works
 
-- **Maiko uses semantic embeddings to get agents what they need without shoving 100 rules into every prompt.**
-  - Agents just need to describe what they are doing to get ONLY what they need. This lets us have a pool of hundreds of very specific nits, rules, and context without overwhelming the agents.
+The boring part is running agents. The interesting part is the loop on the right: your PR history quietly teaches the rulebook, and the rulebook only ever hands each dog the few rules that matter for what it is touching.
 
-![Rules-retrieved](docs/screenshots/agent-rules-searched.png)
+```mermaid
+flowchart TD
+  subgraph SRC["the outside world"]
+    GH["GitHub"]
+    LN["Linear"]
+    PD["PagerDuty"]
+    CAL["Calendar"]
+  end
 
-**Maiko makes agents confess their own mistakes too.** Everyone learns.
+  SRC -->|"pollers and plugins"| PUP["Pupdates<br/>(everything that just happened)"]
+  PUP -->|"automations: when this, then that"| BRAIN["Maiko, the brain"]
+  BRAIN --> HOME["Home overview and inbox<br/>(what actually needs you)"]
+  BRAIN --> TASKS["Tasks"]
+  TASKS --> PACK
 
-![Insights](docs/screenshots/insights2.png)
+  subgraph PACK["the pack (alien dogs)"]
+    A1["coding dog"]
+    A2["review dog"]
+    A3["investigation dog"]
+  end
+
+  PACK -->|"isolated git worktrees"| PR["branches and PRs"]
+  PR --> GH
+
+  GH -->|"PR history and review comments"| SIG["Signals"]
+  SIG -->|"clustered into rules"| RULES["self-maintaining rulebook"]
+  RULES -->|"local RAG: only the rules<br/>that matter for this task"| PACK
+  PACK -->|"what I got wrong"| INS["pack insights<br/>(shared memory)"]
+  INS --> PACK
+```
 
 ## Build a plugin for any tool you never want to have to look at again.
 
@@ -60,8 +85,6 @@ Open source, free forever, no paid tiers or subscriptions.
 
 ## In-app diff review, agent chat view (no terminal needed), cost-aware model routing, automations, and more!
 ![Diff](docs/screenshots/diff2.png)
-
-![Automations](docs/screenshots/automations.png)
 
 ## Most importantly: agents are weird alien dogs, cause why not?
 
