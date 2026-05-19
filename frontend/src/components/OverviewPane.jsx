@@ -11,7 +11,6 @@ import {
 import TaskCard from "./TaskCard";
 import ModalPortal from "./ModalPortal";
 import PlanetSpinner from "./PlanetSpinner";
-import ClosingCard from "./overview/ClosingCard";
 import LearningsCard from "./overview/LearningsCard";
 import "./OverviewPane.css";
 
@@ -606,8 +605,6 @@ export default function OverviewPane() {
       {overview.alive && (
         <p className="overview-alive">{overview.alive}</p>
       )}
-
-      <ClosingCard closing={overview.closing} overnight={overview.overnight} />
 
       {overview.custom_section && (
         <section className="overview-custom">

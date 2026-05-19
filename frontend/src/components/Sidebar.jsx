@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { Settings, Palette, Power, Leaf, Hearth, ListTodo, Paw, SpellBook, Crystal } from "@icons";
+import { Settings, Palette, Power, Hearth, ListTodo, Paw, SpellBook, Crystal } from "@icons";
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api/client";
 import { applyCustomTheme, clearCustomTheme, hydrateCachedCustomTheme } from "../utils/themes";
@@ -9,7 +9,7 @@ import "./ShutdownModal.css";
 
 // Nav icons come from the Maiko pixel-art set (icons/index.jsx) — paw
 // for the Pack, scroll for Tasks, etc. The rest of the topbar (gear,
-// power, palette, weekend leaf) still uses lucide while those surfaces
+// power, palette) still uses lucide while those surfaces
 // wait their turn for the pixel-art treatment.
 const NAV_ITEMS = [
   { to: "/", icon: Hearth, label: "Home", end: true },
@@ -50,8 +50,6 @@ function getAutoTheme() {
 
 export default function Sidebar({ onOpenShutdown }) {
   const navigate = useNavigate();
-  const today = new Date().getDay();
-  const isActualWeekend = today === 0 || today === 6;  // Sat or Sun
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem("maiko-theme") || "dark";
     // Re-apply cached custom theme ASAP so the first paint uses the right
@@ -61,36 +59,7 @@ export default function Sidebar({ onOpenShutdown }) {
   });
   const [customThemes, setCustomThemes] = useState([]);
   const [showThemeMenu, setShowThemeMenu] = useState(false);
-  const [weekendMode, setWeekendMode] = useState(false);
-  const [weekendBusy, setWeekendBusy] = useState(false);
   const themeRef = useRef(null);
-
-  // Hydrate weekend-mode from config so the topbar pill reflects
-  // the persisted state rather than defaulting to off on every reload.
-  useEffect(() => {
-    let cancelled = false;
-    api.getConfig().then((cfg) => {
-      if (!cancelled) setWeekendMode(Boolean(cfg?.user?.weekend_mode));
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-
-  const toggleWeekendMode = async () => {
-    if (weekendBusy) return;
-    setWeekendBusy(true);
-    const next = !weekendMode;
-    setWeekendMode(next);  // optimistic — revert on failure
-    try {
-      const cfg = await api.getConfig();
-      await api.updateConfig({
-        ...cfg,
-        user: { ...(cfg.user || {}), weekend_mode: next },
-      });
-    } catch {
-      setWeekendMode(!next);  // revert
-    }
-    setWeekendBusy(false);
-  };
 
   useEffect(() => {
     if (theme.startsWith("custom:")) {
@@ -172,21 +141,6 @@ export default function Sidebar({ onOpenShutdown }) {
         </div>
 
         <div className="topbar-right">
-          {/* Weekend pill only shows on actual weekend days or when
-              weekend_mode is already on. Reduces topbar noise during
-              the week when the toggle is irrelevant, while still letting
-              the user flip it off on a Monday morning. */}
-          {(isActualWeekend || weekendMode) && (
-            <button
-              className={`weekend-pill-topbar ${weekendMode ? "on" : ""}`}
-              onClick={toggleWeekendMode}
-              disabled={weekendBusy}
-              title={weekendMode ? "Weekend mode on. Click to resume." : "Weekend mode off. Click to go off-duty."}
-            >
-              <Leaf size={10} /> {weekendMode ? "weekend on" : "weekend"}
-            </button>
-          )}
-
           <div className="theme-wrapper" ref={themeRef}>
             <button className="topbar-action" onClick={() => setShowThemeMenu(!showThemeMenu)} title="Theme">
               {themeEmoji}

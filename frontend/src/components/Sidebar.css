@@ -107,26 +107,6 @@
   gap: 4px;
 }
 
-/* Weekend-mode topbar pill — quiet when off, warm when on. */
-.weekend-pill-topbar {
-  display: flex; align-items: center; gap: 4px;
-  padding: 4px 10px; border-radius: 10px;
-  cursor: pointer;
-  font-size: 11px; font-weight: 600; text-transform: capitalize;
-  font-family: var(--font);
-  transition: all 0.15s;
-  background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border-subtle);
-}
-.weekend-pill-topbar:hover { color: var(--text); border-color: var(--border); }
-.weekend-pill-topbar.on {
-  background: var(--lavender, #e4d8f0);
-  color: var(--bg);
-  border-color: var(--lavender, #c0a8d8);
-}
-.weekend-pill-topbar:disabled { opacity: 0.5; cursor: wait; }
-
 .topbar-action {
   display: flex;
   align-items: center;

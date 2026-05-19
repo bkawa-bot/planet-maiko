@@ -21,26 +21,6 @@ def maiko_api_url():
 DEFAULT_CONFIG = {
     "user": {
         "name": "",  # Your name (Maiko addresses you by this)
-        # Hour (0-23) in local time when your workday wraps. Maiko uses
-        # this to show a warm "enough for today" closing card in the
-        # Home overview — appearing ~30 min before this hour and
-        # lingering ~2h after. Anti-burnout plumbing: every other AI
-        # product is engineered to keep you pulling the lever; Maiko
-        # has an explicit closing condition. Set to null to disable.
-        "workday_end_hour": 17,
-        # Weekend mode — when true, Maiko assumes you're off-duty and
-        # agents defer anything non-critical to the next workday. Not a
-        # notification-muter: a durable, visible state that agents read
-        # from their TASK.md preamble and the Home overview reflects in
-        # its voice. Flip it on Friday, flip it off Monday.
-        "weekend_mode": False,
-        # Soft cap on "interruptions" Maiko is willing to surface per
-        # local day. An interruption = a high or urgent pupdate actively
-        # pulling you away from what you're doing. Once the count exceeds
-        # the budget, the overview voice shifts toward batching (still
-        # surfaces things, but framed as "a lot piled up — want to do
-        # these together?"). Set to null to disable the signal entirely.
-        "interruption_budget": 3,
         # IANA timezone name (e.g. "America/Los_Angeles"). Leave blank to
         # use the system's local timezone. Controls what "today" means for
         # the morning brief, skill-injected current_date, scene time-of-day,

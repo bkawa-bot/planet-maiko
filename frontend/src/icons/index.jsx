@@ -98,7 +98,6 @@ export const HelpCircle = (p) => <MIcon icon="help" {...p} />;
 export const MoreHorizontal = (p) => <MIcon icon="three-leaves" {...p} />;
 
 // Nature / scene
-export const Leaf = (p) => <MIcon icon="linden-leaf" {...p} />;
 export const Flame = (p) => <MIcon icon="flame" {...p} />;
 export const Moon = (p) => <MIcon icon="moon" {...p} />;
 export const Sunrise = (p) => <MIcon icon="sunrise" {...p} />;

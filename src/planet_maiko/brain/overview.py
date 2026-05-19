@@ -469,12 +469,6 @@ def _build_context():
         pass
     user_name = (user_cfg.get("name") or "").strip() or "there"
 
-    closing_window, closing_reason = _closing_window_info(now, user_cfg)
-    weekend_mode = bool(user_cfg.get("weekend_mode"))
-    interruptions_today = _interruptions_today()
-    budget = user_cfg.get("interruption_budget")
-    over_budget = bool(isinstance(budget, int) and budget > 0 and interruptions_today > budget)
-
     available_sprites = _available_sprites()
     sprite_hint = (
         ", ".join(available_sprites) if available_sprites else "(none available)"
@@ -492,159 +486,7 @@ def _build_context():
         "pollers": json.dumps(_pollers_context(), indent=2, default=str),
         "scene": json.dumps(_scene_context(), indent=2, default=str),
         "custom_prompt": _custom_prompt() or "(no add-on configured)",
-        # Closing-condition signal — the LLM uses these to decide
-        # whether to include a `closing` section in its output.
-        "closing_window": "true" if closing_window else "false",
-        "closing_reason": closing_reason,
-        "shipped_today": json.dumps(_shipped_today_context(), indent=2, default=str),
-        # Weekend mode — durable state. Overview voice leans toward
-        # "what can wait until Monday" instead of "what needs you now."
-        "weekend_mode": "true" if weekend_mode else "false",
-        # Interruption budget — visible-only soft cap. Overview voice
-        # shifts toward batching when over budget. Null budget disables.
-        "interruptions_today": str(interruptions_today),
-        "interruption_budget": "none" if budget is None else str(budget),
-        "interruption_over_budget": "true" if over_budget else "false",
     }
-
-
-def _interruptions_today():
-    """Count today's high/urgent live memos (user-local day).
-
-    An "interruption" is any item loud enough to pull a focused user
-    out of what they're doing. Counted off Memos now (pupdates auto-
-    dismiss once routed, so they can't serve as the signal anymore);
-    high/urgent memos that are still pending or seen since local
-    midnight is the right approximation.
-
-    Read-only — purely a surface signal for the overview prompt.
-    Nothing is blocked or altered based on it.
-    """
-    try:
-        from datetime import timezone as _tz
-        from planet_maiko.config import user_now
-        from planet_maiko.models.memo import Memo
-
-        now_local = user_now()
-        midnight_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-        midnight_utc = midnight_local.astimezone(_tz.utc).replace(tzinfo=None)
-        return (
-            Memo.query
-            .filter(Memo.priority.in_(("urgent", "high")))
-            .filter(Memo.status.in_(("pending", "seen")))
-            .filter(Memo.created_at >= midnight_utc)
-            .count()
-        )
-    except Exception as e:
-        logger.debug(f"[overview] interruption count failed: {e}")
-        return 0
-
-
-def _closing_window_info(now, user_cfg):
-    """Decide whether we're in the "enough for today" window.
-
-    Returns (bool, reason_string). The window opens 30 min before
-    workday_end_hour and stays open for 2h after, so anyone checking
-    Maiko between 4:30pm and 7pm (with default 5pm end_hour) gets the
-    closing reflection. Outside that window the field is suppressed.
-
-    Honors user.workday_end_hour; None disables the feature entirely.
-    """
-    end_hour = user_cfg.get("workday_end_hour")
-    if end_hour is None or not isinstance(end_hour, int) or not (0 <= end_hour <= 23):
-        return False, ""
-    end_minutes = end_hour * 60
-    now_minutes = now.hour * 60 + now.minute
-    # Open the window at end_hour - 30 min, close at end_hour + 2h.
-    opens = end_minutes - 30
-    closes = end_minutes + 120
-    if opens <= now_minutes <= closes:
-        return True, f"workday winding down around {end_hour:02d}:00 local"
-    return False, ""
-
-
-def _overnight_tasks_context(context):
-    """Tasks the pack is continuing on past the user's workday end.
-
-    Only populated when the closing window is active — outside that
-    window the overnight section is empty, because "what's queued
-    overnight" isn't a useful frame at 11am.
-
-    Shape per item:
-        {
-          "task_id": str,
-          "title": str,
-          "agent_name": str | None,
-          "agent_avatar": str | None,
-        }
-    """
-    if context.get("closing_window") != "true":
-        return []
-
-    from planet_maiko.models.task import Task
-    from planet_maiko.models.agent_profile import AgentProfile
-
-    active = (
-        Task.query
-        .filter(Task.status == "in_progress")
-        .filter(Task.assigned_agent_id.isnot(None))
-        .order_by(Task.updated_at.desc())
-        .limit(10)
-        .all()
-    )
-    if not active:
-        return []
-
-    agent_ids = {t.assigned_agent_id for t in active if t.assigned_agent_id}
-    agents = {a.id: a for a in AgentProfile.query.filter(AgentProfile.id.in_(agent_ids)).all()}
-    out = []
-    for t in active:
-        agent = agents.get(t.assigned_agent_id)
-        out.append({
-            "task_id": t.id,
-            "title": t.title,
-            "agent_name": agent.display_name if agent else None,
-            "agent_avatar": agent.avatar if agent else None,
-        })
-    return out
-
-
-def _shipped_today_context():
-    """Tasks that moved to done / cancelled today (user-local day).
-
-    Gives the LLM the material it needs to write a grounded closing
-    reflection — "you shipped X, Y; the Z refactor wraps tomorrow" —
-    instead of a generic "good work today" that would make the feature
-    feel like cheerleading. The tasks_context above filters to active
-    states (new / in_progress / blocked), so done tasks don't show up
-    there and we surface them separately here.
-    """
-    from datetime import timezone as _tz
-    from planet_maiko.config import user_now
-    from planet_maiko.models.task import Task
-
-    now_local = user_now()
-    midnight_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-    midnight_utc = midnight_local.astimezone(_tz.utc).replace(tzinfo=None)
-
-    done = (
-        Task.query
-        .filter(Task.status.in_(("done", "cancelled")))
-        .filter(Task.updated_at >= midnight_utc)
-        .order_by(Task.updated_at.desc())
-        .limit(15)
-        .all()
-    )
-    return [
-        {
-            "id": t.id,
-            "title": t.title,
-            "type": t.type,
-            "status": t.status,
-            "updated_at": iso_utc(t.updated_at),
-        }
-        for t in done
-    ]
 
 
 # ---------------------------------------------------------------------------
@@ -1012,7 +854,6 @@ def _generate_overview_locked():
     parsed.setdefault("needs", [])
     parsed.setdefault("alive", "")
     parsed.setdefault("custom_section", "")
-    parsed.setdefault("closing", "")
     parsed.setdefault("sprite", None)
 
     # Validate sprite pick: only keep it if the LLM picked a mood
@@ -1023,13 +864,6 @@ def _generate_overview_locked():
         valid = set(_available_sprites())
         if parsed["sprite"] not in valid:
             parsed["sprite"] = None
-
-    # Evening wrap: during the closing window, inject a structured list
-    # of tasks the pack will continue on overnight. Deterministic (not
-    # LLM-generated) so the frontend can reliably render task-linked
-    # rows with agent names. Empty list outside the window or when
-    # nothing is queued.
-    parsed["overnight"] = _overnight_tasks_context(context)
 
     generated_at = _write_overview_cache(parsed)
 
@@ -1052,9 +886,7 @@ def _placeholder_overview():
         "needs": [],
         "alive": "",
         "custom_section": "",
-        "closing": "",
         "sprite": None,
-        "overnight": [],
     }
 
 
