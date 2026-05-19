@@ -1,9 +1,9 @@
 """Default Automation rows installed on every Maiko boot.
 
 Three idempotent functions:
-  - ensure_seed_rule_automations: the eight canonical pupdate rules
-    (auto-dismiss CI-passed, create review tasks on PR review request,
-    Linear assignment → todo, etc).
+  - ensure_seed_rule_automations: the canonical pupdate rules (create
+    review tasks on PR review request, Linear assignment → todo, close
+    linked tasks on merge, etc).
   - ensure_seed_automations: the wildcard "keep overviews current"
     automation (one row, not one-per-repo).
   - ensure_plugin_default_automations: lets installed plugins seed
@@ -22,20 +22,6 @@ logger = logging.getLogger(__name__)
 
 
 _RULE_SEEDS = [
-    {
-        "name": "Auto-dismiss CI passing",
-        "description": "CI-passed notifications are pure noise — don't need to see them.",
-        "match": {"type": "pr_ci_passed"},
-        "action": "dismiss_pupdate",
-        "action_config": {},
-    },
-    {
-        "name": "Auto-dismiss bot PRs",
-        "description": "Dependabot / renovate PRs don't need human attention.",
-        "match": {"type_prefix": "pr_", "title_contains": "dependabot"},
-        "action": "dismiss_pupdate",
-        "action_config": {},
-    },
     {
         "name": "Create task on PR review request",
         "description": "When a teammate requests your review, create a high-priority review task.",
@@ -113,7 +99,7 @@ _RULE_SEEDS = [
 
 
 def ensure_seed_rule_automations():
-    """Seed pupdate-scope Automations for the eight canonical matchers.
+    """Seed pupdate-scope Automations for the canonical matchers.
     Idempotent on (name, execution_scope).
     """
     created = 0
