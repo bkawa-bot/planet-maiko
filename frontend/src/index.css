@@ -1,52 +1,52 @@
 /* Planet Maiko — Cosmic palette */
 
 :root {
-  /* Cosmic Nighttime — the master dark palette. Deep space backgrounds,
-     signature pink → cobalt → frozen-cyan gradient, plant accents from
-     the bioluminescent flora set. The signature gradient lives in
-     --topbar-gradient below; per-token values pick the right hue from
-     the palette doc rather than improvising. */
-  --bg: #0B0F2A;            /* Deep Space Navy — gradient top */
-  --bg-plain: #2A2250;      /* Midnight Purple — pronounced shift */
-  --bg-card: #1A1F4A;       /* Cosmic Indigo */
-  --bg-card-alt: #2A2250;   /* Midnight Purple */
-  --bg-hover: #2D2A60;
-  --bg-selected: #383270;
-  --text: #F4F7FF;          /* Soft White */
-  --text-dim: #A7B0C0;      /* Cool Gray */
-  --text-muted: #6E7A92;
+  /* Cosmic Nighttime: the master dark palette. Truly-night void-navy
+     backgrounds, Frozen Cyan as the primary accent (pink demoted to a
+     warm spark), plant accents from the bioluminescent flora set. The
+     topbar runs a deep-night to frozen-cyan sweep (no pink). Per-token
+     values pick a hue from the palette rather than improvising. */
+  --bg: #080A18;            /* Deep Void Navy (gradient top) */
+  --bg-plain: #15122E;      /* Midnight Indigo (pronounced shift) */
+  --bg-card: #121225;       /* Void Card */
+  --bg-card-alt: #1A1830;   /* Deep Indigo Card */
+  --bg-hover: #20203A;
+  --bg-selected: #2A1C3A;   /* Deep Plum (a faint warm beat in selection) */
+  --text: #E4FAF2;          /* Soft Mint-White */
+  --text-dim: #93C6BC;      /* Seafoam Gray */
+  --text-muted: #7E7A98;
 
-  --pink: #FF6FAF;          /* Neon Pink — primary accent */
-  --pink-soft: rgba(255, 111, 175, 0.15);
-  --pink-glow: rgba(255, 111, 175, 0.08);
-  --blue: #1FB5E5;          /* Electric Ice — the new cobalt-cyan hero */
+  --pink: #6FE0E8;          /* Frozen Cyan (primary accent, the cryo glow) */
+  --pink-soft: rgba(111, 224, 232, 0.16);
+  --pink-glow: rgba(111, 224, 232, 0.09);
+  --blue: #1FB5E5;          /* Electric Ice (deeper cobalt-cyan) */
   --blue-soft: rgba(31, 181, 229, 0.16);
-  --mint: #8FFFC9;          /* Bio Mint */
-  --orange: #FF6B5C;        /* Plasma Coral */
+  --mint: #4DFFC4;          /* Bio Mint (toxic glow) */
+  --orange: #FF7A4D;        /* Plasma Coral */
   --lavender: #C9A6FF;      /* Soft Lavender Glow */
-  --peach: #FF6B5C;         /* Plasma Coral */
-  --creamsicle: #FF8FE0;    /* Magenta Spark — sweet, between pink + lavender */
+  --peach: #FF7EB8;         /* Pink Spark (demoted pink, now a warm beat) */
+  --creamsicle: #FF8FE0;    /* Magenta Spark */
   --lemon: #FFE66D;         /* Star Yellow */
 
-  --urgent: #FF5577;        /* Hot Magenta Red — distinct from pink */
-  --high: #FF6B5C;          /* Plasma Coral */
-  --normal: #FF6FAF;        /* Neon Pink */
-  --low: #6E7A92;
-  --green: #C4F542;         /* Toxic Lime — bioluminescent green */
-  --border: #3F3D70;
-  --border-subtle: #2D2D60;
+  --urgent: #FF4D6E;        /* Hot Magenta Red */
+  --high: #FF8A3D;          /* Ember Orange */
+  --normal: #8C86A8;        /* Muted Lilac-Gray (no longer the pink primary) */
+  --low: #5C5878;
+  --green: #C4F542;         /* Toxic Lime (bioluminescent success) */
+  --border: #34284E;
+  --border-subtle: #15242A;
 
   /* Card title + border accents — pulled per theme so cards stop
      reading as one-note. */
-  --card-title: #6FE0E8;          /* Frozen Cyan — frosty title against indigo card */
-  --card-border: rgba(255, 111, 175, 0.50);
+  --card-title: #C9A6FF;          /* Soft Lavender Glow (distinct from the cyan primary) */
+  --card-border: rgba(111, 224, 232, 0.42);
 
   /* Themed tint backgrounds — track the active theme so badges/pills
      stay coherent. */
-  --urgent-soft: rgba(255, 85, 119, 0.16);
-  --urgent-faint: rgba(255, 85, 119, 0.08);
-  --high-soft: rgba(255, 107, 92, 0.16);
-  --high-faint: rgba(255, 107, 92, 0.08);
+  --urgent-soft: rgba(255, 77, 110, 0.16);
+  --urgent-faint: rgba(255, 77, 110, 0.08);
+  --high-soft: rgba(255, 138, 61, 0.16);
+  --high-faint: rgba(255, 138, 61, 0.08);
   --lemon-soft: rgba(255, 230, 109, 0.15);
   --lemon-faint: rgba(255, 230, 109, 0.06);
   --green-soft: rgba(196, 245, 66, 0.16);
@@ -93,12 +93,11 @@
   /* Surface backgrounds — theme-controllable. Custom themes can
      override via `topbar_gradient` and `pane_bg` in their colors
      dict; otherwise they inherit these defaults (night look). */
-  /* Topbar gradient. The full 5-stop signature gradient lives on the
-     palette reference — on the nav strip it's noise. Settled on a
-     2-stop pink → electric-ice sweep that still reads as the brand
-     without the rainbow. */
-  --topbar-gradient: linear-gradient(135deg, #FF6FAF 0%, #1FB5E5 100%);
-  --pane-bg: rgba(26, 31, 74, 0.45);
+  /* Topbar gradient. The full signature gradient lives on the palette
+     reference; on the nav strip it's noise. Cosmic Nighttime runs a
+     deep-night sweep that lifts into a frozen-cyan horizon, no pink. */
+  --topbar-gradient: linear-gradient(135deg, #0C1026 0%, #15314A 55%, #2C8E96 100%);
+  --pane-bg: rgba(16, 16, 34, 0.52);
 
   /* World background SVG. Driven by the active theme so flipping
      "Cosmic Nighttime" → "Daylight" swaps which hills sit at the
