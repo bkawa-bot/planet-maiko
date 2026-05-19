@@ -234,16 +234,20 @@ export default function Automations() {
       )}
 
       {activeTab === "specialties" && (
-      <div className="specialties-grid">
+      <div className="specialties-list">
         {specialties.map((s) => {
           const Icon = ICON_MAP[s.icon] || Wand2;
           return (
-            <div key={s.id} className="specialty-card card" onClick={() => openSpecialty(s)}>
-              <Icon size={28} className="specialty-icon" />
-              <div className="specialty-name">{s.name}</div>
-              <div className="specialty-desc">{s.description}</div>
-              <div className="specialty-mcps">
-                {s.mcps?.map(m => <span key={m} className="tag">{m}</span>)}
+            <div key={s.id} className="specialty-row card" onClick={() => openSpecialty(s)}>
+              <Icon size={24} className="specialty-icon" />
+              <div className="specialty-row-body">
+                <div className="specialty-name">{s.name}</div>
+                {s.description && <div className="specialty-desc">{s.description}</div>}
+                {s.mcps?.length > 0 && (
+                  <div className="specialty-mcps">
+                    {s.mcps.map(m => <span key={m} className="tag">{m}</span>)}
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -407,13 +411,10 @@ function AutomationsList() {
           {defaults.length > 0 && (
             <div className="automation-group-collapsible">
               <button
-                className="automation-group-toggle"
+                className="automation-group-toggle-link"
                 onClick={() => setDefaultsOpen((v) => !v)}
               >
-                {defaultsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                <span>Defaults</span>
-                <span className="automation-group-count">{defaults.length}</span>
-                <span className="automation-group-note">built-ins that ship with Maiko — pause if one misfires</span>
+                {defaultsOpen ? "Hide" : "Show"} {defaults.length} built-in default{defaults.length === 1 ? "" : "s"}
               </button>
               {defaultsOpen && (
                 <div className="automations-list">
@@ -447,46 +448,65 @@ function AutomationsList() {
 
 
 function AutomationCard({ automation: a, defaultOrg, onToggle, onEdit }) {
+  const [expanded, setExpanded] = useState(false);
+  const whenSummary = describeAutomationTrigger(a);
+  const thenSummary = (a.then || []).map(describeAction).join(" → ") || "(no action)";
   return (
-    <div className={`automation-card card status-${a.status}`}>
+    <div className={`automation-card card status-${a.status} ${expanded ? "expanded" : ""}`}>
       <button className="automation-card-click-target" onClick={onEdit} title="Edit this automation">
         <div className="automation-card-main">
           <div className="automation-card-name-row">
             <span className="automation-card-name">{a.name}</span>
+            <span className={`automation-card-status status-${a.status}`}>{a.status}</span>
           </div>
-          {(a.scope_repo || a.status) && (
-            <div className="automation-card-chips">
-              <span className={`automation-card-status status-${a.status}`}>{a.status}</span>
-              {a.execution_scope === "pupdate" && (
-                <span className="automation-card-status" style={{ background: "var(--bg)", color: "var(--text-muted)" }}>rule</span>
-              )}
-              {a.scope_repo && (
-                <span className="automation-card-repo" title={a.scope_repo}>
-                  {formatRepo(a.scope_repo, defaultOrg)}
-                </span>
-              )}
+          {!expanded && (
+            <div className="automation-card-summary">
+              {whenSummary} → {thenSummary}
             </div>
           )}
-          {a.description && <div className="automation-card-desc">{a.description}</div>}
-          <div className="automation-card-row">
-            <span className="automation-card-label">WHEN</span>
-            <span>{describeAutomationTrigger(a)}</span>
-          </div>
-          <div className="automation-card-row">
-            <span className="automation-card-label">THEN</span>
-            <span>{(a.then || []).map(describeAction).join(" → ") || "(no action)"}</span>
-          </div>
-          <div className="automation-card-footer">
-            {a.last_fired_at ? (
-              <>fired {relativeTime(a.last_fired_at)} · {a.fire_count || 0}× total</>
-            ) : (
-              <>never fired yet</>
-            )}
-            {a.cooldown_days > 0 && <> · {a.cooldown_days}d cooldown</>}
-          </div>
+          {expanded && (
+            <>
+              {(a.execution_scope === "pupdate" || a.scope_repo) && (
+                <div className="automation-card-chips">
+                  {a.execution_scope === "pupdate" && (
+                    <span className="automation-card-status" style={{ background: "var(--bg)", color: "var(--text-muted)" }}>rule</span>
+                  )}
+                  {a.scope_repo && (
+                    <span className="automation-card-repo" title={a.scope_repo}>
+                      {formatRepo(a.scope_repo, defaultOrg)}
+                    </span>
+                  )}
+                </div>
+              )}
+              {a.description && <div className="automation-card-desc">{a.description}</div>}
+              <div className="automation-card-row">
+                <span className="automation-card-label">WHEN</span>
+                <span>{whenSummary}</span>
+              </div>
+              <div className="automation-card-row">
+                <span className="automation-card-label">THEN</span>
+                <span>{thenSummary}</span>
+              </div>
+              <div className="automation-card-footer">
+                {a.last_fired_at ? (
+                  <>fired {relativeTime(a.last_fired_at)} · {a.fire_count || 0}× total</>
+                ) : (
+                  <>never fired yet</>
+                )}
+                {a.cooldown_days > 0 && <> · {a.cooldown_days}d cooldown</>}
+              </div>
+            </>
+          )}
         </div>
       </button>
       <div className="automation-card-actions">
+        <button
+          className="btn btn-sm btn-ghost"
+          onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+          title={expanded ? "Collapse" : "Expand"}
+        >
+          {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+        </button>
         <button
           className="btn btn-sm"
           onClick={(e) => { e.stopPropagation(); onToggle(); }}
