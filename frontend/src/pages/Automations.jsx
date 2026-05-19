@@ -112,7 +112,7 @@ export default function Automations() {
         queued
           ? "Queued — the cycle will pick it up shortly 🐾"
           : res.success
-            ? "Specialty run complete ✨"
+            ? "Specialty run complete"
             : "Specialty run had trouble",
         res.success ? "normal" : "high",
       );
@@ -132,7 +132,7 @@ export default function Automations() {
         ...newSpecialty,
         mcps: newSpecialty.mcps.split(",").map(s => s.trim()).filter(Boolean),
       });
-      showToast(`Specialty "${newSpecialty.name}" created! 🎉`, "normal");
+      showToast(`Specialty "${newSpecialty.name}" created.`, "normal");
       setShowCreate(false);
       setNewSpecialty({ id: "", name: "", description: "", prompt: "", mcps: "", needs_worktree: false });
       fetchSpecialties();

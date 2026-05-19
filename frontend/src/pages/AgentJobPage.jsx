@@ -922,7 +922,7 @@ function ChatPanel({ jobId, agentName }) {
     try {
       const res = await api.sendToAgent(jobId, { content: text, sender: "user" });
       const mode = res?.wake_mode;
-      if (mode === "woke") showToast("Message sent — waking the agent ✨", "normal");
+      if (mode === "woke") showToast("Message sent. Waking the agent up.", "normal");
       else if (mode === "queued") showToast("Agent's working — queued for the next turn", "normal");
       else if (mode === "error") showToast("Sent, but agent has no live session to wake", "high");
       else showToast("Message saved to inbox", "normal");

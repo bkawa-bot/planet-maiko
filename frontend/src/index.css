@@ -725,10 +725,6 @@ a:hover { text-decoration: underline; }
 }
 
 /* === Animations === */
-@keyframes shimmer {
-  0%, 100% { background-position: 0% center; }
-  50% { background-position: 100% center; }
-}
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }

@@ -557,7 +557,7 @@ export default function Tasks() {
                                 </option>
                               ))}
                               <option value="__spawn__">
-                                ✨ Spawn new {role} agent{scope ? ` for ${scope}` : ""}
+                                Spawn new {role} agent{scope ? ` for ${scope}` : ""}
                               </option>
                             </select>
                           );

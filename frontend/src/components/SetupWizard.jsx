@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   Home as HomeIcon, FolderOpen, Brain, MapPin,
-  GitBranch, Bot, Sparkles, Rocket, PawPrint, Zap,
+  GitBranch, Bot, Moon, Rocket, PawPrint, Zap,
 } from "@icons";
 import { api } from "../api/client";
 
@@ -338,7 +338,7 @@ export default function SetupWizard({ onComplete }) {
         {/* Step 10: Tour — Done */}
         {step === 10 && (
           <div className="setup-step setup-step-centered">
-            <div className="setup-step-icon tour-icon"><Sparkles size={36} /></div>
+            <div className="setup-step-icon tour-icon"><Moon size={36} /></div>
             <h3>You're settled in</h3>
             <p>A few places to wander next:</p>
             <ul className="setup-checklist">
