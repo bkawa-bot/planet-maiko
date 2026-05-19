@@ -38,8 +38,8 @@
 
   /* Card title + border accents — pulled per theme so cards stop
      reading as one-note. */
-  --card-title: #D6FFEE;          /* unset in the mock: titles use the text color */
-  --card-border: rgba(255, 111, 175, 0.40);
+  --card-title: #A8FFD4;          /* Bio Mint Light (title pop) */
+  --card-border: rgba(159, 238, 239, 0.45);   /* Frozen Highlight (light frozen-ice edge) */
 
   /* Themed tint backgrounds — track the active theme so badges/pills
      stay coherent. */
