@@ -33,12 +33,12 @@
   --normal: #8C86A8;        /* Muted Lilac-Gray (no longer the pink primary) */
   --low: #5C5878;
   --green: #C4F542;         /* Toxic Lime (bioluminescent success) */
-  --border: #34284E;
-  --border-subtle: #15242A;
+  --border: #57518A;        /* Lifted Violet (visible on the glass panes) */
+  --border-subtle: #2C3050;
 
   /* Card title + border accents — pulled per theme so cards stop
      reading as one-note. */
-  --card-title: #C9A6FF;          /* Soft Lavender Glow (distinct from the cyan primary) */
+  --card-title: #D9A4FF;          /* Bright Lavender Glow (luminous on near-black cards) */
   --card-border: rgba(111, 224, 232, 0.42);
 
   /* Themed tint backgrounds — track the active theme so badges/pills
