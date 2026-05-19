@@ -38,7 +38,7 @@
 
   /* Card title + border accents — pulled per theme so cards stop
      reading as one-note. */
-  --card-title: #D9A4FF;          /* Bright Lavender Glow (luminous on near-black cards) */
+  --card-title: #52FFC4;          /* Aurora Green (northern-lights pop, distinct from the cyan primary) */
   --card-border: rgba(111, 224, 232, 0.42);
 
   /* Themed tint backgrounds — track the active theme so badges/pills
