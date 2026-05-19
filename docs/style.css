@@ -360,6 +360,15 @@ h2 {
   border-top: 6px solid var(--accent);
   padding: 18px;
 }
+/* Anchor the differentiator. Breaks the 6-up grid symmetry so the
+   section reads as "one big thing plus supporting ones" instead of
+   six identical feature boxes. */
+.card.card-wide {
+  grid-column: span 2;
+}
+@media (max-width: 720px) {
+  .card.card-wide { grid-column: auto; }
+}
 .card h3 {
   font-size: 1.03rem; margin-bottom: 6px;
   display: flex; align-items: baseline; gap: 8px;

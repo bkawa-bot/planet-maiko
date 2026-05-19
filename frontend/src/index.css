@@ -724,6 +724,38 @@ a:hover { text-decoration: underline; }
   padding: 16px 20px; overflow-y: auto; flex: 1;
 }
 
+/* === Page tabs — default tab-bar pattern ===
+   Any page can use <div className="page-tabs"> with <button
+   className="page-tab"> children (add `active` to the selected one).
+   Originally lifted from the Automations page; promoted so every
+   tabbed surface looks the same. */
+.page-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.page-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  margin-bottom: -1px;
+  transition: color 0.12s, background 0.12s;
+}
+.page-tab:hover { color: var(--text); }
+.page-tab.active {
+  color: var(--text);
+  border-color: var(--border);
+  border-bottom-color: var(--bg-card);
+  background: var(--bg-card);
+}
+
 /* === Animations === */
 
 @keyframes pulse {

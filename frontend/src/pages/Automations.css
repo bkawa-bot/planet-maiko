@@ -238,32 +238,7 @@
 }
 .specialty-error { color: var(--urgent); font-size: 12px; }
 
-/* Page-level tab bar. Two tabs (Automations / Specialties) sit in
-   place of the old big h2 so the user can flip between the two
-   surfaces instead of scrolling. */
-.page-tabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 16px;
-}
-.page-tab {
-  background: transparent;
-  border: 1px solid transparent;
-  border-bottom: none;
-  padding: 8px 16px;
-  font: inherit;
-  font-size: 13px;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  margin-bottom: -1px;
-  transition: color 0.12s, background 0.12s;
-}
-.page-tab:hover { color: var(--text); }
-.page-tab.active {
-  color: var(--text);
-  border-color: var(--border);
-  border-bottom-color: var(--bg-card);
-  background: var(--bg-card);
-}
+/* .page-tabs / .page-tab now live in index.css as the default
+   tab-bar pattern. Any page can use them via <div className="page-tabs">
+   + <button className="page-tab"> with an `active` class on the
+   selected one. */
