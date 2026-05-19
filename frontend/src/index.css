@@ -1,58 +1,58 @@
 /* Planet Maiko — Cosmic palette */
 
 :root {
-  /* Cosmic Nighttime: the master dark palette. This is the original
-     reference mock applied verbatim: dark indigo background fading to
-     a near-black backdrop, hot-pink primary, electric-cyan secondary,
-     neon mint / lavender / lemon sparks, deep-violet outlines. Token
-     values are taken straight from the design, not improvised. */
-  --bg: #21213B;            /* Background */
-  --bg-plain: #0F0B14;      /* Page backdrop (the near-black foot) */
-  --bg-card: #141420;       /* Card */
-  --bg-card-alt: #1A1A2C;   /* Card (alt) */
-  --bg-hover: #201E34;      /* Hover */
-  --bg-selected: #2C1832;   /* Selected */
-  --text: #D6FFEE;          /* Text */
-  --text-dim: #8BC1B6;      /* Text (dim) */
-  --text-muted: #A19CBF;    /* Text (muted) */
+  /* Cosmic Nighttime: the master dark palette. The reference mock with
+     accent colors snapped to the nearest canonical Planet Maiko palette
+     hue, so the theme reuses real palette colors. Backgrounds, text,
+     low, peach, green, and the teal subtle border kept at the mock
+     values: nearest palette color was far or duplicated another token. */
+  --bg: #21213B;            /* Background (mock) */
+  --bg-plain: #0F0B14;      /* Page backdrop (mock) */
+  --bg-card: #141420;       /* Card (mock) */
+  --bg-card-alt: #1A1A2C;   /* Card alt (mock) */
+  --bg-hover: #201E34;      /* Hover (mock) */
+  --bg-selected: #2C1832;   /* Selected (mock) */
+  --text: #D6FFEE;          /* Text (mock) */
+  --text-dim: #8BC1B6;      /* Text dim (mock) */
+  --text-muted: #A19CBF;    /* Text muted (mock) */
 
-  --pink: #FF2D95;          /* Primary / pink */
-  --pink-soft: rgba(255, 45, 149, 0.16);
-  --pink-glow: rgba(255, 45, 149, 0.09);
-  --blue: #00CFFF;          /* Blue */
-  --blue-soft: rgba(0, 207, 255, 0.16);
-  --mint: #38FFBD;          /* Mint */
-  --orange: #FF6B2D;        /* Orange */
-  --lavender: #C44DFF;      /* Lavender */
-  --peach: #FF7EB8;         /* Peach */
-  --creamsicle: #FF8FE0;    /* Magenta Spark (between pink and lavender) */
-  --lemon: #DFFF3C;         /* Lemon */
+  --pink: #FF6FAF;          /* Neon Pink (primary; mock #FF2D95 -> palette) */
+  --pink-soft: rgba(255, 111, 175, 0.16);
+  --pink-glow: rgba(255, 111, 175, 0.09);
+  --blue: #1FB5E5;          /* Electric Ice (mock #00CFFF -> palette) */
+  --blue-soft: rgba(31, 181, 229, 0.16);
+  --mint: #8FFFC9;          /* Bio Mint (mock #38FFBD -> palette) */
+  --orange: #FF6B5C;        /* Plasma Coral (mock #FF6B2D -> palette) */
+  --lavender: #B46BFF;      /* Violet Purple (mock #C44DFF -> palette) */
+  --peach: #FF7EB8;         /* Peach (mock kept: closest palette = primary) */
+  --creamsicle: #FF8FE0;    /* Magenta Spark (already a palette color) */
+  --lemon: #FFE66D;         /* Star Yellow (mock #DFFF3C -> palette) */
 
-  --urgent: #FF1A4B;        /* Urgent */
-  --high: #FF8A1A;          /* High */
-  --normal: #8884A0;        /* Normal */
-  --low: #585472;           /* Low */
-  --green: #00FF7F;         /* Green / success */
-  --border: #491566;        /* Border */
-  --border-subtle: #02323B; /* Border (subtle) */
+  --urgent: #FF5577;        /* Hot Magenta Red (mock #FF1A4B -> palette) */
+  --high: #FF6B5C;          /* Plasma Coral (mock #FF8A1A -> palette) */
+  --normal: #6E7A92;        /* palette neutral (mock #8884A0 -> palette) */
+  --low: #585472;           /* Low (mock kept: no close palette neutral) */
+  --green: #00FF7F;         /* Green / success (mock kept: no close palette green) */
+  --border: #3F3D70;        /* palette border (mock #491566 -> palette) */
+  --border-subtle: #02323B; /* Border subtle (mock kept: deliberate teal edge) */
 
   /* Card title + border accents — pulled per theme so cards stop
      reading as one-note. */
   --card-title: #D6FFEE;          /* unset in the mock: titles use the text color */
-  --card-border: rgba(255, 45, 149, 0.40);
+  --card-border: rgba(255, 111, 175, 0.40);
 
   /* Themed tint backgrounds — track the active theme so badges/pills
      stay coherent. */
-  --urgent-soft: rgba(255, 26, 75, 0.16);
-  --urgent-faint: rgba(255, 26, 75, 0.08);
-  --high-soft: rgba(255, 138, 26, 0.16);
-  --high-faint: rgba(255, 138, 26, 0.08);
-  --lemon-soft: rgba(223, 255, 60, 0.15);
-  --lemon-faint: rgba(223, 255, 60, 0.06);
+  --urgent-soft: rgba(255, 85, 119, 0.16);
+  --urgent-faint: rgba(255, 85, 119, 0.08);
+  --high-soft: rgba(255, 107, 92, 0.16);
+  --high-faint: rgba(255, 107, 92, 0.08);
+  --lemon-soft: rgba(255, 230, 109, 0.15);
+  --lemon-faint: rgba(255, 230, 109, 0.06);
   --green-soft: rgba(0, 255, 127, 0.16);
   --green-faint: rgba(0, 255, 127, 0.08);
-  --lavender-soft: rgba(196, 77, 255, 0.15);
-  --lavender-faint: rgba(196, 77, 255, 0.08);
+  --lavender-soft: rgba(180, 107, 255, 0.15);
+  --lavender-faint: rgba(180, 107, 255, 0.08);
 
   /* Body font. Atkinson Hyperlegible — designed by the Braille Institute
      for low-vision readability. Distinct character shapes (the 1, l, I
@@ -93,9 +93,9 @@
   /* Surface backgrounds — theme-controllable. Custom themes can
      override via `topbar_gradient` and `pane_bg` in their colors
      dict; otherwise they inherit these defaults (night look). */
-  /* Topbar gradient. The signature hot-pink to electric-cyan sweep
-     from the mock, the two hero colors. */
-  --topbar-gradient: linear-gradient(135deg, #FF2D95 0%, #00CFFF 100%);
+  /* Topbar gradient. The signature Neon Pink to Electric Ice sweep
+     (the two hero colors, snapped to the palette). */
+  --topbar-gradient: linear-gradient(135deg, #FF6FAF 0%, #1FB5E5 100%);
   --pane-bg: rgba(20, 20, 32, 0.55);
 
   /* World background SVG. Driven by the active theme so flipping
