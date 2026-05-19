@@ -38,8 +38,8 @@
 
   /* Card title + border accents — pulled per theme so cards stop
      reading as one-note. */
-  --card-title: #FF8FE0;          /* Magenta Spark (title pop) */
-  --card-border: #059E8A;         /* Deep Teal (official palette; quiet frame behind the title) */
+  --card-title: #059E8A;          /* Deep Teal (title) */
+  --card-border: rgba(255, 143, 224, 0.42);   /* Magenta Spark (card frame) */
 
   /* Themed tint backgrounds — track the active theme so badges/pills
      stay coherent. */
@@ -93,9 +93,9 @@
   /* Surface backgrounds — theme-controllable. Custom themes can
      override via `topbar_gradient` and `pane_bg` in their colors
      dict; otherwise they inherit these defaults (night look). */
-  /* Topbar gradient. Near-black sweep with an Electric Ice corner so
-     the nav sits back instead of glowing. */
-  --topbar-gradient: linear-gradient(135deg, #141420 0%, #1A1A2C 55%, #1FB5E5 100%);
+  /* Topbar gradient. Near-black sweep with a dim Deep Cobalt corner
+     so the top-right doesn't glare. */
+  --topbar-gradient: linear-gradient(135deg, #141420 0%, #1A1A2C 60%, #1A3D8F 100%);
   --pane-bg: rgba(20, 20, 32, 0.55);
 
   /* World background SVG. Driven by the active theme so flipping
