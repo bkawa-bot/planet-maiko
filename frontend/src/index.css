@@ -39,7 +39,7 @@
   /* Card title + border accents — pulled per theme so cards stop
      reading as one-note. */
   --card-title: #FF8FE0;          /* Magenta Spark (title pop) */
-  --card-border: #1F595E;         /* Deep Teal (quiet frame, recedes behind the title) */
+  --card-border: #059E8A;         /* Deep Teal (official palette; quiet frame behind the title) */
 
   /* Themed tint backgrounds — track the active theme so badges/pills
      stay coherent. */
