@@ -6,7 +6,7 @@
      hue, so the theme reuses real palette colors. Backgrounds, text,
      low, peach, green, and the teal subtle border kept at the mock
      values: nearest palette color was far or duplicated another token. */
-  --bg: #21213B;            /* Background (mock) */
+  --bg: #1A1A2C;            /* Background (mock #21213B softened to neutral dark) */
   --bg-plain: #0F0B14;      /* Page backdrop (mock) */
   --bg-card: #141420;       /* Card (mock) */
   --bg-card-alt: #1A1A2C;   /* Card alt (mock) */
@@ -93,9 +93,9 @@
   /* Surface backgrounds — theme-controllable. Custom themes can
      override via `topbar_gradient` and `pane_bg` in their colors
      dict; otherwise they inherit these defaults (night look). */
-  /* Topbar gradient. The signature Neon Pink to Electric Ice sweep
-     (the two hero colors, snapped to the palette). */
-  --topbar-gradient: linear-gradient(135deg, #FF6FAF 0%, #1FB5E5 100%);
+  /* Topbar gradient. Near-black sweep with an Electric Ice corner so
+     the nav sits back instead of glowing. */
+  --topbar-gradient: linear-gradient(135deg, #141420 0%, #1A1A2C 55%, #1FB5E5 100%);
   --pane-bg: rgba(20, 20, 32, 0.55);
 
   /* World background SVG. Driven by the active theme so flipping
