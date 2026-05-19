@@ -36,7 +36,6 @@
 .automation-card {
   display: flex; gap: 12px;
   padding: 12px 14px;
-  border-left: 3px solid var(--lavender, #b59dd8);
 }
 .automation-card.status-paused { opacity: 0.6; }
 .automation-card.status-archived { opacity: 0.4; }

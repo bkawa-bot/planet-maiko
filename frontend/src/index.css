@@ -838,7 +838,7 @@ a:hover { text-decoration: underline; }
   background: var(--pane-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 2px solid var(--card-border, var(--border));
+  border: 4px solid var(--card-border, var(--border));
   border-radius: var(--radius);
   box-shadow: 0 2px 16px rgba(0, 0, 0, 0.12);
   padding: 20px 24px;

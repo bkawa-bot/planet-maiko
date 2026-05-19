@@ -267,7 +267,7 @@ function JobHeader({ job, task, profile, onBack }) {
 
 function JobTabs({ tabs, active, onChange }) {
   return (
-    <div className="agent-job-tabs" role="tablist">
+    <div className="page-tabs" role="tablist">
       {tabs.map((t) => {
         const Icon = t.icon;
         return (
@@ -275,7 +275,7 @@ function JobTabs({ tabs, active, onChange }) {
             key={t.id}
             role="tab"
             aria-selected={active === t.id}
-            className={`agent-job-tab ${active === t.id ? "is-active" : ""}`}
+            className={`page-tab ${active === t.id ? "active" : ""}`}
             onClick={() => onChange(t.id)}
           >
             <Icon size={11} /> {t.label}
