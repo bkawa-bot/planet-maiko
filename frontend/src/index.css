@@ -1,13 +1,14 @@
 /* Planet Maiko — Cosmic palette */
 
 :root {
-  /* Cosmic Nighttime: the master dark palette. Truly-night void-navy
-     backgrounds, Frozen Cyan as the primary accent (pink demoted to a
+  /* Cosmic Nighttime: the master dark palette. Deep aurora-sky
+     backgrounds (teal-navy fading to a green horizon), Frozen Cyan as
+     the primary accent (pink demoted to a
      warm spark), plant accents from the bioluminescent flora set. The
      topbar runs a deep-night to frozen-cyan sweep (no pink). Per-token
      values pick a hue from the palette rather than improvising. */
-  --bg: #080A18;            /* Deep Void Navy (gradient top) */
-  --bg-plain: #15122E;      /* Midnight Indigo (pronounced shift) */
+  --bg: #07131F;            /* Deep Teal-Navy (aurora sky, gradient top) */
+  --bg-plain: #0C2622;      /* Aurora Horizon (faint green lift at the foot) */
   --bg-card: #121225;       /* Void Card */
   --bg-card-alt: #1A1830;   /* Deep Indigo Card */
   --bg-hover: #20203A;
