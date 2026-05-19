@@ -38,7 +38,7 @@
 
   /* Card title + border accents — pulled per theme so cards stop
      reading as one-note. */
-  --card-title: #059E8A;          /* Deep Teal (title) */
+  --card-title: #5BB5BD;          /* Sea Glass (lighter teal title) */
   --card-border: rgba(255, 143, 224, 0.42);   /* Magenta Spark (card frame) */
 
   /* Themed tint backgrounds — track the active theme so badges/pills
@@ -247,7 +247,7 @@
 
 /* ============================================================
    Curated extended themes — built from the new master palette.
-     Night:    bioluminescent, frozen
+     Night:    bioluminescent
      Day:      mint-meadow
    The remaining themes (cosmic default, sunset twilight, dawn
    morning, daylight light) live above. Each picks a primary
@@ -301,48 +301,6 @@
      every other theme keeps the default white via the fallback in
      .btn-primary. */
   --btn-primary-text: #1F3838;
-}
-
-/* === Frozen — ice planet, cryo glow. Frozen cyan + electric ice as
-   the dominant accent, soft lavender for the under-glaze, magenta
-   spark as the rare warm beat against all the cold. */
-[data-theme="frozen"] {
-  --bg: #0B1830;            /* deep ice-cave navy */
-  --bg-plain: #1A3D8F;      /* Deep Cobalt — visible cryo shift */
-  --bg-card: #122448;
-  --bg-card-alt: #1A2D58;
-  --bg-hover: #1F3870;
-  --bg-selected: #2D4A88;
-  --text: #F4F7FF;
-  --text-dim: #6FE0E8;      /* Frozen Cyan — labels catch the cryo light */
-  --text-muted: #8295B5;
-  --pink: #6FE0E8;          /* Frozen Cyan — primary, the cryo glow */
-  --pink-soft: rgba(111, 224, 232, 0.18);
-  --pink-glow: rgba(111, 224, 232, 0.10);
-  --blue: #1FB5E5;          /* Electric Ice */
-  --blue-soft: rgba(31, 181, 229, 0.18);
-  --mint: #9FEEEF;          /* Frozen Highlight */
-  --orange: #FF8FE0;        /* Magenta Spark — the rare warm break */
-  --lavender: #C9A6FF;      /* Soft Lavender Glow */
-  --peach: #FF8FE0;
-  --creamsicle: #D8C7FF;    /* Light Periwinkle */
-  --lemon: #FFE66D;
-  --urgent: #FF6FAF;        /* Neon Pink — only warm urgent the eye finds */
-  --high: #FF8FE0;
-  --normal: #6FE0E8;
-  --low: #8295B5;
-  --green: #8FFFC9;         /* Bio Mint — distant aurora streaks */
-  --border: #2D4A88;
-  --border-subtle: #1A2D58;
-  --card-title: #FF8FE0;          /* Magenta Spark — warm pop on cool card */
-  --card-border: rgba(111, 224, 232, 0.55);
-  --urgent-soft: rgba(255, 111, 175, 0.16); --urgent-faint: rgba(255, 111, 175, 0.08);
-  --high-soft: rgba(255, 143, 224, 0.16); --high-faint: rgba(255, 143, 224, 0.08);
-  --lemon-soft: rgba(255, 230, 109, 0.16); --lemon-faint: rgba(255, 230, 109, 0.08);
-  --green-soft: rgba(143, 255, 201, 0.18); --green-faint: rgba(143, 255, 201, 0.10);
-  --lavender-soft: rgba(201, 166, 255, 0.20); --lavender-faint: rgba(201, 166, 255, 0.10);
-  --topbar-gradient: linear-gradient(135deg, #0B1830 0%, #1A3D8F 40%, #1FB5E5 75%, #6FE0E8 100%);
-  --pane-bg: rgba(18, 36, 72, 0.55);
 }
 
 /* === Mint Meadow — alien meadow at noon. Frozen wash bg, sea teal as
