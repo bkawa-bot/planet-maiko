@@ -2,10 +2,10 @@
 
 :root {
   /* Cosmic Nighttime: the master dark palette. Near-black backgrounds,
-     Frozen Cyan primary as a neon pop against the black, icy-blue
-     box outlines, Bio Mint on card titles, Toxic Lime as the green
-     accent, pink kept in selection and the sparks. Per-token values
-     pick a hue from the palette rather than improvising. */
+     Frozen Cyan primary as a neon pop against the black, neon pink as
+     the secondary accent, icy-blue card titles, Bio Mint box outlines,
+     Toxic Lime as the green accent. Per-token values pick a hue from
+     the palette rather than improvising. */
   --bg: #08080C;            /* Near-Black (gradient top) */
   --bg-plain: #0D0D14;      /* Near-Black (barely-there lift) */
   --bg-card: #101015;       /* Black Card */
@@ -19,8 +19,8 @@
   --pink: #6FE0E8;          /* Frozen Cyan (primary accent, the cryo glow) */
   --pink-soft: rgba(111, 224, 232, 0.16);
   --pink-glow: rgba(111, 224, 232, 0.09);
-  --blue: #1FB5E5;          /* Electric Ice (deeper cobalt-cyan) */
-  --blue-soft: rgba(31, 181, 229, 0.16);
+  --blue: #FF6FAF;          /* Neon Pink (the secondary accent) */
+  --blue-soft: rgba(255, 111, 175, 0.16);
   --mint: #4DFFC4;          /* Bio Mint (toxic glow) */
   --orange: #FF7A4D;        /* Plasma Coral */
   --lavender: #C9A6FF;      /* Soft Lavender Glow */
@@ -33,13 +33,13 @@
   --normal: #8C86A8;        /* Muted Lilac-Gray (no longer the pink primary) */
   --low: #5C5878;
   --green: #C4F542;         /* Toxic Lime (bioluminescent success) */
-  --border: rgba(95, 209, 235, 0.32);       /* Icy Blue glow on modal/pane edges */
-  --border-subtle: rgba(95, 209, 235, 0.13);
+  --border: rgba(143, 255, 201, 0.30);      /* Bio Mint glow on modal/pane edges */
+  --border-subtle: rgba(143, 255, 201, 0.12);
 
   /* Card title + border accents — pulled per theme so cards stop
      reading as one-note. */
-  --card-title: #8FFFC9;          /* Bio Mint (light glacier-teal title pop) */
-  --card-border: rgba(111, 224, 232, 0.42);
+  --card-title: #5FD1EB;          /* Icy Blue (glacier title pop) */
+  --card-border: rgba(143, 255, 201, 0.42);
 
   /* Themed tint backgrounds — track the active theme so badges/pills
      stay coherent. */
@@ -95,8 +95,8 @@
      dict; otherwise they inherit these defaults (night look). */
   /* Topbar gradient. The full signature gradient lives on the palette
      reference; on the nav strip it's noise. Cosmic Nighttime runs a
-     near-black sweep with a faint icy-blue corner. */
-  --topbar-gradient: linear-gradient(135deg, #08080C 0%, #0E1418 55%, #143038 100%);
+     near-black sweep with a faint bio-mint corner. */
+  --topbar-gradient: linear-gradient(135deg, #08080C 0%, #0E1414 55%, #143828 100%);
   --pane-bg: rgba(13, 13, 17, 0.55);
 
   /* World background SVG. Driven by the active theme so flipping
