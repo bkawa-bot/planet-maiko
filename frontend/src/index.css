@@ -2,10 +2,10 @@
 
 :root {
   /* Cosmic Nighttime: the master dark palette. Near-black backgrounds,
-     Frozen Cyan primary as a neon pop against the black, toxic-lime
-     slime glow on borders, neon pink on card titles. Plant accents
-     from the bioluminescent flora set. Per-token values pick a hue
-     from the palette rather than improvising. */
+     Frozen Cyan primary as a neon pop against the black, icy-blue
+     box outlines, Bio Mint on card titles, Toxic Lime as the green
+     accent, pink kept in selection and the sparks. Per-token values
+     pick a hue from the palette rather than improvising. */
   --bg: #08080C;            /* Near-Black (gradient top) */
   --bg-plain: #0D0D14;      /* Near-Black (barely-there lift) */
   --bg-card: #101015;       /* Black Card */
@@ -33,13 +33,13 @@
   --normal: #8C86A8;        /* Muted Lilac-Gray (no longer the pink primary) */
   --low: #5C5878;
   --green: #C4F542;         /* Toxic Lime (bioluminescent success) */
-  --border: rgba(196, 245, 66, 0.32);       /* Toxic-Lime slime glow on modal/pane edges */
-  --border-subtle: rgba(196, 245, 66, 0.13);
+  --border: rgba(95, 209, 235, 0.32);       /* Icy Blue glow on modal/pane edges */
+  --border-subtle: rgba(95, 209, 235, 0.13);
 
   /* Card title + border accents — pulled per theme so cards stop
      reading as one-note. */
-  --card-title: #FF6FAF;          /* Neon Pink (the warm pop, pink's home) */
-  --card-border: rgba(196, 245, 66, 0.42);
+  --card-title: #8FFFC9;          /* Bio Mint (light glacier-teal title pop) */
+  --card-border: rgba(111, 224, 232, 0.42);
 
   /* Themed tint backgrounds — track the active theme so badges/pills
      stay coherent. */
@@ -95,8 +95,8 @@
      dict; otherwise they inherit these defaults (night look). */
   /* Topbar gradient. The full signature gradient lives on the palette
      reference; on the nav strip it's noise. Cosmic Nighttime runs a
-     near-black sweep with a faint slime-green corner. */
-  --topbar-gradient: linear-gradient(135deg, #08080C 0%, #0E1414 55%, #18331E 100%);
+     near-black sweep with a faint icy-blue corner. */
+  --topbar-gradient: linear-gradient(135deg, #08080C 0%, #0E1418 55%, #143038 100%);
   --pane-bg: rgba(13, 13, 17, 0.55);
 
   /* World background SVG. Driven by the active theme so flipping
