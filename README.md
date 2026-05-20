@@ -26,43 +26,61 @@ All the required agent orchestration work. Automatically kicks off agents, lets 
 
 ## How is Planet Maiko different from RinkStack, Mazino.ai, or QuatroForce? (I just made all of those up)
 
-- **Maiko has a unique self-maintaining memory system** which builds a rule-book from you and your team's PR history and feedback. Internal knowledge and specific gotchas are all automatically captured. No more manual write-ups of your team's guidelines needed.
-- **Maiko uses semantic embeddings to get agents what they need without shoving 100 rules into every prompt.** Agents just describe what they're doing and get ONLY the rules that matter, so you can keep a pool of hundreds of very specific nits and context without drowning every prompt.
-- **The dogs confess their own mistakes too.** When one gets something wrong it writes down what it learned, and the whole pack reads it.
+### A self-maintaining rulebook from your team's PR history
 
-### How it actually works
-
-The boring part is running agents. The interesting part is the loop on the right: your PR history quietly teaches the rulebook, and the rulebook only ever hands each dog the few rules that matter for what it is touching.
+Internal knowledge and specific gotchas get captured automatically, no manual write-ups. When an agent works on something, it only sees the handful of rules that matter for that change. You can keep a pool of hundreds of very specific nits without drowning every prompt.
 
 ```mermaid
-flowchart TD
-  subgraph SRC["the outside world"]
-    GH["GitHub"]
-    LN["Linear"]
-    PD["PagerDuty"]
-    CAL["Calendar"]
-  end
-
-  SRC -->|"pollers and plugins"| PUP["Pupdates<br/>(everything that just happened)"]
-  PUP -->|"automations: when this, then that"| BRAIN["Maiko, the brain"]
-  BRAIN --> HOME["Home overview and inbox<br/>(what actually needs you)"]
-  BRAIN --> TASKS["Tasks"]
-  TASKS --> PACK
-
-  subgraph PACK["the pack (alien dogs)"]
-    A1["coding dog"]
-    A2["review dog"]
-    A3["investigation dog"]
-  end
-
-  PACK -->|"isolated git worktrees"| PR["branches and PRs"]
-  PR --> GH
-
-  GH -->|"PR history and review comments"| SIG["Signals"]
-  SIG -->|"clustered into rules"| RULES["self-maintaining rulebook"]
+flowchart LR
+  GH["your PR history"]:::source
+  SIG["raw reviewer<br/>comments"]:::signal
+  RULES["clustered<br/>rulebook"]:::rules
+  PACK["the pack"]:::pack
+  GH -->|"scraped from merged PRs"| SIG
+  SIG -->|"clustered into rules"| RULES
   RULES -->|"local RAG: only the rules<br/>that matter for this task"| PACK
-  PACK -->|"what I got wrong"| INS["pack insights<br/>(shared memory)"]
-  INS --> PACK
+
+  classDef source fill:#1A1F4A,stroke:#FF6FAF,stroke-width:2px,color:#F4F7FF;
+  classDef signal fill:#1A1F4A,stroke:#FF8FE0,stroke-width:2px,color:#F4F7FF;
+  classDef rules fill:#1A1F4A,stroke:#6FE0E8,stroke-width:2px,color:#F4F7FF;
+  classDef pack fill:#1A1F4A,stroke:#C4F542,stroke-width:2px,color:#F4F7FF;
+```
+
+### The dogs confess their own mistakes
+
+When one gets something wrong it writes down what it learned, and the whole pack reads it. Future agents inherit those notes in their preamble, so a gotcha gets discovered once.
+
+```mermaid
+flowchart LR
+  DOG["a dog<br/>(after a task)"]:::pack
+  NOTE["what I got wrong"]:::signal
+  MEM["pack insights<br/>(shared memory)"]:::mem
+  NEW["future agents<br/>inherit it"]:::pack
+  DOG -->|"confesses"| NOTE --> MEM --> NEW
+
+  classDef pack fill:#1A1F4A,stroke:#C4F542,stroke-width:2px,color:#F4F7FF;
+  classDef signal fill:#1A1F4A,stroke:#FF8FE0,stroke-width:2px,color:#F4F7FF;
+  classDef mem fill:#1A1F4A,stroke:#FFE66D,stroke-width:2px,color:#F4F7FF;
+```
+
+### How a task moves through the system
+
+```mermaid
+flowchart LR
+  SRC["GitHub / Linear /<br/>PagerDuty / Calendar"]:::source
+  PUP["Pupdates"]:::signal
+  AUTO["Automations<br/>(when X, then Y)"]:::auto
+  TASK["Tasks"]:::task
+  AGENT["Agent in an<br/>isolated worktree"]:::pack
+  PR["Branch / PR"]:::pr
+  SRC -->|"pollers + plugins"| PUP --> AUTO --> TASK --> AGENT -->|"commits"| PR
+
+  classDef source fill:#1A1F4A,stroke:#FF6FAF,stroke-width:2px,color:#F4F7FF;
+  classDef signal fill:#1A1F4A,stroke:#FF8FE0,stroke-width:2px,color:#F4F7FF;
+  classDef auto fill:#1A1F4A,stroke:#FFE66D,stroke-width:2px,color:#F4F7FF;
+  classDef task fill:#1A1F4A,stroke:#C9A6FF,stroke-width:2px,color:#F4F7FF;
+  classDef pack fill:#1A1F4A,stroke:#C4F542,stroke-width:2px,color:#F4F7FF;
+  classDef pr fill:#1A1F4A,stroke:#6FE0E8,stroke-width:2px,color:#F4F7FF;
 ```
 
 ## Build a plugin for any tool you never want to have to look at again.
