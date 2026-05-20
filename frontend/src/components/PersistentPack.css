@@ -197,3 +197,25 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+/* Maiko is the controller, not a worker — different ring color from
+   the pack so the role is legible at a glance. */
+.persistent-pack-maiko-wrap {
+  background: var(--lavender-soft, #efe5ff);
+  box-shadow: 0 0 0 2px var(--lavender, #c0a8d8);
+}
+
+.persistent-pack-maiko-avatar {
+  border-radius: 28%;
+  image-rendering: pixelated;
+  display: block;
+}
+
+/* Divider between Maiko and the pack, only when the pack has anyone.
+   Soft so it doesn't shout. */
+.persistent-pack-divider {
+  width: 24px;
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 2px 0;
+}
