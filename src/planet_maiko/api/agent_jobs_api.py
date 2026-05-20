@@ -89,14 +89,22 @@ def cancel_job(job_id):
     j.status = "cancelled"
     j.finished_at = datetime.now(timezone.utc)
     # Cascade cancel to the linked Task so the Tasks page also stops
-    # showing this work as in-flight. Skip terminal tasks — never
-    # un-close a done one.
+    # showing this work as in-flight. Two skips: terminal tasks (never
+    # un-close a done one), and tasks that still have other in-flight
+    # jobs working on them. Cancelling one of N parallel agents
+    # shouldn't kill the task they all share.
     if j.source_task_id:
         from planet_maiko.models.task import Task
         t = db.session.get(Task, j.source_task_id)
         if t is not None and t.status not in ("done", "cancelled"):
-            t.status = "cancelled"
-            t.updated_at = datetime.now(timezone.utc)
+            active_siblings = AgentJob.query.filter(
+                AgentJob.source_task_id == j.source_task_id,
+                AgentJob.id != j.id,
+                AgentJob.status.in_(("queued", "running")),
+            ).count()
+            if active_siblings == 0:
+                t.status = "cancelled"
+                t.updated_at = datetime.now(timezone.utc)
     db.session.commit()
     return jsonify(j.to_dict())
 
