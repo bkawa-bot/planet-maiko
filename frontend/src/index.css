@@ -744,7 +744,7 @@ a:hover { text-decoration: underline; }
      Automations/Pack tab pattern (rests on the bottom border, active
      tab punches through to the surface below). */
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-dim);
   cursor: pointer;
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
