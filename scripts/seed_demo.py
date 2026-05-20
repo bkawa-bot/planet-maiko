@@ -100,38 +100,72 @@ PUPDATES = [
      "low", False, None, dict(days_ago=2)),
 ]
 
-# Rulebook: signals (raw feedback) clustered into learnings (rules).
+# Rulebook: signals (raw reviewer quotes) clustered into learnings (rules).
+# Each learning carries a list of `quotes` (the original PR-review
+# comments) so when the user expands a rule in the Knowledge UI they
+# see varied reviewer voices, not the rule text repeated N times.
 # (rule, category, repo, signal_count, confidence, is_global,
-#  violation_description)
+#  violation_description, quotes)
 LEARNINGS = [
     ("Add new nullable columns to the idempotent patch list, never a "
      "hard migration: existing SQLite databases must survive an update.",
      "architecture", "aurora-labs/star-charts", 4, 0.92, True,
      "A schema change introduces a non-additive migration or a NOT NULL "
-     "column without a default, which breaks existing local databases."),
+     "column without a default, which breaks existing local databases.",
+     [
+       "this needs to be in the patch list or older databases will break on update",
+       "ALTER TABLE goes through _ensure_new_columns, not a hard migration here",
+       "had to roll back v0.3.2 because this added a NOT NULL column with no default",
+       "let's keep migrations idempotent. if i run it twice it should be a no-op",
+     ]),
     ("Pass task_type through to the runtime resolver. If a call site uses "
      "resolve_model(X) the matching runtime must use the same key or "
      "per-task routing silently no-ops.",
      "gotcha", "aurora-labs/tide-engine", 3, 0.88, False,
      "A model-resolution call site and its runtime use different task_type "
-     "keys, so the per-task routing rule never takes effect."),
+     "keys, so the per-task routing rule never takes effect.",
+     [
+       "resolve_model('cartograph') here but _get_runtime() is called without task_type, so the routing rule never fires",
+       "spent 20 min debugging why per-task routing wasn't working. it's this.",
+       "if you add a resolve_model() call site you have to wire task_type through, or the rule silently no-ops",
+     ]),
     ("Prefer select(...) over the legacy Query API in new code; the old "
      "path is being removed and mixing them breaks eager loading.",
      "style", "moss/garden-server", 5, 0.81, True,
-     "New code uses the legacy Query API instead of select(...)."),
+     "New code uses the legacy Query API instead of select(...).",
+     [
+       "use select() here, Query is being removed",
+       "mixing eager-load styles between Query and select breaks the join in subtle ways. we caught one in #84",
+       "new code goes through 2.0 style, see the migration note in CONTRIBUTING",
+       "the old way works, but every new file that uses it adds to the cleanup pile",
+       "switch to select(Foo).where(...) please",
+     ]),
     ("Null-check the cursor before .fetchone(); the moss driver returns "
      "None on an empty result instead of raising.",
      "null_safety", "moss/garden-server", 2, 0.74, False,
-     "A .fetchone() result is used without checking it against None."),
+     "A .fetchone() result is used without checking it against None.",
+     [
+       "cursor.fetchone() returns None when there are no rows here. needs a guard",
+       "this crashed in prod on an empty result set. please null-check before .get('id')",
+     ]),
     ("Commit inside the daemon thread that did the work. A worker that "
      "writes rows but never commits loses everything on thread exit.",
      "gotcha", "aurora-labs/tide-engine", 3, 0.86, True,
      "A background thread mutates the session but returns without "
-     "committing or rolling back."),
+     "committing or rolling back.",
+     [
+       "the worker thread writes but never commits, so on thread exit the session rolls back and you lose the row",
+       "had this exact bug last sprint. need a db.session.commit() at the end of _run.",
+       "each thread is its own caller. you commit yourself in the worker.",
+     ]),
     ("Floor displayed times to the minute. Seconds in a timestamp read "
      "as machine output, not something a person would write.",
      "style", "aurora-labs/star-charts", 2, 0.7, False,
-     "A user-facing timestamp is rendered with seconds."),
+     "A user-facing timestamp is rendered with seconds.",
+     [
+       "drop the seconds in that timestamp. reads as machine output.",
+       "users don't write times with seconds. it's an instant tell that something is computer-generated.",
+     ]),
 ]
 
 # Pack insights: the campfire confessions. Agents owning their misses.
@@ -272,7 +306,7 @@ def _seed_rulebook():
     from planet_maiko.models.signal import Signal
 
     reviewers = ["quill", "juniper", "sable", "fenn"]
-    for i, (rule, cat, repo, count, conf, is_global, viol) in enumerate(LEARNINGS):
+    for i, (rule, cat, repo, count, conf, is_global, viol, quotes) in enumerate(LEARNINGS):
         if Learning.query.filter_by(rule=rule).first():
             continue
         learning = Learning(
@@ -285,11 +319,14 @@ def _seed_rulebook():
         )
         db.session.add(learning)
         db.session.flush()
-        # A few confirming signals per rule so the count is real and the
-        # "PR reviewer said this N times" story holds up.
+        # Confirming signals are the original reviewer comments that got
+        # clustered into the rule. Different text per signal so expanding
+        # a rule in the UI shows a real-feeling chorus of voices.
         for n in range(count):
+            quote = quotes[n % len(quotes)]
             db.session.add(Signal(
-                category=cat, text=rule, source_type="pr_comment",
+                category=cat, text=quote, original_text=quote,
+                source_type="pr_comment",
                 reviewer=reviewers[n % len(reviewers)], severity="suggestion",
                 repo=repo, learning_id=learning.id, aggregated=True,
                 synthesized=True, created_at=_utc(days_ago=i, hours_ago=n),
