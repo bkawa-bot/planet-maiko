@@ -94,6 +94,15 @@ def _phase_spawn_jobs_for_tasks():
                 continue
 
             extra = task.extra or {}
+            # Carry plan_first / custom_prompt from the task across to
+            # the new job so the reassign flow's options (and any other
+            # path that stashes these on task.extra) reach the kickoff
+            # in execute_jobs, which reads them from job.extra.
+            job_extra = {}
+            if "plan_first" in extra:
+                job_extra["plan_first"] = bool(extra["plan_first"])
+            if extra.get("custom_prompt"):
+                job_extra["custom_prompt"] = extra["custom_prompt"]
             job = AgentJob(
                 id=_uuid.uuid4().hex[:24],
                 kind=task.type,
@@ -105,7 +114,7 @@ def _phase_spawn_jobs_for_tasks():
                 source_task_id=task.id,
                 agent_profile_id=task.assigned_agent_id,
                 status="queued",
-                extra={},
+                extra=job_extra,
             )
             db.session.add(job)
             spawned += 1

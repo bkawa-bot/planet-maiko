@@ -540,6 +540,13 @@ def reassign_task(task_id):
     data = request.get_json(silent=True) or {}
     current = task.assigned_agent_id
     target_id = data.get("agent_id")
+    # plan_first / custom_prompt mirror the assign flow. They land on
+    # task.extra so the cycle's spawn-jobs phase picks them up when it
+    # creates the fresh AgentJob for the new assignee. plan_first only
+    # has meaning for coding tasks; we still persist whatever the user
+    # set and let the kickoff path ignore it for non-coding roles.
+    reassign_plan_first = data.get("plan_first")
+    reassign_custom_prompt = data.get("custom_prompt")
 
     if target_id:
         profile = db.session.get(AgentProfile, target_id)
@@ -577,6 +584,13 @@ def reassign_task(task_id):
     new_extra.pop("working_path", None)
     new_extra.pop("branch", None)
     new_extra.pop("session_id", None)
+    if reassign_plan_first is not None:
+        new_extra["plan_first"] = bool(reassign_plan_first)
+    if reassign_custom_prompt is not None:
+        if reassign_custom_prompt:
+            new_extra["custom_prompt"] = reassign_custom_prompt
+        else:
+            new_extra.pop("custom_prompt", None)
     task.extra = new_extra
 
     # Reset status so the new agent picks it up next cycle.

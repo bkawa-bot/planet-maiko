@@ -98,8 +98,17 @@ export const api = {
   // Hard-delete a cancelled or done task. The escape hatch from the
   // soft-delete pattern — use after cancel if the task is truly gone.
   forgetTask: (id) => request(`/tasks/${id}/forget`, { method: "POST" }),
-  reassignTask: (id, agent_id) =>
-    request(`/tasks/${id}/reassign`, { method: "POST", body: JSON.stringify(agent_id ? { agent_id } : {}) }),
+  // opts: { agent_id?, plan_first?, custom_prompt? }. agent_id omitted
+  // means "router picks a different one of the same role for me."
+  reassignTask: (id, opts = {}) => {
+    const body = {};
+    if (opts.agent_id) body.agent_id = opts.agent_id;
+    if (opts.plan_first !== undefined) body.plan_first = opts.plan_first;
+    if (opts.custom_prompt) body.custom_prompt = opts.custom_prompt;
+    return request(`/tasks/${id}/reassign`, {
+      method: "POST", body: JSON.stringify(body),
+    });
+  },
   launchTask: (id) => request(`/tasks/${id}/launch`, { method: "POST" }),
   sendTaskToLinear: (id, overrides = {}) =>
     request(`/tasks/${id}/linear`, { method: "POST", body: JSON.stringify(overrides) }),
