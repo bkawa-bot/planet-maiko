@@ -68,7 +68,18 @@ export default function MaikoChat() {
   };
 
   const handleKey = (e) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      // Cmd/Ctrl+Enter inserts a newline manually since the browser
+      // default for that combo is "nothing" in a textarea.
+      const el = e.target;
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      setInput(el.value.slice(0, start) + "\n" + el.value.slice(end));
+      requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = start + 1; });
+      e.preventDefault();
+      return;
+    }
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       send();
     }
@@ -113,7 +124,7 @@ export default function MaikoChat() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKey}
-          placeholder="Ask Maiko anything. Shift+Enter for a newline."
+          placeholder="Ask Maiko anything. Shift or Cmd+Enter for a newline."
           rows={2}
           disabled={sending}
         />

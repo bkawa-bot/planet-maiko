@@ -660,7 +660,22 @@ function DiffPanel({ jobId, job, task, onChanged }) {
             <textarea
               value={newBody}
               onChange={(e) => setNewBody(e.target.value)}
-              placeholder="Leave a comment…"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  const el = e.target;
+                  const start = el.selectionStart;
+                  const end = el.selectionEnd;
+                  setNewBody(el.value.slice(0, start) + "\n" + el.value.slice(end));
+                  requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = start + 1; });
+                  e.preventDefault();
+                  return;
+                }
+                if (e.key === "Enter" && !e.shiftKey && newBody.trim()) {
+                  e.preventDefault();
+                  submitNew();
+                }
+              }}
+              placeholder="Leave a comment… (Enter saves, Shift or Cmd+Enter for newline)"
               rows={4}
               autoFocus
             />

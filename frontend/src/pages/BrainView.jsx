@@ -359,7 +359,7 @@ export default function BrainView() {
         {clusterProgress && (
           <ClusterProgress progress={clusterProgress} />
         )}
-        {/* Tabs */}
+        {/* Tabs + top-level rule sharing actions */}
         <div className="page-tabs">
           <button
             className={`page-tab ${tab === "pool" ? "active" : ""}`}
@@ -379,6 +379,9 @@ export default function BrainView() {
           >
             Unsynthesized {rawSignalsTotal > 0 && <span className="tab-badge">{rawSignalsTotal}</span>}
           </button>
+          <div style={{ marginLeft: "auto" }}>
+            <TeamRulesSection />
+          </div>
         </div>
 
         {tab === "unsynthesized" && unsynthesized.length > 0 && (
@@ -553,8 +556,6 @@ export default function BrainView() {
             <p>Active learnings are retrieved by agents at task kickoff via <code>maiko rules-relevant</code> — relevant patterns surface in the agent's context so they can apply the team's accumulated knowledge from past PR reviews.</p>
           </InfoButton>
         </div>
-
-        <TeamRulesSection />
 
         {baseVisible.length > 0 && (
           <div className="scope-filter-row">

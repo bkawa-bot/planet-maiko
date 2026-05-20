@@ -644,6 +644,47 @@ a:hover { text-decoration: underline; }
 .badge.active { background: var(--green-soft); color: var(--green); }
 .badge.paused { background: var(--lemon-soft); color: var(--lemon); }
 
+/* Badge text overrides for light-bg themes. The default pattern uses
+   var(--hue-soft) bg + var(--hue) text, which has plenty of contrast
+   on dark surfaces but becomes pale-on-pale on light themes (the
+   green RUNNING badge, the yellow draft badge, etc. were unreadable).
+   Override to dark saturated variants per hue so the labels stay
+   legible without changing the dark-theme look. */
+[data-theme="light"] .badge.in_progress,
+[data-theme="morning"] .badge.in_progress,
+[data-theme="light"] .badge.paused,
+[data-theme="morning"] .badge.paused,
+[data-theme="light"] .diff-comment-badge.draft,
+[data-theme="morning"] .diff-comment-badge.draft {
+  color: #8a6800;
+}
+[data-theme="light"] .badge.done,
+[data-theme="morning"] .badge.done,
+[data-theme="light"] .badge.active,
+[data-theme="morning"] .badge.active,
+[data-theme="light"] .diff-comment-badge.resolved,
+[data-theme="morning"] .diff-comment-badge.resolved,
+[data-theme="light"] .agent-job-status.status-active,
+[data-theme="morning"] .agent-job-status.status-active {
+  color: #1f6b3a;
+}
+[data-theme="light"] .badge.new,
+[data-theme="morning"] .badge.new,
+[data-theme="light"] .badge.approved,
+[data-theme="morning"] .badge.approved,
+[data-theme="light"] .diff-comment-badge.submitted,
+[data-theme="morning"] .diff-comment-badge.submitted {
+  color: #0e5d75;
+}
+[data-theme="light"] .badge.normal,
+[data-theme="morning"] .badge.normal {
+  color: #c5337a;
+}
+[data-theme="light"] .badge.planning,
+[data-theme="morning"] .badge.planning {
+  color: #5b2d8c;
+}
+
 /* === Buttons === */
 .btn {
   background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim);
