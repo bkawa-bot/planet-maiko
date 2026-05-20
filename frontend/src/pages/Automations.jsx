@@ -123,13 +123,25 @@ export default function Automations() {
   };
 
   const handleCreate = async () => {
-    if (!newSpecialty.id || !newSpecialty.name || !newSpecialty.prompt) {
-      showToast("Need at least an ID, name, and prompt", "high");
+    if (!newSpecialty.name || !newSpecialty.prompt) {
+      showToast("Need a name and prompt", "high");
+      return;
+    }
+    // Slug the name to make the stable id, so the user doesn't have
+    // to invent one. "Error triage" -> "error-triage".
+    const id = newSpecialty.name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    if (!id) {
+      showToast("Name needs at least one letter or number", "high");
       return;
     }
     try {
       await api.createSkill({
         ...newSpecialty,
+        id,
         mcps: newSpecialty.mcps.split(",").map(s => s.trim()).filter(Boolean),
       });
       showToast(`Specialty "${newSpecialty.name}" created.`, "normal");
@@ -202,10 +214,7 @@ export default function Automations() {
             </div>
             <div className="modal-body">
               <div className="specialty-editor">
-                <div className="specialty-form-row">
-                  <label>ID <input type="text" value={newSpecialty.id} onChange={e => setNewSpecialty(s => ({ ...s, id: e.target.value }))} placeholder="error-triage" /></label>
-                  <label>Name <input type="text" value={newSpecialty.name} onChange={e => setNewSpecialty(s => ({ ...s, name: e.target.value }))} placeholder="Error triage" /></label>
-                </div>
+                <label>Name <input type="text" value={newSpecialty.name} onChange={e => setNewSpecialty(s => ({ ...s, name: e.target.value }))} placeholder="Error triage" /></label>
                 <label>Description <input type="text" value={newSpecialty.description} onChange={e => setNewSpecialty(s => ({ ...s, description: e.target.value }))} placeholder="What agents doing this specialty produce" /></label>
                 <label className="checkbox-label">
                   <input
