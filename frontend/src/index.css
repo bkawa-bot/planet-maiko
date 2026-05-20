@@ -857,10 +857,6 @@ a:hover { text-decoration: underline; }
   padding: 8px;
 }
 
-/* Cards inside a frost-pane shift to the alt surface so they read
-   as a step distinct from the pane's translucent layer, which was
-   collapsing to the same near-white / near-black in some themes. */
-.frost-pane .card { background: var(--bg-card-alt); }
 
 /* Cards inside glass container get tighter margins */
 .card-list-container .card,
