@@ -142,7 +142,6 @@
 .action-strip-list { display: flex; flex-direction: column; gap: 6px; }
 .action-strip-list .pupdate-card {
   background: var(--bg-card);
-  border-left: 3px solid var(--pink);
 }
 
 /* Inbox tabs */
