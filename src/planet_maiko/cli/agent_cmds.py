@@ -232,7 +232,7 @@ def cmd_leave_comment(args):
         "side": args.side,
         "body": body,
     }
-    api_request(f"/tasks/{task_id}/comments/agent", method="POST", data=data)
+    api_request(f"/jobs/{task_id}/comments/agent", method="POST", data=data)
     print(f"Comment pinned to {args.file}:{args.line}")
 
 
