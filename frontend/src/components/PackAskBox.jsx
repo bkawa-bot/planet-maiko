@@ -118,7 +118,7 @@ export default function PackAskBox() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKey}
-          placeholder="Ask the pack…"
+          placeholder="Ask Maiko…"
           className="pack-ask-input"
           disabled={loading}
         />
@@ -135,7 +135,7 @@ export default function PackAskBox() {
 
       <div className="pack-announce-box">
         <span className="pack-announce-label">
-          <Megaphone size={11} /> Announce to the whole pack
+          <Megaphone size={11} /> Ask the pack
         </span>
         <div className="pack-announce-row">
           <input

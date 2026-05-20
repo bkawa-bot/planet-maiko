@@ -328,6 +328,16 @@ function DiffPanel({ jobId, job, task, onChanged }) {
     }
   }, [id]);
 
+  // Light refetch that only re-pulls comments. Used after add-comment
+  // so the diff body isn't re-rendered (which loses scroll position
+  // and flashes the loading state).
+  const refetchComments = useCallback(async () => {
+    try {
+      const c = await api.listDiffComments(id);
+      setComments(c || []);
+    } catch { /* ignore — leave the existing list in place */ }
+  }, [id]);
+
   useEffect(() => { refetch(); }, [refetch]);
 
   const threadsByAnchor = useMemo(() => {
@@ -374,7 +384,10 @@ function DiffPanel({ jobId, job, task, onChanged }) {
       });
       setNewAnchor(null);
       setNewBody("");
-      await refetch();
+      // Only the comments changed; don't re-pull the diff (which
+      // re-mounts the diff body, flashes the loading state, and
+      // dumps the user back at the top of the page).
+      await refetchComments();
     } catch (e) { showToast(e.message, "high"); }
   };
 
@@ -876,6 +889,10 @@ function ChatPanel({ jobId, agentName }) {
   const [sending, setSending] = useState(false);
   const [userName, setUserName] = useState("");
   const endRef = useRef(null);
+  // True after the first auto-scroll-to-bottom completes. Initial
+  // load snaps without animation so a long chat doesn't visibly
+  // scroll past every message; subsequent new messages still animate.
+  const didInitialScrollRef = useRef(false);
 
   const refetch = useCallback(async () => {
     try {
@@ -912,7 +929,12 @@ function ChatPanel({ jobId, agentName }) {
   // Snap to the bottom whenever the message count changes — opening
   // the panel or sending a new message lands on the latest entry.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (!endRef.current) return;
+    endRef.current.scrollIntoView({
+      behavior: didInitialScrollRef.current ? "smooth" : "auto",
+      block: "end",
+    });
+    didInitialScrollRef.current = true;
   }, [messages.length]);
 
   const handleSend = async () => {
