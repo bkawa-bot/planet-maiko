@@ -1,0 +1,138 @@
+.maiko-chat-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 80px);
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px;
+  gap: 14px;
+}
+
+.maiko-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.maiko-chat-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  image-rendering: pixelated;
+}
+
+.maiko-chat-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.maiko-chat-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.maiko-chat-thread {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 6px;
+}
+
+.maiko-chat-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+  padding: 20px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.maiko-msg {
+  max-width: 78%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.maiko-msg-user {
+  align-self: flex-end;
+  background: var(--lavender, #c0a8d8);
+  color: var(--bg, #0a0a0a);
+  border-bottom-right-radius: 4px;
+}
+
+.maiko-msg-maiko {
+  align-self: flex-start;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border-subtle);
+  border-bottom-left-radius: 4px;
+}
+
+.maiko-msg-typing {
+  font-style: italic;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.maiko-chat-input-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.maiko-chat-input {
+  flex: 1;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  resize: vertical;
+  min-height: 44px;
+  max-height: 200px;
+}
+
+.maiko-chat-input:focus {
+  outline: none;
+  border-color: var(--lavender, #c0a8d8);
+}
+
+.maiko-chat-send {
+  padding: 10px 16px;
+  background: var(--lavender, #c0a8d8);
+  color: var(--bg, #0a0a0a);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.maiko-chat-send:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.maiko-chat-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

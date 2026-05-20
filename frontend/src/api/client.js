@@ -149,6 +149,11 @@ export const api = {
   getPollerStatus: () => request("/pollers/status"),
   runPoller: (name) => request(`/pollers/${name}/run`, { method: "POST" }),
 
+  // Maiko chat (global controller conversation; not per-agent)
+  getMaikoMessages: () => request("/maiko/messages"),
+  sendMaikoMessage: (content) =>
+    request("/maiko/chat", { method: "POST", body: JSON.stringify({ content }) }),
+
   // Brain
   getBrainStatus: () => request("/brain/status"),
   runBrainCycle: () => request("/brain/cycle", { method: "POST" }),

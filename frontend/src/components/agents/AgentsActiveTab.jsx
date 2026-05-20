@@ -261,6 +261,13 @@ export default function AgentsActiveTab({ agents, activity, conflicts, profiles,
 
   return (
     <div className="agents-active-main">
+        <Link to="/maiko" className="maiko-slot" title="Open Maiko chat">
+          <img src="/icon.svg" alt="" className="maiko-slot-avatar" />
+          <div className="maiko-slot-info">
+            <div className="maiko-slot-name">Maiko</div>
+            <div className="maiko-slot-status">she sees the pack. ask her anything.</div>
+          </div>
+        </Link>
         {dormantAgents.length === 0 && activity.length === 0 && queuedJobs.length === 0 && failedJobs.length === 0 ? (
           <div className="empty-state">
             <span style={{ fontSize: 48 }}>🐾</span>

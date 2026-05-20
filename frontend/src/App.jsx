@@ -20,6 +20,7 @@ const BrainView = lazy(() => import("./pages/BrainView"));
 const Automations = lazy(() => import("./pages/Automations"));
 const Themes = lazy(() => import("./pages/Themes"));
 const AgentJobPage = lazy(() => import("./pages/AgentJobPage"));
+const MaikoChat = lazy(() => import("./pages/MaikoChat"));
 import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
 
 
@@ -54,6 +55,7 @@ function AppRoutes() {
         <Route path="/themes" element={<Suspense fallback={<RouteFallback />}><Themes /></Suspense>} />
         <Route path="/settings" element={<Suspense fallback={<RouteFallback />}><Settings /></Suspense>} />
         <Route path="/jobs/:jobId" element={<Suspense fallback={<RouteFallback />}><AgentJobPage /></Suspense>} />
+        <Route path="/maiko" element={<Suspense fallback={<RouteFallback />}><MaikoChat /></Suspense>} />
         {/* Renamed pages — keep bookmarks working. */}
         <Route path="/skills" element={<Navigate to="/automations" replace />} />
         <Route path="/brain" element={<Navigate to="/knowledge" replace />} />
