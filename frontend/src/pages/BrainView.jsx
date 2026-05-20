@@ -350,7 +350,7 @@ export default function BrainView() {
   const toggleCategory = (cat) => setExpandedCats((e) => ({ ...e, [cat]: !e[cat] }));
 
   return (
-    <div className="brain-view-page">
+    <div className="brain-view-page frost-pane">
       <div className="knowledge-page">
         {/* Live progress while backfill is running */}
         {(backfilling || backfillProgress?.phase === "done" || backfillProgress?.phase === "error") && (
