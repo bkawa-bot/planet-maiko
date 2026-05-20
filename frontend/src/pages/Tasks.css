@@ -31,6 +31,11 @@
 .project-group-header {
   display: flex; align-items: center; gap: 8px; padding: 10px 14px;
   cursor: pointer; font-size: 13px; transition: background 0.15s;
+  /* Project header sits one tier above the tasks (which use --bg-card)
+     so the section reads as "this is a project, tasks below" rather
+     than as one of the cards. */
+  background: var(--bg-card-alt);
+  border-bottom: 1px solid var(--border-subtle);
 }
 .project-group-header:hover { background: var(--bg-hover); }
 .project-group-title { font-weight: 600; color: var(--text); }
