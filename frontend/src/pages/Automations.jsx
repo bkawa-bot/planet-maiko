@@ -457,7 +457,9 @@ function AutomationCard({ automation: a, defaultOrg, onToggle, onEdit }) {
         <div className="automation-card-main">
           <div className="automation-card-name-row">
             <span className="automation-card-name">{a.name}</span>
-            <span className={`automation-card-status status-${a.status}`}>{a.status}</span>
+            {a.status !== "active" && (
+              <span className={`automation-card-status status-${a.status}`}>{a.status}</span>
+            )}
           </div>
           {!expanded && (
             <div className="automation-card-summary">
