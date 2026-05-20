@@ -31,14 +31,13 @@ All the required agent orchestration work. Automatically kicks off agents, lets 
 Internal knowledge and specific gotchas get captured automatically, no manual write-ups. When an agent works on something, it only sees the handful of rules that matter for that change. You can keep a pool of hundreds of very specific nits without drowning every prompt.
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'18px'}}}%%
 flowchart LR
-  GH["your PR history"]:::source
-  SIG["raw reviewer<br/>comments"]:::signal
-  RULES["clustered<br/>rulebook"]:::rules
-  PACK["the pack"]:::pack
-  GH -->|"scraped from merged PRs"| SIG
-  SIG -->|"clustered into rules"| RULES
-  RULES -->|"local RAG: only the rules<br/>that matter for this task"| PACK
+  GH["PR history"]:::source
+  SIG["Review<br/>comments"]:::signal
+  RULES["Rulebook"]:::rules
+  PACK["Pack"]:::pack
+  GH --> SIG -->|"clustered"| RULES -->|"local RAG"| PACK
 
   classDef source fill:#1A1F4A,stroke:#FF6FAF,stroke-width:2px,color:#F4F7FF;
   classDef signal fill:#1A1F4A,stroke:#FF8FE0,stroke-width:2px,color:#F4F7FF;
@@ -51,12 +50,13 @@ flowchart LR
 When one gets something wrong it writes down what it learned, and the whole pack reads it. Future agents inherit those notes in their preamble, so a gotcha gets discovered once.
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'18px'}}}%%
 flowchart LR
-  DOG["a dog<br/>(after a task)"]:::pack
-  NOTE["what I got wrong"]:::signal
-  MEM["pack insights<br/>(shared memory)"]:::mem
-  NEW["future agents<br/>inherit it"]:::pack
-  DOG -->|"confesses"| NOTE --> MEM --> NEW
+  DOG["Dog<br/>(after a task)"]:::pack
+  NOTE["What I<br/>got wrong"]:::signal
+  MEM["Pack<br/>insights"]:::mem
+  NEW["Future<br/>agents"]:::pack
+  DOG --> NOTE --> MEM --> NEW
 
   classDef pack fill:#1A1F4A,stroke:#C4F542,stroke-width:2px,color:#F4F7FF;
   classDef signal fill:#1A1F4A,stroke:#FF8FE0,stroke-width:2px,color:#F4F7FF;
@@ -66,14 +66,15 @@ flowchart LR
 ### How a task moves through the system
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'18px'}}}%%
 flowchart LR
-  SRC["GitHub / Linear /<br/>PagerDuty / Calendar"]:::source
+  SRC["External<br/>sources"]:::source
   PUP["Pupdates"]:::signal
-  AUTO["Automations<br/>(when X, then Y)"]:::auto
+  AUTO["Automations"]:::auto
   TASK["Tasks"]:::task
-  AGENT["Agent in an<br/>isolated worktree"]:::pack
-  PR["Branch / PR"]:::pr
-  SRC -->|"pollers + plugins"| PUP --> AUTO --> TASK --> AGENT -->|"commits"| PR
+  AGENT["Agent in<br/>a worktree"]:::pack
+  PR["Branch + PR"]:::pr
+  SRC --> PUP --> AUTO --> TASK --> AGENT --> PR
 
   classDef source fill:#1A1F4A,stroke:#FF6FAF,stroke-width:2px,color:#F4F7FF;
   classDef signal fill:#1A1F4A,stroke:#FF8FE0,stroke-width:2px,color:#F4F7FF;
