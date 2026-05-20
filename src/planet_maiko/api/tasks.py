@@ -458,7 +458,22 @@ def _enqueue_task_job(task, plan_first=False):
     # repo is required.
     WORKTREE_REQUIRED_TASK_TYPES = {"coding", "review", "pr_review"}
     if task.type in WORKTREE_REQUIRED_TASK_TYPES and not repo_path:
-        return {"success": False, "error": f"no local clone found for {scope_repo or 'this task'}"}
+        if not scope_repo:
+            return {
+                "success": False,
+                "error": (
+                    "This task has no repo scope set. Edit the task and give "
+                    "it a scope_repo so the agent knows which repo to work in."
+                ),
+            }
+        return {
+            "success": False,
+            "error": (
+                f"No local clone of {scope_repo} found. Add the parent "
+                "directory where your clones live under Settings > Plugins "
+                "> github > Repo roots."
+            ),
+        }
 
     job_extra_seed = {
         "repo_path": repo_path,
