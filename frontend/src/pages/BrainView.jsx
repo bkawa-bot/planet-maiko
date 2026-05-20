@@ -360,21 +360,21 @@ export default function BrainView() {
           <ClusterProgress progress={clusterProgress} />
         )}
         {/* Tabs */}
-        <div className="knowledge-tabs">
+        <div className="page-tabs">
           <button
-            className={`inbox-tab ${tab === "pool" ? "active" : ""}`}
+            className={`page-tab ${tab === "pool" ? "active" : ""}`}
             onClick={() => setTab("pool")}
           >
             Knowledge Pool
           </button>
           <button
-            className={`inbox-tab ${tab === "pending" ? "active" : ""}`}
+            className={`page-tab ${tab === "pending" ? "active" : ""}`}
             onClick={() => setTab("pending")}
           >
             Pending {pending.length > 0 && <span className="tab-badge">{pending.length}</span>}
           </button>
           <button
-            className={`inbox-tab ${tab === "unsynthesized" ? "active" : ""}`}
+            className={`page-tab ${tab === "unsynthesized" ? "active" : ""}`}
             onClick={() => setTab("unsynthesized")}
           >
             Unsynthesized {rawSignalsTotal > 0 && <span className="tab-badge">{rawSignalsTotal}</span>}

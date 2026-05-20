@@ -739,21 +739,25 @@ a:hover { text-decoration: underline; }
   background: transparent;
   border: 1px solid transparent;
   border-bottom: none;
-  padding: 8px 16px;
-  font: inherit;
-  font-size: 13px;
-  color: var(--text-muted);
+  padding: 8px 14px;
+  /* Knowledge-tab font + color treatment kept; structure from the
+     Automations/Pack tab pattern (rests on the bottom border, active
+     tab punches through to the surface below). */
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
   cursor: pointer;
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   margin-bottom: -1px;
-  transition: color 0.12s, background 0.12s;
+  transition: all 0.15s;
 }
-.page-tab:hover { color: var(--text); }
+.page-tab:hover { color: var(--text); border-color: var(--pink); }
 .page-tab.active {
   color: var(--text);
-  border-color: var(--border);
+  border-color: var(--pink);
   border-bottom-color: var(--bg-card);
   background: var(--bg-card);
+  font-weight: 600;
 }
 
 /* === Animations === */
@@ -838,9 +842,9 @@ a:hover { text-decoration: underline; }
   background: var(--pane-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 2px solid var(--card-border, var(--border));
+  border: 1px solid var(--card-border, var(--border));
   border-radius: var(--radius);
-  /* Elevation via shadow instead of a chunky border. Sits the pane
+  /* Elevation via shadow rather than border thickness. Sits the pane
      visibly above the body backdrop in every theme without bulk. */
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
   box-shadow: 0 2px 16px rgba(0, 0, 0, 0.12);
