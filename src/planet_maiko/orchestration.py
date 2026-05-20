@@ -71,6 +71,23 @@ def build_task_prompt(task, role, custom_prompt=""):
         elif isinstance(non_goals, str) and non_goals.strip():
             parts.append(f"\n## Must not\n\n{non_goals.strip()}")
 
+    # If a previous one-shot run on this task produced a report, surface
+    # it. This is the investigation -> coding handoff lever: the new
+    # agent reads the prior agent's findings instead of starting cold.
+    # spawn_jobs stashes the artifact text on task.extra["artifact"]
+    # when an investigation / review / cartograph finishes; carrying it
+    # into TASK.md here is what makes "investigate, then have a coding
+    # agent fix it" actually flow.
+    prior_report = extra.get("artifact")
+    if prior_report:
+        parts.append(
+            "\n## Prior agent report\n\n"
+            "A previous agent worked this task and left the report below. "
+            "Treat it as context, not gospel: verify before relying on its "
+            "conclusions, and call out anything you can't reproduce.\n\n"
+            f"{prior_report}"
+        )
+
     if task.source_pupdate_id:
         source = db.session.get(Pupdate, task.source_pupdate_id)
         if source and source.body:
