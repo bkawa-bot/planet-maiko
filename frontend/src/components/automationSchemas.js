@@ -39,9 +39,9 @@ const CONDITION_SCHEMAS = {
     label: "On a schedule",
     group: "Time",
     scopes: ["cycle"],
-    help: "Fires every N minutes. Uses last_fired_at + interval as the clock.",
+    help: "Fires every N. Uses last_fired_at + interval as the clock.",
     fields: [
-      { name: "interval_minutes", type: "number", label: "Every N minutes", default: 60, min: 1 },
+      { name: "interval_minutes", type: "duration", label: "Every", default: 60, min: 1 },
     ],
   },
   overview_stale: {
