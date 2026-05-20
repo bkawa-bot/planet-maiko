@@ -31,7 +31,7 @@
   <div class="boot"><span>maiko.os &middot; the pack is awake &middot; strange agents, strange world. &middot; do not close the campfire one &middot; it boots faster than it should &middot; the dogs say hello &middot; </span></div>
 
   <div class="desk-icons" aria-hidden="true">
-    <a href="#look"><span class="glyph">🖼</span> photos</a>
+    <a href="#gallery"><span class="glyph">🖼</span> photos</a>
     <a href="#campfire"><span class="glyph">☾</span> campfire</a>
     <a href="https://github.com/bkawa-bot/planet-maiko"><span class="glyph">◐</span> source</a>
     <a href="sludge.html"><span class="glyph">🐛</span> sludge_pup</a>
@@ -79,39 +79,22 @@
     </section>
   </div>
 
-  <section class="win wide c-lemon" id="look" style="--tilt:-0.6deg;">
+  <section class="win wide c-lemon" id="what" style="--tilt:-0.4deg;">
     <div class="win-bar">
       <span class="win-dots"><i></i><i></i><i></i></span>
-      <span class="win-title">home.png</span>
+      <span class="win-title">ok-but-what-does-it-do.txt</span>
       <span class="win-x" title="close">&#10005;</span>
     </div>
     <div class="win-body">
-      <img class="shot" src="screenshots/home.png" alt="The Home page: pack requests, a generated overview, the scene and weather">
-      <p class="shot-cap">the front door. it greets you, then tells you what it would look at first.</p>
-      <div class="card what-card" style="--accent: var(--lemon); margin-top: 20px;">
-        <h3><span class="dot" style="background:var(--lemon)"></span>ok but what does it do?</h3>
-        <ul class="what-list">
-          <li>runs AI coding agents on your repos. each in its own git worktree, so they don't step on each other.</li>
-          <li>builds a rulebook from your team's past PR review comments. agents only see the rules that matter for what they're touching.</li>
-          <li>collects work from GitHub, Linear, PagerDuty, your calendar. you decide what becomes a task.</li>
-          <li>agents say when they're stuck, write up what they got wrong, and the whole pack reads it.</li>
-          <li>local. free forever. nothing leaves your laptop.</li>
-        </ul>
-      </div>
+      <ul class="what-list">
+        <li>runs AI coding agents on your repos. each in its own git worktree, so they don't step on each other.</li>
+        <li>builds a rulebook from your team's past PR review comments. agents only see the rules that matter for what they're touching.</li>
+        <li>collects work from GitHub, Linear, PagerDuty, your calendar. you decide what becomes a task.</li>
+        <li>agents say when they're stuck, write up what they got wrong, and the whole pack reads it.</li>
+        <li>local. free forever. nothing leaves your laptop.</li>
+      </ul>
     </div>
-  </section>
-
-  <section class="win wide c-peach" style="--tilt:0.5deg;">
-    <div class="win-bar">
-      <span class="win-dots"><i></i><i></i><i></i></span>
-      <span class="win-title">the pack</span>
-      <span class="win-x" title="close">&#10005;</span>
-    </div>
-    <div class="win-body">
-      <img class="shot" src="screenshots/profiles.png" alt="The pack: agent profiles">
-      <p class="shot-cap">every agent is a character sheet: a name, an avatar, a role, and a bio it wrote when it arrived.</p>
-    </div>
-    <span class="scrawl br">the dogs. yes, they are like that.</span>
+    <span class="scrawl br">show, don't tell. ok also tell.</span>
   </section>
 
   <section class="win wide c-mint" id="gallery" style="--tilt:-0.4deg;">
@@ -412,6 +395,8 @@ maiko up</pre>
     // Click-through screenshot gallery. To add a shot: drop the file
     // in docs/screenshots/ and add a line to SHOTS below.
     var SHOTS = [
+      { src: "screenshots/home.png", title: "the front door",
+        desc: "The Home page greets you, then tells you what it would look at first." },
       { src: "screenshots/knowledge.png", title: "the rulebook",
         desc: "It wrote this itself, from every nit your team ever left on a PR. You didn't have to." },
       { src: "screenshots/rule-3.png", title: "one rule",
@@ -432,6 +417,8 @@ maiko up</pre>
         desc: "Small things they figured out, passed down to every new dog that shows up." },
       { src: "screenshots/model-routing.png", title: "who runs on what",
         desc: "Point the heavy work and the quick work at different brains. Your call." },
+      { src: "screenshots/profiles.png", title: "the pack",
+        desc: "Every agent is a character sheet: a name, an avatar, a role, and a bio it wrote when it arrived." },
       { src: "screenshots/merged_cards.png", title: "the dogs",
         desc: "Weird alien dogs. Because why not." }
     ];
