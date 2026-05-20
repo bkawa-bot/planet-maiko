@@ -110,8 +110,8 @@ LEARNINGS = [
     ("Add new nullable columns to the idempotent patch list, never a "
      "hard migration: existing SQLite databases must survive an update.",
      "architecture", "aurora-labs/star-charts", 4, 0.92, True,
-     "A schema change introduces a non-additive migration or a NOT NULL "
-     "column without a default, which breaks existing local databases.",
+     "Adding a new column or index to an existing SQLite model in "
+     "aurora-labs/star-charts.",
      [
        "this needs to be in the patch list or older databases will break on update",
        "ALTER TABLE goes through _ensure_new_columns, not a hard migration here",
@@ -122,8 +122,8 @@ LEARNINGS = [
      "resolve_model(X) the matching runtime must use the same key or "
      "per-task routing silently no-ops.",
      "gotcha", "aurora-labs/tide-engine", 3, 0.88, False,
-     "A model-resolution call site and its runtime use different task_type "
-     "keys, so the per-task routing rule never takes effect.",
+     "Adding a new resolve_model() call site that should pick up "
+     "per-task routing rules.",
      [
        "resolve_model('cartograph') here but _get_runtime() is called without task_type, so the routing rule never fires",
        "spent 20 min debugging why per-task routing wasn't working. it's this.",
@@ -132,7 +132,8 @@ LEARNINGS = [
     ("Prefer select(...) over the legacy Query API in new code; the old "
      "path is being removed and mixing them breaks eager loading.",
      "style", "moss/garden-server", 5, 0.81, True,
-     "New code uses the legacy Query API instead of select(...).",
+     "Writing a new database query against an existing model in "
+     "moss/garden-server.",
      [
        "use select() here, Query is being removed",
        "mixing eager-load styles between Query and select breaks the join in subtle ways. we caught one in #84",
@@ -143,7 +144,7 @@ LEARNINGS = [
     ("Null-check the cursor before .fetchone(); the moss driver returns "
      "None on an empty result instead of raising.",
      "null_safety", "moss/garden-server", 2, 0.74, False,
-     "A .fetchone() result is used without checking it against None.",
+     "Reading a single row out of the moss driver with cursor.fetchone().",
      [
        "cursor.fetchone() returns None when there are no rows here. needs a guard",
        "this crashed in prod on an empty result set. please null-check before .get('id')",
@@ -151,8 +152,8 @@ LEARNINGS = [
     ("Commit inside the daemon thread that did the work. A worker that "
      "writes rows but never commits loses everything on thread exit.",
      "gotcha", "aurora-labs/tide-engine", 3, 0.86, True,
-     "A background thread mutates the session but returns without "
-     "committing or rolling back.",
+     "Spawning a background daemon thread that writes rows to the "
+     "database.",
      [
        "the worker thread writes but never commits, so on thread exit the session rolls back and you lose the row",
        "had this exact bug last sprint. need a db.session.commit() at the end of _run.",
@@ -161,7 +162,7 @@ LEARNINGS = [
     ("Floor displayed times to the minute. Seconds in a timestamp read "
      "as machine output, not something a person would write.",
      "style", "aurora-labs/star-charts", 2, 0.7, False,
-     "A user-facing timestamp is rendered with seconds.",
+     "Rendering a user-facing timestamp in the UI (last-seen, last-ran-at, etc).",
      [
        "drop the seconds in that timestamp. reads as machine output.",
        "users don't write times with seconds. it's an instant tell that something is computer-generated.",
