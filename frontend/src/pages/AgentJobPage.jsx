@@ -970,14 +970,15 @@ function ChatPanel({ jobId, agentName }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
-            // Cmd/Ctrl+Enter sends; plain Enter inserts a newline so
-            // multi-line messages are easy.
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            // Chat convention: plain Enter sends. Hold Shift, Cmd, or
+            // Ctrl to insert a newline instead (so multi-line messages
+            // are still easy).
+            if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
               e.preventDefault();
               handleSend();
             }
           }}
-          placeholder="Ask a follow-up… ⌘+Enter to send"
+          placeholder="Reply to the agent… ⇧+Enter for a new line"
           rows={3}
           disabled={sending}
         />
