@@ -30,59 +30,15 @@ All the required agent orchestration work. Automatically kicks off agents, lets 
 
 Internal knowledge and specific gotchas get captured automatically, no manual write-ups. When an agent works on something, it only sees the handful of rules that matter for that change. You can keep a pool of hundreds of very specific nits without drowning every prompt.
 
-```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'18px'}}}%%
-flowchart LR
-  GH["PR history"]:::source
-  SIG["Review<br/>comments"]:::signal
-  RULES["Rulebook"]:::rules
-  PACK["Pack"]:::pack
-  GH --> SIG -->|"clustered"| RULES -->|"local RAG"| PACK
+<img width="597" height="483" alt="Screenshot 2026-05-19 at 9 41 02 PM" src="https://github.com/user-attachments/assets/5463d146-b8ac-4c57-9af9-abf8591a1008" />
 
-  classDef source fill:#1A1F4A,stroke:#FF6FAF,stroke-width:2px,color:#F4F7FF;
-  classDef signal fill:#1A1F4A,stroke:#FF8FE0,stroke-width:2px,color:#F4F7FF;
-  classDef rules fill:#1A1F4A,stroke:#6FE0E8,stroke-width:2px,color:#F4F7FF;
-  classDef pack fill:#1A1F4A,stroke:#C4F542,stroke-width:2px,color:#F4F7FF;
-```
 
 ### The dogs confess their own mistakes
 
 When one gets something wrong it writes down what it learned, and the whole pack reads it. Future agents inherit those notes in their preamble, so a gotcha gets discovered once.
 
-```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'18px'}}}%%
-flowchart LR
-  DOG["Dog<br/>(after a task)"]:::pack
-  NOTE["What I<br/>got wrong"]:::signal
-  MEM["Pack<br/>insights"]:::mem
-  NEW["Future<br/>agents"]:::pack
-  DOG --> NOTE --> MEM --> NEW
+![insights](docs/screenshots/insights2.png)
 
-  classDef pack fill:#1A1F4A,stroke:#C4F542,stroke-width:2px,color:#F4F7FF;
-  classDef signal fill:#1A1F4A,stroke:#FF8FE0,stroke-width:2px,color:#F4F7FF;
-  classDef mem fill:#1A1F4A,stroke:#FFE66D,stroke-width:2px,color:#F4F7FF;
-```
-
-### How a task moves through the system
-
-```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'18px'}}}%%
-flowchart LR
-  SRC["External<br/>sources"]:::source
-  PUP["Pupdates"]:::signal
-  AUTO["Automations"]:::auto
-  TASK["Tasks"]:::task
-  AGENT["Agent in<br/>a worktree"]:::pack
-  PR["Branch + PR"]:::pr
-  SRC --> PUP --> AUTO --> TASK --> AGENT --> PR
-
-  classDef source fill:#1A1F4A,stroke:#FF6FAF,stroke-width:2px,color:#F4F7FF;
-  classDef signal fill:#1A1F4A,stroke:#FF8FE0,stroke-width:2px,color:#F4F7FF;
-  classDef auto fill:#1A1F4A,stroke:#FFE66D,stroke-width:2px,color:#F4F7FF;
-  classDef task fill:#1A1F4A,stroke:#C9A6FF,stroke-width:2px,color:#F4F7FF;
-  classDef pack fill:#1A1F4A,stroke:#C4F542,stroke-width:2px,color:#F4F7FF;
-  classDef pr fill:#1A1F4A,stroke:#6FE0E8,stroke-width:2px,color:#F4F7FF;
-```
 
 ## Build a plugin for any tool you never want to have to look at again.
 
