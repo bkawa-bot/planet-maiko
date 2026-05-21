@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import pathlib
 
 from flask import Blueprint, jsonify, request
 
@@ -25,6 +26,15 @@ from planet_maiko.database import db
 from planet_maiko.models.maiko_message import MaikoMessage
 
 logger = logging.getLogger(__name__)
+
+# Shared voice fragment used by every Maiko-voiced surface (home
+# overview, morning brief, this chat). Read once at import; the file
+# rarely changes between server starts.
+_VOICE_PATH = pathlib.Path(__file__).resolve().parent.parent / "prompts" / "voice.md"
+try:
+    _VOICE_TEXT = _VOICE_PATH.read_text(encoding="utf-8")
+except Exception:
+    _VOICE_TEXT = ""
 
 maiko_chat_bp = Blueprint("maiko_chat", __name__)
 
@@ -109,6 +119,7 @@ def _generate_reply(latest_user_message: str) -> str:
     prompt = get_skill_prompt("maiko-chat", {
         "user_name": user_name,
         "current_time": user_now().strftime("%I:%M %p"),
+        "voice": _VOICE_TEXT,
         "agents": json.dumps(_agents_context(), indent=2, default=str),
         "tasks": json.dumps(_tasks_context(), indent=2, default=str),
         "automations": json.dumps(_automations_context(), indent=2, default=str),

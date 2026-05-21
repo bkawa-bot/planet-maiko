@@ -227,6 +227,21 @@ function JobHeader({ job, task, profile }) {
         {job.scope_repo && (
           <span className="agent-job-repo">{job.scope_repo}</span>
         )}
+        {(() => {
+          const prUrl = task?.extra?.pr_url
+            || (task?.url && /github\.com\/[^/]+\/[^/]+\/pull\//.test(task.url) ? task.url : null);
+          return prUrl ? (
+            <a
+              className="btn btn-sm"
+              href={prUrl}
+              target="_blank"
+              rel="noreferrer"
+              title="Open the linked pull request on GitHub"
+            >
+              <GitPullRequest size={10} /> View PR
+            </a>
+          ) : null;
+        })()}
         {canResume && (
           <button className="btn btn-sm" onClick={openSession} disabled={resuming}
             title="Attach to the agent's session in a terminal">
