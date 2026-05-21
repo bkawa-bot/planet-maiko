@@ -32,7 +32,9 @@ def cmd_status(args):
 
     # Check gh CLI
     try:
-        result = subprocess.run(["gh", "auth", "status"], capture_output=True, text=True, timeout=5)
+        # Scope to github.com so users with extra hosts (GHE, gitea) don't
+        # show "not authenticated" just because one of the extras is logged out.
+        result = subprocess.run(["gh", "auth", "status", "-h", "github.com"], capture_output=True, text=True, timeout=5)
         print(f"gh CLI: {'authenticated' if result.returncode == 0 else 'not authenticated'}")
     except FileNotFoundError:
         print("gh CLI: not installed")

@@ -171,8 +171,10 @@ def _gh_discover_payload(username):
             "action": "install",
         }, 400
     try:
+        # Scope to github.com so users with extra hosts (GHE, gitea) don't
+        # fail this preflight just because one of the extras is logged out.
         auth_check = subprocess.run(
-            ["gh", "auth", "status"], capture_output=True, text=True, timeout=5,
+            ["gh", "auth", "status", "-h", "github.com"], capture_output=True, text=True, timeout=5,
         )
         if auth_check.returncode != 0:
             return {

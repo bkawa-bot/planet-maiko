@@ -97,8 +97,10 @@ class GitHubPlugin(PollerPlugin):
             raise RuntimeError(
                 "gh CLI not found. Install it from https://cli.github.com"
             )
+        # Scope to github.com so users with extra hosts (GHE, gitea) don't
+        # fail this preflight just because one of the extras is logged out.
         auth = subprocess.run(
-            ["gh", "auth", "status"], capture_output=True, text=True, timeout=5,
+            ["gh", "auth", "status", "-h", "github.com"], capture_output=True, text=True, timeout=5,
         )
         if auth.returncode != 0:
             raise RuntimeError("gh CLI isn't authenticated. Run: gh auth login")
