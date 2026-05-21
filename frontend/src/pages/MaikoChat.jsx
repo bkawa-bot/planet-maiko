@@ -18,6 +18,7 @@ export default function MaikoChat() {
   const [loading, setLoading] = useState(true);
   const endRef = useRef(null);
   const inputRef = useRef(null);
+  const initialScrolled = useRef(false);
 
   useEffect(() => {
     api.getMaikoMessages()
@@ -27,7 +28,16 @@ export default function MaikoChat() {
   }, []);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!endRef.current) return;
+    // First time messages land, jump straight to the bottom (no
+    // animation — the user just opened the chat, they want to be at
+    // the most recent already, not watch the page scroll through
+    // their history). Subsequent updates (a new message, a "thinking"
+    // bubble) animate so the user sees them arrive.
+    endRef.current.scrollIntoView({
+      behavior: initialScrolled.current ? "smooth" : "auto",
+    });
+    if (messages.length > 0) initialScrolled.current = true;
   }, [messages.length, sending]);
 
   useEffect(() => {
