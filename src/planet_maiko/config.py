@@ -193,6 +193,12 @@ def load_config():
 
 def save_config(config):
     """Write config back to YAML file."""
+    # First-run path: the parent dir (~/.maiko on most installs) doesn't
+    # exist yet, so the open() below would FileNotFoundError. Create it
+    # idempotently before writing.
+    parent = os.path.dirname(CONFIG_PATH)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     with open(CONFIG_PATH, "w") as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
