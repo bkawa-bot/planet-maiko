@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  ArrowLeft, Check, Loader, FileText, MessageSquare,
+  Check, Loader, FileText, MessageSquare,
   Sparkles, Clock, AlertTriangle, Activity, GitPullRequest, X,
   PanelRightClose, PanelRightOpen, CheckboxTree, ChatBubble, ExternalLink,
 } from "@icons";
@@ -37,7 +37,6 @@ import "./AgentJobPage.css";
  */
 export default function AgentJobPage() {
   const { jobId } = useParams();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedView = searchParams.get("view");
 
@@ -80,7 +79,7 @@ export default function AgentJobPage() {
 
   if (loading) {
     return (
-      <div className="agent-job-page">
+      <div className="agent-job-page frost-pane">
         <div className="agent-job-loading"><PlanetSpinner size={14} /> Loading…</div>
       </div>
     );
@@ -88,20 +87,15 @@ export default function AgentJobPage() {
 
   if (!job) {
     return (
-      <div className="agent-job-page">
-        <div className="agent-job-header">
-          <button className="btn btn-sm" onClick={() => navigate(-1)}>
-            <ArrowLeft size={10} /> Back
-          </button>
-        </div>
+      <div className="agent-job-page frost-pane">
         <div className="agent-job-empty">Job not found.</div>
       </div>
     );
   }
 
   return (
-    <div className="agent-job-page">
-      <JobHeader job={job} task={task} profile={profile} onBack={() => navigate(-1)} />
+    <div className="agent-job-page frost-pane">
+      <JobHeader job={job} task={task} profile={profile} />
       <JobTabs tabs={availableTabs} active={activeView} onChange={setView} />
       <div className="agent-job-body">
         {activeView === "diff" && (
@@ -189,7 +183,7 @@ function resolveActiveView(requested, tabs, job, task) {
 // Header
 // ---------------------------------------------------------------------------
 
-function JobHeader({ job, task, profile, onBack }) {
+function JobHeader({ job, task, profile }) {
   const KIND_LABEL = {
     coding: "Coding", review: "Review", pr_review: "PR review",
     investigation: "Investigation", repo_analysis: "Repo analysis",
@@ -228,10 +222,6 @@ function JobHeader({ job, task, profile, onBack }) {
   return (
     <div className="agent-job-header">
       <div className="agent-job-header-top">
-        <button className="btn btn-sm" onClick={onBack}>
-          <ArrowLeft size={10} /> Back
-        </button>
-        <span className="agent-job-header-spacer" />
         <span className={`agent-job-kind kind-${job.kind}`}>{kindLabel}</span>
         <span className={`agent-job-status status-${tone}`}>{job.status}</span>
         {job.scope_repo && (
