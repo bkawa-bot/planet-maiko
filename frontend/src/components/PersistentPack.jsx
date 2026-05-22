@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
+import { Plus } from "@icons";
 import CardAvatar from "./CardAvatar";
 import "./PersistentPack.css";
 
@@ -180,6 +181,25 @@ export default function PersistentPack() {
           </button>
         );
       })}
+      {activity.length > 0 && (
+        <span className="persistent-pack-divider" aria-hidden="true" />
+      )}
+      <button
+        type="button"
+        className="persistent-pack-villager persistent-pack-add"
+        onClick={() => window.dispatchEvent(new CustomEvent("open-launch-agent"))}
+        onFocus={() => setExpanded(true)}
+        onBlur={() => setExpanded(false)}
+        aria-label="Launch a new agent"
+      >
+        <span className="persistent-pack-avatar-wrap persistent-pack-add-wrap">
+          <Plus size={expanded ? 24 : 18} />
+        </span>
+        <span className="persistent-pack-bubble" role="tooltip">
+          <span className="persistent-pack-bubble-name">Launch an agent</span>
+          <span className="persistent-pack-bubble-title">Pick agent + prompt. Cmd/Ctrl+K too.</span>
+        </span>
+      </button>
     </div>
   );
 }

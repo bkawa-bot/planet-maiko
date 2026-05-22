@@ -140,3 +140,11 @@
   gap: 8px;
   margin-top: 6px;
 }
+
+.quick-launch-empty {
+  padding: 12px;
+  background: var(--pink-soft);
+  color: var(--pink);
+  border-radius: var(--radius-xs, 6px);
+  font-size: 12px;
+}

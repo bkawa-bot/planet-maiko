@@ -2,11 +2,20 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
-import { ChevronDown, ChevronRight, Rocket, X, Loader } from "@icons";
-import { useConfiguredRepos } from "../utils/repo";
+import { ChevronDown, ChevronRight, Rocket, X, Loader, Code2, Eye, Search } from "@icons";
+import { useConfiguredRepos, formatRepo, useDefaultOrg } from "../utils/repo";
 import CardAvatar from "./CardAvatar";
 import ModalPortal from "./ModalPortal";
+// Reuse the agent-card list classes (.assign-agent-list, .assign-agent-option, ...)
+// from AssignAgentModal so the picker looks identical across the two surfaces.
+import "./AssignAgentModal.css";
 import "./QuickLaunchModal.css";
+
+const ROLE_META = {
+  coding: { icon: Code2, label: "Coder" },
+  review: { icon: Eye, label: "Reviewer" },
+  investigation: { icon: Search, label: "Investigator" },
+};
 
 /**
  * Direct agent-job launcher. The user picks the agent themselves
@@ -34,6 +43,7 @@ const PRIORITIES = [
 export default function QuickLaunchModal({ open, onClose }) {
   const navigate = useNavigate();
   const configuredRepos = useConfiguredRepos();
+  const defaultOrg = useDefaultOrg();
   const [profiles, setProfiles] = useState([]);
   const [specialties, setSpecialties] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -137,29 +147,44 @@ export default function QuickLaunchModal({ open, onClose }) {
             <div className="quick-launch-loading"><Loader size={12} className="spin" /> Loading…</div>
           ) : (
             <div className="quick-launch-body">
-              <label className="quick-launch-field">
+              <div className="quick-launch-field">
                 <span>Agent</span>
-                <select
-                  value={selectedAgentId}
-                  onChange={(e) => setSelectedAgentId(e.target.value)}
-                  disabled={profiles.length === 0}
-                >
-                  {profiles.length === 0 && <option value="">— no agents available —</option>}
-                  {profiles.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.display_name}{p.role ? ` · ${p.role}` : ""}{p.scope_repo ? ` · ${p.scope_repo}` : ""}
-                    </option>
-                  ))}
-                </select>
-                {selectedAgentId && profiles.find((p) => p.id === selectedAgentId) && (
-                  <div className="quick-launch-agent-preview">
-                    <CardAvatar agent={profiles.find((p) => p.id === selectedAgentId)} size={28} />
-                    <span className="quick-launch-agent-bio">
-                      {profiles.find((p) => p.id === selectedAgentId)?.flavor_text || ""}
-                    </span>
+                {profiles.length === 0 ? (
+                  <div className="quick-launch-empty">
+                    No agents available. Create one from the Agents page first.
+                  </div>
+                ) : (
+                  <div className="assign-agent-list">
+                    {profiles.map((p) => {
+                      const meta = ROLE_META[p.role] || ROLE_META.coding;
+                      const RoleIcon = meta.icon;
+                      return (
+                        <div
+                          key={p.id}
+                          className={`assign-agent-option ${selectedAgentId === p.id ? "selected" : ""}`}
+                          onClick={() => setSelectedAgentId(p.id)}
+                        >
+                          <span className="assign-avatar">
+                            <CardAvatar agent={p} size="md" />
+                          </span>
+                          <div className="assign-agent-info">
+                            <div className="assign-agent-name">
+                              {p.display_name}
+                              <span className="assign-agent-role">
+                                <RoleIcon size={10} /> {meta.label}
+                              </span>
+                              {p.scope_repo
+                                ? <span className="assign-agent-scope" title={p.scope_repo}>{formatRepo(p.scope_repo, defaultOrg)}</span>
+                                : <span className="assign-agent-scope">global</span>}
+                            </div>
+                            {p.flavor_text && <div className="assign-agent-reasons">{p.flavor_text}</div>}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
-              </label>
+              </div>
 
               <label className="quick-launch-field">
                 <span>Prompt</span>

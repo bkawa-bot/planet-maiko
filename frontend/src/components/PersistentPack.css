@@ -219,3 +219,28 @@
   background: var(--border-subtle);
   margin: 2px 0;
 }
+
+/* "+" launch button pinned at the bottom of the dock. Same rounded
+   square shape as the agent avatars so it reads as part of the row,
+   but with a dashed ring + muted color so it doesn't look like a
+   real agent. */
+.persistent-pack-add-wrap {
+  background: transparent;
+  box-shadow: 0 0 0 2px var(--border-subtle);
+  width: 44px;
+  height: 44px;
+  border-radius: 28%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: width 0.15s ease, height 0.15s ease, color 0.15s, box-shadow 0.15s;
+}
+.persistent-pack.expanded .persistent-pack-add-wrap {
+  width: 56px;
+  height: 56px;
+}
+.persistent-pack-add:hover .persistent-pack-add-wrap {
+  color: var(--pink);
+  box-shadow: 0 0 0 2px var(--pink);
+}
