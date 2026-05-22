@@ -6,7 +6,7 @@
 
 Free forever, no paid tiers or subscriptions. Made by one dev for other devs.
 
-![title](docs/screenshots/title.png)
+![title](docs/screenshots/profiles2.png)
 
 ---
 
@@ -17,8 +17,6 @@ Free forever, no paid tiers or subscriptions. Made by one dev for other devs.
 We live in strange times, and yet our dev tools are so painfully un-strange. No one knows what being a software engineer will be like in a year, or even a month. If we are all headed to our own inevitable obsolescence, we might as well have fun.
 
 ![Planet Maiko home](docs/screenshots/home.png)
-
-![profiles](docs/screenshots/profiles2.png)
 
 ## What does Planet Maiko do? 
 
