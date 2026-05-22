@@ -385,6 +385,7 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.home_api import home_bp
     from planet_maiko.api.pack_api import pack_bp
     from planet_maiko.api.maiko_chat_api import maiko_chat_bp
+    from planet_maiko.api.usage_api import usage_bp
     from planet_maiko.api.checks_api import checks_bp
     from planet_maiko.api.automations_api import automations_bp
     from planet_maiko.api.agent_jobs_api import agent_jobs_bp
@@ -411,6 +412,7 @@ def create_app(start_scheduler=False):
     app.register_blueprint(home_bp, url_prefix="/api")
     app.register_blueprint(pack_bp, url_prefix="/api")
     app.register_blueprint(maiko_chat_bp, url_prefix="/api")
+    app.register_blueprint(usage_bp, url_prefix="/api")
     app.register_blueprint(checks_bp, url_prefix="/api")
     app.register_blueprint(automations_bp, url_prefix="/api")
     app.register_blueprint(agent_jobs_bp, url_prefix="/api")

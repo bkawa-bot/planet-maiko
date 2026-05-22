@@ -5,6 +5,7 @@ import OverviewPane from "../components/OverviewPane";
 import MemosPane from "../components/MemosPane";
 import { formatTime, formatClock, formatLongDate } from "../utils/dates";
 import { Brain, Sun, Video, RadarSweep, Rocket } from "@icons";
+import UsageWidget from "../components/UsageWidget";
 import { showToast } from "../components/Toast";
 import FooterPendingPopover from "../components/FooterPendingPopover";
 import "./Home.css";
@@ -190,6 +191,8 @@ export default function Home() {
               <kbd>⌘K</kbd>
             </button>
           </div>
+
+          <UsageWidget />
 
           <div className="home-widget home-brain-widget">
             <div className="widget-header">

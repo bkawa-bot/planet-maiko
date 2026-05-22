@@ -132,7 +132,7 @@ def _generate_reply(latest_user_message: str) -> str:
     db.session.close()
 
     result = runtime.send(
-        prompt, timeout=60,
+        prompt, timeout=60, source="maiko_chat",
         model=resolve_model("maiko"), effort=resolve_effort("maiko"),
     )
     if not result.get("success"):

@@ -134,7 +134,7 @@ class ClaudeCodeRuntime(AgentRuntime):
         env["ENABLE_PROMPT_CACHING_1H"] = "1"
         return env
 
-    def send(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None, session_id=None, skip_permissions=False, permission_mode=None, effort=None):
+    def send(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None, session_id=None, skip_permissions=False, permission_mode=None, effort=None, source=None):
         """Send a prompt to claude CLI in print mode.
 
         Uses --print for single prompt/response (no interactive session).
@@ -169,7 +169,11 @@ class ClaudeCodeRuntime(AgentRuntime):
             }
 
         claude_path = self._find_claude() or "claude"
-        cmd = [claude_path, "--print", "--output-format", "text"]
+        # JSON output gets us the usage block (input/output/cache tokens,
+        # cost estimate, duration) so every internal Maiko call lands a
+        # TokenUsage row. The text the model produced still surfaces as
+        # `output`; callers don't need to change.
+        cmd = [claude_path, "--print", "--output-format", "json"]
 
         if session_id:
             cmd.extend(["--session-id", session_id])
@@ -231,10 +235,44 @@ class ClaudeCodeRuntime(AgentRuntime):
                     "error": error_msg,
                 }
 
+            # JSON output: parse the wrapper to get `result` (the model's
+            # text) plus the usage block. If parsing fails (older claude
+            # CLI that doesn't support --output-format json, or a
+            # malformed line), fall back to treating stdout as text.
+            stdout = result.stdout.strip()
+            output_text = stdout
+            usage = None
+            session_used = None
+            duration_ms = None
+            total_cost_usd = None
+            try:
+                import json as _json
+                data = _json.loads(stdout)
+                if isinstance(data, dict):
+                    output_text = (data.get("result") or "").strip() or stdout
+                    usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
+                    session_used = data.get("session_id") or session_id
+                    duration_ms = data.get("duration_ms")
+                    total_cost_usd = data.get("total_cost_usd")
+            except Exception:
+                pass
+
+            self._log_usage(
+                source=source,
+                model=model,
+                usage=usage,
+                duration_ms=duration_ms,
+                total_cost_usd=total_cost_usd,
+                session_id=session_used,
+            )
+
             return {
-                "output": result.stdout.strip(),
+                "output": output_text,
                 "success": True,
                 "error": None,
+                "usage": usage,
+                "duration_ms": duration_ms,
+                "total_cost_usd": total_cost_usd,
             }
 
         except subprocess.TimeoutExpired:
@@ -251,7 +289,35 @@ class ClaudeCodeRuntime(AgentRuntime):
                 "error": "claude CLI not found. Install Claude Code first.",
             }
 
-    def send_json(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None, permission_mode=None, effort=None):
+    def _log_usage(self, source, model, usage, duration_ms, total_cost_usd, session_id):
+        """Best-effort write of a TokenUsage row for this LLM call.
+
+        Swallows everything: failure to log shouldn't bubble up and break
+        an actual LLM result, and the logger should also no-op cleanly
+        when there's no Flask app context (CLI tools, one-shot scripts).
+        """
+        if not usage:
+            return
+        try:
+            from planet_maiko.database import db
+            from planet_maiko.models.token_usage import TokenUsage
+            row = TokenUsage(
+                source=(source or "unknown")[:100],
+                model=(model or "")[:100] or None,
+                input_tokens=int(usage.get("input_tokens") or 0),
+                output_tokens=int(usage.get("output_tokens") or 0),
+                cache_creation_tokens=int(usage.get("cache_creation_input_tokens") or 0),
+                cache_read_tokens=int(usage.get("cache_read_input_tokens") or 0),
+                total_cost_usd=float(total_cost_usd) if total_cost_usd is not None else None,
+                duration_ms=int(duration_ms) if duration_ms is not None else None,
+                session_id=session_id,
+            )
+            db.session.add(row)
+            db.session.commit()
+        except Exception as e:
+            logger.debug(f"[claude-code] token usage log failed: {e}")
+
+    def send_json(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None, permission_mode=None, effort=None, source=None):
         """Send a prompt and parse the response as JSON.
 
         Wraps the prompt with instructions to return JSON.
@@ -262,7 +328,7 @@ class ClaudeCodeRuntime(AgentRuntime):
             "Respond with ONLY valid JSON, no markdown fencing, no explanation."
         )
 
-        result = self.send(json_prompt, working_dir=working_dir, timeout=timeout, model=model, allowed_tools=allowed_tools, permission_mode=permission_mode, effort=effort)
+        result = self.send(json_prompt, working_dir=working_dir, timeout=timeout, model=model, allowed_tools=allowed_tools, permission_mode=permission_mode, effort=effort, source=source)
 
         if not result["success"]:
             return result

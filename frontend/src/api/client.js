@@ -437,6 +437,14 @@ export const api = {
   quickLaunchAgentJob: (body) =>
     request("/agent-jobs/quick-launch", { method: "POST", body: JSON.stringify(body) }),
 
+  // Token-usage audit. Aggregated totals + per-source + per-day, over
+  // a configurable window. Powers the Home spend widget and any
+  // future budget guardrails.
+  getUsage: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/usage${q ? `?${q}` : ""}`);
+  },
+
   // Broadcast a message to every active agent (no routing, no LLM).
   announceToPack: (message) =>
     request("/pack/announce", {

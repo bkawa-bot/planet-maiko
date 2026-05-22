@@ -575,6 +575,7 @@ def _run_home_overview_skill(prompt, working_dir):
     db.session.close()
     return runtime.send(
         prompt,
+        source="home_overview",
         working_dir=working_dir,
         timeout=OVERVIEW_TIMEOUT_SECONDS,
         model=model,
