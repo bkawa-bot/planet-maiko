@@ -73,3 +73,17 @@ def _phase_insights_reconcile():
     except Exception as e:
         logger.warning(f"[cycle] Insights reconcile phase error: {e}")
         return {"checked": 0, "recovered": 0, "deduped": 0, "error": str(e)}
+
+
+def _phase_rules_decay():
+    """Rules decay check: find active Learnings that haven't seen a
+    new signal or user confirmation in 90+ days and drop a single
+    batched cleanup memo. Cooldown-gated so the user is asked at
+    most once per week, even though the phase runs every cycle.
+    """
+    try:
+        from planet_maiko.brain.learning.rules_decay import maybe_check_rules_decay
+        return maybe_check_rules_decay()
+    except Exception as e:
+        logger.warning(f"[cycle] Rules decay phase error: {e}")
+        return {"stale_count": 0, "error": str(e)}

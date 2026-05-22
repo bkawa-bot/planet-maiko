@@ -248,9 +248,45 @@ def _approve_task_approval(memo, data=None):
     return {"task": task.to_dict()}
 
 
+def _approve_rules_decay(memo, data=None):
+    """Approve a stale-rules cleanup memo by marking every listed
+    Learning as still relevant (bumps last_confirmed_at so the
+    cooldown window applies to the next decay check).
+
+    Individual archiving stays a manual action on the Knowledge
+    page — the memo's job is just "tell me to leave these alone for
+    another N days," not "let me prune in-modal."
+    """
+    from datetime import datetime, timezone
+    from planet_maiko.models.learning import Learning
+
+    extra = memo.extra or {}
+    rule_ids = extra.get("rule_ids") or []
+    if not rule_ids:
+        return {"kept": 0}
+
+    now = datetime.now(timezone.utc)
+    kept = 0
+    for rid in rule_ids:
+        try:
+            rule = db.session.get(Learning, int(rid))
+        except (TypeError, ValueError):
+            continue
+        if rule is not None and rule.status == "active":
+            rule.last_confirmed_at = now
+            kept += 1
+    if kept:
+        db.session.commit()
+    logger.info(
+        f"[memo-approve] rules_decay memo #{memo.id} → confirmed {kept} rule(s)"
+    )
+    return {"kept": kept}
+
+
 def register_all():
     """Wire every approve handler. Idempotent — safe to call on each
     app boot."""
     register_approve_handler("agent_proposal", _approve_agent_proposal)
     register_approve_handler("job_approval", _approve_job_approval)
     register_approve_handler("task_approval", _approve_task_approval)
+    register_approve_handler("rules_decay", _approve_rules_decay)

@@ -39,6 +39,10 @@ class Learning(db.Model):
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
                            onupdate=lambda: datetime.now(timezone.utc))
     last_signal_at = db.Column(db.DateTime, nullable=True)
+    # Bumped when the user explicitly tells the decay check to keep this
+    # rule. Distinct from updated_at (which moves on any field change)
+    # and from last_signal_at (which only moves on real signal events).
+    last_confirmed_at = db.Column(db.DateTime, nullable=True)
 
     # RAG retrieval fields. violation_description is a Claude-generated
     # paragraph describing what code that VIOLATES this rule looks like
@@ -68,6 +72,7 @@ class Learning(db.Model):
             "created_at": iso_utc(self.created_at),
             "updated_at": iso_utc(self.updated_at),
             "last_signal_at": iso_utc(self.last_signal_at),
+            "last_confirmed_at": iso_utc(self.last_confirmed_at),
             "has_violation_description": bool(self.violation_description),
             "violation_description": self.violation_description,
             "violation_description_generated_at": iso_utc(self.violation_description_generated_at),
