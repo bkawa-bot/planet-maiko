@@ -9,6 +9,7 @@ import AgentPreferencesSection from "../components/settings/AgentPreferencesSect
 import ModelRoutingSection from "../components/settings/ModelRoutingSection";
 import SceneSection from "../components/settings/SceneSection";
 import PluginsSection from "../components/settings/PluginsSection";
+import UsageSection from "../components/settings/UsageSection";
 import WorktreeMaintenanceSection from "../components/settings/WorktreeMaintenanceSection";
 import { invalidateDefaultOrg } from "../utils/repo";
 import "./Settings.css";
@@ -224,6 +225,8 @@ export default function Settings() {
         pollerStatus={pollerStatus}
         onRunPoller={handleRunPoller}
       />
+
+      <UsageSection />
 
       <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 4 }}>
         <span style={{

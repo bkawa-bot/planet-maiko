@@ -195,58 +195,6 @@
   border-radius: 4px;
 }
 
-/* Token-usage audit widget: today's spend up top, 7-day total below,
-   top-3 sources broken out. Pure read-only — clicking a source isn't
-   wired anywhere yet. */
-.home-usage-widget .usage-today {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 4px 0;
-}
-.home-usage-widget .usage-today-cost {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text);
-}
-.home-usage-widget .usage-today-meta {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-.home-usage-widget .usage-window {
-  font-size: 11px;
-  color: var(--text-dim);
-  padding: 4px 0;
-  border-top: 1px dashed var(--border-subtle);
-}
-.home-usage-widget .usage-sources {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding-top: 6px;
-  margin-top: 4px;
-  border-top: 1px dashed var(--border-subtle);
-}
-.home-usage-widget .usage-sources-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  margin-bottom: 2px;
-}
-.home-usage-widget .usage-source-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  font-size: 11px;
-}
-.home-usage-widget .usage-source-name {
-  color: var(--text);
-  font-family: var(--font-mono, monospace);
-}
-.home-usage-widget .usage-source-cost {
-  color: var(--text-muted);
-}
 /* The Goals stat on Home renders as a <button> so it can open the
    goals-list modal. Reset browser button defaults and add a small
    hover affordance so it reads as "clickable, not just a chip". */
