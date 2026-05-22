@@ -70,6 +70,109 @@ def approve_job(job_id):
     return jsonify(j.to_dict())
 
 
+@agent_jobs_bp.route("/agent-jobs/quick-launch", methods=["POST"])
+def quick_launch():
+    """Direct-launch an AgentJob with a user-picked agent and prompt.
+
+    Mints a fresh Task + queued AgentJob in one round-trip. Bypasses the
+    pack-router LLM hop entirely (the user already knows who they want).
+
+    Body:
+      agent_profile_id: str (required) — which agent runs it
+      title:            str (required) — short prompt / job title
+      description:      str (optional) — full task body, defaults to title
+      task_type:        str (default "coding") — coding | review | investigation | cartograph | repo_analysis
+      scope_repo:       str (optional) — org/repo; falls back to profile.scope_repo
+      priority:         str (default "normal")
+      specialty_id:     str (optional) — CustomSkill id to layer on this run
+
+    Returns: {"task": {...}, "job": {...}}
+    """
+    import uuid as _uuid
+    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.models.task import Task
+    from planet_maiko.orchestration import resolve_repo_path
+
+    data = request.get_json(silent=True) or {}
+    agent_id = (data.get("agent_profile_id") or "").strip()
+    title = (data.get("title") or "").strip()
+    if not agent_id:
+        return jsonify({"error": "agent_profile_id is required"}), 400
+    if not title:
+        return jsonify({"error": "title is required"}), 400
+
+    profile = db.session.get(AgentProfile, agent_id)
+    if not profile or profile.archived:
+        return jsonify({"error": f"Agent {agent_id!r} not found or archived"}), 404
+
+    task_type = (data.get("task_type") or "coding").strip() or "coding"
+    description = (data.get("description") or "").strip()
+    priority = (data.get("priority") or "normal").strip() or "normal"
+    scope_repo = (data.get("scope_repo") or "").strip() or profile.scope_repo or None
+    specialty_id = (data.get("specialty_id") or "").strip() or None
+
+    task_extra = {
+        "description": description or title,
+        "source": "quick-launch",
+    }
+    if scope_repo:
+        task_extra["repo"] = scope_repo
+    if specialty_id:
+        task_extra["specialty_id"] = specialty_id
+
+    task_id = f"task-ql-{_uuid.uuid4().hex[:10]}"
+    task = Task(
+        id=task_id,
+        title=title,
+        type=task_type,
+        status="in_progress",
+        priority=priority,
+        assigned_agent_id=profile.id,
+        tags=["quick-launch"],
+        extra=task_extra,
+    )
+    db.session.add(task)
+    db.session.flush()
+
+    job_extra = {}
+    local_path = resolve_repo_path(scope_repo) if scope_repo else None
+    if local_path:
+        job_extra["repo_path"] = local_path
+    if specialty_id:
+        job_extra["specialty_id"] = specialty_id
+
+    job_id = f"job-{_uuid.uuid4().hex[:10]}"
+    job = AgentJob(
+        id=job_id,
+        kind=task_type,
+        title=title,
+        description=description or None,
+        scope_repo=scope_repo,
+        priority=priority,
+        created_by="quick-launch",
+        source_task_id=task_id,
+        agent_profile_id=profile.id,
+        requires_approval=False,
+        approved_at=datetime.now(timezone.utc),
+        approved_by="user",
+        status="queued",
+        extra=job_extra,
+    )
+    db.session.add(job)
+
+    # Link the job onto the task's extra so /tasks views can find it
+    # the same way they do for tasks launched through the regular path.
+    task_extra["agent_job_id"] = job_id
+    task.extra = task_extra
+    db.session.commit()
+
+    logger.info(
+        f"[quick-launch] task={task_id} job={job_id} agent={profile.id} "
+        f"kind={task_type} repo={scope_repo!r}"
+    )
+    return jsonify({"task": task.to_dict(), "job": job.to_dict()}), 201
+
+
 @agent_jobs_bp.route("/agent-jobs/<job_id>/cancel", methods=["POST"])
 def cancel_job(job_id):
     """Soft-cancel a job. Stops the subprocess but keeps the worktree

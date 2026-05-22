@@ -1,9 +1,10 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/Layout";
 import ToastContainer from "./components/Toast";
 import ArrivalWatcher from "./components/ArrivalWatcher";
 import PersistentPack from "./components/PersistentPack";
+import QuickLaunchModal from "./components/QuickLaunchModal";
 // Eager: the four surfaces a user hits on almost every visit. Keeping
 // them in the main bundle avoids a suspense flicker on the critical
 // path.
@@ -38,7 +39,18 @@ function RouteFallback() {
 function AppRoutes() {
   useKeyboardShortcuts();
 
+  // Global Quick-Launch modal — mounted here so Cmd+K and the Home
+  // launcher button both open the same instance. open-launch-agent
+  // is dispatched by useKeyboardShortcuts and by the Home trigger.
+  const [launchOpen, setLaunchOpen] = useState(false);
+  useEffect(() => {
+    const onOpen = () => setLaunchOpen(true);
+    window.addEventListener("open-launch-agent", onOpen);
+    return () => window.removeEventListener("open-launch-agent", onOpen);
+  }, []);
+
   return (
+    <>
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Home />} />
@@ -68,6 +80,8 @@ function AppRoutes() {
         <Route path="/tournaments" element={<Navigate to="/agents" replace />} />
       </Route>
     </Routes>
+    <QuickLaunchModal open={launchOpen} onClose={() => setLaunchOpen(false)} />
+    </>
   );
 }
 

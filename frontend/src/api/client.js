@@ -432,6 +432,11 @@ export const api = {
   // training pipeline code stays in src/planet_maiko/brain/learning/
   // dormant for future revival.
 
+  // Direct-launch an AgentJob: user picks the agent, the prompt, and
+  // optionally a skill / repo. Bypasses the pack-router LLM hop.
+  quickLaunchAgentJob: (body) =>
+    request("/agent-jobs/quick-launch", { method: "POST", body: JSON.stringify(body) }),
+
   // Broadcast a message to every active agent (no routing, no LLM).
   announceToPack: (message) =>
     request("/pack/announce", {

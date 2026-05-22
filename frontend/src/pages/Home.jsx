@@ -4,7 +4,7 @@ import SetupWizard from "../components/SetupWizard";
 import OverviewPane from "../components/OverviewPane";
 import MemosPane from "../components/MemosPane";
 import { formatTime, formatClock, formatLongDate } from "../utils/dates";
-import { Brain, Sun, Video, RadarSweep } from "@icons";
+import { Brain, Sun, Video, RadarSweep, Rocket } from "@icons";
 import { showToast } from "../components/Toast";
 import FooterPendingPopover from "../components/FooterPendingPopover";
 import "./Home.css";
@@ -175,6 +175,20 @@ export default function Home() {
             ) : (
               <div className="widget-empty">No meetings today</div>
             )}
+          </div>
+
+          <div className="home-widget home-launch-widget">
+            <div className="widget-header">
+              <Rocket size={12} /> Launch an agent
+            </div>
+            <button
+              className="home-launch-btn"
+              onClick={() => window.dispatchEvent(new CustomEvent("open-launch-agent"))}
+              title="Pick an agent, type a prompt. Cmd/Ctrl+K opens from anywhere."
+            >
+              <span>Pick an agent, send a prompt.</span>
+              <kbd>⌘K</kbd>
+            </button>
           </div>
 
           <div className="home-widget home-brain-widget">
