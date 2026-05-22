@@ -225,11 +225,16 @@ def _repo_from_github_url(url: Optional[str]) -> Optional[str]:
 def resolve_repo_path(repo: Optional[str]) -> Optional[str]:
     """Resolve a GitHub-style "org/repo" to a local filesystem path.
 
-    Walks config.github.repo_roots (set under Settings) looking for a
-    directory that is a git repo and whose name matches the last
-    segment of `repo` — i.e. the repo name without the org prefix.
-    Most devs clone flat (~/src/planet-maiko, not
-    ~/src/bkawa-bot/planet-maiko), so we only check <root>/<name>.
+    Walks config.github.repo_roots (set under Settings) and checks, in
+    order of preference, for each root:
+
+      1. ``<root>/<repo-name>``      — flat clones (most common).
+      2. ``<root>/<org>/<repo-name>``— `gh repo clone`-style nested.
+      3. case-insensitive scan       — catches "Planet-Maiko" in the
+                                      config vs. "planet-maiko" on
+                                      disk (or vice versa).
+
+    Returns the first match; None if no root resolves.
     """
     if not repo:
         return None
@@ -237,11 +242,30 @@ def resolve_repo_path(repo: Optional[str]) -> Optional[str]:
     from planet_maiko.config import load_config
     roots = (load_config().get("github", {}) or {}).get("repo_roots") or []
     name = repo.rsplit("/", 1)[-1]
+    org = repo.rsplit("/", 1)[0] if "/" in repo else None
+    name_lower = name.lower()
     for root in roots:
         root = os.path.expanduser(root)
+        # 1) Flat form
         candidate = os.path.join(root, name)
         if os.path.isdir(os.path.join(candidate, ".git")):
             return candidate
+        # 2) Nested form (org-prefixed subdir)
+        if org:
+            nested = os.path.join(root, org, name)
+            if os.path.isdir(os.path.join(nested, ".git")):
+                return nested
+        # 3) Case-insensitive scan, fallback for case-mismatched dir
+        if not os.path.isdir(root):
+            continue
+        try:
+            for entry in os.listdir(root):
+                if entry.lower() == name_lower:
+                    fuzzy = os.path.join(root, entry)
+                    if os.path.isdir(os.path.join(fuzzy, ".git")):
+                        return fuzzy
+        except (PermissionError, OSError):
+            continue
     return None
 
 
