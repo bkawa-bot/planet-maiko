@@ -3,9 +3,8 @@ import { api } from "../api/client";
 import SetupWizard from "../components/SetupWizard";
 import OverviewPane from "../components/OverviewPane";
 import MemosPane from "../components/MemosPane";
-import PackAskBox from "../components/PackAskBox";
 import { formatTime, formatClock, formatLongDate } from "../utils/dates";
-import { Brain, Sun, Video, RadarSweep, Conversation } from "@icons";
+import { Brain, Sun, Video, RadarSweep } from "@icons";
 import { showToast } from "../components/Toast";
 import FooterPendingPopover from "../components/FooterPendingPopover";
 import "./Home.css";
@@ -176,13 +175,6 @@ export default function Home() {
             ) : (
               <div className="widget-empty">No meetings today</div>
             )}
-          </div>
-
-          <div className="home-widget">
-            <div className="widget-header">
-              <Conversation size={12} /> Ask the pack
-            </div>
-            <PackAskBox />
           </div>
 
           <div className="home-widget home-brain-widget">

@@ -2,7 +2,6 @@ import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/Layout";
 import ToastContainer from "./components/Toast";
-import AskMaiko from "./components/AskMaiko";
 import ArrivalWatcher from "./components/ArrivalWatcher";
 import PersistentPack from "./components/PersistentPack";
 // Eager: the four surfaces a user hits on almost every visit. Keeping
@@ -77,7 +76,6 @@ export default function App() {
     <BrowserRouter>
       <AppRoutes />
       <ToastContainer />
-      <AskMaiko />
       <ArrivalWatcher />
       <PersistentPack />
     </BrowserRouter>

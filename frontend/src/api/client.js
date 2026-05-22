@@ -432,19 +432,6 @@ export const api = {
   // training pipeline code stays in src/planet_maiko/brain/learning/
   // dormant for future revival.
 
-  // Ask the Pack — natural-language dispatcher that picks an agent and launches them.
-  // Backend calls an LLM router with a 45s ceiling; we give the network a small cushion
-  // and fail loudly instead of hanging forever.
-  dispatchPack: (request_text, context, non_goals) =>
-    request("/pack/dispatch", {
-      method: "POST",
-      timeoutMs: 60_000,
-      body: JSON.stringify({
-        request: request_text,
-        context: context || "",
-        non_goals: non_goals || "",
-      }),
-    }),
   // Broadcast a message to every active agent (no routing, no LLM).
   announceToPack: (message) =>
     request("/pack/announce", {
