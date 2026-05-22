@@ -147,14 +147,21 @@ function computeTabs(job, task) {
   if (isDiffKind) {
     tabs.push({ id: "diff", label: "Diff", icon: CheckboxTree });
   }
-  if (job.kind === "coding" && hasPlan) {
+  if (hasPlan) {
+    // Plan tab is no longer gated on kind=="coding". A job that went
+    // investigation -> coding via `maiko handoff` keeps the plan; a
+    // coding job that did plan-first surfaces it the same way.
     tabs.push({
       id: "plan",
       label: hasPlanForApproval ? "Plan ●" : "Plan",
       icon: FileText,
     });
   }
-  if (isReportKind || (hasArtifact && !isDiffKind)) {
+  if (isReportKind || hasArtifact) {
+    // Report tab now shows whenever there's a written artifact, even
+    // if the current kind is a diff-producing one. Lets a coding agent
+    // that started as an investigation keep its prior report visible
+    // alongside the new diff.
     tabs.push({ id: "report", label: "Report", icon: FileText });
   }
   // Activity rolled into Chat — same data stream, the chat tab now

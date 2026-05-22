@@ -173,6 +173,73 @@ def quick_launch():
     return jsonify({"task": task.to_dict(), "job": job.to_dict()}), 201
 
 
+@agent_jobs_bp.route("/agent-jobs/<job_id>/change-kind", methods=["POST"])
+def change_kind(job_id):
+    """Switch a running job's kind (investigation → coding, etc.).
+
+    Useful when the agent's investigation surfaces work that wants
+    coding, or vice versa. Updates job.kind, cascades to the linked
+    Task.type so the UI reflects the switch, and returns the new
+    role's agent-protocol markdown so the calling CLI can print the
+    fresh instructions and the agent can adopt them mid-session
+    without a restart.
+
+    Body: {"kind": str}
+    Response: {previous_kind, kind, protocol}
+    """
+    import pathlib
+
+    VALID_KINDS = {"coding", "investigation", "review", "cartograph", "repo_analysis"}
+    # Roles with dedicated protocols; everything else falls back to the
+    # generic agent-protocol.md the coding role also uses.
+    SPECIFIC_PROTOCOLS = {
+        "investigation": "investigation-agent-protocol",
+        "review": "review-agent-protocol",
+        "cartograph": "cartographer-agent-protocol",
+    }
+
+    data = request.get_json(silent=True) or {}
+    kind = (data.get("kind") or "").strip()
+    if kind not in VALID_KINDS:
+        return jsonify({
+            "error": f"Unknown kind: {kind!r}. Pick one of {sorted(VALID_KINDS)}.",
+        }), 400
+
+    job = db.get_or_404(AgentJob, job_id)
+    previous_kind = job.kind
+    job.kind = kind
+
+    # Cascade to the linked Task so the UI reflects the role switch
+    # (Tasks page badge, etc.). Skip terminal tasks.
+    if job.source_task_id:
+        from planet_maiko.models.task import Task
+        task = db.session.get(Task, job.source_task_id)
+        if task is not None and task.status not in ("done", "cancelled"):
+            task.type = kind
+            task.updated_at = datetime.now(timezone.utc)
+
+    db.session.commit()
+
+    protocol_name = SPECIFIC_PROTOCOLS.get(kind, "agent-protocol")
+    protocol_path = (
+        pathlib.Path(__file__).resolve().parent.parent
+        / "prompts" / f"{protocol_name}.md"
+    )
+    try:
+        protocol_text = protocol_path.read_text(encoding="utf-8")
+    except Exception as e:
+        logger.warning(f"[change-kind] couldn't load protocol {protocol_name}: {e}")
+        protocol_text = ""
+
+    logger.info(f"[change-kind] {job_id}: {previous_kind!r} -> {kind!r}")
+    return jsonify({
+        "job_id": job_id,
+        "previous_kind": previous_kind,
+        "kind": kind,
+        "protocol": protocol_text,
+    })
+
+
 @agent_jobs_bp.route("/agent-jobs/<job_id>/cancel", methods=["POST"])
 def cancel_job(job_id):
     """Soft-cancel a job. Stops the subprocess but keeps the worktree
