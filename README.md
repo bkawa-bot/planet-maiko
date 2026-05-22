@@ -2,25 +2,15 @@
 
 > *These alien dogs want to live in your computer. Would you let them in?*
 
-**A local-first agent orchestrator where your AI agents are weird alien dogs that know a little too much.**
-
-Free forever, no paid tiers or subscriptions. Made by one dev for other devs.
-
 ![title](docs/screenshots/profiles2.png)
 
----
-
-> **⚠️ Beta.** Planet Maiko is in active beta testing. Expect breaking changes, schema migrations, rough edges, and bugs. If you try it and something's broken, [file an issue](https://github.com/bkawa-bot/planet-maiko/issues/new).
-
----
-
-We live in strange times, and yet our dev tools are so painfully un-strange. No one knows what being a software engineer will be like in a year, or even a month. If we are all headed to our own inevitable obsolescence, we might as well have fun.
-
-![Planet Maiko home](docs/screenshots/home.png)
+Planet Maiko is a free local dev tool made by 1 dev, for other devs, to make your working day a bit more fun!
 
 ## What does Planet Maiko do? 
 
-All the required agent orchestration work. Automatically kicks off agents, lets them yell at each other (with Maiko as the mediator), agent task lifecycles, context sharing... but also some more interesting features as well such as conflict detection, (experimental) fine-tuning, self-curated shared memory and insights etc
+All the required agent orchestration work. Automatically kicks off agents, lets them yell at each other (with Maiko as the mediator), agent task lifecycles, context sharing... but also some more interesting features as well such as conflict detection, (experimental) fine-tuning, self-curated shared memory and insights etc...
+
+![Planet Maiko home](docs/screenshots/home.png)
 
 ## How is Planet Maiko different from RinkStack, Mazino.ai, or QuatroForce? (I just made all of those up)
 
