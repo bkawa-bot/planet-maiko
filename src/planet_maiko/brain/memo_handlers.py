@@ -188,8 +188,69 @@ def _approve_job_approval(memo, data=None):
     return {"job_id": job.id, "kind": spec["kind"]}
 
 
+def _approve_task_approval(memo, data=None):
+    """Approve an ask-first create_task or create_task_from_pupdate.
+
+    The task spec lives in memo.extra.task_spec — built by
+    _act_create_task / _act_create_task_from_pupdate when
+    ask_first=True. Approving mints the real Task, runs orchestration
+    route() to assign an agent, and lets is_ready() set the initial
+    status (new vs blocked).
+    """
+    from planet_maiko.models.task import Task
+    from planet_maiko.orchestration import route, is_ready
+
+    extra = memo.extra or {}
+    spec = extra.get("task_spec") or {}
+    if not spec.get("title"):
+        raise ValueError("memo.extra.task_spec is missing title")
+
+    task_id = f"task-{uuid.uuid4().hex[:10]}"
+    task_extra = dict(spec.get("extra") or {})
+    task_extra.setdefault(
+        "description",
+        spec.get("body") or spec.get("description") or memo.body or "",
+    )
+    if extra.get("from_automation") is not None:
+        task_extra["from_automation"] = extra["from_automation"]
+    if extra.get("triggered_by_pupdate"):
+        task_extra["triggered_by_pupdate"] = extra["triggered_by_pupdate"]
+    if extra.get("pupdate_snapshot"):
+        task_extra["pupdate_snapshot"] = extra["pupdate_snapshot"]
+    task_extra["approved_via_memo"] = memo.id
+
+    task = Task(
+        id=task_id,
+        title=spec["title"],
+        type=spec.get("type") or "todo",
+        priority=spec.get("priority") or memo.priority or "normal",
+        status="new",
+        url=spec.get("url") or memo.url,
+        source_pupdate_id=spec.get("source_pupdate_id"),
+        tags=list(spec.get("tags") or []) + ["from_automation"],
+        extra=task_extra,
+    )
+    db.session.add(task)
+    db.session.flush()
+
+    try:
+        route(task)
+    except Exception as e:
+        logger.warning(
+            f"[memo-approve] task_approval: route(task={task.id}) failed: {e}"
+        )
+    if not is_ready(task):
+        task.status = "blocked"
+
+    logger.info(
+        f"[memo-approve] task_approval memo #{memo.id} → task {task.id}"
+    )
+    return {"task": task.to_dict()}
+
+
 def register_all():
     """Wire every approve handler. Idempotent — safe to call on each
     app boot."""
     register_approve_handler("agent_proposal", _approve_agent_proposal)
     register_approve_handler("job_approval", _approve_job_approval)
+    register_approve_handler("task_approval", _approve_task_approval)

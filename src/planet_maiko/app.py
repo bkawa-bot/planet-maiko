@@ -468,7 +468,15 @@ def create_app(start_scheduler=False):
             ensure_seed_automations,
             ensure_seed_rule_automations,
             ensure_plugin_default_automations,
+            migrate_obsolete_create_task_seeds,
         )
+        # Archive obsolete create_task default rows BEFORE seeding the
+        # new notify_me equivalents so existing installs don't run
+        # both side-by-side for a tick.
+        try:
+            migrate_obsolete_create_task_seeds()
+        except Exception as e:
+            logger.warning(f"[startup] Obsolete seed migration skipped: {e}")
         try:
             ensure_seed_automations()
         except Exception as e:

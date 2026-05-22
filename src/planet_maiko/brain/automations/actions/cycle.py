@@ -182,6 +182,7 @@ def _act_create_task(automation, config, pupdate=None, context=None):
     from planet_maiko.orchestration import route, is_ready
 
     ctx = context or {}
+    ask_first = bool(config.get("ask_first", False))
     task_id = f"task-{uuid.uuid4().hex[:10]}"
     pup_extra = (pupdate.extra or {}) if pupdate is not None else {}
     task_type = config.get("type") or "todo"
@@ -204,6 +205,41 @@ def _act_create_task(automation, config, pupdate=None, context=None):
             f"{task_type} from pupdate {pupdate.id} with NO repo — "
             f"pupdate.extra keys: {sorted(pup_extra.keys()) or '(empty)'}"
         )
+    # Ask-first → drop a memo and let the user approve. Same rationale
+    # as _act_run_agent_job's ask_first branch: we don't mint the task
+    # until the user has decided they actually want it.
+    title = config.get("title") or automation.name
+    description = config.get("description") or automation.description or ""
+    priority = config.get("priority") or "normal"
+    if ask_first:
+        from planet_maiko.brain.memos import create_memo
+        memo_extra = {
+            "from_automation": automation.id,
+            "task_spec": {
+                "type": task_type,
+                "title": title,
+                "description": description,
+                "priority": priority,
+                "repo": repo,
+                "auto_launch": bool(config.get("auto_launch", False)),
+            },
+        }
+        memo = create_memo(
+            kind="task_approval",
+            category="offer",
+            title=title,
+            body=description or None,
+            priority=priority,
+            cta_label="Create task",
+            cta_action="approve",
+            extra=memo_extra,
+        )
+        db.session.flush()
+        return {
+            "kind": "create_task",
+            "status": "awaiting_approval",
+            "memo_id": memo.id,
+        }
     task = Task(
         id=task_id,
         title=config.get("title") or automation.name,
