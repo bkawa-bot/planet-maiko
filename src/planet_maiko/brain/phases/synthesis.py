@@ -1,7 +1,10 @@
-"""Phases 3.8 + 4: signal synthesis + learning aggregation.
+"""Phases 3.8 + 4: signal synthesis + learning aggregation + insight reconcile.
 
   - synthesis: drain the queue of unsynthesized pr_comment signals
   - learning: cluster signals into learnings, dedupe drifted categories
+  - insights_reconcile: scrape recent message_type='insight' AgentMessages
+    for any Insight row the live-save path dropped (server restart,
+    inline-save exception). Cheap on quiet cycles.
 """
 
 import logging
@@ -53,3 +56,20 @@ def _phase_learning():
         drift = cluster_learnings(categories=touched)
         result["drift"] = drift
     return result
+
+
+def _phase_insights_reconcile():
+    """Insight reconciliation: scrape recent message_type='insight'
+    AgentMessages for any Insight the live-save path missed.
+
+    Bounded by window_days; cheap when there's nothing to do (the
+    AgentMessage index makes the candidate filter and the
+    source_message_id lookup both fast). Swallows its own errors so a
+    transient DB hiccup doesn't take the cycle down.
+    """
+    try:
+        from planet_maiko.brain.learning.pack_insights import reconcile_insights
+        return reconcile_insights()
+    except Exception as e:
+        logger.warning(f"[cycle] Insights reconcile phase error: {e}")
+        return {"checked": 0, "recovered": 0, "deduped": 0, "error": str(e)}
