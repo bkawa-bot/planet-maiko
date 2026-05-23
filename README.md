@@ -8,7 +8,16 @@ Planet Maiko is a free local dev tool made by 1 dev, for other devs, to make you
 
 ## What does Planet Maiko do? 
 
-All the required agent orchestration work. Automatically kicks off agents, lets them yell at each other (with Maiko as the mediator), agent task lifecycles, context sharing... but also some more interesting features as well such as conflict detection, (experimental) fine-tuning, self-curated shared memory and insights etc...
+Planet Maiko's goal is to be the center of your workday as a developer. It pulls info in from all your external tools, task managers, and agent workflows into one dashboard.
+
+You wake up and see a greeting from Maiko (my dog) that knows all your in-progress work, what your manager asked you to do last week, even if it is a cool rainy day or a summer scortcher (in which case she will recommend you to take the afternoon off and go to the beach.)
+
+Quick feature overview:
+- Pulls in data from your whole stack into a centralized view.
+- Handles all your agent orchestration needs, but is way cooler cause the agents are space dogs.
+- Does some cool memory stuff like curating a rulebook based on your previous gh history.
+- A lot more! If it doesn't do something you need it to do, please tell me!!
+- Local, Open source, free forever, made by 1 dev for fun. 
 
 ![Planet Maiko home](docs/screenshots/home.png)
 
