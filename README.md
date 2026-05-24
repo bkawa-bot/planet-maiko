@@ -2,7 +2,12 @@
 
 > *These alien dogs want to live in your computer. Would you let them in?*
 
-![title](docs/screenshots/profiles2.png)
+<table>
+<tr>
+<td><img src="docs/screenshots/home.png" alt="Home" /></td>
+<td><img src="docs/screenshots/profiles2.png" alt="Profiles" /></td>
+</tr>
+</table>
 
 Planet Maiko is a free local dev tool made by 1 dev, for other devs, to make your working day a bit more fun!
 
@@ -18,8 +23,6 @@ Quick feature overview:
 - Does some cool memory stuff like curating a rulebook based on your previous gh history.
 - A lot more! If it doesn't do something you need it to do, please tell me!!
 - Local, Open source, free forever, made by 1 dev for fun. 
-
-![Planet Maiko home](docs/screenshots/home.png)
 
 ## How is Planet Maiko different from RinkStack, Mazino.ai, or QuatroForce? (I just made all of those up)
 
