@@ -269,15 +269,12 @@
       <div class="win-body">
         <p class="section-kicker">// one command. it opens itself.</p>
         <h2>Boot it yourself</h2>
-        <p style="color:var(--text-dim); margin-bottom:16px; font-size:0.95rem;">Needs: macOS, Python 3.10+, Node 18+, the <code>gh</code> CLI, Claude Code.</p>
+        <p style="color:var(--text-dim); margin-bottom:16px; font-size:0.95rem;">Needs: Python 3.10+, Node 18+, the <code>gh</code> CLI, Claude Code.</p>
 <pre>git clone https://github.com/bkawa-bot/planet-maiko.git
 cd planet-maiko
+python3 bootstrap.py
 
-python3 -m venv .venv &amp;&amp; source .venv/bin/activate
-pip install -e .
-cd frontend &amp;&amp; npm install &amp;&amp; cd ..
-
-gh auth login
+source .venv/bin/activate
 maiko up</pre>
         <p class="install-note">
           <code>maiko up</code> starts the backend, starts the frontend,
