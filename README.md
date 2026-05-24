@@ -71,32 +71,27 @@ Open source, free forever, no paid tiers or subscriptions.
 
 ### Prerequisites
 
-- macOS (or Linux/Windows for development)
 - Python 3.10+
 - Node.js 18+
-- `gh` CLI
-- Claude Code (the agent runtime), installed and on your PATH
+- [`gh` CLI](https://cli.github.com)
+- [Claude Code](https://docs.claude.com/en/docs/claude-code/quickstart) on your PATH (Maiko's agent runtime)
 
 ### Setup
 
 ```bash
 git clone https://github.com/bkawa-bot/planet-maiko.git
 cd planet-maiko
-
-python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e .
-cd frontend && npm install && cd ..
-
-gh auth login    # GitHub: repo discovery + worktrees
+python3 bootstrap.py
 ```
+
+The bootstrap checks prereqs, creates a venv, installs both backend and frontend deps, and verifies your `gh` auth. If anything is missing it'll tell you what to do.
 
 > **SSL errors** with Linear or other integrations? `pip install --upgrade certifi`, then `open /Applications/Python\ 3.12/Install\ Certificates.command`.
 
 ### Run
 
-One command:
-
 ```bash
+source .venv/bin/activate    # Windows: .venv\Scripts\activate
 maiko up
 ```
 
