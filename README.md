@@ -2,12 +2,9 @@
 
 > *These alien dogs want to live in your computer. Would you let them in?*
 
-<table>
-<tr>
-<td><img src="docs/screenshots/home.png" alt="Home" /></td>
-<td><img src="docs/screenshots/profiles2.png" alt="Profiles" /></td>
-</tr>
-</table>
+![Profiles](docs/screenshots/profiles2.png)
+
+![Home](docs/screenshots/home.png)
 
 Planet Maiko is a free local dev tool made by 1 dev, for other devs, to make your working day a bit more fun!
 
