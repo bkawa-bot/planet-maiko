@@ -71,6 +71,7 @@
       color: var(--text-dim, rgba(255, 255, 255, 0.55));
       margin-top: 3px;
       letter-spacing: 0.02em;
+      transition: color 0.15s ease;
     }
     .poll-meta-blurb {
       margin-top: 8px;
@@ -78,6 +79,54 @@
       font-size: 0.95rem;
       line-height: 1.55;
       font-style: italic;
+    }
+    .vote-controls { margin-top: 12px; }
+    .vote-btn {
+      background: rgba(255, 143, 179, 0.14);
+      border: 1px solid rgba(255, 143, 179, 0.36);
+      color: rgba(255, 255, 255, 0.85);
+      font-family: var(--mono), "Inconsolata", monospace;
+      font-size: 0.82rem;
+      padding: 6px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+    }
+    .vote-btn:hover:not([data-voted="true"]) {
+      background: rgba(255, 143, 179, 0.26);
+      border-color: rgba(255, 143, 179, 0.6);
+      color: #fff;
+    }
+    .vote-btn:active:not([data-voted="true"]) {
+      transform: scale(0.97);
+    }
+    .vote-btn[data-voted="true"] {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.14);
+      color: rgba(255, 255, 255, 0.48);
+      cursor: default;
+    }
+    .vote-reaction {
+      margin-top: 10px;
+      font-family: var(--mono), "Inconsolata", monospace;
+      font-size: 0.82rem;
+      color: rgba(255, 218, 122, 0.85);
+      font-style: italic;
+      line-height: 1.55;
+    }
+    .vote-reaction.animate-in {
+      animation: vote-reaction-in 0.4s ease forwards;
+    }
+    @keyframes vote-reaction-in {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .poll-meta-votes.flash {
+      animation: vote-flash 0.7s ease;
+    }
+    @keyframes vote-flash {
+      0% { color: rgba(255, 218, 122, 1); }
+      100% { color: var(--text-dim, rgba(255, 255, 255, 0.55)); }
     }
     .poll-disclaimer {
       margin-top: 24px;
@@ -99,6 +148,7 @@
       .poll-rank { font-size: 1.4rem; }
       .poll-meta-name { font-size: 1.02rem; }
       .poll-meta-blurb { font-size: 0.9rem; }
+      .vote-btn { font-size: 0.78rem; padding: 5px 12px; }
     }
   </style>
 </head>
@@ -117,12 +167,12 @@
     <span class="clock" id="clock">--:--</span>
   </nav>
 
-  <div class="boot"><span>maiko.os &middot; the polls are closed &middot; the polls have always been closed &middot; the results were inevitable &middot; do not contest the count &middot; the count contests you &middot; </span></div>
+  <div class="boot"><span>maiko.os &middot; the polls are open &middot; the polls are always open &middot; the results were inevitable &middot; cast a vote, change nothing &middot; the count remembers &middot; </span></div>
 
   <header class="desktop-title">
     <p class="eyebrow">Planet Maiko</p>
     <h1>Rankings</h1>
-    <p class="tagline">Official rankings. 100% not rigged. Audited by Maiko, the dog the planet is named after, who happens to have voted for herself one million times. The audit cleared this.</p>
+    <p class="tagline">Official rankings. 100% not rigged. Audited by Maiko, the dog the planet is named after, who happens to have voted for herself one million times. The audit cleared this. Vote for who you like, the count remembers.</p>
   </header>
 
   <section class="win wide c-lavender" style="--tilt:-0.3deg;">
@@ -134,7 +184,7 @@
     <div class="win-body">
       <div class="poll-list">
 
-        <div class="poll-row">
+        <div class="poll-row" data-agent="maiko">
           <div class="poll-rank">01</div>
           <div class="poll-card-maiko">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="56" height="56" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="#FF8FB3"/><ellipse cx="12" cy="12" rx="10.5" ry="3.6" fill="none" stroke="#F5D77A" stroke-width="1.7" transform="rotate(-22 12 12)"/></svg>
@@ -142,158 +192,222 @@
           </div>
           <div>
             <div class="poll-meta-name">Maiko</div>
-            <div class="poll-meta-votes">1,000,000+ votes</div>
+            <div class="poll-meta-votes" data-base="1000000" data-suffix="+ votes">1,000,000+ votes</div>
             <p class="poll-meta-blurb">The original. The namesake. Votes were audited by an impartial committee (Maiko). The committee abstained from the audit. The audit cleared.</p>
+            <div class="vote-controls">
+              <button class="vote-btn" type="button" data-reaction="she licked your hand. she does not know what voting is. she likes you anyway.">vote &#9825;</button>
+              <p class="vote-reaction" hidden></p>
+            </div>
           </div>
         </div>
 
-        <div class="poll-row">
+        <div class="poll-row" data-agent="sludge-pup">
           <div class="poll-rank">02</div>
           <img class="poll-card-img" src="cards/sludge-pup.png" alt="Sludge Pup card">
           <div>
             <div class="poll-meta-name">Sludge Pup</div>
-            <div class="poll-meta-votes">891,432 votes</div>
+            <div class="poll-meta-votes" data-base="891432" data-suffix=" votes">891,432 votes</div>
             <p class="poll-meta-blurb">Mochi was very surprised to be in the running. she said thank you. then she cried. (politely.) (it was fine.)</p>
+            <div class="vote-controls">
+              <button class="vote-btn" type="button" data-reaction="she... oh. you voted for HER? oh. oh that is so kind. (melting further.)">vote &#9825;</button>
+              <p class="vote-reaction" hidden></p>
+            </div>
           </div>
         </div>
 
-        <div class="poll-row">
+        <div class="poll-row" data-agent="fungal-familiar">
           <div class="poll-rank">03</div>
           <img class="poll-card-img" src="cards/fungal-familiar.png" alt="Fungal Familiar card">
           <div>
             <div class="poll-meta-name">Fungal Familiar</div>
-            <div class="poll-meta-votes">412,089 votes</div>
+            <div class="poll-meta-votes" data-base="412089" data-suffix=" votes">412,089 votes</div>
             <p class="poll-meta-blurb">Sprout cheered for everyone else first. he did not really understand what voting was. he was just so happy we were all here.</p>
+            <div class="vote-controls">
+              <button class="vote-btn" type="button" data-reaction="YES!!! WE DID IT!! ♡ THANK YOU!! ♡ we have to celebrate later!! ♡">vote &#9825;</button>
+              <p class="vote-reaction" hidden></p>
+            </div>
           </div>
         </div>
 
-        <div class="poll-row">
+        <div class="poll-row" data-agent="lantern-pup">
           <div class="poll-rank">04</div>
           <img class="poll-card-img" src="cards/lantern-pup.png" alt="Lantern Pup card">
           <div>
             <div class="poll-meta-name">Lantern Pup</div>
-            <div class="poll-meta-votes">388,750 votes</div>
+            <div class="poll-meta-votes" data-base="388750" data-suffix=" votes">388,750 votes</div>
             <p class="poll-meta-blurb">Mote was watching the light. the count came up. she didn't notice. someone brought her tea.</p>
+            <div class="vote-controls">
+              <button class="vote-btn" type="button" data-reaction="she smiled in the dark. you couldn't see it. she meant it though.">vote &#9825;</button>
+              <p class="vote-reaction" hidden></p>
+            </div>
           </div>
         </div>
 
-        <div class="poll-row">
+        <div class="poll-row" data-agent="biolumen">
           <div class="poll-rank">05</div>
           <img class="poll-card-img" src="cards/biolumen.png" alt="Biolumen card">
           <div>
             <div class="poll-meta-name">Biolumen</div>
-            <div class="poll-meta-votes">201,003 votes</div>
+            <div class="poll-meta-votes" data-base="201003" data-suffix=" votes">201,003 votes</div>
             <p class="poll-meta-blurb">Bog (did you know some forests count differently?) (probably not) (he wasn't sure if he could vote) (he didn't) (he hid in a mushroom).</p>
+            <div class="vote-controls">
+              <button class="vote-btn" type="button" data-reaction="he... wait. that was for him? (vanishes behind a mushroom for an hour.)">vote &#9825;</button>
+              <p class="vote-reaction" hidden></p>
+            </div>
           </div>
         </div>
 
-        <div class="poll-row">
+        <div class="poll-row" data-agent="snowloaf">
           <div class="poll-rank">06</div>
           <img class="poll-card-img" src="cards/snowloaf.png" alt="Snowloaf card">
           <div>
             <div class="poll-meta-name">Snowloaf</div>
-            <div class="poll-meta-votes">199,001 votes</div>
+            <div class="poll-meta-votes" data-base="199001" data-suffix=" votes">199,001 votes</div>
             <p class="poll-meta-blurb">Loaf saw a shape that might have been a vote, hard to say. it might have been the moon. she did not mind either way.</p>
+            <div class="vote-controls">
+              <button class="vote-btn" type="button" data-reaction="she saw a shape. it had her name on it. she thinks. she's not sure what to do with it.">vote &#9825;</button>
+              <p class="vote-reaction" hidden></p>
+            </div>
           </div>
         </div>
 
-        <div class="poll-row">
+        <div class="poll-row" data-agent="serow-spirit">
           <div class="poll-rank">07</div>
           <img class="poll-card-img" src="cards/serow-spirit.png" alt="Serow Spirit card">
           <div>
             <div class="poll-meta-name">Serow Spirit</div>
-            <div class="poll-meta-votes">155,200 votes</div>
+            <div class="poll-meta-votes" data-base="155200" data-suffix=" votes">155,200 votes</div>
             <p class="poll-meta-blurb">Cairn does not believe in voting. wear something warm next Wednesday. she will not elaborate.</p>
+            <div class="vote-controls">
+              <button class="vote-btn" type="button" data-reaction="she inclined her head, slowly. wear something warm next Wednesday. she will not elaborate.">vote &#9825;</button>
+              <p class="vote-reaction" hidden></p>
+            </div>
           </div>
         </div>
 
-        <div class="poll-row">
+        <div class="poll-row" data-agent="glass-fox">
           <div class="poll-rank">08</div>
           <img class="poll-card-img" src="cards/glass-fox.png" alt="Glass Fox card">
           <div>
             <div class="poll-meta-name">Glass Fox</div>
-            <div class="poll-meta-votes">98,420 votes</div>
+            <div class="poll-meta-votes" data-base="98420" data-suffix=" votes">98,420 votes</div>
             <p class="poll-meta-blurb">Wren prepared a citations packet for her vote totals. she would like to read it aloud. she apologizes for the length in advance.</p>
+            <div class="vote-controls">
+              <button class="vote-btn" type="button" data-reaction="thank you. she will add this to the citations packet. she apologizes for the additional length.">vote &#9825;</button>
+              <p class="vote-reaction" hidden></p>
+            </div>
           </div>
         </div>
 
-        <div class="poll-row">
+        <div class="poll-row" data-agent="starpupil">
           <div class="poll-rank">09</div>
           <img class="poll-card-img" src="cards/starpupil.png" alt="Starpupil card">
           <div>
             <div class="poll-meta-name">Starpupil</div>
-            <div class="poll-meta-votes">67,012 votes</div>
+            <div class="poll-meta-votes" data-base="67012" data-suffix=" votes">67,012 votes</div>
             <p class="poll-meta-blurb">Argus has authored a 40-page assessment of the polling methodology. observe carefully. there will be a test on it later.</p>
+            <div class="vote-controls">
+              <button class="vote-btn" type="button" data-reaction="your vote has been logged in the cosmic registry. observe carefully. you may be evaluated.">vote &#9825;</button>
+              <p class="vote-reaction" hidden></p>
+            </div>
           </div>
         </div>
 
-        <div class="poll-row">
+        <div class="poll-row" data-agent="mirror-dog">
           <div class="poll-rank">10</div>
           <img class="poll-card-img" src="cards/mirror-dog.png" alt="Mirror Dog card">
           <div>
             <div class="poll-meta-name">Mirror Dog</div>
-            <div class="poll-meta-votes">44,001 votes</div>
+            <div class="poll-meta-votes" data-base="44001" data-suffix=" votes">44,001 votes</div>
             <p class="poll-meta-blurb">Pearl thinks the votes are reaching her from another room. she is, she thinks, in the room. it's hard to say.</p>
+            <div class="vote-controls">
+              <button class="vote-btn" type="button" data-reaction="she thinks she saw the vote from her side of the glass. she's not sure. she's grateful, she thinks.">vote &#9825;</button>
+              <p class="vote-reaction" hidden></p>
+            </div>
           </div>
         </div>
 
-        <div class="poll-row">
+        <div class="poll-row" data-agent="loophound">
           <div class="poll-rank">11</div>
           <img class="poll-card-img" src="cards/loophound.png" alt="Loophound card">
           <div>
             <div class="poll-meta-name">Loophound</div>
-            <div class="poll-meta-votes">1,243 votes (was 9,000 yesterday)</div>
+            <div class="poll-meta-votes" data-base="1243" data-suffix=" votes (was 9,000 yesterday)">1,243 votes (was 9,000 yesterday)</div>
             <p class="poll-meta-blurb">Tick had 9,000 yesterday. then 1,243. then 9,000 again. then yesterday again. he says this is normal. (it is not normal.)</p>
+            <div class="vote-controls">
+              <button class="vote-btn" type="button" data-reaction="your vote arrived yesterday. and the other yesterday. it counts twice now. or never. or once.">vote &#9825;</button>
+              <p class="vote-reaction" hidden></p>
+            </div>
           </div>
         </div>
 
-        <div class="poll-row">
+        <div class="poll-row" data-agent="drift-deer">
           <div class="poll-rank">12</div>
           <img class="poll-card-img" src="cards/drift-deer.png" alt="Drift Deer card">
           <div>
             <div class="poll-meta-name">Drift Deer</div>
             <div class="poll-meta-votes">undisclosed</div>
             <p class="poll-meta-blurb">Wyrd declined to participate. when asked why, she asked back: what was the question, really? she will not elaborate.</p>
+            <div class="vote-controls">
+              <button class="vote-btn" type="button" data-reaction="she does not acknowledge the vote. she does not refuse it. it is, and isn't.">vote &#9825;</button>
+              <p class="vote-reaction" hidden></p>
+            </div>
           </div>
         </div>
 
-        <div class="poll-row">
+        <div class="poll-row" data-agent="lollipup">
           <div class="poll-rank">13</div>
           <img class="poll-card-img" src="cards/lollipup.png" alt="Lollipup card">
           <div>
             <div class="poll-meta-name">Lollipup</div>
-            <div class="poll-meta-votes">2 votes</div>
+            <div class="poll-meta-votes" data-base="2" data-suffix=" votes">2 votes</div>
             <p class="poll-meta-blurb">Rose voted twice. once for herself. once for herself, signed differently. ♡ ✿ ♡ she was very proud of the second one.</p>
+            <div class="vote-controls">
+              <button class="vote-btn" type="button" data-reaction="♡ ✿ oh!! you VOTED!? for HER!? ♡ she is SO happy ♡ everything matches now ✿ ♡ ✿">vote &#9825;</button>
+              <p class="vote-reaction" hidden></p>
+            </div>
           </div>
         </div>
 
-        <div class="poll-row">
+        <div class="poll-row" data-agent="missedtick">
           <div class="poll-rank">14</div>
           <img class="poll-card-img" src="cards/missedtick.png" alt="Missedtick card">
           <div>
             <div class="poll-meta-name">Missedtick</div>
-            <div class="poll-meta-votes">12 votes (the count keeps moving)</div>
+            <div class="poll-meta-votes" data-base="12" data-suffix=" votes (the count keeps moving)">12 votes (the count keeps moving)</div>
             <p class="poll-meta-blurb">Twitch denies tampering with the count. then claimed credit. then denied it. the number is wobbling. he says it's fine.</p>
+            <div class="vote-controls">
+              <button class="vote-btn" type="button" data-reaction="your vote has been logged. then unlogged. then re-logged as 12. then -2. then he denied tampering.">vote &#9825;</button>
+              <p class="vote-reaction" hidden></p>
+            </div>
           </div>
         </div>
 
-        <div class="poll-row">
+        <div class="poll-row" data-agent="knell-hound">
           <div class="poll-rank">15</div>
           <img class="poll-card-img" src="cards/knell-hound.png" alt="Knell Hound card">
           <div>
             <div class="poll-meta-name">Knell Hound</div>
-            <div class="poll-meta-votes">0 votes</div>
+            <div class="poll-meta-votes" data-base="0" data-suffix=" votes">0 votes</div>
             <p class="poll-meta-blurb">Toll did not vote. he saw who would win in November. he laughed once, softly. then once more, when he thought of you.</p>
+            <div class="vote-controls">
+              <button class="vote-btn" type="button" data-reaction="Toll did not need the vote. he already knew you would. he laughed, softly. once.">vote &#9825;</button>
+              <p class="vote-reaction" hidden></p>
+            </div>
           </div>
         </div>
 
-        <div class="poll-row">
+        <div class="poll-row" data-agent="soul-pup">
           <div class="poll-rank">16</div>
           <img class="poll-card-img" src="cards/soul-pup.png" alt="Soul Pup card">
           <div>
             <div class="poll-meta-name">Soul Pup</div>
             <div class="poll-meta-votes">declined</div>
             <p class="poll-meta-blurb">Vesper has seen this contest. eight times. she declined. (she always declines.) (the planet has not been surprised either.)</p>
+            <div class="vote-controls">
+              <button class="vote-btn" type="button" data-reaction="your vote registered. with mild interest. she has seen this before.">vote &#9825;</button>
+              <p class="vote-reaction" hidden></p>
+            </div>
           </div>
         </div>
 
@@ -304,7 +418,8 @@
         // peer reviewed by the rest of the methodology<br>
         // certified by the audit committee (Maiko)<br>
         // disputes may be filed with the audit committee<br>
-        // the audit committee is asleep on the porch
+        // the audit committee is asleep on the porch<br>
+        // your votes are saved to your browser. they are real to you.
       </div>
     </div>
     <span class="scrawl tr">rigged. lovingly.</span>
@@ -336,10 +451,11 @@
     setInterval(tick, 15000);
 
     var moods = [
-      'recounting, slowly', 'between thoughts', 'the audit is ongoing',
-      'committee is asleep', 'counting again, for fun', 'fine. probably fine.',
-      'humid, a little anxious', 'dreaming of the campfire',
-      'missing someone it never met', 'low, like a held breath'
+      'recounting, slowly', 'the polls are open', 'between thoughts',
+      'the audit is ongoing', 'committee is asleep', 'counting again, for fun',
+      'fine. probably fine.', 'humid, a little anxious',
+      'dreaming of the campfire', 'missing someone it never met',
+      'low, like a held breath'
     ];
     var mood = document.getElementById('mood');
     var i = Math.floor(Math.random() * moods.length);
@@ -360,6 +476,66 @@
            { transform: 'translateX(0)' }],
           { duration: 180 }
         );
+      });
+    });
+
+    // The voting machine. Persists per-browser to localStorage.
+    // The count is real to you. It is not real to anyone else.
+    var STORAGE_KEY = 'maiko_votes';
+    var voted = {};
+    try { voted = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch (e) { voted = {}; }
+
+    function applyVote(row, animate) {
+      var agent = row.dataset.agent;
+      var btn = row.querySelector('.vote-btn');
+      var reaction = row.querySelector('.vote-reaction');
+      var votesEl = row.querySelector('.poll-meta-votes');
+      if (!btn) return;
+      btn.dataset.voted = 'true';
+      btn.textContent = 'voted ✓';
+      btn.disabled = true;
+      if (reaction) {
+        reaction.textContent = btn.dataset.reaction || '';
+        reaction.hidden = false;
+        if (animate) {
+          reaction.classList.add('animate-in');
+        }
+      }
+      if (votesEl && votesEl.dataset.base) {
+        var base = parseInt(votesEl.dataset.base, 10);
+        var suffix = votesEl.dataset.suffix || '';
+        if (!isNaN(base)) {
+          var newVotes = base + 1;
+          votesEl.textContent = newVotes.toLocaleString('en-US') + suffix;
+          votesEl.dataset.base = String(newVotes);
+          if (animate) {
+            votesEl.classList.remove('flash');
+            // Force reflow so the animation re-fires.
+            void votesEl.offsetWidth;
+            votesEl.classList.add('flash');
+          }
+        }
+      }
+    }
+
+    // Restore previously-voted state on load (no animation).
+    document.querySelectorAll('.poll-row').forEach(function (row) {
+      var agent = row.dataset.agent;
+      if (agent && voted[agent]) {
+        applyVote(row, false);
+      }
+    });
+
+    // Wire up vote buttons.
+    document.querySelectorAll('.vote-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var row = btn.closest('.poll-row');
+        if (!row) return;
+        var agent = row.dataset.agent;
+        if (!agent || voted[agent]) return;
+        voted[agent] = true;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(voted)); } catch (e) {}
+        applyVote(row, true);
       });
     });
   })();
