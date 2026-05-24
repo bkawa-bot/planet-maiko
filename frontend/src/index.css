@@ -1,45 +1,45 @@
 /* Planet Maiko — Cosmic palette */
 
 :root {
-  /* Cosmic Nighttime — the master dark palette. Deep space backgrounds,
-     signature pink → cobalt → frozen-cyan gradient, plant accents from
-     the bioluminescent flora set. The signature gradient lives in
-     --topbar-gradient below; per-token values pick the right hue from
-     the palette doc rather than improvising. */
-  --bg: #0B0F2A;            /* Deep Space Navy — gradient top */
-  --bg-plain: #2A2250;      /* Midnight Purple — pronounced shift */
-  --bg-card: #1A1F4A;       /* Cosmic Indigo */
-  --bg-card-alt: #2A2250;   /* Midnight Purple */
-  --bg-hover: #2D2A60;
-  --bg-selected: #383270;
-  --text: #F4F7FF;          /* Soft White */
-  --text-dim: #A7B0C0;      /* Cool Gray */
-  --text-muted: #6E7A92;
+  /* Cosmic Nighttime: the master dark palette. The reference mock with
+     accent colors snapped to the nearest canonical Planet Maiko palette
+     hue, so the theme reuses real palette colors. Backgrounds, text,
+     low, peach, green, and the teal subtle border kept at the mock
+     values: nearest palette color was far or duplicated another token. */
+  --bg: #1A1A2C;            /* Background (mock #21213B softened to neutral dark) */
+  --bg-plain: #0F0B14;      /* Page backdrop (mock) */
+  --bg-card: #141420;       /* Card (mock) */
+  --bg-card-alt: #1A1A2C;   /* Card alt (mock) */
+  --bg-hover: #201E34;      /* Hover (mock) */
+  --bg-selected: #2C1832;   /* Selected (mock) */
+  --text: #D6FFEE;          /* Text (mock) */
+  --text-dim: #8BC1B6;      /* Text dim (mock) */
+  --text-muted: #A19CBF;    /* Text muted (mock) */
 
-  --pink: #FF6FAF;          /* Neon Pink — primary accent */
-  --pink-soft: rgba(255, 111, 175, 0.15);
-  --pink-glow: rgba(255, 111, 175, 0.08);
-  --blue: #1FB5E5;          /* Electric Ice — the new cobalt-cyan hero */
-  --blue-soft: rgba(31, 181, 229, 0.16);
-  --mint: #8FFFC9;          /* Bio Mint */
-  --orange: #FF6B5C;        /* Plasma Coral */
-  --lavender: #C9A6FF;      /* Soft Lavender Glow */
-  --peach: #FF6B5C;         /* Plasma Coral */
-  --creamsicle: #FF8FE0;    /* Magenta Spark — sweet, between pink + lavender */
-  --lemon: #FFE66D;         /* Star Yellow */
+  --pink: #6FE0E8;          /* Frozen Cyan (primary) */
+  --pink-soft: rgba(111, 224, 232, 0.16);
+  --pink-glow: rgba(111, 224, 232, 0.09);
+  --blue: #FF6FAF;          /* Neon Pink (secondary accent, pink kept in play) */
+  --blue-soft: rgba(255, 111, 175, 0.16);
+  --mint: #8FFFC9;          /* Bio Mint (mock #38FFBD -> palette) */
+  --orange: #FF6B5C;        /* Plasma Coral (mock #FF6B2D -> palette) */
+  --lavender: #B46BFF;      /* Violet Purple (mock #C44DFF -> palette) */
+  --peach: #FF7EB8;         /* Peach (mock kept: closest palette = primary) */
+  --creamsicle: #FF8FE0;    /* Magenta Spark (already a palette color) */
+  --lemon: #FFE66D;         /* Star Yellow (mock #DFFF3C -> palette) */
 
-  --urgent: #FF5577;        /* Hot Magenta Red — distinct from pink */
-  --high: #FF6B5C;          /* Plasma Coral */
-  --normal: #FF6FAF;        /* Neon Pink */
-  --low: #6E7A92;
-  --green: #C4F542;         /* Toxic Lime — bioluminescent green */
-  --border: #3F3D70;
-  --border-subtle: #2D2D60;
+  --urgent: #FF5577;        /* Hot Magenta Red (mock #FF1A4B -> palette) */
+  --high: #FF6B5C;          /* Plasma Coral (mock #FF8A1A -> palette) */
+  --normal: #6E7A92;        /* palette neutral (mock #8884A0 -> palette) */
+  --low: #585472;           /* Low (mock kept: no close palette neutral) */
+  --green: #00FF7F;         /* Green / success (mock kept: no close palette green) */
+  --border: #3F3D70;        /* palette border (mock #491566 -> palette) */
+  --border-subtle: #02323B; /* Border subtle (mock kept: deliberate teal edge) */
 
   /* Card title + border accents — pulled per theme so cards stop
      reading as one-note. */
-  --card-title: #6FE0E8;          /* Frozen Cyan — frosty title against indigo card */
-  --card-border: rgba(255, 111, 175, 0.50);
+  --card-title: #5BB5BD;          /* Sea Glass (lighter teal title) */
+  --card-border: rgba(255, 143, 224, 0.42);   /* Magenta Spark (card frame) */
 
   /* Themed tint backgrounds — track the active theme so badges/pills
      stay coherent. */
@@ -49,10 +49,10 @@
   --high-faint: rgba(255, 107, 92, 0.08);
   --lemon-soft: rgba(255, 230, 109, 0.15);
   --lemon-faint: rgba(255, 230, 109, 0.06);
-  --green-soft: rgba(196, 245, 66, 0.16);
-  --green-faint: rgba(196, 245, 66, 0.08);
-  --lavender-soft: rgba(201, 166, 255, 0.15);
-  --lavender-faint: rgba(201, 166, 255, 0.08);
+  --green-soft: rgba(0, 255, 127, 0.16);
+  --green-faint: rgba(0, 255, 127, 0.08);
+  --lavender-soft: rgba(180, 107, 255, 0.15);
+  --lavender-faint: rgba(180, 107, 255, 0.08);
 
   /* Body font. Atkinson Hyperlegible — designed by the Braille Institute
      for low-vision readability. Distinct character shapes (the 1, l, I
@@ -93,12 +93,10 @@
   /* Surface backgrounds — theme-controllable. Custom themes can
      override via `topbar_gradient` and `pane_bg` in their colors
      dict; otherwise they inherit these defaults (night look). */
-  /* Topbar gradient. The full 5-stop signature gradient lives on the
-     palette reference — on the nav strip it's noise. Settled on a
-     2-stop pink → electric-ice sweep that still reads as the brand
-     without the rainbow. */
-  --topbar-gradient: linear-gradient(135deg, #FF6FAF 0%, #1FB5E5 100%);
-  --pane-bg: rgba(26, 31, 74, 0.45);
+  /* Topbar gradient. Near-black sweep with a dim Deep Cobalt corner
+     so the top-right doesn't glare. */
+  --topbar-gradient: linear-gradient(135deg, #141420 0%, #1A1A2C 60%, #1A3D8F 100%);
+  --pane-bg: rgba(20, 20, 32, 0.55);
 
   /* World background SVG. Driven by the active theme so flipping
      "Cosmic Nighttime" → "Daylight" swaps which hills sit at the
@@ -249,7 +247,7 @@
 
 /* ============================================================
    Curated extended themes — built from the new master palette.
-     Night:    bioluminescent, frozen, aurora
+     Night:    bioluminescent
      Day:      mint-meadow
    The remaining themes (cosmic default, sunset twilight, dawn
    morning, daylight light) live above. Each picks a primary
@@ -303,91 +301,6 @@
      every other theme keeps the default white via the fallback in
      .btn-primary. */
   --btn-primary-text: #1F3838;
-}
-
-/* === Frozen — ice planet, cryo glow. Frozen cyan + electric ice as
-   the dominant accent, soft lavender for the under-glaze, magenta
-   spark as the rare warm beat against all the cold. */
-[data-theme="frozen"] {
-  --bg: #0B1830;            /* deep ice-cave navy */
-  --bg-plain: #1A3D8F;      /* Deep Cobalt — visible cryo shift */
-  --bg-card: #122448;
-  --bg-card-alt: #1A2D58;
-  --bg-hover: #1F3870;
-  --bg-selected: #2D4A88;
-  --text: #F4F7FF;
-  --text-dim: #6FE0E8;      /* Frozen Cyan — labels catch the cryo light */
-  --text-muted: #8295B5;
-  --pink: #6FE0E8;          /* Frozen Cyan — primary, the cryo glow */
-  --pink-soft: rgba(111, 224, 232, 0.18);
-  --pink-glow: rgba(111, 224, 232, 0.10);
-  --blue: #1FB5E5;          /* Electric Ice */
-  --blue-soft: rgba(31, 181, 229, 0.18);
-  --mint: #9FEEEF;          /* Frozen Highlight */
-  --orange: #FF8FE0;        /* Magenta Spark — the rare warm break */
-  --lavender: #C9A6FF;      /* Soft Lavender Glow */
-  --peach: #FF8FE0;
-  --creamsicle: #D8C7FF;    /* Light Periwinkle */
-  --lemon: #FFE66D;
-  --urgent: #FF6FAF;        /* Neon Pink — only warm urgent the eye finds */
-  --high: #FF8FE0;
-  --normal: #6FE0E8;
-  --low: #8295B5;
-  --green: #8FFFC9;         /* Bio Mint — distant aurora streaks */
-  --border: #2D4A88;
-  --border-subtle: #1A2D58;
-  --card-title: #FF8FE0;          /* Magenta Spark — warm pop on cool card */
-  --card-border: rgba(111, 224, 232, 0.55);
-  --urgent-soft: rgba(255, 111, 175, 0.16); --urgent-faint: rgba(255, 111, 175, 0.08);
-  --high-soft: rgba(255, 143, 224, 0.16); --high-faint: rgba(255, 143, 224, 0.08);
-  --lemon-soft: rgba(255, 230, 109, 0.16); --lemon-faint: rgba(255, 230, 109, 0.08);
-  --green-soft: rgba(143, 255, 201, 0.18); --green-faint: rgba(143, 255, 201, 0.10);
-  --lavender-soft: rgba(201, 166, 255, 0.20); --lavender-faint: rgba(201, 166, 255, 0.10);
-  --topbar-gradient: linear-gradient(135deg, #0B1830 0%, #1A3D8F 40%, #1FB5E5 75%, #6FE0E8 100%);
-  --pane-bg: rgba(18, 36, 72, 0.55);
-}
-
-/* === Aurora — northern lights over a violet plane. Lavender + magenta
-   spark + soft lavender glow on a deep-indigo bg. Star yellow as the
-   single warm beat (the lone moon). Heavier on the highlights/sparkles
-   palette than the original aurora; less mint-teal, more witching. */
-[data-theme="aurora"] {
-  --bg: #0E1230;            /* deep cosmos */
-  --bg-plain: #2A2250;      /* Midnight Purple */
-  --bg-card: #1A1F4A;
-  --bg-card-alt: #2A2250;
-  --bg-hover: #3A2D6A;
-  --bg-selected: #4A3878;
-  --text: #F4F7FF;
-  --text-dim: #C9A6FF;      /* Soft Lavender Glow */
-  --text-muted: #7B6BAA;    /* Dusk Lavender */
-  --pink: #C9A6FF;          /* Soft Lavender Glow — primary */
-  --pink-soft: rgba(201, 166, 255, 0.18);
-  --pink-glow: rgba(201, 166, 255, 0.10);
-  --blue: #B46BFF;          /* Violet Purple */
-  --blue-soft: rgba(180, 107, 255, 0.18);
-  --mint: #8FFFC9;          /* Bio Mint */
-  --orange: #FF8FE0;        /* Magenta Spark */
-  --lavender: #C9A6FF;
-  --peach: #FF8FE0;
-  --creamsicle: #FF8FE0;
-  --lemon: #FFE66D;         /* Star Yellow — the lone moon */
-  --urgent: #FF5577;
-  --high: #FF8FE0;
-  --normal: #C9A6FF;
-  --low: #7B6BAA;
-  --green: #C4F542;
-  --border: #3A2D6A;
-  --border-subtle: #2A2250;
-  --card-title: #FFE66D;          /* Star Yellow — warm pop on cool aurora */
-  --card-border: rgba(201, 166, 255, 0.55);
-  --urgent-soft: rgba(255, 85, 119, 0.16); --urgent-faint: rgba(255, 85, 119, 0.08);
-  --high-soft: rgba(255, 143, 224, 0.18); --high-faint: rgba(255, 143, 224, 0.08);
-  --lemon-soft: rgba(255, 230, 109, 0.20); --lemon-faint: rgba(255, 230, 109, 0.10);
-  --green-soft: rgba(196, 245, 66, 0.16); --green-faint: rgba(196, 245, 66, 0.08);
-  --lavender-soft: rgba(201, 166, 255, 0.22); --lavender-faint: rgba(201, 166, 255, 0.12);
-  --topbar-gradient: linear-gradient(135deg, #0E1230 0%, #B46BFF 50%, #C9A6FF 100%);
-  --pane-bg: rgba(26, 31, 74, 0.55);
 }
 
 /* === Mint Meadow — alien meadow at noon. Frozen wash bg, sea teal as
@@ -731,6 +644,47 @@ a:hover { text-decoration: underline; }
 .badge.active { background: var(--green-soft); color: var(--green); }
 .badge.paused { background: var(--lemon-soft); color: var(--lemon); }
 
+/* Badge text overrides for light-bg themes. The default pattern uses
+   var(--hue-soft) bg + var(--hue) text, which has plenty of contrast
+   on dark surfaces but becomes pale-on-pale on light themes (the
+   green RUNNING badge, the yellow draft badge, etc. were unreadable).
+   Override to dark saturated variants per hue so the labels stay
+   legible without changing the dark-theme look. */
+[data-theme="light"] .badge.in_progress,
+[data-theme="morning"] .badge.in_progress,
+[data-theme="light"] .badge.paused,
+[data-theme="morning"] .badge.paused,
+[data-theme="light"] .diff-comment-badge.draft,
+[data-theme="morning"] .diff-comment-badge.draft {
+  color: #8a6800;
+}
+[data-theme="light"] .badge.done,
+[data-theme="morning"] .badge.done,
+[data-theme="light"] .badge.active,
+[data-theme="morning"] .badge.active,
+[data-theme="light"] .diff-comment-badge.resolved,
+[data-theme="morning"] .diff-comment-badge.resolved,
+[data-theme="light"] .agent-job-status.status-active,
+[data-theme="morning"] .agent-job-status.status-active {
+  color: #1f6b3a;
+}
+[data-theme="light"] .badge.new,
+[data-theme="morning"] .badge.new,
+[data-theme="light"] .badge.approved,
+[data-theme="morning"] .badge.approved,
+[data-theme="light"] .diff-comment-badge.submitted,
+[data-theme="morning"] .diff-comment-badge.submitted {
+  color: #0e5d75;
+}
+[data-theme="light"] .badge.normal,
+[data-theme="morning"] .badge.normal {
+  color: #c5337a;
+}
+[data-theme="light"] .badge.planning,
+[data-theme="morning"] .badge.planning {
+  color: #5b2d8c;
+}
+
 /* === Buttons === */
 .btn {
   background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim);
@@ -811,11 +765,43 @@ a:hover { text-decoration: underline; }
   padding: 16px 20px; overflow-y: auto; flex: 1;
 }
 
-/* === Animations === */
-@keyframes shimmer {
-  0%, 100% { background-position: 0% center; }
-  50% { background-position: 100% center; }
+/* === Page tabs — default tab-bar pattern ===
+   Any page can use <div className="page-tabs"> with <button
+   className="page-tab"> children (add `active` to the selected one).
+   Originally lifted from the Automations page; promoted so every
+   tabbed surface looks the same. */
+.page-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
 }
+.page-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  padding: 8px 14px;
+  /* Knowledge-tab font + color treatment kept; structure from the
+     Automations/Pack tab pattern (rests on the bottom border, active
+     tab punches through to the surface below). */
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  margin-bottom: -1px;
+  transition: all 0.15s;
+}
+.page-tab:hover { color: var(--text); border-color: var(--pink); }
+.page-tab.active {
+  color: var(--text);
+  border-color: var(--pink);
+  border-bottom-color: var(--bg-card);
+  background: var(--bg-card);
+  font-weight: 600;
+}
+
+/* === Animations === */
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
@@ -897,37 +883,28 @@ a:hover { text-decoration: underline; }
   background: var(--pane-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 2px solid var(--card-border, var(--border));
+  border: 1px solid var(--card-border, var(--border));
   border-radius: var(--radius);
+  /* Elevation via shadow rather than border thickness. Sits the pane
+     visibly above the body backdrop in every theme without bulk. */
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
   box-shadow: 0 2px 16px rgba(0, 0, 0, 0.12);
   padding: 20px 24px;
 }
 
-/* === Card list backdrop — frosted glass container === */
+/* === Card list backdrop. Sits inside .frost-pane (which provides
+   the translucent layer already), so this container is just a
+   bordered list-area with no fill of its own. Filling it created
+   three stacked near-identical surfaces in some themes ("just a
+   bunch of borders"). The outline alone defines "this is the list,"
+   the pane provides the surface, the cards sit clearly on top. === */
 .card-list-container {
-  background: rgba(45, 54, 60, 0.4);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: transparent;
   border: 2px solid var(--border-subtle);
   border-radius: var(--radius);
   padding: 8px;
 }
 
-[data-theme="light"] .card-list-container {
-  background: rgba(255, 255, 255, 0.5);
-}
-[data-theme="morning"] .card-list-container {
-  background: rgba(255, 253, 248, 0.5);
-}
-[data-theme="sunset"] .card-list-container {
-  background: rgba(58, 34, 72, 0.5);
-}
-/* Light themes use a near-white frosted backdrop so the default
-   dark-mode rgba doesn't punch a navy hole in a pastel page. */
-[data-theme="morning"] .card-list-container,
-[data-theme="mint-meadow"] .card-list-container {
-  background: rgba(255, 255, 255, 0.55);
-}
 
 /* Cards inside glass container get tighter margins */
 .card-list-container .card,

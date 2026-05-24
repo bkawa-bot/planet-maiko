@@ -36,7 +36,6 @@
 .automation-card {
   display: flex; gap: 12px;
   padding: 12px 14px;
-  border-left: 3px solid var(--lavender, #b59dd8);
 }
 .automation-card.status-paused { opacity: 0.6; }
 .automation-card.status-archived { opacity: 0.4; }
@@ -84,6 +83,13 @@
   font-size: 11.5px; color: var(--text-dim); line-height: 1.4;
   margin-bottom: 2px;
 }
+/* Collapsed-state one-line summary "when X -> then Y". Truncates
+   with ellipsis so long automations stay on a single row until the
+   user expands the card. */
+.automation-card-summary {
+  font-size: 11px; color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .automation-card-row {
   display: flex; gap: 6px; align-items: baseline;
   font-size: 11px; color: var(--text);
@@ -129,53 +135,47 @@
 .automation-group-collapsible {
   margin-top: 18px;
 }
-.automation-group-toggle {
-  display: flex; align-items: center; gap: 8px;
-  width: 100%;
-  padding: 8px 10px;
-  background: var(--bg-hover);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xs);
-  cursor: pointer;
-  font-family: inherit;
-  color: var(--text);
+/* Quiet text-link toggle for the built-in defaults group. The earlier
+   chevron-plus-pill-plus-note button competed with the user's own
+   automations for attention; this is a small underlined link instead. */
+.automation-group-toggle-link {
+  background: none; border: none; padding: 6px 0;
+  margin: 6px 0 0;
+  cursor: pointer; font: inherit; font-size: 11px;
+  color: var(--text-muted);
+  text-decoration: underline; text-underline-offset: 3px;
   text-align: left;
 }
-.automation-group-toggle:hover { background: var(--bg-card-alt, var(--bg)); }
-.automation-group-toggle span:first-of-type {
-  font-size: 11px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.06em;
-}
-.automation-group-count {
-  font-size: 10px; font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--text-muted);
-}
-.automation-group-note {
-  font-size: 10px; font-weight: 400;
-  color: var(--text-muted);
-  margin-left: auto;
-}
+.automation-group-toggle-link:hover { color: var(--text); }
 .automation-group-collapsible .automations-list {
   margin-top: 10px;
 }
 
-.specialties-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;
+/* Specialties as a 2-column list with row layout (icon left, body
+   right) instead of the old 3-up icon-over-text grid. The grid
+   shape was the textbook "feature trio" slop. The list reads as
+   "here are your tools, scan them" and gives each specialty real
+   reading room. */
+.specialties-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 10px;
 }
-
-.specialty-card {
-  cursor: pointer; text-align: center; padding: 20px 16px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+.specialty-row {
+  display: flex; gap: 14px; align-items: flex-start;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.specialty-card:hover { border-color: var(--pink); transform: translateY(-2px); box-shadow: 0 0 0 1px var(--pink-glow), 0 4px 16px rgba(0,0,0,0.2); }
-
-.specialty-icon { color: var(--pink); margin-bottom: 8px; }
-.specialty-name { font-weight: 600; font-size: 14px; color: var(--text); text-transform: capitalize; margin-bottom: 4px; }
-.specialty-desc { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
-.specialty-mcps { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; min-height: 18px; }
+.specialty-row:hover {
+  border-color: var(--pink);
+  box-shadow: 0 0 0 1px var(--pink-glow);
+}
+.specialty-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.specialty-icon { color: var(--pink); flex-shrink: 0; margin-top: 2px; }
+.specialty-name { font-weight: 600; font-size: 13px; color: var(--text); text-transform: capitalize; }
+.specialty-desc { font-size: 11.5px; color: var(--text-dim); line-height: 1.4; }
+.specialty-mcps { display: flex; gap: 4px; flex-wrap: wrap; }
 .schedule-tag { background: var(--lemon-soft); color: var(--lemon); display: inline-flex; align-items: center; gap: 2px; }
 .checkbox-label { flex-direction: row !important; align-items: center; gap: 6px !important; font-size: 11px; margin-top: auto; }
 
@@ -237,3 +237,8 @@
   line-height: 1.5; font-family: var(--font); margin: 0; max-height: 300px; overflow-y: auto;
 }
 .specialty-error { color: var(--urgent); font-size: 12px; }
+
+/* .page-tabs / .page-tab now live in index.css as the default
+   tab-bar pattern. Any page can use them via <div className="page-tabs">
+   + <button className="page-tab"> with an `active` class on the
+   selected one. */

@@ -39,9 +39,9 @@ const CONDITION_SCHEMAS = {
     label: "On a schedule",
     group: "Time",
     scopes: ["cycle"],
-    help: "Fires every N minutes. Uses last_fired_at + interval as the clock.",
+    help: "Fires every N. Uses last_fired_at + interval as the clock.",
     fields: [
-      { name: "interval_minutes", type: "number", label: "Every N minutes", default: 60, min: 1 },
+      { name: "interval_minutes", type: "duration", label: "Every", default: 60, min: 1 },
     ],
   },
   overview_stale: {
@@ -121,6 +121,7 @@ const ACTION_SCHEMAS = {
       { name: "title", type: "string", label: "Title" },
       { name: "type", type: "select", label: "Task type", default: "todo", options: TASK_TYPE_OPTIONS },
       { name: "description", type: "textarea", label: "Description", rows: 2 },
+      { name: "ask_first", type: "bool", label: "Ask me before creating", help: "When on, the automation drops a memo asking you to approve; the task is only minted after you click Approve. Off creates the task directly." },
       { name: "auto_launch", type: "bool", label: "Launch an agent immediately", help: "For review/investigation/cartograph/repo_analysis types: skip manual Assign and spawn a linked agent job. No-op on plain todos." },
       { name: "repo", type: "string", label: "Repo", placeholder: "org/repo", advanced: true, datalist: "repos" },
       { name: "priority", type: "select", label: "Priority", default: "normal", options: PRIORITY_OPTIONS, advanced: true },
@@ -140,6 +141,7 @@ const ACTION_SCHEMAS = {
     help: "Uses the pupdate's title/priority as the task seed. Lands on the Tasks page as work you own.",
     fields: [
       { name: "task_type", type: "select", label: "Task type", default: "todo", options: TASK_TYPE_OPTIONS },
+      { name: "ask_first", type: "bool", label: "Ask me before creating", help: "When on, the automation drops a memo asking you to approve; the task is only minted after you click Approve. Off creates the task directly." },
       { name: "task_priority", type: "select", label: "Task priority", options: PRIORITY_OPTIONS, advanced: true },
     ],
   },

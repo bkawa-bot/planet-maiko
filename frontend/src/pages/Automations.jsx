@@ -44,6 +44,7 @@ export default function Automations() {
   const [result, setResult] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newSpecialty, setNewSpecialty] = useState({ id: "", name: "", description: "", prompt: "", mcps: "", needs_worktree: false });
+  const [activeTab, setActiveTab] = useState("automations");
 
   const fetchSpecialties = () => api.getSkills()
     .then((list) => setSpecialties(list.filter((s) => !HIDDEN_SPECIALTY_IDS.has(s.id))))
@@ -111,7 +112,7 @@ export default function Automations() {
         queued
           ? "Queued — the cycle will pick it up shortly 🐾"
           : res.success
-            ? "Specialty run complete ✨"
+            ? "Specialty run complete"
             : "Specialty run had trouble",
         res.success ? "normal" : "high",
       );
@@ -122,16 +123,28 @@ export default function Automations() {
   };
 
   const handleCreate = async () => {
-    if (!newSpecialty.id || !newSpecialty.name || !newSpecialty.prompt) {
-      showToast("Need at least an ID, name, and prompt", "high");
+    if (!newSpecialty.name || !newSpecialty.prompt) {
+      showToast("Need a name and prompt", "high");
+      return;
+    }
+    // Slug the name to make the stable id, so the user doesn't have
+    // to invent one. "Error triage" -> "error-triage".
+    const id = newSpecialty.name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    if (!id) {
+      showToast("Name needs at least one letter or number", "high");
       return;
     }
     try {
       await api.createSkill({
         ...newSpecialty,
+        id,
         mcps: newSpecialty.mcps.split(",").map(s => s.trim()).filter(Boolean),
       });
-      showToast(`Specialty "${newSpecialty.name}" created! 🎉`, "normal");
+      showToast(`Specialty "${newSpecialty.name}" created.`, "normal");
       setShowCreate(false);
       setNewSpecialty({ id: "", name: "", description: "", prompt: "", mcps: "", needs_worktree: false });
       fetchSpecialties();
@@ -158,13 +171,28 @@ export default function Automations() {
 
   return (
     <div className="specialties-page frost-pane">
-      <div className="specialties-header">
-        <Zap size={18} />
-        <h2>Automations</h2>
+      <div className="page-tabs" role="tablist">
+        <button
+          role="tab"
+          aria-selected={activeTab === "automations"}
+          className={`page-tab ${activeTab === "automations" ? "active" : ""}`}
+          onClick={() => setActiveTab("automations")}
+        >
+          Automations
+        </button>
+        <button
+          role="tab"
+          aria-selected={activeTab === "specialties"}
+          className={`page-tab ${activeTab === "specialties" ? "active" : ""}`}
+          onClick={() => setActiveTab("specialties")}
+        >
+          Specialties
+        </button>
       </div>
 
-      <AutomationsList />
+      {activeTab === "automations" && <AutomationsList />}
 
+      {activeTab === "specialties" && (
       <div className="skills-section-header">
         <h3>Specialties</h3>
         <p className="skills-section-sub">Role protocols agents adopt when doing a specific kind of work (analysis, triage, brainstorming). Run on-demand, on a cadence, or spawn a dedicated agent for a specialty from the Pack page. Running a specialty either uses an existing agent with that role or lazy-spawns one.</p>
@@ -172,6 +200,7 @@ export default function Automations() {
           <Plus size={12} /> New Specialty
         </button>
       </div>
+      )}
 
       {/* Create modal */}
       {showCreate && (
@@ -185,10 +214,7 @@ export default function Automations() {
             </div>
             <div className="modal-body">
               <div className="specialty-editor">
-                <div className="specialty-form-row">
-                  <label>ID <input type="text" value={newSpecialty.id} onChange={e => setNewSpecialty(s => ({ ...s, id: e.target.value }))} placeholder="error-triage" /></label>
-                  <label>Name <input type="text" value={newSpecialty.name} onChange={e => setNewSpecialty(s => ({ ...s, name: e.target.value }))} placeholder="Error triage" /></label>
-                </div>
+                <label>Name <input type="text" value={newSpecialty.name} onChange={e => setNewSpecialty(s => ({ ...s, name: e.target.value }))} placeholder="Error triage" /></label>
                 <label>Description <input type="text" value={newSpecialty.description} onChange={e => setNewSpecialty(s => ({ ...s, description: e.target.value }))} placeholder="What agents doing this specialty produce" /></label>
                 <label className="checkbox-label">
                   <input
@@ -216,21 +242,27 @@ export default function Automations() {
         </ModalPortal>
       )}
 
-      <div className="specialties-grid">
+      {activeTab === "specialties" && (
+      <div className="specialties-list">
         {specialties.map((s) => {
           const Icon = ICON_MAP[s.icon] || Wand2;
           return (
-            <div key={s.id} className="specialty-card card" onClick={() => openSpecialty(s)}>
-              <Icon size={28} className="specialty-icon" />
-              <div className="specialty-name">{s.name}</div>
-              <div className="specialty-desc">{s.description}</div>
-              <div className="specialty-mcps">
-                {s.mcps?.map(m => <span key={m} className="tag">{m}</span>)}
+            <div key={s.id} className="specialty-row card" onClick={() => openSpecialty(s)}>
+              <Icon size={24} className="specialty-icon" />
+              <div className="specialty-row-body">
+                <div className="specialty-name">{s.name}</div>
+                {s.description && <div className="specialty-desc">{s.description}</div>}
+                {s.mcps?.length > 0 && (
+                  <div className="specialty-mcps">
+                    {s.mcps.map(m => <span key={m} className="tag">{m}</span>)}
+                  </div>
+                )}
               </div>
             </div>
           );
         })}
       </div>
+      )}
 
       {selected && (
         <ModalPortal>
@@ -388,13 +420,10 @@ function AutomationsList() {
           {defaults.length > 0 && (
             <div className="automation-group-collapsible">
               <button
-                className="automation-group-toggle"
+                className="automation-group-toggle-link"
                 onClick={() => setDefaultsOpen((v) => !v)}
               >
-                {defaultsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                <span>Defaults</span>
-                <span className="automation-group-count">{defaults.length}</span>
-                <span className="automation-group-note">built-ins that ship with Maiko — pause if one misfires</span>
+                {defaultsOpen ? "Hide" : "Show"} {defaults.length} built-in default{defaults.length === 1 ? "" : "s"}
               </button>
               {defaultsOpen && (
                 <div className="automations-list">
@@ -428,46 +457,67 @@ function AutomationsList() {
 
 
 function AutomationCard({ automation: a, defaultOrg, onToggle, onEdit }) {
+  const [expanded, setExpanded] = useState(false);
+  const whenSummary = describeAutomationTrigger(a);
+  const thenSummary = (a.then || []).map(describeAction).join(" → ") || "(no action)";
   return (
-    <div className={`automation-card card status-${a.status}`}>
+    <div className={`automation-card card status-${a.status} ${expanded ? "expanded" : ""}`}>
       <button className="automation-card-click-target" onClick={onEdit} title="Edit this automation">
         <div className="automation-card-main">
           <div className="automation-card-name-row">
             <span className="automation-card-name">{a.name}</span>
-          </div>
-          {(a.scope_repo || a.status) && (
-            <div className="automation-card-chips">
+            {a.status !== "active" && (
               <span className={`automation-card-status status-${a.status}`}>{a.status}</span>
-              {a.execution_scope === "pupdate" && (
-                <span className="automation-card-status" style={{ background: "var(--bg)", color: "var(--text-muted)" }}>rule</span>
-              )}
-              {a.scope_repo && (
-                <span className="automation-card-repo" title={a.scope_repo}>
-                  {formatRepo(a.scope_repo, defaultOrg)}
-                </span>
-              )}
+            )}
+          </div>
+          {!expanded && (
+            <div className="automation-card-summary">
+              {whenSummary} → {thenSummary}
             </div>
           )}
-          {a.description && <div className="automation-card-desc">{a.description}</div>}
-          <div className="automation-card-row">
-            <span className="automation-card-label">WHEN</span>
-            <span>{describeAutomationTrigger(a)}</span>
-          </div>
-          <div className="automation-card-row">
-            <span className="automation-card-label">THEN</span>
-            <span>{(a.then || []).map(describeAction).join(" → ") || "(no action)"}</span>
-          </div>
-          <div className="automation-card-footer">
-            {a.last_fired_at ? (
-              <>fired {relativeTime(a.last_fired_at)} · {a.fire_count || 0}× total</>
-            ) : (
-              <>never fired yet</>
-            )}
-            {a.cooldown_days > 0 && <> · {a.cooldown_days}d cooldown</>}
-          </div>
+          {expanded && (
+            <>
+              {(a.execution_scope === "pupdate" || a.scope_repo) && (
+                <div className="automation-card-chips">
+                  {a.execution_scope === "pupdate" && (
+                    <span className="automation-card-status" style={{ background: "var(--bg)", color: "var(--text-muted)" }}>rule</span>
+                  )}
+                  {a.scope_repo && (
+                    <span className="automation-card-repo" title={a.scope_repo}>
+                      {formatRepo(a.scope_repo, defaultOrg)}
+                    </span>
+                  )}
+                </div>
+              )}
+              {a.description && <div className="automation-card-desc">{a.description}</div>}
+              <div className="automation-card-row">
+                <span className="automation-card-label">WHEN</span>
+                <span>{whenSummary}</span>
+              </div>
+              <div className="automation-card-row">
+                <span className="automation-card-label">THEN</span>
+                <span>{thenSummary}</span>
+              </div>
+              <div className="automation-card-footer">
+                {a.last_fired_at ? (
+                  <>fired {relativeTime(a.last_fired_at)} · {a.fire_count || 0}× total</>
+                ) : (
+                  <>never fired yet</>
+                )}
+                {a.cooldown_days > 0 && <> · {a.cooldown_days}d cooldown</>}
+              </div>
+            </>
+          )}
         </div>
       </button>
       <div className="automation-card-actions">
+        <button
+          className="btn btn-sm btn-ghost"
+          onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+          title={expanded ? "Collapse" : "Expand"}
+        >
+          {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+        </button>
         <button
           className="btn btn-sm"
           onClick={(e) => { e.stopPropagation(); onToggle(); }}

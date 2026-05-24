@@ -197,3 +197,50 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+/* Maiko is the controller, not a worker — different ring color from
+   the pack so the role is legible at a glance. */
+.persistent-pack-maiko-wrap {
+  background: var(--lavender-soft, #efe5ff);
+  box-shadow: 0 0 0 2px var(--lavender, #c0a8d8);
+}
+
+.persistent-pack-maiko-avatar {
+  border-radius: 28%;
+  image-rendering: pixelated;
+  display: block;
+}
+
+/* Divider between Maiko and the pack, only when the pack has anyone.
+   Soft so it doesn't shout. */
+.persistent-pack-divider {
+  width: 24px;
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 2px 0;
+}
+
+/* "+" launch button pinned at the bottom of the dock. Same rounded
+   square shape as the agent avatars so it reads as part of the row,
+   but with a dashed ring + muted color so it doesn't look like a
+   real agent. */
+.persistent-pack-add-wrap {
+  background: transparent;
+  box-shadow: 0 0 0 2px var(--border-subtle);
+  width: 44px;
+  height: 44px;
+  border-radius: 28%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: width 0.15s ease, height 0.15s ease, color 0.15s, box-shadow 0.15s;
+}
+.persistent-pack.expanded .persistent-pack-add-wrap {
+  width: 56px;
+  height: 56px;
+}
+.persistent-pack-add:hover .persistent-pack-add-wrap {
+  color: var(--pink);
+  box-shadow: 0 0 0 2px var(--pink);
+}

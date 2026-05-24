@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Plug, AlertTriangle, CheckCircle2, AlertCircle, Loader } from "@icons";
 import { api } from "../../api/client";
+import { relativeTime } from "../../utils/dates";
 
 /**
  * Plugins — every discovered plugin (builtin first-party integrations,
@@ -205,6 +206,7 @@ function PluginCard({ p, config, setConfig, setPlugins, onMessage, poller, onRun
             <span>
               {poller.enabled ? "Enabled" : "Disabled"}
               {" · polls every "}{poller.interval_minutes || 5} min
+              {poller.last_run_at && <> · last ran {relativeTime(poller.last_run_at)}</>}
             </span>
             {onRunPoller && (
               <button
@@ -276,20 +278,14 @@ function PluginConfigForm({ plugin, config, onChange, dynamicOptions = {} }) {
           );
         }
         if (type === "list") {
-          const csv = Array.isArray(value) ? value.join(", ") : (value || "");
           return (
-            <label key={field} className="plugin-config-field">
-              <span>{label}{meta.help && <span className="plugin-config-help"> — {meta.help}</span>}</span>
-              <input
-                type="text"
-                value={csv}
-                placeholder={meta.placeholder || "comma, separated"}
-                onChange={(e) => onChange(
-                  field,
-                  e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
-                )}
-              />
-            </label>
+            <ListField
+              key={field}
+              label={label}
+              meta={meta}
+              value={value}
+              onChange={(items) => onChange(field, items)}
+            />
           );
         }
         // string / number fallthrough
@@ -309,5 +305,40 @@ function PluginConfigForm({ plugin, config, onChange, dynamicOptions = {} }) {
         );
       })}
     </div>
+  );
+}
+
+/**
+ * Text input for `list`-typed config fields. Stores the raw typed
+ * string in local state so the user can freely type commas, partial
+ * tokens, and trailing whitespace without each keystroke being
+ * round-tripped through split/trim/filter (which would erase the
+ * comma they just pressed). External updates (a sync setup action
+ * returning a config_patch) re-seed the text whenever the field
+ * isn't focused.
+ */
+function ListField({ label, meta, value, onChange }) {
+  const csv = Array.isArray(value) ? value.join(", ") : (value || "");
+  const [text, setText] = useState(csv);
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    if (!focused) setText(csv);
+  }, [csv, focused]);
+  return (
+    <label className="plugin-config-field">
+      <span>{label}{meta.help && <span className="plugin-config-help"> — {meta.help}</span>}</span>
+      <input
+        type="text"
+        value={text}
+        placeholder={meta.placeholder || "comma, separated"}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onChange={(e) => {
+          const raw = e.target.value;
+          setText(raw);
+          onChange(raw.split(",").map((s) => s.trim()).filter(Boolean));
+        }}
+      />
+    </label>
   );
 }

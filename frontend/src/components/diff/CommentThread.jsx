@@ -67,7 +67,25 @@ export default function CommentThread({ comments = [], onReply, onEditDraft, onD
           <textarea
             value={replyBody}
             onChange={(e) => setReplyBody(e.target.value)}
-            placeholder="Reply…"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                // Cmd/Ctrl+Enter inserts a newline manually since the
+                // browser default for that combo is "nothing" in a
+                // textarea. Mirrors the chat input's keybindings.
+                const el = e.target;
+                const start = el.selectionStart;
+                const end = el.selectionEnd;
+                setReplyBody(el.value.slice(0, start) + "\n" + el.value.slice(end));
+                requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = start + 1; });
+                e.preventDefault();
+                return;
+              }
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submitReply();
+              }
+            }}
+            placeholder="Reply… (Enter saves, Shift or Cmd+Enter for newline)"
             rows={3}
             autoFocus
           />

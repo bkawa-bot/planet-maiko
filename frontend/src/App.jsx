@@ -1,10 +1,10 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/Layout";
 import ToastContainer from "./components/Toast";
-import AskMaiko from "./components/AskMaiko";
 import ArrivalWatcher from "./components/ArrivalWatcher";
 import PersistentPack from "./components/PersistentPack";
+import QuickLaunchModal from "./components/QuickLaunchModal";
 // Eager: the four surfaces a user hits on almost every visit. Keeping
 // them in the main bundle avoids a suspense flicker on the critical
 // path.
@@ -20,6 +20,7 @@ const BrainView = lazy(() => import("./pages/BrainView"));
 const Automations = lazy(() => import("./pages/Automations"));
 const Themes = lazy(() => import("./pages/Themes"));
 const AgentJobPage = lazy(() => import("./pages/AgentJobPage"));
+const MaikoChat = lazy(() => import("./pages/MaikoChat"));
 import useKeyboardShortcuts from "./hooks/useKeyboardShortcuts";
 
 
@@ -38,7 +39,18 @@ function RouteFallback() {
 function AppRoutes() {
   useKeyboardShortcuts();
 
+  // Global Quick-Launch modal — mounted here so Cmd+K and the Home
+  // launcher button both open the same instance. open-launch-agent
+  // is dispatched by useKeyboardShortcuts and by the Home trigger.
+  const [launchOpen, setLaunchOpen] = useState(false);
+  useEffect(() => {
+    const onOpen = () => setLaunchOpen(true);
+    window.addEventListener("open-launch-agent", onOpen);
+    return () => window.removeEventListener("open-launch-agent", onOpen);
+  }, []);
+
   return (
+    <>
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Home />} />
@@ -54,6 +66,7 @@ function AppRoutes() {
         <Route path="/themes" element={<Suspense fallback={<RouteFallback />}><Themes /></Suspense>} />
         <Route path="/settings" element={<Suspense fallback={<RouteFallback />}><Settings /></Suspense>} />
         <Route path="/jobs/:jobId" element={<Suspense fallback={<RouteFallback />}><AgentJobPage /></Suspense>} />
+        <Route path="/maiko" element={<Suspense fallback={<RouteFallback />}><MaikoChat /></Suspense>} />
         {/* Renamed pages — keep bookmarks working. */}
         <Route path="/skills" element={<Navigate to="/automations" replace />} />
         <Route path="/brain" element={<Navigate to="/knowledge" replace />} />
@@ -67,6 +80,8 @@ function AppRoutes() {
         <Route path="/tournaments" element={<Navigate to="/agents" replace />} />
       </Route>
     </Routes>
+    <QuickLaunchModal open={launchOpen} onClose={() => setLaunchOpen(false)} />
+    </>
   );
 }
 
@@ -75,7 +90,6 @@ export default function App() {
     <BrowserRouter>
       <AppRoutes />
       <ToastContainer />
-      <AskMaiko />
       <ArrivalWatcher />
       <PersistentPack />
     </BrowserRouter>

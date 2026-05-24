@@ -386,3 +386,115 @@ def _guess_category(text):
     if any(w in lower for w in ("name", "rename", "variable", "convention")):
         return "naming"
     return "domain_knowledge"
+
+
+# ---------------------------------------------------------------------------
+# Insight reconciliation
+#
+# The live save path in agent_outbox runs inside the request and can
+# drop an Insight if the inline create errors or the server restarts
+# between AgentMessage commit and Insight commit. The AgentMessage row
+# survives in both cases. This reconciler scrapes recent
+# message_type='insight' AgentMessages and creates any Insight that's
+# still missing, so the live save is just a fast-path and the brain
+# cycle is the eventual-consistency safety net.
+# ---------------------------------------------------------------------------
+
+
+def reconcile_insights(window_days: int = 7) -> dict:
+    """Recover any insight messages whose Insight row never got written.
+
+    Matches the live-save logic in
+    planet_maiko.api.agent_outbox._handle_job_outbox (insight branch):
+    same dedupe (find_duplicate by fingerprint + scope), same
+    cartographer tagging, same length cap.
+
+    Idempotent. Safe to call every cycle: bounded by `window_days` and
+    cheap when there's nothing to do (one indexed query that returns
+    zero rows on a quiet system).
+    """
+    from datetime import datetime, timezone, timedelta
+    from planet_maiko.models.agent_message import AgentMessage
+    from planet_maiko.models.agent_job import AgentJob
+    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.models.insight import Insight, find_duplicate
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=window_days)
+    # SQLite stores DateTime columns as naive UTC; align before comparison.
+    cutoff_naive = cutoff.replace(tzinfo=None)
+
+    candidates = (
+        AgentMessage.query
+        .filter(AgentMessage.message_type == "insight")
+        .filter(AgentMessage.created_at >= cutoff_naive)
+        .order_by(AgentMessage.created_at.asc())
+        .all()
+    )
+    if not candidates:
+        return {"checked": 0, "recovered": 0, "deduped": 0}
+
+    candidate_ids = [m.id for m in candidates]
+    existing = {
+        sid for (sid,) in (
+            db.session.query(Insight.source_message_id)
+            .filter(Insight.source_message_id.in_(candidate_ids))
+            .all()
+        )
+        if sid is not None
+    }
+
+    recovered = 0
+    deduped = 0
+    for msg in candidates:
+        if msg.id in existing:
+            continue
+        # AgentMessage.task_id is the AgentJob.id on the unified path.
+        job = db.session.get(AgentJob, msg.task_id) if msg.task_id else None
+        if job is None:
+            continue
+        text = (msg.content or "").strip()
+        if not text:
+            continue
+        agent = (
+            db.session.get(AgentProfile, job.agent_profile_id)
+            if job.agent_profile_id else None
+        )
+        author_role = agent.role if agent else None
+        is_cartographer = author_role == "cartographer" or job.kind == "cartograph"
+        tags = ["overview", "cartographer"] if is_cartographer else []
+        max_len = 8000 if is_cartographer else 2000
+        text = text[:max_len]
+
+        match = find_duplicate(text, job.scope_repo, tags)
+        if match is not None:
+            match.last_confirmed_at = datetime.now(timezone.utc)
+            match.source_message_id = msg.id
+            merged_tags = list(match.tags or [])
+            for t in tags:
+                if t not in merged_tags:
+                    merged_tags.append(t)
+            match.tags = merged_tags
+            deduped += 1
+            continue
+
+        db.session.add(Insight(
+            text=text,
+            repo_scope=job.scope_repo,
+            tags=tags,
+            author_agent_id=job.agent_profile_id,
+            status="pending",
+            source_message_id=msg.id,
+        ))
+        recovered += 1
+
+    if recovered or deduped:
+        db.session.commit()
+        logger.info(
+            f"[insights-reconcile] window={window_days}d checked={len(candidates)} "
+            f"recovered={recovered} deduped={deduped}"
+        )
+    return {
+        "checked": len(candidates),
+        "recovered": recovered,
+        "deduped": deduped,
+    }

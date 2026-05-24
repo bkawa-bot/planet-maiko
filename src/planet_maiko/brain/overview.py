@@ -202,7 +202,6 @@ def _tasks_context():
             "url": t.url,
             "assigned_agent_id": t.assigned_agent_id,
             "repo": (t.extra or {}).get("repo"),
-            "pinned": bool((t.extra or {}).get("pinned")),
         }
         for t in rows
     ]
@@ -576,6 +575,7 @@ def _run_home_overview_skill(prompt, working_dir):
     db.session.close()
     return runtime.send(
         prompt,
+        source="home_overview",
         working_dir=working_dir,
         timeout=OVERVIEW_TIMEOUT_SECONDS,
         model=model,

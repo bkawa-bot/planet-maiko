@@ -98,8 +98,17 @@ export const api = {
   // Hard-delete a cancelled or done task. The escape hatch from the
   // soft-delete pattern — use after cancel if the task is truly gone.
   forgetTask: (id) => request(`/tasks/${id}/forget`, { method: "POST" }),
-  reassignTask: (id, agent_id) =>
-    request(`/tasks/${id}/reassign`, { method: "POST", body: JSON.stringify(agent_id ? { agent_id } : {}) }),
+  // opts: { agent_id?, plan_first?, custom_prompt? }. agent_id omitted
+  // means "router picks a different one of the same role for me."
+  reassignTask: (id, opts = {}) => {
+    const body = {};
+    if (opts.agent_id) body.agent_id = opts.agent_id;
+    if (opts.plan_first !== undefined) body.plan_first = opts.plan_first;
+    if (opts.custom_prompt) body.custom_prompt = opts.custom_prompt;
+    return request(`/tasks/${id}/reassign`, {
+      method: "POST", body: JSON.stringify(body),
+    });
+  },
   launchTask: (id) => request(`/tasks/${id}/launch`, { method: "POST" }),
   sendTaskToLinear: (id, overrides = {}) =>
     request(`/tasks/${id}/linear`, { method: "POST", body: JSON.stringify(overrides) }),
@@ -139,6 +148,11 @@ export const api = {
   // Pollers
   getPollerStatus: () => request("/pollers/status"),
   runPoller: (name) => request(`/pollers/${name}/run`, { method: "POST" }),
+
+  // Maiko chat (global controller conversation; not per-agent)
+  getMaikoMessages: () => request("/maiko/messages"),
+  sendMaikoMessage: (content) =>
+    request("/maiko/chat", { method: "POST", body: JSON.stringify({ content }) }),
 
   // Brain
   getBrainStatus: () => request("/brain/status"),
@@ -418,19 +432,19 @@ export const api = {
   // training pipeline code stays in src/planet_maiko/brain/learning/
   // dormant for future revival.
 
-  // Ask the Pack — natural-language dispatcher that picks an agent and launches them.
-  // Backend calls an LLM router with a 45s ceiling; we give the network a small cushion
-  // and fail loudly instead of hanging forever.
-  dispatchPack: (request_text, context, non_goals) =>
-    request("/pack/dispatch", {
-      method: "POST",
-      timeoutMs: 60_000,
-      body: JSON.stringify({
-        request: request_text,
-        context: context || "",
-        non_goals: non_goals || "",
-      }),
-    }),
+  // Direct-launch an AgentJob: user picks the agent, the prompt, and
+  // optionally a skill / repo. Bypasses the pack-router LLM hop.
+  quickLaunchAgentJob: (body) =>
+    request("/agent-jobs/quick-launch", { method: "POST", body: JSON.stringify(body) }),
+
+  // Token-usage audit. Aggregated totals + per-source + per-day, over
+  // a configurable window. Powers the Home spend widget and any
+  // future budget guardrails.
+  getUsage: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/usage${q ? `?${q}` : ""}`);
+  },
+
   // Broadcast a message to every active agent (no routing, no LLM).
   announceToPack: (message) =>
     request("/pack/announce", {

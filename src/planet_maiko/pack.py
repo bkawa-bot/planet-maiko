@@ -113,7 +113,7 @@ def dispatch(request: str, context: str = "", non_goals: str = "") -> dict:
     db.session.close()
 
     result = runtime.send_json(
-        prompt, timeout=45,
+        prompt, timeout=45, source="pack_router",
         model=resolve_model("triage"), effort=resolve_effort("triage"),
     )
     if not result.get("success"):

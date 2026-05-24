@@ -165,7 +165,21 @@ def assign_agent():
         scope_repo = scope_for_task(task)
         local_path = resolve_repo_path(scope_repo)
         if not local_path:
-            return jsonify({"error": f"No local clone found for {scope_repo or 'this task'}"}), 400
+            if not scope_repo:
+                return jsonify({
+                    "error": (
+                        "This task has no repo scope set. Edit the task and "
+                        "give it a scope_repo so the agent knows which repo "
+                        "to work in."
+                    ),
+                }), 400
+            return jsonify({
+                "error": (
+                    f"No local clone of {scope_repo} found. Add the parent "
+                    "directory where your clones live under Settings > Plugins "
+                    "> github > Repo roots."
+                ),
+            }), 400
         repo_path = local_path
         # Normalize task.type so monitor + cycle phases recognize the
         # one-shot kinds. Cartographer task type is "cartograph" by

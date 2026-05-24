@@ -205,16 +205,16 @@ export default function Agents() {
         </ModalPortal>
       )}
 
-      <div className="inbox-tab-bar">
+      <div className="page-tabs">
         <button
-          className={`inbox-tab ${tab === "active" ? "active" : ""}`}
+          className={`page-tab ${tab === "active" ? "active" : ""}`}
           onClick={() => setTab("active")}
         >
           Active
         </button>
 
         <button
-          className={`inbox-tab ${tab === "profiles" ? "active" : ""}`}
+          className={`page-tab ${tab === "profiles" ? "active" : ""}`}
           onClick={() => setTab("profiles")}
         >
           <Target size={10} /> Profiles
@@ -230,7 +230,7 @@ export default function Agents() {
         )}
 
         <button
-          className={`inbox-tab ${tab === "insights" ? "active" : ""}`}
+          className={`page-tab ${tab === "insights" ? "active" : ""}`}
           onClick={() => setTab("insights")}
         >
           <MoonTarot size={10} /> Pack Insights

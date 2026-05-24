@@ -1,5 +1,5 @@
 .playbook-tab {
-  display: flex; flex-direction: column; gap: 16px;
+  display: flex; flex-direction: column; gap: 14px;
   padding-top: 10px;
 }
 
@@ -12,18 +12,39 @@
   font-size: 12.5px; color: var(--text-dim); line-height: 1.55;
 }
 
-.playbook-filter-row { display: flex; align-items: center; gap: 8px; }
+/* Filter pills with count badges + the bulk-approve button to the right. */
+.playbook-filter-row {
+  display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap;
+}
 .playbook-filter-pills { display: flex; gap: 4px; }
 .playbook-filter-pill {
-  padding: 4px 10px; border: 1px solid var(--border);
+  padding: 5px 12px; border: 1px solid var(--border);
   border-radius: 999px; font-size: 11px; font-weight: 500;
   background: var(--bg-card); color: var(--text-dim);
   cursor: pointer; text-transform: capitalize;
+  display: inline-flex; align-items: center; gap: 6px;
 }
 .playbook-filter-pill:hover { border-color: var(--pink); color: var(--pink); }
 .playbook-filter-pill.active {
   background: var(--bg-card); border-color: var(--pink); color: var(--pink);
   box-shadow: 0 1px 6px var(--pink-glow);
+}
+.playbook-filter-count {
+  font-size: 10px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--border-subtle);
+  color: var(--text-muted);
+  min-width: 16px;
+  text-align: center;
+}
+.playbook-filter-pill.active .playbook-filter-count {
+  background: var(--pink);
+  color: var(--bg, #fff);
+}
+.playbook-bulk-approve {
+  margin-left: auto;
 }
 
 .playbook-groups { display: flex; flex-direction: column; gap: 14px; }
@@ -36,17 +57,26 @@
 }
 
 .playbook-group-header {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 10px;
+  display: flex; align-items: center; gap: 10px;
   padding: 10px 14px;
   background: var(--bg);
-  font-size: 12px; font-weight: 600;
+  font-size: 12px;
   color: var(--text);
   border-bottom: 1px solid var(--border-subtle);
-  font-family: var(--font-mono);
 }
-
+.playbook-group-name {
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+}
+.playbook-group-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--bg-card-alt, var(--bg-hover));
+  padding: 1px 6px;
+  border-radius: 999px;
+}
 .playbook-cartograph-btn {
+  margin-left: auto;
   font-family: var(--font-body, inherit);
   font-size: 11px;
   font-weight: 600;
@@ -61,16 +91,11 @@
   color: #fff;
 }
 
-/* Overview insight — collapsed card by default, expands to full
-   rendered markdown. These docs are 1–1.5K tokens, too big to spill
-   inline. */
+/* Overview cards (special-case for repo overviews — too long to spill inline). */
 .playbook-overview {
   display: flex; flex-direction: column; gap: 6px;
   width: 100%;
 }
-/* Inline header row holds the expand-toggle and the Refresh button so
-   users can re-run Atlas without navigating up to the repo header's
-   Cartograph button. Flex keeps Refresh snug to the right. */
 .playbook-overview-header {
   display: flex; align-items: stretch; gap: 6px;
 }
@@ -142,35 +167,93 @@
 }
 
 .playbook-item {
-  display: flex; gap: 10px; align-items: flex-start;
-  padding: 10px 14px;
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border-subtle);
 }
 .playbook-item:last-child { border-bottom: none; }
-.playbook-item.pending { background: var(--lavender-soft); }
+.playbook-item.pending {
+  background: var(--lavender-soft);
+  border-left: 3px solid var(--lavender, #c0a8d8);
+}
 .playbook-item.dismissed { opacity: 0.5; }
 .playbook-item.expired { opacity: 0.55; font-style: italic; }
 
 .playbook-item-main { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .playbook-item-text {
-  font-size: 12.5px; color: var(--text); line-height: 1.5;
+  font-size: 13px; color: var(--text); line-height: 1.55;
   word-break: break-word;
 }
 .playbook-item-meta {
   display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
-  font-size: 10px;
-}
-.playbook-item-meta .tag {
-  font-size: 10px; padding: 1px 6px;
-  background: var(--border-subtle); color: var(--text-muted);
-  border-radius: 3px;
-}
-.playbook-item-meta .badge.paused {
-  background: var(--lavender-soft); color: var(--lavender); font-weight: 600;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
+.playbook-tag {
+  font-size: 10px;
+  padding: 1px 7px;
+  background: var(--border-subtle);
+  color: var(--text-muted);
+  border-radius: 999px;
+}
+
+.playbook-pending-pill {
+  font-size: 10px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--lavender, #c0a8d8);
+  color: var(--bg, #0a0a0a);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.playbook-expired-pill {
+  font-size: 10px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--border-subtle);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.playbook-author {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* Action row: primary Approve gets visible color + label; the rest are
+   square icon buttons that recede until hover. */
 .playbook-item-actions {
   display: flex; gap: 4px; flex-shrink: 0; align-items: flex-start;
+}
+
+.playbook-action-primary {
+  white-space: nowrap;
+}
+
+.playbook-icon-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-xs, 6px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.playbook-icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-color: var(--border-subtle);
+}
+.playbook-icon-btn-danger:hover {
+  background: var(--urgent-soft, rgba(255, 85, 119, 0.12));
+  color: var(--urgent);
+  border-color: var(--urgent);
 }
 
 .playbook-edit-input {
@@ -180,21 +263,34 @@
   font-family: inherit; resize: vertical;
 }
 
+/* Add-insight section: collapsed by default since most insights flow
+   in from agents — manual entry is the edge case. */
 .playbook-add-section {
-  padding: 14px;
-  background: var(--pink-soft);
-  border-radius: var(--radius);
-  margin-top: 6px;
+  display: flex; flex-direction: column;
+  margin-top: 4px;
 }
-.playbook-add-header {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 11px; font-weight: 700;
+.playbook-add-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none;
+  border: 1px dashed var(--border-subtle);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-xs, 6px);
+  cursor: pointer;
+  align-self: flex-start;
+}
+.playbook-add-toggle:hover {
   color: var(--pink);
-  text-transform: uppercase; letter-spacing: 0.06em;
-  margin-bottom: 10px;
+  border-color: var(--pink);
 }
 .playbook-add-form {
   display: flex; flex-direction: column; gap: 8px;
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--pink-soft);
+  border-radius: var(--radius-xs, 6px);
 }
 .playbook-add-input,
 .playbook-add-textarea {

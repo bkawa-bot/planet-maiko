@@ -347,17 +347,21 @@ export default function AutomationEditor({ mode = "edit", automation, onClose, o
                 </datalist>
               )}
             </div>
-            {scope === "cycle" && (
-              <div className="automation-editor-field">
-                <label>Cooldown (days)</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={cooldownDays}
-                  onChange={(e) => setCooldownDays(e.target.value)}
-                />
-              </div>
-            )}
+            <div className="automation-editor-field">
+              <label>Cooldown (days)</label>
+              <input
+                type="number"
+                min="0"
+                value={scope === "pupdate" ? 0 : cooldownDays}
+                disabled={scope === "pupdate"}
+                onChange={(e) => setCooldownDays(e.target.value)}
+              />
+              {scope === "pupdate" && (
+                <small style={{ color: "var(--text-muted)" }}>
+                  Per-pupdate automations don't use a cooldown (each pupdate is a fresh trigger).
+                </small>
+              )}
+            </div>
             <div className="automation-editor-field">
               <label>Status</label>
               <select value={status} onChange={(e) => setStatus(e.target.value)}>

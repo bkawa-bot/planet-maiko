@@ -350,7 +350,7 @@ export default function BrainView() {
   const toggleCategory = (cat) => setExpandedCats((e) => ({ ...e, [cat]: !e[cat] }));
 
   return (
-    <div className="brain-view-page">
+    <div className="brain-view-page frost-pane">
       <div className="knowledge-page">
         {/* Live progress while backfill is running */}
         {(backfilling || backfillProgress?.phase === "done" || backfillProgress?.phase === "error") && (
@@ -359,26 +359,29 @@ export default function BrainView() {
         {clusterProgress && (
           <ClusterProgress progress={clusterProgress} />
         )}
-        {/* Tabs */}
-        <div className="knowledge-tabs">
+        {/* Tabs + top-level rule sharing actions */}
+        <div className="page-tabs">
           <button
-            className={`inbox-tab ${tab === "pool" ? "active" : ""}`}
+            className={`page-tab ${tab === "pool" ? "active" : ""}`}
             onClick={() => setTab("pool")}
           >
             Knowledge Pool
           </button>
           <button
-            className={`inbox-tab ${tab === "pending" ? "active" : ""}`}
+            className={`page-tab ${tab === "pending" ? "active" : ""}`}
             onClick={() => setTab("pending")}
           >
             Pending {pending.length > 0 && <span className="tab-badge">{pending.length}</span>}
           </button>
           <button
-            className={`inbox-tab ${tab === "unsynthesized" ? "active" : ""}`}
+            className={`page-tab ${tab === "unsynthesized" ? "active" : ""}`}
             onClick={() => setTab("unsynthesized")}
           >
             Unsynthesized {rawSignalsTotal > 0 && <span className="tab-badge">{rawSignalsTotal}</span>}
           </button>
+          <div style={{ marginLeft: "auto" }}>
+            <TeamRulesSection />
+          </div>
         </div>
 
         {tab === "unsynthesized" && unsynthesized.length > 0 && (
@@ -424,9 +427,10 @@ export default function BrainView() {
               title = `Backend: ${ragStatus.model}. All ${total} active rules indexed for retrieval.`;
             }
             const ragSetupMessage = (
-              "RAG (rule retrieval) needs the local embedding model:\n\n" +
-              "   pip install -e \".[rag]\"\n" +
-              "   Restart `maiko serve`.\n\n" +
+              "RAG (rule retrieval) needs the local embedding model.\n\n" +
+              "From your planet-maiko clone, run:\n" +
+              "   pip install -e \".[rag]\"\n\n" +
+              "Then restart with `maiko up`.\n\n" +
               "Free, runs on CPU, no API key. ~2GB on first install " +
               "(pulls torch); the model itself is ~335MB and caches " +
               "to ~/.cache/huggingface."
@@ -552,8 +556,6 @@ export default function BrainView() {
             <p>Active learnings are retrieved by agents at task kickoff via <code>maiko rules-relevant</code> — relevant patterns surface in the agent's context so they can apply the team's accumulated knowledge from past PR reviews.</p>
           </InfoButton>
         </div>
-
-        <TeamRulesSection />
 
         {baseVisible.length > 0 && (
           <div className="scope-filter-row">

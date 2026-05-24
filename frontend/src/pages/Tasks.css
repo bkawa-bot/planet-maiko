@@ -31,6 +31,11 @@
 .project-group-header {
   display: flex; align-items: center; gap: 8px; padding: 10px 14px;
   cursor: pointer; font-size: 13px; transition: background 0.15s;
+  /* Project header sits one tier above the tasks (which use --bg-card)
+     so the section reads as "this is a project, tasks below" rather
+     than as one of the cards. */
+  background: var(--bg-card-alt);
+  border-bottom: 1px solid var(--border-subtle);
 }
 .project-group-header:hover { background: var(--bg-hover); }
 .project-group-title { font-weight: 600; color: var(--text); }
@@ -62,8 +67,6 @@
 }
 .pupdate-card:hover .task-quick-actions,
 .pupdate-card.expanded .task-quick-actions { opacity: 1; }
-.task-quick-actions .pinned { opacity: 1 !important; }
-.btn-pin.pinned { opacity: 1; }
 
 .btn-ghost {
   border: none; background: none; cursor: pointer;
@@ -72,7 +75,6 @@
   transition: all 0.15s;
 }
 .btn-ghost:hover { background: var(--bg-hover); color: var(--text); }
-.btn-pin.pinned { color: var(--pink); }
 .btn-quick-start:hover { color: var(--green); }
 .btn-quick-done:hover { color: var(--green); }
 .task-title { font-size: 13px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

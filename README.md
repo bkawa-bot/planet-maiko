@@ -2,43 +2,40 @@
 
 > *These alien dogs want to live in your computer. Would you let them in?*
 
-**A local-first agent orchestrator where your AI agents are weird alien dogs that know a little too much.**
+![title](docs/screenshots/profiles2.png)
 
-Free forever, no paid tiers or subscriptions. Made by one dev for other devs.
-
-![title](docs/screenshots/title.png)
-
----
-
-> **⚠️ Beta.** Planet Maiko is in active beta testing. Expect breaking changes, schema migrations, rough edges, and bugs. If you try it and something's broken, [file an issue](https://github.com/bkawa-bot/planet-maiko/issues/new).
-
----
-
-We live in strange times, and yet our dev tools are so painfully un-strange. No one knows what being a software engineer will be like in a year, or even a month. If we are all headed to our own inevitable obsolescence, we might as well have fun.
-
-![Planet Maiko home](docs/screenshots/home.png)
-
-![profiles](docs/screenshots/profiles2.png)
+Planet Maiko is a free local dev tool made by 1 dev, for other devs, to make your working day a bit more fun!
 
 ## What does Planet Maiko do? 
 
-All the required agent orchestration work. Automatically kicks off agents, lets them yell at each other (with Maiko as the mediator), agent task lifecycles, context sharing... but also some more interesting features as well such as conflict detection, (experimental) fine-tuning, self-curated shared memory and insights etc
+Planet Maiko's goal is to be the center of your workday as a developer. It pulls info in from all your external tools, task managers, and agent workflows into one dashboard.
+
+You wake up and see a greeting from Maiko (my dog) that knows all your in-progress work, what your manager asked you to do last week, even if it is a cool rainy day or a summer scortcher (in which case she will recommend you to take the afternoon off and go to the beach.)
+
+Quick feature overview:
+- Pulls in data from your whole stack into a centralized view.
+- Handles all your agent orchestration needs, but is way cooler cause the agents are space dogs.
+- Does some cool memory stuff like curating a rulebook based on your previous gh history.
+- A lot more! If it doesn't do something you need it to do, please tell me!!
+- Local, Open source, free forever, made by 1 dev for fun. 
+
+![Planet Maiko home](docs/screenshots/home.png)
 
 ## How is Planet Maiko different from RinkStack, Mazino.ai, or QuatroForce? (I just made all of those up)
 
-- **Maiko has a unique self-maintaining memory system** which builds a rule-book from you and your team's PR history and feedback. Internal knowledge and specific gotchas are all automatically captured. No more manual write-ups of your team's guidelines needed.
+### A self-maintaining rulebook from your team's PR history
 
-![Rule](docs/screenshots/rule-3.png)
-(A PR reviewer left this same comment multiple times, we tracked it down ahead of time so our agents don't make the same mistake).
+Internal knowledge and specific gotchas get captured automatically, no manual write-ups. When an agent works on something, it only sees the handful of rules that matter for that change. You can keep a pool of hundreds of very specific nits without drowning every prompt.
 
-- **Maiko uses semantic embeddings to get agents what they need without shoving 100 rules into every prompt.**
-  - Agents just need to describe what they are doing to get ONLY what they need. This lets us have a pool of hundreds of very specific nits, rules, and context without overwhelming the agents.
+<img width="597" height="483" alt="Screenshot 2026-05-19 at 9 41 02 PM" src="https://github.com/user-attachments/assets/5463d146-b8ac-4c57-9af9-abf8591a1008" />
 
-![Rules-retrieved](docs/screenshots/agent-rules-searched.png)
 
-**Maiko makes agents confess their own mistakes too.** Everyone learns.
+### The dogs confess their own mistakes
 
-![Insights](docs/screenshots/insights2.png)
+When one gets something wrong it writes down what it learned, and the whole pack reads it. Future agents inherit those notes in their preamble, so a gotcha gets discovered once.
+
+![insights](docs/screenshots/insights2.png)
+
 
 ## Build a plugin for any tool you never want to have to look at again.
 
@@ -60,8 +57,6 @@ Open source, free forever, no paid tiers or subscriptions.
 
 ## In-app diff review, agent chat view (no terminal needed), cost-aware model routing, automations, and more!
 ![Diff](docs/screenshots/diff2.png)
-
-![Automations](docs/screenshots/automations.png)
 
 ## Most importantly: agents are weird alien dogs, cause why not?
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   Home as HomeIcon, FolderOpen, Brain, MapPin,
-  GitBranch, Bot, Sparkles, Rocket, PawPrint, Zap,
+  GitBranch, Bot, Rocket, PawPrint, Zap,
 } from "@icons";
 import { api } from "../api/client";
 
@@ -187,12 +187,7 @@ export default function SetupWizard({ onComplete }) {
             <button className="btn btn-discover" onClick={handleDiscoverRepos} disabled={discovering}>
               {discovering ? "Discovering..." : "Auto-Discover Repos"}
             </button>
-            <input
-              type="text"
-              value={repos.join(", ")}
-              onChange={(e) => setRepos(e.target.value.split(",").map(s => s.trim()).filter(Boolean))}
-              placeholder="org/repo1, org/repo2"
-            />
+            <CsvField value={repos} onCommit={setRepos} placeholder="org/repo1, org/repo2" />
             {repos.length > 0 && (
               <div className="setup-hint-good">Found {repos.length} repo(s)</div>
             )}
@@ -203,12 +198,7 @@ export default function SetupWizard({ onComplete }) {
               </div>
             )}
             <p style={{ marginTop: 16 }}>Where do the clones live? Use the full path, a leading <code>~</code> can be unreliable.</p>
-            <input
-              type="text"
-              value={repoRoots.join(", ")}
-              onChange={(e) => setRepoRoots(e.target.value.split(",").map(s => s.trim()).filter(Boolean))}
-              placeholder="/Users/you/src, /Users/you/code"
-            />
+            <CsvField value={repoRoots} onCommit={setRepoRoots} placeholder="/Users/you/src, /Users/you/code" />
             <div className="setup-actions">
               <button className="setup-skip" onClick={() => setStep(2)}>Back</button>
               <button className="btn btn-primary" onClick={() => setStep(4)}>Next</button>
@@ -241,9 +231,11 @@ export default function SetupWizard({ onComplete }) {
               <div className="setup-hint-warn">
                 <div>Not installed yet.</div>
                 <div className="setup-hint-warn-sub">
-                  One-time setup: <code>pip install -e ".[rag]"</code> (pulls
-                  ~2GB of ML deps). Maiko runs fine without it; you can enable
-                  it later from the Knowledge page.
+                  One-time setup: from your planet-maiko clone, run{" "}
+                  <code>pip install -e ".[rag]"</code> (pulls ~2GB of ML
+                  deps), then restart with <code>maiko up</code>. Maiko
+                  runs fine without it; you can enable it later from the
+                  Knowledge page.
                 </div>
               </div>
             )}
@@ -336,7 +328,14 @@ export default function SetupWizard({ onComplete }) {
         {/* Step 10: Tour — Done */}
         {step === 10 && (
           <div className="setup-step setup-step-centered">
-            <div className="setup-step-icon tour-icon"><Sparkles size={36} /></div>
+            <div className="setup-step-icon tour-icon">
+              <img
+                src="/sprites/maiko-walk-smile.png"
+                alt="Maiko walking and smiling"
+                width={96}
+                className="setup-welcome-sprite"
+              />
+            </div>
             <h3>You're settled in</h3>
             <p>A few places to wander next:</p>
             <ul className="setup-checklist">
@@ -354,5 +353,34 @@ export default function SetupWizard({ onComplete }) {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Comma-separated text input that doesn't eat the comma the user just
+ * pressed. Local string state owns the value while the input is
+ * focused; on blur (or external array changes) it re-seeds from the
+ * parsed array. Same pattern as PluginsSection's ListField.
+ */
+function CsvField({ value, onCommit, placeholder }) {
+  const csv = (value || []).join(", ");
+  const [text, setText] = useState(csv);
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    if (!focused) setText(csv);
+  }, [csv, focused]);
+  return (
+    <input
+      type="text"
+      value={text}
+      placeholder={placeholder}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      onChange={(e) => {
+        const raw = e.target.value;
+        setText(raw);
+        onCommit(raw.split(",").map((s) => s.trim()).filter(Boolean));
+      }}
+    />
   );
 }

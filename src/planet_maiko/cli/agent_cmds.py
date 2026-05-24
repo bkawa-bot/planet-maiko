@@ -232,8 +232,48 @@ def cmd_leave_comment(args):
         "side": args.side,
         "body": body,
     }
-    api_request(f"/tasks/{task_id}/comments/agent", method="POST", data=data)
+    api_request(f"/jobs/{task_id}/comments/agent", method="POST", data=data)
     print(f"Comment pinned to {args.file}:{args.line}")
+
+
+def cmd_handoff(args):
+    """Switch the current job's kind (investigation → coding, etc.).
+
+    Useful when the agent's investigation surfaces work that wants
+    coding, or a coding job uncovers a question that wants
+    investigation. Updates the job + linked task on the backend and
+    prints the new role's agent protocol so the running agent can
+    adopt the new instructions mid-session without restarting.
+    """
+    task_id = args.task or detect_task_id()
+    if not task_id:
+        print(
+            "Error: No job ID provided and could not detect from "
+            "TASK.md or MAIKO_JOB_ID env",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    result = api_request(
+        f"/agent-jobs/{task_id}/change-kind",
+        method="POST",
+        data={"kind": args.kind},
+    )
+
+    prev = result.get("previous_kind") or "?"
+    print(f"Job kind: {prev} -> {args.kind}")
+    protocol = result.get("protocol") or ""
+    if not protocol.strip():
+        print(
+            f"(no protocol file found for {args.kind}; "
+            "operate from the base agent contract)",
+        )
+        return
+    print()
+    print("=" * 64)
+    print(f"NEW {args.kind.upper()} PROTOCOL")
+    print("=" * 64)
+    print(protocol)
 
 
 def cmd_feedback(args):
@@ -385,6 +425,19 @@ def register(subparsers):
     p.add_argument("--side", choices=["old", "new"], default="new", help="Which side of the diff (default: new)")
     p.add_argument("--job", "--task", dest="task", help="Job ID (auto-detected from MAIKO_JOB_ID env or TASK.md if omitted)")
     p.set_defaults(func=cmd_leave_comment)
+
+    # maiko handoff — switch the current job's kind (and get the new role's protocol)
+    p = subparsers.add_parser(
+        "handoff",
+        help="Switch this job's kind (coding / investigation / review / cartograph / repo_analysis) and print the new role's protocol.",
+    )
+    p.add_argument(
+        "kind",
+        choices=["coding", "investigation", "review", "cartograph", "repo_analysis"],
+        help="Target kind to hand off to.",
+    )
+    p.add_argument("--job", "--task", dest="task", help="Job ID (auto-detected if omitted)")
+    p.set_defaults(func=cmd_handoff)
 
     # maiko feedback
     p = subparsers.add_parser("feedback", help="Send in-session feedback about agent work")

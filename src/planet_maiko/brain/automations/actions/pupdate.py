@@ -227,6 +227,56 @@ def _act_create_task_from_pupdate(automation, config, pupdate=None, context=None
                 "status_flipped": status_flipped,
             }
 
+    # Ask-first → drop a memo and let the user approve. Mirrors the
+    # _act_spawn_agent_job_from_pupdate path: snapshot the pupdate's
+    # fields into the memo so the approval handler can mint the task
+    # later even if the pupdate has since been dismissed or archived.
+    ask_first = bool(config.get("ask_first", False))
+    if ask_first:
+        from planet_maiko.brain.memos import create_memo
+        pup_extra_snap = pupdate.extra or {}
+        task_extra_snapshot = {"description": pupdate.body or "", "repo": pup_extra_snap.get("repo") or ""}
+        for key in ("linear_id", "identifier", "linear_cycle_id",
+                    "linear_cycle_number", "linear_cycle_name"):
+            if pup_extra_snap.get(key) is not None:
+                task_extra_snapshot[key] = pup_extra_snap[key]
+        memo_extra = {
+            "from_automation": automation.id,
+            "triggered_by_pupdate": pupdate.id,
+            "task_spec": {
+                "type": task_type,
+                "title": pupdate.title,
+                "priority": task_priority,
+                "body": pupdate.body or "",
+                "url": pupdate.url,
+                "tags": list(pupdate.tags or []),
+                "extra": task_extra_snapshot,
+                "source_pupdate_id": pupdate.id,
+            },
+        }
+        snap = _pupdate_snapshot(pupdate)
+        if snap:
+            memo_extra["pupdate_snapshot"] = snap
+        memo = create_memo(
+            kind="task_approval",
+            category="offer",
+            title=pupdate.title,
+            body=pupdate.body or None,
+            url=pupdate.url,
+            priority=task_priority,
+            cta_label="Create task",
+            cta_action="approve",
+            source_pupdate_id=pupdate.id,
+            extra=memo_extra,
+        )
+        db.session.flush()
+        return {
+            "kind": "create_task_from_pupdate",
+            "status": "awaiting_approval",
+            "memo_id": memo.id,
+            "pupdate_id": pupdate.id,
+        }
+
     task_id = f"task-{uuid.uuid4().hex[:10]}"
     pup_extra = pupdate.extra or {}
     repo = pup_extra.get("repo") or ""

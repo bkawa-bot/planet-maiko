@@ -25,6 +25,7 @@ _PATCH_COLUMNS = [
     ("custom_skills", "user_edited", "BOOLEAN DEFAULT 0"),
     ("custom_skills", "needs_worktree", "BOOLEAN DEFAULT 0"),
     ("custom_skills", "last_run_at", "DATETIME"),
+    ("learnings", "last_confirmed_at", "DATETIME"),
 ]
 
 
@@ -384,6 +385,8 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.shutdown_api import shutdown_bp
     from planet_maiko.api.home_api import home_bp
     from planet_maiko.api.pack_api import pack_bp
+    from planet_maiko.api.maiko_chat_api import maiko_chat_bp
+    from planet_maiko.api.usage_api import usage_bp
     from planet_maiko.api.checks_api import checks_bp
     from planet_maiko.api.automations_api import automations_bp
     from planet_maiko.api.agent_jobs_api import agent_jobs_bp
@@ -409,6 +412,8 @@ def create_app(start_scheduler=False):
     app.register_blueprint(shutdown_bp, url_prefix="/api")
     app.register_blueprint(home_bp, url_prefix="/api")
     app.register_blueprint(pack_bp, url_prefix="/api")
+    app.register_blueprint(maiko_chat_bp, url_prefix="/api")
+    app.register_blueprint(usage_bp, url_prefix="/api")
     app.register_blueprint(checks_bp, url_prefix="/api")
     app.register_blueprint(automations_bp, url_prefix="/api")
     app.register_blueprint(agent_jobs_bp, url_prefix="/api")
@@ -466,7 +471,15 @@ def create_app(start_scheduler=False):
             ensure_seed_automations,
             ensure_seed_rule_automations,
             ensure_plugin_default_automations,
+            migrate_obsolete_create_task_seeds,
         )
+        # Archive obsolete create_task default rows BEFORE seeding the
+        # new notify_me equivalents so existing installs don't run
+        # both side-by-side for a tick.
+        try:
+            migrate_obsolete_create_task_seeds()
+        except Exception as e:
+            logger.warning(f"[startup] Obsolete seed migration skipped: {e}")
         try:
             ensure_seed_automations()
         except Exception as e:

@@ -357,9 +357,28 @@ h2 {
 }
 .card {
   background: #20244a; box-shadow: var(--sink);
-  border-left: 4px solid var(--accent);
-  padding: 18px 18px 18px 20px;
+  border-top: 6px solid var(--accent);
+  padding: 18px;
 }
+/* Anchor the differentiator. Breaks the 6-up grid symmetry so the
+   section reads as "one big thing plus supporting ones" instead of
+   six identical feature boxes. */
+.card.card-wide {
+  grid-column: span 2;
+}
+@media (max-width: 720px) {
+  .card.card-wide { grid-column: auto; }
+}
+
+/* "ok but what does it do?" summary card under the home.png. */
+.what-list {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+.what-list li { margin-bottom: 6px; }
+.what-list li::marker { color: var(--lemon); }
 .card h3 {
   font-size: 1.03rem; margin-bottom: 6px;
   display: flex; align-items: baseline; gap: 8px;

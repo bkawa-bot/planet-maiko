@@ -43,6 +43,8 @@ from .phases.ingest import (  # noqa: E402
 from .phases.synthesis import (  # noqa: E402
     _phase_synthesis,
     _phase_learning,
+    _phase_insights_reconcile,
+    _phase_rules_decay,
 )
 from .phases.health import (  # noqa: E402
     _phase_stuck_check,
@@ -73,6 +75,8 @@ _PHASES = [
     ("pupdates", _phase_pupdates),
     ("synthesis", _phase_synthesis),
     ("learning", _phase_learning),
+    ("insights_reconcile", _phase_insights_reconcile),
+    ("rules_decay", _phase_rules_decay),
     ("stuck_check", _phase_stuck_check),
     ("projects", _phase_projects),
     ("orchestrate", _phase_orchestrate),

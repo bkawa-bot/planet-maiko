@@ -244,6 +244,45 @@ function FieldInput({ field, value, datalists, optionsMap, onChange }) {
       </label>
     );
   }
+  if (field.type === "duration") {
+    // Stored in minutes; UI shows whatever unit fits the value most
+    // naturally so "every day" reads as "1 days" not "1440 minutes."
+    // Changing the unit preserves the number ("1 minute" -> "1 hour")
+    // rather than the absolute duration, since that's what the user
+    // means when they switch dropdowns.
+    const UNIT_TO_MIN = { minutes: 1, hours: 60, days: 1440 };
+    const minutes = Number(v) || field.default || 60;
+    let unit = "minutes";
+    let display = minutes;
+    if (minutes % 1440 === 0 && minutes >= 1440) { unit = "days"; display = minutes / 1440; }
+    else if (minutes % 60 === 0 && minutes >= 60) { unit = "hours"; display = minutes / 60; }
+    return (
+      <label className="automation-field">
+        <span>{field.label}{field.help && <small> — {field.help}</small>}</span>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input
+            type="number"
+            value={display}
+            min={field.min || 1}
+            style={{ width: 90 }}
+            onChange={(e) => {
+              const n = e.target.value === "" ? null : Number(e.target.value);
+              if (n === null) return onChange(null);
+              onChange(n * UNIT_TO_MIN[unit]);
+            }}
+          />
+          <select
+            value={unit}
+            onChange={(e) => onChange((display || 1) * UNIT_TO_MIN[e.target.value])}
+          >
+            <option value="minutes">minutes</option>
+            <option value="hours">hours</option>
+            <option value="days">days</option>
+          </select>
+        </div>
+      </label>
+    );
+  }
   if (field.type === "textarea") {
     return (
       <label className="automation-field">

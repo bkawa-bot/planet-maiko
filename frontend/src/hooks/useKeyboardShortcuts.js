@@ -14,12 +14,11 @@ export default function useKeyboardShortcuts() {
 
   useEffect(() => {
     const handler = (e) => {
-      // Cmd/Ctrl+K — open Ask the Pack from anywhere. Works even with
-      // focus in an input (users mid-note often want to hand it off to
-      // the pack without losing context).
+      // Cmd/Ctrl+K — open the Launch Agent modal from anywhere.
+      // Works even with focus in an input.
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        window.dispatchEvent(new CustomEvent("open-ask-pack"));
+        window.dispatchEvent(new CustomEvent("open-launch-agent"));
         return;
       }
 

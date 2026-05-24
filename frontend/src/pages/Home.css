@@ -162,6 +162,8 @@
   text-align: center; padding: 8px 4px;
   background: var(--bg-card-alt); border-radius: var(--radius-xs);
 }
+
+
 /* The Goals stat on Home renders as a <button> so it can open the
    goals-list modal. Reset browser button defaults and add a small
    hover affordance so it reads as "clickable, not just a chip". */

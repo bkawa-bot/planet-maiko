@@ -26,11 +26,9 @@ const NAV_ITEMS = [
 // index.css with the matching color tokens.
 const THEMES = [
   { id: "auto", label: "Auto", emoji: "🔄", group: "auto" },
-  // Night — cosmic, bioluminescent, frozen, magical
+  // Night — cosmic, bioluminescent, magical
   { id: "dark", label: "Cosmic Nighttime", emoji: "🌙", group: "night" },
   { id: "bioluminescent", label: "Bioluminescent", emoji: "🟢", group: "night" },
-  { id: "frozen", label: "Frozen", emoji: "❄️", group: "night" },
-  { id: "aurora", label: "Aurora", emoji: "🌌", group: "night" },
   // Twilight — coral horizon over deep indigo
   { id: "sunset", label: "Twilight", emoji: "🌇", group: "twilight" },
   // Morning — alien sunrise haze

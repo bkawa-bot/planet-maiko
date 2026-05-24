@@ -111,7 +111,13 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
     if (isReassign) {
       setAssigning(true);
       try {
-        await api.reassignTask(task.id, selectedId);
+        await api.reassignTask(task.id, {
+          agent_id: selectedId,
+          // plan_first is coding-only; the backend will ignore it for
+          // other roles, but only send it when meaningful.
+          plan_first: isCoding ? planFirst : undefined,
+          custom_prompt: customPrompt || undefined,
+        });
         const agent = profiles.find((p) => p.id === selectedId);
         showToast(`Reassigned to ${agent?.display_name || "agent"}`, "normal");
         onAssigned();
@@ -339,9 +345,37 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
               )}
 
               {isReassign && (
-                <div style={{ marginTop: 16, padding: "10px 12px", background: "var(--pink-soft)", borderRadius: "var(--radius-xs)", fontSize: 12, color: "var(--text-dim)" }}>
-                  Reassigning drops the current agent's worktree and resets the task so the next cycle preps a fresh one for whomever you pick. The old commits aren't deleted (they're on the branch) — just the worktree checkout goes.
-                </div>
+                <>
+                  {isCoding && (
+                    <>
+                      <div className="assign-section-label" style={{ marginTop: 16 }}>Options</div>
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text-dim)", cursor: "pointer" }}>
+                        <input type="checkbox" checked={planFirst} onChange={(e) => setPlanFirst(e.target.checked)} />
+                        Plan first
+                        <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                          New agent proposes a plan for your approval before writing code
+                        </span>
+                      </label>
+                    </>
+                  )}
+
+                  <div className="assign-section-label" style={{ marginTop: 16 }}>Additional Instructions (optional)</div>
+                  <textarea
+                    style={{
+                      width: "100%", minHeight: 60, padding: "8px 10px", fontSize: 12,
+                      border: "1px solid var(--border)", borderRadius: "var(--radius-xs)",
+                      background: "var(--bg)", color: "var(--text)", fontFamily: "var(--font)",
+                      resize: "vertical",
+                    }}
+                    value={customPrompt}
+                    onChange={(e) => setCustomPrompt(e.target.value)}
+                    placeholder="e.g. Address the review comments from the previous run, but keep the existing test structure."
+                  />
+
+                  <div style={{ marginTop: 16, padding: "10px 12px", background: "var(--pink-soft)", borderRadius: "var(--radius-xs)", fontSize: 12, color: "var(--text-dim)" }}>
+                    Reassigning drops the current agent's worktree and resets the task so the next cycle preps a fresh one for whomever you pick. The old commits aren't deleted (they're on the branch). Just the worktree checkout goes.
+                  </div>
+                </>
               )}
             </>
           )}

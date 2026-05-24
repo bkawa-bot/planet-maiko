@@ -394,4 +394,5 @@ from .seeding import (  # noqa: E402,F401
     ensure_seed_rule_automations,
     ensure_seed_automations,
     ensure_plugin_default_automations,
+    migrate_obsolete_create_task_seeds,
 )

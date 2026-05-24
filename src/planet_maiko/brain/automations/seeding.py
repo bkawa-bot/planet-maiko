@@ -1,9 +1,9 @@
 """Default Automation rows installed on every Maiko boot.
 
 Three idempotent functions:
-  - ensure_seed_rule_automations: the eight canonical pupdate rules
-    (auto-dismiss CI-passed, create review tasks on PR review request,
-    Linear assignment → todo, etc).
+  - ensure_seed_rule_automations: the canonical pupdate rules (create
+    review tasks on PR review request, Linear assignment → todo, close
+    linked tasks on merge, etc).
   - ensure_seed_automations: the wildcard "keep overviews current"
     automation (one row, not one-per-repo).
   - ensure_plugin_default_automations: lets installed plugins seed
@@ -21,38 +21,41 @@ from planet_maiko.models.automation import Automation
 logger = logging.getLogger(__name__)
 
 
+# Default action for "something happened on a thing you care about" is
+# now notify_me, not create_task_from_pupdate. The old defaults filled
+# the Tasks list with rows the user didn't explicitly choose; notify
+# surfaces the event on Home and the user converts to a task by hand
+# if they want. Power users can still set up create_task automations
+# manually, and the create_task action now supports an "Ask me before
+# running" gate (creates a memo that mints the task on approval).
 _RULE_SEEDS = [
     {
-        "name": "Auto-dismiss CI passing",
-        "description": "CI-passed notifications are pure noise — don't need to see them.",
-        "match": {"type": "pr_ci_passed"},
-        "action": "dismiss_pupdate",
-        "action_config": {},
-    },
-    {
-        "name": "Auto-dismiss bot PRs",
-        "description": "Dependabot / renovate PRs don't need human attention.",
-        "match": {"type_prefix": "pr_", "title_contains": "dependabot"},
-        "action": "dismiss_pupdate",
-        "action_config": {},
-    },
-    {
-        "name": "Create task on PR review request",
-        "description": "When a teammate requests your review, create a high-priority review task.",
+        "name": "Notify on PR review request",
+        "description": "A teammate requested your review. Surfaces as a high-priority memo on Home.",
         "match": {"type": "pr_review_requested"},
-        "action": "create_task_from_pupdate",
-        "action_config": {"task_type": "review", "task_priority": "high"},
+        "action": "notify_me",
+        "action_config": {
+            "title": "{pupdate_title}",
+            "body": "{pupdate_body}",
+            "priority": "high",
+            "url": "{pupdate_url}",
+        },
     },
     {
-        "name": "Create task on Linear assignment",
-        "description": "A Linear issue assigned to you becomes a todo task.",
+        "name": "Notify on Linear assignment",
+        "description": "A Linear issue was assigned to you. Surfaces as a memo on Home.",
         "match": {"type": "linear_assigned"},
-        "action": "create_task_from_pupdate",
-        "action_config": {"task_type": "todo"},
+        "action": "notify_me",
+        "action_config": {
+            "title": "{pupdate_title}",
+            "body": "{pupdate_body}",
+            "priority": "normal",
+            "url": "{pupdate_url}",
+        },
     },
     {
         "name": "Notify on Linear @-mention",
-        "description": "Someone tagged you in a Linear issue or comment — surface as a high-priority memo so you don't miss it.",
+        "description": "Someone tagged you in a Linear issue or comment. Surfaces as a high-priority memo.",
         "match": {"type": "linear_mention"},
         "action": "notify_me",
         "action_config": {
@@ -64,7 +67,7 @@ _RULE_SEEDS = [
     },
     {
         "name": "Notify on Linear comment",
-        "description": "New comment on a Linear issue you're subscribed to — surface as an info memo.",
+        "description": "New comment on a Linear issue you're subscribed to.",
         "match": {"type": "linear_comment"},
         "action": "notify_me",
         "action_config": {
@@ -75,36 +78,51 @@ _RULE_SEEDS = [
         },
     },
     {
-        "name": "Create task on PagerDuty incident",
-        "description": "An incident assigned to you becomes a high-priority bug task.",
+        "name": "Notify on PagerDuty incident",
+        "description": "An incident was assigned to you. Surfaces as a high-priority memo.",
         "match": {"type": "pagerduty_incident"},
-        "action": "create_task_from_pupdate",
-        "action_config": {"task_type": "bug", "task_priority": "high"},
+        "action": "notify_me",
+        "action_config": {
+            "title": "{pupdate_title}",
+            "body": "{pupdate_body}",
+            "priority": "high",
+            "url": "{pupdate_url}",
+        },
     },
     {
-        "name": "Create task on PR changes requested",
-        "description": "Reviewer wants changes — create a high-priority bug task to address them.",
+        "name": "Notify on PR changes requested",
+        "description": "Reviewer wants changes on your PR. Surfaces as a high-priority memo.",
         "match": {"type": "pr_changes_requested"},
-        "action": "create_task_from_pupdate",
-        "action_config": {"task_type": "bug", "task_priority": "high"},
+        "action": "notify_me",
+        "action_config": {
+            "title": "{pupdate_title}",
+            "body": "{pupdate_body}",
+            "priority": "high",
+            "url": "{pupdate_url}",
+        },
     },
     {
-        "name": "Create task on CI failure",
-        "description": "CI red on your PR — create a high-priority bug task so it doesn't get forgotten.",
+        "name": "Notify on CI failure",
+        "description": "CI is red on your PR. Surfaces as a high-priority memo.",
         "match": {"type": "pr_ci_failed"},
-        "action": "create_task_from_pupdate",
-        "action_config": {"task_type": "bug", "task_priority": "high"},
+        "action": "notify_me",
+        "action_config": {
+            "title": "{pupdate_title}",
+            "body": "{pupdate_body}",
+            "priority": "high",
+            "url": "{pupdate_url}",
+        },
     },
     {
         "name": "Close linked task on PR approved",
-        "description": "An approval means the review's done — close any review/coding task pointing at this PR.",
+        "description": "An approval means the review's done. Close any review/coding task pointing at this PR.",
         "match": {"type": "pr_approved"},
         "action": "complete_linked_task",
         "action_config": {},
     },
     {
         "name": "Close linked task on PR merged",
-        "description": "PR merged — close linked tasks and clean up any worktree backing them.",
+        "description": "PR merged. Close linked tasks and clean up any worktree backing them.",
         "match": {"type": "pr_merged"},
         "action": "complete_linked_task",
         "action_config": {},
@@ -112,8 +130,49 @@ _RULE_SEEDS = [
 ]
 
 
+# Names from the previous default-seed set. On startup we archive any
+# of these that the user still has lying around so the auto-creation
+# behavior actually goes away on existing installs, not just fresh
+# ones. Idempotent: if the user already renamed or archived a row, the
+# query just doesn't find it.
+_OBSOLETE_SEED_NAMES = [
+    "Create task on PR review request",
+    "Create task on Linear assignment",
+    "Create task on PagerDuty incident",
+    "Create task on PR changes requested",
+    "Create task on CI failure",
+]
+
+
+def migrate_obsolete_create_task_seeds():
+    """Archive the old `create_task_from_pupdate` seeded rows so the
+    new notify_me defaults take over without firing both side-by-side.
+
+    Only touches rows that are still flagged `created_by='seed'` and
+    haven't been archived already. If the user renamed a row or moved
+    it off seed status, we leave it alone."""
+    archived = 0
+    rows = (
+        Automation.query
+        .filter(Automation.name.in_(_OBSOLETE_SEED_NAMES))
+        .filter(Automation.created_by == "seed")
+        .filter(Automation.status != "archived")
+        .all()
+    )
+    for row in rows:
+        row.status = "archived"
+        archived += 1
+    if archived:
+        db.session.commit()
+        logger.info(
+            f"[automations] archived {archived} obsolete create_task "
+            f"default rule(s) — replaced by notify_me equivalents"
+        )
+    return archived
+
+
 def ensure_seed_rule_automations():
-    """Seed pupdate-scope Automations for the eight canonical matchers.
+    """Seed pupdate-scope Automations for the canonical matchers.
     Idempotent on (name, execution_scope).
     """
     created = 0

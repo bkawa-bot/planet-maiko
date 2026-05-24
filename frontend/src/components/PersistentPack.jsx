@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
+import { Plus } from "@icons";
 import CardAvatar from "./CardAvatar";
 import "./PersistentPack.css";
 
@@ -59,8 +60,9 @@ export default function PersistentPack() {
   // The dock stays visible on /jobs/<id> too -- the user wants to
   // hop between agent conversations without going back home, which
   // is the whole point of making it persistent.
-
-  if (activity.length === 0) return null;
+  //
+  // Maiko's slot is always rendered first regardless of pack
+  // activity, so the dock never disappears entirely.
 
   const handleAvatarClick = (a) => {
     const id = a.job_id || a.task_id;
@@ -105,6 +107,31 @@ export default function PersistentPack() {
       onMouseEnter={() => setExpanded(true)}
       onMouseLeave={() => setExpanded(false)}
     >
+      <button
+        type="button"
+        className="persistent-pack-villager persistent-pack-maiko"
+        onClick={() => navigate("/maiko")}
+        onFocus={() => setExpanded(true)}
+        onBlur={() => setExpanded(false)}
+        aria-label="Maiko, the controller"
+      >
+        <span className="persistent-pack-avatar-wrap persistent-pack-maiko-wrap">
+          <img
+            src="/icon.svg"
+            alt=""
+            width={expanded ? 56 : 44}
+            height={expanded ? 56 : 44}
+            className="persistent-pack-maiko-avatar"
+          />
+        </span>
+        <span className="persistent-pack-bubble" role="tooltip">
+          <span className="persistent-pack-bubble-name">Maiko</span>
+          <span className="persistent-pack-bubble-title">she sees the pack</span>
+        </span>
+      </button>
+      {activity.length > 0 && (
+        <span className="persistent-pack-divider" aria-hidden="true" />
+      )}
       {activity.map((a) => {
         const id = a.job_id || a.task_id;
         const unread = hasUnread(a);
@@ -154,6 +181,25 @@ export default function PersistentPack() {
           </button>
         );
       })}
+      {activity.length > 0 && (
+        <span className="persistent-pack-divider" aria-hidden="true" />
+      )}
+      <button
+        type="button"
+        className="persistent-pack-villager persistent-pack-add"
+        onClick={() => window.dispatchEvent(new CustomEvent("open-launch-agent"))}
+        onFocus={() => setExpanded(true)}
+        onBlur={() => setExpanded(false)}
+        aria-label="Launch a new agent"
+      >
+        <span className="persistent-pack-avatar-wrap persistent-pack-add-wrap">
+          <Plus size={expanded ? 24 : 18} />
+        </span>
+        <span className="persistent-pack-bubble" role="tooltip">
+          <span className="persistent-pack-bubble-name">Launch an agent</span>
+          <span className="persistent-pack-bubble-title">Pick agent + prompt. Cmd/Ctrl+K too.</span>
+        </span>
+      </button>
     </div>
   );
 }

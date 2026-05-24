@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  ArrowLeft, Check, Loader, FileText, MessageSquare,
+  Check, Loader, FileText, MessageSquare,
   Sparkles, Clock, AlertTriangle, Activity, GitPullRequest, X,
   PanelRightClose, PanelRightOpen, CheckboxTree, ChatBubble, ExternalLink,
 } from "@icons";
@@ -37,7 +37,6 @@ import "./AgentJobPage.css";
  */
 export default function AgentJobPage() {
   const { jobId } = useParams();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedView = searchParams.get("view");
 
@@ -80,7 +79,7 @@ export default function AgentJobPage() {
 
   if (loading) {
     return (
-      <div className="agent-job-page">
+      <div className="agent-job-page frost-pane">
         <div className="agent-job-loading"><PlanetSpinner size={14} /> Loading…</div>
       </div>
     );
@@ -88,20 +87,15 @@ export default function AgentJobPage() {
 
   if (!job) {
     return (
-      <div className="agent-job-page">
-        <div className="agent-job-header">
-          <button className="btn btn-sm" onClick={() => navigate(-1)}>
-            <ArrowLeft size={10} /> Back
-          </button>
-        </div>
+      <div className="agent-job-page frost-pane">
         <div className="agent-job-empty">Job not found.</div>
       </div>
     );
   }
 
   return (
-    <div className="agent-job-page">
-      <JobHeader job={job} task={task} profile={profile} onBack={() => navigate(-1)} />
+    <div className="agent-job-page frost-pane">
+      <JobHeader job={job} task={task} profile={profile} />
       <JobTabs tabs={availableTabs} active={activeView} onChange={setView} />
       <div className="agent-job-body">
         {activeView === "diff" && (
@@ -153,14 +147,21 @@ function computeTabs(job, task) {
   if (isDiffKind) {
     tabs.push({ id: "diff", label: "Diff", icon: CheckboxTree });
   }
-  if (job.kind === "coding" && hasPlan) {
+  if (hasPlan) {
+    // Plan tab is no longer gated on kind=="coding". A job that went
+    // investigation -> coding via `maiko handoff` keeps the plan; a
+    // coding job that did plan-first surfaces it the same way.
     tabs.push({
       id: "plan",
       label: hasPlanForApproval ? "Plan ●" : "Plan",
       icon: FileText,
     });
   }
-  if (isReportKind || (hasArtifact && !isDiffKind)) {
+  if (isReportKind || hasArtifact) {
+    // Report tab now shows whenever there's a written artifact, even
+    // if the current kind is a diff-producing one. Lets a coding agent
+    // that started as an investigation keep its prior report visible
+    // alongside the new diff.
     tabs.push({ id: "report", label: "Report", icon: FileText });
   }
   // Activity rolled into Chat — same data stream, the chat tab now
@@ -189,7 +190,7 @@ function resolveActiveView(requested, tabs, job, task) {
 // Header
 // ---------------------------------------------------------------------------
 
-function JobHeader({ job, task, profile, onBack }) {
+function JobHeader({ job, task, profile }) {
   const KIND_LABEL = {
     coding: "Coding", review: "Review", pr_review: "PR review",
     investigation: "Investigation", repo_analysis: "Repo analysis",
@@ -228,15 +229,26 @@ function JobHeader({ job, task, profile, onBack }) {
   return (
     <div className="agent-job-header">
       <div className="agent-job-header-top">
-        <button className="btn btn-sm" onClick={onBack}>
-          <ArrowLeft size={10} /> Back
-        </button>
-        <span className="agent-job-header-spacer" />
         <span className={`agent-job-kind kind-${job.kind}`}>{kindLabel}</span>
         <span className={`agent-job-status status-${tone}`}>{job.status}</span>
         {job.scope_repo && (
           <span className="agent-job-repo">{job.scope_repo}</span>
         )}
+        {(() => {
+          const prUrl = task?.extra?.pr_url
+            || (task?.url && /github\.com\/[^/]+\/[^/]+\/pull\//.test(task.url) ? task.url : null);
+          return prUrl ? (
+            <a
+              className="btn btn-sm"
+              href={prUrl}
+              target="_blank"
+              rel="noreferrer"
+              title="Open the linked pull request on GitHub"
+            >
+              <GitPullRequest size={10} /> View PR
+            </a>
+          ) : null;
+        })()}
         {canResume && (
           <button className="btn btn-sm" onClick={openSession} disabled={resuming}
             title="Attach to the agent's session in a terminal">
@@ -267,7 +279,7 @@ function JobHeader({ job, task, profile, onBack }) {
 
 function JobTabs({ tabs, active, onChange }) {
   return (
-    <div className="agent-job-tabs" role="tablist">
+    <div className="page-tabs" role="tablist">
       {tabs.map((t) => {
         const Icon = t.icon;
         return (
@@ -275,7 +287,7 @@ function JobTabs({ tabs, active, onChange }) {
             key={t.id}
             role="tab"
             aria-selected={active === t.id}
-            className={`agent-job-tab ${active === t.id ? "is-active" : ""}`}
+            className={`page-tab ${active === t.id ? "active" : ""}`}
             onClick={() => onChange(t.id)}
           >
             <Icon size={11} /> {t.label}
@@ -328,6 +340,16 @@ function DiffPanel({ jobId, job, task, onChanged }) {
     }
   }, [id]);
 
+  // Light refetch that only re-pulls comments. Used after add-comment
+  // so the diff body isn't re-rendered (which loses scroll position
+  // and flashes the loading state).
+  const refetchComments = useCallback(async () => {
+    try {
+      const c = await api.listDiffComments(id);
+      setComments(c || []);
+    } catch { /* ignore — leave the existing list in place */ }
+  }, [id]);
+
   useEffect(() => { refetch(); }, [refetch]);
 
   const threadsByAnchor = useMemo(() => {
@@ -374,7 +396,10 @@ function DiffPanel({ jobId, job, task, onChanged }) {
       });
       setNewAnchor(null);
       setNewBody("");
-      await refetch();
+      // Only the comments changed; don't re-pull the diff (which
+      // re-mounts the diff body, flashes the loading state, and
+      // dumps the user back at the top of the page).
+      await refetchComments();
     } catch (e) { showToast(e.message, "high"); }
   };
 
@@ -647,7 +672,22 @@ function DiffPanel({ jobId, job, task, onChanged }) {
             <textarea
               value={newBody}
               onChange={(e) => setNewBody(e.target.value)}
-              placeholder="Leave a comment…"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  const el = e.target;
+                  const start = el.selectionStart;
+                  const end = el.selectionEnd;
+                  setNewBody(el.value.slice(0, start) + "\n" + el.value.slice(end));
+                  requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = start + 1; });
+                  e.preventDefault();
+                  return;
+                }
+                if (e.key === "Enter" && !e.shiftKey && newBody.trim()) {
+                  e.preventDefault();
+                  submitNew();
+                }
+              }}
+              placeholder="Leave a comment… (Enter saves, Shift or Cmd+Enter for newline)"
               rows={4}
               autoFocus
             />
@@ -876,6 +916,10 @@ function ChatPanel({ jobId, agentName }) {
   const [sending, setSending] = useState(false);
   const [userName, setUserName] = useState("");
   const endRef = useRef(null);
+  // True after the first auto-scroll-to-bottom completes. Initial
+  // load snaps without animation so a long chat doesn't visibly
+  // scroll past every message; subsequent new messages still animate.
+  const didInitialScrollRef = useRef(false);
 
   const refetch = useCallback(async () => {
     try {
@@ -912,7 +956,12 @@ function ChatPanel({ jobId, agentName }) {
   // Snap to the bottom whenever the message count changes — opening
   // the panel or sending a new message lands on the latest entry.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (!endRef.current) return;
+    endRef.current.scrollIntoView({
+      behavior: didInitialScrollRef.current ? "smooth" : "auto",
+      block: "end",
+    });
+    didInitialScrollRef.current = true;
   }, [messages.length]);
 
   const handleSend = async () => {
@@ -922,7 +971,7 @@ function ChatPanel({ jobId, agentName }) {
     try {
       const res = await api.sendToAgent(jobId, { content: text, sender: "user" });
       const mode = res?.wake_mode;
-      if (mode === "woke") showToast("Message sent — waking the agent ✨", "normal");
+      if (mode === "woke") showToast("Message sent. Waking the agent up.", "normal");
       else if (mode === "queued") showToast("Agent's working — queued for the next turn", "normal");
       else if (mode === "error") showToast("Sent, but agent has no live session to wake", "high");
       else showToast("Message saved to inbox", "normal");
@@ -970,14 +1019,15 @@ function ChatPanel({ jobId, agentName }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
-            // Cmd/Ctrl+Enter sends; plain Enter inserts a newline so
-            // multi-line messages are easy.
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            // Chat convention: plain Enter sends. Hold Shift, Cmd, or
+            // Ctrl to insert a newline instead (so multi-line messages
+            // are still easy).
+            if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
               e.preventDefault();
               handleSend();
             }
           }}
-          placeholder="Ask a follow-up… ⌘+Enter to send"
+          placeholder="Reply to the agent… ⇧+Enter for a new line"
           rows={3}
           disabled={sending}
         />
