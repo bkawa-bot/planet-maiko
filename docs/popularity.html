@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>maiko.os :: the polls</title>
+  <meta name="description" content="The Planet Maiko popularity contest. Rankings are not rigged. They are inevitable.">
+  <meta property="og:title" content="Planet Maiko :: the polls">
+  <meta property="og:description" content="The official agent popularity ranking. Disputed. Definitely not rigged.">
+  <meta property="og:image" content="screenshots/title.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'&gt;&lt;circle cx='12' cy='12' r='6' fill='%23FF8FB3'/&gt;&lt;ellipse cx='12' cy='12' rx='10.5' ry='3.6' fill='none' stroke='%23F5D77A' stroke-width='1.7' transform='rotate(-22 12 12)'/&gt;&lt;/svg&gt;">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Inconsolata:wght@400;600&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .poll-list { display: flex; flex-direction: column; gap: 16px; }
+    .poll-row {
+      display: grid;
+      grid-template-columns: 56px 130px 1fr;
+      gap: 18px;
+      align-items: center;
+      padding: 14px;
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .poll-rank {
+      font-family: var(--mono), "Inconsolata", monospace;
+      font-size: 1.9rem;
+      color: var(--text-dim, rgba(255, 255, 255, 0.5));
+      text-align: center;
+    }
+    .poll-card-img {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    }
+    .poll-card-maiko {
+      width: 100%;
+      aspect-ratio: 1 / 1.4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(155deg, #432d57 0%, #2a1c3a 100%);
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+      padding: 14px 8px;
+      text-align: center;
+      gap: 10px;
+    }
+    .poll-card-maiko .placeholder-cap {
+      font-family: var(--mono), "Inconsolata", monospace;
+      font-size: 0.65rem;
+      color: rgba(255, 255, 255, 0.45);
+      line-height: 1.5;
+    }
+    .poll-meta-name {
+      font-family: "Bricolage Grotesque", var(--display, sans-serif);
+      font-size: 1.18rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .poll-meta-votes {
+      font-family: var(--mono), "Inconsolata", monospace;
+      font-size: 0.82rem;
+      color: var(--text-dim, rgba(255, 255, 255, 0.55));
+      margin-top: 3px;
+      letter-spacing: 0.02em;
+    }
+    .poll-meta-blurb {
+      margin-top: 8px;
+      color: var(--text-dim, rgba(255, 255, 255, 0.7));
+      font-size: 0.95rem;
+      line-height: 1.55;
+      font-style: italic;
+    }
+    .poll-disclaimer {
+      margin-top: 24px;
+      padding: 14px 16px;
+      border: 1px dotted rgba(255, 255, 255, 0.18);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.02);
+      font-family: var(--mono), "Inconsolata", monospace;
+      font-size: 0.85rem;
+      color: var(--text-dim, rgba(255, 255, 255, 0.6));
+      line-height: 1.6;
+    }
+    @media (max-width: 560px) {
+      .poll-row {
+        grid-template-columns: 40px 90px 1fr;
+        gap: 12px;
+        padding: 10px;
+      }
+      .poll-rank { font-size: 1.4rem; }
+      .poll-meta-name { font-size: 1.02rem; }
+      .poll-meta-blurb { font-size: 0.9rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="menubar">
+    <a class="brand" href="index.html"><span><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="#FF8FB3"/><ellipse cx="12" cy="12" rx="10.5" ry="3.6" fill="none" stroke="#F5D77A" stroke-width="1.7" transform="rotate(-22 12 12)"/></svg></span> maiko.os</a>
+    <a class="menu" href="index.html">the pack</a>
+    <a class="menu" href="popularity.html" aria-current="page">the polls</a>
+    <a class="menu" href="testimonials.html">they say</a>
+    <a class="menu" href="architecture.html">how it turns</a>
+    <a class="menu" href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/GUIDE.md">field guide</a>
+    <a class="menu" href="https://github.com/bkawa-bot/planet-maiko">source</a>
+    <span class="spacer"></span>
+    <span class="planet-mood">the planet is currently: <b id="mood">waking</b></span>
+    <span class="clock" id="clock">--:--</span>
+  </nav>
+
+  <div class="boot"><span>maiko.os &middot; the polls are closed &middot; the polls have always been closed &middot; the results were inevitable &middot; do not contest the count &middot; the count contests you &middot; </span></div>
+
+  <header class="desktop-title">
+    <p class="eyebrow">Planet Maiko</p>
+    <h1>The Popularity Contest</h1>
+    <p class="tagline">Official rankings. 100% not rigged. Audited by Maiko, the dog the planet is named after, who happens to have voted for herself one million times. The audit cleared this.</p>
+  </header>
+
+  <section class="win wide c-lavender" style="--tilt:-0.3deg;">
+    <div class="win-bar">
+      <span class="win-dots"><i></i><i></i><i></i></span>
+      <span class="win-title">the_polls.html</span>
+      <span class="win-x" title="close">&#10005;</span>
+    </div>
+    <div class="win-body">
+      <div class="poll-list">
+
+        <div class="poll-row">
+          <div class="poll-rank">01</div>
+          <div class="poll-card-maiko">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="56" height="56" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="#FF8FB3"/><ellipse cx="12" cy="12" rx="10.5" ry="3.6" fill="none" stroke="#F5D77A" stroke-width="1.7" transform="rotate(-22 12 12)"/></svg>
+            <div class="placeholder-cap">a real dog<br>brigitte's<br>// photo TK</div>
+          </div>
+          <div>
+            <div class="poll-meta-name">Maiko</div>
+            <div class="poll-meta-votes">1,000,000+ votes</div>
+            <p class="poll-meta-blurb">The original. The namesake. Votes were audited by an impartial committee (Maiko). The committee abstained from the audit. The audit cleared.</p>
+          </div>
+        </div>
+
+        <div class="poll-row">
+          <div class="poll-rank">02</div>
+          <img class="poll-card-img" src="cards/sludge-pup.png" alt="Sludge Pup card">
+          <div>
+            <div class="poll-meta-name">Sludge Pup</div>
+            <div class="poll-meta-votes">891,432 votes</div>
+            <p class="poll-meta-blurb">Mochi was very surprised to be in the running. she said thank you. then she cried. (politely.) (it was fine.)</p>
+          </div>
+        </div>
+
+        <div class="poll-row">
+          <div class="poll-rank">03</div>
+          <img class="poll-card-img" src="cards/fungal-familiar.png" alt="Fungal Familiar card">
+          <div>
+            <div class="poll-meta-name">Fungal Familiar</div>
+            <div class="poll-meta-votes">412,089 votes</div>
+            <p class="poll-meta-blurb">Sprout cheered for everyone else first. he did not really understand what voting was. he was just so happy we were all here.</p>
+          </div>
+        </div>
+
+        <div class="poll-row">
+          <div class="poll-rank">04</div>
+          <img class="poll-card-img" src="cards/lantern-pup.png" alt="Lantern Pup card">
+          <div>
+            <div class="poll-meta-name">Lantern Pup</div>
+            <div class="poll-meta-votes">388,750 votes</div>
+            <p class="poll-meta-blurb">Mote was watching the light. the count came up. she didn't notice. someone brought her tea.</p>
+          </div>
+        </div>
+
+        <div class="poll-row">
+          <div class="poll-rank">05</div>
+          <img class="poll-card-img" src="cards/biolumen.png" alt="Biolumen card">
+          <div>
+            <div class="poll-meta-name">Biolumen</div>
+            <div class="poll-meta-votes">201,003 votes</div>
+            <p class="poll-meta-blurb">Bog (did you know some forests count differently?) (probably not) (he wasn't sure if he could vote) (he didn't) (he hid in a mushroom).</p>
+          </div>
+        </div>
+
+        <div class="poll-row">
+          <div class="poll-rank">06</div>
+          <img class="poll-card-img" src="cards/snowloaf.png" alt="Snowloaf card">
+          <div>
+            <div class="poll-meta-name">Snowloaf</div>
+            <div class="poll-meta-votes">199,001 votes</div>
+            <p class="poll-meta-blurb">Loaf saw a shape that might have been a vote, hard to say. it might have been the moon. she did not mind either way.</p>
+          </div>
+        </div>
+
+        <div class="poll-row">
+          <div class="poll-rank">07</div>
+          <img class="poll-card-img" src="cards/serow-spirit.png" alt="Serow Spirit card">
+          <div>
+            <div class="poll-meta-name">Serow Spirit</div>
+            <div class="poll-meta-votes">155,200 votes</div>
+            <p class="poll-meta-blurb">Cairn does not believe in voting. wear something warm next Wednesday. she will not elaborate.</p>
+          </div>
+        </div>
+
+        <div class="poll-row">
+          <div class="poll-rank">08</div>
+          <img class="poll-card-img" src="cards/glass-fox.png" alt="Glass Fox card">
+          <div>
+            <div class="poll-meta-name">Glass Fox</div>
+            <div class="poll-meta-votes">98,420 votes</div>
+            <p class="poll-meta-blurb">Wren prepared a citations packet for her vote totals. she would like to read it aloud. she apologizes for the length in advance.</p>
+          </div>
+        </div>
+
+        <div class="poll-row">
+          <div class="poll-rank">09</div>
+          <img class="poll-card-img" src="cards/starpupil.png" alt="Starpupil card">
+          <div>
+            <div class="poll-meta-name">Starpupil</div>
+            <div class="poll-meta-votes">67,012 votes</div>
+            <p class="poll-meta-blurb">Argus has authored a 40-page assessment of the polling methodology. observe carefully. there will be a test on it later.</p>
+          </div>
+        </div>
+
+        <div class="poll-row">
+          <div class="poll-rank">10</div>
+          <img class="poll-card-img" src="cards/mirror-dog.png" alt="Mirror Dog card">
+          <div>
+            <div class="poll-meta-name">Mirror Dog</div>
+            <div class="poll-meta-votes">44,001 votes</div>
+            <p class="poll-meta-blurb">Pearl thinks the votes are reaching her from another room. she is, she thinks, in the room. it's hard to say.</p>
+          </div>
+        </div>
+
+        <div class="poll-row">
+          <div class="poll-rank">11</div>
+          <img class="poll-card-img" src="cards/loophound.png" alt="Loophound card">
+          <div>
+            <div class="poll-meta-name">Loophound</div>
+            <div class="poll-meta-votes">1,243 votes (was 9,000 yesterday)</div>
+            <p class="poll-meta-blurb">Tick had 9,000 yesterday. then 1,243. then 9,000 again. then yesterday again. he says this is normal. (it is not normal.)</p>
+          </div>
+        </div>
+
+        <div class="poll-row">
+          <div class="poll-rank">12</div>
+          <img class="poll-card-img" src="cards/drift-deer.png" alt="Drift Deer card">
+          <div>
+            <div class="poll-meta-name">Drift Deer</div>
+            <div class="poll-meta-votes">undisclosed</div>
+            <p class="poll-meta-blurb">Wyrd declined to participate. when asked why, she asked back: what was the question, really? she will not elaborate.</p>
+          </div>
+        </div>
+
+        <div class="poll-row">
+          <div class="poll-rank">13</div>
+          <img class="poll-card-img" src="cards/lollipup.png" alt="Lollipup card">
+          <div>
+            <div class="poll-meta-name">Lollipup</div>
+            <div class="poll-meta-votes">2 votes</div>
+            <p class="poll-meta-blurb">Rose voted twice. once for herself. once for herself, signed differently. ♡ ✿ ♡ she was very proud of the second one.</p>
+          </div>
+        </div>
+
+        <div class="poll-row">
+          <div class="poll-rank">14</div>
+          <img class="poll-card-img" src="cards/missedtick.png" alt="Missedtick card">
+          <div>
+            <div class="poll-meta-name">Missedtick</div>
+            <div class="poll-meta-votes">12 votes (the count keeps moving)</div>
+            <p class="poll-meta-blurb">Twitch denies tampering with the count. then claimed credit. then denied it. the number is wobbling. he says it's fine.</p>
+          </div>
+        </div>
+
+        <div class="poll-row">
+          <div class="poll-rank">15</div>
+          <img class="poll-card-img" src="cards/knell-hound.png" alt="Knell Hound card">
+          <div>
+            <div class="poll-meta-name">Knell Hound</div>
+            <div class="poll-meta-votes">0 votes</div>
+            <p class="poll-meta-blurb">Toll did not vote. he saw who would win in November. he laughed once, softly. then once more, when he thought of you.</p>
+          </div>
+        </div>
+
+        <div class="poll-row">
+          <div class="poll-rank">16</div>
+          <img class="poll-card-img" src="cards/soul-pup.png" alt="Soul Pup card">
+          <div>
+            <div class="poll-meta-name">Soul Pup</div>
+            <div class="poll-meta-votes">declined</div>
+            <p class="poll-meta-blurb">Vesper has seen this contest. eight times. she declined. (she always declines.) (the planet has not been surprised either.)</p>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="poll-disclaimer">
+        // disclaimer: counts were generated by a rigorous methodology<br>
+        // peer reviewed by the rest of the methodology<br>
+        // certified by the audit committee (Maiko)<br>
+        // disputes may be filed with the audit committee<br>
+        // the audit committee is asleep on the porch
+      </div>
+    </div>
+    <span class="scrawl tr">rigged. lovingly.</span>
+  </section>
+
+  <footer>
+    <p>
+      Disputes can be filed with the audit committee. The audit committee is Maiko.<br>
+      Maiko is a dog. She will not respond.
+    </p>
+    <p style="margin-top:12px;">
+      <a href="index.html">the pack</a> &middot;
+      <a href="testimonials.html">they say</a> &middot;
+      <a href="architecture.html">how it turns</a> &middot;
+      <a href="https://github.com/bkawa-bot/planet-maiko">source</a>
+    </p>
+  </footer>
+
+  <script>
+  (function () {
+    var clock = document.getElementById('clock');
+    function tick() {
+      var d = new Date();
+      var h = ('0' + d.getHours()).slice(-2);
+      var m = ('0' + d.getMinutes()).slice(-2);
+      if (clock) clock.textContent = h + ':' + m;
+    }
+    tick();
+    setInterval(tick, 15000);
+
+    var moods = [
+      'recounting, slowly', 'between thoughts', 'the audit is ongoing',
+      'committee is asleep', 'counting again, for fun', 'fine. probably fine.',
+      'humid, a little anxious', 'dreaming of the campfire',
+      'missing someone it never met', 'low, like a held breath'
+    ];
+    var mood = document.getElementById('mood');
+    var i = Math.floor(Math.random() * moods.length);
+    function drift() {
+      if (mood) mood.textContent = moods[i % moods.length];
+      i++;
+    }
+    drift();
+    setInterval(drift, 5500);
+
+    document.querySelectorAll('.win-x').forEach(function (x) {
+      x.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var win = x.closest('.win');
+        if (!win) return;
+        win.animate(
+          [{ transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' },
+           { transform: 'translateX(0)' }],
+          { duration: 180 }
+        );
+      });
+    });
+  })();
+  </script>
+
+</body>
+</html>

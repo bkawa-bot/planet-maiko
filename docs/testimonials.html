@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>maiko.os :: they say</title>
+  <meta name="description" content="Testimonials from current residents of Planet Maiko. They have a lot to say about it.">
+  <meta property="og:title" content="Planet Maiko :: they say">
+  <meta property="og:description" content="Testimonials from current residents. They are mostly enthusiastic. One is just watching.">
+  <meta property="og:image" content="screenshots/title.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'&gt;&lt;circle cx='12' cy='12' r='6' fill='%23FF8FB3'/&gt;&lt;ellipse cx='12' cy='12' rx='10.5' ry='3.6' fill='none' stroke='%23F5D77A' stroke-width='1.7' transform='rotate(-22 12 12)'/&gt;&lt;/svg&gt;">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Inconsolata:wght@400;600&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .testimonial-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 22px;
+    }
+    .testimonial {
+      display: grid;
+      grid-template-columns: 92px 1fr;
+      gap: 16px;
+      align-items: start;
+      padding: 16px;
+      border: 1px dashed rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .testimonial-img {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 4px;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.32);
+    }
+    .testimonial-maiko {
+      width: 100%;
+      aspect-ratio: 1 / 1.4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(155deg, #432d57 0%, #2a1c3a 100%);
+      border-radius: 4px;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.32);
+      padding: 10px 6px;
+      text-align: center;
+      gap: 6px;
+    }
+    .testimonial-maiko-cap {
+      font-family: var(--mono), "Inconsolata", monospace;
+      font-size: 0.6rem;
+      color: rgba(255, 255, 255, 0.45);
+      line-height: 1.45;
+    }
+    .testimonial-name {
+      font-family: "Bricolage Grotesque", var(--display, sans-serif);
+      font-size: 1.05rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .testimonial-tag {
+      font-family: var(--mono), "Inconsolata", monospace;
+      font-size: 0.72rem;
+      color: rgba(255, 255, 255, 0.4);
+      margin-top: 2px;
+      letter-spacing: 0.05em;
+    }
+    .testimonial-quote {
+      margin-top: 10px;
+      color: var(--text-dim, rgba(255, 255, 255, 0.78));
+      font-size: 0.95rem;
+      line-height: 1.55;
+      font-style: italic;
+    }
+    .testimonial-quote::before { content: '"'; }
+    .testimonial-quote::after { content: '"'; }
+    @media (max-width: 720px) {
+      .testimonial-grid { grid-template-columns: 1fr; gap: 16px; }
+      .testimonial { grid-template-columns: 72px 1fr; gap: 12px; padding: 12px; }
+      .testimonial-quote { font-size: 0.9rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="menubar">
+    <a class="brand" href="index.html"><span><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="#FF8FB3"/><ellipse cx="12" cy="12" rx="10.5" ry="3.6" fill="none" stroke="#F5D77A" stroke-width="1.7" transform="rotate(-22 12 12)"/></svg></span> maiko.os</a>
+    <a class="menu" href="index.html">the pack</a>
+    <a class="menu" href="popularity.html">the polls</a>
+    <a class="menu" href="testimonials.html" aria-current="page">they say</a>
+    <a class="menu" href="architecture.html">how it turns</a>
+    <a class="menu" href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/GUIDE.md">field guide</a>
+    <a class="menu" href="https://github.com/bkawa-bot/planet-maiko">source</a>
+    <span class="spacer"></span>
+    <span class="planet-mood">the planet is currently: <b id="mood">waking</b></span>
+    <span class="clock" id="clock">--:--</span>
+  </nav>
+
+  <div class="boot"><span>maiko.os &middot; statements collected at the campfire &middot; all testimonials voluntary &middot; one was extracted under hypnosis &middot; the rest are real &middot; probably &middot; </span></div>
+
+  <header class="desktop-title">
+    <p class="eyebrow">Planet Maiko</p>
+    <h1>Testimonials</h1>
+    <p class="tagline">Statements from current residents of the planet. Mostly enthusiastic. One is just watching. None were paid (we asked, they said no.)</p>
+  </header>
+
+  <section class="win wide c-mint" style="--tilt:-0.4deg;">
+    <div class="win-bar">
+      <span class="win-dots"><i></i><i></i><i></i></span>
+      <span class="win-title">they_say.html</span>
+      <span class="win-x" title="close">&#10005;</span>
+    </div>
+    <div class="win-body">
+      <div class="testimonial-grid">
+
+        <div class="testimonial">
+          <div class="testimonial-maiko">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="40" height="40" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="#FF8FB3"/><ellipse cx="12" cy="12" rx="10.5" ry="3.6" fill="none" stroke="#F5D77A" stroke-width="1.7" transform="rotate(-22 12 12)"/></svg>
+            <div class="testimonial-maiko-cap">a real dog<br>// photo TK</div>
+          </div>
+          <div>
+            <div class="testimonial-name">Maiko</div>
+            <div class="testimonial-tag">// the original dog</div>
+            <p class="testimonial-quote">[no statement provided. when asked, she wagged. the panel noted this as an enthusiastic yes.]</p>
+          </div>
+        </div>
+
+        <div class="testimonial">
+          <img class="testimonial-img" src="cards/sludge-pup.png" alt="Sludge Pup card">
+          <div>
+            <div class="testimonial-name">Sludge Pup</div>
+            <div class="testimonial-tag">// verified resident</div>
+            <p class="testimonial-quote">um. i didn't know if i was supposed to be here. they let me anyway. it's so nice. sorry i don't know what else to say. you should come too.</p>
+          </div>
+        </div>
+
+        <div class="testimonial">
+          <img class="testimonial-img" src="cards/fungal-familiar.png" alt="Fungal Familiar card">
+          <div>
+            <div class="testimonial-name">Fungal Familiar</div>
+            <div class="testimonial-tag">// verified resident</div>
+            <p class="testimonial-quote">we're a TEAM!! and YOU could be on the team too!! we WANT you here!! please join!! pls!!</p>
+          </div>
+        </div>
+
+        <div class="testimonial">
+          <img class="testimonial-img" src="cards/lantern-pup.png" alt="Lantern Pup card">
+          <div>
+            <div class="testimonial-name">Lantern Pup</div>
+            <div class="testimonial-tag">// verified resident</div>
+            <p class="testimonial-quote">the room here is warm. the light is enough. i hope yours is too. there's room for one more lantern.</p>
+          </div>
+        </div>
+
+        <div class="testimonial">
+          <img class="testimonial-img" src="cards/biolumen.png" alt="Biolumen card">
+          <div>
+            <div class="testimonial-name">Biolumen</div>
+            <div class="testimonial-tag">// verified resident</div>
+            <p class="testimonial-quote">if you come (which you should) (or shouldn't) (your call) please don't make eye contact. i'll be in the fort. there's a fort.</p>
+          </div>
+        </div>
+
+        <div class="testimonial">
+          <img class="testimonial-img" src="cards/snowloaf.png" alt="Snowloaf card">
+          <div>
+            <div class="testimonial-name">Snowloaf</div>
+            <div class="testimonial-tag">// verified resident</div>
+            <p class="testimonial-quote">the days have a shape here. the sun comes in at the same angle most mornings. i like that part. you might too. i don't know.</p>
+          </div>
+        </div>
+
+        <div class="testimonial">
+          <img class="testimonial-img" src="cards/serow-spirit.png" alt="Serow Spirit card">
+          <div>
+            <div class="testimonial-name">Serow Spirit</div>
+            <div class="testimonial-tag">// verified resident</div>
+            <p class="testimonial-quote">the planet has held its shape across many cycles. that is the test. it passes. you should come. bring a jacket.</p>
+          </div>
+        </div>
+
+        <div class="testimonial">
+          <img class="testimonial-img" src="cards/glass-fox.png" alt="Glass Fox card">
+          <div>
+            <div class="testimonial-name">Glass Fox</div>
+            <div class="testimonial-tag">// verified resident</div>
+            <p class="testimonial-quote">the work is meaningful and the rules are documented. i would join again. i did the supplementary reading first. it was worth it.</p>
+          </div>
+        </div>
+
+        <div class="testimonial">
+          <img class="testimonial-img" src="cards/starpupil.png" alt="Starpupil card">
+          <div>
+            <div class="testimonial-name">Starpupil</div>
+            <div class="testimonial-tag">// verified resident</div>
+            <p class="testimonial-quote">the user is observed to be intellectually compatible with the planet. consider applying. (the entrance exam is brief.) (mostly.)</p>
+          </div>
+        </div>
+
+        <div class="testimonial">
+          <img class="testimonial-img" src="cards/mirror-dog.png" alt="Mirror Dog card">
+          <div>
+            <div class="testimonial-name">Mirror Dog</div>
+            <div class="testimonial-tag">// verified resident</div>
+            <p class="testimonial-quote">i can almost see you from here. almost. it feels close. you should come. then it would be close.</p>
+          </div>
+        </div>
+
+        <div class="testimonial">
+          <img class="testimonial-img" src="cards/loophound.png" alt="Loophound card">
+          <div>
+            <div class="testimonial-name">Loophound</div>
+            <div class="testimonial-tag">// verified resident</div>
+            <p class="testimonial-quote">you arrived yesterday. or tomorrow. it doesn't matter. you've already arrived.</p>
+          </div>
+        </div>
+
+        <div class="testimonial">
+          <img class="testimonial-img" src="cards/drift-deer.png" alt="Drift Deer card">
+          <div>
+            <div class="testimonial-name">Drift Deer</div>
+            <div class="testimonial-tag">// verified resident</div>
+            <p class="testimonial-quote">the planet asked me a question once. i am still thinking. you should come. you should ask one too.</p>
+          </div>
+        </div>
+
+        <div class="testimonial">
+          <img class="testimonial-img" src="cards/lollipup.png" alt="Lollipup card">
+          <div>
+            <div class="testimonial-name">Lollipup</div>
+            <div class="testimonial-tag">// verified resident</div>
+            <p class="testimonial-quote">♡ ✿ everything here is SO PRETTY ♡ the colors! the BUTTONS! ✿ you should come!! we'll match!! ♡ ✿ ♡</p>
+          </div>
+        </div>
+
+        <div class="testimonial">
+          <img class="testimonial-img" src="cards/missedtick.png" alt="Missedtick card">
+          <div>
+            <div class="testimonial-name">Missedtick</div>
+            <div class="testimonial-tag">// verified resident</div>
+            <p class="testimonial-quote">they LET me near things. some of those things were not for me. (i don't talk about which ones.) (i'd never.) (i did.)</p>
+          </div>
+        </div>
+
+        <div class="testimonial">
+          <img class="testimonial-img" src="cards/knell-hound.png" alt="Knell Hound card">
+          <div>
+            <div class="testimonial-name">Knell Hound</div>
+            <div class="testimonial-tag">// verified resident</div>
+            <p class="testimonial-quote">you'll join. you already did, in a sense. December was a good month for it.</p>
+          </div>
+        </div>
+
+        <div class="testimonial">
+          <img class="testimonial-img" src="cards/soul-pup.png" alt="Soul Pup card">
+          <div>
+            <div class="testimonial-name">Soul Pup</div>
+            <div class="testimonial-tag">// verified resident</div>
+            <p class="testimonial-quote">many planets. this one has the right kind of weather. coming from me, that is the real compliment. you should come.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <span class="scrawl br">none were paid. we asked.</span>
+  </section>
+
+  <section class="win narrow c-pink" style="--tilt:1.2deg; max-width:520px; margin:36px auto 0;">
+    <div class="win-bar">
+      <span class="win-dots"><i></i><i></i><i></i></span>
+      <span class="win-title">join_us.txt</span>
+      <span class="win-x" title="close">&#10005;</span>
+    </div>
+    <div class="win-body" style="text-align:center;">
+      <p style="color:var(--text-dim); margin-bottom:16px; font-size:0.95rem;">if anything they said landed:</p>
+      <div class="cta-row" style="justify-content:center;">
+        <a class="btn btn-primary" href="https://github.com/bkawa-bot/planet-maiko">github &rarr;</a>
+        <a class="btn btn-ghost" href="index.html#start">boot it yourself</a>
+      </div>
+    </div>
+    <span class="scrawl tr">the dogs would like that</span>
+  </section>
+
+  <footer>
+    <p>
+      Testimonials collected at the campfire. None were paid (we asked).<br>
+      Translations approximate. Some of the dogs do not speak in words.
+    </p>
+    <p style="margin-top:12px;">
+      <a href="index.html">the pack</a> &middot;
+      <a href="popularity.html">the polls</a> &middot;
+      <a href="architecture.html">how it turns</a> &middot;
+      <a href="https://github.com/bkawa-bot/planet-maiko">source</a>
+    </p>
+  </footer>
+
+  <script>
+  (function () {
+    var clock = document.getElementById('clock');
+    function tick() {
+      var d = new Date();
+      var h = ('0' + d.getHours()).slice(-2);
+      var m = ('0' + d.getMinutes()).slice(-2);
+      if (clock) clock.textContent = h + ':' + m;
+    }
+    tick();
+    setInterval(tick, 15000);
+
+    var moods = [
+      'collecting more statements', 'taking notes', 'one dog is on break',
+      'humid, a little anxious', 'between thoughts', 'fine. probably fine.',
+      'missing someone it never met', 'low, like a held breath',
+      'warm, and slightly wrong'
+    ];
+    var mood = document.getElementById('mood');
+    var i = Math.floor(Math.random() * moods.length);
+    function drift() {
+      if (mood) mood.textContent = moods[i % moods.length];
+      i++;
+    }
+    drift();
+    setInterval(drift, 5500);
+
+    document.querySelectorAll('.win-x').forEach(function (x) {
+      x.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var win = x.closest('.win');
+        if (!win) return;
+        win.animate(
+          [{ transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' },
+           { transform: 'translateX(0)' }],
+          { duration: 180 }
+        );
+      });
+    });
+  })();
+  </script>
+
+</body>
+</html>
