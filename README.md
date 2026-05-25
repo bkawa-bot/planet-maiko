@@ -89,7 +89,7 @@ git clone https://github.com/bkawa-bot/planet-maiko.git && cd planet-maiko && py
 ```
 > **SSL errors** with Linear or other integrations? `pip install --upgrade certifi`, then `open /Applications/Python\ 3.12/Install\ Certificates.command`.
 
-### Run
+### Next time
 
 ```bash
 maiko up

@@ -120,10 +120,15 @@ def create_venv() -> None:
     ok("venv created")
 
 
-def venv_python() -> Path:
+def venv_bin(name: str) -> Path:
+    """Path to an executable inside the venv (handles .exe on Windows)."""
     if os.name == "nt":
-        return VENV_DIR / "Scripts" / "python.exe"
-    return VENV_DIR / "bin" / "python"
+        return VENV_DIR / "Scripts" / f"{name}.exe"
+    return VENV_DIR / "bin" / name
+
+
+def venv_python() -> Path:
+    return venv_bin("python")
 
 
 def install_python_deps() -> None:
@@ -141,6 +146,27 @@ def install_npm_deps() -> None:
     ok("Frontend deps installed")
 
 
+# ----- launch -----
+
+
+def launch_maiko() -> None:
+    """Hand off to `maiko up` so the first thing the user sees is Maiko."""
+    step("Launching Maiko (ctrl+C to stop)")
+    maiko = venv_bin("maiko")
+    if not maiko.exists():
+        activate = r".venv\Scripts\activate" if os.name == "nt" else "source .venv/bin/activate"
+        warn(
+            f"Couldn't find {maiko}. Activate the venv and run `maiko up` manually:\n"
+            f"    {activate}\n    maiko up"
+        )
+        return
+    print()
+    try:
+        subprocess.run([str(maiko), "up"], cwd=REPO_ROOT)
+    except KeyboardInterrupt:
+        pass
+
+
 # ----- entry point -----
 
 
@@ -155,11 +181,7 @@ def main() -> None:
     install_python_deps()
     install_npm_deps()
     check_gh_auth()
-    activate = r".venv\Scripts\activate" if os.name == "nt" else "source .venv/bin/activate"
-    print()
-    print("All set.")
-    print(f"  Activate the venv: {activate}")
-    print("  Then launch Maiko: maiko up")
+    launch_maiko()
 
 
 if __name__ == "__main__":

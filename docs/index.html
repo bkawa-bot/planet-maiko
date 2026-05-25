@@ -301,14 +301,11 @@
         <p style="color:var(--text-dim); margin-bottom:16px; font-size:0.95rem;">Needs: Python 3.10+, Node 18+, the <code>gh</code> CLI, Claude Code.</p>
 <pre>git clone https://github.com/bkawa-bot/planet-maiko.git
 cd planet-maiko
-python3 bootstrap.py
-
-source .venv/bin/activate
-maiko up</pre>
+python3 bootstrap.py</pre>
         <p class="install-note">
-          <code>maiko up</code> starts the backend, starts the frontend,
-          and opens the window for you. First run makes its own database
-          and walks you through setup. The rest lives in
+          Bootstrap installs everything and launches Maiko. First run
+          makes its own database and walks you through setup in your
+          browser. Ctrl+C to stop. The rest lives in
           <a href="https://github.com/bkawa-bot/planet-maiko/blob/main/docs/GUIDE.md">the field guide</a>.
         </p>
         <div class="beta">beta. breaking changes, schema patches, rough edges, bugs.</div>
