@@ -116,8 +116,12 @@ export default function PersistentPack() {
         aria-label="Maiko, the controller"
       >
         <span className="persistent-pack-avatar-wrap persistent-pack-maiko-wrap">
+          {/* Drops a real Maiko sprite (photo or pixel-art portrait) at
+              /public/sprites/maiko-avatar.png and it replaces the planet
+              icon here. Until then onError falls back to the planet. */}
           <img
-            src="/icon.svg"
+            src="/sprites/maiko-avatar.png"
+            onError={(e) => { e.currentTarget.src = "/icon.svg"; }}
             alt=""
             width={expanded ? 56 : 44}
             height={expanded ? 56 : 44}
