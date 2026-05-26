@@ -39,27 +39,7 @@
       border-radius: 4px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
     }
-    .poll-card-maiko {
-      width: 100%;
-      aspect-ratio: 1 / 1.4;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      background: linear-gradient(155deg, #432d57 0%, #2a1c3a 100%);
-      border-radius: 4px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-      padding: 14px 8px;
-      text-align: center;
-      gap: 10px;
-    }
-    .poll-card-maiko .placeholder-cap {
-      font-family: var(--mono), "Inconsolata", monospace;
-      font-size: 0.65rem;
-      color: rgba(255, 255, 255, 0.45);
-      line-height: 1.5;
-    }
-    .poll-meta-name {
+.poll-meta-name {
       font-family: "Bricolage Grotesque", var(--display, sans-serif);
       font-size: 1.18rem;
       font-weight: 700;
@@ -200,10 +180,7 @@
 
         <div class="poll-row" data-agent="maiko">
           <div class="poll-rank">02</div>
-          <div class="poll-card-maiko">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="56" height="56" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="#FF8FB3"/><ellipse cx="12" cy="12" rx="10.5" ry="3.6" fill="none" stroke="#F5D77A" stroke-width="1.7" transform="rotate(-22 12 12)"/></svg>
-            <div class="placeholder-cap">a real dog<br>brigitte's<br>// photo TK</div>
-          </div>
+          <img class="poll-card-img" src="cards/maiko.png" alt="Maiko card">
           <div>
             <div class="poll-meta-name">Maiko</div>
             <div class="poll-meta-votes" data-base="1000000" data-suffix="+ votes">1,000,000+ votes</div>
