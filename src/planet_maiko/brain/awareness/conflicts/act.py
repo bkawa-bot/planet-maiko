@@ -108,8 +108,8 @@ def resolve_conflicts(conflicts):
         dict with counts: {resolved, escalated, failed}
     """
     try:
-        from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
-        runtime = ClaudeCodeRuntime()
+        from planet_maiko.agents.brain_session import _get_runtime
+        runtime = _get_runtime("conflict_resolution")
         if not runtime.is_available():
             return {"resolved": 0, "escalated": 0, "failed": 0, "skipped": "runtime unavailable"}
     except Exception:

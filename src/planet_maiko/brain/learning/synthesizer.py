@@ -96,10 +96,10 @@ def synthesize_unsynthesized_signals(max_signals=None, batch_size=BATCH_SIZE,
         return {"found": 0, "processed": 0, "synthesized": 0,
                 "dropped_junk": 0, "error": None}
 
-    from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
+    from planet_maiko.agents.brain_session import _get_runtime
     from planet_maiko.agents.routing import resolve_model
 
-    runtime = ClaudeCodeRuntime()
+    runtime = _get_runtime("classify")
     model = resolve_model("classify")
 
     # --- Phase 1: build batch jobs on the main thread. Workers receive
