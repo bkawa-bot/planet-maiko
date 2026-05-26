@@ -18,6 +18,10 @@ export default function MaikoChat() {
   const endRef = useRef(null);
   const inputRef = useRef(null);
   const initialScrolled = useRef(false);
+  // FIFO queue of thinking-placeholder ids waiting for a real reply.
+  // Each send pushes one; refetch pops the oldest when a new maiko
+  // message arrives in a poll, and swaps it in place.
+  const pendingMaikoIds = useRef([]);
 
   useEffect(() => {
     api.getMaikoMessages()
@@ -25,6 +29,52 @@ export default function MaikoChat() {
       .catch(() => setMessages([]))
       .finally(() => setLoading(false));
   }, []);
+
+  const refetchMessages = async () => {
+    try {
+      const rows = await api.getMaikoMessages();
+      setMessages((prev) => {
+        // Real (server-persisted) rows the UI already knows about.
+        // Optimistic / pending ids are non-numeric so they don't get
+        // counted here.
+        const realIds = new Set(
+          prev.filter((m) => typeof m.id === "number").map((m) => m.id),
+        );
+        const newRows = rows.filter((r) => !realIds.has(r.id));
+        if (newRows.length === 0) return prev;
+
+        const next = [...prev];
+        for (const row of newRows) {
+          // A new maiko row fulfills the oldest queued thinking
+          // placeholder. Out-of-band maiko rows (e.g. seeded from
+          // another tab) just append.
+          if (row.role === "maiko" && pendingMaikoIds.current.length > 0) {
+            const tmpId = pendingMaikoIds.current.shift();
+            const idx = next.findIndex((m) => m.id === tmpId);
+            if (idx >= 0) {
+              next[idx] = row;
+              continue;
+            }
+          }
+          if (!next.some((m) => m.id === row.id)) {
+            next.push(row);
+          }
+        }
+        return next;
+      });
+    } catch {
+      // Transient failures keep the prior list.
+    }
+  };
+
+  // Poll for new messages while the page is open. 4s is snappier
+  // than the 8s AgentJobPage uses because this surface is an
+  // active conversation, not a background-watching audit log.
+  useEffect(() => {
+    if (loading) return undefined;
+    const id = setInterval(refetchMessages, 4000);
+    return () => clearInterval(id);
+  }, [loading]);
 
   useEffect(() => {
     if (!endRef.current) return;
@@ -49,10 +99,12 @@ export default function MaikoChat() {
     if (!content) return;
     setInput("");
     // Each send is independent: optimistic user bubble + a per-send
-    // "thinking" placeholder. The server reply replaces the
-    // placeholder in place, so multiple sends can be in flight at
-    // once and the user can keep typing follow-ups without waiting
-    // for Maiko's LLM round trip (10–30s) to finish.
+    // "thinking" placeholder. POST returns the saved user message
+    // immediately; the maiko reply arrives via the polling tick
+    // after the background generation finishes (10-90s). Multiple
+    // sends can be in flight at once — each placeholder gets queued
+    // in pendingMaikoIds and the next polled maiko reply fulfills
+    // the oldest one FIFO.
     const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const tmpUserId = `tmp-user-${stamp}`;
     const tmpMaikoId = `tmp-maiko-${stamp}`;
@@ -70,14 +122,22 @@ export default function MaikoChat() {
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, optimisticUser, thinking]);
+    pendingMaikoIds.current.push(tmpMaikoId);
     try {
       const r = await api.sendMaikoMessage(content);
+      // POST now returns just {user}; the reply will arrive via the
+      // polling tick after Maiko finishes generating.
       setMessages((prev) => prev.map((m) => {
         if (m.id === tmpUserId) return r.user;
-        if (m.id === tmpMaikoId) return r.maiko;
         return m;
       }));
     } catch (err) {
+      // POST failed (network, validation, etc). Drop the queued
+      // placeholder so a future unrelated reply can't claim it, and
+      // swap the thinking bubble for the error.
+      pendingMaikoIds.current = pendingMaikoIds.current.filter(
+        (id) => id !== tmpMaikoId,
+      );
       setMessages((prev) => prev.map((m) => {
         if (m.id === tmpMaikoId) {
           return {
