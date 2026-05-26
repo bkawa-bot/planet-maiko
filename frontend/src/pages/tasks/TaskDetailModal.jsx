@@ -1,6 +1,5 @@
 import { FolderOpen, X, ExternalLink } from "@icons";
 import ModalPortal from "../../components/ModalPortal";
-import { renderMarkdown } from "../../utils/markdown";
 
 /**
  * Read-only detail modal for a Task — shows description / url /
@@ -31,28 +30,6 @@ export default function TaskDetailModal({ task, onClose }) {
           {task.metadata?.description && (
             <div style={{ whiteSpace: "pre-wrap", marginBottom: 12 }}>
               {task.metadata.description}
-            </div>
-          )}
-          {task.metadata?.artifact && (
-            <div style={{ marginTop: task.metadata?.description ? 16 : 0, marginBottom: 12 }}>
-              <div
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                  color: "var(--text-muted)",
-                  marginBottom: 8,
-                }}
-              >
-                Agent's report
-              </div>
-              <div
-                className="brief-content markdown"
-                dangerouslySetInnerHTML={{
-                  __html: renderMarkdown(task.metadata.artifact),
-                }}
-              />
             </div>
           )}
           {task.url && (

@@ -206,8 +206,12 @@ export default function TaskCard({
           )}
         </div>
 
-        {/* Inline artifact viewer for one-shot tasks that have produced a report */}
-        {isOneShotTask && hasArtifact && (
+        {/* Inline artifact viewer for any task with a stored agent
+            report. Used to be gated to one-shot kinds only, which
+            hid coding-task artifacts even when the agent had
+            populated metadata.artifact via the ready_for_review
+            path. */}
+        {hasArtifact && (
           <div className="agent-artifact" onClick={(e) => e.stopPropagation()}>
             <button
               className="agent-artifact-toggle"
