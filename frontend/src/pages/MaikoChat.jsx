@@ -14,7 +14,6 @@ import "./MaikoChat.css";
 export default function MaikoChat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const endRef = useRef(null);
   const inputRef = useRef(null);
@@ -33,12 +32,13 @@ export default function MaikoChat() {
     // animation — the user just opened the chat, they want to be at
     // the most recent already, not watch the page scroll through
     // their history). Subsequent updates (a new message, a "thinking"
-    // bubble) animate so the user sees them arrive.
+    // bubble, a reply replacing a placeholder) animate so the user
+    // sees them arrive.
     endRef.current.scrollIntoView({
       behavior: initialScrolled.current ? "smooth" : "auto",
     });
     if (messages.length > 0) initialScrolled.current = true;
-  }, [messages.length, sending]);
+  }, [messages]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -46,34 +46,49 @@ export default function MaikoChat() {
 
   const send = async () => {
     const content = input.trim();
-    if (!content || sending) return;
+    if (!content) return;
     setInput("");
-    setSending(true);
-    // Optimistic append so the user sees their message before the
-    // reply lands. Server-saved version replaces it on response.
-    const tmpId = `tmp-${Date.now()}`;
-    const optimistic = { id: tmpId, role: "user", content, created_at: new Date().toISOString() };
-    setMessages((prev) => [...prev, optimistic]);
+    // Each send is independent: optimistic user bubble + a per-send
+    // "thinking" placeholder. The server reply replaces the
+    // placeholder in place, so multiple sends can be in flight at
+    // once and the user can keep typing follow-ups without waiting
+    // for Maiko's LLM round trip (10–30s) to finish.
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const tmpUserId = `tmp-user-${stamp}`;
+    const tmpMaikoId = `tmp-maiko-${stamp}`;
+    const optimisticUser = {
+      id: tmpUserId,
+      role: "user",
+      content,
+      created_at: new Date().toISOString(),
+    };
+    const thinking = {
+      id: tmpMaikoId,
+      role: "maiko",
+      content: "",
+      _pending: true,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimisticUser, thinking]);
     try {
       const r = await api.sendMaikoMessage(content);
-      setMessages((prev) => [
-        ...prev.filter((m) => m.id !== tmpId),
-        r.user,
-        r.maiko,
-      ]);
+      setMessages((prev) => prev.map((m) => {
+        if (m.id === tmpUserId) return r.user;
+        if (m.id === tmpMaikoId) return r.maiko;
+        return m;
+      }));
     } catch (err) {
-      setMessages((prev) => [
-        ...prev.filter((m) => m.id !== tmpId),
-        optimistic,
-        {
-          id: `err-${Date.now()}`,
-          role: "maiko",
-          content: `Couldn't reach me: ${err.message}`,
-          created_at: new Date().toISOString(),
-        },
-      ]);
-    } finally {
-      setSending(false);
+      setMessages((prev) => prev.map((m) => {
+        if (m.id === tmpMaikoId) {
+          return {
+            id: `err-${stamp}`,
+            role: "maiko",
+            content: `Couldn't reach me: ${err.message}`,
+            created_at: new Date().toISOString(),
+          };
+        }
+        return m;
+      }));
     }
   };
 
@@ -115,15 +130,17 @@ export default function MaikoChat() {
           </div>
         )}
         {messages.map((m) => (
-          <div key={m.id} className={`maiko-msg maiko-msg-${m.role}`}>
-            <div className="maiko-msg-body">{m.content}</div>
+          <div
+            key={m.id}
+            className={`maiko-msg maiko-msg-${m.role}${m._pending ? " maiko-msg-typing" : ""}`}
+          >
+            {m._pending ? (
+              <><Loader size={12} className="spin" /> thinking…</>
+            ) : (
+              <div className="maiko-msg-body">{m.content}</div>
+            )}
           </div>
         ))}
-        {sending && (
-          <div className="maiko-msg maiko-msg-maiko maiko-msg-typing">
-            <Loader size={12} className="spin" /> thinking…
-          </div>
-        )}
         <div ref={endRef} />
       </div>
 
@@ -136,12 +153,11 @@ export default function MaikoChat() {
           onKeyDown={handleKey}
           placeholder="Ask Maiko anything. Shift or Cmd+Enter for a newline."
           rows={2}
-          disabled={sending}
         />
         <button
           className="maiko-chat-send"
           onClick={send}
-          disabled={sending || !input.trim()}
+          disabled={!input.trim()}
           title="Send"
         >
           <Send size={14} />
