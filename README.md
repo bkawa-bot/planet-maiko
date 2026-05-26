@@ -92,6 +92,7 @@ git clone https://github.com/bkawa-bot/planet-maiko.git && cd planet-maiko && py
 ### Next time
 
 ```bash
+source .venv/bin/activate    # Windows: .venv\Scripts\activate
 maiko up
 ```
 
