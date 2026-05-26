@@ -349,14 +349,9 @@ Rules:
     # `claude --print`. An allowlist gives us the same "explore but
     # can't mutate" property and still lets the agent print JSON to
     # stdout normally.
-    # MCP discovery currently lives on ClaudeCodeRuntime (reads
-    # ~/.claude.json). Keep the direct instantiation for that; route
-    # the actual send through _get_runtime so per-task model routing
-    # applies. When MCP discovery is promoted to the AgentRuntime base
-    # class, this can collapse to a single _get_runtime() call.
     from planet_maiko.agents.brain_session import _get_runtime
-    from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
-    mcp_tools = ClaudeCodeRuntime()._discover_global_mcps()
+    runtime = _get_runtime("project_tasks")
+    mcp_tools = runtime.discover_global_mcps()
     read_only_tools = [
         "Read", "Glob", "Grep",
         # Read-only bash patterns commonly useful for code exploration:
@@ -371,7 +366,6 @@ Rules:
 
     # Release DB before long LLM call to avoid SQLite locks
     db.session.close()
-    runtime = _get_runtime("project_tasks")
     result = runtime.send_json(
         prompt,
         working_dir=primary_path,
@@ -481,10 +475,9 @@ Rules:
 - Tasks in different repos with no real dep should NOT be artificially linked.
 """
 
-    # Same MCP-discovery-direct, send-routed split as generate-tasks.
     from planet_maiko.agents.brain_session import _get_runtime
-    from planet_maiko.agents.runtimes.claude_code import ClaudeCodeRuntime
-    mcp_tools = ClaudeCodeRuntime()._discover_global_mcps()
+    runtime = _get_runtime("project_tasks_revise")
+    mcp_tools = runtime.discover_global_mcps()
     # Same read-only allowlist as generate-tasks — see the long
     # comment there for why an allowlist beats --permission-mode plan
     # in --print mode.
@@ -496,7 +489,6 @@ Rules:
         "Bash(wc:*)", "Bash(find:*)",
     ] + (mcp_tools or [])
     db.session.close()
-    runtime = _get_runtime("project_tasks_revise")
     result = runtime.send_json(
         prompt,
         working_dir=primary_path,

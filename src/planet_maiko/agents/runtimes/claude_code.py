@@ -59,12 +59,12 @@ class ClaudeCodeRuntime(AgentRuntime):
             base = list(load_config().get("brain", {}).get("allowed_tools", []))
         except Exception:
             base = []
-        for mcp_tool in self._discover_global_mcps():
+        for mcp_tool in self.discover_global_mcps():
             if mcp_tool not in base:
                 base.append(mcp_tool)
         return base
 
-    def _discover_global_mcps(self):
+    def discover_global_mcps(self):
         """Return [mcp__<server>, ...] for every MCP registered with
         Claude Code — both globally and across all known projects.
         Best-effort: returns [] if no settings file is readable.

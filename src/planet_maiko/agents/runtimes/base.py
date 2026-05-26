@@ -328,3 +328,21 @@ class AgentRuntime(ABC):
         access-control + file-streaming logic.
         """
         return None
+
+    # ----- Tool discovery (optional) -----
+    # Some runtimes expose external tools through a registry the user
+    # configured outside Maiko (Claude Code reads ~/.claude.json for
+    # MCP servers). Maiko surfaces those so skill / triage / planning
+    # runs can pass them through allowed_tools the same way an
+    # interactive session would. Runtimes without an equivalent
+    # registry return []; callers always get back a list.
+
+    def discover_global_mcps(self) -> list[str]:
+        """Return ["mcp__<server>", ...] for every external tool this
+        runtime knows how to call.
+
+        Default: []. Runtimes integrated with an external tool
+        registry override to return the tool identifiers callers can
+        include in ``allowed_tools``.
+        """
+        return []
