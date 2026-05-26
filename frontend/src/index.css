@@ -946,3 +946,54 @@ a:hover { text-decoration: underline; }
 }
 .md-content ul, .md-content ol { padding-left: 18px; margin: 4px 0; }
 .md-content li { margin: 2px 0; }
+
+/* Output from renderMarkdown(). Applied wherever the lightweight
+   renderer's HTML lands so <pre>, <blockquote>, <table> don't fall
+   back to white-on-white browser defaults inside the dark theme. */
+.markdown h1, .markdown h2, .markdown h3,
+.markdown h4, .markdown h5, .markdown h6 {
+  color: var(--text); margin: 16px 0 8px; line-height: 1.3;
+}
+.markdown h1:first-child, .markdown h2:first-child, .markdown h3:first-child {
+  margin-top: 0;
+}
+.markdown p { margin: 8px 0; }
+.markdown ul, .markdown ol { padding-left: 20px; margin: 8px 0; }
+.markdown li { margin: 3px 0; }
+.markdown code {
+  background: var(--bg); padding: 1px 5px; border-radius: 3px;
+  font-family: var(--font-mono); font-size: 11px; color: var(--peach);
+  word-break: break-word;
+}
+.markdown pre {
+  background: var(--bg); padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  overflow-x: auto; margin: 10px 0;
+}
+.markdown pre code {
+  background: transparent; padding: 0; border: 0;
+  color: var(--text); font-size: 11.5px; line-height: 1.5;
+  white-space: pre; word-break: normal;
+}
+.markdown blockquote {
+  margin: 10px 0; padding: 6px 14px;
+  border-left: 3px solid var(--pink-soft);
+  color: var(--text-dim);
+  background: var(--bg-card-alt);
+}
+.markdown blockquote p { margin: 4px 0; }
+.markdown table {
+  border-collapse: collapse; margin: 10px 0;
+  font-size: 12px;
+}
+.markdown table td, .markdown table th {
+  border: 1px solid var(--border-subtle);
+  padding: 4px 10px;
+}
+.markdown hr {
+  border: 0; border-top: 1px dashed var(--border-subtle);
+  margin: 16px 0;
+}
+.markdown a { color: var(--pink); }
+.markdown a:hover { text-decoration: underline; }
