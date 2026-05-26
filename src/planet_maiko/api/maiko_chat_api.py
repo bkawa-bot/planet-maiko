@@ -131,8 +131,14 @@ def _generate_reply(latest_user_message: str) -> str:
 
     db.session.close()
 
+    # Match the agent-level timeout in agents/profiles.py (240s) rather
+    # than the short 45-60s used by quick triage / router calls. Maiko's
+    # prompt is large (voice file + agents + tasks + automations + the
+    # full chat history), and Opus reasoning over it can run past a
+    # minute on its own — capping at 60s meant follow-up turns would
+    # time out before she finished thinking.
     result = runtime.send(
-        prompt, timeout=60, source="maiko_chat",
+        prompt, timeout=240, source="maiko_chat",
         model=resolve_model("maiko"), effort=resolve_effort("maiko"),
     )
     if not result.get("success"):
