@@ -141,8 +141,14 @@ function computeTabs(job, task) {
   const isDiffKind = hasWorktree && !isReportKind;
   const hasArtifact = !!(job.artifact || task?.metadata?.artifact);
   const taskExtra = task?.metadata || {};
-  const hasPlan = !!taskExtra.plan;
-  const hasPlanForApproval = !!taskExtra.plan && !taskExtra.plan_approved_at;
+  // Plan content actually lives in an AgentMessage row (the agent's
+  // `reply --type plan_for_approval`), fetched by /jobs/<id>/plan
+  // inside PlanPanel. We don't have that here, so use the durable
+  // signal that IS on the task: plan_first (set at assign/spawn
+  // time). taskExtra.plan stays in the OR for any legacy code path
+  // that DID mirror the content onto the task.
+  const hasPlan = !!taskExtra.plan_first || !!taskExtra.plan;
+  const hasPlanForApproval = hasPlan && !taskExtra.plan_approved_at;
 
   if (isDiffKind) {
     tabs.push({ id: "diff", label: "Diff", icon: CheckboxTree });
@@ -175,7 +181,10 @@ function resolveActiveView(requested, tabs, job, task) {
   if (requested && tabs.some((t) => t.id === requested)) return requested;
   // Default selection: highest-leverage first action.
   const taskExtra = task?.metadata || {};
-  if (job?.kind === "coding" && taskExtra.plan && !taskExtra.plan_approved_at) {
+  // Same plan_first / plan signal as computeTabs — the actual plan
+  // content lives in AgentMessage rows, not on the task.
+  const hasPlan = !!taskExtra.plan_first || !!taskExtra.plan;
+  if (job?.kind === "coding" && hasPlan && !taskExtra.plan_approved_at) {
     return "plan";
   }
   const isReportKind = ["investigation", "repo_analysis", "cartograph"].includes(job?.kind);
