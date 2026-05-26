@@ -44,7 +44,7 @@ From there, you can live your whole day in Planet Maiko, from reviewing your tea
 ### - Works with whatever model you want (slightly wip/still testing)
 ### - Custom automations (stuff like: my manager slacked me, set off an investigation agent to reply with an excuse for why I am OOO (just kidding but you can do this if you want))
 
-## - If it doesn't do something you need it to do, please tell me!! (seriously I have no life)
+### - If it doesn't do something you need it to do, please tell me!! (seriously I have no life)
 
 ## Build a plugin for any tool you never want to have to look at again.
 
@@ -97,6 +97,12 @@ maiko up
 ```
 
 **Full guide** (mental model, architecture, plugin system, extending, CLI reference): see [`docs/GUIDE.md`](docs/GUIDE.md).
+
+### License: AGPL v3
+
+#### Can I integrate with internal software?
+
+Yes. Planet Maiko is a free, open-source dev tool that runs locally, and you can build internal plugins for it. Under AGPL v3, any plugin that's a combined work with Planet Maiko must itself be AGPL v3, and you must make the source available to the people using it. For an internal tool, that means your teammates. You don't have to publish it publicly. What you can't do is ship Planet Maiko, or a derivative of it, under a proprietary license :)
 
 ## About
 
