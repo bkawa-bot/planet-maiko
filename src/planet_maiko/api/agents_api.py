@@ -164,7 +164,14 @@ def assign_agent():
     else:
         scope_repo = scope_for_task(task)
         local_path = resolve_repo_path(scope_repo)
-        if not local_path:
+        # Investigation and cartographer are report-producing roles that
+        # can run repo-less: execute_jobs' prepare() will mint a scratch
+        # worktree under <data_dir>/scratch-worktrees when no clone is
+        # found. Review needs a real checkout to diff against, so it
+        # keeps the strict gate. Mirrors WORKTREE_REQUIRED_KINDS in
+        # execute_jobs.py and WORKTREE_REQUIRED_TASK_TYPES in tasks.py
+        # so all three launch paths agree.
+        if not local_path and role == "review":
             if not scope_repo:
                 return jsonify({
                     "error": (
@@ -180,7 +187,7 @@ def assign_agent():
                     "> github > Repo roots."
                 ),
             }), 400
-        repo_path = local_path
+        repo_path = local_path or ""
         # Normalize task.type so monitor + cycle phases recognize the
         # one-shot kinds. Cartographer task type is "cartograph" by
         # convention; everything else maps 1:1 with the role.
