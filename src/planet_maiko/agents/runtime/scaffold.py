@@ -186,7 +186,14 @@ def _write_claude_md(working_path, job_id, job_title, role="coding", maiko_port=
     # aren't code rules. Insights tagged "overview" get promoted to
     # a Repo Overview block at the top; the rest render as the usual
     # Team Playbook bullets.
-    playbook = _build_playbook_section(parent_repo_path)
+    #
+    # context_tags scopes the injection: only insights whose tags
+    # overlap the agent's job context surface (plus untagged + the
+    # always-shown "overview" insights). Without this, every new
+    # coding job inherited every Insight on the repo, including ones
+    # that were tagged for unrelated projects / use-cases.
+    context_tags = _build_context_tags(job_id, role, specialty_id)
+    playbook = _build_playbook_section(parent_repo_path, context_tags=context_tags)
     if playbook:
         content += f"\n\n{playbook}\n"
 
@@ -204,7 +211,7 @@ def _write_claude_md(working_path, job_id, job_title, role="coding", maiko_port=
         f.write(content)
 
 
-def _build_playbook_section(parent_repo_path):
+def _build_playbook_section(parent_repo_path, context_tags=None):
     """Render the Repo Overview + Team Playbook sections from active
     Insights scoped to this repo (or global).
 
@@ -212,9 +219,84 @@ def _build_playbook_section(parent_repo_path):
     so existing call sites get the string form they expect. The
     underlying function also returns the structured insight list, which
     the read-surface HTTP endpoint uses.
+
+    context_tags is forwarded to build_playbook so the agent only sees
+    insights whose tags overlap its job context (plus untagged ones).
     """
     from planet_maiko.brain.learning.playbook import build_playbook
-    return build_playbook(parent_repo_path)["playbook_md"]
+    return build_playbook(parent_repo_path, context_tags=context_tags)["playbook_md"]
+
+
+def _build_context_tags(job_id, role, specialty_id):
+    """Compose the agent's context tag set for insight scoping.
+
+    Sources, in order:
+      - role (e.g. "coding", "review", "investigation", "cartographer",
+        or a CustomSkill id when the role IS a specialty).
+      - job.kind — usually matches role but stays distinct for
+        specialty-as-role runs where they can diverge.
+      - specialty_id — the per-run specialty pick (None for most runs).
+      - linked task's tags (Task.tags is a free-form list — the user
+        often types things like "auth", "billing", "perf" there).
+      - source pupdate's tags — covers automation-spawned jobs where
+        no Task exists but the triggering pupdate has tags.
+      - linked task's project title (lowercase, slug-friendly).
+
+    Returns a set of lowercased strings. Best-effort: any lookup that
+    fails contributes nothing rather than crashing prep.
+
+    The set is intentionally broad — false positives (showing an
+    insight that wasn't strictly relevant) are cheaper than false
+    negatives (hiding an insight the agent needed). Users tune via
+    tagging discipline: tag narrowly to scope tightly, leave untagged
+    or tag broadly to keep an insight in the always-show set.
+    """
+    tags = set()
+    if role:
+        tags.add(str(role).lower())
+    if specialty_id:
+        tags.add(str(specialty_id).lower())
+
+    try:
+        from planet_maiko.models.agent_job import AgentJob
+        from planet_maiko.models.task import Task
+        from planet_maiko.models.project import Project
+        from planet_maiko.models.pupdate import Pupdate
+        from planet_maiko.database import db as _db
+
+        job = _db.session.get(AgentJob, job_id) if job_id else None
+        if job is not None:
+            if job.kind:
+                tags.add(str(job.kind).lower())
+            task = (
+                _db.session.get(Task, job.source_task_id)
+                if job.source_task_id else None
+            )
+            if task is not None:
+                for t in (task.tags or []):
+                    if t:
+                        tags.add(str(t).lower())
+                if task.project_id:
+                    project = _db.session.get(Project, task.project_id)
+                    if project is not None and project.title:
+                        tags.add(project.title.lower())
+                # Source pupdate tags surface for automation-spawned
+                # jobs whose triggering signal carries topic hints (e.g.
+                # "ci", "deploy", "auth") even when the task itself is
+                # generically titled.
+                if task.source_pupdate_id:
+                    pupdate = _db.session.get(Pupdate, task.source_pupdate_id)
+                    if pupdate is not None:
+                        for t in (pupdate.tags or []):
+                            if t:
+                                tags.add(str(t).lower())
+    except Exception:
+        # Defaulting to a smaller tag set just shrinks the candidate
+        # matches; the safe-default (untagged insights pass) keeps the
+        # agent informed even when this enrichment fails.
+        pass
+
+    return tags
 
 
 def _build_character_section(agent_profile_id):

@@ -16,7 +16,30 @@ from datetime import datetime, timezone
 logger = logging.getLogger(__name__)
 
 
-def build_playbook(parent_repo_path):
+def _matches_context(insight, ctx_set):
+    """True iff the insight is relevant to the given job/agent context.
+
+    Match rules:
+      - Untagged insights pass — they're general repo context, no
+        scope claim attached.
+      - The "overview" tag always passes — that's the cartographer's
+        cold-start repo map, not a context-scoped note.
+      - At least one tag overlaps the context set (case-insensitive).
+
+    ctx_set is the already-lowercased context tag set. The caller
+    builds it from job kind / role / task tags / project / specialty
+    so each insight only surfaces in jobs where its scope makes sense.
+    """
+    tags = insight.tags or []
+    if not tags:
+        return True
+    tag_lower = {str(t).lower() for t in tags if t}
+    if "overview" in tag_lower:
+        return True
+    return bool(tag_lower & ctx_set)
+
+
+def build_playbook(parent_repo_path, *, context_tags=None):
     """Render the Repo Overview + Team Playbook sections from active
     Insights scoped to this repo (or global).
 
@@ -33,6 +56,16 @@ def build_playbook(parent_repo_path):
         parent_repo_path: either an absolute path to a local clone or
             a bare "org/repo" / "repo" string. Only the last path
             segment is used for matching, so both forms work.
+        context_tags: optional iterable of strings describing the
+            job/agent context (role, kind, task tags, project name,
+            specialty id, etc.). When provided, the result is filtered
+            by tag relevance — see _matches_context for the rule. None
+            means no relevance filter (every active insight matching
+            the repo scope is returned, the legacy behavior). The
+            read-surface HTTP endpoint passes None so the user-facing
+            playbook page shows the full repo set; agent injection at
+            worktree-prep time passes a populated set so the agent
+            doesn't have to skim 40 unrelated bullets.
 
     Returns:
         dict with:
@@ -66,11 +99,33 @@ def build_playbook(parent_repo_path):
         else:
             q = q.filter(Insight.repo_scope.is_(None))
 
-        insights = q.order_by(Insight.last_confirmed_at.desc()).limit(40).all()
+        # Pull a wider candidate set when context-filtering — the
+        # filter shrinks the set significantly, so a hard 40-cap on
+        # the query would starve the post-filter result. Cap at 120
+        # candidates pre-filter when context_tags is set; otherwise
+        # keep the original 40-cap (the legacy "show everything"
+        # behavior).
+        cap = 120 if context_tags else 40
+        insights = q.order_by(Insight.last_confirmed_at.desc()).limit(cap).all()
         now = datetime.now(timezone.utc)
         fresh = [i for i in insights if not i.is_expired(now)]
         if not fresh:
             return {"playbook_md": "", "insights": []}
+
+        # Tag-relevance filter. None = no filter (existing callers,
+        # /playbook HTTP endpoint). A set = filter to insights whose
+        # tags overlap context_tags OR are untagged OR are an
+        # "overview" insight (always-show cold-start map).
+        ctx_set = None
+        if context_tags is not None:
+            ctx_set = {str(t).lower() for t in context_tags if t}
+            fresh = [i for i in fresh if _matches_context(i, ctx_set)]
+            # Trim back to the legacy display cap after filtering so
+            # the rendered block doesn't grow if a job's context tags
+            # are very broad.
+            fresh = fresh[:40]
+            if not fresh:
+                return {"playbook_md": "", "insights": []}
 
         overviews = [i for i in fresh if i.tags and "overview" in i.tags]
         bullets = [i for i in fresh if not (i.tags and "overview" in i.tags)]
