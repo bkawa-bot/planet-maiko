@@ -47,6 +47,7 @@ from .phases.synthesis import (  # noqa: E402
     _phase_rules_decay,
 )
 from .phases.health import (  # noqa: E402
+    _phase_nudge_quiet_agents,
     _phase_stuck_check,
     _phase_stuck_escalation,
     _phase_worktree_sweep,
@@ -77,6 +78,10 @@ _PHASES = [
     ("learning", _phase_learning),
     ("insights_reconcile", _phase_insights_reconcile),
     ("rules_decay", _phase_rules_decay),
+    # Order matters: nudge first so a quiet agent gets a chance to
+    # re-engage and stamp last_active_at before stuck_check would
+    # flag it at the 15m mark.
+    ("nudge_quiet_agents", _phase_nudge_quiet_agents),
     ("stuck_check", _phase_stuck_check),
     ("projects", _phase_projects),
     ("orchestrate", _phase_orchestrate),

@@ -99,6 +99,27 @@ DEFAULT_CONFIG = {
         # read. Leave False if you're on a metered plan and want to
         # measure before committing.
         "prompt_cache_1h": False,
+        # Re-engage agents that have gone silent inside an active run.
+        # An AgentJob in status='running' whose lock isn't held, whose
+        # last_active_at is older than nudge_after_minutes, and whose
+        # most recent message ISN'T a "waiting on user" type (stuck /
+        # plan_for_approval / recipient=user) gets one
+        # wake_agent(source='heartbeat') to prompt an inbox check + a
+        # fresh status reply.
+        #
+        # An earlier incarnation of this phase was ripped in 7f18678
+        # because it bled tokens overnight — every nudge is a real
+        # Claude turn, and there was no upper bound. This round keeps
+        # the same skip rules but adds nudge_max_per_job so a job that
+        # never re-engages stops getting pinged after N tries; stuck_check
+        # then surfaces an agent_stuck memo at the 15m mark. Flip
+        # enabled=False for autonomous overnight runs where cost
+        # outweighs visibility.
+        "nudge_quiet_agents": {
+            "enabled": True,
+            "nudge_after_minutes": 7,
+            "max_per_job": 6,
+        },
         # Role-as-intent autonomy. Each role-native agent watches for
         # specific conditions (stale repo overview, missing CLAUDE.md,
         # etc.) and proposes work into the inbox instead of waiting for

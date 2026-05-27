@@ -1,5 +1,7 @@
 """Agent + task health phases.
 
+  - nudge_quiet_agents: heartbeat-wake running agents that have gone
+    silent — gives them a chance to re-engage before stuck_check flags.
   - stuck_check: flag agents whose claude process exited silently
   - stuck_escalation: surface tasks stuck in_progress for too long
   - worktree_sweep: daily-cadenced cleanup of stale agent worktrees
@@ -20,6 +22,149 @@ logger = logging.getLogger(__name__)
 # unnoticed.
 _last_worktree_sweep_at = 0.0
 _WORKTREE_SWEEP_INTERVAL_S = 24 * 60 * 60
+
+
+def _phase_nudge_quiet_agents():
+    """Phase: wake any AgentJob whose agent has been silent for too long.
+
+    Agents are reactive — a claude process exits after each turn and
+    only re-runs when wake_agent fires. Without an external trigger
+    (user message, automation, this nudge), a job in status="running"
+    with no pending input can sit idle indefinitely. This phase pings
+    them so their next inbox check + status post happens automatically.
+
+    Skip rules:
+      - phase disabled in config — early-return.
+      - Lock is held — wake_agent would drop-on-busy anyway, save the
+        noise.
+      - last_active_at is fresh (< nudge_after_minutes) — already
+        active in this window.
+      - Agent's most recent message is a "waiting on user" type
+        (stuck / plan_for_approval / recipient=user) — they're not
+        idle, they're parked waiting for a reply. Don't disturb.
+      - job has already been nudged max_per_job times — stuck_check
+        catches the truly-broken case at 15m as agent_stuck; further
+        pinging just bleeds tokens. The previous incarnation of this
+        phase (commit bb0fcc3, ripped in 7f18678) had no cap, which
+        is why it bled overnight; the cap is what makes re-adding
+        this safe.
+
+    wake_agent uses source="heartbeat" so a redundant call against a
+    truly-busy agent is silently dropped by wake's per-task lock.
+    """
+    from planet_maiko.config import load_config
+    from planet_maiko.database import db
+    from planet_maiko.models.agent_job import AgentJob
+    from planet_maiko.models.agent_message import AgentMessage
+    from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.agents.wake import wake_agent, is_working
+
+    cfg = (load_config().get("brain") or {}).get("nudge_quiet_agents") or {}
+    if not cfg.get("enabled", True):
+        return {"skipped": "disabled"}
+
+    nudge_after_minutes = int(cfg.get("nudge_after_minutes") or 7)
+    max_per_job = int(cfg.get("max_per_job") or 6)
+
+    nudged = 0
+    skipped_busy = 0
+    skipped_waiting = 0
+    skipped_fresh = 0
+    skipped_capped = 0
+    failed = 0
+
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=nudge_after_minutes)
+        running = AgentJob.query.filter(AgentJob.status == "running").all()
+        for job in running:
+            if is_working(job.id):
+                skipped_busy += 1
+                continue
+
+            extra = job.extra or {}
+            if int(extra.get("nudge_count") or 0) >= max_per_job:
+                # Stuck_check will catch this at the 15m mark and surface
+                # an agent_stuck memo for the user to nudge manually.
+                # Stay quiet here.
+                skipped_capped += 1
+                continue
+
+            # Check the agent's last_active_at via the linked profile.
+            # wake_agent.set_agent_state stamps this on each claude
+            # subprocess start/end, and the PostToolUse heartbeat
+            # endpoint stamps it during long turns — so a freshly-busy
+            # agent gets correctly classified as not-quiet.
+            profile = (
+                db.session.get(AgentProfile, job.agent_profile_id)
+                if job.agent_profile_id else None
+            )
+            last_active = profile.last_active_at if profile else None
+            if last_active is not None:
+                la = last_active
+                if la.tzinfo is None:
+                    la = la.replace(tzinfo=timezone.utc)
+                if la >= cutoff:
+                    skipped_fresh += 1
+                    continue
+
+            # Skip agents that emitted a "waiting on user" signal — they
+            # SHOULD be parked until the user replies, not woken.
+            last_msg = (
+                AgentMessage.query
+                .filter_by(task_id=job.id, direction="from_agent")
+                .order_by(AgentMessage.created_at.desc())
+                .first()
+            )
+            if last_msg is not None and (
+                last_msg.message_type in ("stuck", "plan_for_approval")
+                or (last_msg.recipient or "").lower() == "user"
+            ):
+                skipped_waiting += 1
+                continue
+
+            try:
+                ok, _mode = wake_agent(
+                    job.id,
+                    "Heartbeat. Check your inbox for any pending messages, "
+                    "post a quick status update via "
+                    "`maiko reply \"<one line>\" --type status`, and "
+                    "continue your work.",
+                    source="heartbeat",
+                )
+                if ok:
+                    nudged += 1
+                    # Persist the increment so the cap survives across
+                    # cycles. Re-assign rather than mutate-in-place so
+                    # SQLAlchemy notices the change to the JSON column.
+                    new_extra = dict(extra)
+                    new_extra["nudge_count"] = int(new_extra.get("nudge_count") or 0) + 1
+                    new_extra["last_nudged_at"] = datetime.now(timezone.utc).isoformat()
+                    job.extra = new_extra
+                else:
+                    failed += 1
+            except Exception as e:
+                failed += 1
+                logger.warning(f"[nudge] wake failed for job {job.id}: {e}")
+
+        if nudged:
+            db.session.commit()
+            logger.info(
+                f"[nudge] heartbeat-woke {nudged} quiet agent(s) "
+                f"(skipped: busy={skipped_busy}, waiting={skipped_waiting}, "
+                f"fresh={skipped_fresh}, capped={skipped_capped})"
+            )
+    except Exception as e:
+        logger.warning(f"[nudge] phase error: {e}")
+        return {"nudged": nudged, "error": str(e)}
+
+    return {
+        "nudged": nudged,
+        "skipped_busy": skipped_busy,
+        "skipped_waiting": skipped_waiting,
+        "skipped_fresh": skipped_fresh,
+        "skipped_capped": skipped_capped,
+        "failed": failed,
+    }
 
 
 def _phase_stuck_check():
