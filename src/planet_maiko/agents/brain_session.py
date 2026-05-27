@@ -83,18 +83,26 @@ def _get_runtime_by_name(name):
 
 
 def _default_runtime_name():
+    # Default to the tmux-backed Claude runtime: interactive sessions,
+    # plays nicely with Claude Code subscriptions, and the session
+    # pop-out from the agent job page actually attaches into something
+    # real. The headless "claude-code" runtime is still selectable via
+    # config (brain.runtime) or per-task routing rules; when tmux
+    # isn't available on the host, _instantiate_runtime returns None
+    # and the caller falls back to ClaudeCodeRuntime automatically.
     try:
         cfg = load_config()
-        return (cfg.get("brain") or {}).get("runtime", "claude-code")
+        return (cfg.get("brain") or {}).get("runtime", "claude-code-tmux")
     except Exception:
-        return "claude-code"
+        return "claude-code-tmux"
 
 
 def _get_runtime(task_type=None):
     """Get the right agent runtime for ``task_type``.
 
     Without ``task_type``: returns the default runtime configured at
-    ``brain.runtime`` (currently "claude-code" or "claude-code-tmux").
+    ``brain.runtime`` (default: "claude-code-tmux"; "claude-code"
+    selects the headless Agent SDK pool instead).
     All existing callers that don't pass a task_type continue to get
     the same behavior as before.
 
