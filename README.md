@@ -2,7 +2,9 @@
 
 > *These alien dogs want to live in your computer, which is a weird thing for software to want to do. Would you let them in?*
 
-Planet Maiko is an all-encompassing free local dev tool made by 1 dev, for other devs, for fun!
+Planet Maiko is like if Raycast and Conductor had a baby, and the baby is a pack of alien dogs that also remember every mistake you have ever made as a developer!
+
+Free local dev tool made by 1 dev, for other devs, for fun! No accounts needed, no telemetry, no paid tiers (I don't even know how to do that and idc enough)
 
 [Testimonials (real)](https://bkawa-bot.github.io/planet-maiko/testimonials.html)
 
