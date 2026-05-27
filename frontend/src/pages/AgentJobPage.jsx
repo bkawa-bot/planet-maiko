@@ -796,7 +796,7 @@ function PlanPanel({ jobId, task, onChanged }) {
         </div>
       )}
       <div
-        className="plan-body markdown"
+        className="plan-body brief-content markdown"
         dangerouslySetInnerHTML={{ __html: renderMarkdown(plan.plan) }}
       />
       {!approved && (
@@ -901,7 +901,7 @@ function ReportPanel({ job, task }) {
           ))}
         </div>
       )}
-      <div className="agent-job-report markdown">
+      <div className="agent-job-report brief-content markdown">
         <div dangerouslySetInnerHTML={{ __html: renderMarkdown(artifact) }} />
       </div>
     </div>

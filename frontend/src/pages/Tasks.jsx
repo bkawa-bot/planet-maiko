@@ -130,6 +130,13 @@ export default function Tasks() {
   }
 
   const activeTasks = tasks.filter((t) => t.status !== "done" && t.status !== "cancelled");
+  // Tasks whose assigned agent has actually started work (status
+  // in_progress + a worktree on disk). These rise to a callout band
+  // at the top so it's obvious what the pack is doing right now —
+  // they still appear in their project group below for context.
+  const activeAgentTasks = activeTasks.filter(
+    (t) => t.status === "in_progress" && t.metadata?.working_path,
+  );
 
   if (loading) return <p className="page-empty">Loading...</p>;
 
@@ -264,6 +271,31 @@ export default function Tasks() {
         </div>
       ) : (
         <>
+          {activeAgentTasks.length > 0 && (
+            <div className="active-tasks-section">
+              <div className="active-tasks-header">
+                <span className="active-tasks-pulse" /> Active
+                <span className="active-tasks-count">{activeAgentTasks.length}</span>
+              </div>
+              {activeAgentTasks.map((t) => (
+                <TaskCard
+                  key={`active-${t.id}`}
+                  task={t}
+                  isExpanded={expanded === `active-${t.id}`}
+                  onToggleExpand={() => setExpanded(
+                    expanded === `active-${t.id}` ? null : `active-${t.id}`,
+                  )}
+                  onAction={handleAction}
+                  onAssignAgent={setAssigningTask}
+                  onEdit={(task, form) => { setEditForm(form); setEditingTask(task); }}
+                  onShowDetail={setDetailTask}
+                  onRefresh={fetchData}
+                  projects={projects}
+                  agentNames={agentNames}
+                />
+              ))}
+            </div>
+          )}
           {/* Project groups — skip terminal-state projects. Backend
               cascades their tasks to cancelled when a project closes,
               but we also hide the group itself so a quick "I marked
