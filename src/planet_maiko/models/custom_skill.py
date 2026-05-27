@@ -28,6 +28,21 @@ class CustomSkill(db.Model):
     # specialties (brainstorm, plan, verify-level) that just compose
     # a prompt from DB state. Default off — opt-in per specialty.
     needs_worktree = db.Column(db.Boolean, default=False)
+    # When set, this CustomSkill can act as a first-class agent type
+    # (not just a specialty layered onto a built-in role). The string
+    # is rendered into CLAUDE.md verbatim in place of the role-default
+    # protocol (agent-protocol.md / review-agent-protocol.md / etc.).
+    # `prompt` keeps its existing role: the specialty body appended as
+    # "Your specialty for this run." Leaving this NULL means "I'm a
+    # specialty layered onto a built-in role, not my own agent type."
+    protocol_prompt = db.Column(db.Text, nullable=True)
+    # Maps to the runtime's permission-mode flag (Claude Code:
+    # `--permission-mode plan` for read-only-with-plan, otherwise
+    # NULL). When set on a CustomSkill that's serving as an agent
+    # type, overrides the per-role default in kickoff.py (which
+    # hardcodes "plan" for cartographer + plan_first). Leaving this
+    # NULL means "use whatever the role default is."
+    permission_mode = db.Column(db.String(32), nullable=True)
     last_run_at = db.Column(db.DateTime, nullable=True)
     # Soft-delete tombstone for default skills. Hard delete is fine for
     # user-created skills, but defaults get re-seeded on every boot, so
@@ -49,6 +64,8 @@ class CustomSkill(db.Model):
             "is_default": self.is_default,
             "user_edited": self.user_edited,
             "needs_worktree": bool(self.needs_worktree),
+            "protocol_prompt": self.protocol_prompt or "",
+            "permission_mode": self.permission_mode or "",
             "last_run_at": iso_utc(self.last_run_at),
             "deleted_at": iso_utc(self.deleted_at),
             "created_at": iso_utc(self.created_at),

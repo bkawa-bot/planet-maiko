@@ -55,6 +55,15 @@ def create_skill():
         icon=data.get("icon", "wand"),
         is_default=False,
         needs_worktree=bool(data.get("needs_worktree", False)),
+        # Optional "I'm a first-class agent type, not just a specialty"
+        # knobs. Both nullable — leaving them empty means this skill
+        # behaves as a specialty layered onto a built-in role (the
+        # pre-existing shape). When protocol_prompt is set the runtime
+        # uses it in place of the role's default protocol; when
+        # permission_mode is set it overrides the role default in
+        # kickoff. See models/custom_skill.py for the full rationale.
+        protocol_prompt=(data.get("protocol_prompt") or None),
+        permission_mode=(data.get("permission_mode") or None),
     )
     db.session.add(skill)
     db.session.commit()
@@ -80,6 +89,13 @@ def update_skill(skill_id):
         skill.icon = data["icon"]
     if "needs_worktree" in data:
         skill.needs_worktree = bool(data["needs_worktree"])
+    if "protocol_prompt" in data:
+        # Empty string from the editor textarea collapses to NULL so
+        # the resolver in scaffold.py / kickoff.py reads "use the role
+        # default" instead of "use this empty protocol."
+        skill.protocol_prompt = data["protocol_prompt"] or None
+    if "permission_mode" in data:
+        skill.permission_mode = data["permission_mode"] or None
     db.session.commit()
     return jsonify(skill.to_dict())
 

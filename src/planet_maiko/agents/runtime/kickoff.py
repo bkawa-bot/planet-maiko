@@ -151,8 +151,19 @@ def _kickoff_agent_headless(agent_id, worktree_path, job_id, branch_name=None, p
 
     # Cartographer + plan_first need read-only restrictions; the
     # runtime maps "plan" to its underlying flag (claude-code:
-    # --permission-mode plan).
+    # --permission-mode plan). A custom agent type (CustomSkill with
+    # permission_mode set) overrides the role default — that's the
+    # knob that lets a user declare "my read-only-investigator role
+    # always runs in plan mode."
     permission_mode = "plan" if (plan_first or role == "cartographer") else None
+    try:
+        from planet_maiko.models.custom_skill import CustomSkill
+        from planet_maiko.database import db as _db
+        cs = _db.session.get(CustomSkill, role)
+        if cs is not None and cs.permission_mode:
+            permission_mode = cs.permission_mode
+    except Exception:
+        pass
 
     # If a .mcp.json was written for inherited project MCPs, point
     # claude at it. With maiko-channel removed, this is only present

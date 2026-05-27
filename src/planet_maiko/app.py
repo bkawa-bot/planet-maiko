@@ -25,6 +25,8 @@ _PATCH_COLUMNS = [
     ("custom_skills", "user_edited", "BOOLEAN DEFAULT 0"),
     ("custom_skills", "needs_worktree", "BOOLEAN DEFAULT 0"),
     ("custom_skills", "last_run_at", "DATETIME"),
+    ("custom_skills", "protocol_prompt", "TEXT"),
+    ("custom_skills", "permission_mode", "VARCHAR(32)"),
     ("learnings", "last_confirmed_at", "DATETIME"),
 ]
 

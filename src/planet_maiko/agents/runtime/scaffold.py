@@ -78,6 +78,22 @@ def _write_claude_md(working_path, job_id, job_title, role="coding", maiko_port=
         "cartographer": "cartographer-agent-protocol",
     }.get(role, "agent-protocol")
 
+    # If role IS a CustomSkill with its own protocol_prompt set, the
+    # skill is acting as a first-class agent type — use that as the
+    # protocol template directly, skipping the role-default lookup.
+    # Falls through to the normal path on any DB hiccup or when the
+    # skill exists as a specialty (no protocol_prompt) rather than an
+    # agent type. The same templating substitutions still apply below.
+    custom_protocol_template = None
+    try:
+        from planet_maiko.models.custom_skill import CustomSkill
+        from planet_maiko.database import db as _db
+        cs = _db.session.get(CustomSkill, role)
+        if cs is not None and cs.protocol_prompt:
+            custom_protocol_template = cs.protocol_prompt
+    except Exception:
+        custom_protocol_template = None
+
     # Agent identity + signature — filled into the protocol template so
     # the agent knows its own name (for first-person self-reference in
     # PR comments) and the exact sign-off line to append on external
@@ -102,19 +118,35 @@ def _write_claude_md(working_path, job_id, job_title, role="coding", maiko_port=
     # vars both resolve to the same values, so user-customized
     # prompts work with either spelling.
     content = None
-    try:
-        from planet_maiko.agents.skills import get_skill_prompt
-        content = get_skill_prompt(protocol_skill, {
-            "job_title": job_title,
-            "job_id": job_id,
-            "task_title": job_title,
-            "task_id": job_id,
-            "maiko_port": str(maiko_port),
-            "agent_identity": agent_identity,
-            "agent_signature": agent_signature,
-        })
-    except Exception:
-        pass
+    if custom_protocol_template:
+        # First-class custom agent type: render the user's
+        # protocol_prompt verbatim with the same substitutions
+        # get_skill_prompt would apply to a default protocol.
+        content = custom_protocol_template
+        for key, value in (
+            ("job_title", job_title),
+            ("job_id", job_id),
+            ("task_title", job_title),
+            ("task_id", job_id),
+            ("maiko_port", str(maiko_port)),
+            ("agent_identity", agent_identity),
+            ("agent_signature", agent_signature),
+        ):
+            content = content.replace("{" + key + "}", str(value))
+    if not content:
+        try:
+            from planet_maiko.agents.skills import get_skill_prompt
+            content = get_skill_prompt(protocol_skill, {
+                "job_title": job_title,
+                "job_id": job_id,
+                "task_title": job_title,
+                "task_id": job_id,
+                "maiko_port": str(maiko_port),
+                "agent_identity": agent_identity,
+                "agent_signature": agent_signature,
+            })
+        except Exception:
+            pass
 
     # Fallback to the prompt file directly
     if not content:
