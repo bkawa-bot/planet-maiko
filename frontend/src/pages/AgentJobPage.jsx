@@ -966,6 +966,13 @@ function ChatPanel({ jobId, agentName }) {
   // the panel or sending a new message lands on the latest entry.
   useEffect(() => {
     if (!endRef.current) return;
+    // Skip the mount-time empty render. The effect fires once on
+    // mount with messages.length === 0, before refetch() has landed
+    // any rows — if we flipped didInitialScrollRef on that pass,
+    // the next render (with the actual messages) would use the
+    // smooth path and produce a visible scroll animation on page
+    // open. Wait until there's something to scroll past.
+    if (messages.length === 0) return;
     endRef.current.scrollIntoView({
       behavior: didInitialScrollRef.current ? "smooth" : "auto",
       block: "end",
