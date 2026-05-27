@@ -2,7 +2,7 @@
 
 > *These alien dogs want to live in your computer, which is a weird thing for software to want to do. Would you let them in?*
 
-Planet Maiko is like if Raycast and Conductor had a baby, and the baby is a pack of alien dogs that also remember every mistake you have ever made as a developer!
+Planet Maiko is like if Conductor and Sunsama had a baby, and the baby is a pack of alien dogs that also remember every mistake you have ever made!
 
 Free local dev tool made by 1 dev, for other devs, for fun! No accounts needed, no telemetry, no paid tiers (I don't even know how to do that and idc enough)
 
