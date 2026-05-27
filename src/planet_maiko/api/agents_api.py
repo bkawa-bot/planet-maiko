@@ -1,6 +1,7 @@
 import logging
 import os
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from flask import Blueprint, current_app, jsonify, request
@@ -1071,6 +1072,85 @@ def get_conflicts():
 # --- Hook Handlers ---
 # Called by Claude Code hook scripts (hooks/*.py) to report events back
 # to Planet Maiko. All endpoints are fire-and-forget from the hook side.
+
+# Per-job last-accepted-heartbeat timestamps. Module-level so it
+# survives across requests but resets on process restart (the brain
+# cycle re-derives "is the agent quiet" from last_active_at on disk,
+# so a reset doesn't lose state — it just means a fresh in-memory
+# window after restart). Guard with a lock because Flask's threaded
+# dev server can race two PostToolUse pings from the same agent in
+# rapid succession.
+_HEARTBEAT_GUARD = threading.Lock()
+_HEARTBEAT_LAST_AT = {}
+# Minimum gap between accepted heartbeats per job. A coding turn can
+# fire 10+ tool calls per second during a tight Read/Edit loop; we
+# don't need DB-level resolution for "is the agent active" — bumping
+# last_active_at every ~15s is plenty to keep the nudge / stuck
+# checks accurate, and avoids hammering SQLite on the agent's hot path.
+_HEARTBEAT_MIN_GAP_S = 15.0
+
+
+@agents_bp.route("/agents/<job_id>/heartbeat", methods=["POST"])
+def agent_heartbeat(job_id):
+    """Per-tool-call heartbeat from the agent's PostToolUse hook.
+
+    The hook fires after every tool the agent uses (Bash, Read, Edit,
+    Task subagent launch, etc.) — this endpoint bumps the agent's
+    last_active_at and stashes the last tool / hint on the job so the
+    UI can show "currently using <Tool> on <path>" instead of just a
+    silent green dot. Two payoffs:
+
+      1. UI visibility into in-progress work without the agent having
+         to remember to send `--type status` messages.
+      2. Accurate dormant-detection. Before this, last_active_at only
+         ticked on turn boundaries, so a long Task subagent dispatch
+         read as "quiet" even though the agent was clearly working.
+         The nudge / stuck-check phases now see real activity and
+         stop false-positiving.
+
+    Body: { "tool": "<tool name>", "hint": "<short string>" }. Both
+    optional; the endpoint still bumps last_active_at with neither.
+
+    Rate-limited server-side to one accepted ping per
+    _HEARTBEAT_MIN_GAP_S seconds per job. Over-the-limit pings return
+    204 with no DB write — cheaper than rejecting on the hook side and
+    keeps the hook script dead simple (always POST, never decide).
+    """
+    from planet_maiko.models.agent_job import AgentJob
+    from planet_maiko.models.agent_profile import AgentProfile
+
+    now_mono = time.monotonic()
+    with _HEARTBEAT_GUARD:
+        last = _HEARTBEAT_LAST_AT.get(job_id, 0.0)
+        if (now_mono - last) < _HEARTBEAT_MIN_GAP_S:
+            return ("", 204)
+        _HEARTBEAT_LAST_AT[job_id] = now_mono
+
+    data = request.get_json(silent=True) or {}
+    tool = (data.get("tool") or "")[:64]
+    hint = (data.get("hint") or "")[:200]
+
+    job = db.session.get(AgentJob, job_id)
+    if job is None:
+        return jsonify({"error": "job not found"}), 404
+
+    now_utc = datetime.now(timezone.utc)
+    new_extra = dict(job.extra or {})
+    if tool:
+        new_extra["last_tool"] = tool
+    if hint:
+        new_extra["last_tool_hint"] = hint
+    new_extra["last_tool_at"] = now_utc.isoformat()
+    job.extra = new_extra
+
+    if job.agent_profile_id:
+        profile = db.session.get(AgentProfile, job.agent_profile_id)
+        if profile is not None:
+            profile.last_active_at = now_utc
+
+    db.session.commit()
+    return jsonify({"status": "ok"}), 200
+
 
 @agents_bp.route("/hooks/post-tool-use", methods=["POST"])
 def hook_post_tool_use():
