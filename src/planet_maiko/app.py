@@ -39,6 +39,15 @@ _PATCH_COLUMNS = [
 _DROP_COLUMNS = [
     ("custom_skills", "schedule_interval_minutes"),
     ("custom_skills", "creates_pupdates"),
+    # AgentType schema trim — dead-weight columns that no code path
+    # reads. Pass 1 of the post-rogue-agent cleanup.
+    ("agent_types", "tagline"),
+    ("agent_types", "is_active"),
+    ("agent_types", "commits_locally"),
+    ("agent_types", "produces_pr"),
+    ("agent_types", "is_self_reviewing"),
+    ("agent_types", "default_display_name"),
+    ("agent_types", "supports_plan_first"),
 ]
 
 

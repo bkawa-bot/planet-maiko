@@ -145,7 +145,6 @@ BUILT_IN_AGENT_TYPES = [
     {
         "id": "coding",
         "name": "Coder",
-        "tagline": "Writes code, opens PRs",
         "description": (
             "Implements features and fixes in an isolated git worktree. "
             "Commits locally; pushes + opens a PR only after you approve."
@@ -155,20 +154,14 @@ BUILT_IN_AGENT_TYPES = [
         "requires_scope_repo_clone": True,
         "permission_mode": None,
         "branch_prefix": "maiko",
-        "supports_plan_first": True,
         "output_kind": "diff",
-        "commits_locally": True,
-        "produces_pr": True,
         "auto_tag_insights": [],
-        "default_display_name": None,
         "model_routing_key": "coding_agent",
-        "is_self_reviewing": True,
         "protocol_md": "agent-protocol",
     },
     {
         "id": "review",
         "name": "Reviewer",
-        "tagline": "Reviews PRs",
         "description": (
             "Reads a PR diff, leaves inline comments, files a verdict. "
             "Read + write to the worktree; never commits or pushes."
@@ -178,20 +171,14 @@ BUILT_IN_AGENT_TYPES = [
         "requires_scope_repo_clone": True,
         "permission_mode": None,
         "branch_prefix": "maiko",
-        "supports_plan_first": False,
         "output_kind": "diff",
-        "commits_locally": False,
-        "produces_pr": False,
         "auto_tag_insights": [],
-        "default_display_name": None,
         "model_routing_key": "coding_agent",
-        "is_self_reviewing": False,
         "protocol_md": "review-agent-protocol",
     },
     {
         "id": "investigation",
         "name": "Investigator",
-        "tagline": "Digs into incidents and CI",
         "description": (
             "Investigates an incident, failing test, or unknown behavior "
             "and returns a markdown report with root cause + PATTERN / "
@@ -201,20 +188,14 @@ BUILT_IN_AGENT_TYPES = [
         "needs_worktree": True,
         "permission_mode": None,
         "branch_prefix": "maiko",
-        "supports_plan_first": False,
         "output_kind": "report",
-        "commits_locally": False,
-        "produces_pr": False,
         "auto_tag_insights": [],
-        "default_display_name": None,
         "model_routing_key": "coding_agent",
-        "is_self_reviewing": False,
         "protocol_md": "investigation-agent-protocol",
     },
     {
         "id": "cartographer",
         "name": "Cartographer",
-        "tagline": "Maps repos into a playbook",
         "description": (
             "Walks a repo and emits an Insight with architecture, "
             "conventions, and gotchas. Read-only; runs in plan mode."
@@ -223,15 +204,10 @@ BUILT_IN_AGENT_TYPES = [
         "needs_worktree": True,
         "permission_mode": "plan",
         "branch_prefix": "cartographer",
-        "supports_plan_first": False,
         "output_kind": "insight",
-        "commits_locally": False,
-        "produces_pr": False,
         "auto_tag_insights": ["overview", "cartographer"],
         "insight_max_length": 8000,
-        "default_display_name": "Atlas",
         "model_routing_key": "coding_agent",
-        "is_self_reviewing": False,
         "protocol_md": "cartographer-agent-protocol",
     },
 ]
@@ -312,26 +288,19 @@ def ensure_seed_agent_types():
                 row = AgentType(
                     id=spec["id"],
                     name=spec["name"],
-                    tagline=spec.get("tagline"),
                     description=spec.get("description"),
                     icon=spec.get("icon", "user"),
                     is_default=True,
-                    is_active=True,
                     user_edited=False,
                     protocol_prompt=protocol_body,
                     needs_worktree=bool(spec.get("needs_worktree", True)),
                     requires_scope_repo_clone=bool(spec.get("requires_scope_repo_clone", False)),
                     permission_mode=spec.get("permission_mode"),
                     branch_prefix=spec.get("branch_prefix", "maiko"),
-                    supports_plan_first=bool(spec.get("supports_plan_first", False)),
                     output_kind=spec.get("output_kind", "diff"),
-                    commits_locally=bool(spec.get("commits_locally", False)),
-                    produces_pr=bool(spec.get("produces_pr", False)),
                     auto_tag_insights=list(spec.get("auto_tag_insights") or []),
                     insight_max_length=int(spec.get("insight_max_length") or 2000),
-                    default_display_name=spec.get("default_display_name"),
                     model_routing_key=spec.get("model_routing_key", "coding_agent"),
-                    is_self_reviewing=bool(spec.get("is_self_reviewing", False)),
                 )
                 db.session.add(row)
                 added += 1
@@ -339,7 +308,6 @@ def ensure_seed_agent_types():
                 # un-edited default: refresh from the spec so prompt
                 # changes flow to existing installs.
                 existing.name = spec["name"]
-                existing.tagline = spec.get("tagline")
                 existing.description = spec.get("description")
                 existing.icon = spec.get("icon", "user")
                 existing.protocol_prompt = protocol_body
@@ -347,15 +315,10 @@ def ensure_seed_agent_types():
                 existing.requires_scope_repo_clone = bool(spec.get("requires_scope_repo_clone", False))
                 existing.permission_mode = spec.get("permission_mode")
                 existing.branch_prefix = spec.get("branch_prefix", "maiko")
-                existing.supports_plan_first = bool(spec.get("supports_plan_first", False))
                 existing.output_kind = spec.get("output_kind", "diff")
-                existing.commits_locally = bool(spec.get("commits_locally", False))
-                existing.produces_pr = bool(spec.get("produces_pr", False))
                 existing.auto_tag_insights = list(spec.get("auto_tag_insights") or [])
                 existing.insight_max_length = int(spec.get("insight_max_length") or 2000)
-                existing.default_display_name = spec.get("default_display_name")
                 existing.model_routing_key = spec.get("model_routing_key", "coding_agent")
-                existing.is_self_reviewing = bool(spec.get("is_self_reviewing", False))
                 refreshed += 1
         except Exception as e:
             logger.warning(
@@ -438,25 +401,18 @@ def backfill_from_custom_skills():
                 db.session.add(AgentType(
                     id=skill.id,
                     name=skill.name,
-                    tagline=skill.description,
                     description=skill.description,
                     icon=skill.icon or "user",
                     is_default=False,
-                    is_active=True,
                     user_edited=bool(skill.user_edited),
                     deleted_at=skill.deleted_at,
                     protocol_prompt=skill.protocol_prompt,
                     needs_worktree=bool(skill.needs_worktree),
                     permission_mode=skill.permission_mode,
                     branch_prefix="maiko",
-                    supports_plan_first=False,
                     output_kind="diff",
-                    commits_locally=False,
-                    produces_pr=False,
                     auto_tag_insights=[],
-                    default_display_name=None,
                     model_routing_key="coding_agent",
-                    is_self_reviewing=False,
                 ))
                 to_agent_type += 1
             else:

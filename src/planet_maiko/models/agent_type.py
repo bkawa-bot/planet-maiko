@@ -27,7 +27,6 @@ class AgentType(db.Model):
     id = db.Column(db.String(64), primary_key=True)
 
     name = db.Column(db.String(100), nullable=False)
-    tagline = db.Column(db.String(256), nullable=True)
     description = db.Column(db.Text, nullable=True)
     icon = db.Column(db.String(50), default="user")
 
@@ -38,7 +37,6 @@ class AgentType(db.Model):
     # their changes. deleted_at is a tombstone for soft-deleted
     # defaults (so the next boot's seed pass skips them).
     is_default = db.Column(db.Boolean, default=False)
-    is_active = db.Column(db.Boolean, default=True)
     user_edited = db.Column(db.Boolean, default=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
 
@@ -67,20 +65,12 @@ class AgentType(db.Model):
     # Git branch prefix when this agent commits. Default "maiko";
     # cartographer historically used "cartographer/" for legibility.
     branch_prefix = db.Column(db.String(64), default="maiko")
-    # Whether the assign modal offers a "plan first" checkbox. Today
-    # only coding supports it.
-    supports_plan_first = db.Column(db.Boolean, default=False)
 
     # Output shape. "diff" = the agent produces a git diff the user
     # reviews and approves. "report" = the agent produces a markdown
     # report saved to task.extra.artifact. "insight" = the agent
     # produces an insight (the cartographer's repo overview path).
     output_kind = db.Column(db.String(20), default="diff")
-    # Whether the agent runs `git commit` inside its worktree. Used
-    # to gate the post-approval push flow.
-    commits_locally = db.Column(db.Boolean, default=False)
-    # Whether `gh pr create` is part of this agent's approved flow.
-    produces_pr = db.Column(db.Boolean, default=False)
 
     # Behavior.
     # auto_tag_insights: tags applied verbatim to any Insight this
@@ -93,17 +83,9 @@ class AgentType(db.Model):
     # overview is long); everyone else's insights are one-paragraph
     # tribal-knowledge notes and 2000 is plenty.
     insight_max_length = db.Column(db.Integer, default=2000)
-    # default_display_name: when set, profiles auto-spawned for this
-    # type get this as their initial display_name. "Atlas" for
-    # cartographer; null elsewhere.
-    default_display_name = db.Column(db.String(100), nullable=True)
     # routing.rules key used to resolve model + effort. Every built-in
     # uses "coding_agent" today (a long-standing TODO).
     model_routing_key = db.Column(db.String(64), default="coding_agent")
-    # is_self_reviewing: this agent reviews its own work (coding=True;
-    # review=False, because the reviewer is checking someone else's
-    # code). Controls verdict-banner copy on the diff page.
-    is_self_reviewing = db.Column(db.Boolean, default=False)
 
     # Forward-flex. Future per-type fields the schema doesn't have a
     # column for yet can land here without a migration.
@@ -124,11 +106,9 @@ class AgentType(db.Model):
         return {
             "id": self.id,
             "name": self.name,
-            "tagline": self.tagline,
             "description": self.description,
             "icon": self.icon,
             "is_default": bool(self.is_default),
-            "is_active": bool(self.is_active),
             "user_edited": bool(self.user_edited),
             "deleted_at": iso_utc(self.deleted_at),
             "protocol_prompt": self.protocol_prompt,
@@ -136,15 +116,10 @@ class AgentType(db.Model):
             "requires_scope_repo_clone": bool(self.requires_scope_repo_clone),
             "permission_mode": self.permission_mode,
             "branch_prefix": self.branch_prefix or "maiko",
-            "supports_plan_first": bool(self.supports_plan_first),
             "output_kind": self.output_kind or "diff",
-            "commits_locally": bool(self.commits_locally),
-            "produces_pr": bool(self.produces_pr),
             "auto_tag_insights": self.auto_tag_insights or [],
             "insight_max_length": int(self.insight_max_length or 2000),
-            "default_display_name": self.default_display_name,
             "model_routing_key": self.model_routing_key or "coding_agent",
-            "is_self_reviewing": bool(self.is_self_reviewing),
             "extra": self.extra or {},
             "created_at": iso_utc(self.created_at),
             "updated_at": iso_utc(self.updated_at),

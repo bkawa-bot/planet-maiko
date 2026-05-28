@@ -89,7 +89,6 @@ export function roleMeta(id, types) {
   return {
     id,
     label: t?.name || id || "Unknown",
-    tagline: t?.tagline || "",
     description: t?.description || "",
     icon: ICON_MAP[iconName] || User,
     color: COLOR_MAP[id] || "var(--text-muted)",
@@ -98,12 +97,7 @@ export function roleMeta(id, types) {
     outputKind: t?.output_kind || "diff",
     needsWorktree: !!t?.needs_worktree,
     requiresScopeRepoClone: !!t?.requires_scope_repo_clone,
-    supportsPlanFirst: !!t?.supports_plan_first,
-    commitsLocally: !!t?.commits_locally,
-    producesPr: !!t?.produces_pr,
-    isSelfReviewing: !!t?.is_self_reviewing,
     permissionMode: t?.permission_mode || null,
-    defaultDisplayName: t?.default_display_name || null,
     raw: t || null,
   };
 }

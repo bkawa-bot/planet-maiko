@@ -20,18 +20,16 @@ agent_types_bp = Blueprint("agent_types", __name__)
 
 
 _EDITABLE_FIELDS = {
-    "name", "tagline", "description", "icon",
+    "name", "description", "icon",
     "protocol_prompt",
     "needs_worktree", "permission_mode", "branch_prefix",
-    "supports_plan_first", "output_kind",
-    "commits_locally", "produces_pr",
-    "auto_tag_insights", "default_display_name", "model_routing_key",
-    "is_self_reviewing", "is_active", "extra",
+    "output_kind",
+    "auto_tag_insights", "model_routing_key",
+    "extra",
 }
 
 _BOOL_FIELDS = {
-    "needs_worktree", "supports_plan_first",
-    "commits_locally", "produces_pr", "is_self_reviewing", "is_active",
+    "needs_worktree",
 }
 
 
@@ -41,7 +39,7 @@ def _coerce(field, value):
     empty strings on nullable string columns."""
     if field in _BOOL_FIELDS:
         return bool(value)
-    if field in ("permission_mode", "default_display_name", "tagline", "description"):
+    if field in ("permission_mode", "description"):
         # Empty string from a UI textarea collapses to NULL so reader
         # code can rely on "null => use default" semantics.
         return value or None
@@ -92,23 +90,16 @@ def create_agent_type():
     row = AgentType(
         id=data["id"],
         name=data["name"],
-        tagline=data.get("tagline") or None,
         description=data.get("description") or None,
         icon=data.get("icon") or "user",
         is_default=False,
-        is_active=True,
         protocol_prompt=data["protocol_prompt"],
         needs_worktree=bool(data.get("needs_worktree", True)),
         permission_mode=data.get("permission_mode") or None,
         branch_prefix=data.get("branch_prefix") or "maiko",
-        supports_plan_first=bool(data.get("supports_plan_first", False)),
         output_kind=data.get("output_kind") or "diff",
-        commits_locally=bool(data.get("commits_locally", False)),
-        produces_pr=bool(data.get("produces_pr", False)),
         auto_tag_insights=list(data.get("auto_tag_insights") or []),
-        default_display_name=data.get("default_display_name") or None,
         model_routing_key=data.get("model_routing_key") or "coding_agent",
-        is_self_reviewing=bool(data.get("is_self_reviewing", False)),
         extra=data.get("extra") or {},
     )
     db.session.add(row)
