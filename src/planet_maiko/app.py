@@ -427,8 +427,6 @@ def create_app(start_scheduler=False):
     app.register_blueprint(specialties_bp, url_prefix="/api")
     app.register_blueprint(memos_bp, url_prefix="/api")
     app.register_blueprint(rules_bp, url_prefix="/api")
-    from planet_maiko.api.agent_types_api import agent_types_bp
-    app.register_blueprint(agent_types_bp, url_prefix="/api")
 
     # Register kind-specific memo approve handlers (agent_proposal → task,
     # future: job_approval → AgentJob). Side-effect-only on import.
@@ -477,7 +475,6 @@ def create_app(start_scheduler=False):
         from planet_maiko.agents.skills import seed_defaults
         seed_defaults()
 
-<<<<<<< Updated upstream
         # AgentType + Specialty seed pass (issue #22 split). Runs
         # after the CustomSkill seed so the backfill pass sees the
         # default skill rows. Both calls are idempotent.
@@ -489,14 +486,6 @@ def create_app(start_scheduler=False):
             backfill_from_custom_skills()
         except Exception as e:
             logger.warning(f"[startup] AgentType seed / backfill skipped: {e}")
-=======
-        # Seed the 6 built-in AgentTypes (coding, review, pr_review,
-        # investigation, repo_analysis, cartograph). PR 1 of the
-        # AgentType refactor — dispatch code still uses hardcoded
-        # sets; this just makes the table queryable.
-        from planet_maiko.agents.agent_types import seed_default_types
-        seed_default_types()
->>>>>>> Stashed changes
 
         # Seed per-repo watches + make sure every configured repo has a
         # seeded 'keep overview current' watch.
