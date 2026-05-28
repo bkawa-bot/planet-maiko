@@ -225,7 +225,8 @@ export const api = {
     request(`/agents/${jobId}/rerun`, { method: "POST" }),
   getConflicts: () => request("/agents/conflicts"),
 
-  // Skills
+  // Skills (legacy; will be removed in step 4 of the AgentType
+  // refactor once the UI has fully migrated to agentTypes/specialties).
   getSkills: () => request("/skills"),
   getSkill: (id) => request(`/skills/${id}`),
   createSkill: (data) => request("/skills", { method: "POST", body: JSON.stringify(data) }),
@@ -233,6 +234,32 @@ export const api = {
   deleteSkill: (id) => request(`/skills/${id}`, { method: "DELETE" }),
   runSkill: (name, data) =>
     request(`/skills/${name}/run`, { method: "POST", body: JSON.stringify(data) }),
+
+  // Agent types — the role-level identity of an agent (protocol,
+  // permissions, output shape, spawn pattern). Four built-ins
+  // (coding/review/investigation/cartographer) plus user-created
+  // custom types. Replaces the historical four-string hardcoded role
+  // enum. See models/agent_type.py.
+  getAgentTypes: () => request("/agent-types"),
+  getAgentType: (id) => request(`/agent-types/${id}`),
+  createAgentType: (data) =>
+    request("/agent-types", { method: "POST", body: JSON.stringify(data) }),
+  updateAgentType: (id, data) =>
+    request(`/agent-types/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteAgentType: (id) =>
+    request(`/agent-types/${id}`, { method: "DELETE" }),
+
+  // Specialties — swappable per-run prompt bodies attached to a
+  // profile's specialty_ids pool and picked at assign time. Distinct
+  // from agent types; see models/specialty.py.
+  getSpecialties: () => request("/specialties"),
+  getSpecialty: (id) => request(`/specialties/${id}`),
+  createSpecialty: (data) =>
+    request("/specialties", { method: "POST", body: JSON.stringify(data) }),
+  updateSpecialty: (id, data) =>
+    request(`/specialties/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteSpecialty: (id) =>
+    request(`/specialties/${id}`, { method: "DELETE" }),
 
   // Learnings management
   createLearning: (data) => request("/learnings", { method: "POST", body: JSON.stringify(data) }),

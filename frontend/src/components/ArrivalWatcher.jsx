@@ -1,22 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { Code2, Eye, Search, Map } from "@icons";
 import { api } from "../api/client";
 import CardArt from "./CardArt";
 import RarityBadge from "./RarityBadge";
 import ModalPortal from "./ModalPortal";
 import { useCards } from "../hooks/useCards";
+import { useAgentTypes, roleMeta } from "../hooks/useAgentTypes";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import "./ArrivalWatcher.css";
 
 const SEEN_KEY = "maiko-seen-arrivals";
 const POLL_MS = 15_000;
-
-const ROLE_META = {
-  coding: { icon: Code2, label: "Coder" },
-  review: { icon: Eye, label: "Reviewer" },
-  investigation: { icon: Search, label: "Investigator" },
-  cartographer: { icon: Map, label: "Cartographer" },
-};
 
 function loadSeen() {
   try {
@@ -48,6 +41,7 @@ function saveSeen(set) {
 export default function ArrivalWatcher() {
   const defaultOrg = useDefaultOrg();
   const cards = useCards();
+  const agentTypes = useAgentTypes();
   const [queue, setQueue] = useState([]);
   // seen lives in a ref so the polling closure reads the latest set
   // without the effect having to re-subscribe on every dismissal.
@@ -85,7 +79,7 @@ export default function ArrivalWatcher() {
   const profile = queue[0];
   const card = cards.find((c) => c.id === profile.avatar);
   const role = profile.role || "coding";
-  const meta = ROLE_META[role] || ROLE_META.coding;
+  const meta = roleMeta(role, agentTypes);
   const RoleIcon = meta.icon;
 
   const dismiss = () => {

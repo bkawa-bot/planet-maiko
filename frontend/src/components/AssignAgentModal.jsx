@@ -1,20 +1,12 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
-import { Bot, Plus, Rocket, Code2, Eye, Search } from "@icons";
+import { Bot, Plus, Rocket } from "@icons";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import CardAvatar from "./CardAvatar";
 import ModalPortal from "./ModalPortal";
+import { useAgentTypes, roleMeta } from "../hooks/useAgentTypes";
 import "./AssignAgentModal.css";
-
-// Role chip metadata so the modal can show at-a-glance what each
-// listed agent actually does — a Reviewer shouldn't get picked for a
-// coding task, and vice versa.
-const ROLE_META = {
-  coding: { icon: Code2, label: "Coder" },
-  review: { icon: Eye, label: "Reviewer" },
-  investigation: { icon: Search, label: "Investigator" },
-};
 
 // Task type → expected agent role. Drives the default filter.
 const TYPE_TO_ROLE = {
@@ -26,6 +18,7 @@ const TYPE_TO_ROLE = {
 
 export default function AssignAgentModal({ task, onClose, onAssigned }) {
   const defaultOrg = useDefaultOrg();
+  const agentTypes = useAgentTypes();
   const [profiles, setProfiles] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [specialtyId, setSpecialtyId] = useState("");
@@ -194,15 +187,15 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
             <>
               {profiles.length === 0 && (
                 <div style={{ padding: "8px 12px", marginBottom: 8, background: "var(--pink-soft)", borderRadius: "var(--radius-xs)", fontSize: 12, color: "var(--pink)" }}>
-                  No {ROLE_META[expectedRole]?.label.toLowerCase() || expectedRole} agent for this task yet. Create one below.
+                  No {roleMeta(expectedRole, agentTypes).label.toLowerCase()} agent for this task yet. Create one below.
                 </div>
               )}
               <div className="assign-section-label">
-                Available {ROLE_META[expectedRole]?.label || expectedRole}s
+                Available {roleMeta(expectedRole, agentTypes).label}s
               </div>
               <div className="assign-agent-list">
                 {profiles.map((p) => {
-                  const meta = ROLE_META[p.role] || ROLE_META.coding;
+                  const meta = roleMeta(p.role, agentTypes);
                   const RoleIcon = meta.icon;
                   return (
                     <div
@@ -230,7 +223,7 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
               </div>
 
               <button className="btn btn-sm" onClick={handleCreateNew} style={{ marginTop: 8 }}>
-                <Plus size={10} /> Create a new {ROLE_META[expectedRole]?.label.toLowerCase() || "agent"}
+                <Plus size={10} /> Create a new {roleMeta(expectedRole, agentTypes).label.toLowerCase()}
               </button>
 
               {attachedSpecialties.length > 0 && !isReassign && (
@@ -340,7 +333,7 @@ export default function AssignAgentModal({ task, onClose, onAssigned }) {
 
               {!isCoding && !isReassign && (
                 <div style={{ marginTop: 16, padding: "10px 12px", background: "var(--pink-soft)", borderRadius: "var(--radius-xs)", fontSize: 12, color: "var(--text-dim)" }}>
-                  {ROLE_META[expectedRole]?.label || "This agent"} runs autonomously — Maiko prepares a worktree and starts it in the background. You'll see the result in your inbox.
+                  {roleMeta(expectedRole, agentTypes).label} runs autonomously — Maiko prepares a worktree and starts it in the background. You'll see the result in your inbox.
                 </div>
               )}
 

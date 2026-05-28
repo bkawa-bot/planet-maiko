@@ -2,20 +2,15 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { showToast } from "./Toast";
-import { ChevronDown, ChevronRight, Rocket, X, Loader, Code2, Eye, Search } from "@icons";
+import { ChevronDown, ChevronRight, Rocket, X, Loader } from "@icons";
 import { useConfiguredRepos, formatRepo, useDefaultOrg } from "../utils/repo";
 import CardAvatar from "./CardAvatar";
 import ModalPortal from "./ModalPortal";
+import { useAgentTypes, roleMeta } from "../hooks/useAgentTypes";
 // Reuse the agent-card list classes (.assign-agent-list, .assign-agent-option, ...)
 // from AssignAgentModal so the picker looks identical across the two surfaces.
 import "./AssignAgentModal.css";
 import "./QuickLaunchModal.css";
-
-const ROLE_META = {
-  coding: { icon: Code2, label: "Coder" },
-  review: { icon: Eye, label: "Reviewer" },
-  investigation: { icon: Search, label: "Investigator" },
-};
 
 /**
  * Direct agent-job launcher. The user picks the agent themselves
@@ -44,6 +39,7 @@ export default function QuickLaunchModal({ open, onClose }) {
   const navigate = useNavigate();
   const configuredRepos = useConfiguredRepos();
   const defaultOrg = useDefaultOrg();
+  const agentTypes = useAgentTypes();
   const [profiles, setProfiles] = useState([]);
   const [specialties, setSpecialties] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -156,7 +152,7 @@ export default function QuickLaunchModal({ open, onClose }) {
                 ) : (
                   <div className="assign-agent-list">
                     {profiles.map((p) => {
-                      const meta = ROLE_META[p.role] || ROLE_META.coding;
+                      const meta = roleMeta(p.role, agentTypes);
                       const RoleIcon = meta.icon;
                       return (
                         <div

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   Brain, CheckSquare, ChevronDown, ChevronRight, Plus,
-  Target, X, Pencil, Save, Code2, Eye, Search, Map, Loader, Compass, Pause, Play,
+  Target, X, Pencil, Save, Map, Loader, Compass, Pause, Play,
 } from "@icons";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
@@ -11,16 +11,7 @@ import CardAvatar from "../CardAvatar";
 import CardArt from "../CardArt";
 import ProfileDetailModal from "./ProfileDetailModal";
 import ModalPortal from "../ModalPortal";
-
-const ROLE_META = {
-  coding: { icon: Code2, label: "Coder", color: "var(--pink)" },
-  review: { icon: Eye, label: "Reviewer", color: "var(--blue)" },
-  investigation: { icon: Search, label: "Investigator", color: "var(--lavender)" },
-  cartographer: { icon: Map, label: "Cartographer", color: "var(--lemon)" },
-};
-
-// Section order for the role-grouped view.
-const ROLE_ORDER = ["coding", "review", "investigation", "cartographer"];
+import { useAgentTypes, roleMeta } from "../../hooks/useAgentTypes";
 
 // Auto-collapse a role section when it has more than this many agents.
 // Keeps the pack-grows-large case scannable without forcing users with
@@ -167,6 +158,7 @@ export default function AgentsProfilesTab({
   const [editForm, setEditForm] = useState({ role: "coding", scope_repo: "", instructions: "", flavor_text: "", specialty_ids: [] });
   const [editSaving, setEditSaving] = useState(false);
   const [specialties, setSpecialties] = useState([]);
+  const agentTypes = useAgentTypes();
   const configuredRepos = useConfiguredRepos();
 
   useEffect(() => {
@@ -257,9 +249,15 @@ export default function AgentsProfilesTab({
 
   const visibleProfiles = showArchived ? profiles : profiles.filter((p) => !p.archived);
 
+  // Role-bucket order comes from the AgentTypes API (defaults first,
+  // then custom types alpha). Profiles whose role doesn't match any
+  // AgentType fall back into the "coding" bucket — keeps stale-role
+  // profiles visible instead of silently dropping them.
+  const knownRoles = new Set(agentTypes.map((t) => t.id));
+  const ROLE_ORDER = agentTypes.map((t) => t.id);
   const byRole = {};
   for (const p of visibleProfiles) {
-    const r = ROLE_META[p.role] ? p.role : "coding";
+    const r = knownRoles.has(p.role) ? p.role : "coding";
     (byRole[r] = byRole[r] || []).push(p);
   }
 
@@ -302,7 +300,7 @@ export default function AgentsProfilesTab({
       </div>
 
       {ROLE_ORDER.filter((r) => (byRole[r] || []).length > 0).map((role) => {
-        const meta = ROLE_META[role];
+        const meta = roleMeta(role, agentTypes);
         const RoleIcon = meta.icon;
         const collapsedNow = isCollapsed(role);
         const ToggleIcon = collapsedNow ? ChevronRight : ChevronDown;

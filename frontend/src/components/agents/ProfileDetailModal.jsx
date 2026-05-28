@@ -1,29 +1,13 @@
 import { useState } from "react";
 import {
-  Brain, CheckSquare, X, Pencil, Code2, Eye, Search, Map, Sparkles,
+  Brain, CheckSquare, X, Pencil, Sparkles,
 } from "@icons";
 import { formatRepo, useDefaultOrg } from "../../utils/repo";
 import CardArt from "../CardArt";
 import RarityBadge from "../RarityBadge";
 import { useCards } from "../../hooks/useCards";
+import { useAgentTypes, roleMeta } from "../../hooks/useAgentTypes";
 import ModalPortal from "../ModalPortal";
-
-const ROLE_META = {
-  coding: { icon: Code2, label: "Coder", color: "var(--pink)" },
-  review: { icon: Eye, label: "Reviewer", color: "var(--blue)" },
-  investigation: { icon: Search, label: "Investigator", color: "var(--lavender)" },
-  cartographer: { icon: Map, label: "Cartographer", color: "var(--lemon)" },
-};
-
-// Section order for the role-grouped view.
-const ROLE_ORDER = ["coding", "review", "investigation", "cartographer"];
-
-// Auto-collapse a role section when it has more than this many agents.
-// Keeps the pack-grows-large case scannable without forcing users with
-// 3 agents to click every header.
-const AUTO_COLLAPSE_THRESHOLD = 6;
-
-const COLLAPSE_STORAGE_KEY = "maiko-profiles-collapsed";
 
 
 
@@ -37,7 +21,8 @@ export default function ProfileDetailModal({
   const defaultOrg = useDefaultOrg();
   const hasContextSet = profile.context_set?.length > 0;
   const role = profile.role || "coding";
-  const meta = ROLE_META[role] || ROLE_META.coding;
+  const agentTypes = useAgentTypes();
+  const meta = roleMeta(role, agentTypes);
   const RoleIcon = meta.icon;
   const cards = useCards();
   const card = cards.find((c) => c.id === profile.avatar);
