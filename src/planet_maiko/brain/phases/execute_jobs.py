@@ -128,15 +128,18 @@ def _phase_execute_agent_jobs():
                 or extra.get("repo_path_override")
                 or (resolve_repo_path(job.scope_repo) if job.scope_repo else None)
             )
-            # Kinds that actually need a checkout. Investigation / repo_analysis
-            # / cartograph and skills are report-producing — they take
-            # scope_repo as a hint but can fall through to scratch mode
-            # when no clone exists, rather than failing the job.
-            WORKTREE_REQUIRED_KINDS = {"coding", "review", "pr_review"}
+            # Kinds that actually need a checkout. Investigation /
+            # repo_analysis / cartograph and skills are
+            # report-producing — they take scope_repo as a hint but
+            # can fall through to scratch mode when no clone exists,
+            # rather than failing the job. Source of truth:
+            # AgentType.requires_scope_repo_clone, resolved through
+            # TYPE_TO_ROLE so pr_review -> review etc.
+            from planet_maiko.agent_types import kind_requires_scope_repo_clone
             if (
                 job.scope_repo
                 and not local_path
-                and job.kind in WORKTREE_REQUIRED_KINDS
+                and kind_requires_scope_repo_clone(job.kind)
             ):
                 logger.warning(
                     f"[cycle] agent_job {job.id}: no local clone for "

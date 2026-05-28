@@ -116,9 +116,11 @@ def _approve_job_approval(memo, data=None):
     # Kinds that actually need a checkout to run. Anything else can
     # run in scratch mode if no clone is available — execute_jobs
     # routes prepare(repo_path=None) into a maiko-managed scratch
-    # workspace for those.
-    WORKTREE_REQUIRED_KINDS = {"coding", "review", "pr_review"}
-    needs_worktree = spec.get("kind") in WORKTREE_REQUIRED_KINDS
+    # workspace for those. Source of truth:
+    # AgentType.requires_scope_repo_clone (via kind→role→AgentType
+    # resolution).
+    from planet_maiko.agent_types import kind_requires_scope_repo_clone
+    needs_worktree = kind_requires_scope_repo_clone(spec.get("kind"))
 
     if not repo_path_override and scope_repo and needs_worktree:
         local = resolve_repo_path(scope_repo)

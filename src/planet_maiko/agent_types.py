@@ -51,6 +51,30 @@ def get_agent_type(role):
     return None
 
 
+def kind_requires_scope_repo_clone(kind):
+    """True iff this job kind (or task type) needs a real clone of
+    scope_repo on disk. Used at memo-approve / task-spawn /
+    job-execute time to fail fast when scope_repo is set but no local
+    clone resolves.
+
+    Resolves the kind through TYPE_TO_ROLE first (so "pr_review" →
+    "review", "repo_analysis" → "investigation", etc.) so the same
+    rule applies whether the caller is checking a task.type, an
+    AgentJob.kind, or an AgentProfile.role directly.
+
+    Returns False on any miss (unknown kind, no AgentType row,
+    tombstoned default) — preserves the "fall through to scratch
+    mode" behavior the legacy code defaulted to.
+    """
+    try:
+        from planet_maiko.orchestration import TYPE_TO_ROLE
+    except Exception:
+        TYPE_TO_ROLE = {}
+    role = TYPE_TO_ROLE.get(kind, kind)
+    at = get_agent_type(role)
+    return bool(at and at.requires_scope_repo_clone)
+
+
 # The four built-ins. Each entry's `protocol_md` is read from
 # src/planet_maiko/prompts/<protocol_md>.md at seed time so the
 # bundled .md remains the canonical source of the protocol body —
@@ -66,6 +90,7 @@ BUILT_IN_AGENT_TYPES = [
         ),
         "icon": "code",
         "needs_worktree": True,
+        "requires_scope_repo_clone": True,
         "permission_mode": None,
         "branch_prefix": "maiko",
         "supports_plan_first": True,
@@ -88,6 +113,7 @@ BUILT_IN_AGENT_TYPES = [
         ),
         "icon": "git-pull-request",
         "needs_worktree": True,
+        "requires_scope_repo_clone": True,
         "permission_mode": None,
         "branch_prefix": "maiko",
         "supports_plan_first": False,
@@ -231,6 +257,7 @@ def ensure_seed_agent_types():
                     user_edited=False,
                     protocol_prompt=protocol_body,
                     needs_worktree=bool(spec.get("needs_worktree", True)),
+                    requires_scope_repo_clone=bool(spec.get("requires_scope_repo_clone", False)),
                     permission_mode=spec.get("permission_mode"),
                     branch_prefix=spec.get("branch_prefix", "maiko"),
                     supports_plan_first=bool(spec.get("supports_plan_first", False)),
@@ -253,6 +280,7 @@ def ensure_seed_agent_types():
                 existing.icon = spec.get("icon", "user")
                 existing.protocol_prompt = protocol_body
                 existing.needs_worktree = bool(spec.get("needs_worktree", True))
+                existing.requires_scope_repo_clone = bool(spec.get("requires_scope_repo_clone", False))
                 existing.permission_mode = spec.get("permission_mode")
                 existing.branch_prefix = spec.get("branch_prefix", "maiko")
                 existing.supports_plan_first = bool(spec.get("supports_plan_first", False))

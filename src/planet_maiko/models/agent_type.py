@@ -46,9 +46,22 @@ class AgentType(db.Model):
     # start. NOT NULL: an AgentType without a protocol can't run.
     protocol_prompt = db.Column(db.Text, nullable=False)
 
-    # Spawn shape — subsumes the three drifted WORKTREE_REQUIRED_KINDS
-    # sets in execute_jobs.py / memo_handlers.py / api/tasks.py.
+    # Spawn shape.
+    #
+    # needs_worktree: this type runs in a worktree (a real or scratch
+    # one) with a Claude Code subprocess vs. a one-shot LLM call with
+    # no workspace. All four built-ins are True; lightweight specialty-
+    # style types set it False.
     needs_worktree = db.Column(db.Boolean, default=True)
+    # requires_scope_repo_clone: this type fails when scope_repo is
+    # set but no local clone of that repo is found on disk. Subsumes
+    # the three drifted WORKTREE_REQUIRED_KINDS sets in
+    # execute_jobs.py / memo_handlers.py / api/tasks.py. Distinct from
+    # needs_worktree: investigation and cartographer DO need a worktree
+    # but happily fall through to scratch mode when no clone exists.
+    # coding and review can't review/diff against an imaginary repo,
+    # so they fail fast instead.
+    requires_scope_repo_clone = db.Column(db.Boolean, default=False)
     # null | "plan" — runtime maps to its own permission flag.
     permission_mode = db.Column(db.String(32), nullable=True)
     # Git branch prefix when this agent commits. Default "maiko";
@@ -115,6 +128,7 @@ class AgentType(db.Model):
             "deleted_at": iso_utc(self.deleted_at),
             "protocol_prompt": self.protocol_prompt,
             "needs_worktree": bool(self.needs_worktree),
+            "requires_scope_repo_clone": bool(self.requires_scope_repo_clone),
             "permission_mode": self.permission_mode,
             "branch_prefix": self.branch_prefix or "maiko",
             "supports_plan_first": bool(self.supports_plan_first),

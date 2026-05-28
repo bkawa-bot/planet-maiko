@@ -27,6 +27,7 @@ _PATCH_COLUMNS = [
     ("custom_skills", "last_run_at", "DATETIME"),
     ("custom_skills", "protocol_prompt", "TEXT"),
     ("custom_skills", "permission_mode", "VARCHAR(32)"),
+    ("agent_types", "requires_scope_repo_clone", "BOOLEAN DEFAULT 0"),
     ("learnings", "last_confirmed_at", "DATETIME"),
 ]
 
