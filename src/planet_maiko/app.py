@@ -441,6 +441,8 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.learning import Learning  # noqa: F401
         from planet_maiko.models.agent_profile import AgentProfile  # noqa: F401
         from planet_maiko.models.custom_skill import CustomSkill  # noqa: F401
+        from planet_maiko.models.agent_type import AgentType  # noqa: F401
+        from planet_maiko.models.specialty import Specialty  # noqa: F401
         from planet_maiko.models.diff_comment import DiffComment  # noqa: F401
         from planet_maiko.models.insight import Insight  # noqa: F401
         from planet_maiko.models.automation import Automation  # noqa: F401
@@ -466,6 +468,18 @@ def create_app(start_scheduler=False):
         # Seed default skills on first run
         from planet_maiko.agents.skills import seed_defaults
         seed_defaults()
+
+        # AgentType + Specialty seed pass (issue #22 split). Runs
+        # after the CustomSkill seed so the backfill pass sees the
+        # default skill rows. Both calls are idempotent.
+        try:
+            from planet_maiko.agent_types import (
+                ensure_seed_agent_types, backfill_from_custom_skills,
+            )
+            ensure_seed_agent_types()
+            backfill_from_custom_skills()
+        except Exception as e:
+            logger.warning(f"[startup] AgentType seed / backfill skipped: {e}")
 
         # Seed per-repo watches + make sure every configured repo has a
         # seeded 'keep overview current' watch.
