@@ -392,6 +392,8 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.checks_api import checks_bp
     from planet_maiko.api.automations_api import automations_bp
     from planet_maiko.api.agent_jobs_api import agent_jobs_bp
+    from planet_maiko.api.agent_types_api import agent_types_bp
+    from planet_maiko.api.specialties_api import specialties_bp
     from planet_maiko.api.memos_api import memos_bp
     from planet_maiko.api.rules_api import rules_bp
     app.register_blueprint(pupdates_bp, url_prefix="/api")
@@ -419,6 +421,8 @@ def create_app(start_scheduler=False):
     app.register_blueprint(checks_bp, url_prefix="/api")
     app.register_blueprint(automations_bp, url_prefix="/api")
     app.register_blueprint(agent_jobs_bp, url_prefix="/api")
+    app.register_blueprint(agent_types_bp, url_prefix="/api")
+    app.register_blueprint(specialties_bp, url_prefix="/api")
     app.register_blueprint(memos_bp, url_prefix="/api")
     app.register_blueprint(rules_bp, url_prefix="/api")
 

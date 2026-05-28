@@ -1,0 +1,160 @@
+"""CRUD for AgentType — the role-level identity of an agent.
+
+Companion to /api/specialties (which manages per-run prompt bodies).
+Together they replace /api/skills, which conflated both concepts on
+the underlying CustomSkill model.
+
+The four built-ins (coding / review / investigation / cartographer)
+appear in the list like any user-created type. Deleting a default
+soft-deletes (deleted_at tombstone so the seed pass on next boot
+doesn't resurrect); deleting a user-created type hard-deletes.
+"""
+
+from datetime import datetime, timezone
+from flask import Blueprint, jsonify, request
+
+from planet_maiko.database import db
+from planet_maiko.models.agent_type import AgentType
+
+agent_types_bp = Blueprint("agent_types", __name__)
+
+
+_EDITABLE_FIELDS = {
+    "name", "tagline", "description", "icon",
+    "protocol_prompt",
+    "needs_worktree", "permission_mode", "branch_prefix",
+    "supports_plan_first", "output_kind",
+    "commits_locally", "produces_pr",
+    "auto_tag_insights", "default_display_name", "model_routing_key",
+    "is_self_reviewing", "is_active", "extra",
+}
+
+_BOOL_FIELDS = {
+    "needs_worktree", "supports_plan_first",
+    "commits_locally", "produces_pr", "is_self_reviewing", "is_active",
+}
+
+
+def _coerce(field, value):
+    """Coerce request-body field values to the column type. Mostly
+    just bool casting for the boolean columns + null-collapse for
+    empty strings on nullable string columns."""
+    if field in _BOOL_FIELDS:
+        return bool(value)
+    if field in ("permission_mode", "default_display_name", "tagline", "description"):
+        # Empty string from a UI textarea collapses to NULL so reader
+        # code can rely on "null => use default" semantics.
+        return value or None
+    return value
+
+
+@agent_types_bp.route("/agent-types", methods=["GET"])
+def list_agent_types():
+    """List all active (non-tombstoned) agent types, defaults first.
+
+    Defaults render in the original seeded order (coding, review,
+    investigation, cartographer) via id-based sort within is_default;
+    user-created types follow in alpha order.
+    """
+    rows = (
+        AgentType.query
+        .filter(AgentType.deleted_at.is_(None))
+        .order_by(AgentType.is_default.desc(), AgentType.id)
+        .all()
+    )
+    return jsonify([r.to_dict() for r in rows])
+
+
+@agent_types_bp.route("/agent-types/<type_id>", methods=["GET"])
+def get_agent_type(type_id):
+    row = db.session.get(AgentType, type_id)
+    if row is None or row.deleted_at is not None:
+        return jsonify({"error": "AgentType not found"}), 404
+    return jsonify(row.to_dict())
+
+
+@agent_types_bp.route("/agent-types", methods=["POST"])
+def create_agent_type():
+    """Create a user-defined agent type.
+
+    Required: id, name, protocol_prompt. Everything else falls back
+    to model defaults — sensible for a "I just want a custom role
+    with my own protocol" workflow.
+    """
+    data = request.get_json() or {}
+    for required in ("id", "name", "protocol_prompt"):
+        if not data.get(required):
+            return jsonify({"error": f"{required} is required"}), 400
+
+    if db.session.get(AgentType, data["id"]) is not None:
+        return jsonify({"error": "id already exists"}), 409
+
+    row = AgentType(
+        id=data["id"],
+        name=data["name"],
+        tagline=data.get("tagline") or None,
+        description=data.get("description") or None,
+        icon=data.get("icon") or "user",
+        is_default=False,
+        is_active=True,
+        protocol_prompt=data["protocol_prompt"],
+        needs_worktree=bool(data.get("needs_worktree", True)),
+        permission_mode=data.get("permission_mode") or None,
+        branch_prefix=data.get("branch_prefix") or "maiko",
+        supports_plan_first=bool(data.get("supports_plan_first", False)),
+        output_kind=data.get("output_kind") or "diff",
+        commits_locally=bool(data.get("commits_locally", False)),
+        produces_pr=bool(data.get("produces_pr", False)),
+        auto_tag_insights=list(data.get("auto_tag_insights") or []),
+        default_display_name=data.get("default_display_name") or None,
+        model_routing_key=data.get("model_routing_key") or "coding_agent",
+        is_self_reviewing=bool(data.get("is_self_reviewing", False)),
+        extra=data.get("extra") or {},
+    )
+    db.session.add(row)
+    db.session.commit()
+    return jsonify(row.to_dict()), 201
+
+
+@agent_types_bp.route("/agent-types/<type_id>", methods=["PATCH"])
+def update_agent_type(type_id):
+    """Partial update. PATCHing any field on a default flips
+    user_edited=True so the next boot's seed pass stops refreshing
+    the row from the bundled spec."""
+    row = db.session.get(AgentType, type_id)
+    if row is None or row.deleted_at is not None:
+        return jsonify({"error": "AgentType not found"}), 404
+
+    data = request.get_json() or {}
+    touched = False
+    for field in _EDITABLE_FIELDS:
+        if field in data:
+            setattr(row, field, _coerce(field, data[field]))
+            touched = True
+
+    if touched and row.is_default:
+        row.user_edited = True
+
+    db.session.commit()
+    return jsonify(row.to_dict())
+
+
+@agent_types_bp.route("/agent-types/<type_id>", methods=["DELETE"])
+def delete_agent_type(type_id):
+    """Delete an agent type.
+
+    Defaults soft-delete (deleted_at tombstone so the boot seed pass
+    knows to skip; user can revive by clearing deleted_at). Custom
+    types hard-delete. Defers checking whether any AgentProfile still
+    references the id — that's a separate concern; profiles silently
+    fall back to "coding" when their role no longer resolves.
+    """
+    row = db.session.get(AgentType, type_id)
+    if row is None:
+        return jsonify({"error": "AgentType not found"}), 404
+    if row.is_default:
+        row.deleted_at = datetime.now(timezone.utc)
+    else:
+        db.session.delete(row)
+    db.session.commit()
+    return jsonify({"status": "deleted"})
