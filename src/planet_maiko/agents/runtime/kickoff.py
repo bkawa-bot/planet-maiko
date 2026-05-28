@@ -111,12 +111,19 @@ def _kickoff_agent_headless(agent_id, worktree_path, job_id, branch_name=None, p
     if _UNSAFE_PATH_CHARS.search(worktree_path):
         return {"success": False, "error": f"Unsafe worktree path: {worktree_path!r}"}
 
-    # Pass "coding_agent" so the Settings → Model Routing → Coding agents
+    # Resolve the routing key from AgentType.model_routing_key (falls
+    # back to "coding_agent" when missing — preserves legacy behavior
+    # for the four built-ins, all seeded with model_routing_key=
+    # "coding_agent" today).
+    from planet_maiko.agent_types import model_routing_key_for
+    routing_key = model_routing_key_for(role)
+
+    # Pass the routing_key so the Settings → Model Routing override
     # rule actually picks the runtime. Without this the spawn would
     # always use brain.runtime and a user who set "Coding agents → tmux"
     # via the per-task routing UI would silently still get the default.
     from planet_maiko.agents.brain_session import _get_runtime
-    runtime = _get_runtime("coding_agent")
+    runtime = _get_runtime(routing_key)
     if not runtime.is_available():
         return {"success": False, "error": f"{runtime.name} runtime not available"}
     if not runtime.supports_spawn():
@@ -138,13 +145,15 @@ def _kickoff_agent_headless(agent_id, worktree_path, job_id, branch_name=None, p
     initial_prompt = _initial_prompt_for(role, plan_first=plan_first)
 
     # Model + effort routing: pull both from config so the agent runs
-    # on whatever the user picked in Settings → Model Routing. All
-    # roles share the "coding_agent" key today; user can split in
-    # routing.rules if they want different tiers per role.
+    # on whatever the user picked in Settings → Model Routing. The
+    # routing key per-role comes from AgentType.model_routing_key
+    # above; the four built-ins all default to "coding_agent" so the
+    # legacy single-rule behavior is preserved, but a custom type can
+    # opt into its own routing slot.
     try:
         from planet_maiko.agents.routing import resolve_model, resolve_effort
-        model = resolve_model("coding_agent")
-        effort = resolve_effort("coding_agent") or "medium"
+        model = resolve_model(routing_key)
+        effort = resolve_effort(routing_key) or "medium"
     except Exception:
         model = None
         effort = "medium"

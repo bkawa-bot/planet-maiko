@@ -138,13 +138,27 @@ def wake_agent(task_id, prompt, source, working_path=None, session_id=None, app=
         logger.warning(f"[wake] no worktree for task {task_id} (source={source})")
         return False, "error"
 
-    # Use the coding_agent task_type so a routing.runtime_rules override
-    # (Settings → Model Routing → Coding agents) actually applies on
-    # resume — without this, a user who picked tmux for coding agents
-    # would have their follow-up messages routed to brain.runtime and
-    # the resume would target the wrong session id space.
+    # Resolve the routing key from AgentType.model_routing_key for
+    # this job's role. Falls back to "coding_agent" — the legacy
+    # value — when any lookup misses (job gone, profile gone, role
+    # unknown to AgentType). Without this, a custom agent type with
+    # its own routing slot would silently drop to coding_agent on
+    # resume even when kickoff used the right slot.
+    routing_key = "coding_agent"
+    try:
+        from planet_maiko.models.agent_job import AgentJob
+        from planet_maiko.models.agent_profile import AgentProfile
+        from planet_maiko.agent_types import model_routing_key_for
+        _job = db.session.get(AgentJob, task_id)
+        if _job is not None and _job.agent_profile_id:
+            _prof = db.session.get(AgentProfile, _job.agent_profile_id)
+            if _prof is not None and _prof.role:
+                routing_key = model_routing_key_for(_prof.role)
+    except Exception as e:
+        logger.debug(f"[wake] routing key lookup failed for {task_id}: {e}")
+
     from planet_maiko.agents.brain_session import _get_runtime
-    runtime = _get_runtime("coding_agent")
+    runtime = _get_runtime(routing_key)
     if not runtime.is_available():
         logger.warning(f"[wake] {runtime.name} runtime not available (task={task_id})")
         return False, "error"
@@ -187,8 +201,9 @@ def wake_agent(task_id, prompt, source, working_path=None, session_id=None, app=
             # different tier than the user configured.
             try:
                 from planet_maiko.agents.routing import resolve_model, resolve_effort
-                model = resolve_model("coding_agent")
-                effort = resolve_effort("coding_agent") or "medium"
+                # routing_key resolved above from this job's AgentType.
+                model = resolve_model(routing_key)
+                effort = resolve_effort(routing_key) or "medium"
             except Exception:
                 model = None
                 effort = "medium"

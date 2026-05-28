@@ -89,6 +89,22 @@ def insight_max_length_for(kind_or_role):
     return int(at.insight_max_length)
 
 
+def model_routing_key_for(role):
+    """The routing.rules key for this role's model + effort + runtime
+    resolution. Reads AgentType.model_routing_key; defaults to
+    "coding_agent" when the AgentType is missing — same as the
+    legacy hardcoded value at kickoff:146 and wake:147.
+
+    Lets a custom agent type opt into its own routing slot (e.g.
+    "review_agent" for a high-effort PR reviewer that wants opus
+    where coding agents settle for sonnet).
+    """
+    at = get_agent_type(role)
+    if at is None or not at.model_routing_key:
+        return "coding_agent"
+    return at.model_routing_key
+
+
 def kind_produces_report(kind_or_role):
     """True iff this kind/role's deliverable goes to the Report panel
     (vs the Diff panel). Reads AgentType.output_kind: "diff" means
