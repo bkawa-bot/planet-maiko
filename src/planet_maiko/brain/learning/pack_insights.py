@@ -460,9 +460,14 @@ def reconcile_insights(window_days: int = 7) -> dict:
             if job.agent_profile_id else None
         )
         author_role = agent.role if agent else None
-        is_cartographer = author_role == "cartographer" or job.kind == "cartograph"
-        tags = ["overview", "cartographer"] if is_cartographer else []
-        max_len = 8000 if is_cartographer else 2000
+        # Auto-tag + length budget from AgentType. Prefer the role; fall
+        # back to the job's kind if the profile no longer resolves.
+        from planet_maiko.agent_types import (
+            auto_tag_insights_for, insight_max_length_for,
+        )
+        role_or_kind = author_role or job.kind
+        tags = list(auto_tag_insights_for(role_or_kind))
+        max_len = insight_max_length_for(role_or_kind)
         text = text[:max_len]
 
         match = find_duplicate(text, job.scope_repo, tags)

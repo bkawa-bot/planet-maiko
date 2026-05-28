@@ -257,8 +257,8 @@ def handle_agent_job_reply(job, msg, data, message_type):
             # The /tasks/<id>/review URL still resolves through
             # TaskRouteRedirect; new memos route directly so the user
             # lands without the redirect hop.
-            is_report_kind = job.kind in ("investigation", "repo_analysis", "cartograph")
-            if not is_report_kind:
+            from planet_maiko.agent_types import kind_produces_report
+            if not kind_produces_report(job.kind):
                 cta_label = "Review diff"
                 cta_action = "review"
                 memo_url = f"/jobs/{job.id}?view=diff"
@@ -309,13 +309,18 @@ def handle_agent_job_reply(job, msg, data, message_type):
             from planet_maiko.models.insight import Insight, find_duplicate
             ag = db.session.get(_AP, job.agent_profile_id) if job.agent_profile_id else None
             author_role = ag.role if ag else None
-            is_cartographer = author_role == "cartographer" or job.kind == "cartograph"
+            # Auto-tag + length budget from AgentType. Prefer the
+            # author's role (it's the AgentType id); fall back to the
+            # job's kind for jobs whose profile id no longer resolves.
+            from planet_maiko.agent_types import (
+                auto_tag_insights_for, insight_max_length_for,
+            )
+            role_or_kind = author_role or job.kind
             tags = list(data.get("tags") or [])
-            if is_cartographer:
-                for t_ in ("overview", "cartographer"):
-                    if t_ not in tags:
-                        tags.append(t_)
-            max_len = 8000 if is_cartographer else 2000
+            for t_ in auto_tag_insights_for(role_or_kind):
+                if t_ not in tags:
+                    tags.append(t_)
+            max_len = insight_max_length_for(role_or_kind)
             text = content.strip()[:max_len]
             existing = find_duplicate(text, job.scope_repo, tags)
             if existing is not None:
@@ -486,15 +491,16 @@ def handle_task_insight(task_id, task, msg, data):
             author = db.session.get(_AP, task.assigned_agent_id)
             if author:
                 author_role = author.role
-        is_cartographer = author_role == "cartographer"
 
+        from planet_maiko.agent_types import (
+            auto_tag_insights_for, insight_max_length_for,
+        )
         tags = list(data.get("tags") or [])
-        if is_cartographer:
-            for t_ in ("overview", "cartographer"):
-                if t_ not in tags:
-                    tags.append(t_)
+        for t_ in auto_tag_insights_for(author_role):
+            if t_ not in tags:
+                tags.append(t_)
 
-        max_len = 8000 if is_cartographer else 2000
+        max_len = insight_max_length_for(author_role)
         text = (data["content"] or "").strip()[:max_len]
         existing = find_duplicate(text, repo_scope, tags)
         if existing is not None:

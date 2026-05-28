@@ -51,6 +51,57 @@ def get_agent_type(role):
     return None
 
 
+def _resolve_role(kind_or_role):
+    """Resolve a kind / task type / role string to an AgentType row.
+
+    Uses orchestration.TYPE_TO_ROLE to map kinds → roles (so
+    "pr_review" → "review", "cartograph" → "cartographer" etc.)
+    before the AgentType lookup. Returns None on any miss.
+    """
+    try:
+        from planet_maiko.orchestration import TYPE_TO_ROLE
+    except Exception:
+        TYPE_TO_ROLE = {}
+    role = TYPE_TO_ROLE.get(kind_or_role, kind_or_role)
+    return get_agent_type(role)
+
+
+def auto_tag_insights_for(kind_or_role):
+    """Tags that should be applied to every Insight emitted by this
+    kind/role. Cartographer ships with ["overview", "cartographer"];
+    custom types declare their own; everyone else gets an empty list.
+    Returns a plain list (caller owns mutations).
+    """
+    at = _resolve_role(kind_or_role)
+    if at is None or not at.auto_tag_insights:
+        return []
+    return list(at.auto_tag_insights)
+
+
+def insight_max_length_for(kind_or_role):
+    """Byte budget for an Insight emitted by this kind/role before
+    truncation. Cartographer gets 8000 (repo overviews are long);
+    everyone else defaults to 2000.
+    """
+    at = _resolve_role(kind_or_role)
+    if at is None or not at.insight_max_length:
+        return 2000
+    return int(at.insight_max_length)
+
+
+def kind_produces_report(kind_or_role):
+    """True iff this kind/role's deliverable goes to the Report panel
+    (vs the Diff panel). Reads AgentType.output_kind: "diff" means
+    DiffPanel; anything else ("report", "insight") means ReportPanel.
+    Returns False on unknown kinds — preserves legacy "treat as diff"
+    behavior so a new kind doesn't accidentally start opening reports.
+    """
+    at = _resolve_role(kind_or_role)
+    if at is None:
+        return False
+    return at.output_kind not in (None, "", "diff")
+
+
 def kind_requires_scope_repo_clone(kind):
     """True iff this job kind (or task type) needs a real clone of
     scope_repo on disk. Used at memo-approve / task-spawn /
@@ -66,12 +117,7 @@ def kind_requires_scope_repo_clone(kind):
     tombstoned default) — preserves the "fall through to scratch
     mode" behavior the legacy code defaulted to.
     """
-    try:
-        from planet_maiko.orchestration import TYPE_TO_ROLE
-    except Exception:
-        TYPE_TO_ROLE = {}
-    role = TYPE_TO_ROLE.get(kind, kind)
-    at = get_agent_type(role)
+    at = _resolve_role(kind)
     return bool(at and at.requires_scope_repo_clone)
 
 
@@ -166,6 +212,7 @@ BUILT_IN_AGENT_TYPES = [
         "commits_locally": False,
         "produces_pr": False,
         "auto_tag_insights": ["overview", "cartographer"],
+        "insight_max_length": 8000,
         "default_display_name": "Atlas",
         "model_routing_key": "coding_agent",
         "is_self_reviewing": False,
@@ -265,6 +312,7 @@ def ensure_seed_agent_types():
                     commits_locally=bool(spec.get("commits_locally", False)),
                     produces_pr=bool(spec.get("produces_pr", False)),
                     auto_tag_insights=list(spec.get("auto_tag_insights") or []),
+                    insight_max_length=int(spec.get("insight_max_length") or 2000),
                     default_display_name=spec.get("default_display_name"),
                     model_routing_key=spec.get("model_routing_key", "coding_agent"),
                     is_self_reviewing=bool(spec.get("is_self_reviewing", False)),
@@ -288,6 +336,7 @@ def ensure_seed_agent_types():
                 existing.commits_locally = bool(spec.get("commits_locally", False))
                 existing.produces_pr = bool(spec.get("produces_pr", False))
                 existing.auto_tag_insights = list(spec.get("auto_tag_insights") or [])
+                existing.insight_max_length = int(spec.get("insight_max_length") or 2000)
                 existing.default_display_name = spec.get("default_display_name")
                 existing.model_routing_key = spec.get("model_routing_key", "coding_agent")
                 existing.is_self_reviewing = bool(spec.get("is_self_reviewing", False))

@@ -88,6 +88,11 @@ class AgentType(db.Model):
     # "cartographer"] so cartograph runs auto-route into the
     # ## Repo Overview block. Empty list for everyone else.
     auto_tag_insights = db.Column(db.JSON, default=list)
+    # insight_max_length: byte budget for insights this agent type
+    # emits before truncation. Cartographer needs more (the full repo
+    # overview is long); everyone else's insights are one-paragraph
+    # tribal-knowledge notes and 2000 is plenty.
+    insight_max_length = db.Column(db.Integer, default=2000)
     # default_display_name: when set, profiles auto-spawned for this
     # type get this as their initial display_name. "Atlas" for
     # cartographer; null elsewhere.
@@ -136,6 +141,7 @@ class AgentType(db.Model):
             "commits_locally": bool(self.commits_locally),
             "produces_pr": bool(self.produces_pr),
             "auto_tag_insights": self.auto_tag_insights or [],
+            "insight_max_length": int(self.insight_max_length or 2000),
             "default_display_name": self.default_display_name,
             "model_routing_key": self.model_routing_key or "coding_agent",
             "is_self_reviewing": bool(self.is_self_reviewing),

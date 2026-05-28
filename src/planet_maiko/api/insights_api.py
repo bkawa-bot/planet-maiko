@@ -187,9 +187,15 @@ def cartograph_repo():
                        (AgentProfile.archived.is_(False)) | (AgentProfile.archived.is_(None)))
                .first())
     if not profile:
+        # Display name comes from the cartographer AgentType row
+        # (seeded with "Atlas"); falls back to "Atlas" verbatim if the
+        # row is missing or user-customized.
+        from planet_maiko.agent_types import get_agent_type
+        _at = get_agent_type("cartographer")
+        _display = (_at.default_display_name if _at else None) or "Atlas"
         profile = AgentProfile(
             id=f"cartographer-{_uuid.uuid4().hex[:6]}",
-            display_name="Atlas",
+            display_name=_display,
             avatar="fox",
             flavor_text="Walks new repos and draws the map.",
             role="cartographer",
