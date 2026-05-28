@@ -264,13 +264,20 @@ def _phase_execute_agent_jobs():
                 # silently drops unattached ids.
                 job_extra_for_prep = job.extra or {}
                 specialty_id = job_extra_for_prep.get("specialty_id") or None
-                # Branch prefix preference: explicit user choice from the
-                # assign endpoint > role default. cartographer keeps its
-                # own prefix so its scratch branches read as "cartographer
-                # mapping <repo>" instead of generic "maiko/...".
+                # Branch prefix preference: explicit user choice from
+                # the assign endpoint > AgentType.branch_prefix > "maiko".
+                # Cartographer is seeded with branch_prefix="cartographer"
+                # so its scratch branches read as "cartographer mapping
+                # <repo>" instead of generic "maiko/..."; custom agent
+                # types can pick their own.
+                from planet_maiko.agent_types import (
+                    get_agent_type as _get_agent_type,
+                )
+                _at = _get_agent_type(role)
                 branch_prefix = (
                     job_extra_for_prep.get("branch_prefix")
-                    or ("cartographer" if role == "cartographer" else "maiko")
+                    or (_at.branch_prefix if _at else None)
+                    or "maiko"
                 )
                 # For review jobs, derive the PR number from the linked
                 # task's URL so the worktree is built from the PR's head

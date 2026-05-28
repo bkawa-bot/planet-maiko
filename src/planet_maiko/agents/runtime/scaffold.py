@@ -72,27 +72,24 @@ def _write_claude_md(working_path, job_id, job_title, role="coding", maiko_port=
     except Exception:
         pass
 
+    # Protocol resolution — AgentType is the canonical source now.
+    # The four built-ins are seeded as rows on boot; user-created
+    # custom types appear alongside them. The legacy file-path
+    # fallback below is kept only for the transient "AgentType row
+    # missing" case (fresh DB before seeding completes, or a user
+    # who tombstoned a default and then re-used the slug).
+    from planet_maiko.agent_types import get_agent_type as _get_agent_type
+    agent_type = _get_agent_type(role)
+    agent_type_template = agent_type.protocol_prompt if agent_type else None
+
+    # File-fallback name kept for the legacy code path below. Built-ins
+    # follow the <role>-agent-protocol convention except "coding" which
+    # is just "agent-protocol".
     protocol_skill = {
         "review": "review-agent-protocol",
         "investigation": "investigation-agent-protocol",
         "cartographer": "cartographer-agent-protocol",
     }.get(role, "agent-protocol")
-
-    # If role IS a CustomSkill with its own protocol_prompt set, the
-    # skill is acting as a first-class agent type — use that as the
-    # protocol template directly, skipping the role-default lookup.
-    # Falls through to the normal path on any DB hiccup or when the
-    # skill exists as a specialty (no protocol_prompt) rather than an
-    # agent type. The same templating substitutions still apply below.
-    custom_protocol_template = None
-    try:
-        from planet_maiko.models.custom_skill import CustomSkill
-        from planet_maiko.database import db as _db
-        cs = _db.session.get(CustomSkill, role)
-        if cs is not None and cs.protocol_prompt:
-            custom_protocol_template = cs.protocol_prompt
-    except Exception:
-        custom_protocol_template = None
 
     # Agent identity + signature — filled into the protocol template so
     # the agent knows its own name (for first-person self-reference in
@@ -118,11 +115,12 @@ def _write_claude_md(working_path, job_id, job_title, role="coding", maiko_port=
     # vars both resolve to the same values, so user-customized
     # prompts work with either spelling.
     content = None
-    if custom_protocol_template:
-        # First-class custom agent type: render the user's
-        # protocol_prompt verbatim with the same substitutions
-        # get_skill_prompt would apply to a default protocol.
-        content = custom_protocol_template
+    if agent_type_template:
+        # Primary path: render the AgentType.protocol_prompt verbatim
+        # with the same substitutions get_skill_prompt would apply.
+        # Covers both the four built-ins and any user-created custom
+        # agent type.
+        content = agent_type_template
         for key, value in (
             ("job_title", job_title),
             ("job_id", job_id),

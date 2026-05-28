@@ -28,6 +28,29 @@ from datetime import datetime, timezone
 logger = logging.getLogger(__name__)
 
 
+def get_agent_type(role):
+    """Resolve a role string (AgentProfile.role / AgentJob.kind) to an
+    AgentType row, or None.
+
+    Honors deleted_at — a tombstoned type resolves to None so callers
+    fall through to legacy behavior. Returns None silently on any
+    DB failure so call sites don't need a try/except every time.
+
+    The four built-ins (coding / review / investigation / cartographer)
+    are seeded on boot, so the lookup hits for them too — there's no
+    distinction between "built-in" and "custom" at the read API.
+    """
+    try:
+        from planet_maiko.database import db
+        from planet_maiko.models.agent_type import AgentType
+        at = db.session.get(AgentType, role)
+        if at is not None and at.deleted_at is None:
+            return at
+    except Exception:
+        pass
+    return None
+
+
 # The four built-ins. Each entry's `protocol_md` is read from
 # src/planet_maiko/prompts/<protocol_md>.md at seed time so the
 # bundled .md remains the canonical source of the protocol body —
