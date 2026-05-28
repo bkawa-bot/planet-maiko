@@ -67,26 +67,38 @@ def _resolve_role(kind_or_role):
 
 
 def auto_tag_insights_for(kind_or_role):
-    """Tags that should be applied to every Insight emitted by this
-    kind/role. Cartographer ships with ["overview", "cartographer"];
-    custom types declare their own; everyone else gets an empty list.
-    Returns a plain list (caller owns mutations).
+    """Tags applied verbatim to every Insight emitted by this kind/role.
+
+    Cartographer outputs auto-route into the ## Repo Overview block
+    via the "overview" + "cartographer" tags. Everyone else gets an
+    empty list. Was previously a per-AgentType column; collapsed to
+    this one hardcoded special case after the pass 2 trim showed
+    no other type ever wanted it.
     """
-    at = _resolve_role(kind_or_role)
-    if at is None or not at.auto_tag_insights:
-        return []
-    return list(at.auto_tag_insights)
+    try:
+        from planet_maiko.orchestration import TYPE_TO_ROLE
+    except Exception:
+        TYPE_TO_ROLE = {}
+    role = TYPE_TO_ROLE.get(kind_or_role, kind_or_role)
+    if role in ("cartograph", "cartographer"):
+        return ["overview", "cartographer"]
+    return []
+
+
+# Single byte budget for any Insight emitted by an agent before
+# truncation. Was per-type (cartographer 8000, others 2000); the
+# 2000 cap was arbitrary and nothing else fills 8000 anyway. Held
+# as a constant rather than a column so a new type doesn't have
+# to know to set it.
+_INSIGHT_MAX_LENGTH = 8000
 
 
 def insight_max_length_for(kind_or_role):
     """Byte budget for an Insight emitted by this kind/role before
-    truncation. Cartographer gets 8000 (repo overviews are long);
-    everyone else defaults to 2000.
+    truncation. Constant across all types now (was a per-AgentType
+    column before pass 2).
     """
-    at = _resolve_role(kind_or_role)
-    if at is None or not at.insight_max_length:
-        return 2000
-    return int(at.insight_max_length)
+    return _INSIGHT_MAX_LENGTH
 
 
 def model_routing_key_for(role):
@@ -124,17 +136,17 @@ def kind_requires_scope_repo_clone(kind):
     job-execute time to fail fast when scope_repo is set but no local
     clone resolves.
 
-    Resolves the kind through TYPE_TO_ROLE first (so "pr_review" →
-    "review", "repo_analysis" → "investigation", etc.) so the same
-    rule applies whether the caller is checking a task.type, an
-    AgentJob.kind, or an AgentProfile.role directly.
+    Implementation reads AgentType.spawn_mode (was the
+    requires_scope_repo_clone boolean before pass 2): "worktree"
+    means a real clone is required, "scratch" means the agent
+    happily falls through to a scratch dir.
 
     Returns False on any miss (unknown kind, no AgentType row,
     tombstoned default) — preserves the "fall through to scratch
     mode" behavior the legacy code defaulted to.
     """
     at = _resolve_role(kind)
-    return bool(at and at.requires_scope_repo_clone)
+    return bool(at and at.spawn_mode == "worktree")
 
 
 # The four built-ins. Each entry's `protocol_md` is read from
@@ -150,12 +162,9 @@ BUILT_IN_AGENT_TYPES = [
             "Commits locally; pushes + opens a PR only after you approve."
         ),
         "icon": "code",
-        "needs_worktree": True,
-        "requires_scope_repo_clone": True,
+        "spawn_mode": "worktree",
         "permission_mode": None,
-        "branch_prefix": "maiko",
         "output_kind": "diff",
-        "auto_tag_insights": [],
         "model_routing_key": "coding_agent",
         "protocol_md": "agent-protocol",
     },
@@ -167,12 +176,9 @@ BUILT_IN_AGENT_TYPES = [
             "Read + write to the worktree; never commits or pushes."
         ),
         "icon": "git-pull-request",
-        "needs_worktree": True,
-        "requires_scope_repo_clone": True,
+        "spawn_mode": "worktree",
         "permission_mode": None,
-        "branch_prefix": "maiko",
         "output_kind": "diff",
-        "auto_tag_insights": [],
         "model_routing_key": "coding_agent",
         "protocol_md": "review-agent-protocol",
     },
@@ -185,11 +191,9 @@ BUILT_IN_AGENT_TYPES = [
             "PROPOSAL blocks for the knowledge pool."
         ),
         "icon": "search",
-        "needs_worktree": True,
+        "spawn_mode": "scratch",
         "permission_mode": None,
-        "branch_prefix": "maiko",
         "output_kind": "report",
-        "auto_tag_insights": [],
         "model_routing_key": "coding_agent",
         "protocol_md": "investigation-agent-protocol",
     },
@@ -201,12 +205,9 @@ BUILT_IN_AGENT_TYPES = [
             "conventions, and gotchas. Read-only; runs in plan mode."
         ),
         "icon": "map",
-        "needs_worktree": True,
+        "spawn_mode": "scratch",
         "permission_mode": "plan",
-        "branch_prefix": "cartographer",
         "output_kind": "insight",
-        "auto_tag_insights": ["overview", "cartographer"],
-        "insight_max_length": 8000,
         "model_routing_key": "coding_agent",
         "protocol_md": "cartographer-agent-protocol",
     },
@@ -293,13 +294,9 @@ def ensure_seed_agent_types():
                     is_default=True,
                     user_edited=False,
                     protocol_prompt=protocol_body,
-                    needs_worktree=bool(spec.get("needs_worktree", True)),
-                    requires_scope_repo_clone=bool(spec.get("requires_scope_repo_clone", False)),
+                    spawn_mode=spec.get("spawn_mode", "worktree"),
                     permission_mode=spec.get("permission_mode"),
-                    branch_prefix=spec.get("branch_prefix", "maiko"),
                     output_kind=spec.get("output_kind", "diff"),
-                    auto_tag_insights=list(spec.get("auto_tag_insights") or []),
-                    insight_max_length=int(spec.get("insight_max_length") or 2000),
                     model_routing_key=spec.get("model_routing_key", "coding_agent"),
                 )
                 db.session.add(row)
@@ -311,13 +308,9 @@ def ensure_seed_agent_types():
                 existing.description = spec.get("description")
                 existing.icon = spec.get("icon", "user")
                 existing.protocol_prompt = protocol_body
-                existing.needs_worktree = bool(spec.get("needs_worktree", True))
-                existing.requires_scope_repo_clone = bool(spec.get("requires_scope_repo_clone", False))
+                existing.spawn_mode = spec.get("spawn_mode", "worktree")
                 existing.permission_mode = spec.get("permission_mode")
-                existing.branch_prefix = spec.get("branch_prefix", "maiko")
                 existing.output_kind = spec.get("output_kind", "diff")
-                existing.auto_tag_insights = list(spec.get("auto_tag_insights") or [])
-                existing.insight_max_length = int(spec.get("insight_max_length") or 2000)
                 existing.model_routing_key = spec.get("model_routing_key", "coding_agent")
                 refreshed += 1
         except Exception as e:
@@ -407,11 +400,11 @@ def backfill_from_custom_skills():
                     user_edited=bool(skill.user_edited),
                     deleted_at=skill.deleted_at,
                     protocol_prompt=skill.protocol_prompt,
-                    needs_worktree=bool(skill.needs_worktree),
+                    # CustomSkill.needs_worktree maps to worktree when
+                    # True (real clone expected), scratch otherwise.
+                    spawn_mode="worktree" if bool(skill.needs_worktree) else "scratch",
                     permission_mode=skill.permission_mode,
-                    branch_prefix="maiko",
                     output_kind="diff",
-                    auto_tag_insights=[],
                     model_routing_key="coding_agent",
                 ))
                 to_agent_type += 1

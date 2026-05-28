@@ -454,9 +454,10 @@ def _enqueue_task_job(task, plan_first=False):
     # Investigation, cartograph, and repo_analysis are
     # report-producing: they take a repo as a hint but fall through
     # to scratch mode when no clone exists. Source of truth:
-    # AgentType.requires_scope_repo_clone (kind→role→AgentType).
-    # Aligned with execute_jobs and memo_handlers so a task and the
-    # AgentJob it spawns can't disagree.
+    # AgentType.spawn_mode ("worktree" vs "scratch") via
+    # kind→role→AgentType. Aligned with execute_jobs and
+    # memo_handlers so a task and the AgentJob it spawns can't
+    # disagree.
     from planet_maiko.agent_types import kind_requires_scope_repo_clone
     if kind_requires_scope_repo_clone(task.type) and not repo_path:
         if not scope_repo:

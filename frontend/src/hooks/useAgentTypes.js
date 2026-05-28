@@ -95,8 +95,7 @@ export function roleMeta(id, types) {
     // Capability flags — let components ask "should I show a Plan
     // tab / a Diff tab / a Report tab?" without grepping kind sets.
     outputKind: t?.output_kind || "diff",
-    needsWorktree: !!t?.needs_worktree,
-    requiresScopeRepoClone: !!t?.requires_scope_repo_clone,
+    spawnMode: t?.spawn_mode || "worktree",
     permissionMode: t?.permission_mode || null,
     raw: t || null,
   };

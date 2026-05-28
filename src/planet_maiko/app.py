@@ -29,6 +29,11 @@ _PATCH_COLUMNS = [
     ("custom_skills", "permission_mode", "VARCHAR(32)"),
     ("agent_types", "requires_scope_repo_clone", "BOOLEAN DEFAULT 0"),
     ("agent_types", "insight_max_length", "INTEGER DEFAULT 2000"),
+    # spawn_mode collapses the prior needs_worktree +
+    # requires_scope_repo_clone pair. Existing rows get "worktree"
+    # as the safe default; the seeder overwrites builtins to the
+    # correct value at boot (investigation, cartographer → scratch).
+    ("agent_types", "spawn_mode", "VARCHAR(16) DEFAULT 'worktree'"),
     ("learnings", "last_confirmed_at", "DATETIME"),
 ]
 
@@ -48,6 +53,14 @@ _DROP_COLUMNS = [
     ("agent_types", "is_self_reviewing"),
     ("agent_types", "default_display_name"),
     ("agent_types", "supports_plan_first"),
+    # Pass 2: helper-mediated drops (call sites now read constants or
+    # role-keyed special cases) and the worktree boolean collapse
+    # into spawn_mode.
+    ("agent_types", "branch_prefix"),
+    ("agent_types", "auto_tag_insights"),
+    ("agent_types", "insight_max_length"),
+    ("agent_types", "needs_worktree"),
+    ("agent_types", "requires_scope_repo_clone"),
 ]
 
 

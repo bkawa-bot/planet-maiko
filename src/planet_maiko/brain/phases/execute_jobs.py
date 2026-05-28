@@ -133,8 +133,8 @@ def _phase_execute_agent_jobs():
             # report-producing — they take scope_repo as a hint but
             # can fall through to scratch mode when no clone exists,
             # rather than failing the job. Source of truth:
-            # AgentType.requires_scope_repo_clone, resolved through
-            # TYPE_TO_ROLE so pr_review -> review etc.
+            # AgentType.spawn_mode ("worktree" vs "scratch"),
+            # resolved through TYPE_TO_ROLE so pr_review -> review etc.
             from planet_maiko.agent_types import kind_requires_scope_repo_clone
             if (
                 job.scope_repo
@@ -268,19 +268,14 @@ def _phase_execute_agent_jobs():
                 job_extra_for_prep = job.extra or {}
                 specialty_id = job_extra_for_prep.get("specialty_id") or None
                 # Branch prefix preference: explicit user choice from
-                # the assign endpoint > AgentType.branch_prefix > "maiko".
-                # Cartographer is seeded with branch_prefix="cartographer"
-                # so its scratch branches read as "cartographer mapping
-                # <repo>" instead of generic "maiko/..."; custom agent
-                # types can pick their own.
-                from planet_maiko.agent_types import (
-                    get_agent_type as _get_agent_type,
-                )
-                _at = _get_agent_type(role)
+                # the assign endpoint > role-derived default. The only
+                # role with a non-"maiko" default is cartographer
+                # (legibility: scratch branches read as "cartographer
+                # mapping <repo>"). Was an AgentType column before the
+                # pass 2 trim; turned out to be a single special case.
                 branch_prefix = (
                     job_extra_for_prep.get("branch_prefix")
-                    or (_at.branch_prefix if _at else None)
-                    or "maiko"
+                    or ("cartographer" if role == "cartographer" else "maiko")
                 )
                 # For review jobs, derive the PR number from the linked
                 # task's URL so the worktree is built from the PR's head

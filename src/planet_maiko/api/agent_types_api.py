@@ -22,23 +22,16 @@ agent_types_bp = Blueprint("agent_types", __name__)
 _EDITABLE_FIELDS = {
     "name", "description", "icon",
     "protocol_prompt",
-    "needs_worktree", "permission_mode", "branch_prefix",
+    "spawn_mode", "permission_mode",
     "output_kind",
-    "auto_tag_insights", "model_routing_key",
+    "model_routing_key",
     "extra",
-}
-
-_BOOL_FIELDS = {
-    "needs_worktree",
 }
 
 
 def _coerce(field, value):
-    """Coerce request-body field values to the column type. Mostly
-    just bool casting for the boolean columns + null-collapse for
-    empty strings on nullable string columns."""
-    if field in _BOOL_FIELDS:
-        return bool(value)
+    """Coerce request-body field values to the column type. Null-
+    collapse for empty strings on nullable string columns."""
     if field in ("permission_mode", "description"):
         # Empty string from a UI textarea collapses to NULL so reader
         # code can rely on "null => use default" semantics.
@@ -94,11 +87,9 @@ def create_agent_type():
         icon=data.get("icon") or "user",
         is_default=False,
         protocol_prompt=data["protocol_prompt"],
-        needs_worktree=bool(data.get("needs_worktree", True)),
+        spawn_mode=data.get("spawn_mode") or "worktree",
         permission_mode=data.get("permission_mode") or None,
-        branch_prefix=data.get("branch_prefix") or "maiko",
         output_kind=data.get("output_kind") or "diff",
-        auto_tag_insights=list(data.get("auto_tag_insights") or []),
         model_routing_key=data.get("model_routing_key") or "coding_agent",
         extra=data.get("extra") or {},
     )
