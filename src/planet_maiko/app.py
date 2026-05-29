@@ -424,6 +424,7 @@ def create_app(start_scheduler=False):
     from planet_maiko.api.specialties_api import specialties_bp
     from planet_maiko.api.memos_api import memos_bp
     from planet_maiko.api.rules_api import rules_bp
+    from planet_maiko.api.workflows_api import workflows_bp
     app.register_blueprint(pupdates_bp, url_prefix="/api")
     app.register_blueprint(tasks_bp, url_prefix="/api")
     app.register_blueprint(projects_bp, url_prefix="/api")
@@ -453,6 +454,7 @@ def create_app(start_scheduler=False):
     app.register_blueprint(specialties_bp, url_prefix="/api")
     app.register_blueprint(memos_bp, url_prefix="/api")
     app.register_blueprint(rules_bp, url_prefix="/api")
+    app.register_blueprint(workflows_bp, url_prefix="/api")
 
     # Register kind-specific memo approve handlers (agent_proposal → task,
     # future: job_approval → AgentJob). Side-effect-only on import.
@@ -481,6 +483,7 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.agent_job import AgentJob  # noqa: F401
         from planet_maiko.models.memo import Memo  # noqa: F401
         from planet_maiko.models.adapter_eval import AdapterEval  # noqa: F401
+        from planet_maiko.models.workflow import Workflow  # noqa: F401
         # Fresh-DB shape: every model registered above gets its table
         # via SQLAlchemy.
         db.create_all()

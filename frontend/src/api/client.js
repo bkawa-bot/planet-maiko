@@ -249,6 +249,18 @@ export const api = {
   deleteAgentType: (id) =>
     request(`/agent-types/${id}`, { method: "DELETE" }),
 
+  // Workflows — saved flow-editor graphs (nodes + edges JSON). See
+  // models/workflow.py. Running a workflow is a later phase; these are
+  // CRUD of the saved graph the editor builds.
+  getWorkflows: () => request("/workflows"),
+  getWorkflow: (id) => request(`/workflows/${id}`),
+  createWorkflow: (data) =>
+    request("/workflows", { method: "POST", body: JSON.stringify(data) }),
+  updateWorkflow: (id, data) =>
+    request(`/workflows/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteWorkflow: (id) =>
+    request(`/workflows/${id}`, { method: "DELETE" }),
+
   // Specialties — swappable per-run prompt bodies attached to a
   // profile's specialty_ids pool and picked at assign time. Distinct
   // from agent types; see models/specialty.py.

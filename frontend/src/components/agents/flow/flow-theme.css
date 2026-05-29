@@ -76,3 +76,61 @@
   color: var(--text-muted); font-size: 13px;
   pointer-events: none;
 }
+
+/* === Flow editor (Phase C: drag from palette, wire, save) === */
+.flow-editor {
+  display: flex; flex-direction: column;
+  height: 72vh; min-height: 460px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg);
+}
+.flow-editor-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+}
+.flow-editor-name {
+  font-family: inherit; font-size: 14px; font-weight: 700;
+  color: var(--text);
+  background: transparent; border: 1px solid transparent;
+  border-radius: var(--radius-xs); padding: 4px 8px;
+  min-width: 180px;
+}
+.flow-editor-name:hover { border-color: var(--border-subtle); }
+.flow-editor-name:focus { border-color: var(--pink); outline: none; background: var(--bg); }
+.flow-editor-body { display: flex; flex: 1; min-height: 0; }
+.flow-palette {
+  width: 184px; flex-shrink: 0;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  padding: 10px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.flow-palette-label {
+  font-size: 9px; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  margin-bottom: 3px;
+}
+.flow-palette-item {
+  display: flex; align-items: center; gap: 7px;
+  width: 100%; text-align: left;
+  padding: 7px 8px;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-xs);
+  cursor: pointer; font-family: inherit;
+  transition: border-color 0.12s, background 0.12s;
+}
+.flow-palette-item:hover { border-color: var(--pink); background: var(--bg-hover); }
+.flow-palette-icon { flex-shrink: 0; display: flex; }
+.flow-palette-name {
+  font-size: 12px; font-weight: 600; flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.flow-palette-io {
+  font-size: 9px; font-family: var(--font-mono);
+  color: var(--text-muted); flex-shrink: 0;
+}
+.flow-editor-canvas { position: relative; flex: 1; min-width: 0; }

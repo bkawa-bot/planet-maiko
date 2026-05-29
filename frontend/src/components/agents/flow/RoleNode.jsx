@@ -5,7 +5,7 @@ import { kindColor } from "./kinds";
 // sockets are colored doorways: the input on the left edge, the output
 // on the right. Read-only for Phase B (isConnectable=false); the same
 // component backs the interactive editor later.
-export default function RoleNode({ data }) {
+export default function RoleNode({ data, isConnectable }) {
   const { type, color, Icon } = data;
   const inKind = type.input_kind || "task";
   const outKind = type.output_kind || "diff";
@@ -19,7 +19,7 @@ export default function RoleNode({ data }) {
         className="flow-socket"
         style={{ background: kindColor(inKind) }}
         title={`accepts ${inKind}`}
-        isConnectable={false}
+        isConnectable={isConnectable}
       />
 
       <div className="flow-role-head">
@@ -45,7 +45,7 @@ export default function RoleNode({ data }) {
         className="flow-socket"
         style={{ background: kindColor(outKind) }}
         title={`produces ${outKind}`}
-        isConnectable={false}
+        isConnectable={isConnectable}
       />
     </div>
   );

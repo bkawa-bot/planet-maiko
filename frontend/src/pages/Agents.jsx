@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
-import { Plus, MoonTarot, Target, X, SpellBook } from "@icons";
+import { Plus, MoonTarot, Target, X, SpellBook, GitBranch } from "@icons";
 import InfoButton from "../components/InfoButton";
 import AgentsActiveTab from "../components/agents/AgentsActiveTab";
 import AgentsProfilesTab from "../components/agents/AgentsProfilesTab";
@@ -11,6 +11,10 @@ import ModalPortal from "../components/ModalPortal";
 import { useConfiguredRepos } from "../utils/repo";
 import { useAgentTypes } from "../hooks/useAgentTypes";
 import "./Agents.css";
+
+// Lazy: FlowsTab pulls in the React Flow editor, so its chunk only
+// loads when the Flows tab is opened.
+const FlowsTab = lazy(() => import("../components/agents/FlowsTab"));
 
 export default function Agents() {
   const configuredRepos = useConfiguredRepos();
@@ -253,6 +257,20 @@ export default function Agents() {
         )}
 
         <button
+          className={`page-tab ${tab === "flows" ? "active" : ""}`}
+          onClick={() => setTab("flows")}
+        >
+          <GitBranch size={10} /> Flows
+        </button>
+        {tab === "flows" && (
+          <InfoButton title={<><GitBranch size={16} /> Flows</>}>
+            <p>A flow is a pipeline of roles. One role's output drops into the next role's input: a planner's plan into a coder, a coder's diff into a reviewer. You build one by wiring roles on a canvas, and a wire only connects when the kinds match.</p>
+            <h4>Right now</h4>
+            <p>You can compose and save flows. Running them (spawning an agent per step and passing each one's output to the next) is the next piece of work.</p>
+          </InfoButton>
+        )}
+
+        <button
           className={`page-tab ${tab === "insights" ? "active" : ""}`}
           onClick={() => setTab("insights")}
         >
@@ -303,6 +321,12 @@ export default function Agents() {
       )}
 
       {tab === "types" && <AgentTypesTab />}
+
+      {tab === "flows" && (
+        <Suspense fallback={<p className="page-empty">Loading flows…</p>}>
+          <FlowsTab />
+        </Suspense>
+      )}
 
       {tab === "insights" && <AgentsInsightsTab />}
     </div>
