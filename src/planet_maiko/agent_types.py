@@ -215,6 +215,22 @@ BUILT_IN_AGENT_TYPES = [
         "model_routing_key": "coding_agent",
         "protocol_md": "cartographer-agent-protocol",
     },
+    {
+        "id": "planner",
+        "name": "Planner",
+        "description": (
+            "Reads the task and the repo, then writes an implementation "
+            "plan (steps, files, risks) for a coder to follow. Read-only: "
+            "it proposes, it does not build."
+        ),
+        "icon": "clipboard",
+        "spawn_mode": "worktree",
+        "permission_mode": "plan",
+        "output_kind": "plan",
+        "input_kind": "task",
+        "model_routing_key": "coding_agent",
+        "protocol_md": "planner-agent-protocol",
+    },
 ]
 
 

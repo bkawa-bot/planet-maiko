@@ -13,7 +13,7 @@ import "./flow-theme.css";
 import { X, Save } from "@icons";
 import RoleNode from "./RoleNode";
 import { roleMeta } from "../../../hooks/useAgentTypes";
-import { kindColor } from "./kinds";
+import { kindColor, edgeValid } from "./kinds";
 import { api } from "../../../api/client";
 import { showToast } from "../../Toast";
 
@@ -84,7 +84,7 @@ export default function FlowEditor({ workflow, types, onSaved, onClose }) {
       if (!src || !tgt) return false;
       const out = src.data.type.output_kind || "diff";
       const inn = tgt.data.type.input_kind || "task";
-      return out === inn;
+      return edgeValid(out, inn);
     },
     [nodes]
   );

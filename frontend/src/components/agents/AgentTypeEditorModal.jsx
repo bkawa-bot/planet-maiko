@@ -23,6 +23,7 @@ const OUTPUT_KINDS = [
   { value: "diff", label: "Diff (review + approve a git diff)" },
   { value: "report", label: "Report (markdown artifact)" },
   { value: "insight", label: "Insight (card for the playbook)" },
+  { value: "plan", label: "Plan (an implementation plan for a coder)" },
 ];
 
 // The IN-side socket vocabulary, mirror of OUTPUT_KINDS. Declares what

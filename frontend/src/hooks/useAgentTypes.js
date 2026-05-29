@@ -76,6 +76,7 @@ const COLOR_MAP = {
   review: "var(--blue)",
   investigation: "var(--lavender)",
   cartographer: "var(--lemon)",
+  planner: "var(--peach)",
 };
 
 export function useAgentTypes() {

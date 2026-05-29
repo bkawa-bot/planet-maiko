@@ -4,7 +4,7 @@ import "@xyflow/react/dist/base.css";
 import "./flow-theme.css";
 import RoleNode from "./RoleNode";
 import { roleMeta } from "../../../hooks/useAgentTypes";
-import { kindColor } from "./kinds";
+import { kindColor, edgeValid } from "./kinds";
 
 const nodeTypes = { role: RoleNode };
 
@@ -34,7 +34,7 @@ export default function RoleFlowCanvas({ types }) {
         if (a.id === b.id) continue;
         const aOut = a.output_kind || "diff";
         const bIn = b.input_kind || "task";
-        if (aOut === bIn) {
+        if (edgeValid(aOut, bIn)) {
           edges.push({
             id: `${a.id}__${b.id}`,
             source: a.id,
