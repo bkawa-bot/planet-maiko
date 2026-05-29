@@ -34,6 +34,10 @@ _PATCH_COLUMNS = [
     # as the safe default; the seeder overwrites builtins to the
     # correct value at boot (investigation, cartographer → scratch).
     ("agent_types", "spawn_mode", "VARCHAR(16) DEFAULT 'worktree'"),
+    # input_kind: the IN-side typed socket mirroring output_kind.
+    # Existing rows default to "task"; the seeder sets the builtins
+    # (review→diff, investigation→incident, cartographer→repo).
+    ("agent_types", "input_kind", "VARCHAR(20) DEFAULT 'task'"),
     ("learnings", "last_confirmed_at", "DATETIME"),
 ]
 

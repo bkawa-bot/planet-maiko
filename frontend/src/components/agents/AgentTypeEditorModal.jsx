@@ -25,6 +25,21 @@ const OUTPUT_KINDS = [
   { value: "insight", label: "Insight (card for the playbook)" },
 ];
 
+// The IN-side socket vocabulary, mirror of OUTPUT_KINDS. Declares what
+// a run hands this role. Shared vocabulary with outputs so a future
+// flow editor can type-check an edge (producer.produces feeds
+// consumer.accepts). Not consumed at runtime yet; for now it documents
+// the role's contract and shows up as the node's input socket.
+const INPUT_KINDS = [
+  { value: "task", label: "Task (a unit of work)" },
+  { value: "plan", label: "Plan (an approved plan)" },
+  { value: "diff", label: "Diff (changes to review)" },
+  { value: "report", label: "Report (a prior writeup)" },
+  { value: "insight", label: "Insight (a repo overview)" },
+  { value: "incident", label: "Incident (a failure or alert)" },
+  { value: "repo", label: "Repo (a whole repository)" },
+];
+
 const PERMISSION_MODES = [
   { value: "", label: "Full access (read + write)" },
   { value: "plan", label: "Plan only (read-only, proposes)" },
@@ -60,6 +75,7 @@ export default function AgentTypeEditorModal({ type, onClose, onSaved }) {
     protocol_prompt: type?.protocol_prompt || "",
     spawn_mode: type?.spawn_mode || "worktree",
     output_kind: type?.output_kind || "diff",
+    input_kind: type?.input_kind || "task",
     permission_mode: type?.permission_mode || "",
     model_routing_key: type?.model_routing_key || "coding_agent",
   }));
@@ -91,6 +107,7 @@ export default function AgentTypeEditorModal({ type, onClose, onSaved }) {
           protocol_prompt: form.protocol_prompt,
           spawn_mode: form.spawn_mode,
           output_kind: form.output_kind,
+          input_kind: form.input_kind,
           permission_mode: form.permission_mode || null,
           model_routing_key: form.model_routing_key.trim() || "coding_agent",
         });
@@ -103,6 +120,7 @@ export default function AgentTypeEditorModal({ type, onClose, onSaved }) {
           protocol_prompt: form.protocol_prompt,
           spawn_mode: form.spawn_mode,
           output_kind: form.output_kind,
+          input_kind: form.input_kind,
           permission_mode: form.permission_mode || undefined,
           model_routing_key: form.model_routing_key.trim() || "coding_agent",
         });
@@ -199,36 +217,48 @@ export default function AgentTypeEditorModal({ type, onClose, onSaved }) {
 
             <div className="agent-edit-row">
               <label>
+                Accepts (input)
+                <select value={form.input_kind} onChange={(e) => set({ input_kind: e.target.value })}>
+                  {INPUT_KINDS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </label>
+              <label>
+                Produces (output)
+                <select value={form.output_kind} onChange={(e) => set({ output_kind: e.target.value })}>
+                  {OUTPUT_KINDS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </label>
+            </div>
+            <span className="agent-edit-hint">
+              The role's typed sockets. A flow can wire this role's output into any
+              role that accepts the same kind. Wiring arrives with the flow editor;
+              for now this documents the contract.
+            </span>
+
+            <div className="agent-edit-row">
+              <label>
                 Workspace
                 <select value={form.spawn_mode} onChange={(e) => set({ spawn_mode: e.target.value })}>
                   {SPAWN_MODES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </label>
               <label>
-                Output
-                <select value={form.output_kind} onChange={(e) => set({ output_kind: e.target.value })}>
-                  {OUTPUT_KINDS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </label>
-            </div>
-
-            <div className="agent-edit-row">
-              <label>
                 Permissions
                 <select value={form.permission_mode} onChange={(e) => set({ permission_mode: e.target.value })}>
                   {PERMISSION_MODES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </label>
-              <label>
-                Model routing key
-                <input
-                  type="text"
-                  value={form.model_routing_key}
-                  onChange={(e) => set({ model_routing_key: e.target.value })}
-                  placeholder="coding_agent"
-                />
-              </label>
             </div>
+
+            <label className="agent-edit-full">
+              Model routing key
+              <input
+                type="text"
+                value={form.model_routing_key}
+                onChange={(e) => set({ model_routing_key: e.target.value })}
+                placeholder="coding_agent"
+              />
+            </label>
             <span className="agent-edit-hint">
               The routing key picks this role's model + effort. It must match a
               rule in Settings, Model Routing, otherwise it falls back to the

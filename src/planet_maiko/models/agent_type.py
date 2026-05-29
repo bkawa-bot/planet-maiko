@@ -68,6 +68,15 @@ class AgentType(db.Model):
     # produces an insight (the cartographer's repo overview path).
     output_kind = db.Column(db.String(20), default="diff")
 
+    # Input shape. The typed socket on the IN side, mirroring
+    # output_kind. Declares what a run hands this role: "task" (a unit
+    # of work), "plan" (an approved plan), "diff" (changes to review),
+    # "report" / "insight" (a prior agent's artifact), "incident" (a
+    # failure or alert), "repo" (a whole repository). Lets a future
+    # flow editor type-check an edge: producer.output_kind must feed
+    # consumer.input_kind. Nullable; defaults to "task".
+    input_kind = db.Column(db.String(20), default="task")
+
     # routing.rules key used to resolve model + effort. Every built-in
     # uses "coding_agent" today (a long-standing TODO).
     model_routing_key = db.Column(db.String(64), default="coding_agent")
@@ -100,6 +109,7 @@ class AgentType(db.Model):
             "spawn_mode": self.spawn_mode or "worktree",
             "permission_mode": self.permission_mode,
             "output_kind": self.output_kind or "diff",
+            "input_kind": self.input_kind or "task",
             "model_routing_key": self.model_routing_key or "coding_agent",
             "extra": self.extra or {},
             "created_at": iso_utc(self.created_at),

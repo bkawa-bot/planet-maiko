@@ -69,8 +69,8 @@ export default function AgentTypesTab() {
                     </span>
                     {t.description && <span className="agent-type-desc">{t.description}</span>}
                     <span className="agent-type-chips">
+                      <span className="agent-type-chip io">{t.input_kind || "task"} → {t.output_kind}</span>
                       <span className="agent-type-chip">{t.spawn_mode}</span>
-                      <span className="agent-type-chip">{t.output_kind}</span>
                       {t.permission_mode === "plan" && (
                         <span className="agent-type-chip plan">plan mode</span>
                       )}

@@ -1139,6 +1139,12 @@
 }
 .agent-type-chip.mono { font-family: var(--font-mono); }
 .agent-type-chip.plan { background: var(--lavender-soft, var(--bg-hover)); color: var(--lavender, var(--text-dim)); }
+/* The role's typed-socket signature: input → output. The headline of
+   the typing feature, so give it a soft accent over the plain chips. */
+.agent-type-chip.io {
+  background: color-mix(in srgb, var(--pink) 12%, transparent);
+  color: var(--text-dim); font-weight: 600;
+}
 .agent-type-actions {
   display: flex; gap: 6px; justify-content: flex-end;
   padding: 8px 12px;

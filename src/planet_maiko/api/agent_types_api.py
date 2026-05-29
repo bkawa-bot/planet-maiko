@@ -23,7 +23,7 @@ _EDITABLE_FIELDS = {
     "name", "description", "icon",
     "protocol_prompt",
     "spawn_mode", "permission_mode",
-    "output_kind",
+    "output_kind", "input_kind",
     "model_routing_key",
     "extra",
 }
@@ -90,6 +90,7 @@ def create_agent_type():
         spawn_mode=data.get("spawn_mode") or "worktree",
         permission_mode=data.get("permission_mode") or None,
         output_kind=data.get("output_kind") or "diff",
+        input_kind=data.get("input_kind") or "task",
         model_routing_key=data.get("model_routing_key") or "coding_agent",
         extra=data.get("extra") or {},
     )
