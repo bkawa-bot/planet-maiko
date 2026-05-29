@@ -1,0 +1,78 @@
+/* React Flow canvas, themed to the Maiko palette. We import only the
+   library's base.css (positioning math), never the stock blue
+   style.css, then point React Flow's CSS vars at the app tokens so the
+   canvas tracks every theme. The cold technical look is dropped; the
+   nodes are warm character cards and the sockets are colored doorways. */
+
+.flow-canvas-wrap {
+  position: relative;
+  height: 68vh;
+  min-height: 420px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.react-flow {
+  --xy-background-pattern-color: var(--border-subtle);
+  --xy-edge-stroke: var(--border);
+  --xy-edge-stroke-width: 1.5;
+  --xy-controls-button-background-color: var(--bg-card);
+  --xy-controls-button-background-color-hover: var(--bg-hover);
+  --xy-controls-button-color: var(--text-dim);
+  --xy-controls-button-color-hover: var(--text);
+  --xy-controls-button-border-color: var(--border-subtle);
+}
+
+/* Role node = warm character card */
+.flow-role-node {
+  width: 256px;
+  background: var(--bg-card);
+  border: 2px solid var(--text-muted);
+  border-radius: 14px;
+  padding: 11px 13px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  color: var(--text);
+}
+.flow-role-head { display: flex; align-items: center; gap: 10px; }
+.flow-role-icon {
+  width: 34px; height: 34px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 28%;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.flow-role-title { min-width: 0; }
+.flow-role-name { font-weight: 700; font-size: 14px; color: var(--text); }
+.flow-role-sockets {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; font-family: var(--font-mono); font-weight: 600;
+  margin-top: 2px;
+}
+.flow-sock-arrow { color: var(--text-muted); }
+.flow-role-desc {
+  margin-top: 8px;
+  font-size: 11px; color: var(--text-dim); line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Sockets = colored doorways */
+.flow-socket {
+  width: 12px; height: 12px;
+  border: 2px solid var(--bg-card);
+}
+
+/* Faint dashed compatibility wires (a wire = "these two could connect"),
+   colored by the kind they carry. */
+.react-flow__edge.flow-edge .react-flow__edge-path {
+  stroke-dasharray: 5 4;
+  opacity: 0.55;
+}
+
+.flow-empty {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); font-size: 13px;
+  pointer-events: none;
+}

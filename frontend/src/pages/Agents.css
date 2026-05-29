@@ -1156,6 +1156,27 @@
   background: var(--urgent-faint, rgba(255, 85, 119, 0.12));
 }
 
+/* Grid / Map segmented toggle in the Roles toolbar. */
+.flow-view-toggle {
+  display: inline-flex;
+  margin-right: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg);
+}
+.flow-view-toggle button {
+  border: none; background: none; cursor: pointer;
+  font-family: inherit; font-size: 11px; font-weight: 600;
+  color: var(--text-muted);
+  padding: 4px 12px;
+  transition: background 0.12s, color 0.12s;
+}
+.flow-view-toggle button:hover { color: var(--text); }
+.flow-view-toggle button.active {
+  background: var(--pink-soft); color: var(--pink);
+}
+
 /* === Role editor modal extras === */
 /* The role form is taller than the profile form (big protocol box),
    so let the body scroll inside the fixed-height modal. */

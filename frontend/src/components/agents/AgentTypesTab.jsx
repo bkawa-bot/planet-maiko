@@ -1,10 +1,14 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Plus, Pencil, Trash2 } from "@icons";
 import { api } from "../../api/client";
 import { showToast } from "../Toast";
 import { useAgentTypes, refreshAgentTypes, roleMeta } from "../../hooks/useAgentTypes";
 import ConfirmModal from "../ConfirmModal";
 import AgentTypeEditorModal from "./AgentTypeEditorModal";
+
+// Lazy so the React Flow chunk only loads when the Map view is opened,
+// never in the initial bundle.
+const RoleFlowCanvas = lazy(() => import("./flow/RoleFlowCanvas"));
 
 // Management surface for AgentTypes (roles). Lists built-ins + custom
 // types, opens the editor for create / edit, and deletes (custom rows
@@ -13,6 +17,7 @@ import AgentTypeEditorModal from "./AgentTypeEditorModal";
 // every roleMeta() consumer stay in sync without a reload.
 export default function AgentTypesTab() {
   const types = useAgentTypes();
+  const [view, setView] = useState("grid");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -35,12 +40,20 @@ export default function AgentTypesTab() {
   return (
     <div className="agent-types-tab">
       <div className="profiles-toolbar">
+        <div className="flow-view-toggle">
+          <button className={view === "grid" ? "active" : ""} onClick={() => setView("grid")}>Grid</button>
+          <button className={view === "map" ? "active" : ""} onClick={() => setView("map")}>Map</button>
+        </div>
         <button className="btn btn-primary" onClick={() => setCreating(true)}>
           <Plus size={12} /> New role
         </button>
       </div>
 
-      {types.length === 0 ? (
+      {view === "map" ? (
+        <Suspense fallback={<p className="page-empty">Loading map…</p>}>
+          <RoleFlowCanvas types={types} />
+        </Suspense>
+      ) : types.length === 0 ? (
         <p className="page-empty">No roles yet.</p>
       ) : (
         <div className="agent-types-grid">
