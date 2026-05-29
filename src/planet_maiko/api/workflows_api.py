@@ -11,6 +11,7 @@ from flask import Blueprint, jsonify, request
 
 from planet_maiko.database import db
 from planet_maiko.models.workflow import Workflow
+from planet_maiko.models.workflow_run import WorkflowRun, NodeRun
 
 workflows_bp = Blueprint("workflows", __name__)
 
@@ -88,3 +89,47 @@ def delete_workflow(wf_id):
     row.deleted_at = datetime.now(timezone.utc)
     db.session.commit()
     return jsonify({"status": "deleted"})
+
+
+@workflows_bp.route("/workflows/<wf_id>/run", methods=["POST"])
+def run_workflow(wf_id):
+    """Launch a workflow. Snapshots the current graph, mints a NodeRun
+    per node (pending), and sets the run running. The advance_workflows
+    cycle phase spawns the root nodes on the next tick and drives the
+    rest. Optional body: {scope_repo} = the repo the steps run against."""
+    row = db.session.get(Workflow, wf_id)
+    if row is None or row.deleted_at is not None:
+        return jsonify({"error": "Workflow not found"}), 404
+
+    graph = row.graph or {"nodes": [], "edges": []}
+    nodes = graph.get("nodes") or []
+    if not nodes:
+        return jsonify({"error": "This flow has no steps to run"}), 400
+
+    data = request.get_json() or {}
+    run = WorkflowRun(
+        workflow_id=row.id,
+        status="running",
+        graph_snapshot=graph,
+        extra={"scope_repo": (data.get("scope_repo") or "").strip() or None},
+    )
+    db.session.add(run)
+    db.session.flush()  # assign run.id before the NodeRuns reference it
+    for n in nodes:
+        db.session.add(NodeRun(
+            workflow_run_id=run.id,
+            node_id=n.get("id"),
+            agent_type=n.get("agent_type"),
+            status="pending",
+        ))
+    db.session.commit()
+    return jsonify(run.to_dict()), 201
+
+
+@workflows_bp.route("/workflow-runs/<run_id>", methods=["GET"])
+def get_workflow_run(run_id):
+    """The run plus its per-node state, for the live canvas / status poll."""
+    run = db.session.get(WorkflowRun, run_id)
+    if run is None:
+        return jsonify({"error": "Run not found"}), 404
+    return jsonify(run.to_dict())

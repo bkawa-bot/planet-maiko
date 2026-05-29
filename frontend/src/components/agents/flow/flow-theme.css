@@ -101,6 +101,14 @@
 }
 .flow-editor-name:hover { border-color: var(--border-subtle); }
 .flow-editor-name:focus { border-color: var(--pink); outline: none; background: var(--bg); }
+.flow-editor-repo {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--text-dim);
+  background: var(--bg); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs); padding: 5px 8px;
+  width: 190px;
+}
+.flow-editor-repo:focus { border-color: var(--pink); outline: none; color: var(--text); }
 .flow-editor-body { display: flex; flex: 1; min-height: 0; }
 .flow-palette {
   width: 184px; flex-shrink: 0;

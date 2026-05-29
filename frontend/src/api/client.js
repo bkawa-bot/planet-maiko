@@ -260,6 +260,9 @@ export const api = {
     request(`/workflows/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteWorkflow: (id) =>
     request(`/workflows/${id}`, { method: "DELETE" }),
+  runWorkflow: (id, data = {}) =>
+    request(`/workflows/${id}/run`, { method: "POST", body: JSON.stringify(data) }),
+  getWorkflowRun: (runId) => request(`/workflow-runs/${runId}`),
 
   // Specialties — swappable per-run prompt bodies attached to a
   // profile's specialty_ids pool and picked at assign time. Distinct

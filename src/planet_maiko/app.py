@@ -484,6 +484,7 @@ def create_app(start_scheduler=False):
         from planet_maiko.models.memo import Memo  # noqa: F401
         from planet_maiko.models.adapter_eval import AdapterEval  # noqa: F401
         from planet_maiko.models.workflow import Workflow  # noqa: F401
+        from planet_maiko.models.workflow_run import WorkflowRun, NodeRun  # noqa: F401
         # Fresh-DB shape: every model registered above gets its table
         # via SQLAlchemy.
         db.create_all()

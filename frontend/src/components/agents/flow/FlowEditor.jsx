@@ -10,7 +10,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
 import "./flow-theme.css";
-import { X, Save } from "@icons";
+import { X, Save, Play } from "@icons";
 import RoleNode from "./RoleNode";
 import { roleMeta } from "../../../hooks/useAgentTypes";
 import { kindColor, edgeValid } from "./kinds";
@@ -72,6 +72,8 @@ export default function FlowEditor({ workflow, types, onSaved, onClose }) {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [name, setName] = useState((workflow && workflow.name) || "Untitled flow");
   const [saving, setSaving] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [scopeRepo, setScopeRepo] = useState("");
   const [rf, setRf] = useState(null);
 
   // A wire is valid only when the producer's output kind equals the
@@ -117,33 +119,54 @@ export default function FlowEditor({ workflow, types, onSaved, onClose }) {
     );
   };
 
+  const serializeGraph = () => ({
+    nodes: nodes.map((n) => ({
+      id: n.id,
+      agent_type: n.data.type.id,
+      x: Math.round(n.position.x),
+      y: Math.round(n.position.y),
+    })),
+    edges: edges.map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle,
+      targetHandle: e.targetHandle,
+    })),
+    viewport: rf ? rf.getViewport() : undefined,
+  });
+
+  const persist = async () => {
+    const body = { name: name.trim() || "Untitled flow", graph: serializeGraph() };
+    return workflow && workflow.id
+      ? api.updateWorkflow(workflow.id, body)
+      : api.createWorkflow(body);
+  };
+
   const save = async () => {
+    if (saving || running) return;
     setSaving(true);
     try {
-      const graph = {
-        nodes: nodes.map((n) => ({
-          id: n.id,
-          agent_type: n.data.type.id,
-          x: Math.round(n.position.x),
-          y: Math.round(n.position.y),
-        })),
-        edges: edges.map((e) => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          sourceHandle: e.sourceHandle,
-          targetHandle: e.targetHandle,
-        })),
-        viewport: rf ? rf.getViewport() : undefined,
-      };
-      const body = { name: name.trim() || "Untitled flow", graph };
-      const saved = workflow && workflow.id
-        ? await api.updateWorkflow(workflow.id, body)
-        : await api.createWorkflow(body);
+      const saved = await persist();
       onSaved?.(saved);
     } catch (err) {
       showToast(err.message || "Save failed", "high");
       setSaving(false);
+    }
+  };
+
+  const run = async () => {
+    if (saving || running) return;
+    setRunning(true);
+    try {
+      // Save the current canvas first so the run executes what's on screen.
+      const saved = await persist();
+      await api.runWorkflow(saved.id, { scope_repo: scopeRepo.trim() || undefined });
+      showToast("Flow is running. Watch the pack on the Active tab 🐾", "normal");
+      onSaved?.(saved);
+    } catch (err) {
+      showToast(err.message || "Couldn't start the run", "high");
+      setRunning(false);
     }
   };
 
@@ -157,11 +180,24 @@ export default function FlowEditor({ workflow, types, onSaved, onClose }) {
           placeholder="Flow name"
         />
         <span style={{ flex: 1 }} />
-        <button className="btn btn-sm" onClick={onClose} disabled={saving}>
+        <input
+          className="flow-editor-repo"
+          value={scopeRepo}
+          onChange={(e) => setScopeRepo(e.target.value)}
+          placeholder="repo for this run (optional)"
+        />
+        <button className="btn btn-sm" onClick={onClose} disabled={saving || running}>
           <X size={12} /> Close
         </button>
-        <button className="btn btn-primary btn-sm" onClick={save} disabled={saving}>
+        <button className="btn btn-sm" onClick={save} disabled={saving || running}>
           {saving ? "Saving..." : <><Save size={12} /> Save</>}
+        </button>
+        <button
+          className="btn btn-primary btn-sm"
+          onClick={run}
+          disabled={saving || running || nodes.length === 0}
+        >
+          {running ? "Starting..." : <><Play size={12} /> Run</>}
         </button>
       </div>
 
