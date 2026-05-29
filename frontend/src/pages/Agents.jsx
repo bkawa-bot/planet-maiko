@@ -1,17 +1,20 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
-import { Plus, MoonTarot, Target, X } from "@icons";
+import { Plus, MoonTarot, Target, X, SpellBook } from "@icons";
 import InfoButton from "../components/InfoButton";
 import AgentsActiveTab from "../components/agents/AgentsActiveTab";
 import AgentsProfilesTab from "../components/agents/AgentsProfilesTab";
 import AgentsInsightsTab from "../components/agents/AgentsInsightsTab";
+import AgentTypesTab from "../components/agents/AgentTypesTab";
 import ModalPortal from "../components/ModalPortal";
 import { useConfiguredRepos } from "../utils/repo";
+import { useAgentTypes } from "../hooks/useAgentTypes";
 import "./Agents.css";
 
 export default function Agents() {
   const configuredRepos = useConfiguredRepos();
+  const agentTypes = useAgentTypes();
   const [tab, setTab] = useState("active");
   const [profiles, setProfiles] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -132,10 +135,9 @@ export default function Agents() {
                     value={createForm.role}
                     onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
                   >
-                    <option value="coding">Coder — writes code, opens PRs</option>
-                    <option value="review">Reviewer — reviews PRs</option>
-                    <option value="investigation">Investigator — digs into incidents & CI</option>
-                    <option value="cartographer">Cartographer — maps repos into a playbook</option>
+                    {agentTypes.length
+                      ? agentTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)
+                      : <option value={createForm.role}>{createForm.role}</option>}
                   </select>
                 </label>
                 <label>
@@ -230,6 +232,27 @@ export default function Agents() {
         )}
 
         <button
+          className={`page-tab ${tab === "types" ? "active" : ""}`}
+          onClick={() => setTab("types")}
+        >
+          <SpellBook size={10} /> Roles
+        </button>
+        {tab === "types" && (
+          <InfoButton title={<><SpellBook size={16} /> Agent Roles</>}>
+            <p>A role is the <em>kind</em> of agent you can spawn (Coder, Reviewer, and any you add here). It's the template behind each character on the Profiles tab, and the thing the New Agent picker chooses from.</p>
+            <h4>What a role carries</h4>
+            <ul>
+              <li><strong>Protocol</strong>: how this kind of agent works, read at the start of every run.</li>
+              <li><strong>Workspace</strong>: a real git worktree it can commit in, or a throwaway scratch dir.</li>
+              <li><strong>Output</strong>: what it hands back, a diff to approve, a report, or an insight card.</li>
+              <li><strong>Model routing key</strong>: which Settings routing rule picks its model + effort.</li>
+            </ul>
+            <h4>Built-in vs custom</h4>
+            <p>The four built-ins ship with Maiko. Edit one and it keeps your changes (it stops auto-updating from then on). Custom roles are yours to add, edit, and remove.</p>
+          </InfoButton>
+        )}
+
+        <button
           className={`page-tab ${tab === "insights" ? "active" : ""}`}
           onClick={() => setTab("insights")}
         >
@@ -278,6 +301,8 @@ export default function Agents() {
           onShowArchived={handleShowArchived}
         />
       )}
+
+      {tab === "types" && <AgentTypesTab />}
 
       {tab === "insights" && <AgentsInsightsTab />}
     </div>

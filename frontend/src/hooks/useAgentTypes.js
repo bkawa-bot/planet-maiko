@@ -10,6 +10,12 @@ import { api } from "../api/client";
 let _typesCache = null;
 let _typesPromise = null;
 
+// Live subscribers. Every mounted useAgentTypes() registers its state
+// setter here so refreshAgentTypes() can push a fresh list to all of
+// them after a create / edit / delete, instead of waiting for a full
+// page reload to repopulate the module cache.
+const _subscribers = new Set();
+
 function fetchOnce() {
   if (_typesCache) return Promise.resolve(_typesCache);
   if (!_typesPromise) {
@@ -48,6 +54,21 @@ const ICON_MAP = {
   clipboard: Clipboard,
 };
 
+// Resolve an AgentType.icon string to its component (User fallback).
+// Shared by roleMeta and the agent-type editor's icon picker so both
+// agree on what a given icon name renders as.
+export function iconForName(name) {
+  const key = (name || "user").toLowerCase().replace(/_/g, "-");
+  return ICON_MAP[key] || User;
+}
+
+// Curated, deduped icon choices for the agent-type editor picker.
+// A subset of ICON_MAP (which carries a few aliases like code/code2).
+export const AGENT_ICON_CHOICES = [
+  "code", "git-pull-request", "search", "map", "eye",
+  "compass", "wand", "bot", "clipboard", "filetext", "user",
+];
+
 // CSS color var for each built-in. Custom agent types get a neutral
 // default until we add a `color` column to AgentType (deferred).
 const COLOR_MAP = {
@@ -60,16 +81,30 @@ const COLOR_MAP = {
 export function useAgentTypes() {
   const [types, setTypes] = useState(_typesCache || []);
   useEffect(() => {
-    if (_typesCache) return;
     let cancelled = false;
-    fetchOnce().then((data) => {
-      if (!cancelled) setTypes(data);
-    });
+    const update = (data) => { if (!cancelled) setTypes(data); };
+    _subscribers.add(update);
+    // Resolves instantly from cache when warm; fetches once when cold.
+    fetchOnce().then(update);
     return () => {
       cancelled = true;
+      _subscribers.delete(update);
     };
   }, []);
   return types;
+}
+
+// Drop the cache, refetch, and push the new list to every mounted
+// useAgentTypes(). Call after any AgentType mutation so the Roles tab,
+// the New Agent role picker, and all roleMeta() consumers refresh
+// together rather than drifting until the next reload.
+export function refreshAgentTypes() {
+  _typesCache = null;
+  _typesPromise = null;
+  return fetchOnce().then((data) => {
+    _subscribers.forEach((fn) => fn(data));
+    return data;
+  });
 }
 
 // Sync accessor for non-React contexts. Returns null until the first
@@ -85,12 +120,11 @@ export function getAgentTypeSync(id) {
 export function roleMeta(id, types) {
   const list = types || _typesCache || [];
   const t = list.find((x) => x.id === id);
-  const iconName = (t?.icon || "user").toLowerCase().replace(/_/g, "-");
   return {
     id,
     label: t?.name || id || "Unknown",
     description: t?.description || "",
-    icon: ICON_MAP[iconName] || User,
+    icon: iconForName(t?.icon),
     color: COLOR_MAP[id] || "var(--text-muted)",
     // Capability flags — let components ask "should I show a Plan
     // tab / a Diff tab / a Report tab?" without grepping kind sets.

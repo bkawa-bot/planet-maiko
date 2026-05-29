@@ -362,10 +362,9 @@ export default function AgentsProfilesTab({
                     value={editForm.role}
                     onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
                   >
-                    <option value="coding">Coder</option>
-                    <option value="review">Reviewer</option>
-                    <option value="investigation">Investigator</option>
-                    <option value="cartographer">Cartographer</option>
+                    {agentTypes.length
+                      ? agentTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)
+                      : <option value={editForm.role}>{editForm.role}</option>}
                   </select>
                 </label>
                 <label>
