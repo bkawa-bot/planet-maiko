@@ -130,6 +130,7 @@ export function roleMeta(id, types) {
     // Capability flags — let components ask "should I show a Plan
     // tab / a Diff tab / a Report tab?" without grepping kind sets.
     inputKind: t?.input_kind || "task",
+    accepts: (t?.accepts && t.accepts.length) ? t.accepts : [t?.input_kind || "task"],
     outputKind: t?.output_kind || "diff",
     spawnMode: t?.spawn_mode || "worktree",
     permissionMode: t?.permission_mode || null,

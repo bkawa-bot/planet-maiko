@@ -38,6 +38,10 @@ _PATCH_COLUMNS = [
     # Existing rows default to "task"; the seeder sets the builtins
     # (review→diff, investigation→incident, cartographer→repo).
     ("agent_types", "input_kind", "VARCHAR(20) DEFAULT 'task'"),
+    # accepts: the full set of input kinds a role takes (input_kind is
+    # the primary). JSON list; existing rows fall back to [input_kind]
+    # in to_dict. Added so a coder can explicitly accept a plan / report.
+    ("agent_types", "accepts", "JSON"),
     ("learnings", "last_confirmed_at", "DATETIME"),
 ]
 

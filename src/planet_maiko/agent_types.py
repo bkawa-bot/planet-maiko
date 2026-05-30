@@ -166,6 +166,7 @@ BUILT_IN_AGENT_TYPES = [
         "permission_mode": None,
         "output_kind": "diff",
         "input_kind": "task",
+        "accepts": ["task", "plan", "report"],
         "model_routing_key": "coding_agent",
         "protocol_md": "agent-protocol",
     },
@@ -181,6 +182,7 @@ BUILT_IN_AGENT_TYPES = [
         "permission_mode": None,
         "output_kind": "diff",
         "input_kind": "diff",
+        "accepts": ["diff"],
         "model_routing_key": "coding_agent",
         "protocol_md": "review-agent-protocol",
     },
@@ -197,6 +199,7 @@ BUILT_IN_AGENT_TYPES = [
         "permission_mode": None,
         "output_kind": "report",
         "input_kind": "incident",
+        "accepts": ["incident", "task"],
         "model_routing_key": "coding_agent",
         "protocol_md": "investigation-agent-protocol",
     },
@@ -212,6 +215,7 @@ BUILT_IN_AGENT_TYPES = [
         "permission_mode": "plan",
         "output_kind": "insight",
         "input_kind": "repo",
+        "accepts": ["repo"],
         "model_routing_key": "coding_agent",
         "protocol_md": "cartographer-agent-protocol",
     },
@@ -228,6 +232,7 @@ BUILT_IN_AGENT_TYPES = [
         "permission_mode": "plan",
         "output_kind": "plan",
         "input_kind": "task",
+        "accepts": ["task"],
         "model_routing_key": "coding_agent",
         "protocol_md": "planner-agent-protocol",
     },
@@ -318,6 +323,7 @@ def ensure_seed_agent_types():
                     permission_mode=spec.get("permission_mode"),
                     output_kind=spec.get("output_kind", "diff"),
                     input_kind=spec.get("input_kind", "task"),
+                    accepts=spec.get("accepts") or [spec.get("input_kind", "task")],
                     model_routing_key=spec.get("model_routing_key", "coding_agent"),
                 )
                 db.session.add(row)
@@ -333,6 +339,7 @@ def ensure_seed_agent_types():
                 existing.permission_mode = spec.get("permission_mode")
                 existing.output_kind = spec.get("output_kind", "diff")
                 existing.input_kind = spec.get("input_kind", "task")
+                existing.accepts = spec.get("accepts") or [spec.get("input_kind", "task")]
                 existing.model_routing_key = spec.get("model_routing_key", "coding_agent")
                 refreshed += 1
         except Exception as e:

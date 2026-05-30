@@ -85,8 +85,9 @@ export default function FlowEditor({ workflow, types, onSaved, onClose }) {
       const tgt = nodes.find((n) => n.id === conn.target);
       if (!src || !tgt) return false;
       const out = src.data.type.output_kind || "diff";
-      const inn = tgt.data.type.input_kind || "task";
-      return edgeValid(out, inn);
+      const t = tgt.data.type;
+      const accepts = (t.accepts && t.accepts.length) ? t.accepts : [t.input_kind || "task"];
+      return edgeValid(out, accepts);
     },
     [nodes]
   );

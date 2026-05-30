@@ -15,22 +15,11 @@ export function kindColor(kind) {
   return KIND_COLOR[kind] || "var(--text-muted)";
 }
 
-// Which producer output kinds satisfy a given consumer input kind. A
-// role declares one primary input_kind; this map says what actually
-// plugs into it. A task-driven role (a coder) also takes a plan or a
-// report as its marching orders (so planner -> coder is a valid edge);
-// everything else is exact-match.
-export const ACCEPTS = {
-  task: ["task", "plan", "report"],
-  plan: ["plan"],
-  diff: ["diff"],
-  report: ["report"],
-  insight: ["insight", "repo"],
-  incident: ["incident"],
-  repo: ["repo"],
-};
-
-export function edgeValid(outputKind, inputKind) {
-  const allowed = ACCEPTS[inputKind] || [inputKind];
-  return allowed.includes(outputKind);
+// An edge A -> B is valid when A's output kind is one of the kinds B
+// accepts. Each role declares its own accept-set (AgentType.accepts),
+// so this is a plain membership check with no hidden global rules: a
+// Coder that accepts ["task", "plan", "report"] takes a Planner's plan
+// because "plan" is literally in its list.
+export function edgeValid(outputKind, accepts) {
+  return Array.isArray(accepts) && accepts.includes(outputKind);
 }

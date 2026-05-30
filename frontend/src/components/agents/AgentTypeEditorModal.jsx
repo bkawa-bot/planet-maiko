@@ -77,6 +77,7 @@ export default function AgentTypeEditorModal({ type, onClose, onSaved }) {
     spawn_mode: type?.spawn_mode || "worktree",
     output_kind: type?.output_kind || "diff",
     input_kind: type?.input_kind || "task",
+    accepts: type?.accepts && type.accepts.length ? type.accepts : [type?.input_kind || "task"],
     permission_mode: type?.permission_mode || "",
     model_routing_key: type?.model_routing_key || "coding_agent",
   }));
@@ -86,6 +87,16 @@ export default function AgentTypeEditorModal({ type, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+
+  // Toggle an accepted input kind. input_kind tracks the first one as
+  // the primary (it drives the lead socket color), so they never drift.
+  const toggleAccept = (kind) => {
+    setForm((f) => {
+      const has = f.accepts.includes(kind);
+      const accepts = has ? f.accepts.filter((k) => k !== kind) : [...f.accepts, kind];
+      return { ...f, accepts, input_kind: accepts[0] || f.input_kind };
+    });
+  };
 
   const onNameChange = (name) => {
     set({ name, ...(!isEdit && !idTouched ? { id: slugify(name) } : {}) });
@@ -108,7 +119,8 @@ export default function AgentTypeEditorModal({ type, onClose, onSaved }) {
           protocol_prompt: form.protocol_prompt,
           spawn_mode: form.spawn_mode,
           output_kind: form.output_kind,
-          input_kind: form.input_kind,
+          input_kind: form.accepts[0] || "task",
+          accepts: form.accepts,
           permission_mode: form.permission_mode || null,
           model_routing_key: form.model_routing_key.trim() || "coding_agent",
         });
@@ -121,7 +133,8 @@ export default function AgentTypeEditorModal({ type, onClose, onSaved }) {
           protocol_prompt: form.protocol_prompt,
           spawn_mode: form.spawn_mode,
           output_kind: form.output_kind,
-          input_kind: form.input_kind,
+          input_kind: form.accepts[0] || "task",
+          accepts: form.accepts,
           permission_mode: form.permission_mode || undefined,
           model_routing_key: form.model_routing_key.trim() || "coding_agent",
         });
@@ -216,24 +229,36 @@ export default function AgentTypeEditorModal({ type, onClose, onSaved }) {
               />
             </label>
 
-            <div className="agent-edit-row">
-              <label>
-                Accepts (input)
-                <select value={form.input_kind} onChange={(e) => set({ input_kind: e.target.value })}>
-                  {INPUT_KINDS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </label>
-              <label>
-                Produces (output)
-                <select value={form.output_kind} onChange={(e) => set({ output_kind: e.target.value })}>
-                  {OUTPUT_KINDS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </label>
+            <div className="agent-edit-full">
+              <div className="agent-edit-label">Accepts (input)</div>
+              <div className="agent-specialty-grid">
+                {INPUT_KINDS.map((o) => {
+                  const on = form.accepts.includes(o.value);
+                  return (
+                    <button
+                      type="button"
+                      key={o.value}
+                      className={`agent-specialty-chip ${on ? "checked" : ""}`}
+                      onClick={() => toggleAccept(o.value)}
+                      title={o.label}
+                    >
+                      {o.value}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+
+            <label className="agent-edit-full">
+              Produces (output)
+              <select value={form.output_kind} onChange={(e) => set({ output_kind: e.target.value })}>
+                {OUTPUT_KINDS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </label>
             <span className="agent-edit-hint">
-              The role's typed sockets. A flow can wire this role's output into any
-              role that accepts the same kind. Wiring arrives with the flow editor;
-              for now this documents the contract.
+              The role's typed sockets. A flow wires this role's output into any role
+              whose Accepts list includes that kind, so a Planner that produces a plan
+              can feed a Coder that accepts plans. Pick every input this role can run from.
             </span>
 
             <div className="agent-edit-row">

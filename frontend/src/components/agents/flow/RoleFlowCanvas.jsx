@@ -33,8 +33,8 @@ export default function RoleFlowCanvas({ types }) {
       for (const b of list) {
         if (a.id === b.id) continue;
         const aOut = a.output_kind || "diff";
-        const bIn = b.input_kind || "task";
-        if (edgeValid(aOut, bIn)) {
+        const bAccepts = (b.accepts && b.accepts.length) ? b.accepts : [b.input_kind || "task"];
+        if (edgeValid(aOut, bAccepts)) {
           edges.push({
             id: `${a.id}__${b.id}`,
             source: a.id,

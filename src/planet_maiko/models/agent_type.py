@@ -77,6 +77,15 @@ class AgentType(db.Model):
     # consumer.input_kind. Nullable; defaults to "task".
     input_kind = db.Column(db.String(20), default="task")
 
+    # The full set of input kinds this role accepts. A role can take a
+    # raw task, OR a plan, OR a prior report, so the input contract is a
+    # set, not a scalar. input_kind above is the primary/first of these
+    # (kept for back-compat + the chip's lead color); `accepts` is the
+    # authoritative list the flow editor type-checks an edge against: an
+    # edge A->B is valid when A.output_kind is in B.accepts. JSON list;
+    # falls back to [input_kind] for rows written before this column.
+    accepts = db.Column(db.JSON, default=list)
+
     # routing.rules key used to resolve model + effort. Every built-in
     # uses "coding_agent" today (a long-standing TODO).
     model_routing_key = db.Column(db.String(64), default="coding_agent")
@@ -110,6 +119,7 @@ class AgentType(db.Model):
             "permission_mode": self.permission_mode,
             "output_kind": self.output_kind or "diff",
             "input_kind": self.input_kind or "task",
+            "accepts": self.accepts or ([self.input_kind] if self.input_kind else ["task"]),
             "model_routing_key": self.model_routing_key or "coding_agent",
             "extra": self.extra or {},
             "created_at": iso_utc(self.created_at),

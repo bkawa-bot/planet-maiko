@@ -7,7 +7,8 @@ import { kindColor } from "./kinds";
 // component backs the interactive editor later.
 export default function RoleNode({ data, isConnectable }) {
   const { type, color, Icon } = data;
-  const inKind = type.input_kind || "task";
+  const accepts = (type.accepts && type.accepts.length) ? type.accepts : [type.input_kind || "task"];
+  const primaryIn = accepts[0] || "task";
   const outKind = type.output_kind || "diff";
 
   return (
@@ -17,8 +18,8 @@ export default function RoleNode({ data, isConnectable }) {
         position={Position.Left}
         id="in"
         className="flow-socket"
-        style={{ background: kindColor(inKind) }}
-        title={`accepts ${inKind}`}
+        style={{ background: kindColor(primaryIn) }}
+        title={`accepts ${accepts.join(", ")}`}
         isConnectable={isConnectable}
       />
 
@@ -29,7 +30,7 @@ export default function RoleNode({ data, isConnectable }) {
         <div className="flow-role-title">
           <div className="flow-role-name">{type.name}</div>
           <div className="flow-role-sockets">
-            <span style={{ color: kindColor(inKind) }}>{inKind}</span>
+            <span style={{ color: kindColor(primaryIn) }}>{accepts.join("/")}</span>
             <span className="flow-sock-arrow">→</span>
             <span style={{ color: kindColor(outKind) }}>{outKind}</span>
           </div>
