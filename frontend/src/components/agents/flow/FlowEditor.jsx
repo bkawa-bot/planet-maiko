@@ -16,6 +16,7 @@ import { roleMeta } from "../../../hooks/useAgentTypes";
 import { kindColor, edgeValid } from "./kinds";
 import { api } from "../../../api/client";
 import { showToast } from "../../Toast";
+import ModalPortal from "../../ModalPortal";
 
 const nodeTypes = { role: RoleNode };
 
@@ -73,6 +74,8 @@ export default function FlowEditor({ workflow, types, onSaved, onClose }) {
   const [name, setName] = useState((workflow && workflow.name) || "Untitled flow");
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
+  const [showRun, setShowRun] = useState(false);
+  const [runTask, setRunTask] = useState("");
   const [scopeRepo, setScopeRepo] = useState("");
   const [rf, setRf] = useState(null);
 
@@ -156,13 +159,17 @@ export default function FlowEditor({ workflow, types, onSaved, onClose }) {
     }
   };
 
-  const run = async () => {
-    if (saving || running) return;
+  const doRun = async () => {
+    if (saving || running || !runTask.trim()) return;
     setRunning(true);
     try {
-      // Save the current canvas first so the run executes what's on screen.
+      // Save the current canvas first so the run executes what's on screen,
+      // then launch it with the kickoff task as the flow's input.
       const saved = await persist();
-      await api.runWorkflow(saved.id, { scope_repo: scopeRepo.trim() || undefined });
+      await api.runWorkflow(saved.id, {
+        input: runTask.trim(),
+        scope_repo: scopeRepo.trim() || undefined,
+      });
       showToast("Flow is running. Watch the pack on the Active tab 🐾", "normal");
       onSaved?.(saved);
     } catch (err) {
@@ -181,12 +188,6 @@ export default function FlowEditor({ workflow, types, onSaved, onClose }) {
           placeholder="Flow name"
         />
         <span style={{ flex: 1 }} />
-        <input
-          className="flow-editor-repo"
-          value={scopeRepo}
-          onChange={(e) => setScopeRepo(e.target.value)}
-          placeholder="repo for this run (optional)"
-        />
         <button className="btn btn-sm" onClick={onClose} disabled={saving || running}>
           <X size={12} /> Close
         </button>
@@ -195,10 +196,10 @@ export default function FlowEditor({ workflow, types, onSaved, onClose }) {
         </button>
         <button
           className="btn btn-primary btn-sm"
-          onClick={run}
+          onClick={() => setShowRun(true)}
           disabled={saving || running || nodes.length === 0}
         >
-          {running ? "Starting..." : <><Play size={12} /> Run</>}
+          <Play size={12} /> Run
         </button>
       </div>
 
@@ -252,6 +253,50 @@ export default function FlowEditor({ workflow, types, onSaved, onClose }) {
           )}
         </div>
       </div>
+
+      {showRun && (
+        <ModalPortal>
+          <div className="modal-overlay" onClick={() => !running && setShowRun(false)}>
+            <div className="agent-edit-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <Play size={14} /> Run flow
+                <span style={{ flex: 1 }} />
+                <button className="btn btn-sm" onClick={() => setShowRun(false)} disabled={running}>
+                  <X size={12} />
+                </button>
+              </div>
+              <div className="modal-body agent-edit-body">
+                <label className="agent-edit-full">
+                  Task
+                  <textarea
+                    rows={5}
+                    value={runTask}
+                    onChange={(e) => setRunTask(e.target.value)}
+                    placeholder={"What should this flow do? This is the initial input handed to the first step.\n\nExample: Add rate limiting to the /login endpoint."}
+                  />
+                </label>
+                <label className="agent-edit-full">
+                  Repo
+                  <input
+                    type="text"
+                    value={scopeRepo}
+                    onChange={(e) => setScopeRepo(e.target.value)}
+                    placeholder="org/repo  (the repo the steps run against)"
+                  />
+                </label>
+              </div>
+              <div className="agent-edit-footer">
+                <button className="btn" onClick={() => setShowRun(false)} disabled={running}>
+                  Cancel
+                </button>
+                <button className="btn btn-primary" onClick={doRun} disabled={running || !runTask.trim()}>
+                  {running ? "Starting..." : <><Play size={12} /> Run flow</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
     </div>
   );
 }

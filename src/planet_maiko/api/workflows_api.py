@@ -111,7 +111,12 @@ def run_workflow(wf_id):
         workflow_id=row.id,
         status="running",
         graph_snapshot=graph,
-        extra={"scope_repo": (data.get("scope_repo") or "").strip() or None},
+        extra={
+            "scope_repo": (data.get("scope_repo") or "").strip() or None,
+            # The kickoff task: the "Task (input)" of the flow. Fed to the
+            # root node(s) (those with no inbound edge) as their input.
+            "input": (data.get("input") or "").strip() or None,
+        },
     )
     db.session.add(run)
     db.session.flush()  # assign run.id before the NodeRuns reference it
