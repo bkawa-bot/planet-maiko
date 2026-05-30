@@ -15,6 +15,7 @@ import RunView from "./flow/RunView";
 export default function FlowsTab() {
   const types = useAgentTypes();
   const [flows, setFlows] = useState([]);
+  const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(undefined);
   const [viewingRun, setViewingRun] = useState(null);
@@ -27,10 +28,16 @@ export default function FlowsTab() {
       .then((f) => setFlows(Array.isArray(f) ? f : []))
       .catch(() => setFlows([]))
       .finally(() => setLoading(false));
+    api
+      .getWorkflowRuns()
+      .then((r) => setRuns(Array.isArray(r) ? r : []))
+      .catch(() => {});
   };
 
-  // Initial fetch. setState happens only in the promise callbacks
-  // (never synchronously in the effect body), guarded by a cancel flag.
+  // Initial fetch + a light poll of runs so the list reflects live
+  // status and a running flow stays reachable after you navigate away.
+  // setState happens only in promise callbacks (never synchronously in
+  // the effect body), guarded by a cancel flag.
   useEffect(() => {
     let cancelled = false;
     api
@@ -38,7 +45,14 @@ export default function FlowsTab() {
       .then((f) => { if (!cancelled) setFlows(Array.isArray(f) ? f : []); })
       .catch(() => { if (!cancelled) setFlows([]); })
       .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    const loadRuns = () =>
+      api
+        .getWorkflowRuns()
+        .then((r) => { if (!cancelled) setRuns(Array.isArray(r) ? r : []); })
+        .catch(() => {});
+    loadRuns();
+    const timer = setInterval(loadRuns, 5000);
+    return () => { cancelled = true; clearInterval(timer); };
   }, []);
 
   if (viewingRun) {
@@ -89,6 +103,31 @@ export default function FlowsTab() {
           <Plus size={12} /> New flow
         </button>
       </div>
+
+      {runs.length > 0 && (
+        <div className="flow-runs-section">
+          <div className="flow-runs-label">Recent runs</div>
+          <div className="flow-runs-list">
+            {runs.slice(0, 10).map((r) => (
+              <button
+                key={r.id}
+                className="flow-run-row"
+                onClick={() => setViewingRun(r.id)}
+              >
+                <span className={`flow-run-row-status status-${r.status}`}>{r.status}</span>
+                <span className="flow-run-row-name">{r.workflow_name}</span>
+                <span className={`flow-run-row-meta${r.awaiting > 0 ? " awaiting" : ""}`}>
+                  {r.awaiting > 0
+                    ? `${r.awaiting} awaiting approval`
+                    : `${r.steps_done}/${r.steps_total} steps`}
+                  {" · "}
+                  {relativeTime(r.created_at)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {flows.length === 0 ? (
         <div className="empty-state">

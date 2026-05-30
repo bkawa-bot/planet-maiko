@@ -9,7 +9,7 @@ update / delete of the saved graph only. Mirrors agent_types_api.py.
 from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request
 
-from planet_maiko.database import db
+from planet_maiko.database import db, iso_utc
 from planet_maiko.models.workflow import Workflow
 from planet_maiko.models.workflow_run import WorkflowRun, NodeRun
 
@@ -190,3 +190,31 @@ def reject_node(run_id, node_run_id):
     nr.error = "rejected at the gate"
     db.session.commit()
     return jsonify(run.to_dict())
+
+
+@workflows_bp.route("/workflow-runs", methods=["GET"])
+def list_workflow_runs():
+    """Recent runs across all flows, lightweight summary for the Flows
+    tab so a run can be reopened after you navigate away from it."""
+    rows = (
+        WorkflowRun.query
+        .order_by(WorkflowRun.created_at.desc())
+        .limit(25)
+        .all()
+    )
+    out = []
+    for r in rows:
+        nrs = r.node_runs
+        wf = db.session.get(Workflow, r.workflow_id)
+        out.append({
+            "id": r.id,
+            "workflow_id": r.workflow_id,
+            "workflow_name": wf.name if wf else "(deleted flow)",
+            "status": r.status,
+            "created_at": iso_utc(r.created_at),
+            "finished_at": iso_utc(r.finished_at),
+            "steps_total": len(nrs),
+            "steps_done": sum(1 for n in nrs if n.status == "done"),
+            "awaiting": sum(1 for n in nrs if n.status == "awaiting_approval"),
+        })
+    return jsonify(out)

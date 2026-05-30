@@ -263,6 +263,7 @@ export const api = {
   runWorkflow: (id, data = {}) =>
     request(`/workflows/${id}/run`, { method: "POST", body: JSON.stringify(data) }),
   getWorkflowRun: (runId) => request(`/workflow-runs/${runId}`),
+  getWorkflowRuns: () => request("/workflow-runs"),
   approveWorkflowNode: (runId, nodeRunId) =>
     request(`/workflow-runs/${runId}/nodes/${nodeRunId}/approve`, { method: "POST" }),
   rejectWorkflowNode: (runId, nodeRunId) =>

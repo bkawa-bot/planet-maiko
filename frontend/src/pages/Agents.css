@@ -1223,6 +1223,53 @@
   background: var(--urgent-faint, rgba(255, 85, 119, 0.12));
 }
 
+/* Recent runs strip on the Flows tab (reopen / track a run). */
+.flow-runs-section { margin-bottom: 14px; }
+.flow-runs-label {
+  font-size: 10px; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px;
+}
+.flow-runs-list { display: flex; flex-direction: column; gap: 5px; }
+.flow-run-row {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; text-align: left;
+  padding: 7px 10px;
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs); cursor: pointer; font-family: inherit;
+  color: var(--text);
+  transition: border-color 0.12s, background 0.12s;
+}
+.flow-run-row:hover { border-color: var(--pink); background: var(--bg-hover); }
+.flow-run-row-status {
+  font-size: 9px; font-weight: 700; flex-shrink: 0;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 2px 7px; border-radius: 999px;
+  background: var(--bg-hover); color: var(--text-muted);
+}
+.flow-run-row-status.status-running {
+  background: color-mix(in srgb, var(--mint, var(--blue)) 18%, transparent);
+  color: var(--mint, var(--blue));
+}
+.flow-run-row-status.status-done {
+  background: color-mix(in srgb, var(--green) 16%, transparent);
+  color: var(--green);
+}
+.flow-run-row-status.status-failed,
+.flow-run-row-status.status-partial {
+  background: color-mix(in srgb, var(--lemon) 18%, transparent);
+  color: var(--lemon);
+}
+.flow-run-row-name {
+  font-weight: 600; font-size: 13px;
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.flow-run-row-meta {
+  font-size: 10px; color: var(--text-muted);
+  font-family: var(--font-mono); flex-shrink: 0;
+}
+.flow-run-row-meta.awaiting { color: var(--lemon); font-weight: 600; }
+
 /* === Role editor modal extras === */
 /* The role form is taller than the profile form (big protocol box),
    so let the body scroll inside the fixed-height modal. */
