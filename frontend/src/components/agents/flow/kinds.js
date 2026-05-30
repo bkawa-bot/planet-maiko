@@ -9,6 +9,7 @@ export const KIND_COLOR = {
   insight: "var(--lemon)",
   incident: "var(--urgent)",
   repo: "var(--green)",
+  tasks: "var(--lavender)",
 };
 
 export function kindColor(kind) {
@@ -21,5 +22,10 @@ export function kindColor(kind) {
 // Coder that accepts ["task", "plan", "report"] takes a Planner's plan
 // because "plan" is literally in its list.
 export function edgeValid(outputKind, accepts) {
-  return Array.isArray(accepts) && accepts.includes(outputKind);
+  if (!Array.isArray(accepts)) return false;
+  if (accepts.includes(outputKind)) return true;
+  // A "tasks" list scatters into individual "task" items, so it can feed
+  // any node that accepts a task (the fan-out itself runs server-side).
+  if (outputKind === "tasks" && accepts.includes("task")) return true;
+  return false;
 }

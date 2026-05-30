@@ -236,6 +236,23 @@ BUILT_IN_AGENT_TYPES = [
         "model_routing_key": "coding_agent",
         "protocol_md": "planner-agent-protocol",
     },
+    {
+        "id": "decomposer",
+        "name": "Decomposer",
+        "description": (
+            "Takes an approved plan and breaks it into a set of small, "
+            "independent tasks for coders to pick up. Read-only: it "
+            "splits the work, it does not build."
+        ),
+        "icon": "git-fork",
+        "spawn_mode": "worktree",
+        "permission_mode": "plan",
+        "output_kind": "tasks",
+        "input_kind": "plan",
+        "accepts": ["plan", "task", "report"],
+        "model_routing_key": "coding_agent",
+        "protocol_md": "decomposer-agent-protocol",
+    },
 ]
 
 

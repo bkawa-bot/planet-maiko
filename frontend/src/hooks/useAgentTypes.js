@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   Code2, Eye, Search, Map as MapIcon, User, Compass, Wand2,
-  GitPullRequest, FileText, Clipboard, Bot,
+  GitPullRequest, GitFork, FileText, Clipboard, Bot,
 } from "@icons";
 import { api } from "../api/client";
 
@@ -50,6 +50,7 @@ const ICON_MAP = {
   wand: Wand2,
   wand2: Wand2,
   "git-pull-request": GitPullRequest,
+  "git-fork": GitFork,
   filetext: FileText,
   clipboard: Clipboard,
 };
@@ -66,7 +67,7 @@ export function iconForName(name) {
 // A subset of ICON_MAP (which carries a few aliases like code/code2).
 export const AGENT_ICON_CHOICES = [
   "code", "git-pull-request", "search", "map", "eye",
-  "compass", "wand", "bot", "clipboard", "filetext", "user",
+  "compass", "wand", "bot", "clipboard", "filetext", "git-fork", "user",
 ];
 
 // CSS color var for each built-in. Custom agent types get a neutral
@@ -77,6 +78,7 @@ const COLOR_MAP = {
   investigation: "var(--lavender)",
   cartographer: "var(--lemon)",
   planner: "var(--peach)",
+  decomposer: "var(--green)",
 };
 
 export function useAgentTypes() {

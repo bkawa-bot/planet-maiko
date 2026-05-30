@@ -24,6 +24,7 @@ const OUTPUT_KINDS = [
   { value: "report", label: "Report (markdown artifact)" },
   { value: "insight", label: "Insight (card for the playbook)" },
   { value: "plan", label: "Plan (an implementation plan for a coder)" },
+  { value: "tasks", label: "Tasks (a list that fans out to coders)" },
 ];
 
 // The IN-side socket vocabulary, mirror of OUTPUT_KINDS. Declares what
@@ -39,6 +40,7 @@ const INPUT_KINDS = [
   { value: "insight", label: "Insight (a repo overview)" },
   { value: "incident", label: "Incident (a failure or alert)" },
   { value: "repo", label: "Repo (a whole repository)" },
+  { value: "tasks", label: "Tasks (a list of tasks)" },
 ];
 
 const PERMISSION_MODES = [
