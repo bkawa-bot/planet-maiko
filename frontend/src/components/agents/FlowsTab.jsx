@@ -6,6 +6,7 @@ import { useAgentTypes } from "../../hooks/useAgentTypes";
 import { relativeTime } from "../../utils/dates";
 import ConfirmModal from "../ConfirmModal";
 import FlowEditor from "./flow/FlowEditor";
+import RunView from "./flow/RunView";
 
 // The Flows surface: a list of saved flows + the editor. `editing` is
 // the view switch — undefined shows the list, null opens a fresh flow,
@@ -16,6 +17,7 @@ export default function FlowsTab() {
   const [flows, setFlows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(undefined);
+  const [viewingRun, setViewingRun] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -39,6 +41,15 @@ export default function FlowsTab() {
     return () => { cancelled = true; };
   }, []);
 
+  if (viewingRun) {
+    return (
+      <RunView
+        runId={viewingRun}
+        onClose={() => { setViewingRun(null); setEditing(undefined); load(); }}
+      />
+    );
+  }
+
   if (editing !== undefined) {
     return (
       <FlowEditor
@@ -50,6 +61,7 @@ export default function FlowsTab() {
           load();
           showToast("Flow saved 🐾", "normal");
         }}
+        onRan={(runRes) => { setEditing(undefined); setViewingRun(runRes.id); }}
       />
     );
   }

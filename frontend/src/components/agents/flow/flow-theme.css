@@ -142,3 +142,61 @@
   color: var(--text-muted); flex-shrink: 0;
 }
 .flow-editor-canvas { position: relative; flex: 1; min-width: 0; }
+
+/* === Run view: a saved flow, lit up live === */
+.flow-run-view {
+  display: flex; flex-direction: column;
+  height: 72vh; min-height: 460px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg);
+}
+.flow-run-status {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 3px 10px; border-radius: 999px;
+  background: var(--bg-hover); color: var(--text-dim);
+}
+.flow-run-status.status-running {
+  background: color-mix(in srgb, var(--mint, var(--blue)) 18%, transparent);
+  color: var(--mint, var(--blue));
+}
+.flow-run-status.status-done {
+  background: color-mix(in srgb, var(--green) 16%, transparent);
+  color: var(--green);
+}
+.flow-run-status.status-failed,
+.flow-run-status.status-partial {
+  background: color-mix(in srgb, var(--lemon) 18%, transparent);
+  color: var(--lemon);
+}
+.flow-run-sub {
+  font-size: 11px; color: var(--text-muted);
+  margin-left: 10px; font-family: var(--font-mono);
+}
+
+/* Per-node status glow on the run canvas. Campfire warmth, never an
+   alarm: a stuck/failed step goes muted amber (lemon), not red. */
+.flow-role-node.status-pending { opacity: 0.6; }
+.flow-role-node.status-queued {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--lavender) 35%, transparent);
+}
+.flow-role-node.status-running {
+  box-shadow: 0 0 0 2px var(--mint, var(--blue)),
+    0 0 18px color-mix(in srgb, var(--mint, var(--blue)) 45%, transparent);
+  animation: flow-node-pulse 1.8s ease-in-out infinite;
+}
+.flow-role-node.status-done {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 60%, transparent),
+    0 0 14px color-mix(in srgb, var(--green) 28%, transparent);
+}
+.flow-role-node.status-failed,
+.flow-role-node.status-skipped {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--lemon) 60%, transparent);
+  opacity: 0.85;
+}
+@keyframes flow-node-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.72; }
+}

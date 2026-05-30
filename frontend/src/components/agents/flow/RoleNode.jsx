@@ -6,13 +6,13 @@ import { kindColor } from "./kinds";
 // on the right. Read-only for Phase B (isConnectable=false); the same
 // component backs the interactive editor later.
 export default function RoleNode({ data, isConnectable }) {
-  const { type, color, Icon } = data;
+  const { type, color, Icon, status } = data;
   const accepts = (type.accepts && type.accepts.length) ? type.accepts : [type.input_kind || "task"];
   const primaryIn = accepts[0] || "task";
   const outKind = type.output_kind || "diff";
 
   return (
-    <div className="flow-role-node" style={{ borderColor: color }}>
+    <div className={`flow-role-node${status ? ` status-${status}` : ""}`} style={{ borderColor: color }}>
       <Handle
         type="target"
         position={Position.Left}

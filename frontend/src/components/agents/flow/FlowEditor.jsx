@@ -67,7 +67,7 @@ function buildInitial(workflow, types) {
 // doorways to matching input doorways (the connection is rejected unless
 // the kinds match), and save the whole canvas as one graph blob. No
 // execution yet; this is Phase C (authoring), the engine is Phase D.
-export default function FlowEditor({ workflow, types, onSaved, onClose }) {
+export default function FlowEditor({ workflow, types, onSaved, onClose, onRan }) {
   const initial = useMemo(() => buildInitial(workflow, types), [workflow, types]);
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
@@ -166,12 +166,12 @@ export default function FlowEditor({ workflow, types, onSaved, onClose }) {
       // Save the current canvas first so the run executes what's on screen,
       // then launch it with the kickoff task as the flow's input.
       const saved = await persist();
-      await api.runWorkflow(saved.id, {
+      const runRes = await api.runWorkflow(saved.id, {
         input: runTask.trim(),
         scope_repo: scopeRepo.trim() || undefined,
       });
-      showToast("Flow is running. Watch the pack on the Active tab 🐾", "normal");
-      onSaved?.(saved);
+      showToast("Flow is running 🐾", "normal");
+      onRan?.(runRes);
     } catch (err) {
       showToast(err.message || "Couldn't start the run", "high");
       setRunning(false);
