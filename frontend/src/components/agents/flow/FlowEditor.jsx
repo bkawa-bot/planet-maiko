@@ -10,15 +10,16 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
 import "./flow-theme.css";
-import { X, Save, Play } from "@icons";
+import { X, Save, Play, CombinationLock } from "@icons";
 import RoleNode from "./RoleNode";
+import GateNode from "./GateNode";
 import { roleMeta } from "../../../hooks/useAgentTypes";
 import { kindColor, edgeValid } from "./kinds";
 import { api } from "../../../api/client";
 import { showToast } from "../../Toast";
 import ModalPortal from "../../ModalPortal";
 
-const nodeTypes = { role: RoleNode };
+const nodeTypes = { role: RoleNode, gate: GateNode };
 
 // Hydrate the saved graph blob into React Flow nodes/edges. A node
 // references a role by agent_type; we re-resolve its live color + icon
@@ -29,6 +30,14 @@ function buildInitial(workflow, types) {
   const byId = Object.fromEntries(list.map((t) => [t.id, t]));
 
   const nodes = (g.nodes || []).map((n) => {
+    if (n.kind === "gate" || n.agent_type === "gate") {
+      return {
+        id: n.id,
+        type: "gate",
+        position: { x: n.x ?? 0, y: n.y ?? 0 },
+        data: { editable: true },
+      };
+    }
     const t = byId[n.agent_type] || {
       id: n.agent_type,
       name: n.agent_type,
@@ -87,6 +96,8 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
       const src = nodes.find((n) => n.id === conn.source);
       const tgt = nodes.find((n) => n.id === conn.target);
       if (!src || !tgt) return false;
+      // A gate is a pass-through; any wire to or from it is valid.
+      if (src.type === "gate" || tgt.type === "gate") return true;
       const out = src.data.type.output_kind || "diff";
       const t = tgt.data.type;
       const accepts = (t.accepts && t.accepts.length) ? t.accepts : [t.input_kind || "task"];
@@ -98,7 +109,7 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
   const onConnect = useCallback(
     (conn) => {
       const src = nodes.find((n) => n.id === conn.source);
-      const kind = (src && src.data.type.output_kind) || "diff";
+      const kind = (src && src.type !== "gate" && src.data.type.output_kind) || "diff";
       setEdges((eds) =>
         addEdge(
           { ...conn, className: "flow-edge", style: { stroke: kindColor(kind) } },
@@ -123,10 +134,24 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
     );
   };
 
+  const addGate = () => {
+    const id = `gate-${crypto.randomUUID().slice(0, 8)}`;
+    const offset = nodes.length;
+    setNodes((nds) =>
+      nds.concat({
+        id,
+        type: "gate",
+        position: { x: 140 + (offset % 4) * 50, y: 90 + (offset % 6) * 46 },
+        data: { editable: true },
+      })
+    );
+  };
+
   const serializeGraph = () => ({
     nodes: nodes.map((n) => ({
       id: n.id,
-      agent_type: n.data.type.id,
+      kind: n.type === "gate" ? "gate" : "role",
+      agent_type: n.type === "gate" ? "gate" : n.data.type.id,
       x: Math.round(n.position.x),
       y: Math.round(n.position.y),
     })),
@@ -226,6 +251,15 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
               </button>
             );
           })}
+          <div className="flow-palette-label flow-palette-control">Control</div>
+          <button
+            className="flow-palette-item"
+            onClick={addGate}
+            title="Pause the run here for your approval"
+          >
+            <span className="flow-palette-icon"><CombinationLock size={16} /></span>
+            <span className="flow-palette-name">Approval gate</span>
+          </button>
         </div>
 
         <div className="flow-editor-canvas">

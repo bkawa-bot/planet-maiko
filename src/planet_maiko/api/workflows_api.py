@@ -138,3 +138,55 @@ def get_workflow_run(run_id):
     if run is None:
         return jsonify({"error": "Run not found"}), 404
     return jsonify(run.to_dict())
+
+
+def _gate_node_run(run_id, node_run_id):
+    """Resolve a (run, node_run) pair for a gate action, or an error tuple."""
+    run = db.session.get(WorkflowRun, run_id)
+    if run is None:
+        return None, None, (jsonify({"error": "Run not found"}), 404)
+    nr = db.session.get(NodeRun, node_run_id)
+    if nr is None or nr.workflow_run_id != run.id:
+        return None, None, (jsonify({"error": "Step not found"}), 404)
+    if nr.status != "awaiting_approval":
+        return None, None, (jsonify({"error": "This step is not awaiting approval"}), 400)
+    return run, nr, None
+
+
+@workflows_bp.route("/workflow-runs/<run_id>/nodes/<node_run_id>/approve", methods=["POST"])
+def approve_node(run_id, node_run_id):
+    """Approve a paused gate. Mark it done and forward its upstream
+    producer's job through it (pass-through), so the next cycle advances
+    downstream reading the real artifact/branch."""
+    run, nr, err = _gate_node_run(run_id, node_run_id)
+    if err:
+        return err
+
+    graph = run.graph_snapshot or {}
+    edges = graph.get("edges") or []
+    for src_id in [e.get("source") for e in edges if e.get("target") == nr.node_id]:
+        src_nr = (
+            NodeRun.query
+            .filter_by(workflow_run_id=run.id, node_id=src_id)
+            .first()
+        )
+        if src_nr and src_nr.agent_job_id:
+            nr.agent_job_id = src_nr.agent_job_id
+            break
+
+    nr.status = "done"
+    db.session.commit()
+    return jsonify(run.to_dict())
+
+
+@workflows_bp.route("/workflow-runs/<run_id>/nodes/<node_run_id>/reject", methods=["POST"])
+def reject_node(run_id, node_run_id):
+    """Reject at a gate: skip it, which cascades a skip to everything
+    downstream and ends the run as partial/failed."""
+    run, nr, err = _gate_node_run(run_id, node_run_id)
+    if err:
+        return err
+    nr.status = "skipped"
+    nr.error = "rejected at the gate"
+    db.session.commit()
+    return jsonify(run.to_dict())

@@ -130,6 +130,14 @@ def _phase_advance_workflows():
                 if not all(src in done_ids for src in inbound):
                     continue  # inputs not ready yet
 
+                # Approval gate: a control node, not an agent. Park it for
+                # the user instead of spawning. The approve endpoint marks
+                # it done and forwards its upstream's output downstream;
+                # reject marks it skipped (which skips its dependents).
+                if node.get("kind") == "gate" or node.get("agent_type") == "gate":
+                    nr.status = "awaiting_approval"
+                    continue
+
                 role = nr.agent_type
                 blocks = []
                 push_failed = False
@@ -153,7 +161,12 @@ def _phase_advance_workflows():
                         src_job = db.session.get(AgentJob, src_nr.agent_job_id)
                         if not src_job:
                             continue
-                        src_type = get_agent_type(src_nr.agent_type)
+                        # Resolve the output kind from the producing JOB's
+                        # role, not the NodeRun's agent_type, so it stays
+                        # correct through a pass-through gate (whose NodeRun
+                        # is "gate" but whose forwarded job is the real
+                        # producer).
+                        src_type = get_agent_type(src_job.kind)
                         out_kind = (src_type.output_kind if src_type else None) or "diff"
                         if out_kind == "diff" and src_job.worktree_path and src_job.branch:
                             if not _push_branch(src_job.worktree_path, src_job.branch):

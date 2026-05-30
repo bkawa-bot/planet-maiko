@@ -221,3 +221,46 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.72; }
 }
+
+/* === Approval gate node (a control node, not an agent) === */
+.flow-gate-node {
+  position: relative;
+  min-width: 132px;
+  background: var(--bg-card);
+  border: 2px dashed var(--lavender, var(--border));
+  border-radius: 14px;
+  padding: 10px 14px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  color: var(--text);
+  text-align: center;
+}
+.flow-gate-head {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  color: var(--lavender, var(--text-dim));
+}
+.flow-gate-label { font-weight: 700; font-size: 13px; color: var(--text); }
+.flow-gate-node.status-done {
+  border-style: solid;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 50%, transparent);
+}
+.flow-gate-node.awaiting {
+  border-style: solid; border-color: var(--lemon);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--lemon) 55%, transparent),
+    0 0 16px color-mix(in srgb, var(--lemon) 30%, transparent);
+}
+.flow-gate-actions { display: flex; gap: 6px; justify-content: center; margin-top: 8px; }
+.flow-gate-approve, .flow-gate-reject {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: inherit; font-size: 11px; font-weight: 600;
+  padding: 3px 9px; border-radius: var(--radius-xs); cursor: pointer;
+  border: 1px solid var(--border-subtle);
+}
+.flow-gate-approve {
+  background: color-mix(in srgb, var(--green) 16%, transparent);
+  color: var(--green); border-color: transparent;
+}
+.flow-gate-approve:hover { background: color-mix(in srgb, var(--green) 28%, transparent); }
+.flow-gate-reject { background: transparent; color: var(--text-muted); }
+.flow-gate-reject:hover { color: var(--urgent); border-color: var(--urgent); }
+.flow-socket-gate { background: var(--lavender, var(--text-muted)) !important; }
+.flow-palette-control { margin-top: 10px; }

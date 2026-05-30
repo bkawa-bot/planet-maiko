@@ -263,6 +263,10 @@ export const api = {
   runWorkflow: (id, data = {}) =>
     request(`/workflows/${id}/run`, { method: "POST", body: JSON.stringify(data) }),
   getWorkflowRun: (runId) => request(`/workflow-runs/${runId}`),
+  approveWorkflowNode: (runId, nodeRunId) =>
+    request(`/workflow-runs/${runId}/nodes/${nodeRunId}/approve`, { method: "POST" }),
+  rejectWorkflowNode: (runId, nodeRunId) =>
+    request(`/workflow-runs/${runId}/nodes/${nodeRunId}/reject`, { method: "POST" }),
 
   // Specialties — swappable per-run prompt bodies attached to a
   // profile's specialty_ids pool and picked at assign time. Distinct

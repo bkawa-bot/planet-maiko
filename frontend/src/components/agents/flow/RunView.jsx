@@ -4,11 +4,12 @@ import "@xyflow/react/dist/base.css";
 import "./flow-theme.css";
 import { X } from "@icons";
 import RoleNode from "./RoleNode";
+import GateNode from "./GateNode";
 import { useAgentTypes, roleMeta } from "../../../hooks/useAgentTypes";
 import { kindColor } from "./kinds";
 import { api } from "../../../api/client";
 
-const nodeTypes = { role: RoleNode };
+const nodeTypes = { role: RoleNode, gate: GateNode };
 const TERMINAL = new Set(["done", "failed", "partial", "cancelled"]);
 
 // A node's live status, rolled up from its NodeRun(s). 1:1 today; once a
@@ -58,12 +59,32 @@ export default function RunView({ runId, onClose }) {
   const { nodes, edges } = useMemo(() => {
     const g = (run && run.graph_snapshot) || { nodes: [], edges: [] };
     const byNode = {};
+    const nrByNode = {};
     for (const nr of (run && run.node_runs) || []) {
       (byNode[nr.node_id] = byNode[nr.node_id] || []).push(nr.status);
+      if (!nrByNode[nr.node_id]) nrByNode[nr.node_id] = nr;
     }
     const byId = Object.fromEntries((g.nodes || []).map((n) => [n.id, n]));
 
     const nodes = (g.nodes || []).map((n) => {
+      const status = rollup(byNode[n.id]);
+      if (n.kind === "gate" || n.agent_type === "gate") {
+        const nrId = nrByNode[n.id] ? nrByNode[n.id].id : null;
+        return {
+          id: n.id,
+          type: "gate",
+          position: { x: n.x ?? 0, y: n.y ?? 0 },
+          data: {
+            status,
+            onApprove: nrId
+              ? () => api.approveWorkflowNode(runId, nrId).then(setRun).catch(() => {})
+              : null,
+            onReject: nrId
+              ? () => api.rejectWorkflowNode(runId, nrId).then(setRun).catch(() => {})
+              : null,
+          },
+        };
+      }
       const meta = roleMeta(n.agent_type, types);
       return {
         id: n.id,
@@ -80,7 +101,7 @@ export default function RunView({ runId, onClose }) {
           },
           color: meta.color,
           Icon: meta.icon,
-          status: rollup(byNode[n.id]),
+          status,
         },
       };
     });
@@ -100,7 +121,7 @@ export default function RunView({ runId, onClose }) {
     });
 
     return { nodes, edges };
-  }, [run, types]);
+  }, [run, types, runId]);
 
   const status = run ? run.status : "loading";
   const allRuns = (run && run.node_runs) || [];
