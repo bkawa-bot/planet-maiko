@@ -49,11 +49,13 @@
   opacity: 0;
   transition: opacity 0.12s, color 0.12s, border-color 0.12s;
 }
-.flow-role-node:hover .flow-node-delete { opacity: 1; }
+.flow-role-node:hover .flow-node-delete,
+.flow-gate-node:hover .flow-node-delete { opacity: 1; }
 .flow-node-delete:hover { color: var(--urgent); border-color: var(--urgent); }
 
 /* Selection feedback (also makes select-then-Delete legible). */
-.react-flow__node.selected .flow-role-node {
+.react-flow__node.selected .flow-role-node,
+.react-flow__node.selected .flow-gate-node {
   box-shadow: 0 0 0 2px var(--pink), 0 2px 12px rgba(0, 0, 0, 0.12);
 }
 .flow-role-head { display: flex; align-items: center; gap: 10px; }
