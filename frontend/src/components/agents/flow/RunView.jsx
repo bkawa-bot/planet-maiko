@@ -18,6 +18,9 @@ const TERMINAL = new Set(["done", "failed", "partial", "cancelled"]);
 function rollup(statuses) {
   if (!statuses || !statuses.length) return "pending";
   if (statuses.some((s) => s === "running")) return "running";
+  // A gate parked for the user must surface as awaiting, not collapse to
+  // pending, or its Approve / Reject buttons never render.
+  if (statuses.some((s) => s === "awaiting_approval")) return "awaiting_approval";
   if (statuses.some((s) => s === "queued")) return "queued";
   if (statuses.some((s) => s === "failed")) return "failed";
   if (statuses.every((s) => s === "done")) return "done";
