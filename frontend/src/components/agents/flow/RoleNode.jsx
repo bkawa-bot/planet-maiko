@@ -1,18 +1,30 @@
-import { Handle, Position } from "@xyflow/react";
+import { Handle, Position, useReactFlow } from "@xyflow/react";
+import { X } from "@icons";
 import { kindColor } from "./kinds";
 
 // A role rendered as a warm character card on the flow canvas. The
 // sockets are colored doorways: the input on the left edge, the output
 // on the right. Read-only for Phase B (isConnectable=false); the same
 // component backs the interactive editor later.
-export default function RoleNode({ data, isConnectable }) {
-  const { type, color, Icon, status } = data;
+export default function RoleNode({ id, data, isConnectable }) {
+  const { type, color, Icon, status, editable } = data;
+  const rf = useReactFlow();
   const accepts = (type.accepts && type.accepts.length) ? type.accepts : [type.input_kind || "task"];
   const primaryIn = accepts[0] || "task";
   const outKind = type.output_kind || "diff";
 
   return (
     <div className={`flow-role-node${status ? ` status-${status}` : ""}`} style={{ borderColor: color }}>
+      {editable && (
+        <button
+          type="button"
+          className="flow-node-delete"
+          title="Remove step"
+          onClick={(e) => { e.stopPropagation(); rf.deleteElements({ nodes: [{ id }] }); }}
+        >
+          <X size={11} />
+        </button>
+      )}
       <Handle
         type="target"
         position={Position.Left}

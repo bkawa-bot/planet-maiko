@@ -41,7 +41,7 @@ function buildInitial(workflow, types) {
       id: n.id,
       type: "role",
       position: { x: n.x ?? 0, y: n.y ?? 0 },
-      data: { type: t, color: meta.color, Icon: meta.icon },
+      data: { type: t, color: meta.color, Icon: meta.icon, editable: true },
     };
   });
 
@@ -118,7 +118,7 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
         id,
         type: "role",
         position: { x: 140 + (offset % 4) * 50, y: 90 + (offset % 6) * 46 },
-        data: { type: role, color: meta.color, Icon: meta.icon },
+        data: { type: role, color: meta.color, Icon: meta.icon, editable: true },
       })
     );
   };
