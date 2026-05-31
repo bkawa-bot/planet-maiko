@@ -217,6 +217,42 @@ def get_review_queue():
             "pupdate_snapshot": extra.get("pupdate_snapshot"),
         })
 
+    # 3c. Flow gate approvals. A workflow paused at an approval gate; the
+    #     memo carries the upstream plan. Surface it with run + node ids so
+    #     the inbox can approve / reject inline. Self-cleaning: a gate
+    #     already resolved in the run view is no longer awaiting, so its
+    #     memo is skipped here (the approve/reject path dismisses it).
+    from planet_maiko.models.workflow_run import NodeRun
+    flow_gate_memos = (
+        Memo.query
+        .filter(Memo.kind == "flow_approval")
+        .filter(Memo.status.in_(("pending", "seen")))
+        .order_by(Memo.created_at.desc())
+        .all()
+    )
+    for m in flow_gate_memos:
+        m_extra = m.extra or {}
+        nr_id = m_extra.get("node_run_id")
+        node_run = db.session.get(NodeRun, nr_id) if nr_id else None
+        if node_run is None or node_run.status != "awaiting_approval":
+            continue
+        job_id = m_extra.get("job_id")
+        items.append({
+            "kind": "flow_gate",
+            "task_id": None,
+            "job_id": job_id,
+            "memo_id": m.id,
+            "title": m.title,
+            "repo": None,
+            "agent_name": None,
+            "route": (f"/jobs/{job_id}?view=report" if job_id else None),
+            "run_id": m_extra.get("workflow_run_id"),
+            "node_run_id": nr_id,
+            "body": m.body,
+            "age_seconds": _age(m.created_at),
+            "timestamp": iso_utc(m.created_at),
+        })
+
     # AgentJobs already in the DB with status=pending_approval. Shown
     # until the user approves/dismisses them.
     pending_jobs = (

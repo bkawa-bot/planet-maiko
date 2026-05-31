@@ -153,6 +153,22 @@ def _gate_node_run(run_id, node_run_id):
     return run, nr, None
 
 
+def _retire_gate_memo(node_run_id):
+    """Dismiss the inbox memo for a gate once it's approved or rejected
+    (from the run view or the memo itself) so it stops surfacing. Caller
+    commits."""
+    from planet_maiko.models.memo import Memo
+    from planet_maiko.brain.memos import mark_dismissed
+    for m in (
+        Memo.query
+        .filter(Memo.kind == "flow_approval")
+        .filter(Memo.status.in_(("pending", "seen")))
+        .all()
+    ):
+        if (m.extra or {}).get("node_run_id") == node_run_id:
+            mark_dismissed(m)
+
+
 @workflows_bp.route("/workflow-runs/<run_id>/nodes/<node_run_id>/approve", methods=["POST"])
 def approve_node(run_id, node_run_id):
     """Approve a paused gate. Mark it done and forward its upstream
@@ -175,6 +191,7 @@ def approve_node(run_id, node_run_id):
             break
 
     nr.status = "done"
+    _retire_gate_memo(nr.id)
     db.session.commit()
     return jsonify(run.to_dict())
 
@@ -188,6 +205,7 @@ def reject_node(run_id, node_run_id):
         return err
     nr.status = "skipped"
     nr.error = "rejected at the gate"
+    _retire_gate_memo(nr.id)
     db.session.commit()
     return jsonify(run.to_dict())
 

@@ -102,6 +102,12 @@ const KIND_META = {
     label: "Approval",
     tone: "plan",
   },
+  flow_gate: {
+    Icon: ClipboardCheck,
+    cta: "Approve",
+    label: "Flow gate",
+    tone: "plan",
+  },
   notification: {
     Icon: Bell,
     cta: null,
@@ -370,6 +376,68 @@ export default function MemosPane() {
                     className="btn btn-sm btn-ghost"
                     onClick={onDismiss}
                     title="Dismiss without running"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          // Flow gate: a workflow paused at an approval gate. The body
+          // carries the upstream plan (markdown); Approve / Reject act on
+          // the gate inline (the same calls as the run-view gate), then
+          // retire the memo so it stops surfacing.
+          if (it.kind === "flow_gate") {
+            const settle = async (verb) => {
+              try {
+                if (verb === "approve") {
+                  await api.approveWorkflowNode(it.run_id, it.node_run_id);
+                } else {
+                  await api.rejectWorkflowNode(it.run_id, it.node_run_id);
+                }
+                if (it.memo_id) await api.dismissMemo(it.memo_id).catch(() => {});
+                showToast(verb === "approve" ? "Approved 🐾" : "Rejected", "normal");
+                fetchQueue();
+              } catch (err) {
+                showToast("Couldn't " + verb + ": " + (err.message || "unknown"), "high");
+              }
+            };
+            return (
+              <div
+                key={`flow_gate:${it.memo_id}`}
+                className={`review-queue-row tone-${meta.tone}`}
+              >
+                {renderRowIcon(it, Icon)}
+                <div className="review-queue-body">
+                  <div className="review-queue-title">{it.title || "Flow gate"}</div>
+                  <div className="review-queue-meta">
+                    <span className="review-queue-kind">{meta.label}</span>
+                    {it.timestamp && (
+                      <span className="review-queue-time">
+                        {relativeTime(it.timestamp)}
+                      </span>
+                    )}
+                  </div>
+                  {it.body && (
+                    <div
+                      className="review-queue-description markdown"
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(it.body) }}
+                    />
+                  )}
+                </div>
+                <div className="review-queue-actions">
+                  <button
+                    className="btn btn-sm btn-primary"
+                    onClick={(e) => { e.stopPropagation(); settle("approve"); }}
+                    title="Approve the gate and continue the flow"
+                  >
+                    <Check size={12} /> Approve
+                  </button>
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={(e) => { e.stopPropagation(); settle("reject"); }}
+                    title="Reject and stop the flow here"
                   >
                     <X size={12} />
                   </button>

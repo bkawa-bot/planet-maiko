@@ -66,6 +66,48 @@ def _push_branch(worktree, branch):
         return False
 
 
+def _emit_gate_memo(run, node_id, nr, edges, by_node):
+    """Park-time notification. When a gate starts waiting on the user,
+    drop a 'waiting' memo carrying the upstream plan so it surfaces in
+    the inbox review queue with inline approve / reject, instead of being
+    buried in a run the user has to remember to reopen.
+
+    Best-effort: a memo failure must never break the run. create_memo
+    only adds to the session; the phase's own commit persists it."""
+    from planet_maiko.database import db
+    from planet_maiko.models.agent_job import AgentJob
+    from planet_maiko.models.workflow import Workflow
+    from planet_maiko.brain.memos import create_memo
+    try:
+        up_job = None
+        for src in [e.get("source") for e in edges if e.get("target") == node_id]:
+            src_nr = by_node.get(src)
+            if src_nr and src_nr.agent_job_id:
+                up_job = db.session.get(AgentJob, src_nr.agent_job_id)
+                if up_job:
+                    break
+        wf = db.session.get(Workflow, run.workflow_id)
+        flow_name = (wf.name if wf else None) or "a flow"
+        plan = ((up_job.artifact if up_job else None) or "").strip()
+        create_memo(
+            kind="flow_approval",
+            category="waiting",
+            title=f"Plan ready for your approval in {flow_name}",
+            body=plan or "The upstream step left no readable output. Open the flow to review.",
+            cta_label="Review and approve",
+            priority="normal",
+            extra={
+                "workflow_run_id": run.id,
+                "node_run_id": nr.id,
+                "node_id": node_id,
+                "job_id": up_job.id if up_job else None,
+                "flow_name": flow_name,
+            },
+        )
+    except Exception as e:
+        logger.warning(f"[cycle] gate memo skipped for run {run.id}: {e}")
+
+
 def _phase_advance_workflows():
     from planet_maiko.database import db
     from planet_maiko.models.workflow_run import WorkflowRun
@@ -136,6 +178,7 @@ def _phase_advance_workflows():
                 # reject marks it skipped (which skips its dependents).
                 if node.get("kind") == "gate" or node.get("agent_type") == "gate":
                     nr.status = "awaiting_approval"
+                    _emit_gate_memo(run, nid, nr, edges, by_node)
                     continue
 
                 role = nr.agent_type

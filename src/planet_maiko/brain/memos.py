@@ -30,6 +30,9 @@ CANONICAL_KINDS = {
     "agent_proposal",
     "agent_plan",
     "job_approval",
+    # A workflow paused at an approval gate; the memo carries the upstream
+    # plan and approves / rejects the gate inline.
+    "flow_approval",
     # An agent reply that explicitly addressed the user (recipient="user"
     # on the originating AgentMessage). Surfaces the message in MemosPane
     # so it doesn't get lost inside the chat thread.
