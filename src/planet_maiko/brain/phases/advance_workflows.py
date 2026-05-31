@@ -101,6 +101,48 @@ def _first_line(text, limit=80):
     return "task"
 
 
+_MAX_REVIEW_ROUNDS = 3
+
+
+def _parse_verdict(text):
+    """Pull a reviewer's verdict from its ready_for_review artifact, which
+    the review protocol starts with `VERDICT: <tag>`. Returns one of
+    approve | approve_with_comments | soft_block | hard_block, or None when
+    there's no verdict line (then the node isn't a review-loop node)."""
+    for ln in (text or "").splitlines():
+        s = ln.strip()
+        if s[:8].upper() == "VERDICT:":
+            v = s[8:].strip().lower()
+            for tag in ("hard_block", "soft_block", "approve_with_comments", "approve"):
+                if tag in v:
+                    return tag
+            return v or None
+    return None
+
+
+def _review_feedback(reviewer_job, verdict):
+    """The revision prompt handed back to the coder: the reviewer's
+    artifact (verdict + summary) plus its inline comments, if any."""
+    parts = [
+        f"A reviewer looked at your work and asked for changes (verdict: "
+        f"{verdict}). Address the feedback below in your existing worktree, "
+        f"commit, then reply --type ready_for_review again.",
+        f"## Review\n\n{reviewer_job.artifact or '(no summary)'}",
+    ]
+    try:
+        from planet_maiko.models.diff_comment import DiffComment
+        comments = DiffComment.query.filter_by(job_id=reviewer_job.id).all()
+        if comments:
+            lines = []
+            for c in comments:
+                body = getattr(c, "body", None) or getattr(c, "content", "") or ""
+                lines.append(f"- `{c.file_path}:{c.line_number}`: {body}")
+            parts.append("## Inline comments\n\n" + "\n".join(lines))
+    except Exception as e:
+        logger.debug(f"[cycle] review comment fetch failed: {e}")
+    return "\n\n".join(parts)
+
+
 def _emit_gate_memo(run, node_id, nr, edges, nrs_by_node):
     """Park-time notification. When a gate starts waiting on the user,
     drop a 'waiting' memo carrying the upstream plan so it surfaces in
@@ -151,6 +193,7 @@ def _phase_advance_workflows():
     from planet_maiko.models.agent_job import AgentJob
     from planet_maiko.orchestration import maybe_spawn
     from planet_maiko.agent_types import get_agent_type
+    from planet_maiko.agents.wake import wake_agent
 
     try:
         runs = (
@@ -190,6 +233,70 @@ def _phase_advance_workflows():
                         nr.error = job.error or job.status
                     elif job.status == "running":
                         nr.status = "running"
+
+            # 1.5 Review loop. A node that emitted a blocking VERDICT
+            #     (soft_block / hard_block) sends its upstream coder back to
+            #     revise (wake the same session so it keeps its branch) and
+            #     re-arms itself for another pass, bounded by
+            #     _MAX_REVIEW_ROUNDS. approve / approve_with_comments (or no
+            #     verdict) settles the node so downstream proceeds.
+            for node in nodes:
+                nid = node.get("id")
+                insts = nrs_by_node.get(nid, [])
+                if len(insts) != 1:
+                    continue  # only 1:1 reviewers loop (a scatter doesn't)
+                rv = insts[0]
+                if rv.status != "done" or not rv.agent_job_id:
+                    continue
+                if (rv.extra or {}).get("loop_settled"):
+                    continue
+                rv_job = db.session.get(AgentJob, rv.agent_job_id)
+                verdict = _parse_verdict(rv_job.artifact) if rv_job else None
+                if verdict not in ("soft_block", "hard_block"):
+                    rv.extra = {**(rv.extra or {}), "loop_settled": True}
+                    continue
+                # The coder to send back to: a 1:1 upstream producer with a
+                # live worktree (so its session can be woken).
+                coder_nr = coder_job = None
+                for src in [e.get("source") for e in edges if e.get("target") == nid]:
+                    src_insts = nrs_by_node.get(src, [])
+                    if len(src_insts) != 1:
+                        continue
+                    src_nr = src_insts[0]
+                    j = (
+                        db.session.get(AgentJob, src_nr.agent_job_id)
+                        if src_nr.agent_job_id else None
+                    )
+                    if j and j.worktree_path:
+                        coder_nr, coder_job = src_nr, j
+                        break
+                round_n = (rv.extra or {}).get("round", 0)
+                if not coder_job or round_n >= _MAX_REVIEW_ROUNDS:
+                    rv.extra = {
+                        **(rv.extra or {}),
+                        "loop_settled": True,
+                        "loop_result": "max_rounds" if coder_job else "no_target",
+                    }
+                    continue
+                ok, _mode = wake_agent(
+                    coder_job.id, _review_feedback(rv_job, verdict), source="review"
+                )
+                if not ok:
+                    rv.extra = {
+                        **(rv.extra or {}),
+                        "loop_settled": True,
+                        "loop_result": "wake_failed",
+                    }
+                    continue
+                # Coder is iterating again (same job, same branch); the
+                # reviewer waits to re-review next round.
+                coder_job.status = "running"
+                coder_nr.status = "running"
+                coder_nr.extra = {**(coder_nr.extra or {}), "round": round_n + 1}
+                rv.status = "pending"
+                rv.agent_job_id = None
+                rv.extra = {**(rv.extra or {}), "round": round_n + 1}
+                advanced += 1
 
             # Roll a graph node's N instances (scatter) into one state for
             # downstream readiness: "done" only when every instance is done,

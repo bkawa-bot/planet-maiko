@@ -161,14 +161,17 @@ export default function RunView({ runId, onClose }) {
         }));
       }
 
-      // Single instance (or none yet): one node in the graph slot.
+      // Single instance (or none yet): one node in the graph slot. A
+      // reviewer-loop revision round shows as a small "round N" label.
       const status = rollup(byNode[n.id]);
-      const ownJobId = nrByNode[n.id] ? nrByNode[n.id].agent_job_id : null;
+      const only = nrByNode[n.id];
+      const ownJobId = only ? only.agent_job_id : null;
+      const rnd = only && only.extra ? only.extra.round : 0;
       return [{
         id: n.id,
         type: "role",
         position: { x: n.x ?? 0, y: n.y ?? 0 },
-        data: roleData(status, ownJobId, null),
+        data: roleData(status, ownJobId, rnd ? `revision round ${rnd}` : null),
       }];
     });
 
