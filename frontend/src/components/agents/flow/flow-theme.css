@@ -266,3 +266,31 @@
 .flow-gate-reject:hover { color: var(--urgent); border-color: var(--urgent); }
 .flow-socket-gate { background: var(--lavender, var(--text-muted)) !important; }
 .flow-palette-control { margin-top: 10px; }
+
+/* === Step inspector: click any node on the run canvas to read its
+   output. For a gate, that's the upstream artifact it's gating, so you
+   approve against the actual plan instead of blind. Reuses the
+   .agent-edit-modal chrome; this just sizes + scrolls it. === */
+.flow-inspect-modal {
+  width: min(680px, calc(100vw - 40px));
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+}
+.flow-inspect-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+  text-transform: capitalize;
+}
+.flow-inspect-body { overflow-y: auto; flex: 1; }
+.flow-inspect-artifact {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  margin: 0;
+}
+.flow-inspect-empty { color: var(--text-muted); font-size: 13px; margin: 0; }

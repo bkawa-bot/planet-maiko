@@ -8,6 +8,7 @@ import GateNode from "./GateNode";
 import { useAgentTypes, roleMeta } from "../../../hooks/useAgentTypes";
 import { kindColor } from "./kinds";
 import { api } from "../../../api/client";
+import ModalPortal from "../../ModalPortal";
 
 const nodeTypes = { role: RoleNode, gate: GateNode };
 const TERMINAL = new Set(["done", "failed", "partial", "cancelled"]);
@@ -34,6 +35,8 @@ function rollup(statuses) {
 export default function RunView({ runId, onClose }) {
   const types = useAgentTypes();
   const [run, setRun] = useState(null);
+  const [inspect, setInspect] = useState(null);
+  const [inspectJob, setInspectJob] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +62,18 @@ export default function RunView({ runId, onClose }) {
     };
   }, [runId]);
 
+  // Fetch the artifact of the node being inspected (its own job, or for
+  // a gate, the upstream job it's gating). undefined = loading.
+  useEffect(() => {
+    if (!inspect || !inspect.jobId) return;
+    let cancelled = false;
+    api
+      .getAgentJob(inspect.jobId)
+      .then((j) => { if (!cancelled) setInspectJob(j); })
+      .catch(() => { if (!cancelled) setInspectJob(null); });
+    return () => { cancelled = true; };
+  }, [inspect]);
+
   const { nodes, edges } = useMemo(() => {
     const g = (run && run.graph_snapshot) || { nodes: [], edges: [] };
     const byNode = {};
@@ -71,14 +86,25 @@ export default function RunView({ runId, onClose }) {
 
     const nodes = (g.nodes || []).map((n) => {
       const status = rollup(byNode[n.id]);
+      const ownJobId = nrByNode[n.id] ? nrByNode[n.id].agent_job_id : null;
       if (n.kind === "gate" || n.agent_type === "gate") {
         const nrId = nrByNode[n.id] ? nrByNode[n.id].id : null;
+        // What this gate is gating: the artifact of its upstream producer,
+        // so clicking the gate shows the plan/diff you're approving.
+        const inbound = (g.edges || [])
+          .filter((e) => e.target === n.id)
+          .map((e) => e.source);
+        const upstreamJobId =
+          inbound.map((s) => nrByNode[s] && nrByNode[s].agent_job_id).find(Boolean) || ownJobId;
         return {
           id: n.id,
           type: "gate",
           position: { x: n.x ?? 0, y: n.y ?? 0 },
           data: {
             status,
+            label: "Approval gate",
+            isGate: true,
+            jobId: upstreamJobId,
             onApprove: nrId
               ? () => api.approveWorkflowNode(runId, nrId).then(setRun).catch(() => {})
               : null,
@@ -105,6 +131,8 @@ export default function RunView({ runId, onClose }) {
           color: meta.color,
           Icon: meta.icon,
           status,
+          label: (meta.raw && meta.raw.name) || n.agent_type,
+          jobId: ownJobId,
         },
       };
     });
@@ -130,6 +158,24 @@ export default function RunView({ runId, onClose }) {
   const allRuns = (run && run.node_runs) || [];
   const doneCount = allRuns.filter((n) => n.status === "done").length;
 
+  // Click any node to read its output. For a gate, that's the upstream
+  // artifact it's gating, so you see the plan before approving.
+  const openInspect = (node) => {
+    const d = node.data || {};
+    const jobId = d.jobId || null;
+    setInspect({
+      jobId,
+      label: d.label || node.id,
+      isGate: !!d.isGate,
+      awaiting: d.status === "awaiting_approval",
+      onApprove: d.onApprove,
+      onReject: d.onReject,
+    });
+    // Reset the panel here (event handler), not in the effect, so the
+    // fetch effect stays free of synchronous setState. undefined = loading.
+    setInspectJob(jobId ? undefined : null);
+  };
+
   return (
     <div className="flow-run-view">
       <div className="flow-editor-bar">
@@ -151,6 +197,7 @@ export default function RunView({ runId, onClose }) {
           fitViewOptions={{ padding: 0.2 }}
           nodesConnectable={false}
           nodesDraggable={false}
+          onNodeClick={(_, node) => openInspect(node)}
           minZoom={0.3}
           maxZoom={1.5}
         >
@@ -159,6 +206,52 @@ export default function RunView({ runId, onClose }) {
           <MiniMap pannable zoomable />
         </ReactFlow>
       </div>
+
+      {inspect && (
+        <ModalPortal>
+          <div className="modal-overlay" onClick={() => setInspect(null)}>
+            <div
+              className="agent-edit-modal flow-inspect-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="modal-header">
+                <span className="flow-inspect-title">{inspect.label}</span>
+                <span style={{ flex: 1 }} />
+                <button className="btn btn-sm" onClick={() => setInspect(null)}>
+                  <X size={12} />
+                </button>
+              </div>
+              <div className="modal-body flow-inspect-body">
+                {inspectJob === undefined ? (
+                  <p className="flow-inspect-empty">Loading…</p>
+                ) : inspectJob && inspectJob.artifact ? (
+                  <pre className="flow-inspect-artifact">{inspectJob.artifact}</pre>
+                ) : (
+                  <p className="flow-inspect-empty">
+                    This step hasn't produced any output yet.
+                  </p>
+                )}
+              </div>
+              {inspect.isGate && inspect.awaiting && (
+                <div className="agent-edit-footer">
+                  <button
+                    className="btn"
+                    onClick={() => { if (inspect.onReject) inspect.onReject(); setInspect(null); }}
+                  >
+                    Reject
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => { if (inspect.onApprove) inspect.onApprove(); setInspect(null); }}
+                  >
+                    Approve
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </ModalPortal>
+      )}
     </div>
   );
 }
