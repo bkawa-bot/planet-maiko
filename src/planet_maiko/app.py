@@ -43,6 +43,8 @@ _PATCH_COLUMNS = [
     # in to_dict. Added so a coder can explicitly accept a plan / report.
     ("agent_types", "accepts", "JSON"),
     ("learnings", "last_confirmed_at", "DATETIME"),
+    # NodeRun.extra: scatter instance bookkeeping (instance index + label).
+    ("node_runs", "extra", "JSON"),
 ]
 
 

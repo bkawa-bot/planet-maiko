@@ -82,6 +82,9 @@ class NodeRun(db.Model):
     # FK-less link to the executing AgentJob (DiffComment.job_id pattern).
     agent_job_id = db.Column(db.String(64), nullable=True, index=True)
     error = db.Column(db.Text, nullable=True)
+    # Scatter bookkeeping: {instance: int, label: str} for fanned-out
+    # instances sharing a node_id; empty {} for ordinary 1:1 nodes.
+    extra = db.Column(db.JSON, default=dict, nullable=True)
     created_at = db.Column(
         db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False,
     )
@@ -99,4 +102,5 @@ class NodeRun(db.Model):
             "status": self.status,
             "agent_job_id": self.agent_job_id,
             "error": self.error,
+            "extra": self.extra or {},
         }

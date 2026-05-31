@@ -7,7 +7,7 @@ import { kindColor } from "./kinds";
 // on the right. Read-only for Phase B (isConnectable=false); the same
 // component backs the interactive editor later.
 export default function RoleNode({ id, data, isConnectable }) {
-  const { type, color, Icon, status, editable } = data;
+  const { type, color, Icon, status, editable, sub } = data;
   const rf = useReactFlow();
   const accepts = (type.accepts && type.accepts.length) ? type.accepts : [type.input_kind || "task"];
   const primaryIn = accepts[0] || "task";
@@ -49,6 +49,7 @@ export default function RoleNode({ id, data, isConnectable }) {
         </div>
       </div>
 
+      {sub && <div className="flow-role-sub" title={sub}>{sub}</div>}
       {type.description && <div className="flow-role-desc">{type.description}</div>}
 
       <Handle

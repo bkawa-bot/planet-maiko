@@ -78,17 +78,36 @@ export default function RunView({ runId, onClose }) {
     const g = (run && run.graph_snapshot) || { nodes: [], edges: [] };
     const byNode = {};
     const nrByNode = {};
+    const instancesByNode = {};
     for (const nr of (run && run.node_runs) || []) {
       (byNode[nr.node_id] = byNode[nr.node_id] || []).push(nr.status);
       if (!nrByNode[nr.node_id]) nrByNode[nr.node_id] = nr;
+      (instancesByNode[nr.node_id] = instancesByNode[nr.node_id] || []).push(nr);
+    }
+    // Stable order for a node's scatter instances, by instance index.
+    for (const k in instancesByNode) {
+      instancesByNode[k].sort(
+        (a, b) => ((a.extra && a.extra.instance) || 0) - ((b.extra && b.extra.instance) || 0)
+      );
     }
     const byId = Object.fromEntries((g.nodes || []).map((n) => [n.id, n]));
 
-    const nodes = (g.nodes || []).map((n) => {
-      const status = rollup(byNode[n.id]);
-      const ownJobId = nrByNode[n.id] ? nrByNode[n.id].agent_job_id : null;
-      if (n.kind === "gate" || n.agent_type === "gate") {
-        const nrId = nrByNode[n.id] ? nrByNode[n.id].id : null;
+    const fallbackType = (n) => ({
+      id: n.agent_type,
+      name: n.agent_type,
+      output_kind: "diff",
+      input_kind: "task",
+      accepts: ["task"],
+      icon: "user",
+    });
+
+    const nodes = (g.nodes || []).flatMap((n) => {
+      const isGate = n.kind === "gate" || n.agent_type === "gate";
+      if (isGate) {
+        const status = rollup(byNode[n.id]);
+        const nr = nrByNode[n.id];
+        const nrId = nr ? nr.id : null;
+        const ownJobId = nr ? nr.agent_job_id : null;
         // What this gate is gating: the artifact of its upstream producer,
         // so clicking the gate shows the plan/diff you're approving.
         const inbound = (g.edges || [])
@@ -96,7 +115,7 @@ export default function RunView({ runId, onClose }) {
           .map((e) => e.source);
         const upstreamJobId =
           inbound.map((s) => nrByNode[s] && nrByNode[s].agent_job_id).find(Boolean) || ownJobId;
-        return {
+        return [{
           id: n.id,
           type: "gate",
           position: { x: n.x ?? 0, y: n.y ?? 0 },
@@ -112,43 +131,78 @@ export default function RunView({ runId, onClose }) {
               ? () => api.rejectWorkflowNode(runId, nrId).then(setRun).catch(() => {})
               : null,
           },
-        };
+        }];
       }
+
       const meta = roleMeta(n.agent_type, types);
-      return {
+      const roleData = (status, jobId, sub) => ({
+        type: meta.raw || fallbackType(n),
+        color: meta.color,
+        Icon: meta.icon,
+        status,
+        label: (meta.raw && meta.raw.name) || n.agent_type,
+        sub,
+        jobId,
+      });
+
+      const insts = instancesByNode[n.id] || [];
+      if (insts.length > 1) {
+        // SCATTER: one node per instance, cascaded down-right from the
+        // graph slot so the fan reads as "these came from here."
+        return insts.map((inst, i) => ({
+          id: `${n.id}__${inst.id}`,
+          type: "role",
+          position: { x: (n.x ?? 0) + i * 28, y: (n.y ?? 0) + i * 108 },
+          data: roleData(
+            inst.status,
+            inst.agent_job_id,
+            (inst.extra && inst.extra.label) || `task ${i + 1}`
+          ),
+        }));
+      }
+
+      // Single instance (or none yet): one node in the graph slot.
+      const status = rollup(byNode[n.id]);
+      const ownJobId = nrByNode[n.id] ? nrByNode[n.id].agent_job_id : null;
+      return [{
         id: n.id,
         type: "role",
         position: { x: n.x ?? 0, y: n.y ?? 0 },
-        data: {
-          type: meta.raw || {
-            id: n.agent_type,
-            name: n.agent_type,
-            output_kind: "diff",
-            input_kind: "task",
-            accepts: ["task"],
-            icon: "user",
-          },
-          color: meta.color,
-          Icon: meta.icon,
-          status,
-          label: (meta.raw && meta.raw.name) || n.agent_type,
-          jobId: ownJobId,
-        },
-      };
+        data: roleData(status, ownJobId, null),
+      }];
     });
 
-    const edges = (g.edges || []).map((e) => {
+    // A scattered node renders as N instance nodes, so an edge touching it
+    // fans to every instance (source x target cross-product). For 1:1
+    // nodes this collapses to the single original edge.
+    const rfIds = (graphNodeId) => {
+      const gn = byId[graphNodeId];
+      const isGate = gn && (gn.kind === "gate" || gn.agent_type === "gate");
+      const insts = instancesByNode[graphNodeId] || [];
+      if (!isGate && insts.length > 1) {
+        return insts.map((inst) => `${graphNodeId}__${inst.id}`);
+      }
+      return [graphNodeId];
+    };
+
+    const edges = (g.edges || []).flatMap((e) => {
       const src = byId[e.source];
       const kind = src ? roleMeta(src.agent_type, types).outputKind : "diff";
-      return {
-        id: e.id || `${e.source}__${e.target}`,
-        source: e.source,
-        target: e.target,
-        sourceHandle: e.sourceHandle || "out",
-        targetHandle: e.targetHandle || "in",
-        className: "flow-edge",
-        style: { stroke: kindColor(kind) },
-      };
+      const out = [];
+      for (const s of rfIds(e.source)) {
+        for (const t of rfIds(e.target)) {
+          out.push({
+            id: `${s}__${t}`,
+            source: s,
+            target: t,
+            sourceHandle: e.sourceHandle || "out",
+            targetHandle: e.targetHandle || "in",
+            className: "flow-edge",
+            style: { stroke: kindColor(kind) },
+          });
+        }
+      }
+      return out;
     });
 
     return { nodes, edges };
@@ -165,7 +219,7 @@ export default function RunView({ runId, onClose }) {
     const jobId = d.jobId || null;
     setInspect({
       jobId,
-      label: d.label || node.id,
+      label: d.sub ? `${d.label || ""}: ${d.sub}` : (d.label || node.id),
       isGate: !!d.isGate,
       awaiting: d.status === "awaiting_approval",
       onApprove: d.onApprove,

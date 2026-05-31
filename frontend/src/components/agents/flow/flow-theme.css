@@ -294,3 +294,17 @@
   margin: 0;
 }
 .flow-inspect-empty { color: var(--text-muted); font-size: 13px; margin: 0; }
+
+/* Per-instance task label on a scattered role node (the coder fan). */
+.flow-role-sub {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-muted);
+  max-width: 184px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}

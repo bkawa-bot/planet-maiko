@@ -66,7 +66,42 @@ def _push_branch(worktree, branch):
         return False
 
 
-def _emit_gate_memo(run, node_id, nr, edges, by_node):
+def _parse_tasks(text):
+    """Split a decomposer's reply into one block per TASK: marker. Each
+    block (the TASK: title line plus its description lines) is fed to one
+    coder instance as its task. Returns [] when there are no markers."""
+    if not text:
+        return []
+    tasks, cur = [], None
+    for ln in text.splitlines():
+        if ln.strip()[:5].upper() == "TASK:":
+            if cur is not None:
+                block = "\n".join(cur).strip()
+                if block:
+                    tasks.append(block)
+            cur = [ln]
+        elif cur is not None:
+            cur.append(ln)
+    if cur is not None:
+        block = "\n".join(cur).strip()
+        if block:
+            tasks.append(block)
+    return tasks
+
+
+def _first_line(text, limit=80):
+    """A short label for a scattered instance: the task's first real line,
+    minus any TASK: marker, truncated."""
+    for ln in (text or "").splitlines():
+        s = ln.strip()
+        if s:
+            if s[:5].upper() == "TASK:":
+                s = s[5:].strip()
+            return s[:limit] or "task"
+    return "task"
+
+
+def _emit_gate_memo(run, node_id, nr, edges, nrs_by_node):
     """Park-time notification. When a gate starts waiting on the user,
     drop a 'waiting' memo carrying the upstream plan so it surfaces in
     the inbox review queue with inline approve / reject, instead of being
@@ -81,11 +116,13 @@ def _emit_gate_memo(run, node_id, nr, edges, by_node):
     try:
         up_job = None
         for src in [e.get("source") for e in edges if e.get("target") == node_id]:
-            src_nr = by_node.get(src)
-            if src_nr and src_nr.agent_job_id:
-                up_job = db.session.get(AgentJob, src_nr.agent_job_id)
-                if up_job:
-                    break
+            for src_nr in nrs_by_node.get(src, []):
+                if src_nr.agent_job_id:
+                    up_job = db.session.get(AgentJob, src_nr.agent_job_id)
+                    if up_job:
+                        break
+            if up_job:
+                break
         wf = db.session.get(Workflow, run.workflow_id)
         flow_name = (wf.name if wf else None) or "a flow"
         plan = ((up_job.artifact if up_job else None) or "").strip()
@@ -110,7 +147,7 @@ def _emit_gate_memo(run, node_id, nr, edges, by_node):
 
 def _phase_advance_workflows():
     from planet_maiko.database import db
-    from planet_maiko.models.workflow_run import WorkflowRun
+    from planet_maiko.models.workflow_run import WorkflowRun, NodeRun
     from planet_maiko.models.agent_job import AgentJob
     from planet_maiko.orchestration import maybe_spawn
     from planet_maiko.agent_types import get_agent_type
@@ -130,7 +167,9 @@ def _phase_advance_workflows():
             graph = run.graph_snapshot or {}
             nodes = graph.get("nodes") or []
             edges = graph.get("edges") or []
-            by_node = {nr.node_id: nr for nr in run.node_runs}
+            nrs_by_node = {}
+            for nr in run.node_runs:
+                nrs_by_node.setdefault(nr.node_id, []).append(nr)
 
             if len(nodes) > _MAX_NODES_PER_RUN:
                 run.status = "failed"
@@ -152,36 +191,117 @@ def _phase_advance_workflows():
                     elif job.status == "running":
                         nr.status = "running"
 
-            done_ids = {nr.node_id for nr in run.node_runs if nr.status == "done"}
-            failed_ids = {nr.node_id for nr in run.node_runs if nr.status in ("failed", "skipped")}
+            # Roll a graph node's N instances (scatter) into one state for
+            # downstream readiness: "done" only when every instance is done,
+            # "failed" when all are terminal with none done, "partial" on a
+            # terminal mix, "active" while any is still in flight.
+            def node_status(node_id):
+                insts = nrs_by_node.get(node_id, [])
+                if not insts:
+                    return "absent"
+                ss = [i.status for i in insts]
+                if all(s == "done" for s in ss):
+                    return "done"
+                if all(s in ("done", "failed", "skipped") for s in ss):
+                    return "partial" if any(s == "done" for s in ss) else "failed"
+                return "active"
+
             scope_repo = (run.extra or {}).get("scope_repo")
 
-            # 2. Spawn ready pending nodes.
+            def _spawn_job(role, description, node_id):
+                """Mint one queued AgentJob for a node (or a scatter
+                instance). Lazy-spawns the (role, scope) profile so
+                execute_jobs resolves the right role, including custom ones
+                like planner/decomposer whose kind isn't in the builtin map."""
+                profile = maybe_spawn(role, scope_repo)
+                job = AgentJob(
+                    id=uuid.uuid4().hex[:24],
+                    kind=role,
+                    title=f"{role} step",
+                    description=description,
+                    scope_repo=scope_repo,
+                    created_by="system",
+                    agent_profile_id=profile.id,
+                    status="queued",
+                    extra={"workflow_run_id": run.id, "node_id": node_id},
+                )
+                db.session.add(job)
+                return job
+
+            # 2. Spawn ready nodes. A node acts only while it's an untouched
+            #    placeholder (all its instances still pending); once spawned
+            #    or fanned out it's skipped here.
             for node in nodes:
                 nid = node.get("id")
-                nr = by_node.get(nid)
-                if nr is None or nr.status != "pending":
+                insts = nrs_by_node.get(nid, [])
+                if not insts or not all(i.status == "pending" for i in insts):
                     continue
+                placeholder = insts[0]
                 inbound = [e.get("source") for e in edges if e.get("target") == nid]
-                # An upstream failure blocks this node (and, transitively,
-                # its own dependents on the next tick).
-                if any(src in failed_ids for src in inbound):
-                    nr.status = "skipped"
-                    nr.error = "an upstream step did not finish"
+
+                # A fully-failed upstream blocks this node (and its dependents
+                # next tick). A partial upstream (some instances succeeded)
+                # still flows.
+                if any(node_status(src) == "failed" for src in inbound):
+                    placeholder.status = "skipped"
+                    placeholder.error = "an upstream step did not finish"
                     continue
-                if not all(src in done_ids for src in inbound):
-                    continue  # inputs not ready yet
+                if not all(node_status(src) in ("done", "partial") for src in inbound):
+                    continue  # inputs not all terminal yet
 
                 # Approval gate: a control node, not an agent. Park it for
-                # the user instead of spawning. The approve endpoint marks
-                # it done and forwards its upstream's output downstream;
-                # reject marks it skipped (which skips its dependents).
+                # the user. Approve marks it done + forwards its upstream's
+                # job; reject skips it (and its dependents).
                 if node.get("kind") == "gate" or node.get("agent_type") == "gate":
-                    nr.status = "awaiting_approval"
-                    _emit_gate_memo(run, nid, nr, edges, by_node)
+                    placeholder.status = "awaiting_approval"
+                    _emit_gate_memo(run, nid, placeholder, edges, nrs_by_node)
                     continue
 
-                role = nr.agent_type
+                role = placeholder.agent_type
+
+                # Gather every done upstream instance + its job. Resolve the
+                # output kind from the producing JOB's role (not the NodeRun's
+                # agent_type) so it stays correct through a pass-through gate,
+                # whose forwarded job is the real producer. A "tasks" producer
+                # turns this node into a scatter.
+                upstream = []
+                scatter_src = None
+                for src in inbound:
+                    for src_nr in nrs_by_node.get(src, []):
+                        if src_nr.status != "done" or not src_nr.agent_job_id:
+                            continue
+                        src_job = db.session.get(AgentJob, src_nr.agent_job_id)
+                        if not src_job:
+                            continue
+                        upstream.append((src_nr, src_job))
+                        st = get_agent_type(src_job.kind)
+                        if st and st.output_kind == "tasks":
+                            scatter_src = src_job
+
+                # --- Scatter: one instance per emitted task. Reuse the
+                #     placeholder as instance 0, mint NodeRuns for the rest;
+                #     each instance gets exactly its own task as the prompt. ---
+                if scatter_src is not None:
+                    tasks = _parse_tasks(scatter_src.artifact)
+                    if not tasks:
+                        placeholder.status = "failed"
+                        placeholder.error = "the upstream step produced no tasks to scatter"
+                        continue
+                    for idx, task_text in enumerate(tasks):
+                        target = placeholder if idx == 0 else NodeRun(
+                            workflow_run_id=run.id, node_id=nid, agent_type=role,
+                        )
+                        if idx > 0:
+                            db.session.add(target)
+                        job = _spawn_job(role, task_text, nid)
+                        target.status = "queued"
+                        target.agent_job_id = job.id
+                        target.extra = {"instance": idx, "label": _first_line(task_text)}
+                        advanced += 1
+                    continue
+
+                # --- Normal single spawn: compose the prompt from the seed
+                #     (root) or the upstream artifacts / pushed branches. ---
                 blocks = []
                 push_failed = False
                 if not inbound:
@@ -191,24 +311,7 @@ def _phase_advance_workflows():
                     if seed:
                         blocks.append(seed)
                 else:
-                    # Compose from upstream sources. A "diff" producer hands
-                    # off through the remote: push its branch to origin and
-                    # tell this step to fetch + review it (the reviewer
-                    # already fetches a ref, diffs against base, and leaves
-                    # local comments). Other kinds hand off their text
-                    # artifact as a context section.
-                    for src in inbound:
-                        src_nr = by_node.get(src)
-                        if not (src_nr and src_nr.agent_job_id):
-                            continue
-                        src_job = db.session.get(AgentJob, src_nr.agent_job_id)
-                        if not src_job:
-                            continue
-                        # Resolve the output kind from the producing JOB's
-                        # role, not the NodeRun's agent_type, so it stays
-                        # correct through a pass-through gate (whose NodeRun
-                        # is "gate" but whose forwarded job is the real
-                        # producer).
+                    for src_nr, src_job in upstream:
                         src_type = get_agent_type(src_job.kind)
                         out_kind = (src_type.output_kind if src_type else None) or "diff"
                         if out_kind == "diff" and src_job.worktree_path and src_job.branch:
@@ -235,31 +338,14 @@ def _phase_advance_workflows():
                             )
 
                 if push_failed:
-                    nr.status = "failed"
-                    nr.error = "couldn't push the upstream branch to origin for review"
+                    placeholder.status = "failed"
+                    placeholder.error = "couldn't push the upstream branch to origin for review"
                     continue
 
                 description = "\n\n".join(blocks) if blocks else None
-
-                # Lazy-spawn a profile for (role, scope) so execute_jobs
-                # resolves the right role, including custom roles like
-                # planner (its kind isn't in the builtin role map, but the
-                # assigned profile's role wins).
-                profile = maybe_spawn(role, scope_repo)
-                job = AgentJob(
-                    id=uuid.uuid4().hex[:24],
-                    kind=role,
-                    title=f"{role} step",
-                    description=description,
-                    scope_repo=scope_repo,
-                    created_by="system",
-                    agent_profile_id=profile.id,
-                    status="queued",
-                    extra={"workflow_run_id": run.id, "node_id": nid},
-                )
-                db.session.add(job)
-                nr.status = "queued"
-                nr.agent_job_id = job.id
+                job = _spawn_job(role, description, nid)
+                placeholder.status = "queued"
+                placeholder.agent_job_id = job.id
                 advanced += 1
 
             # 3. Finish the run when every node is terminal.
