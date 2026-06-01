@@ -193,7 +193,10 @@ def _phase_advance_workflows():
     from planet_maiko.models.agent_job import AgentJob
     from planet_maiko.orchestration import maybe_spawn
     from planet_maiko.agent_types import get_agent_type
-    from planet_maiko.agents.wake import wake_agent
+    # Reuse the human-review transport: a "review" inbox message + the
+    # standard resume, the same path the diff-review UI uses.
+    from planet_maiko.api.diff_api import _resume_agent_with_review
+    from planet_maiko.models.agent_message import AgentMessage
 
     try:
         runs = (
@@ -278,10 +281,23 @@ def _phase_advance_workflows():
                         "loop_result": "max_rounds" if coder_job else "no_target",
                     }
                     continue
-                ok, _mode = wake_agent(
-                    coder_job.id, _review_feedback(rv_job, verdict), source="review"
-                )
-                if not ok:
+                # Hand the review back through the SAME path a human review
+                # uses: drop it in the coder's inbox as a to_agent "review"
+                # message, commit so the woken session can read it, then
+                # resume the coder (it reads the inbox, addresses the
+                # comments, commits, and replies ready_for_review). No
+                # bespoke loop transport, the workflow only decides WHEN to
+                # send a review back (verdict + round cap); the sending and
+                # revising reuse the existing diff-review machinery.
+                db.session.add(AgentMessage(
+                    task_id=coder_job.id,
+                    direction="to_agent",
+                    sender="reviewer",
+                    content=_review_feedback(rv_job, verdict),
+                    message_type="review",
+                ))
+                db.session.commit()
+                if not _resume_agent_with_review(coder_job.id, coder_job.worktree_path):
                     rv.extra = {
                         **(rv.extra or {}),
                         "loop_settled": True,
