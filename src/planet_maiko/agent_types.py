@@ -229,7 +229,11 @@ BUILT_IN_AGENT_TYPES = [
         ),
         "icon": "clipboard",
         "spawn_mode": "worktree",
-        "permission_mode": "plan",
+        # Default mode, not "plan": plan mode makes the agent present a
+        # plan via ExitPlanMode and WAIT, so it never calls
+        # reply --type ready_for_review and the flow stalls until nudged.
+        # It stays read-only by its protocol (like the Investigator).
+        "permission_mode": None,
         "output_kind": "plan",
         "input_kind": "task",
         "accepts": ["task"],
@@ -246,7 +250,9 @@ BUILT_IN_AGENT_TYPES = [
         ),
         "icon": "git-fork",
         "spawn_mode": "worktree",
-        "permission_mode": "plan",
+        # Default mode, not "plan" (see Planner): plan mode stalls the
+        # one-shot reply. Read-only by protocol.
+        "permission_mode": None,
         "output_kind": "tasks",
         "input_kind": "plan",
         "accepts": ["plan", "task", "report"],
