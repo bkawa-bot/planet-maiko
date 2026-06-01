@@ -253,6 +253,36 @@ def get_review_queue():
             "timestamp": iso_utc(m.created_at),
         })
 
+    # 3d. Flow diff-ready: a finished flow's coder branches, each reviewed
+    #     and waiting for the human to look at the diff + open a PR. Reuses
+    #     the diff surface; self-cleaning when the job is gone.
+    flow_diff_memos = (
+        Memo.query
+        .filter(Memo.kind == "flow_diff_ready")
+        .filter(Memo.status.in_(("pending", "seen")))
+        .order_by(Memo.created_at.desc())
+        .all()
+    )
+    for m in flow_diff_memos:
+        mx = m.extra or {}
+        job_id = mx.get("job_id")
+        job = db.session.get(AgentJob, job_id) if job_id else None
+        if job is None:
+            continue
+        items.append({
+            "kind": "flow_diff",
+            "task_id": None,
+            "job_id": job_id,
+            "memo_id": m.id,
+            "title": m.title,
+            "repo": job.scope_repo,
+            "agent_name": None,
+            "route": f"/jobs/{job_id}?view=diff",
+            "body": m.body,
+            "age_seconds": _age(m.created_at),
+            "timestamp": iso_utc(m.created_at),
+        })
+
     # AgentJobs already in the DB with status=pending_approval. Shown
     # until the user approves/dismisses them.
     pending_jobs = (

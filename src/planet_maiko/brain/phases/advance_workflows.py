@@ -187,6 +187,59 @@ def _emit_gate_memo(run, node_id, nr, edges, nrs_by_node):
         logger.warning(f"[cycle] gate memo skipped for run {run.id}: {e}")
 
 
+def _emit_ready_memos(run, nrs_by_node):
+    """When a run finishes, drop one 'ready to review + PR' memo per coder
+    branch (a done diff-producer that isn't a reviewer), so each fanned
+    branch lands in the human review queue as its own PR-to-be. Reuses the
+    diff-review surface; the coder job is a normal AgentJob with a worktree
+    + branch, so /jobs/<id>?view=diff and open-PR work as usual.
+
+    Best-effort; runs once (the run leaves "running" right after)."""
+    from planet_maiko.database import db
+    from planet_maiko.models.agent_job import AgentJob
+    from planet_maiko.models.workflow import Workflow
+    from planet_maiko.agent_types import get_agent_type
+    from planet_maiko.brain.memos import create_memo
+    try:
+        wf = db.session.get(Workflow, run.workflow_id)
+        flow_name = (wf.name if wf else None) or "a flow"
+        for insts in nrs_by_node.values():
+            for nr in insts:
+                if nr.status != "done" or not nr.agent_job_id:
+                    continue
+                job = db.session.get(AgentJob, nr.agent_job_id)
+                if not job or not (job.worktree_path and job.branch):
+                    continue
+                at = get_agent_type(job.kind)
+                accepts = (at.accepts if at else None) or []
+                out_kind = (at.output_kind if at else None) or "diff"
+                # A coder: produces a diff but doesn't consume one (a reviewer
+                # accepts "diff"). Only coders carry a PR-able branch.
+                if out_kind != "diff" or "diff" in accepts:
+                    continue
+                label = (nr.extra or {}).get("label")
+                tail = f": {label}" if label else ""
+                create_memo(
+                    kind="flow_diff_ready",
+                    category="waiting",
+                    title=f"Branch ready to review in {flow_name}",
+                    body=(
+                        f"Branch `{job.branch}`{tail} was reviewed by the flow. "
+                        f"Open the diff to look it over and turn it into a PR."
+                    ),
+                    cta_label="Review the diff",
+                    priority="normal",
+                    extra={
+                        "job_id": job.id,
+                        "workflow_run_id": run.id,
+                        "node_id": nr.node_id,
+                        "branch": job.branch,
+                    },
+                )
+    except Exception as e:
+        logger.warning(f"[cycle] ready memos skipped for run {run.id}: {e}")
+
+
 def _phase_advance_workflows():
     from planet_maiko.database import db
     from planet_maiko.models.workflow_run import WorkflowRun, NodeRun
@@ -583,6 +636,7 @@ def _phase_advance_workflows():
                 else:
                     run.status = "done"
                 run.finished_at = datetime.now(timezone.utc)
+                _emit_ready_memos(run, nrs_by_node)
 
         db.session.commit()
         return {"advanced": advanced}

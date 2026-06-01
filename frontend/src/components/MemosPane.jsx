@@ -108,6 +108,12 @@ const KIND_META = {
     label: "Flow gate",
     tone: "plan",
   },
+  flow_diff: {
+    Icon: GitPullRequest,
+    cta: "Review diff",
+    label: "Ready",
+    tone: "review",
+  },
   notification: {
     Icon: Bell,
     cta: null,

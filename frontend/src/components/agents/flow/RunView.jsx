@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ReactFlow, Background, Controls, MiniMap } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
 import "./flow-theme.css";
@@ -34,6 +35,7 @@ function rollup(statuses) {
 // RoleNode so a run looks like the editor, just lit up.
 export default function RunView({ runId, onClose }) {
   const types = useAgentTypes();
+  const navigate = useNavigate();
   const [run, setRun] = useState(null);
   const [inspect, setInspect] = useState(null);
   const [inspectJob, setInspectJob] = useState(null);
@@ -280,6 +282,15 @@ export default function RunView({ runId, onClose }) {
               <div className="modal-header">
                 <span className="flow-inspect-title">{inspect.label}</span>
                 <span style={{ flex: 1 }} />
+                {inspect.jobId && (
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => navigate(`/jobs/${inspect.jobId}`)}
+                    title="Open this step's full page (diff, chat, report) to review and PR"
+                  >
+                    Open full page
+                  </button>
+                )}
                 <button className="btn btn-sm" onClick={() => setInspect(null)}>
                   <X size={12} />
                 </button>
