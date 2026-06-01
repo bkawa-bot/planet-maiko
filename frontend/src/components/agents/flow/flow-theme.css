@@ -28,7 +28,9 @@
 /* Role node = warm character card */
 .flow-role-node {
   position: relative;
-  width: 200px;
+  width: max-content;
+  min-width: 132px;
+  max-width: 240px;
   background: var(--bg-card);
   border: 2px solid var(--text-muted);
   border-radius: 14px;
