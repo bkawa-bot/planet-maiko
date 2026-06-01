@@ -133,11 +133,28 @@ def run_workflow(wf_id):
 
 @workflows_bp.route("/workflow-runs/<run_id>", methods=["GET"])
 def get_workflow_run(run_id):
-    """The run plus its per-node state, for the live canvas / status poll."""
+    """The run plus its per-node state, for the live canvas / status poll.
+
+    Enriches each node with the assigned agent's avatar + name so the
+    canvas can show WHO is working a step (and the inspector can link
+    into that agent's live session)."""
+    from planet_maiko.models.agent_job import AgentJob
+    from planet_maiko.models.agent_profile import AgentProfile
     run = db.session.get(WorkflowRun, run_id)
     if run is None:
         return jsonify({"error": "Run not found"}), 404
-    return jsonify(run.to_dict())
+    data = run.to_dict()
+    for nr in data.get("node_runs", []):
+        jid = nr.get("agent_job_id")
+        if not jid:
+            continue
+        job = db.session.get(AgentJob, jid)
+        if job and job.agent_profile_id:
+            prof = db.session.get(AgentProfile, job.agent_profile_id)
+            if prof:
+                nr["agent_avatar"] = prof.avatar
+                nr["agent_name"] = prof.display_name
+    return jsonify(data)
 
 
 def _gate_node_run(run_id, node_run_id):

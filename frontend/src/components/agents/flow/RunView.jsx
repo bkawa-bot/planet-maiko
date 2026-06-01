@@ -137,7 +137,7 @@ export default function RunView({ runId, onClose }) {
       }
 
       const meta = roleMeta(n.agent_type, types);
-      const roleData = (status, jobId, sub) => ({
+      const roleData = (status, jobId, sub, avatar) => ({
         type: meta.raw || fallbackType(n),
         color: meta.color,
         Icon: meta.icon,
@@ -145,6 +145,7 @@ export default function RunView({ runId, onClose }) {
         label: (meta.raw && meta.raw.name) || n.agent_type,
         sub,
         jobId,
+        avatar,
       });
 
       const insts = instancesByNode[n.id] || [];
@@ -158,7 +159,7 @@ export default function RunView({ runId, onClose }) {
             id: `${n.id}__${inst.id}`,
             type: "role",
             position: { x: (n.x ?? 0) + i * 28, y: (n.y ?? 0) + i * 108 },
-            data: roleData(inst.status, inst.agent_job_id, rnd ? `${lbl} · round ${rnd}` : lbl),
+            data: roleData(inst.status, inst.agent_job_id, rnd ? `${lbl} · round ${rnd}` : lbl, inst.agent_avatar),
           };
         });
       }
@@ -173,7 +174,7 @@ export default function RunView({ runId, onClose }) {
         id: n.id,
         type: "role",
         position: { x: n.x ?? 0, y: n.y ?? 0 },
-        data: roleData(status, ownJobId, rnd ? `revision round ${rnd}` : null),
+        data: roleData(status, ownJobId, rnd ? `revision round ${rnd}` : null, only && only.agent_avatar),
       }];
     });
 
@@ -232,6 +233,7 @@ export default function RunView({ runId, onClose }) {
       jobId,
       label: d.sub ? `${d.label || ""}: ${d.sub}` : (d.label || node.id),
       isGate: !!d.isGate,
+      status: d.status,
       awaiting: d.status === "awaiting_approval",
       onApprove: d.onApprove,
       onReject: d.onReject,
@@ -300,6 +302,10 @@ export default function RunView({ runId, onClose }) {
                   <p className="flow-inspect-empty">Loading…</p>
                 ) : inspectJob && inspectJob.artifact ? (
                   <pre className="flow-inspect-artifact">{inspectJob.artifact}</pre>
+                ) : inspect.status === "running" || inspect.status === "queued" ? (
+                  <p className="flow-inspect-empty">
+                    This step is still working. Open its full page to watch it live.
+                  </p>
                 ) : (
                   <p className="flow-inspect-empty">
                     This step hasn't produced any output yet.

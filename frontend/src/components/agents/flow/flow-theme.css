@@ -67,6 +67,7 @@
   border-radius: 28%;
   background: color-mix(in srgb, currentColor 14%, transparent);
 }
+.flow-role-avatar { flex-shrink: 0; }
 .flow-role-title { min-width: 0; }
 .flow-role-name {
   font-weight: 700; font-size: 14px; color: var(--text);
