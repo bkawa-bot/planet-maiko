@@ -191,19 +191,25 @@ export default function RunView({ runId, onClose }) {
     const edges = (g.edges || []).flatMap((e) => {
       const src = byId[e.source];
       const kind = src ? roleMeta(src.agent_type, types).outputKind : "diff";
+      const mk = (s, t) => ({
+        id: `${s}__${t}`,
+        source: s,
+        target: t,
+        sourceHandle: e.sourceHandle || "out",
+        targetHandle: e.targetHandle || "in",
+        className: "flow-edge",
+        style: { stroke: kindColor(kind) },
+      });
+      // Paired fan-in: when every target instance is paired 1:1 to an
+      // upstream instance, draw coder_i -> reviewer_i, not a full mesh.
+      const tInsts = instancesByNode[e.target] || [];
+      const paired = tInsts.length > 1 && tInsts.every((ti) => ti.extra && ti.extra.paired_to);
+      if (paired) {
+        return tInsts.map((ti) => mk(`${e.source}__${ti.extra.paired_to}`, `${e.target}__${ti.id}`));
+      }
       const out = [];
       for (const s of rfIds(e.source)) {
-        for (const t of rfIds(e.target)) {
-          out.push({
-            id: `${s}__${t}`,
-            source: s,
-            target: t,
-            sourceHandle: e.sourceHandle || "out",
-            targetHandle: e.targetHandle || "in",
-            className: "flow-edge",
-            style: { stroke: kindColor(kind) },
-          });
-        }
+        for (const t of rfIds(e.target)) out.push(mk(s, t));
       }
       return out;
     });

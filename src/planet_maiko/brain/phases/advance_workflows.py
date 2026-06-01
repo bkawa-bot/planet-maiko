@@ -335,6 +335,36 @@ def _phase_advance_workflows():
                 db.session.add(job)
                 return job
 
+            def _compose_block(src_nr, src_job):
+                """The prompt block for one upstream instance: push + fetch
+                instructions for a diff producer, or its text artifact.
+                Returns (block_or_None, push_failed)."""
+                stype = get_agent_type(src_job.kind)
+                out_kind = (stype.output_kind if stype else None) or "diff"
+                if out_kind == "diff" and src_job.worktree_path and src_job.branch:
+                    if not _push_branch(src_job.worktree_path, src_job.branch):
+                        return None, True
+                    base = _default_branch(src_job.worktree_path)
+                    return (
+                        f"## Code to review\n\n"
+                        f"The upstream {src_nr.agent_type} step pushed its work to "
+                        f"origin on branch `{src_job.branch}` (base `{base}`). There "
+                        f"is no PR; review the branch directly. Fetch it into your "
+                        f"worktree and read the diff:\n\n"
+                        f"```bash\n"
+                        f"git fetch origin {src_job.branch}\n"
+                        f"git checkout {src_job.branch}\n"
+                        f"git diff origin/{base}...HEAD\n"
+                        f"```",
+                        False,
+                    )
+                if src_job.artifact:
+                    return (
+                        f"## Input from the {src_nr.agent_type} step\n\n{src_job.artifact}",
+                        False,
+                    )
+                return None, False
+
             # 2. Spawn ready nodes. A node acts only while it's an untouched
             #    placeholder (all its instances still pending); once spawned
             #    or fanned out it's skipped here.
@@ -407,6 +437,47 @@ def _phase_advance_workflows():
                         advanced += 1
                     continue
 
+                # --- Propagation: when this node's single upstream is itself
+                #     scattered (N done instances), the fan carries through —
+                #     one instance here per upstream instance, paired 1:1 — so
+                #     each fanned coder gets its own reviewer on its own diff. ---
+                scattered_srcs = [
+                    src for src in inbound
+                    if len([i for i in nrs_by_node.get(src, []) if i.status == "done"]) > 1
+                ]
+                if len(inbound) == 1 and len(scattered_srcs) == 1:
+                    src_dones = [
+                        i for i in sorted(
+                            nrs_by_node.get(scattered_srcs[0], []),
+                            key=lambda x: (x.extra or {}).get("instance", 0),
+                        )
+                        if i.status == "done" and i.agent_job_id
+                    ]
+                    for idx, src_nr in enumerate(src_dones):
+                        src_job = db.session.get(AgentJob, src_nr.agent_job_id)
+                        if not src_job:
+                            continue
+                        target = placeholder if idx == 0 else NodeRun(
+                            workflow_run_id=run.id, node_id=nid, agent_type=role,
+                        )
+                        if idx > 0:
+                            db.session.add(target)
+                        block, pf = _compose_block(src_nr, src_job)
+                        if pf:
+                            target.status = "failed"
+                            target.error = "couldn't push the upstream branch for review"
+                            continue
+                        job = _spawn_job(role, block, nid)
+                        target.status = "queued"
+                        target.agent_job_id = job.id
+                        target.extra = {
+                            "instance": (src_nr.extra or {}).get("instance", idx),
+                            "paired_to": src_nr.id,
+                            "label": (src_nr.extra or {}).get("label") or f"#{idx + 1}",
+                        }
+                        advanced += 1
+                    continue
+
                 # --- Normal single spawn: compose the prompt from the seed
                 #     (root) or the upstream artifacts / pushed branches. ---
                 blocks = []
@@ -419,30 +490,12 @@ def _phase_advance_workflows():
                         blocks.append(seed)
                 else:
                     for src_nr, src_job in upstream:
-                        src_type = get_agent_type(src_job.kind)
-                        out_kind = (src_type.output_kind if src_type else None) or "diff"
-                        if out_kind == "diff" and src_job.worktree_path and src_job.branch:
-                            if not _push_branch(src_job.worktree_path, src_job.branch):
-                                push_failed = True
-                                break
-                            base = _default_branch(src_job.worktree_path)
-                            blocks.append(
-                                f"## Code to review\n\n"
-                                f"The upstream {src_nr.agent_type} step pushed its work to "
-                                f"origin on branch `{src_job.branch}` (base `{base}`). There "
-                                f"is no PR; review the branch directly. Fetch it into your "
-                                f"worktree and read the diff:\n\n"
-                                f"```bash\n"
-                                f"git fetch origin {src_job.branch}\n"
-                                f"git checkout {src_job.branch}\n"
-                                f"git diff origin/{base}...HEAD\n"
-                                f"```"
-                            )
-                        elif src_job.artifact:
-                            blocks.append(
-                                f"## Input from the {src_nr.agent_type} step\n\n"
-                                f"{src_job.artifact}"
-                            )
+                        block, pf = _compose_block(src_nr, src_job)
+                        if pf:
+                            push_failed = True
+                            break
+                        if block:
+                            blocks.append(block)
 
                 if push_failed:
                     placeholder.status = "failed"
