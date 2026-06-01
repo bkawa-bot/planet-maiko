@@ -245,74 +245,83 @@ def _phase_advance_workflows():
             #     verdict) settles the node so downstream proceeds.
             for node in nodes:
                 nid = node.get("id")
-                insts = nrs_by_node.get(nid, [])
-                if len(insts) != 1:
-                    continue  # only 1:1 reviewers loop (a scatter doesn't)
-                rv = insts[0]
-                if rv.status != "done" or not rv.agent_job_id:
-                    continue
-                if (rv.extra or {}).get("loop_settled"):
-                    continue
-                rv_job = db.session.get(AgentJob, rv.agent_job_id)
-                verdict = _parse_verdict(rv_job.artifact) if rv_job else None
-                if verdict not in ("soft_block", "hard_block"):
-                    rv.extra = {**(rv.extra or {}), "loop_settled": True}
-                    continue
-                # The coder to send back to: a 1:1 upstream producer with a
-                # live worktree (so its session can be woken).
-                coder_nr = coder_job = None
-                for src in [e.get("source") for e in edges if e.get("target") == nid]:
-                    src_insts = nrs_by_node.get(src, [])
-                    if len(src_insts) != 1:
+                inbound_for = [e.get("source") for e in edges if e.get("target") == nid]
+                for rv in nrs_by_node.get(nid, []):
+                    if rv.status != "done" or not rv.agent_job_id:
                         continue
-                    src_nr = src_insts[0]
-                    j = (
-                        db.session.get(AgentJob, src_nr.agent_job_id)
-                        if src_nr.agent_job_id else None
-                    )
-                    if j and j.worktree_path:
-                        coder_nr, coder_job = src_nr, j
-                        break
-                round_n = (rv.extra or {}).get("round", 0)
-                if not coder_job or round_n >= _MAX_REVIEW_ROUNDS:
-                    rv.extra = {
-                        **(rv.extra or {}),
-                        "loop_settled": True,
-                        "loop_result": "max_rounds" if coder_job else "no_target",
-                    }
-                    continue
-                # Hand the review back through the SAME path a human review
-                # uses: drop it in the coder's inbox as a to_agent "review"
-                # message, commit so the woken session can read it, then
-                # resume the coder (it reads the inbox, addresses the
-                # comments, commits, and replies ready_for_review). No
-                # bespoke loop transport, the workflow only decides WHEN to
-                # send a review back (verdict + round cap); the sending and
-                # revising reuse the existing diff-review machinery.
-                db.session.add(AgentMessage(
-                    task_id=coder_job.id,
-                    direction="to_agent",
-                    sender="reviewer",
-                    content=_review_feedback(rv_job, verdict),
-                    message_type="review",
-                ))
-                db.session.commit()
-                if not _resume_agent_with_review(coder_job.id, coder_job.worktree_path):
-                    rv.extra = {
-                        **(rv.extra or {}),
-                        "loop_settled": True,
-                        "loop_result": "wake_failed",
-                    }
-                    continue
-                # Coder is iterating again (same job, same branch); the
-                # reviewer waits to re-review next round.
-                coder_job.status = "running"
-                coder_nr.status = "running"
-                coder_nr.extra = {**(coder_nr.extra or {}), "round": round_n + 1}
-                rv.status = "pending"
-                rv.agent_job_id = None
-                rv.extra = {**(rv.extra or {}), "round": round_n + 1}
-                advanced += 1
+                    if (rv.extra or {}).get("loop_settled"):
+                        continue
+                    rv_job = db.session.get(AgentJob, rv.agent_job_id)
+                    verdict = _parse_verdict(rv_job.artifact) if rv_job else None
+                    if verdict not in ("soft_block", "hard_block"):
+                        rv.extra = {**(rv.extra or {}), "loop_settled": True}
+                        continue
+                    # Which coder to send back to. A fanned reviewer instance
+                    # carries the exact paired coder NodeRun id (set at
+                    # propagation); a 1:1 reviewer resolves its single upstream
+                    # coder from the graph edge. Either way the id is derived,
+                    # never sent by an agent.
+                    coder_nr = coder_job = None
+                    paired = (rv.extra or {}).get("paired_to")
+                    if paired:
+                        cnr = db.session.get(NodeRun, paired)
+                        cj = (
+                            db.session.get(AgentJob, cnr.agent_job_id)
+                            if cnr and cnr.agent_job_id else None
+                        )
+                        if cj and cj.worktree_path:
+                            coder_nr, coder_job = cnr, cj
+                    else:
+                        for src in inbound_for:
+                            src_insts = nrs_by_node.get(src, [])
+                            if len(src_insts) != 1:
+                                continue
+                            src_nr = src_insts[0]
+                            cj = (
+                                db.session.get(AgentJob, src_nr.agent_job_id)
+                                if src_nr.agent_job_id else None
+                            )
+                            if cj and cj.worktree_path:
+                                coder_nr, coder_job = src_nr, cj
+                                break
+                    round_n = (rv.extra or {}).get("round", 0)
+                    if not coder_job or round_n >= _MAX_REVIEW_ROUNDS:
+                        rv.extra = {
+                            **(rv.extra or {}),
+                            "loop_settled": True,
+                            "loop_result": "max_rounds" if coder_job else "no_target",
+                        }
+                        continue
+                    # Hand the review back through the SAME path a human review
+                    # uses: a to_agent "review" inbox message + the standard
+                    # resume. The coder reads its inbox, addresses the comments,
+                    # commits, and replies ready_for_review. The workflow only
+                    # decides WHEN to send one back (verdict + round cap).
+                    db.session.add(AgentMessage(
+                        task_id=coder_job.id,
+                        direction="to_agent",
+                        sender="reviewer",
+                        content=_review_feedback(rv_job, verdict),
+                        message_type="review",
+                    ))
+                    db.session.commit()
+                    if not _resume_agent_with_review(coder_job.id, coder_job.worktree_path):
+                        rv.extra = {
+                            **(rv.extra or {}),
+                            "loop_settled": True,
+                            "loop_result": "wake_failed",
+                        }
+                        continue
+                    # Coder iterates again on its branch; this reviewer instance
+                    # waits to re-review (paired_to preserved, so it re-targets
+                    # the same coder next round).
+                    coder_job.status = "running"
+                    coder_nr.status = "running"
+                    coder_nr.extra = {**(coder_nr.extra or {}), "round": round_n + 1}
+                    rv.status = "pending"
+                    rv.agent_job_id = None
+                    rv.extra = {**(rv.extra or {}), "round": round_n + 1}
+                    advanced += 1
 
             # Roll a graph node's N instances (scatter) into one state for
             # downstream readiness: "done" only when every instance is done,
@@ -387,17 +396,60 @@ def _phase_advance_workflows():
             for node in nodes:
                 nid = node.get("id")
                 insts = nrs_by_node.get(nid, [])
-                if not insts or not all(i.status == "pending" for i in insts):
+                pendings = [i for i in insts if i.status == "pending"]
+                if not pendings:
                     continue
-                placeholder = insts[0]
+                role = pendings[0].agent_type
                 inbound = [e.get("source") for e in edges if e.get("target") == nid]
 
+                # CASE A: re-armed fanned reviewer instances (they carry a
+                #   paired_to from propagation). Each re-reviews its own paired
+                #   coder's freshly revised branch, the moment THAT coder lands
+                #   (per-instance, independent of its siblings). A 1:1 reviewer
+                #   has no paired_to and falls through to the normal spawn.
+                rearmed = [p for p in pendings if (p.extra or {}).get("paired_to")]
+                if rearmed:
+                    for p in rearmed:
+                        cnr = db.session.get(NodeRun, p.extra["paired_to"])
+                        if cnr is None:
+                            p.status = "failed"
+                            p.error = "lost its paired coder"
+                            continue
+                        if cnr.status in ("failed", "skipped"):
+                            p.status = "skipped"
+                            p.error = "its coder didn't finish the revision"
+                            continue
+                        if cnr.status != "done":
+                            continue  # its coder is still revising; wait
+                        cj = (
+                            db.session.get(AgentJob, cnr.agent_job_id)
+                            if cnr.agent_job_id else None
+                        )
+                        if not cj:
+                            p.status = "failed"
+                            p.error = "lost its paired coder"
+                            continue
+                        block, pf = _compose_block(cnr, cj)
+                        if pf:
+                            p.status = "failed"
+                            p.error = "couldn't push the upstream branch for review"
+                            continue
+                        job = _spawn_job(role, block, nid)
+                        p.status = "queued"
+                        p.agent_job_id = job.id
+                        advanced += 1
+                    continue
+
+                # CASE B: an untouched node (initial spawn / fan-out) or a 1:1
+                #   reviewer re-arm. Gate on every inbound being terminal.
+                placeholder = pendings[0]
                 # A fully-failed upstream blocks this node (and its dependents
                 # next tick). A partial upstream (some instances succeeded)
                 # still flows.
                 if any(node_status(src) == "failed" for src in inbound):
-                    placeholder.status = "skipped"
-                    placeholder.error = "an upstream step did not finish"
+                    for p in pendings:
+                        p.status = "skipped"
+                        p.error = "an upstream step did not finish"
                     continue
                 if not all(node_status(src) in ("done", "partial") for src in inbound):
                     continue  # inputs not all terminal yet
@@ -409,8 +461,6 @@ def _phase_advance_workflows():
                     placeholder.status = "awaiting_approval"
                     _emit_gate_memo(run, nid, placeholder, edges, nrs_by_node)
                     continue
-
-                role = placeholder.agent_type
 
                 # Gather every done upstream instance + its job. Resolve the
                 # output kind from the producing JOB's role (not the NodeRun's

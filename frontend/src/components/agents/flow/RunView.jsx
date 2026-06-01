@@ -149,16 +149,16 @@ export default function RunView({ runId, onClose }) {
       if (insts.length > 1) {
         // SCATTER: one node per instance, cascaded down-right from the
         // graph slot so the fan reads as "these came from here."
-        return insts.map((inst, i) => ({
-          id: `${n.id}__${inst.id}`,
-          type: "role",
-          position: { x: (n.x ?? 0) + i * 28, y: (n.y ?? 0) + i * 108 },
-          data: roleData(
-            inst.status,
-            inst.agent_job_id,
-            (inst.extra && inst.extra.label) || `task ${i + 1}`
-          ),
-        }));
+        return insts.map((inst, i) => {
+          const lbl = (inst.extra && inst.extra.label) || `task ${i + 1}`;
+          const rnd = inst.extra && inst.extra.round;
+          return {
+            id: `${n.id}__${inst.id}`,
+            type: "role",
+            position: { x: (n.x ?? 0) + i * 28, y: (n.y ?? 0) + i * 108 },
+            data: roleData(inst.status, inst.agent_job_id, rnd ? `${lbl} · round ${rnd}` : lbl),
+          };
+        });
       }
 
       // Single instance (or none yet): one node in the graph slot. A
