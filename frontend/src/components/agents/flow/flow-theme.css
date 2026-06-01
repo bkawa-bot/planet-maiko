@@ -220,9 +220,7 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--lavender) 35%, transparent);
 }
 .flow-role-node.status-running {
-  box-shadow: 0 0 0 2px var(--mint, var(--blue)),
-    0 0 18px color-mix(in srgb, var(--mint, var(--blue)) 45%, transparent);
-  animation: flow-node-pulse 1.8s ease-in-out infinite;
+  animation: flow-node-working 1.4s ease-in-out infinite;
 }
 .flow-role-node.status-done {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 60%, transparent),
@@ -233,9 +231,17 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--lemon) 60%, transparent);
   opacity: 0.85;
 }
-@keyframes flow-node-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.72; }
+/* A working node breathes a glowing ring (dim -> bright -> dim) so an
+   active agent reads as alive without an alarm flash. */
+@keyframes flow-node-working {
+  0%, 100% {
+    box-shadow: 0 0 0 2px var(--mint, var(--blue)),
+      0 0 5px color-mix(in srgb, var(--mint, var(--blue)) 28%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 3px var(--mint, var(--blue)),
+      0 0 24px color-mix(in srgb, var(--mint, var(--blue)) 72%, transparent);
+  }
 }
 
 /* === Approval gate node (a control node, not an agent) === */
