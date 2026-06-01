@@ -78,6 +78,14 @@
   margin-top: 2px;
 }
 .flow-sock-arrow { color: var(--text-muted); }
+/* Behavior hints: which roles fan out / loop, readable at build time. */
+.flow-role-flags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.flow-role-flag {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.02em;
+  text-transform: uppercase; padding: 1px 6px; border-radius: 999px;
+}
+.flag-fan { background: color-mix(in srgb, var(--peach) 22%, transparent); color: var(--peach); }
+.flag-loop { background: color-mix(in srgb, var(--lavender) 22%, transparent); color: var(--lavender); }
 .flow-role-desc {
   margin-top: 8px;
   font-size: 11px; color: var(--text-dim); line-height: 1.4;
