@@ -21,6 +21,17 @@ import ModalPortal from "../../ModalPortal";
 
 const nodeTypes = { role: RoleNode, gate: GateNode };
 
+// Placeholder for the Run dialog's kickoff input, keyed by what the first
+// step accepts. The label itself is the capitalized kind.
+const KICKOFF_HINT = {
+  task: "What should this flow do? Handed to the first step as its task.\n\nExample: Add rate limiting to the /login endpoint.",
+  plan: "Paste the plan for the first step to work from (a decomposer breaks it into tasks).",
+  incident: "Describe the incident or failure the first step should dig into.",
+  repo: "What should the first step map or analyze?",
+  report: "Paste the report the first step should work from.",
+  diff: "Describe the change the first step should review.",
+};
+
 // Hydrate the saved graph blob into React Flow nodes/edges. A node
 // references a role by agent_type; we re-resolve its live color + icon
 // from roleMeta so a role re-skin shows up without re-saving the flow.
@@ -87,6 +98,21 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
   const [runTask, setRunTask] = useState("");
   const [scopeRepo, setScopeRepo] = useState("");
   const [rf, setRf] = useState(null);
+
+  // The Run input kicks off the FIRST step(s), so label it by what they
+  // accept (a decomposer wants a "Plan", an investigator an "Incident", a
+  // coder a "Task"). Roots = nodes with no inbound edge; if they disagree,
+  // fall back to the generic "task".
+  const kickoffKind = useMemo(() => {
+    const targets = new Set(edges.map((e) => e.target));
+    const roots = nodes.filter((n) => n.type !== "gate" && !targets.has(n.id));
+    const kinds = roots.map((n) => {
+      const t = n.data.type || {};
+      const accepts = (t.accepts && t.accepts.length) ? t.accepts : [t.input_kind || "task"];
+      return accepts[0] || "task";
+    });
+    return kinds.length && kinds.every((k) => k === kinds[0]) ? kinds[0] : "task";
+  }, [nodes, edges]);
 
   // A wire is valid only when the producer's output kind equals the
   // consumer's input kind. React Flow calls this during a drag and
@@ -301,12 +327,12 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
               </div>
               <div className="modal-body agent-edit-body">
                 <label className="agent-edit-full">
-                  Task
+                  {kickoffKind.charAt(0).toUpperCase() + kickoffKind.slice(1)}
                   <textarea
                     rows={5}
                     value={runTask}
                     onChange={(e) => setRunTask(e.target.value)}
-                    placeholder={"What should this flow do? This is the initial input handed to the first step.\n\nExample: Add rate limiting to the /login endpoint."}
+                    placeholder={KICKOFF_HINT[kickoffKind] || KICKOFF_HINT.task}
                   />
                 </label>
                 <label className="agent-edit-full">
