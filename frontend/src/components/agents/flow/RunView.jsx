@@ -137,7 +137,7 @@ export default function RunView({ runId, onClose }) {
       }
 
       const meta = roleMeta(n.agent_type, types);
-      const roleData = (status, jobId, sub, avatar) => ({
+      const roleData = (status, jobId, sub, avatar, statusLine) => ({
         type: meta.raw || fallbackType(n),
         color: meta.color,
         Icon: meta.icon,
@@ -146,6 +146,7 @@ export default function RunView({ runId, onClose }) {
         sub,
         jobId,
         avatar,
+        statusLine,
       });
 
       const insts = instancesByNode[n.id] || [];
@@ -159,7 +160,7 @@ export default function RunView({ runId, onClose }) {
             id: `${n.id}__${inst.id}`,
             type: "role",
             position: { x: (n.x ?? 0) + i * 28, y: (n.y ?? 0) + i * 108 },
-            data: roleData(inst.status, inst.agent_job_id, rnd ? `${lbl} · round ${rnd}` : lbl, inst.agent_avatar),
+            data: roleData(inst.status, inst.agent_job_id, rnd ? `${lbl} · round ${rnd}` : lbl, inst.agent_avatar, inst.agent_status),
           };
         });
       }
@@ -174,7 +175,7 @@ export default function RunView({ runId, onClose }) {
         id: n.id,
         type: "role",
         position: { x: n.x ?? 0, y: n.y ?? 0 },
-        data: roleData(status, ownJobId, rnd ? `revision round ${rnd}` : null, only && only.agent_avatar),
+        data: roleData(status, ownJobId, rnd ? `revision round ${rnd}` : null, only && only.agent_avatar, only && only.agent_status),
       }];
     });
 

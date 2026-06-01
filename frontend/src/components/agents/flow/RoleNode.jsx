@@ -8,7 +8,7 @@ import CardAvatar from "../../CardAvatar";
 // on the right. Read-only for Phase B (isConnectable=false); the same
 // component backs the interactive editor later.
 export default function RoleNode({ id, data, isConnectable }) {
-  const { type, color, Icon, status, editable, sub, avatar } = data;
+  const { type, color, Icon, status, editable, sub, avatar, statusLine } = data;
   const rf = useReactFlow();
   const accepts = (type.accepts && type.accepts.length) ? type.accepts : [type.input_kind || "task"];
   const primaryIn = accepts[0] || "task";
@@ -85,6 +85,9 @@ export default function RoleNode({ id, data, isConnectable }) {
       </div>
 
       {sub && <div className="flow-role-sub" title={sub}>{sub}</div>}
+      {status === "running" && statusLine && (
+        <div className="flow-role-status" title={statusLine}>{statusLine}</div>
+      )}
 
       <Handle
         type="source"

@@ -140,6 +140,7 @@ def get_workflow_run(run_id):
     into that agent's live session)."""
     from planet_maiko.models.agent_job import AgentJob
     from planet_maiko.models.agent_profile import AgentProfile
+    from planet_maiko.models.agent_message import AgentMessage
     run = db.session.get(WorkflowRun, run_id)
     if run is None:
         return jsonify({"error": "Run not found"}), 404
@@ -154,6 +155,16 @@ def get_workflow_run(run_id):
             if prof:
                 nr["agent_avatar"] = prof.avatar
                 nr["agent_name"] = prof.display_name
+        # The agent's latest status line (its boot-up / progress narration)
+        # so the canvas can show WHAT it's doing, not just that it's busy.
+        last_status = (
+            AgentMessage.query
+            .filter_by(task_id=jid, direction="from_agent", message_type="status")
+            .order_by(AgentMessage.created_at.desc())
+            .first()
+        )
+        if last_status and last_status.content:
+            nr["agent_status"] = last_status.content.strip()[:140]
     return jsonify(data)
 
 

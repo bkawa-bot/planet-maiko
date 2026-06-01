@@ -328,3 +328,17 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
+/* The working agent's latest status line, its own voice narrating. */
+.flow-role-status {
+  margin-top: 5px;
+  font-size: 10px;
+  font-style: italic;
+  line-height: 1.35;
+  color: var(--text-dim);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
