@@ -28,7 +28,7 @@
 /* Role node = warm character card */
 .flow-role-node {
   position: relative;
-  width: 256px;
+  width: 200px;
   background: var(--bg-card);
   border: 2px solid var(--text-muted);
   border-radius: 14px;
@@ -66,7 +66,10 @@
   background: color-mix(in srgb, currentColor 14%, transparent);
 }
 .flow-role-title { min-width: 0; }
-.flow-role-name { font-weight: 700; font-size: 14px; color: var(--text); }
+.flow-role-name {
+  font-weight: 700; font-size: 14px; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .flow-role-sockets {
   display: flex; align-items: center; gap: 5px;
   font-size: 10px; font-family: var(--font-mono); font-weight: 600;

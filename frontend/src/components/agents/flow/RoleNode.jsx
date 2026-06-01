@@ -14,7 +14,11 @@ export default function RoleNode({ id, data, isConnectable }) {
   const outKind = type.output_kind || "diff";
 
   return (
-    <div className={`flow-role-node${status ? ` status-${status}` : ""}`} style={{ borderColor: color }}>
+    <div
+      className={`flow-role-node${status ? ` status-${status}` : ""}`}
+      style={{ borderColor: color }}
+      title={type.description || type.name}
+    >
       {editable && (
         <button
           type="button"
@@ -42,7 +46,7 @@ export default function RoleNode({ id, data, isConnectable }) {
         <div className="flow-role-title">
           <div className="flow-role-name">{type.name}</div>
           <div className="flow-role-sockets">
-            <span style={{ color: kindColor(primaryIn) }}>{accepts.join("/")}</span>
+            <span style={{ color: kindColor(primaryIn) }}>{primaryIn}</span>
             <span className="flow-sock-arrow">→</span>
             <span style={{ color: kindColor(outKind) }}>{outKind}</span>
           </div>
@@ -50,7 +54,6 @@ export default function RoleNode({ id, data, isConnectable }) {
       </div>
 
       {sub && <div className="flow-role-sub" title={sub}>{sub}</div>}
-      {type.description && <div className="flow-role-desc">{type.description}</div>}
 
       <Handle
         type="source"
