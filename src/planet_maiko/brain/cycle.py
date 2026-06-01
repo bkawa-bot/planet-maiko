@@ -148,6 +148,31 @@ def run(app):
         return results
 
 
+_WORKFLOW_PHASES = [
+    ("advance_workflows", _phase_advance_workflows),
+    ("execute_agent_jobs", _phase_execute_agent_jobs),
+]
+
+
+def run_workflow_tick(app):
+    """Run only the workflow-driving phases (advance + execute), for the
+    fast ticker to call between full brain cycles so an in-flight flow
+    advances in near-real-time instead of once per cycle_interval. Runs on
+    the same thread as the full cycle, so there's no concurrent agent-job
+    pickup; per-phase rollback mirrors run()."""
+    from planet_maiko.database import db
+    with app.app_context():
+        for key, phase_fn in _WORKFLOW_PHASES:
+            try:
+                phase_fn()
+            except Exception as e:
+                logger.warning(f"[workflow-tick] {key} skipped: {e}")
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
+
 def get_status():
     """Get brain status for the dashboard. Cached for 5 seconds."""
     global _status_cache, _status_cache_at

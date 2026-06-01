@@ -622,7 +622,8 @@ def create_app(start_scheduler=False):
         import threading
         import time
         from planet_maiko.config import load_config
-        from planet_maiko.brain.cycle import run as run_brain_cycle
+        from planet_maiko.brain.cycle import run as run_brain_cycle, run_workflow_tick
+        from planet_maiko.models.workflow_run import WorkflowRun
         from planet_maiko.backups import run_daily_loop as backup_loop
 
         cfg = load_config()
@@ -635,22 +636,43 @@ def create_app(start_scheduler=False):
         # health pane. Single source instead of the old SCHEDULER blob.
         app.config["LAST_BRAIN_CYCLE"] = None
 
+        # One thread, two cadences: the full brain cycle every
+        # brain_interval, plus a light workflow tick (advance + execute
+        # only) every FAST_TICK seconds while a flow is running, so steps
+        # spawn and progress in near-real-time. Same thread as the full
+        # cycle => no concurrent agent-job pickup.
+        FAST_TICK = 12
+        full_every = max(1, brain_interval // FAST_TICK)
+
         def _brain_cycle_loop():
             time.sleep(30)  # let the app fully come up before first tick
+            i = 0
             while not stop_event.is_set():
                 try:
-                    with app.app_context():
-                        run_brain_cycle(app)
-                    app.config["LAST_BRAIN_CYCLE"] = datetime.now(timezone.utc).isoformat()
+                    if i % full_every == 0:
+                        with app.app_context():
+                            run_brain_cycle(app)
+                        app.config["LAST_BRAIN_CYCLE"] = datetime.now(timezone.utc).isoformat()
+                    else:
+                        with app.app_context():
+                            active = WorkflowRun.query.filter(
+                                WorkflowRun.status == "running"
+                            ).count()
+                        if active:
+                            run_workflow_tick(app)
                 except Exception as e:
                     logger.error(f"[brain-cycle] tick failed: {e}")
-                for _ in range(brain_interval):
+                i += 1
+                for _ in range(FAST_TICK):
                     if stop_event.is_set():
                         break
                     time.sleep(1)
 
         threading.Thread(target=_brain_cycle_loop, daemon=True, name="brain-cycle").start()
-        logger.info(f"[brain-cycle] ticking every {brain_interval}s")
+        logger.info(
+            f"[brain-cycle] full cycle every {brain_interval}s, "
+            f"workflow tick every {FAST_TICK}s"
+        )
 
         threading.Thread(target=backup_loop, args=(stop_event,), daemon=True, name="backups").start()
         logger.info("[backups] daily loop started")
