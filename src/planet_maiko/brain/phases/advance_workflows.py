@@ -109,6 +109,21 @@ def _first_line(text, limit=80):
     return "task"
 
 
+def _scatter_tasks(job):
+    """The tasks to scatter from a producer job. Prefers structured outputs
+    the agent posted via `maiko emit --type task`; falls back to parsing
+    TASK: blocks out of the artifact for a producer that didn't emit them
+    (resilience, not the primary path)."""
+    outs = [
+        o.get("content")
+        for o in (job.outputs or [])
+        if isinstance(o, dict) and o.get("type") == "task" and o.get("content")
+    ]
+    if outs:
+        return outs
+    return _parse_tasks(job.artifact)
+
+
 _MAX_REVIEW_ROUNDS = 3
 
 
@@ -546,7 +561,7 @@ def _phase_advance_workflows():
                 #     placeholder as instance 0, mint NodeRuns for the rest;
                 #     each instance gets exactly its own task as the prompt. ---
                 if scatter_src is not None:
-                    tasks = _parse_tasks(scatter_src.artifact)
+                    tasks = _scatter_tasks(scatter_src)
                     if not tasks:
                         placeholder.status = "failed"
                         placeholder.error = "the upstream step produced no tasks to scatter"

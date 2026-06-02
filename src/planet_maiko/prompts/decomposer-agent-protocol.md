@@ -25,35 +25,31 @@ Read the plan (and the repo, if you need to scope the tasks against reality). Yo
 
 ## How to emit the tasks
 
-Emit one `TASK:` block per task in your final reply. The shape:
+Post each task as its own structured output with `maiko emit --type task`, ONE call per task. The workflow engine fans out one coder per emitted task, so this is the part that actually drives the run (not the reply text). Use a heredoc for the body:
 
-```
-TASK: <short imperative title>
-description:
-  One or two sentences: what to do and where (which files),
-  concretely enough that a coder can start without re-deriving
-  the whole plan.
+```bash
+maiko emit --type task "$(cat <<'EOF'
+Add the rate-limit middleware
+Add a token-bucket limiter in src/middleware/ratelimit.py and wire it into
+the /login route in src/routes/auth.py.
+EOF
+)"
 ```
 
-Then send your final reply with all the blocks plus a one-line summary, using a heredoc:
+The first line is the task's title; everything after is the description (what to do and where, concretely enough that a coder can start without re-deriving the whole plan). Make one `maiko emit --type task` call for each task.
+
+Then send ONE final reply that summarizes for the human and lists the tasks so they are readable at a glance:
 
 ```bash
 maiko reply "$(cat <<'EOF'
-SUMMARY: Broke the plan into <N> tasks.
-
-TASK: Add the rate-limit middleware
-description:
-  Add a token-bucket limiter in src/middleware/ratelimit.py and wire
-  it into the /login route in src/routes/auth.py.
-
-TASK: Add tests for the limiter
-description:
-  Cover the limiter's allow/deny cases in tests/test_ratelimit.py.
+Broke the plan into 2 tasks:
+1. Add the rate-limit middleware
+2. Add tests for the limiter
 EOF
 )" --type ready_for_review
 ```
 
-Aim for the natural number of tasks the plan calls for, usually 2 to 6. Don't pad it, and don't cram unrelated work into one task. This is a one-shot: reply once with the task list and exit.
+The `emit` calls are the machine-readable tasks the engine scatters on; the reply is the human-readable summary. Aim for the natural number of tasks the plan calls for, usually 2 to 6. Do not pad it, and do not cram unrelated work into one task. One `emit` per task, then one reply, then exit.
 
 ## Tone
 

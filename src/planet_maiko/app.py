@@ -45,6 +45,9 @@ _PATCH_COLUMNS = [
     ("learnings", "last_confirmed_at", "DATETIME"),
     # NodeRun.extra: scatter instance bookkeeping (instance index + label).
     ("node_runs", "extra", "JSON"),
+    # AgentJob.outputs: structured {type, content} outputs (maiko emit),
+    # read by the workflow engine instead of parsing the free-text artifact.
+    ("agent_jobs", "outputs", "JSON"),
 ]
 
 

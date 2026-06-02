@@ -123,6 +123,22 @@ def cmd_reply(args):
     print(f"Sent reply for {task_id}")
 
 
+def cmd_emit(args):
+    """Post a structured output (type + content) to the agent's job so the
+    workflow engine can read it without parsing free-text. Distinct from
+    `reply` (the chat/artifact); this writes to agent_jobs.outputs. Used by
+    e.g. the decomposer: one `emit --type task` per task it produces."""
+    task_id = args.task or detect_task_id()
+    if not task_id:
+        print("Error: No job ID provided and could not detect from TASK.md or MAIKO_JOB_ID env", file=sys.stderr)
+        sys.exit(1)
+    api_request(f"/agents/{task_id}/outputs", method="POST", data={
+        "type": args.type,
+        "content": args.content,
+    })
+    print(f"Emitted {args.type} output for {task_id}")
+
+
 def cmd_check_code(args):
     """Run the mechanical checks for the agent's worktree.
 
@@ -400,6 +416,13 @@ def register(subparsers):
         help="Set to 'user' to surface this message in the user's memos. Leave unset for in-thread chatter.",
     )
     p.set_defaults(func=cmd_reply)
+
+    # maiko emit — post a structured output the workflow engine reads
+    p = subparsers.add_parser("emit", help="Post a structured output (task/plan/verdict/...) for the workflow engine")
+    p.add_argument("content", help="Output content (use a heredoc for multi-line)")
+    p.add_argument("--type", required=True, help="Output type: task | plan | diff | report | insight | proposal | verdict | comment")
+    p.add_argument("--job", "--task", dest="task", help="Job ID (auto-detected from MAIKO_JOB_ID env or TASK.md if omitted)")
+    p.set_defaults(func=cmd_emit)
 
     # maiko session-report — link CLAUDE_SESSION_ID to the AgentJob
     p = subparsers.add_parser("session-report", help="Report the agent's session ID to Maiko (replaces the MCP startup ping)")

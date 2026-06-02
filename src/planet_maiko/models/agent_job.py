@@ -68,6 +68,10 @@ class AgentJob(db.Model):
 
     # Output
     artifact = db.Column(db.Text, nullable=True)
+    # Structured outputs: a list of {type, content} the agent posts via
+    # `maiko emit`, for the workflow engine to read without parsing the
+    # free-text artifact. Distinct from artifact (the human-readable reply).
+    outputs = db.Column(db.JSON, default=list)
     error = db.Column(db.Text, nullable=True)
 
     # Timing
@@ -108,6 +112,7 @@ class AgentJob(db.Model):
             "branch": self.branch,
             "session_id": self.session_id,
             "artifact": self.artifact,
+            "outputs": self.outputs or [],
             "error": self.error,
             "created_at": iso_utc(self.created_at),
             "updated_at": iso_utc(self.updated_at),

@@ -774,6 +774,27 @@ def rerun_agent(job_id):
     }), 202
 
 
+@agents_bp.route("/agents/<job_id>/outputs", methods=["POST"])
+def emit_agent_output(job_id):
+    """Append a structured {type, content} output to an agent job, so the
+    workflow engine can read it without parsing the free-text artifact.
+    Agents post these via `maiko emit --type <kind> "<content>"`; this is
+    distinct from the chat/artifact (the /outbox reply path)."""
+    from planet_maiko.models.agent_job import AgentJob
+    data = request.get_json() or {}
+    otype = (data.get("type") or "").strip().lower()
+    content = data.get("content")
+    if not otype or content is None:
+        return jsonify({"error": "type and content are required"}), 400
+    job = db.session.get(AgentJob, job_id)
+    if job is None:
+        return jsonify({"error": f"Job {job_id} not found"}), 404
+    # Reassign (not in-place append) so SQLAlchemy detects the JSON change.
+    job.outputs = (job.outputs or []) + [{"type": otype, "content": content}]
+    db.session.commit()
+    return jsonify({"ok": True, "count": len(job.outputs)}), 201
+
+
 # Outbox dispatcher — per-message-type handlers live in
 # planet_maiko.api.agent_outbox so this stays a thin route.
 @agents_bp.route("/agents/<task_id>/outbox", methods=["POST"])
