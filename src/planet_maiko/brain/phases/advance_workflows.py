@@ -17,6 +17,7 @@ a runaway graph.
 """
 
 import logging
+import re
 import subprocess
 import uuid
 from datetime import datetime, timezone
@@ -66,15 +67,23 @@ def _push_branch(worktree, branch):
         return False
 
 
+# A task header: a line that, after any markdown / list decoration
+# (#, *, -, digits, dots, spaces), starts with "TASK" plus a delimiter.
+# Tolerant so "TASK:", "**TASK:**", "## TASK 2:", "1. TASK -" all count —
+# LLMs decorate these inconsistently and the old strict line-start check
+# missed every variant, so the scatter parsed zero tasks.
+_TASK_HEADER = re.compile(r"^[\s>#*.\d-]*task\b\s*\d*\s*[:).\-]", re.IGNORECASE)
+
+
 def _parse_tasks(text):
-    """Split a decomposer's reply into one block per TASK: marker. Each
-    block (the TASK: title line plus its description lines) is fed to one
-    coder instance as its task. Returns [] when there are no markers."""
+    """Split a decomposer's reply into one block per task header. Each block
+    (the header line plus its following description lines) is fed to one
+    coder instance as its task. Returns [] when there are no headers."""
     if not text:
         return []
     tasks, cur = [], None
     for ln in text.splitlines():
-        if ln.strip()[:5].upper() == "TASK:":
+        if _TASK_HEADER.match(ln):
             if cur is not None:
                 block = "\n".join(cur).strip()
                 if block:
@@ -91,12 +100,11 @@ def _parse_tasks(text):
 
 def _first_line(text, limit=80):
     """A short label for a scattered instance: the task's first real line,
-    minus any TASK: marker, truncated."""
+    with the TASK header decoration stripped, truncated."""
     for ln in (text or "").splitlines():
         s = ln.strip()
         if s:
-            if s[:5].upper() == "TASK:":
-                s = s[5:].strip()
+            s = _TASK_HEADER.sub("", s).strip(" *#:->") or s
             return s[:limit] or "task"
     return "task"
 
