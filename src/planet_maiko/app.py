@@ -662,7 +662,11 @@ def create_app(start_scheduler=False):
                                 WorkflowRun.status == "running"
                             ).count()
                         if active:
-                            run_workflow_tick(app)
+                            adv = run_workflow_tick(app)
+                            logger.info(
+                                f"[brain-cycle] workflow tick: {active} active "
+                                f"run(s), advanced={adv}"
+                            )
                 except Exception as e:
                     logger.error(f"[brain-cycle] tick failed: {e}")
                 i += 1
@@ -673,8 +677,8 @@ def create_app(start_scheduler=False):
 
         threading.Thread(target=_brain_cycle_loop, daemon=True, name="brain-cycle").start()
         logger.info(
-            f"[brain-cycle] full cycle every {brain_interval}s, "
-            f"workflow tick every {FAST_TICK}s"
+            f"[brain-cycle] full cycle every {brain_interval}s (every "
+            f"{full_every} ticks), workflow tick every {FAST_TICK}s"
         )
 
         threading.Thread(target=backup_loop, args=(stop_event,), daemon=True, name="backups").start()

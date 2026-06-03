@@ -162,15 +162,19 @@ def run_workflow_tick(app):
     pickup; per-phase rollback mirrors run()."""
     from planet_maiko.database import db
     with app.app_context():
+        advanced = 0
         for key, phase_fn in _WORKFLOW_PHASES:
             try:
-                phase_fn()
+                res = phase_fn()
+                if key == "advance_workflows" and isinstance(res, dict):
+                    advanced += res.get("advanced", 0)
             except Exception as e:
                 logger.warning(f"[workflow-tick] {key} skipped: {e}")
             try:
                 db.session.rollback()
             except Exception:
                 pass
+        return advanced
 
 
 def get_status():
