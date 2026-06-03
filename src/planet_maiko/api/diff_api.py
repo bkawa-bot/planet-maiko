@@ -687,15 +687,19 @@ def approve(job_id):
     job, task, err = _job_and_task_or_404(job_id)
     if err:
         return err
-    if task is None:
-        return jsonify({"error": "Approve flow requires a linked Task"}), 400
     worktree = _worktree_path(job)
     if not worktree:
         return jsonify({"error": "No worktree for this job"}), 400
 
-    branch = (task.extra or {}).get("branch")
+    # Branch / PR url / title / agent come from the linked Task in the
+    # task-centric review flow, else from the job itself — a task-less
+    # workflow coder job (each fanned branch is independently PR-able)
+    # carries them on the job.
+    branch = (task.extra or {}).get("branch") if task else job.branch
     if not branch:
-        return jsonify({"error": "No branch tracked for this task"}), 400
+        return jsonify({"error": "No branch tracked for this job"}), 400
+    title = task.title if task else (job.title or "this work")
+    agent_id = task.assigned_agent_id if task else job.agent_profile_id
 
     submitted = DiffComment.query.filter_by(
         job_id=job_id, status="submitted",
@@ -703,7 +707,9 @@ def approve(job_id):
     for c in submitted:
         c.status = "resolved"
 
-    existing_pr_url = (task.extra or {}).get("pr_url")
+    existing_pr_url = (
+        (task.extra or {}).get("pr_url") if task else (job.extra or {}).get("pr_url")
+    )
 
     if existing_pr_url:
         instruction = (
@@ -724,13 +730,13 @@ def approve(job_id):
             f"3. Once the PR is open, call "
             f"reply(message_type='pr_opened', content=<PR URL>) with "
             f"the URL on its own line.\n\n"
-            f"Task: {task.title}\n\n"
+            f"Task: {title}\n\n"
             f"If you hit a problem (push rejected, gh auth missing, "
             f"template question), reply with message_type='stuck'."
         )
 
     from planet_maiko.agents.signature import signature_instruction_for_agent
-    instruction += signature_instruction_for_agent(task.assigned_agent_id)
+    instruction += signature_instruction_for_agent(agent_id)
 
     from planet_maiko.models.agent_message import AgentMessage
     db.session.add(AgentMessage(
@@ -741,29 +747,30 @@ def approve(job_id):
         message_type="approved",
     ))
 
-    task.status = "in_review"
-    task.updated_at = datetime.now(timezone.utc)
-    extra = dict(task.extra or {})
-    extra["last_approved_at"] = datetime.now(timezone.utc).isoformat()
-    task.extra = extra
+    if task is not None:
+        task.status = "in_review"
+        task.updated_at = datetime.now(timezone.utc)
+        extra = dict(task.extra or {})
+        extra["last_approved_at"] = datetime.now(timezone.utc).isoformat()
+        task.extra = extra
 
-    from planet_maiko.models.pupdate import Pupdate
-    stale_reviews = (
-        Pupdate.query
-        .filter(Pupdate.type == "agent_ready_for_review")
-        .filter(Pupdate.dismissed == False)  # noqa: E712
-        .filter(Pupdate.tags.contains(task.id))
-        .all()
-    )
-    for p in stale_reviews:
-        p.dismissed = True
+        from planet_maiko.models.pupdate import Pupdate
+        stale_reviews = (
+            Pupdate.query
+            .filter(Pupdate.type == "agent_ready_for_review")
+            .filter(Pupdate.dismissed == False)  # noqa: E712
+            .filter(Pupdate.tags.contains(task.id))
+            .all()
+        )
+        for p in stale_reviews:
+            p.dismissed = True
     db.session.commit()
 
     resumed = _resume_agent_with_review(job_id, worktree)
 
     return jsonify({
         "job_id": job_id,
-        "task_id": task.id,
+        "task_id": task.id if task else None,
         "branch": branch,
         "existing_pr_url": existing_pr_url,
         "agent_resumed": resumed,
