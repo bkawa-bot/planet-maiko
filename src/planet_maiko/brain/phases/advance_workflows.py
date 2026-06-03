@@ -178,6 +178,21 @@ def _revision_request(job):
     return None
 
 
+def _is_diff_producer(job):
+    """True when this job's role produces a diff — a branch that can be
+    revised (a coder), not a plan or task list (a decomposer / planner).
+
+    The revision loop only routes feedback back to something that can act on
+    it by editing code, so a non-diff producer is never a valid revision
+    target. Without this guard, a coder that emits a `revision_request`
+    (e.g. asking for task clarification) would loop back to the decomposer
+    that produced its task, re-arm the coder, and starve the reviewer that
+    was waiting on that coder to stay done."""
+    from planet_maiko.agent_types import get_agent_type
+    at = get_agent_type(job.kind)
+    return bool(at and at.output_kind == "diff")
+
+
 def _revision_message(feedback_text, requester_job):
     """The prompt handed back to the producer when a downstream node asks
     for changes: the revision feedback plus any inline comments. Sent
@@ -376,7 +391,11 @@ def _phase_advance_workflows():
                     # the exact paired producer NodeRun id (set at propagation);
                     # a 1:1 node resolves its single upstream producer from the
                     # graph edge. Either way the id is derived, never sent by an
-                    # agent. The producer needs a worktree to revise in.
+                    # agent. The producer must have a worktree AND produce a diff
+                    # (a coder): a revision can only go back to something that
+                    # revises code, never up to a decomposer / planner. Without
+                    # that, a coder emitting a revision_request loops back to its
+                    # decomposer and the reviewer never gets a settled coder.
                     producer_nr = producer_job = None
                     paired = (rv.extra or {}).get("paired_to")
                     if paired:
@@ -385,7 +404,7 @@ def _phase_advance_workflows():
                             db.session.get(AgentJob, pnr.agent_job_id)
                             if pnr and pnr.agent_job_id else None
                         )
-                        if pj and pj.worktree_path:
+                        if pj and pj.worktree_path and _is_diff_producer(pj):
                             producer_nr, producer_job = pnr, pj
                     else:
                         for src in inbound_for:
@@ -397,15 +416,26 @@ def _phase_advance_workflows():
                                 db.session.get(AgentJob, src_nr.agent_job_id)
                                 if src_nr.agent_job_id else None
                             )
-                            if pj and pj.worktree_path:
+                            if pj and pj.worktree_path and _is_diff_producer(pj):
                                 producer_nr, producer_job = src_nr, pj
                                 break
                     round_n = (rv.extra or {}).get("round", 0)
                     if not producer_job or round_n >= _MAX_REVIEW_ROUNDS:
+                        result = "max_rounds" if producer_job else "no_target"
+                        if result == "no_target":
+                            # A node asked for a revision but has no diff-
+                            # producing upstream to send it to (e.g. a coder
+                            # emitting a revision_request toward its decomposer).
+                            # Settle it so downstream proceeds; surface it.
+                            logger.info(
+                                f"[cycle] {rv.agent_type} node asked for a "
+                                f"revision with no diff-producer upstream; "
+                                f"settling (no loop back)"
+                            )
                         rv.extra = {
                             **(rv.extra or {}),
                             "loop_settled": True,
-                            "loop_result": "max_rounds" if producer_job else "no_target",
+                            "loop_result": result,
                         }
                         continue
                     # Hand the feedback back through the SAME path a human review
