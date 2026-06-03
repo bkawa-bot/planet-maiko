@@ -290,6 +290,21 @@ def _initial_prompt_for(role, plan_first=False):
             "tags yourself. Read-only: do not commit, push, or modify "
             "anything. Exit after the reply."
         )
+    if role in ("planner", "decomposer"):
+        # Read-only producers (a plan / a task list). They never commit,
+        # so the coding prompt's commit-gated "reply when done" never fires
+        # and they stall idle. Tell them plainly: do it in one pass, then
+        # reply — that reply is what advances the flow to the next step.
+        return (
+            "Read TASK.md and CLAUDE.md in this directory. TASK.md carries "
+            "your input; CLAUDE.md carries your protocol — follow it. You "
+            "are read-only: do NOT write code, commit, or push. Do the work "
+            "in this one session, then finish by running `maiko reply "
+            "\"<your summary>\" --type ready_for_review`, plus any `maiko "
+            "emit` outputs your protocol specifies. Do not stop before that "
+            "reply — it is what lets the flow move on. The Stop hook will "
+            "auto-poll your inbox afterward."
+        )
     # coding (default)
     return (
         "Read TASK.md and CLAUDE.md in this directory. Begin working "
