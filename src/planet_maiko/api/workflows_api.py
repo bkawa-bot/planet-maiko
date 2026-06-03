@@ -6,6 +6,7 @@ per-node AgentJob) is a later phase; this blueprint is create / read /
 update / delete of the saved graph only. Mirrors agent_types_api.py.
 """
 
+import logging
 from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request
 
@@ -13,6 +14,7 @@ from planet_maiko.database import db, iso_utc
 from planet_maiko.models.workflow import Workflow
 from planet_maiko.models.workflow_run import WorkflowRun, NodeRun
 
+logger = logging.getLogger(__name__)
 workflows_bp = Blueprint("workflows", __name__)
 
 
@@ -129,6 +131,79 @@ def run_workflow(wf_id):
         ))
     db.session.commit()
     return jsonify(run.to_dict()), 201
+
+
+def _end_runtime_session(job_id):
+    """Force-tear-down the agent's live session for this job across every
+    instantiated runtime (tmux kills its bound session; headless is a
+    no-op). Mirrors the outbox's terminal-reply teardown, minus the
+    message-type gate."""
+    try:
+        from planet_maiko.agents import brain_session
+        for name, runtime in list(brain_session._runtimes.items()):
+            if runtime is None:
+                continue
+            try:
+                runtime.end_session(job_id)
+            except Exception as e:
+                logger.warning(f"[workflows] {name}.end_session({job_id}) failed: {e}")
+    except Exception as e:
+        logger.warning(f"[workflows] end-session fan-out for {job_id} failed: {e}")
+
+
+def _kill_inflight_jobs(run):
+    """Stop every in-flight node job of a run: kill its session, mark the
+    job cancelled. Returns how many were stopped. Caller commits."""
+    from planet_maiko.models.agent_job import AgentJob
+    stopped = 0
+    for nr in run.node_runs:
+        if nr.status in ("queued", "running") and nr.agent_job_id:
+            job = db.session.get(AgentJob, nr.agent_job_id)
+            if job and job.status in ("queued", "running"):
+                _end_runtime_session(job.id)
+                job.status = "cancelled"
+                job.finished_at = datetime.now(timezone.utc)
+                stopped += 1
+    return stopped
+
+
+@workflows_bp.route("/workflow-runs/<run_id>/stop", methods=["POST"])
+def stop_workflow_run(run_id):
+    """Force-stop a running flow: kill its in-flight node sessions and mark
+    its jobs + non-terminal nodes + the run itself cancelled. The run drops
+    out of the active list and the executor stops advancing it. Idempotent
+    on an already-terminal run."""
+    run = db.session.get(WorkflowRun, run_id)
+    if run is None:
+        return jsonify({"error": "Run not found"}), 404
+    if run.status != "running":
+        return jsonify({"ok": True, "status": run.status, "already_terminal": True})
+    stopped = _kill_inflight_jobs(run)
+    for nr in run.node_runs:
+        if nr.status not in ("done", "failed", "skipped"):
+            nr.status = "cancelled"
+    run.status = "cancelled"
+    run.finished_at = datetime.now(timezone.utc)
+    db.session.commit()
+    logger.info(f"[workflows] stopped run {run_id}: killed {stopped} session(s)")
+    return jsonify({"ok": True, "status": "cancelled", "stopped_jobs": stopped})
+
+
+@workflows_bp.route("/workflow-runs/<run_id>", methods=["DELETE"])
+def delete_workflow_run(run_id):
+    """Remove a run from history. If it's still running, stop it first (kill
+    sessions) so deleting can't orphan a live agent."""
+    run = db.session.get(WorkflowRun, run_id)
+    if run is None:
+        return jsonify({"error": "Run not found"}), 404
+    if run.status == "running":
+        _kill_inflight_jobs(run)
+    for nr in list(run.node_runs):
+        db.session.delete(nr)
+    db.session.delete(run)
+    db.session.commit()
+    logger.info(f"[workflows] deleted run {run_id}")
+    return jsonify({"ok": True, "deleted": run_id})
 
 
 @workflows_bp.route("/workflow-runs/<run_id>", methods=["GET"])

@@ -94,6 +94,34 @@ export default function FlowsTab() {
     setDeleting(false);
   };
 
+  const handleStopRun = async (id) => {
+    try {
+      await api.stopWorkflowRun(id);
+      showToast("Run stopped", "normal");
+      load();
+    } catch (err) {
+      showToast(err.message || "Stop failed", "high");
+    }
+  };
+
+  const handleDeleteRun = async (id) => {
+    try {
+      await api.deleteWorkflowRun(id);
+      showToast("Run removed", "normal");
+      load();
+    } catch (err) {
+      showToast(err.message || "Delete failed", "high");
+    }
+  };
+
+  const handleStopAll = async () => {
+    const running = runs.filter((r) => r.status === "running");
+    if (running.length === 0) return;
+    await Promise.allSettled(running.map((r) => api.stopWorkflowRun(r.id)));
+    showToast(`Stopped ${running.length} run${running.length === 1 ? "" : "s"}`, "normal");
+    load();
+  };
+
   if (loading) return <p className="page-empty">Loading flows…</p>;
 
   return (
@@ -106,24 +134,50 @@ export default function FlowsTab() {
 
       {runs.length > 0 && (
         <div className="flow-runs-section">
-          <div className="flow-runs-label">Recent runs</div>
+          <div className="flow-runs-header">
+            <span className="flow-runs-label">Recent runs</span>
+            {runs.some((r) => r.status === "running") && (
+              <button className="btn btn-sm" onClick={handleStopAll} title="Stop every running flow">
+                Stop all running
+              </button>
+            )}
+          </div>
           <div className="flow-runs-list">
             {runs.slice(0, 10).map((r) => (
-              <button
-                key={r.id}
-                className="flow-run-row"
-                onClick={() => setViewingRun(r.id)}
-              >
-                <span className={`flow-run-row-status status-${r.status}`}>{r.status}</span>
-                <span className="flow-run-row-name">{r.workflow_name}</span>
-                <span className={`flow-run-row-meta${r.awaiting > 0 ? " awaiting" : ""}`}>
-                  {r.awaiting > 0
-                    ? `${r.awaiting} awaiting approval`
-                    : `${r.steps_done}/${r.steps_total} steps`}
-                  {" · "}
-                  {relativeTime(r.created_at)}
-                </span>
-              </button>
+              <div key={r.id} className="flow-run-row">
+                <button
+                  className="flow-run-row-main"
+                  onClick={() => setViewingRun(r.id)}
+                >
+                  <span className={`flow-run-row-status status-${r.status}`}>{r.status}</span>
+                  <span className="flow-run-row-name">{r.workflow_name}</span>
+                  <span className={`flow-run-row-meta${r.awaiting > 0 ? " awaiting" : ""}`}>
+                    {r.awaiting > 0
+                      ? `${r.awaiting} awaiting approval`
+                      : `${r.steps_done}/${r.steps_total} steps`}
+                    {" · "}
+                    {relativeTime(r.created_at)}
+                  </span>
+                </button>
+                <div className="flow-run-row-actions">
+                  {r.status === "running" && (
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => handleStopRun(r.id)}
+                      title="Stop this run"
+                    >
+                      Stop
+                    </button>
+                  )}
+                  <button
+                    className="btn btn-sm flow-card-delete"
+                    onClick={() => handleDeleteRun(r.id)}
+                    title="Remove this run"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         </div>

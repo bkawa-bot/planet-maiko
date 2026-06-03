@@ -1230,16 +1230,26 @@
   text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px;
 }
 .flow-runs-list { display: flex; flex-direction: column; gap: 5px; }
+.flow-runs-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-bottom: 6px;
+}
 .flow-run-row {
-  display: flex; align-items: center; gap: 10px;
-  width: 100%; text-align: left;
+  display: flex; align-items: center; gap: 6px;
+  width: 100%;
   padding: 7px 10px;
   background: var(--bg-card); border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xs); cursor: pointer; font-family: inherit;
-  color: var(--text);
+  border-radius: var(--radius-xs); color: var(--text);
   transition: border-color 0.12s, background 0.12s;
 }
 .flow-run-row:hover { border-color: var(--pink); background: var(--bg-hover); }
+.flow-run-row-main {
+  display: flex; align-items: center; gap: 10px;
+  flex: 1; min-width: 0; text-align: left;
+  background: none; border: none; padding: 0; margin: 0;
+  font-family: inherit; color: inherit; cursor: pointer;
+}
+.flow-run-row-actions { display: flex; gap: 4px; flex-shrink: 0; }
 .flow-run-row-status {
   font-size: 9px; font-weight: 700; flex-shrink: 0;
   text-transform: uppercase; letter-spacing: 0.04em;
