@@ -1,44 +1,46 @@
-import {
-  BaseEdge,
-  EdgeLabelRenderer,
-  getBezierPath,
-  useReactFlow,
-} from "@xyflow/react";
+import { useState } from "react";
+import { BaseEdge, EdgeLabelRenderer, useReactFlow } from "@xyflow/react";
 
-// A loop (back-)edge in the flow editor. Two reasons it's a custom edge:
-//   1. Extra curvature so it bows clearly away from the forward wire between
-//      the same two nodes, instead of collapsing on top of it.
-//   2. An editable round-count badge (↻ N). N writes straight back to the
-//      edge's data.maxLoops via useReactFlow().setEdges, which the executor
-//      reads as the loop cap. Using the hook (not a callback threaded through
-//      edge.data) keeps data JSON-clean and works for both freshly-drawn and
-//      reloaded edges.
+// A loop (back-)edge in the flow editor. Custom because:
+//   1. It draws an EXPLICIT arc — a quadratic bezier bulged perpendicular to
+//      the straight line by a fixed margin — so a back-edge always reads as a
+//      visible loop, regardless of node layout, instead of collapsing onto
+//      the forward wire (native curvature wasn't enough on real layouts).
+//   2. It carries an editable round-count badge (↻ N). The input uses a local
+//      draft + commits on blur/Enter, and stops keydown propagation so React
+//      Flow's delete-key handling doesn't eat Backspace (which was deleting
+//      the whole edge mid-type). N writes back to data.maxLoops, the cap the
+//      executor reads.
 export default function LoopEdge({
   id,
   sourceX,
   sourceY,
   targetX,
   targetY,
-  sourcePosition,
-  targetPosition,
   data,
   markerEnd,
 }) {
   const { setEdges } = useReactFlow();
-  const maxLoops = (data && data.maxLoops) || 3;
+  const [draft, setDraft] = useState(String((data && data.maxLoops) || 3));
 
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-    curvature: 0.6,
-  });
+  // Explicit arc: bulge perpendicular to the source->target line by a margin
+  // that scales gently with distance, so it's always a clear loop.
+  const mx = (sourceX + targetX) / 2;
+  const my = (sourceY + targetY) / 2;
+  const dx = targetX - sourceX;
+  const dy = targetY - sourceY;
+  const len = Math.hypot(dx, dy) || 1;
+  const bulge = Math.min(130, Math.max(55, len * 0.3));
+  const px = (-dy / len) * bulge;
+  const py = (dx / len) * bulge;
+  const edgePath = `M ${sourceX},${sourceY} Q ${mx + px},${my + py} ${targetX},${targetY}`;
+  // The quadratic's apex sits ~halfway to the control point; park the badge there.
+  const labelX = mx + px * 0.5;
+  const labelY = my + py * 0.5;
 
-  const setMax = (raw) => {
-    const n = Math.max(1, Math.min(20, parseInt(raw, 10) || maxLoops));
+  const commit = () => {
+    const n = Math.max(1, Math.min(20, parseInt(draft, 10) || 3));
+    setDraft(String(n));
     setEdges((eds) =>
       eds.map((e) =>
         e.id === id ? { ...e, data: { ...(e.data || {}), maxLoops: n } } : e
@@ -60,17 +62,25 @@ export default function LoopEdge({
           style={{
             transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
           }}
-          title="Loop: this step sends the target back up to N rounds"
+          title="Loop: this step sends the target back, up to N rounds"
         >
           <span className="flow-loop-icon">↻</span>
           <input
             type="number"
             min={1}
             max={20}
-            value={maxLoops}
-            onChange={(e) => setMax(e.target.value)}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              e.stopPropagation(); // keep Backspace/Delete from deleting the edge
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            }}
             onClick={(e) => e.stopPropagation()}
-            className="flow-loop-input"
+            className="flow-loop-input nodrag nopan"
             title="Max loop rounds before the flow moves on"
           />
         </div>
