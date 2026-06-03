@@ -648,7 +648,14 @@ def create_app(start_scheduler=False):
         full_every = max(1, brain_interval // FAST_TICK)
 
         def _brain_cycle_loop():
-            time.sleep(30)  # let the app fully come up before first tick
+            # Entry marker: makes "is the daemon thread actually running?"
+            # answerable from the logs immediately, instead of waiting out
+            # the settle delay and the first tick. If you see the startup
+            # line but never this one, the thread was created but isn't
+            # executing (launch path / stale process); if you see this but
+            # no tick lines, the loop body is hanging.
+            logger.info("[brain-cycle] daemon thread started; first tick in ~10s")
+            time.sleep(10)  # let the app settle before the first tick
             i = 0
             while not stop_event.is_set():
                 try:
