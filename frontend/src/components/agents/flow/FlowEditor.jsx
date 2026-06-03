@@ -13,6 +13,7 @@ import "./flow-theme.css";
 import { X, Save, Play, CombinationLock } from "@icons";
 import RoleNode from "./RoleNode";
 import GateNode from "./GateNode";
+import LoopEdge from "./LoopEdge";
 import { roleMeta } from "../../../hooks/useAgentTypes";
 import { kindColor, edgeValid } from "./kinds";
 import { api } from "../../../api/client";
@@ -20,6 +21,7 @@ import { showToast } from "../../Toast";
 import ModalPortal from "../../ModalPortal";
 
 const nodeTypes = { role: RoleNode, gate: GateNode };
+const edgeTypes = { loop: LoopEdge };
 
 // Placeholder for the Run dialog's kickoff input, keyed by what the first
 // step accepts. The label itself is the capitalized kind.
@@ -80,13 +82,10 @@ function buildInitial(workflow, types) {
     // A saved loop (back-)edge: keep its data and draw it distinctly
     // (dashed, ↻N) so it reads as a loop, not a normal dataflow wire.
     if (e.data && e.data.loop) {
-      const maxLoops = e.data.maxLoops || 3;
       return {
         ...base,
-        data: e.data,
-        label: `↻ ${maxLoops}`,
-        animated: true,
-        style: { stroke: "#c9a227", strokeDasharray: "5 4" },
+        type: "loop",
+        data: { loop: true, maxLoops: e.data.maxLoops || 3 },
       };
     }
     return { ...base, style: { stroke: kindColor(kind) } };
@@ -176,17 +175,11 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
       // data.loop with a default cap and draw it distinctly (dashed, ↻N).
       // The executor reads data.loop to drive the bounded back-loop.
       if (reaches(conn.target, conn.source)) {
-        const maxLoops = 3;
+        // Back-edge => a loop edge: the custom LoopEdge type draws the arc
+        // and the editable ↻N badge; we just tag it and seed the default cap.
         setEdges((eds) =>
           addEdge(
-            {
-              ...conn,
-              className: "flow-edge",
-              data: { loop: true, maxLoops },
-              label: `↻ ${maxLoops}`,
-              animated: true,
-              style: { stroke: "#c9a227", strokeDasharray: "5 4" },
-            },
+            { ...conn, type: "loop", data: { loop: true, maxLoops: 3 } },
             eds
           )
         );
@@ -358,6 +351,7 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
             onConnect={onConnect}
             isValidConnection={isValidConnection}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             onInit={setRf}
             fitView
             fitViewOptions={{ padding: 0.2 }}

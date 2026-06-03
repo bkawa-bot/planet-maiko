@@ -79,14 +79,36 @@
   margin-top: 2px;
 }
 .flow-sock-arrow { color: var(--text-muted); }
-/* Behavior hints: which roles fan out / loop, readable at build time. */
+/* Behavior hint: which roles fan out, readable at build time. (Loops are
+   explicit graph edges now — see the loop-edge badge below.) */
 .flow-role-flags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
 .flow-role-flag {
   font-size: 9px; font-weight: 700; letter-spacing: 0.02em;
   text-transform: uppercase; padding: 1px 6px; border-radius: 999px;
 }
 .flag-fan { background: color-mix(in srgb, var(--peach) 22%, transparent); color: var(--peach); }
-.flag-loop { background: color-mix(in srgb, var(--lavender) 22%, transparent); color: var(--lavender); }
+
+/* Loop (back-)edge badge: an editable round count (↻ N), readable on the
+   dark canvas instead of the default black label box. */
+.flow-loop-badge {
+  position: absolute;
+  display: flex; align-items: center; gap: 2px;
+  pointer-events: all;
+  background: #221f2b;
+  border: 1px solid #d9a93a;
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-size: 11px; color: #d9a93a;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.35);
+}
+.flow-loop-icon { font-size: 12px; line-height: 1; }
+.flow-loop-input {
+  width: 26px; background: transparent; border: none;
+  color: #d9a93a; font-size: 11px; text-align: center;
+  outline: none; -moz-appearance: textfield;
+}
+.flow-loop-input::-webkit-inner-spin-button,
+.flow-loop-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .flow-role-desc {
   margin-top: 8px;
   font-size: 11px; color: var(--text-dim); line-height: 1.4;

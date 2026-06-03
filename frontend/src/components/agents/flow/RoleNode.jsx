@@ -13,12 +13,12 @@ export default function RoleNode({ id, data, isConnectable }) {
   const accepts = (type.accepts && type.accepts.length) ? type.accepts : [type.input_kind || "task"];
   const primaryIn = accepts[0] || "task";
   const outKind = type.output_kind || "diff";
-  // Behavior hints, surfaced as pills so the implicit runtime behavior is
+  // Behavior hint, surfaced as a pill so the implicit runtime behavior is
   // legible at build time: a "tasks" producer fans the next step out into
-  // one instance per task; a "diff" consumer (a reviewer) can loop changes
-  // back to its coder.
+  // one instance per task at run time. (Loops are explicit graph edges now,
+  // drawn + capped on the edge itself, not inferred from the role — so no
+  // "loops" pill here anymore.)
   const fansOut = outKind === "tasks";
-  const loops = accepts.includes("diff");
 
   return (
     <div
@@ -61,24 +61,14 @@ export default function RoleNode({ id, data, isConnectable }) {
             <span className="flow-sock-arrow">→</span>
             <span style={{ color: kindColor(outKind) }}>{outKind}</span>
           </div>
-          {(fansOut || loops) && (
+          {fansOut && (
             <div className="flow-role-flags">
-              {fansOut && (
-                <span
-                  className="flow-role-flag flag-fan"
-                  title="Produces a task list, so the next step runs once per task (fans out into N at run time)"
-                >
-                  fans out
-                </span>
-              )}
-              {loops && (
-                <span
-                  className="flow-role-flag flag-loop"
-                  title="Reviews a diff and can send it back to the coder to revise, up to 3 rounds"
-                >
-                  loops ≤3
-                </span>
-              )}
+              <span
+                className="flow-role-flag flag-fan"
+                title="Produces a task list, so the next step runs once per task (fans out into N at run time)"
+              >
+                fans out
+              </span>
             </div>
           )}
         </div>
