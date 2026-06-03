@@ -178,19 +178,23 @@ def _revision_request(job):
     return None
 
 
-def _is_diff_producer(job):
-    """True when this job's role produces a diff — a branch that can be
-    revised (a coder), not a plan or task list (a decomposer / planner).
+def _loop_signal(job):
+    """The 'run another round' feedback from a loop's source node, or None.
 
-    The revision loop only routes feedback back to something that can act on
-    it by editing code, so a non-diff producer is never a valid revision
-    target. Without this guard, a coder that emits a `revision_request`
-    (e.g. asking for task clarification) would loop back to the decomposer
-    that produced its task, re-arm the coder, and starve the reviewer that
-    was waiting on that coder to stay done."""
-    from planet_maiko.agent_types import get_agent_type
-    at = get_agent_type(job.kind)
-    return bool(at and at.output_kind == "diff")
+    Primary path: a generic loop-control bit the node set via
+    `maiko request-changes "<feedback>"` (stored at job.extra.loop_request).
+    It is a plain continue + payload signal — NOT an output type or a role.
+    Absent it, the node is done and the run proceeds along its forward edges.
+    Falls back to a legacy revision_request output / VERDICT: line so an
+    un-migrated reviewer still loops."""
+    if job is None:
+        return None
+    lr = (job.extra or {}).get("loop_request")
+    if isinstance(lr, dict) and lr.get("feedback"):
+        return lr["feedback"]
+    if lr:
+        return "Address the requested changes and revise."
+    return _revision_request(job)
 
 
 def _revision_message(feedback_text, requester_job):
@@ -341,6 +345,13 @@ def _phase_advance_workflows():
             graph = run.graph_snapshot or {}
             nodes = graph.get("nodes") or []
             edges = graph.get("edges") or []
+            # A loop edge is a graph-declared back-edge A->B (data.loop) with
+            # an optional data.maxLoops cap. Forward edges drive readiness +
+            # dataflow; loop edges drive the bounded back-loop (1.5) and must
+            # NOT count toward a node's inbound, or the loop target would
+            # deadlock waiting on the very node that loops back to it.
+            loop_edges = [e for e in edges if (e.get("data") or {}).get("loop")]
+            fwd_edges = [e for e in edges if not (e.get("data") or {}).get("loop")]
             nrs_by_node = {}
             for nr in run.node_runs:
                 nrs_by_node.setdefault(nr.node_id, []).append(nr)
@@ -365,106 +376,90 @@ def _phase_advance_workflows():
                     elif job.status == "running":
                         nr.status = "running"
 
-            # 1.5 Revision loop (generic, role-agnostic). A done node that
-            #     emitted a `revision_request` output sends that feedback
-            #     back to the upstream node it depends on (resume the same
-            #     session so it keeps its branch) and re-arms itself for
-            #     another pass, bounded by _MAX_REVIEW_ROUNDS. No
-            #     revision_request and the node settles so downstream
-            #     proceeds. The engine never parses a verdict or knows what
-            #     a "reviewer" is — it just routes a revision_request back to
-            #     its producer. Reviewer->coder is only the common case.
-            for node in nodes:
-                nid = node.get("id")
-                inbound_for = [e.get("source") for e in edges if e.get("target") == nid]
-                for rv in nrs_by_node.get(nid, []):
+            # 1.5 Loop edges (graph-defined). A loop edge is a back-edge
+            #     A->B declared in the graph (data.loop, capped by
+            #     data.maxLoops, default _MAX_REVIEW_ROUNDS). When the source
+            #     node A finishes a pass and signals "another round" (a
+            #     generic continue/stop bit via `maiko request-changes`, NOT
+            #     an output type or role), the engine re-runs the target B
+            #     with A's feedback and re-arms A, up to the cap. No signal
+            #     and A settles so the run proceeds along A's forward edges.
+            #     The topology (which B) and the cap come straight from the
+            #     graph definition — never inferred from roles or outputs.
+            for le in loop_edges:
+                a_node, b_node = le.get("source"), le.get("target")
+                if not a_node or not b_node:
+                    continue
+                try:
+                    max_loops = int((le.get("data") or {}).get("maxLoops")
+                                    or _MAX_REVIEW_ROUNDS)
+                except (TypeError, ValueError):
+                    max_loops = _MAX_REVIEW_ROUNDS
+                for rv in nrs_by_node.get(a_node, []):
                     if rv.status != "done" or not rv.agent_job_id:
                         continue
                     if (rv.extra or {}).get("loop_settled"):
                         continue
                     rv_job = db.session.get(AgentJob, rv.agent_job_id)
-                    feedback = _revision_request(rv_job)
+                    feedback = _loop_signal(rv_job)
                     if not feedback:
                         rv.extra = {**(rv.extra or {}), "loop_settled": True}
                         continue
-                    # Which producer to send back to. A fanned instance carries
-                    # the exact paired producer NodeRun id (set at propagation);
-                    # a 1:1 node resolves its single upstream producer from the
-                    # graph edge. Either way the id is derived, never sent by an
-                    # agent. The producer must have a worktree AND produce a diff
-                    # (a coder): a revision can only go back to something that
-                    # revises code, never up to a decomposer / planner. Without
-                    # that, a coder emitting a revision_request loops back to its
-                    # decomposer and the reviewer never gets a settled coder.
-                    producer_nr = producer_job = None
+                    # Resolve WHICH INSTANCE of the loop target node to re-run.
+                    # The NODE is fixed by the graph edge (b_node); only the
+                    # instance is resolved here: a fanned A_i carries
+                    # paired_to = its B_i NodeRun (set at propagation), a 1:1 A
+                    # uses the single instance of b_node. The target needs a
+                    # worktree to revise in.
+                    target_nr = target_job = None
                     paired = (rv.extra or {}).get("paired_to")
                     if paired:
-                        pnr = db.session.get(NodeRun, paired)
-                        pj = (
-                            db.session.get(AgentJob, pnr.agent_job_id)
-                            if pnr and pnr.agent_job_id else None
+                        bnr = db.session.get(NodeRun, paired)
+                        bj = (
+                            db.session.get(AgentJob, bnr.agent_job_id)
+                            if bnr and bnr.agent_job_id else None
                         )
-                        if pj and pj.worktree_path and _is_diff_producer(pj):
-                            producer_nr, producer_job = pnr, pj
-                    else:
-                        for src in inbound_for:
-                            src_insts = nrs_by_node.get(src, [])
-                            if len(src_insts) != 1:
-                                continue
-                            src_nr = src_insts[0]
-                            pj = (
-                                db.session.get(AgentJob, src_nr.agent_job_id)
-                                if src_nr.agent_job_id else None
-                            )
-                            if pj and pj.worktree_path and _is_diff_producer(pj):
-                                producer_nr, producer_job = src_nr, pj
-                                break
+                        if bnr and bnr.node_id == b_node and bj and bj.worktree_path:
+                            target_nr, target_job = bnr, bj
+                    if target_nr is None:
+                        insts = [i for i in nrs_by_node.get(b_node, []) if i.agent_job_id]
+                        if len(insts) == 1:
+                            bnr = insts[0]
+                            bj = db.session.get(AgentJob, bnr.agent_job_id)
+                            if bj and bj.worktree_path:
+                                target_nr, target_job = bnr, bj
                     round_n = (rv.extra or {}).get("round", 0)
-                    if not producer_job or round_n >= _MAX_REVIEW_ROUNDS:
-                        result = "max_rounds" if producer_job else "no_target"
-                        if result == "no_target":
-                            # A node asked for a revision but has no diff-
-                            # producing upstream to send it to (e.g. a coder
-                            # emitting a revision_request toward its decomposer).
-                            # Settle it so downstream proceeds; surface it.
-                            logger.info(
-                                f"[cycle] {rv.agent_type} node asked for a "
-                                f"revision with no diff-producer upstream; "
-                                f"settling (no loop back)"
-                            )
+                    if not target_job or round_n >= max_loops:
                         rv.extra = {
                             **(rv.extra or {}),
                             "loop_settled": True,
-                            "loop_result": result,
+                            "loop_result": "max_rounds" if target_job else "no_target",
                         }
                         continue
-                    # Hand the feedback back through the SAME path a human review
-                    # uses: a to_agent "review" inbox message + the standard
-                    # resume. The producer reads its inbox, addresses the
-                    # changes, commits, and replies ready_for_review. The
-                    # workflow only decides WHEN to send one back (a
-                    # revision_request output + the round cap).
+                    # Hand the feedback back through the SAME inbox + resume
+                    # path a human diff-review uses; the target revises on its
+                    # branch and replies ready_for_review again.
                     db.session.add(AgentMessage(
-                        task_id=producer_job.id,
+                        task_id=target_job.id,
                         direction="to_agent",
-                        sender=rv.agent_type or "review",
+                        sender=rv.agent_type or "loop",
                         content=_revision_message(feedback, rv_job),
                         message_type="review",
                     ))
                     db.session.commit()
-                    if not _resume_agent_with_review(producer_job.id, producer_job.worktree_path):
+                    if not _resume_agent_with_review(target_job.id, target_job.worktree_path):
                         rv.extra = {
                             **(rv.extra or {}),
                             "loop_settled": True,
                             "loop_result": "wake_failed",
                         }
                         continue
-                    # Producer iterates again on its branch; this node waits to
-                    # re-review (paired_to preserved, so it re-targets the same
-                    # producer next round).
-                    producer_job.status = "running"
-                    producer_nr.status = "running"
-                    producer_nr.extra = {**(producer_nr.extra or {}), "round": round_n + 1}
+                    # Target iterates again on its branch; A re-arms to re-run
+                    # after it (paired_to preserved so it re-targets the same
+                    # instance next round).
+                    target_job.status = "running"
+                    target_nr.status = "running"
+                    target_nr.extra = {**(target_nr.extra or {}), "round": round_n + 1}
                     rv.status = "pending"
                     rv.agent_job_id = None
                     rv.extra = {**(rv.extra or {}), "round": round_n + 1}
@@ -551,7 +546,7 @@ def _phase_advance_workflows():
                 if not pendings:
                     continue
                 role = pendings[0].agent_type
-                inbound = [e.get("source") for e in edges if e.get("target") == nid]
+                inbound = [e.get("source") for e in fwd_edges if e.get("target") == nid]
 
                 # CASE A: re-armed fanned reviewer instances (they carry a
                 #   paired_to from propagation). Each re-reviews its own paired
@@ -610,7 +605,7 @@ def _phase_advance_workflows():
                 # job; reject skips it (and its dependents).
                 if node.get("kind") == "gate" or node.get("agent_type") == "gate":
                     placeholder.status = "awaiting_approval"
-                    _emit_gate_memo(run, nid, placeholder, edges, nrs_by_node)
+                    _emit_gate_memo(run, nid, placeholder, fwd_edges, nrs_by_node)
                     continue
 
                 # Gather every done upstream instance + its job.

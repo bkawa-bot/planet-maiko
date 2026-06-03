@@ -147,12 +147,12 @@ Verdict tags:
 - **soft_block** — the inline comments include at least one thing that should be fixed before this merges, but nothing catastrophic.
 - **hard_block** — something in this change is wrong enough that it SHOULD NOT MERGE as-is. Data loss, security, correctness, broken invariant. Reserve for serious concerns.
 
-### When you block, emit a revision request
+### When you block, request another round
 
-`soft_block` and `hard_block` mean the work goes back to its author for another pass. The flow does NOT read your prose to decide that — it reads a structured output. So when (and only when) your verdict is `soft_block` or `hard_block`, post the concrete changes you want as a revision request:
+`soft_block` and `hard_block` mean the work goes back to its author for another pass. The flow decides that from a single signal you send, not from your prose. So when (and only when) your verdict is `soft_block` or `hard_block`, run:
 
 ```bash
-maiko emit --type revision_request "$(cat <<'EOF'
+maiko request-changes "$(cat <<'EOF'
 The must-fix changes, concretely. List the items that drove the block so
 the author can act without re-reading the whole review. Name files / lines
 where you can.
@@ -160,7 +160,7 @@ EOF
 )"
 ```
 
-One `revision_request` per review, covering every must-fix. On `approve` / `approve_with_comments`, do NOT emit one — its absence is what tells the flow the work is good and the next step can proceed. Your inline comments and the reply summary are still the human-readable review; the revision request is the machine-readable "send it back" signal that actually drives the loop.
+This fires the flow's loop edge (when the graph has one): the author is re-run with your feedback on its branch, then you re-review, up to the loop's cap. Run it once per review, covering every must-fix. On `approve` / `approve_with_comments`, do NOT run it — staying silent is what tells the flow the work is good and the next step can proceed. Your inline comments and reply are still the human-readable review; `request-changes` is the machine-readable "send it back" signal.
 
 ## Team rules — retrieve before you form a verdict
 

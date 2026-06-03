@@ -69,15 +69,27 @@ function buildInitial(workflow, types) {
     const srcNode = (g.nodes || []).find((n) => n.id === e.source);
     const srcType = srcNode ? byId[srcNode.agent_type] : null;
     const kind = (srcType && srcType.output_kind) || "diff";
-    return {
+    const base = {
       id: e.id || `${e.source}__${e.target}`,
       source: e.source,
       target: e.target,
       sourceHandle: e.sourceHandle || "out",
       targetHandle: e.targetHandle || "in",
       className: "flow-edge",
-      style: { stroke: kindColor(kind) },
     };
+    // A saved loop (back-)edge: keep its data and draw it distinctly
+    // (dashed, ↻N) so it reads as a loop, not a normal dataflow wire.
+    if (e.data && e.data.loop) {
+      const maxLoops = e.data.maxLoops || 3;
+      return {
+        ...base,
+        data: e.data,
+        label: `↻ ${maxLoops}`,
+        animated: true,
+        style: { stroke: "#c9a227", strokeDasharray: "5 4" },
+      };
+    }
+    return { ...base, style: { stroke: kindColor(kind) } };
   });
 
   return { nodes, edges };
@@ -114,14 +126,40 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
     return kinds.length && kinds.every((k) => k === kinds[0]) ? kinds[0] : "task";
   }, [nodes, edges]);
 
-  // A wire is valid only when the producer's output kind equals the
-  // consumer's input kind. React Flow calls this during a drag and
-  // refuses the drop on false.
+  // Does `from` reach `to` via existing forward (non-loop) edges? Used to
+  // tell a normal dataflow wire from a loop (back-)edge: if the target can
+  // already reach the source, a source->target wire closes a cycle.
+  const reaches = useCallback(
+    (from, to) => {
+      const adj = {};
+      edges.forEach((e) => {
+        if ((e.data || {}).loop) return; // ignore existing loop edges
+        (adj[e.source] = adj[e.source] || []).push(e.target);
+      });
+      const seen = new Set();
+      const stack = [from];
+      while (stack.length) {
+        const n = stack.pop();
+        if (n === to) return true;
+        if (seen.has(n)) continue;
+        seen.add(n);
+        (adj[n] || []).forEach((m) => stack.push(m));
+      }
+      return false;
+    },
+    [edges]
+  );
+
+  // A wire is valid when the producer's output kind matches the consumer's
+  // input kind. EXCEPT a back-edge (target already reaches source): that's a
+  // loop edge, a control back-edge, not typed dataflow, so it's allowed
+  // regardless of kinds. React Flow calls this during a drag.
   const isValidConnection = useCallback(
     (conn) => {
       const src = nodes.find((n) => n.id === conn.source);
       const tgt = nodes.find((n) => n.id === conn.target);
-      if (!src || !tgt) return false;
+      if (!src || !tgt || src.id === tgt.id) return false;
+      if (reaches(conn.target, conn.source)) return true; // loop edge
       // A gate is a pass-through; any wire to or from it is valid.
       if (src.type === "gate" || tgt.type === "gate") return true;
       const out = src.data.type.output_kind || "diff";
@@ -129,11 +167,31 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
       const accepts = (t.accepts && t.accepts.length) ? t.accepts : [t.input_kind || "task"];
       return edgeValid(out, accepts);
     },
-    [nodes]
+    [nodes, reaches]
   );
 
   const onConnect = useCallback(
     (conn) => {
+      // A back-edge (target already reaches source) is a loop edge: tag it
+      // data.loop with a default cap and draw it distinctly (dashed, ↻N).
+      // The executor reads data.loop to drive the bounded back-loop.
+      if (reaches(conn.target, conn.source)) {
+        const maxLoops = 3;
+        setEdges((eds) =>
+          addEdge(
+            {
+              ...conn,
+              className: "flow-edge",
+              data: { loop: true, maxLoops },
+              label: `↻ ${maxLoops}`,
+              animated: true,
+              style: { stroke: "#c9a227", strokeDasharray: "5 4" },
+            },
+            eds
+          )
+        );
+        return;
+      }
       const src = nodes.find((n) => n.id === conn.source);
       const kind = (src && src.type !== "gate" && src.data.type.output_kind) || "diff";
       setEdges((eds) =>
@@ -143,7 +201,7 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
         )
       );
     },
-    [nodes, setEdges]
+    [nodes, setEdges, reaches]
   );
 
   const addRole = (role) => {
@@ -187,6 +245,9 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
       target: e.target,
       sourceHandle: e.sourceHandle,
       targetHandle: e.targetHandle,
+      // Persist loop metadata (data.loop / maxLoops) so the executor reads
+      // the back-edge from the saved graph.
+      data: e.data || undefined,
     })),
     viewport: rf ? rf.getViewport() : undefined,
   });

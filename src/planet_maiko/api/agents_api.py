@@ -806,6 +806,27 @@ def emit_agent_output(job_id):
     return jsonify({"ok": True, "count": len(job.outputs)}), 201
 
 
+@agents_bp.route("/agents/<job_id>/request-changes", methods=["POST"])
+def request_changes(job_id):
+    """Set the generic loop-control signal on an agent job: "run another
+    round". A loop's source node (e.g. a reviewer) calls `maiko
+    request-changes "<feedback>"` to ask the flow's loop edge to send its
+    target back for another pass carrying this feedback. It is a plain
+    continue bit + payload the executor reads — NOT an output type or a
+    role. Absent it, the node settles and the run proceeds forward."""
+    from planet_maiko.models.agent_job import AgentJob
+    data = request.get_json() or {}
+    feedback = (data.get("feedback") or data.get("content") or "").strip()
+    if not feedback:
+        return jsonify({"error": "feedback is required"}), 400
+    job = db.session.get(AgentJob, job_id)
+    if job is None:
+        return jsonify({"error": f"Job {job_id} not found"}), 404
+    job.extra = {**(job.extra or {}), "loop_request": {"feedback": feedback}}
+    db.session.commit()
+    return jsonify({"ok": True}), 201
+
+
 # Outbox dispatcher — per-message-type handlers live in
 # planet_maiko.api.agent_outbox so this stays a thin route.
 @agents_bp.route("/agents/<task_id>/outbox", methods=["POST"])

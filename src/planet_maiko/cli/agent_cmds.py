@@ -141,6 +141,22 @@ def cmd_emit(args):
     print(f"Emitted {args.type} output for {task_id}")
 
 
+def cmd_request_changes(args):
+    """Ask the workflow to send this loop's target back for another round,
+    carrying your feedback. A loop's source node (e.g. a reviewer) calls
+    this to fire the graph's loop edge. Generic loop control — not tied to a
+    role or an output type. A no-op outside a flow that has a loop edge."""
+    task_id = args.task or detect_task_id()
+    if not task_id:
+        print("Error: No job ID provided and could not detect from TASK.md or MAIKO_JOB_ID env", file=sys.stderr)
+        sys.exit(1)
+    api_request(
+        f"/agents/{task_id}/request-changes",
+        method="POST", data={"feedback": args.feedback},
+    )
+    print(f"Requested another round for {task_id}")
+
+
 def cmd_check_code(args):
     """Run the mechanical checks for the agent's worktree.
 
@@ -427,6 +443,11 @@ def register(subparsers):
     p.add_argument("--repo", help="Repo (org/name) this output's work targets — overrides the run's repo; omit to inherit it")
     p.add_argument("--job", "--task", dest="task", help="Job ID (auto-detected from MAIKO_JOB_ID env or TASK.md if omitted)")
     p.set_defaults(func=cmd_emit)
+
+    p = subparsers.add_parser("request-changes", help="Ask the flow to loop this step's target back for another round")
+    p.add_argument("feedback", help="What the target should change (use a heredoc for multi-line)")
+    p.add_argument("--job", "--task", dest="task", help="Job ID (auto-detected from MAIKO_JOB_ID env or TASK.md if omitted)")
+    p.set_defaults(func=cmd_request_changes)
 
     # maiko session-report — link CLAUDE_SESSION_ID to the AgentJob
     p = subparsers.add_parser("session-report", help="Report the agent's session ID to Maiko (replaces the MCP startup ping)")
