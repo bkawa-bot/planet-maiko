@@ -117,6 +117,10 @@ def run(app):
 
         results = {}
         for key, phase_fn in _PHASES:
+            # Per-phase trace so a hang or slow phase is locatable: the last
+            # "→ {key}" with no following "{key} took ..." is where it stuck.
+            logger.info(f"[cycle] → {key}")
+            _t0 = time.time()
             results[key] = phase_fn()
             # Clean the session after every phase. Phases own their
             # own commits; anything still pending here is a leak from
@@ -131,15 +135,25 @@ def run(app):
                 db.session.rollback()
             except Exception as e:
                 logger.warning(f"[cycle] post-phase rollback ({key}) skipped: {e}")
+            _dt = time.time() - _t0
+            if _dt > 2.0:
+                logger.info(f"[cycle]   {key} took {_dt:.1f}s")
 
         # Fire plugin hooks. on_brain_cycle is per-phase (for plugins
         # that care about a specific phase's output); on_cycle_tick
         # fires exactly once per cycle (periodic work — pollers, sync,
-        # cleanup). fire_hook skips disabled plugins.
+        # cleanup). fire_hook skips disabled plugins. Pollers (network
+        # calls) run here, so trace it too — a poller without a timeout
+        # is a prime suspect for a hung cycle.
+        logger.info("[cycle] → plugin hooks (pollers run here)")
+        _t0 = time.time()
         from planet_maiko.plugins.loader import fire_hook
         for phase_name, phase_results in results.items():
             fire_hook("on_brain_cycle", phase_name, phase_results, app)
         fire_hook("on_cycle_tick", app)
+        _dt = time.time() - _t0
+        if _dt > 2.0:
+            logger.info(f"[cycle]   plugin hooks took {_dt:.1f}s")
 
         _last_cycle = datetime.now(timezone.utc)
         _cycle_count += 1
