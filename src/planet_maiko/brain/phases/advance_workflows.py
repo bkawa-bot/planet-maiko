@@ -1,19 +1,36 @@
 """Brain-cycle phase: advance running WorkflowRuns.
 
-Drives flow execution. For each running WorkflowRun:
-  1. Sync each NodeRun's status from its AgentJob (done / failed / running).
-  2. For each pending node whose inbound sources are all done, spawn its
-     AgentJob (status=queued), feeding each upstream artifact into the
-     prompt as a section. The existing execute_agent_jobs phase runs the
-     queued jobs next (capped 2/tick, which also throttles a fan-out).
-  3. When every node is terminal, finish the run.
+The executor is a dumb DAG runner. It knows nothing about "reviewers",
+"coders", or "decomposers" — it moves data between nodes by role-agnostic
+rules and lets the agents' declared types (accepts / output_kind) decide
+what flows where. Each tick, for every running WorkflowRun:
 
-Slice 1: linear / DAG auto-run with text-artifact handoff. Approval
-gates, bounded reviewer->coder loops, and diff-branch handoff are later
-slices. Safety: only pending->queued transitions spawn (idempotent), a
-node spawns at most once (guarded on agent_job_id), an upstream failure
-skips its dependents rather than hanging, and a per-run node cap bounds
-a runaway graph.
+  1. Sync each NodeRun's status from its AgentJob (done / failed / running).
+  2. Revision loop: a done node that emitted a `revision_request` output
+     sends that feedback back to the upstream node it depends on (resumes
+     the same session so it keeps its branch) and re-arms itself for
+     another pass, bounded by _MAX_REVIEW_ROUNDS. No revision_request and
+     the node settles so downstream proceeds. This is the generic shape of
+     the review->revise loop, with zero knowledge of "review".
+  3. Spawn ready nodes (every inbound terminal). Three role-agnostic shapes:
+       - Scatter: an upstream emitted N outputs whose type this node
+         `accepts` => fan into N instances, one output each (a decomposer
+         emitting N `task`s is just the common case).
+       - Propagate: an upstream that itself scattered into N done instances
+         => N instances here, paired 1:1 (each fanned coder gets its own
+         reviewer on its own diff).
+       - Single: compose the prompt from the seed (root) or the upstream
+         artifacts / pushed branches.
+  4. Approval gates park for the user; finish the run when every node is
+     terminal, dropping a "ready to review" memo per producer branch.
+
+Agents hand structured data forward by posting outputs (`maiko emit --type
+<kind> "<content>"`, saved on AgentJob.outputs); the executor reads those,
+never parsing free text. Legacy fallbacks (parse TASK: blocks, parse a
+VERDICT: line) survive only for a producer that emitted no outputs. Safety:
+only pending->queued transitions spawn (idempotent), a node spawns at most
+once (guarded on agent_job_id), an upstream failure skips its dependents
+rather than hanging, and a per-run node cap bounds a runaway graph.
 """
 
 import logging
@@ -109,19 +126,19 @@ def _first_line(text, limit=80):
     return "task"
 
 
-def _scatter_tasks(job):
-    """The tasks to scatter from a producer job. Prefers structured outputs
-    the agent posted via `maiko emit --type task`; falls back to parsing
-    TASK: blocks out of the artifact for a producer that didn't emit them
-    (resilience, not the primary path)."""
-    outs = [
+def _matching_outputs(job, accepts):
+    """Contents of the structured outputs this job posted (via `maiko emit`)
+    whose type the consuming node accepts. This is the generic fan-out
+    signal: a producer that emitted N of what the next node consumes
+    scatters into N instances. Role-agnostic — task / plan / report /
+    anything — decided by the consumer's declared `accepts`, never by who
+    produced it or a hardcoded "tasks" kind."""
+    acc = set(accepts or ())
+    return [
         o.get("content")
         for o in (job.outputs or [])
-        if isinstance(o, dict) and o.get("type") == "task" and o.get("content")
+        if isinstance(o, dict) and o.get("type") in acc and o.get("content")
     ]
-    if outs:
-        return outs
-    return _parse_tasks(job.artifact)
 
 
 _MAX_REVIEW_ROUNDS = 3
@@ -143,18 +160,38 @@ def _parse_verdict(text):
     return None
 
 
-def _review_feedback(reviewer_job, verdict):
-    """The revision prompt handed back to the coder: the reviewer's
-    artifact (verdict + summary) plus its inline comments, if any."""
+def _revision_request(job):
+    """The revision feedback if this node asked for changes, else None.
+
+    Primary path: a structured `revision_request` output the node posted
+    via `maiko emit` — its content IS the feedback to hand back, and the
+    engine never reads the node's role or parses a verdict. Fallback: a
+    legacy reviewer that wrote a blocking `VERDICT:` line into its artifact
+    instead of emitting an output (pre-output protocol)."""
+    if job is None:
+        return None
+    for o in reversed(job.outputs or []):
+        if isinstance(o, dict) and o.get("type") == "revision_request" and o.get("content"):
+            return o["content"]
+    if _parse_verdict(job.artifact) in ("soft_block", "hard_block"):
+        return job.artifact or "Address the review feedback and revise."
+    return None
+
+
+def _revision_message(feedback_text, requester_job):
+    """The prompt handed back to the producer when a downstream node asks
+    for changes: the revision feedback plus any inline comments. Sent
+    through the same inbox + resume transport a human diff-review uses, so
+    the producer keeps its worktree/branch and just iterates."""
     parts = [
-        f"A reviewer looked at your work and asked for changes (verdict: "
-        f"{verdict}). Address the feedback below in your existing worktree, "
-        f"commit, then reply --type ready_for_review again.",
-        f"## Review\n\n{reviewer_job.artifact or '(no summary)'}",
+        "A downstream step reviewed your work and asked for changes. "
+        "Address the feedback below in your existing worktree, commit, then "
+        "reply --type ready_for_review again.",
+        f"## Requested changes\n\n{feedback_text or '(no detail)'}",
     ]
     try:
         from planet_maiko.models.diff_comment import DiffComment
-        comments = DiffComment.query.filter_by(job_id=reviewer_job.id).all()
+        comments = DiffComment.query.filter_by(job_id=requester_job.id).all()
         if comments:
             lines = []
             for c in comments:
@@ -162,7 +199,7 @@ def _review_feedback(reviewer_job, verdict):
                 lines.append(f"- `{c.file_path}:{c.line_number}`: {body}")
             parts.append("## Inline comments\n\n" + "\n".join(lines))
     except Exception as e:
-        logger.debug(f"[cycle] review comment fetch failed: {e}")
+        logger.debug(f"[cycle] revision comment fetch failed: {e}")
     return "\n\n".join(parts)
 
 
@@ -313,12 +350,15 @@ def _phase_advance_workflows():
                     elif job.status == "running":
                         nr.status = "running"
 
-            # 1.5 Review loop. A node that emitted a blocking VERDICT
-            #     (soft_block / hard_block) sends its upstream coder back to
-            #     revise (wake the same session so it keeps its branch) and
-            #     re-arms itself for another pass, bounded by
-            #     _MAX_REVIEW_ROUNDS. approve / approve_with_comments (or no
-            #     verdict) settles the node so downstream proceeds.
+            # 1.5 Revision loop (generic, role-agnostic). A done node that
+            #     emitted a `revision_request` output sends that feedback
+            #     back to the upstream node it depends on (resume the same
+            #     session so it keeps its branch) and re-arms itself for
+            #     another pass, bounded by _MAX_REVIEW_ROUNDS. No
+            #     revision_request and the node settles so downstream
+            #     proceeds. The engine never parses a verdict or knows what
+            #     a "reviewer" is — it just routes a revision_request back to
+            #     its producer. Reviewer->coder is only the common case.
             for node in nodes:
                 nid = node.get("id")
                 inbound_for = [e.get("source") for e in edges if e.get("target") == nid]
@@ -328,72 +368,73 @@ def _phase_advance_workflows():
                     if (rv.extra or {}).get("loop_settled"):
                         continue
                     rv_job = db.session.get(AgentJob, rv.agent_job_id)
-                    verdict = _parse_verdict(rv_job.artifact) if rv_job else None
-                    if verdict not in ("soft_block", "hard_block"):
+                    feedback = _revision_request(rv_job)
+                    if not feedback:
                         rv.extra = {**(rv.extra or {}), "loop_settled": True}
                         continue
-                    # Which coder to send back to. A fanned reviewer instance
-                    # carries the exact paired coder NodeRun id (set at
-                    # propagation); a 1:1 reviewer resolves its single upstream
-                    # coder from the graph edge. Either way the id is derived,
-                    # never sent by an agent.
-                    coder_nr = coder_job = None
+                    # Which producer to send back to. A fanned instance carries
+                    # the exact paired producer NodeRun id (set at propagation);
+                    # a 1:1 node resolves its single upstream producer from the
+                    # graph edge. Either way the id is derived, never sent by an
+                    # agent. The producer needs a worktree to revise in.
+                    producer_nr = producer_job = None
                     paired = (rv.extra or {}).get("paired_to")
                     if paired:
-                        cnr = db.session.get(NodeRun, paired)
-                        cj = (
-                            db.session.get(AgentJob, cnr.agent_job_id)
-                            if cnr and cnr.agent_job_id else None
+                        pnr = db.session.get(NodeRun, paired)
+                        pj = (
+                            db.session.get(AgentJob, pnr.agent_job_id)
+                            if pnr and pnr.agent_job_id else None
                         )
-                        if cj and cj.worktree_path:
-                            coder_nr, coder_job = cnr, cj
+                        if pj and pj.worktree_path:
+                            producer_nr, producer_job = pnr, pj
                     else:
                         for src in inbound_for:
                             src_insts = nrs_by_node.get(src, [])
                             if len(src_insts) != 1:
                                 continue
                             src_nr = src_insts[0]
-                            cj = (
+                            pj = (
                                 db.session.get(AgentJob, src_nr.agent_job_id)
                                 if src_nr.agent_job_id else None
                             )
-                            if cj and cj.worktree_path:
-                                coder_nr, coder_job = src_nr, cj
+                            if pj and pj.worktree_path:
+                                producer_nr, producer_job = src_nr, pj
                                 break
                     round_n = (rv.extra or {}).get("round", 0)
-                    if not coder_job or round_n >= _MAX_REVIEW_ROUNDS:
+                    if not producer_job or round_n >= _MAX_REVIEW_ROUNDS:
                         rv.extra = {
                             **(rv.extra or {}),
                             "loop_settled": True,
-                            "loop_result": "max_rounds" if coder_job else "no_target",
+                            "loop_result": "max_rounds" if producer_job else "no_target",
                         }
                         continue
-                    # Hand the review back through the SAME path a human review
+                    # Hand the feedback back through the SAME path a human review
                     # uses: a to_agent "review" inbox message + the standard
-                    # resume. The coder reads its inbox, addresses the comments,
-                    # commits, and replies ready_for_review. The workflow only
-                    # decides WHEN to send one back (verdict + round cap).
+                    # resume. The producer reads its inbox, addresses the
+                    # changes, commits, and replies ready_for_review. The
+                    # workflow only decides WHEN to send one back (a
+                    # revision_request output + the round cap).
                     db.session.add(AgentMessage(
-                        task_id=coder_job.id,
+                        task_id=producer_job.id,
                         direction="to_agent",
-                        sender="reviewer",
-                        content=_review_feedback(rv_job, verdict),
+                        sender=rv.agent_type or "review",
+                        content=_revision_message(feedback, rv_job),
                         message_type="review",
                     ))
                     db.session.commit()
-                    if not _resume_agent_with_review(coder_job.id, coder_job.worktree_path):
+                    if not _resume_agent_with_review(producer_job.id, producer_job.worktree_path):
                         rv.extra = {
                             **(rv.extra or {}),
                             "loop_settled": True,
                             "loop_result": "wake_failed",
                         }
                         continue
-                    # Coder iterates again on its branch; this reviewer instance
-                    # waits to re-review (paired_to preserved, so it re-targets
-                    # the same coder next round).
-                    coder_job.status = "running"
-                    coder_nr.status = "running"
-                    coder_nr.extra = {**(coder_nr.extra or {}), "round": round_n + 1}
+                    # Producer iterates again on its branch; this node waits to
+                    # re-review (paired_to preserved, so it re-targets the same
+                    # producer next round).
+                    producer_job.status = "running"
+                    producer_nr.status = "running"
+                    producer_nr.extra = {**(producer_nr.extra or {}), "round": round_n + 1}
                     rv.status = "pending"
                     rv.agent_job_id = None
                     rv.extra = {**(rv.extra or {}), "round": round_n + 1}
@@ -538,13 +579,8 @@ def _phase_advance_workflows():
                     _emit_gate_memo(run, nid, placeholder, edges, nrs_by_node)
                     continue
 
-                # Gather every done upstream instance + its job. Resolve the
-                # output kind from the producing JOB's role (not the NodeRun's
-                # agent_type) so it stays correct through a pass-through gate,
-                # whose forwarded job is the real producer. A "tasks" producer
-                # turns this node into a scatter.
+                # Gather every done upstream instance + its job.
                 upstream = []
-                scatter_src = None
                 for src in inbound:
                     for src_nr in nrs_by_node.get(src, []):
                         if src_nr.status != "done" or not src_nr.agent_job_id:
@@ -553,29 +589,40 @@ def _phase_advance_workflows():
                         if not src_job:
                             continue
                         upstream.append((src_nr, src_job))
-                        st = get_agent_type(src_job.kind)
-                        if st and st.output_kind == "tasks":
-                            scatter_src = src_job
 
-                # --- Scatter: one instance per emitted task. Reuse the
-                #     placeholder as instance 0, mint NodeRuns for the rest;
-                #     each instance gets exactly its own task as the prompt. ---
-                if scatter_src is not None:
-                    tasks = _scatter_tasks(scatter_src)
-                    if not tasks:
-                        placeholder.status = "failed"
-                        placeholder.error = "the upstream step produced no tasks to scatter"
-                        continue
-                    for idx, task_text in enumerate(tasks):
+                # --- Scatter: an upstream that emitted MORE THAN ONE output
+                #     this node accepts fans out, one instance per output. The
+                #     trigger is the data (N matching outputs), not the
+                #     producer's role — a decomposer emitting N `task`s is just
+                #     the common case. Falls back to parsing TASK: blocks for a
+                #     legacy tasks-producer that emitted no structured outputs.
+                #     Reuse the placeholder as instance 0, mint NodeRuns for the
+                #     rest; each instance gets its own item as the prompt. ---
+                this_at = get_agent_type(role)
+                accepts = (this_at.accepts if this_at else None) or []
+                scatter_items = None
+                for _src_nr, src_job in upstream:
+                    matched = _matching_outputs(src_job, accepts)
+                    if len(matched) > 1:
+                        scatter_items = matched
+                        break
+                    st = get_agent_type(src_job.kind)
+                    if st and st.output_kind == "tasks":
+                        legacy = _parse_tasks(src_job.artifact)
+                        if len(legacy) > 1:
+                            scatter_items = legacy
+                            break
+                if scatter_items is not None:
+                    for idx, item_text in enumerate(scatter_items):
                         target = placeholder if idx == 0 else NodeRun(
                             workflow_run_id=run.id, node_id=nid, agent_type=role,
                         )
                         if idx > 0:
                             db.session.add(target)
-                        job = _spawn_job(role, task_text, nid)
+                        job = _spawn_job(role, item_text, nid)
                         target.status = "queued"
                         target.agent_job_id = job.id
-                        target.extra = {"instance": idx, "label": _first_line(task_text)}
+                        target.extra = {"instance": idx, "label": _first_line(item_text)}
                         advanced += 1
                     continue
 
