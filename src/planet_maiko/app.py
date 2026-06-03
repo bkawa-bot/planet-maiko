@@ -652,21 +652,29 @@ def create_app(start_scheduler=False):
             i = 0
             while not stop_event.is_set():
                 try:
-                    if i % full_every == 0:
+                    is_full = (i % full_every == 0)
+                    # Count active runs every tick (cheap) so the heartbeat
+                    # below shows whether the fast tick has anything to do.
+                    with app.app_context():
+                        active = WorkflowRun.query.filter(
+                            WorkflowRun.status == "running"
+                        ).count()
+                    # TEMP heartbeat: one line per tick. Distinguishes the
+                    # three things that would make the fast tick look silent:
+                    # loop not iterating (no lines / i frozen), every tick a
+                    # full cycle (full_every==1), and no running run seen
+                    # (active_runs=0 while a flow is clearly up).
+                    logger.info(
+                        f"[brain-cycle] tick i={i} full={is_full} "
+                        f"full_every={full_every} active_runs={active}"
+                    )
+                    if is_full:
                         with app.app_context():
                             run_brain_cycle(app)
                         app.config["LAST_BRAIN_CYCLE"] = datetime.now(timezone.utc).isoformat()
-                    else:
-                        with app.app_context():
-                            active = WorkflowRun.query.filter(
-                                WorkflowRun.status == "running"
-                            ).count()
-                        if active:
-                            adv = run_workflow_tick(app)
-                            logger.info(
-                                f"[brain-cycle] workflow tick: {active} active "
-                                f"run(s), advanced={adv}"
-                            )
+                    elif active:
+                        adv = run_workflow_tick(app)
+                        logger.info(f"[brain-cycle] workflow tick advanced={adv}")
                 except Exception as e:
                     logger.error(f"[brain-cycle] tick failed: {e}")
                 i += 1
