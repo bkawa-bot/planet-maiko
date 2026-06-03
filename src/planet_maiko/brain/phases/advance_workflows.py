@@ -319,6 +319,59 @@ def _emit_ready_memos(run, nrs_by_node):
         logger.warning(f"[cycle] ready memos skipped for run {run.id}: {e}")
 
 
+def _run_action_node(node, input_text, run):
+    """Run a non-agent action node inline (create a memo / task). Best-effort:
+    a failure logs but never breaks the run."""
+    cfg = node.get("config") or {}
+    subtype = (cfg.get("subtype") or "create_memo").strip()
+    title = (cfg.get("title") or "").strip()
+    try:
+        if subtype == "create_task":
+            _action_create_task(title, input_text, run)
+        else:
+            _action_create_memo(title, input_text, run)
+    except Exception as e:
+        logger.warning(f"[cycle] action node ({subtype}) failed for run {run.id}: {e}")
+
+
+def _action_create_memo(title, body, run):
+    from planet_maiko.brain.memos import create_memo
+    create_memo(
+        kind="flow_memo",
+        category="info",
+        title=title or "Flow notification",
+        body=(body or "").strip()[:4000] or "(no detail)",
+        cta_label=None,
+        priority="normal",
+        extra={"workflow_run_id": run.id},
+    )
+
+
+def _action_create_task(title, body, run):
+    import uuid as _uuid
+    from planet_maiko.database import db
+    from planet_maiko.models.task import Task
+    from planet_maiko.orchestration import maybe_spawn
+    scope_repo = (run.extra or {}).get("scope_repo")
+    role = "coding"
+    profile = maybe_spawn(role, scope_repo)
+    extra = {"description": (body or "").strip(), "source": "flow", "workflow_run_id": run.id}
+    if scope_repo:
+        extra["repo"] = scope_repo
+    task = Task(
+        id=f"flow-{_uuid.uuid4().hex[:10]}",
+        title=title or "Flow task",
+        type=role,
+        status="new",
+        priority="normal",
+        assigned_agent_id=profile.id,
+        tags=["flow"],
+        extra=extra,
+    )
+    db.session.add(task)
+    db.session.commit()
+
+
 def _phase_advance_workflows():
     from planet_maiko.database import db
     from planet_maiko.models.workflow_run import WorkflowRun, NodeRun
@@ -356,6 +409,10 @@ def _phase_advance_workflows():
             # only by triggers is a root, seeded from run.extra.input (the
             # pupdate that fired the run). They start `done` (flows.start_run).
             trigger_ids = {n.get("id") for n in nodes if n.get("kind") == "trigger"}
+            # Action nodes (create memo/task) are non-agent side-effects that
+            # pass their input through, so they're excluded from real_inbound
+            # the same way triggers are.
+            action_ids = {n.get("id") for n in nodes if n.get("kind") == "action"}
             nrs_by_node = {}
             for nr in run.node_runs:
                 nrs_by_node.setdefault(nr.node_id, []).append(nr)
@@ -612,6 +669,27 @@ def _phase_advance_workflows():
                     _emit_gate_memo(run, nid, placeholder, fwd_edges, nrs_by_node)
                     continue
 
+                # Action node: a non-agent side-effect (create a memo / task).
+                # Run it inline with its input — the upstream artifact, or the
+                # pupdate that fired a trigger — then mark it done.
+                if node.get("kind") == "action":
+                    real_in = [s for s in inbound if s not in trigger_ids and s not in action_ids]
+                    action_input = None
+                    for src in real_in:
+                        for s_nr in nrs_by_node.get(src, []):
+                            if s_nr.status == "done" and s_nr.agent_job_id:
+                                sj = db.session.get(AgentJob, s_nr.agent_job_id)
+                                if sj and sj.artifact:
+                                    action_input = sj.artifact
+                                    break
+                        if action_input:
+                            break
+                    if action_input is None:
+                        action_input = (run.extra or {}).get("input")
+                    _run_action_node(node, action_input, run)
+                    placeholder.status = "done"
+                    continue
+
                 # Gather every done upstream instance + its job.
                 upstream = []
                 for src in inbound:
@@ -712,7 +790,7 @@ def _phase_advance_workflows():
                 #     (root) or the upstream artifacts / pushed branches. ---
                 # A trigger is the run's entry, not a producer, so a node fed
                 # only by triggers is a root and seeds from run.extra.input.
-                real_inbound = [s for s in inbound if s not in trigger_ids]
+                real_inbound = [s for s in inbound if s not in trigger_ids and s not in action_ids]
                 blocks = []
                 push_failed = False
                 if not real_inbound:

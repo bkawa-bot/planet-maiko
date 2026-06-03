@@ -10,10 +10,11 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
 import "./flow-theme.css";
-import { X, Save, Play, CombinationLock, Crystal } from "@icons";
+import { X, Save, Play, CombinationLock, Crystal, ListTodo } from "@icons";
 import RoleNode from "./RoleNode";
 import GateNode from "./GateNode";
 import TriggerNode from "./TriggerNode";
+import ActionNode from "./ActionNode";
 import LoopEdge from "./LoopEdge";
 import { roleMeta } from "../../../hooks/useAgentTypes";
 import { kindColor, edgeValid } from "./kinds";
@@ -21,7 +22,7 @@ import { api } from "../../../api/client";
 import { showToast } from "../../Toast";
 import ModalPortal from "../../ModalPortal";
 
-const nodeTypes = { role: RoleNode, gate: GateNode, trigger: TriggerNode };
+const nodeTypes = { role: RoleNode, gate: GateNode, trigger: TriggerNode, action: ActionNode };
 const edgeTypes = { loop: LoopEdge };
 
 // Placeholder for the Run dialog's kickoff input, keyed by what the first
@@ -48,6 +49,14 @@ function buildInitial(workflow, types) {
       return {
         id: n.id,
         type: "trigger",
+        position: { x: n.x ?? 0, y: n.y ?? 0 },
+        data: { editable: true, config: n.config || {} },
+      };
+    }
+    if (n.kind === "action" || n.agent_type === "action") {
+      return {
+        id: n.id,
+        type: "action",
         position: { x: n.x ?? 0, y: n.y ?? 0 },
         data: { editable: true, config: n.config || {} },
       };
@@ -171,6 +180,7 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
       // A trigger only emits (its output is the pupdate that fired the run);
       // a gate is a pass-through. Either as the source makes the wire valid.
       if (src.type === "trigger") return true;
+      if (src.type === "action" || tgt.type === "action") return true;
       if (src.type === "gate" || tgt.type === "gate") return true;
       const out = src.data.type.output_kind || "diff";
       const t = tgt.data.type;
@@ -249,12 +259,28 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
     );
   };
 
+  const addAction = () => {
+    const id = `action-${crypto.randomUUID().slice(0, 8)}`;
+    const offset = nodes.length;
+    setNodes((nds) =>
+      nds.concat({
+        id,
+        type: "action",
+        position: { x: 140 + (offset % 4) * 50, y: 90 + (offset % 6) * 46 },
+        data: { editable: true, config: { subtype: "create_memo" } },
+      })
+    );
+  };
+
   const serializeGraph = () => ({
     nodes: nodes.map((n) => {
       const base = { id: n.id, x: Math.round(n.position.x), y: Math.round(n.position.y) };
       if (n.type === "gate") return { ...base, kind: "gate", agent_type: "gate" };
       if (n.type === "trigger") {
         return { ...base, kind: "trigger", agent_type: "trigger", config: n.data.config || {} };
+      }
+      if (n.type === "action") {
+        return { ...base, kind: "action", agent_type: "action", config: n.data.config || {} };
       }
       return { ...base, kind: "role", agent_type: n.data.type.id };
     }),
@@ -365,6 +391,15 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
           >
             <span className="flow-palette-icon"><Crystal size={16} /></span>
             <span className="flow-palette-name">Pupdate trigger</span>
+          </button>
+          <div className="flow-palette-label flow-palette-control">Actions</div>
+          <button
+            className="flow-palette-item"
+            onClick={addAction}
+            title="Run a side-effect: create a memo or a task"
+          >
+            <span className="flow-palette-icon"><ListTodo size={16} /></span>
+            <span className="flow-palette-name">Action</span>
           </button>
           <div className="flow-palette-label flow-palette-control">Control</div>
           <button
