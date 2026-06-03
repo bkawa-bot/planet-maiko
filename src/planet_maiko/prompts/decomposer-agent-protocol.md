@@ -35,7 +35,9 @@ EOF
 )"
 ```
 
-The `--title` is a short label (a few words) that names the task's coder job; the body is the description (what to do and where, concretely enough that a coder can start without re-deriving the whole plan). Each coder works on the flow's repo by default, so you don't set a repo. (Only if a task genuinely belongs to a *different* repo, add `--repo org/name`.) Make one `maiko emit --type task` call for each task.
+The `--title` is a short label (a few words) that names the task's coder job; the body is the description (what to do and where, concretely enough that a coder can start without re-deriving the whole plan).
+
+**Set `--repo org/name` on each task** — the repo its coder will work in. Routing each task to the right repo is your job: the coders work wherever you send them. Read the target repo from the plan (it names what's being changed and where). Most plans target a single repo, so put that same repo on every task; a plan that genuinely spans repos routes each task to its own. If you omit `--repo`, the task falls back to the repo the run was launched with (which may be blank, in which case the coder has no checkout, so don't rely on it). Make one `maiko emit --type task` call for each task.
 
 Then send ONE final reply that summarizes for the human and lists the tasks so they are readable at a glance:
 

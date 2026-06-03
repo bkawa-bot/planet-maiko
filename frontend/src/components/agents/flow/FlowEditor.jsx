@@ -336,12 +336,12 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
                   />
                 </label>
                 <label className="agent-edit-full">
-                  Repo (required)
+                  Repo (optional)
                   <input
                     type="text"
                     value={scopeRepo}
                     onChange={(e) => setScopeRepo(e.target.value)}
-                    placeholder="org/repo  — the steps clone and work here"
+                    placeholder="org/repo  — default repo; the decomposer can set one per task"
                   />
                 </label>
               </div>
@@ -349,7 +349,7 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
                 <button className="btn" onClick={() => setShowRun(false)} disabled={running}>
                   Cancel
                 </button>
-                <button className="btn btn-primary" onClick={doRun} disabled={running || !runTask.trim() || !scopeRepo.trim()}>
+                <button className="btn btn-primary" onClick={doRun} disabled={running || !runTask.trim()}>
                   {running ? "Starting..." : <><Play size={12} /> Run flow</>}
                 </button>
               </div>
