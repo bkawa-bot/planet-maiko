@@ -789,8 +789,19 @@ def emit_agent_output(job_id):
     job = db.session.get(AgentJob, job_id)
     if job is None:
         return jsonify({"error": f"Job {job_id} not found"}), 404
+    # Optional metadata used when this output becomes a downstream job: a
+    # title (names the spawned job instead of a generic "coding step") and a
+    # repo (overrides the run's scope_repo for that one task — multi-repo
+    # decomposition; omitted, the task inherits the run's repo).
+    out = {"type": otype, "content": content}
+    title = (data.get("title") or "").strip()
+    if title:
+        out["title"] = title
+    repo = (data.get("repo") or "").strip()
+    if repo:
+        out["repo"] = repo
     # Reassign (not in-place append) so SQLAlchemy detects the JSON change.
-    job.outputs = (job.outputs or []) + [{"type": otype, "content": content}]
+    job.outputs = (job.outputs or []) + [out]
     db.session.commit()
     return jsonify({"ok": True, "count": len(job.outputs)}), 201
 

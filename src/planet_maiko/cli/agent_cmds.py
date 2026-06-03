@@ -132,10 +132,12 @@ def cmd_emit(args):
     if not task_id:
         print("Error: No job ID provided and could not detect from TASK.md or MAIKO_JOB_ID env", file=sys.stderr)
         sys.exit(1)
-    api_request(f"/agents/{task_id}/outputs", method="POST", data={
-        "type": args.type,
-        "content": args.content,
-    })
+    data = {"type": args.type, "content": args.content}
+    if getattr(args, "title", None):
+        data["title"] = args.title
+    if getattr(args, "repo", None):
+        data["repo"] = args.repo
+    api_request(f"/agents/{task_id}/outputs", method="POST", data=data)
     print(f"Emitted {args.type} output for {task_id}")
 
 
@@ -421,6 +423,8 @@ def register(subparsers):
     p = subparsers.add_parser("emit", help="Post a structured output (task/plan/verdict/...) for the workflow engine")
     p.add_argument("content", help="Output content (use a heredoc for multi-line)")
     p.add_argument("--type", required=True, help="Output type: task | plan | diff | report | insight | proposal | verdict | comment")
+    p.add_argument("--title", help="Short title — names the job spawned from this output (else a generic role label)")
+    p.add_argument("--repo", help="Repo (org/name) this output's work targets — overrides the run's repo; omit to inherit it")
     p.add_argument("--job", "--task", dest="task", help="Job ID (auto-detected from MAIKO_JOB_ID env or TASK.md if omitted)")
     p.set_defaults(func=cmd_emit)
 

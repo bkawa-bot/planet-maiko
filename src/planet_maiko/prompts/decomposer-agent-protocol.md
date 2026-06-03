@@ -25,18 +25,17 @@ Read the plan (and the repo, if you need to scope the tasks against reality). Yo
 
 ## How to emit the tasks
 
-Post each task as its own structured output with `maiko emit --type task`, ONE call per task. The workflow engine fans out one coder per emitted task, so this is the part that actually drives the run (not the reply text). Use a heredoc for the body:
+Post each task as its own structured output with `maiko emit --type task`, ONE call per task. The workflow engine fans out one coder per emitted task, so this is the part that actually drives the run (not the reply text). Give each a `--title` (it names the coder's job) and put the description in the body via a heredoc:
 
 ```bash
-maiko emit --type task "$(cat <<'EOF'
-Add the rate-limit middleware
+maiko emit --type task --title "Add the rate-limit middleware" "$(cat <<'EOF'
 Add a token-bucket limiter in src/middleware/ratelimit.py and wire it into
 the /login route in src/routes/auth.py.
 EOF
 )"
 ```
 
-The first line is the task's title; everything after is the description (what to do and where, concretely enough that a coder can start without re-deriving the whole plan). Make one `maiko emit --type task` call for each task.
+The `--title` is a short label (a few words) that names the task's coder job; the body is the description (what to do and where, concretely enough that a coder can start without re-deriving the whole plan). Each coder works on the flow's repo by default, so you don't set a repo. (Only if a task genuinely belongs to a *different* repo, add `--repo org/name`.) Make one `maiko emit --type task` call for each task.
 
 Then send ONE final reply that summarizes for the human and lists the tasks so they are readable at a glance:
 

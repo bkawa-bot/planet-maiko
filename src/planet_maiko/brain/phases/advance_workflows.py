@@ -127,15 +127,15 @@ def _first_line(text, limit=80):
 
 
 def _matching_outputs(job, accepts):
-    """Contents of the structured outputs this job posted (via `maiko emit`)
-    whose type the consuming node accepts. This is the generic fan-out
-    signal: a producer that emitted N of what the next node consumes
-    scatters into N instances. Role-agnostic — task / plan / report /
-    anything — decided by the consumer's declared `accepts`, never by who
-    produced it or a hardcoded "tasks" kind."""
+    """The structured outputs this job posted (via `maiko emit`) whose type
+    the consuming node accepts, as full {type, content, title?, repo?}
+    dicts. This is the generic fan-out signal: a producer that emitted N of
+    what the next node consumes scatters into N instances. Role-agnostic —
+    task / plan / report / anything — decided by the consumer's declared
+    `accepts`, never by who produced it or a hardcoded "tasks" kind."""
     acc = set(accepts or ())
     return [
-        o.get("content")
+        o
         for o in (job.outputs or [])
         if isinstance(o, dict) and o.get("type") in acc and o.get("content")
     ]
@@ -457,18 +457,22 @@ def _phase_advance_workflows():
 
             scope_repo = (run.extra or {}).get("scope_repo")
 
-            def _spawn_job(role, description, node_id):
+            def _spawn_job(role, description, node_id, title=None, repo=None):
                 """Mint one queued AgentJob for a node (or a scatter
                 instance). Lazy-spawns the (role, scope) profile so
                 execute_jobs resolves the right role, including custom ones
-                like planner/decomposer whose kind isn't in the builtin map."""
-                profile = maybe_spawn(role, scope_repo)
+                like planner/decomposer whose kind isn't in the builtin map.
+                `title`/`repo` come from the producing output when present (a
+                scattered task names + optionally re-homes its coder); repo
+                falls back to the run's scope_repo, the shared default."""
+                job_repo = repo or scope_repo
+                profile = maybe_spawn(role, job_repo)
                 job = AgentJob(
                     id=uuid.uuid4().hex[:24],
                     kind=role,
-                    title=f"{role} step",
+                    title=title or f"{role} step",
                     description=description,
-                    scope_repo=scope_repo,
+                    scope_repo=job_repo,
                     created_by="system",
                     agent_profile_id=profile.id,
                     status="queued",
@@ -610,19 +614,27 @@ def _phase_advance_workflows():
                     if st and st.output_kind == "tasks":
                         legacy = _parse_tasks(src_job.artifact)
                         if len(legacy) > 1:
-                            scatter_items = legacy
+                            scatter_items = [{"content": t} for t in legacy]
                             break
                 if scatter_items is not None:
-                    for idx, item_text in enumerate(scatter_items):
+                    for idx, item in enumerate(scatter_items):
+                        content = item.get("content")
+                        # The output's title names the spawned job (else the
+                        # task's first line); its repo re-homes that one coder
+                        # (else the run's repo, applied in _spawn_job).
+                        label = item.get("title") or _first_line(content)
                         target = placeholder if idx == 0 else NodeRun(
                             workflow_run_id=run.id, node_id=nid, agent_type=role,
                         )
                         if idx > 0:
                             db.session.add(target)
-                        job = _spawn_job(role, item_text, nid)
+                        job = _spawn_job(
+                            role, content, nid,
+                            title=label, repo=item.get("repo"),
+                        )
                         target.status = "queued"
                         target.agent_job_id = job.id
-                        target.extra = {"instance": idx, "label": _first_line(item_text)}
+                        target.extra = {"instance": idx, "label": label}
                         advanced += 1
                     continue
 
