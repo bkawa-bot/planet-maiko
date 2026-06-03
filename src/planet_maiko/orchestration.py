@@ -12,6 +12,7 @@ concerns.
 """
 
 import logging
+import random
 import uuid
 from typing import Iterable, Optional
 
@@ -279,7 +280,11 @@ def find_profile(role: str, scope_repo: Optional[str]) -> Optional[AgentProfile]
         q = q.filter(AgentProfile.scope_repo.is_(None))
     else:
         q = q.filter(AgentProfile.scope_repo == scope_repo)
-    return q.first()
+    # Pick randomly from the eligible pool rather than always the first
+    # (lowest-id) match, so work spreads across all matching agents — you
+    # otherwise only ever see the same one or two profiles working.
+    rows = q.all()
+    return random.choice(rows) if rows else None
 
 
 def maybe_spawn(role: str, scope_repo: Optional[str]) -> AgentProfile:
