@@ -15,6 +15,7 @@ import BackfillProgress from "../components/BackfillProgress";
 import ClusterProgress from "../components/ClusterProgress";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import "./Knowledge.css";
+import AgentsInsightsTab from "../components/agents/AgentsInsightsTab";
 import LearningProvenance from "./brain/LearningProvenance";
 import TeamRulesSection from "../components/settings/TeamRulesSection";
 
@@ -349,6 +350,29 @@ export default function BrainView() {
 
   const toggleCategory = (cat) => setExpandedCats((e) => ({ ...e, [cat]: !e[cat] }));
 
+  // Pack Insights moved onto the Lore surface (off the Pack page), as a peer
+  // to the Knowledge Pool. Early return so the big learnings body below stays
+  // untouched; the tab bar is repeated so you can switch back.
+  if (tab === "insights") {
+    return (
+      <div className="brain-view-page frost-pane">
+        <div className="knowledge-page">
+          <div className="page-tabs">
+            <button className="page-tab" onClick={() => setTab("pool")}>Knowledge Pool</button>
+            <button className="page-tab" onClick={() => setTab("pending")}>
+              Pending {pending.length > 0 && <span className="tab-badge">{pending.length}</span>}
+            </button>
+            <button className="page-tab" onClick={() => setTab("unsynthesized")}>
+              Unsynthesized {rawSignalsTotal > 0 && <span className="tab-badge">{rawSignalsTotal}</span>}
+            </button>
+            <button className="page-tab active" onClick={() => setTab("insights")}>Pack Insights</button>
+          </div>
+          <AgentsInsightsTab />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="brain-view-page frost-pane">
       <div className="knowledge-page">
@@ -378,6 +402,12 @@ export default function BrainView() {
             onClick={() => setTab("unsynthesized")}
           >
             Unsynthesized {rawSignalsTotal > 0 && <span className="tab-badge">{rawSignalsTotal}</span>}
+          </button>
+          <button
+            className={`page-tab ${tab === "insights" ? "active" : ""}`}
+            onClick={() => setTab("insights")}
+          >
+            Pack Insights
           </button>
           <div style={{ marginLeft: "auto" }}>
             <TeamRulesSection />

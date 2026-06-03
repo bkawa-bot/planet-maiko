@@ -1,11 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
-import { Plus, MoonTarot, Target, X, SpellBook, GitBranch } from "@icons";
+import { Plus, Target, X, SpellBook, GitBranch } from "@icons";
 import InfoButton from "../components/InfoButton";
 import AgentsActiveTab from "../components/agents/AgentsActiveTab";
 import AgentsProfilesTab from "../components/agents/AgentsProfilesTab";
-import AgentsInsightsTab from "../components/agents/AgentsInsightsTab";
 import AgentTypesTab from "../components/agents/AgentTypesTab";
 import ModalPortal from "../components/ModalPortal";
 import { useConfiguredRepos } from "../utils/repo";
@@ -270,31 +269,6 @@ export default function Agents() {
           </InfoButton>
         )}
 
-        <button
-          className={`page-tab ${tab === "insights" ? "active" : ""}`}
-          onClick={() => setTab("insights")}
-        >
-          <MoonTarot size={10} /> Pack Insights
-        </button>
-        {tab === "insights" && (
-          <InfoButton title={<><MoonTarot size={16} /> Pack Insights</>}>
-            <p>An end-of-day ritual: the pack gathers around the campfire and shares what they noticed today.</p>
-            <h4>What agents share</h4>
-            <ul>
-              <li><strong>Feedback</strong> — coding rules that should apply to future work in a repo (goes to the Knowledge Pool, retrieved by future agents via <code>rules-relevant</code>).</li>
-              <li><strong>Insights</strong> — tribal knowledge future agents should inherit, like tooling quirks or repo state (goes to the Pack Insights library → every agent's CLAUDE.md).</li>
-            </ul>
-            <h4>The flow</h4>
-            <ol>
-              <li><strong>Start the gathering</strong> — Maiko messages each active agent.</li>
-              <li><strong>Watch speech bubbles appear</strong> as agents reply at the fire.</li>
-              <li><strong>Wrap up</strong> when you're ready, then approve what sticks.</li>
-              <li><strong>Finalize</strong> — learnings land in the pool, insights land in the library below.</li>
-            </ol>
-            <p>The library (collapsed below the ritual) holds the active playbook — the insights that currently get injected into every new agent's CLAUDE.md.</p>
-          </InfoButton>
-        )}
-
         <button className="btn btn-primary new-agent-btn" onClick={handleCreateAgent}>
           <Plus size={12} /> New Agent
         </button>
@@ -327,8 +301,6 @@ export default function Agents() {
           <FlowsTab />
         </Suspense>
       )}
-
-      {tab === "insights" && <AgentsInsightsTab />}
     </div>
   );
 }

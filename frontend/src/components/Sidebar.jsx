@@ -15,8 +15,8 @@ const NAV_ITEMS = [
   { to: "/", icon: Hearth, label: "Home", end: true },
   { to: "/tasks", icon: ListTodo, label: "Tasks" },
   { to: "/agents", icon: Paw, label: "Pack" },
-  { to: "/knowledge", icon: SpellBook, label: "Knowledge" },
-  { to: "/automations", icon: Crystal, label: "Automations" },
+  { to: "/knowledge", icon: SpellBook, label: "Lore" },
+  { to: "/automations", icon: Crystal, label: "Workshop" },
 ];
 
 // Built-in theme palette. Each entry's `group` controls dropdown
