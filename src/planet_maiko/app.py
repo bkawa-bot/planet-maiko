@@ -639,61 +639,62 @@ def create_app(start_scheduler=False):
         # health pane. Single source instead of the old SCHEDULER blob.
         app.config["LAST_BRAIN_CYCLE"] = None
 
-        # One thread, two cadences: the full brain cycle every
-        # brain_interval, plus a light workflow tick (advance + execute
-        # only) every FAST_TICK seconds while a flow is running, so steps
-        # spawn and progress in near-real-time. Same thread as the full
-        # cycle => no concurrent agent-job pickup.
+        # Two independent daemon threads, deliberately NOT sharing one:
+        #  - job worker: advances running flows + executes queued agent jobs
+        #    every FAST_TICK seconds. It OWNS all agent-job pickup (single
+        #    thread => no concurrent pickup) and is the only driver of flow
+        #    execution.
+        #  - brain cycle: the "thinking" phases (pupdates, learning, nudges,
+        #    pollers, ...) every brain_interval. It may be slow or even hang
+        #    (e.g. a poller's network call). Because it no longer shares a
+        #    thread with the worker, that can never starve flow execution —
+        #    the bug where one stuck cycle froze every fast tick.
         FAST_TICK = 12
-        full_every = max(1, brain_interval // FAST_TICK)
 
-        def _brain_cycle_loop():
-            # Entry marker: makes "is the daemon thread actually running?"
-            # answerable from the logs immediately, instead of waiting out
-            # the settle delay and the first tick. If you see the startup
-            # line but never this one, the thread was created but isn't
-            # executing (launch path / stale process); if you see this but
-            # no tick lines, the loop body is hanging.
-            logger.info("[brain-cycle] daemon thread started; first tick in ~10s")
+        def _interruptible_sleep(seconds):
+            for _ in range(int(seconds)):
+                if stop_event.is_set():
+                    return
+                time.sleep(1)
+
+        def _worker_loop():
+            logger.info("[worker] job-worker thread started; first tick in ~10s")
             time.sleep(10)  # let the app settle before the first tick
             i = 0
             while not stop_event.is_set():
                 try:
-                    is_full = (i % full_every == 0)
-                    # Count active runs every tick (cheap) so the heartbeat
-                    # below shows whether the fast tick has anything to do.
+                    adv = run_workflow_tick(app)
                     with app.app_context():
                         active = WorkflowRun.query.filter(
                             WorkflowRun.status == "running"
                         ).count()
-                    # TEMP heartbeat: one line per tick. Distinguishes the
-                    # three things that would make the fast tick look silent:
-                    # loop not iterating (no lines / i frozen), every tick a
-                    # full cycle (full_every==1), and no running run seen
-                    # (active_runs=0 while a flow is clearly up).
+                    # TEMP heartbeat: one line per tick so the worker's
+                    # liveness + progress stays visible. Quiet later.
                     logger.info(
-                        f"[brain-cycle] tick i={i} full={is_full} "
-                        f"full_every={full_every} active_runs={active}"
+                        f"[worker] tick i={i} active_runs={active} advanced={adv}"
                     )
-                    if is_full:
-                        with app.app_context():
-                            run_brain_cycle(app)
-                        app.config["LAST_BRAIN_CYCLE"] = datetime.now(timezone.utc).isoformat()
-                    elif active:
-                        adv = run_workflow_tick(app)
-                        logger.info(f"[brain-cycle] workflow tick advanced={adv}")
                 except Exception as e:
-                    logger.error(f"[brain-cycle] tick failed: {e}")
+                    logger.error(f"[worker] tick failed: {e}")
                 i += 1
-                for _ in range(FAST_TICK):
-                    if stop_event.is_set():
-                        break
-                    time.sleep(1)
+                _interruptible_sleep(FAST_TICK)
 
-        threading.Thread(target=_brain_cycle_loop, daemon=True, name="brain-cycle").start()
+        def _brain_loop():
+            logger.info("[brain-cycle] brain thread started; first cycle in ~15s")
+            time.sleep(15)
+            while not stop_event.is_set():
+                try:
+                    with app.app_context():
+                        run_brain_cycle(app)
+                    app.config["LAST_BRAIN_CYCLE"] = datetime.now(timezone.utc).isoformat()
+                except Exception as e:
+                    logger.error(f"[brain-cycle] cycle failed: {e}")
+                _interruptible_sleep(brain_interval)
+
+        threading.Thread(target=_worker_loop, daemon=True, name="job-worker").start()
+        threading.Thread(target=_brain_loop, daemon=True, name="brain-cycle").start()
         logger.info(
-            f"[brain-cycle] full cycle every {brain_interval}s (every "
-            f"{full_every} ticks), workflow tick every {FAST_TICK}s"
+            f"[brain-cycle] brain cycle every {brain_interval}s; "
+            f"job worker every {FAST_TICK}s (separate threads)"
         )
 
         threading.Thread(target=backup_loop, args=(stop_event,), daemon=True, name="backups").start()

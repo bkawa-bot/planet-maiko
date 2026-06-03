@@ -88,10 +88,11 @@ _PHASES = [
     ("orchestrate", _phase_orchestrate),
     ("unblock", _phase_unblock_tasks),
     ("spawn_jobs_for_tasks", _phase_spawn_jobs_for_tasks),
-    # Advance running flows: queue the next ready node(s). Sits just
-    # before execute so a freshly-queued node job runs the same tick.
-    ("advance_workflows", _phase_advance_workflows),
-    ("execute_agent_jobs", _phase_execute_agent_jobs),
+    # advance_workflows + execute_agent_jobs are deliberately NOT here. They
+    # run on the dedicated job-worker thread every FAST_TICK seconds (app.py,
+    # via run_workflow_tick), so a slow or hung phase in this thinking cycle
+    # (e.g. a poller's network call) can never starve flow execution. Jobs
+    # are picked up only on the worker — one thread, no concurrent pickup.
     ("stuck_escalation", _phase_stuck_escalation),
     # Daily-cadenced; the phase itself gates on a 24h cooldown so this
     # is cheap to invoke every cycle.
