@@ -71,6 +71,8 @@ def _phase_eval_triggers():
             ]
             if not triggers:
                 continue
+            if not wf.trigger_armed:
+                continue  # paused: saved but inert (arm it to go live)
             watermark = wf.trigger_evaluated_at
             if watermark is None:
                 # First sight of this armed flow: consume the backlog silently

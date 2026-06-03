@@ -53,6 +53,11 @@ class Workflow(db.Model):
     # backlog silently instead of firing on every old matching pupdate.
     trigger_evaluated_at = db.Column(db.DateTime, nullable=True)
 
+    # Arm/pause switch for trigger nodes. False (default) = saved but inert;
+    # True = its triggers fire on matching pupdates. Saving a flow never
+    # changes this, so you can build a trigger flow without it going live.
+    trigger_armed = db.Column(db.Boolean, default=False)
+
     created_at = db.Column(
         db.DateTime,
         default=lambda: datetime.now(timezone.utc),
@@ -71,6 +76,7 @@ class Workflow(db.Model):
             "description": self.description,
             "graph": self.graph or {"nodes": [], "edges": []},
             "extra": self.extra or {},
+            "trigger_armed": bool(self.trigger_armed),
             "created_at": iso_utc(self.created_at),
             "updated_at": iso_utc(self.updated_at),
         }

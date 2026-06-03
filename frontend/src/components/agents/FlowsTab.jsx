@@ -122,6 +122,19 @@ export default function FlowsTab() {
     load();
   };
 
+  const hasTrigger = (f) =>
+    !!(f.graph && f.graph.nodes && f.graph.nodes.some((n) => n.kind === "trigger"));
+
+  const handleArm = async (f) => {
+    try {
+      await api.armWorkflow(f.id, !f.trigger_armed);
+      showToast(f.trigger_armed ? "Flow paused" : "Flow armed 🐾", "normal");
+      load();
+    } catch (err) {
+      showToast(err.message || "Toggle failed", "high");
+    }
+  };
+
   if (loading) return <p className="page-empty">Loading flows…</p>;
 
   return (
@@ -205,6 +218,17 @@ export default function FlowsTab() {
                   </div>
                 </button>
                 <div className="flow-card-actions">
+                  {hasTrigger(f) && (
+                    <button
+                      className={`btn btn-sm flow-arm-btn${f.trigger_armed ? " armed" : ""}`}
+                      onClick={() => handleArm(f)}
+                      title={f.trigger_armed
+                        ? "Armed — firing on matching pupdates. Click to pause."
+                        : "Paused. Click to arm (go live)."}
+                    >
+                      {f.trigger_armed ? "● Armed" : "Paused"}
+                    </button>
+                  )}
                   <button className="btn btn-sm" onClick={() => setEditing(f)}>Open</button>
                   <button
                     className="btn btn-sm flow-card-delete"

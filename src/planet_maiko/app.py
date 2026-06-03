@@ -48,8 +48,10 @@ _PATCH_COLUMNS = [
     # AgentJob.outputs: structured {type, content} outputs (maiko emit),
     # read by the workflow engine instead of parsing the free-text artifact.
     ("agent_jobs", "outputs", "JSON"),
-    # Trigger nodes: per-flow eval watermark + the pupdate that fired a run.
+    # Trigger nodes: per-flow eval watermark + arm/pause switch + the pupdate
+    # that fired a run.
     ("workflows", "trigger_evaluated_at", "DATETIME"),
+    ("workflows", "trigger_armed", "BOOLEAN"),
     ("workflow_runs", "triggering_pupdate_id", "VARCHAR(64)"),
 ]
 

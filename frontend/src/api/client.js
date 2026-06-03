@@ -262,6 +262,8 @@ export const api = {
     request(`/workflows/${id}`, { method: "DELETE" }),
   runWorkflow: (id, data = {}) =>
     request(`/workflows/${id}/run`, { method: "POST", body: JSON.stringify(data) }),
+  armWorkflow: (id, armed) =>
+    request(`/workflows/${id}/arm`, { method: "POST", body: JSON.stringify({ armed }) }),
   getWorkflowRun: (runId) => request(`/workflow-runs/${runId}`),
   getWorkflowRuns: () => request("/workflow-runs"),
   stopWorkflowRun: (runId) =>

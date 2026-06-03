@@ -1250,6 +1250,10 @@
   font-family: inherit; color: inherit; cursor: pointer;
 }
 .flow-run-row-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.flow-arm-btn.armed {
+  background: color-mix(in srgb, var(--green) 18%, transparent);
+  color: var(--green); border-color: var(--green);
+}
 .flow-run-row-status {
   font-size: 9px; font-weight: 700; flex-shrink: 0;
   text-transform: uppercase; letter-spacing: 0.04em;

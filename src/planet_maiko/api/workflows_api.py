@@ -116,6 +116,23 @@ def run_workflow(wf_id):
     return jsonify(run.to_dict()), 201
 
 
+@workflows_bp.route("/workflows/<wf_id>/arm", methods=["POST"])
+def arm_workflow(wf_id):
+    """Arm or pause a flow's triggers. Armed = its trigger nodes fire on
+    matching pupdates; paused = saved but inert. Arming resets the eval
+    watermark to now, so it fires on new pupdates rather than the backlog
+    that piled up while it was paused. Body: {armed: bool}."""
+    row = db.session.get(Workflow, wf_id)
+    if row is None or row.deleted_at is not None:
+        return jsonify({"error": "Workflow not found"}), 404
+    armed = bool((request.get_json() or {}).get("armed"))
+    row.trigger_armed = armed
+    if armed:
+        row.trigger_evaluated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"ok": True, "trigger_armed": armed})
+
+
 def _end_runtime_session(job_id):
     """Force-tear-down the agent's live session for this job across every
     instantiated runtime (tmux kills its bound session; headless is a
