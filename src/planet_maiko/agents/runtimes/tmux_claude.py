@@ -64,6 +64,19 @@ logger = logging.getLogger(__name__)
 _READY_TIMEOUT_S = 5.0
 _READY_POLL_S = 0.2
 
+# After the TUI first looks ready, wait until the pane stops *changing*
+# before typing. "A prompt marker is on screen" can precede "claude will
+# accept input" by a second or more (it's still booting / loading MCP), and
+# a prompt typed into that gap is silently dropped — the agent then sits
+# idle at an empty box until a later wake re-sends into the settled pane.
+# A pane that's still animating (spinner during MCP load) reads as
+# not-settled, which is exactly when we want to keep waiting.
+_SETTLE_STABLE_S = 1.0   # pane must be unchanged this long to count as settled
+_SETTLE_TIMEOUT_S = 8.0  # ...but send anyway after this, settled or not
+# Pause between sending the literal prompt text and the Enter that submits
+# it, so a long line is fully registered before the newline.
+_SUBMIT_DELAY_S = 0.3
+
 # Poll cadence for "is the tmux session still alive?" while spawn /
 # resume blocks. 1s is fine — agent turns are seconds-to-minutes.
 _TURN_POLL_S = 1.0
@@ -252,6 +265,18 @@ class TmuxClaudeRuntime(ClaudeCodeRuntime):
             self._cleanup(sess, job_id)
             return _spawn_error("claude crashed before becoming ready (see agent.log)")
 
+        # Wait until the TUI stops rendering (claude finished booting +
+        # loading MCP) before typing, so the opening prompt lands in a
+        # ready input box instead of being dropped into a still-initializing
+        # pane. This was the "newly spawned agent does nothing until I
+        # message it" bug: the first send was lost, a later wake's send
+        # (into the now-settled pane) is what actually started the agent.
+        settled, waited = self._wait_until_settled(sess)
+        logger.info(
+            f"[tmux-claude] {sess} settled={settled} after {waited:.1f}s; "
+            f"sending opening prompt"
+        )
+
         # Send the prompt as if the user typed it (-l = literal so special
         # chars aren't interpreted as tmux keysyms like "C-c").
         self._tmux_send(sess, prompt)
@@ -402,6 +427,10 @@ class TmuxClaudeRuntime(ClaudeCodeRuntime):
                 ["tmux", "send-keys", "-t", sess, "-l", text],
                 capture_output=True, timeout=10,
             )
+            # Let the TUI register the literal text before the newline; a
+            # back-to-back Enter can outrun a long paste and submit a
+            # partial line (or an empty one).
+            time.sleep(_SUBMIT_DELAY_S)
             subprocess.run(
                 ["tmux", "send-keys", "-t", sess, "Enter"],
                 capture_output=True, timeout=5,
@@ -460,6 +489,35 @@ class TmuxClaudeRuntime(ClaudeCodeRuntime):
             )):
                 return True
         return True  # claude is almost certainly ready by now
+
+    def _wait_until_settled(self, sess):
+        """Block until the pane stops changing — claude has finished booting
+        and loading MCP, so the input box is genuinely ready for the prompt.
+
+        Returns (settled, elapsed_s). settled=False means we hit the timeout
+        and the caller should send anyway (degrade to the old behavior).
+        A pane that's still animating (a spinner while MCP loads) never goes
+        stable, which is exactly when we want to keep waiting; a quiet input
+        box goes stable within _SETTLE_STABLE_S and we proceed immediately.
+        """
+        start = time.time()
+        deadline = start + _SETTLE_TIMEOUT_S
+        last = None
+        stable_since = None
+        while time.time() < deadline:
+            if not self._tmux_alive(sess):
+                return (False, time.time() - start)
+            content = self._tmux_capture(sess)
+            if content == last:
+                if stable_since is None:
+                    stable_since = time.time()
+                elif (time.time() - stable_since) >= _SETTLE_STABLE_S:
+                    return (True, time.time() - start)
+            else:
+                last = content
+                stable_since = None
+            time.sleep(_READY_POLL_S)
+        return (False, time.time() - start)
 
     def _cleanup(self, sess, job_id):
         with self._SESSIONS_GUARD:
