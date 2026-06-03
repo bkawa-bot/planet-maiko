@@ -60,6 +60,7 @@ from .phases.orchestrate import (  # noqa: E402
 from .phases.spawn_jobs import _phase_spawn_jobs_for_tasks  # noqa: E402
 from .phases.execute_jobs import _phase_execute_agent_jobs  # noqa: E402
 from .phases.advance_workflows import _phase_advance_workflows  # noqa: E402
+from .phases.eval_triggers import _phase_eval_triggers  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +165,10 @@ def run(app):
 
 
 _WORKFLOW_PHASES = [
+    # Fire event-triggered flows first so a run started this tick advances in
+    # the same tick. On the worker thread, so triggering is fast + isn't
+    # starved when the full brain cycle is slow.
+    ("eval_triggers", _phase_eval_triggers),
     ("advance_workflows", _phase_advance_workflows),
     ("execute_agent_jobs", _phase_execute_agent_jobs),
 ]

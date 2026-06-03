@@ -47,6 +47,12 @@ class Workflow(db.Model):
     # Forward-flex per the house pattern.
     extra = db.Column(db.JSON, default=dict)
 
+    # Trigger watermark: the last time the trigger-eval phase looked at this
+    # flow. Pupdates newer than this that match a trigger node fire a run; on
+    # the first eval it's set to "now" so an armed flow consumes the existing
+    # backlog silently instead of firing on every old matching pupdate.
+    trigger_evaluated_at = db.Column(db.DateTime, nullable=True)
+
     created_at = db.Column(
         db.DateTime,
         default=lambda: datetime.now(timezone.utc),

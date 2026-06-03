@@ -42,6 +42,10 @@ class WorkflowRun(db.Model):
     graph_snapshot = db.Column(db.JSON, default=dict)
     error = db.Column(db.Text, nullable=True)
     extra = db.Column(db.JSON, default=dict)
+    # The pupdate that fired this run, when it was started by a trigger node
+    # (null for a manually-run flow). Used for dedup (a pupdate fires a given
+    # flow once) + to seed the entry node with the pupdate's content.
+    triggering_pupdate_id = db.Column(db.String(64), nullable=True, index=True)
     created_at = db.Column(
         db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False,
     )

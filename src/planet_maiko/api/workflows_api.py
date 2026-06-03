@@ -103,33 +103,16 @@ def run_workflow(wf_id):
     if row is None or row.deleted_at is not None:
         return jsonify({"error": "Workflow not found"}), 404
 
-    graph = row.graph or {"nodes": [], "edges": []}
-    nodes = graph.get("nodes") or []
-    if not nodes:
+    if not (row.graph or {}).get("nodes"):
         return jsonify({"error": "This flow has no steps to run"}), 400
 
+    from planet_maiko import flows
     data = request.get_json() or {}
-    run = WorkflowRun(
-        workflow_id=row.id,
-        status="running",
-        graph_snapshot=graph,
-        extra={
-            "scope_repo": (data.get("scope_repo") or "").strip() or None,
-            # The kickoff task: the "Task (input)" of the flow. Fed to the
-            # root node(s) (those with no inbound edge) as their input.
-            "input": (data.get("input") or "").strip() or None,
-        },
+    run = flows.start_run(
+        row,
+        input=(data.get("input") or "").strip() or None,
+        scope_repo=(data.get("scope_repo") or "").strip() or None,
     )
-    db.session.add(run)
-    db.session.flush()  # assign run.id before the NodeRuns reference it
-    for n in nodes:
-        db.session.add(NodeRun(
-            workflow_run_id=run.id,
-            node_id=n.get("id"),
-            agent_type=n.get("agent_type"),
-            status="pending",
-        ))
-    db.session.commit()
     return jsonify(run.to_dict()), 201
 
 

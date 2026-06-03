@@ -10,9 +10,10 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
 import "./flow-theme.css";
-import { X, Save, Play, CombinationLock } from "@icons";
+import { X, Save, Play, CombinationLock, Crystal } from "@icons";
 import RoleNode from "./RoleNode";
 import GateNode from "./GateNode";
+import TriggerNode from "./TriggerNode";
 import LoopEdge from "./LoopEdge";
 import { roleMeta } from "../../../hooks/useAgentTypes";
 import { kindColor, edgeValid } from "./kinds";
@@ -20,7 +21,7 @@ import { api } from "../../../api/client";
 import { showToast } from "../../Toast";
 import ModalPortal from "../../ModalPortal";
 
-const nodeTypes = { role: RoleNode, gate: GateNode };
+const nodeTypes = { role: RoleNode, gate: GateNode, trigger: TriggerNode };
 const edgeTypes = { loop: LoopEdge };
 
 // Placeholder for the Run dialog's kickoff input, keyed by what the first
@@ -43,6 +44,14 @@ function buildInitial(workflow, types) {
   const byId = Object.fromEntries(list.map((t) => [t.id, t]));
 
   const nodes = (g.nodes || []).map((n) => {
+    if (n.kind === "trigger" || n.agent_type === "trigger") {
+      return {
+        id: n.id,
+        type: "trigger",
+        position: { x: n.x ?? 0, y: n.y ?? 0 },
+        data: { editable: true, config: n.config || {} },
+      };
+    }
     if (n.kind === "gate" || n.agent_type === "gate") {
       return {
         id: n.id,
@@ -159,7 +168,9 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
       const tgt = nodes.find((n) => n.id === conn.target);
       if (!src || !tgt || src.id === tgt.id) return false;
       if (reaches(conn.target, conn.source)) return true; // loop edge
-      // A gate is a pass-through; any wire to or from it is valid.
+      // A trigger only emits (its output is the pupdate that fired the run);
+      // a gate is a pass-through. Either as the source makes the wire valid.
+      if (src.type === "trigger") return true;
       if (src.type === "gate" || tgt.type === "gate") return true;
       const out = src.data.type.output_kind || "diff";
       const t = tgt.data.type;
@@ -186,7 +197,8 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
         return;
       }
       const src = nodes.find((n) => n.id === conn.source);
-      const kind = (src && src.type !== "gate" && src.data.type.output_kind) || "diff";
+      // Only role nodes carry a typed output; gate/trigger sources color as diff.
+      const kind = (src && src.type === "role" && src.data.type && src.data.type.output_kind) || "diff";
       setEdges((eds) =>
         addEdge(
           { ...conn, className: "flow-edge", style: { stroke: kindColor(kind) } },
@@ -224,14 +236,28 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
     );
   };
 
+  const addTrigger = () => {
+    const id = `trigger-${crypto.randomUUID().slice(0, 8)}`;
+    const offset = nodes.length;
+    setNodes((nds) =>
+      nds.concat({
+        id,
+        type: "trigger",
+        position: { x: 60 + (offset % 3) * 40, y: 90 + (offset % 6) * 46 },
+        data: { editable: true, config: {} },
+      })
+    );
+  };
+
   const serializeGraph = () => ({
-    nodes: nodes.map((n) => ({
-      id: n.id,
-      kind: n.type === "gate" ? "gate" : "role",
-      agent_type: n.type === "gate" ? "gate" : n.data.type.id,
-      x: Math.round(n.position.x),
-      y: Math.round(n.position.y),
-    })),
+    nodes: nodes.map((n) => {
+      const base = { id: n.id, x: Math.round(n.position.x), y: Math.round(n.position.y) };
+      if (n.type === "gate") return { ...base, kind: "gate", agent_type: "gate" };
+      if (n.type === "trigger") {
+        return { ...base, kind: "trigger", agent_type: "trigger", config: n.data.config || {} };
+      }
+      return { ...base, kind: "role", agent_type: n.data.type.id };
+    }),
     edges: edges.map((e) => ({
       id: e.id,
       source: e.source,
@@ -331,6 +357,15 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
               </button>
             );
           })}
+          <div className="flow-palette-label flow-palette-control">Triggers</div>
+          <button
+            className="flow-palette-item"
+            onClick={addTrigger}
+            title="Start this flow when a matching pupdate arrives"
+          >
+            <span className="flow-palette-icon"><Crystal size={16} /></span>
+            <span className="flow-palette-name">Pupdate trigger</span>
+          </button>
           <div className="flow-palette-label flow-palette-control">Control</div>
           <button
             className="flow-palette-item"

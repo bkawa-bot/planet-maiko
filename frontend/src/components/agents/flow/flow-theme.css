@@ -109,6 +109,34 @@
 }
 .flow-loop-input::-webkit-inner-spin-button,
 .flow-loop-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* Pupdate trigger node: the entry of an event-driven flow. Dashed gold to
+   read as "this fires the flow" rather than a normal step. */
+.flow-trigger-node {
+  position: relative;
+  background: var(--bg-card, #1e1b26);
+  border: 1px dashed #d9a93a;
+  border-radius: 10px;
+  padding: 8px 10px;
+  min-width: 150px; max-width: 210px;
+  color: var(--text, #e8e6f0);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+}
+.flow-trigger-head {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
+  color: #d9a93a; text-transform: uppercase; line-height: 1.2;
+}
+.flow-trigger-icon { flex-shrink: 0; }
+.flow-trigger-input {
+  width: 100%; margin-top: 6px; box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.25); border: 1px solid #4a4458;
+  border-radius: 6px; padding: 3px 6px;
+  color: var(--text, #e8e6f0); font-size: 12px; font-family: inherit;
+  outline: none;
+}
+.flow-trigger-input:focus { border-color: #d9a93a; }
+.flow-trigger-foot { margin-top: 5px; font-size: 10px; color: var(--text-muted, #9a93a8); }
 .flow-role-desc {
   margin-top: 8px;
   font-size: 11px; color: var(--text-dim); line-height: 1.4;

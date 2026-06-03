@@ -352,6 +352,10 @@ def _phase_advance_workflows():
             # deadlock waiting on the very node that loops back to it.
             loop_edges = [e for e in edges if (e.get("data") or {}).get("loop")]
             fwd_edges = [e for e in edges if not (e.get("data") or {}).get("loop")]
+            # Trigger nodes are entry points, not data producers: a node fed
+            # only by triggers is a root, seeded from run.extra.input (the
+            # pupdate that fired the run). They start `done` (flows.start_run).
+            trigger_ids = {n.get("id") for n in nodes if n.get("kind") == "trigger"}
             nrs_by_node = {}
             for nr in run.node_runs:
                 nrs_by_node.setdefault(nr.node_id, []).append(nr)
@@ -706,11 +710,14 @@ def _phase_advance_workflows():
 
                 # --- Normal single spawn: compose the prompt from the seed
                 #     (root) or the upstream artifacts / pushed branches. ---
+                # A trigger is the run's entry, not a producer, so a node fed
+                # only by triggers is a root and seeds from run.extra.input.
+                real_inbound = [s for s in inbound if s not in trigger_ids]
                 blocks = []
                 push_failed = False
-                if not inbound:
-                    # Root node: seed it with the human-provided kickoff
-                    # task from the run (the "Task (input)" of the flow).
+                if not real_inbound:
+                    # Root node: seed it with the kickoff input (the flow's
+                    # "Task (input)", or the pupdate that fired a trigger).
                     seed = (run.extra or {}).get("input")
                     if seed:
                         blocks.append(seed)
