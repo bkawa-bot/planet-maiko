@@ -710,6 +710,10 @@ def approve(job_id):
     existing_pr_url = (
         (task.extra or {}).get("pr_url") if task else (job.extra or {}).get("pr_url")
     )
+    # Stacked child: the scatter cut this worktree from a parent task's branch,
+    # so its PR must target that branch (not the default), or the diff would
+    # include the parent's commits too.
+    parent_branch = (job.extra or {}).get("parent_branch")
 
     if existing_pr_url:
         instruction = (
@@ -721,12 +725,18 @@ def approve(job_id):
             f"message_type='stuck' and describe the error."
         )
     else:
+        base_note = (
+            f" This work stacks on `{parent_branch}`, so open the PR against "
+            f"that branch: pass `--base {parent_branch}` to `gh pr create` (not "
+            f"the default branch), so the PR shows only your changes."
+            if parent_branch else ""
+        )
         instruction = (
             f"Your work is approved. Time to open the PR:\n\n"
             f"1. Push branch `{branch}` to origin.\n"
             f"2. Run `gh pr create` following this repo's conventions:"
             f" respect any PR template at .github/PULL_REQUEST_TEMPLATE.md,"
-            f" use appropriate labels, assign reviewers per team norms.\n"
+            f" use appropriate labels, assign reviewers per team norms.{base_note}\n"
             f"3. Once the PR is open, call "
             f"reply(message_type='pr_opened', content=<PR URL>) with "
             f"the URL on its own line.\n\n"
