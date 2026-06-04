@@ -7,15 +7,19 @@ const SUBTYPES = [
   { value: "create_memo", label: "Create a memo" },
   { value: "create_task", label: "Create a task" },
   { value: "run_agent_job", label: "Run a skill / agent job" },
+  { value: "complete_linked_task", label: "Close linked task" },
 ];
+const PRIORITIES = ["low", "normal", "high", "urgent"];
 
-// A non-agent action node: a side-effect run inline when the flow reaches it.
-//   create_memo / create_task — seeded with its input (the pupdate that fired
-//     a trigger, or an upstream agent's output).
-//   run_agent_job — fire a skill / one-shot agent job (fire-and-forget; the
-//     pack picks it up next tick). This is how a schedule trigger "runs a
-//     skill": [schedule] -> [run a skill]. Config writes to node.data.config,
-//     read by the executor.
+// A non-agent action node, run when the flow reaches it.
+//   create_memo — drop a memo (title / priority / url config; body = its
+//     input; defaults to the triggering pupdate's title/body/url).
+//   create_task — drop a task on the board.
+//   run_agent_job — fire a skill / one-shot job. This one is an AWAITED step
+//     (output flows downstream), spawned in the run loop, not inline.
+//   complete_linked_task — close the task(s) linked to the triggering
+//     pupdate's PR (matches the old "Close linked task" automation).
+// Config writes to node.data.config, read by the executor.
 export default function ActionNode({ id, data }) {
   const { setNodes, deleteElements } = useReactFlow();
   const { agentJobKinds } = useFlowOptions();
@@ -24,6 +28,7 @@ export default function ActionNode({ id, data }) {
   const [title, setTitle] = useState(cfg.title || "");
   const [input, setInput] = useState(cfg.input || "");
   const [repo, setRepo] = useState(cfg.repo || "");
+  const [url, setUrl] = useState(cfg.url || "");
 
   const patch = (next) => {
     setNodes((nds) =>
@@ -42,6 +47,18 @@ export default function ActionNode({ id, data }) {
     v === "run_agent_job"
       ? patch({ subtype: v, job_kind: cfg.job_kind || "cartograph" })
       : patch({ subtype: v });
+
+  const titleField = (
+    <input
+      className="flow-action-input nodrag nopan"
+      value={title}
+      placeholder="title (optional)"
+      onChange={(e) => setTitle(e.target.value)}
+      onBlur={() => patch({ title: title.trim() })}
+      onKeyDown={(e) => { stop(e); if (e.key === "Enter") e.currentTarget.blur(); }}
+      onClick={stop}
+    />
+  );
 
   return (
     <div
@@ -104,16 +121,34 @@ export default function ActionNode({ id, data }) {
             onClick={stop}
           />
         </>
+      ) : subtype === "create_memo" ? (
+        <>
+          {titleField}
+          <select
+            className="flow-action-select nodrag nopan"
+            value={cfg.priority || "normal"}
+            onChange={(e) => patch({ priority: e.target.value })}
+            onClick={stop}
+            title="Memo priority"
+          >
+            {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <input
+            className="flow-action-input nodrag nopan"
+            value={url}
+            placeholder="click-through url (optional)"
+            onChange={(e) => setUrl(e.target.value)}
+            onBlur={() => patch({ url: url.trim() })}
+            onKeyDown={(e) => { stop(e); if (e.key === "Enter") e.currentTarget.blur(); }}
+            onClick={stop}
+          />
+        </>
+      ) : subtype === "complete_linked_task" ? (
+        <div className="flow-action-foot">
+          Closes the task(s) linked to the triggering pupdate’s PR.
+        </div>
       ) : (
-        <input
-          className="flow-action-input nodrag nopan"
-          value={title}
-          placeholder="title (optional)"
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={() => patch({ title: title.trim() })}
-          onKeyDown={(e) => { stop(e); if (e.key === "Enter") e.currentTarget.blur(); }}
-          onClick={stop}
-        />
+        titleField
       )}
 
       <Handle type="source" position={Position.Right} id="out" className="flow-socket" />

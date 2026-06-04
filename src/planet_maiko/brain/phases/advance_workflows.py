@@ -320,18 +320,19 @@ def _emit_ready_memos(run, nrs_by_node):
 
 
 def _run_action_node(node, input_text, run):
-    """Run a fire-and-forget action node inline (create a memo / task).
-    Best-effort: a failure logs but never breaks the run. The run_agent_job
-    subtype is NOT handled here: it's an awaited step spawned in the run loop
-    (like a role node), not an inline side-effect."""
+    """Run a fire-and-forget action node inline (memo / task / close linked
+    task). Best-effort: a failure logs but never breaks the run. run_agent_job
+    is NOT handled here: it's an awaited step spawned in the run loop (like a
+    role node), not an inline side-effect."""
     cfg = node.get("config") or {}
     subtype = (cfg.get("subtype") or "create_memo").strip()
-    title = (cfg.get("title") or "").strip()
     try:
         if subtype == "create_task":
-            _action_create_task(title, input_text, run)
+            _action_create_task((cfg.get("title") or "").strip(), input_text, run)
+        elif subtype == "complete_linked_task":
+            _action_complete_linked_task(run)
         else:
-            _action_create_memo(title, input_text, run)
+            _action_create_memo(cfg, input_text, run)
     except Exception as e:
         logger.warning(f"[cycle] action node ({subtype}) failed for run {run.id}: {e}")
 
@@ -368,17 +369,58 @@ def _spawn_run_agent_job(cfg, description, run, node_id):
     return job
 
 
-def _action_create_memo(title, body, run):
+def _action_create_memo(cfg, body, run):
+    """Drop a memo. config carries title / priority / url; the body is the
+    input handed to the node. When the run was fired by a pupdate, the title /
+    url / body default to that pupdate's (so a [pupdate] -> [notify] flow
+    surfaces the event faithfully, matching the old notify_me automation with
+    no {placeholder} templating). Deduped on the triggering pupdate."""
+    from planet_maiko.database import db
     from planet_maiko.brain.memos import create_memo
+    title = (cfg.get("title") or "").strip()
+    url = (cfg.get("url") or "").strip() or None
+    priority = (cfg.get("priority") or "normal").strip() or "normal"
+    body_text = (body or "").strip()
+    pid = run.triggering_pupdate_id or None
+    if pid:
+        from planet_maiko.models.pupdate import Pupdate
+        p = db.session.get(Pupdate, pid)
+        if p is not None:
+            title = title or (p.title or "")
+            url = url or p.url
+            if p.body:
+                body_text = p.body.strip()
     create_memo(
         kind="flow_memo",
         category="info",
         title=title or "Flow notification",
-        body=(body or "").strip()[:4000] or "(no detail)",
-        cta_label=None,
-        priority="normal",
+        body=body_text[:4000] or "(no detail)",
+        url=url,
+        cta_label="Open" if url else None,
+        priority=priority,
+        source_pupdate_id=pid,
         extra={"workflow_run_id": run.id},
     )
+
+
+def _action_complete_linked_task(run):
+    """Close the review/coding tasks linked to the triggering pupdate's URL
+    (cancel their jobs, dismiss sibling pupdates). Reuses the automation action
+    so behavior matches the "Close linked task on PR approved/merged" rules
+    exactly. No-op without a triggering pupdate."""
+    pid = run.triggering_pupdate_id
+    if not pid:
+        return
+    from planet_maiko.database import db
+    from planet_maiko.models.pupdate import Pupdate
+    from planet_maiko.brain.automations.actions.pupdate import _act_complete_linked_task
+    p = db.session.get(Pupdate, pid)
+    if p is None:
+        return
+    # The automation action only reads `.id` off its first arg (for logging);
+    # a tiny shim lets us reuse all its task/job/pupdate cleanup unchanged.
+    shim = type("_FlowAuto", (), {"id": f"flow-run-{run.id}"})()
+    _act_complete_linked_task(shim, {}, pupdate=p)
 
 
 def _action_create_task(title, body, run):
