@@ -625,16 +625,25 @@ def _phase_advance_workflows():
 
             scope_repo = (run.extra or {}).get("scope_repo")
 
-            def _spawn_job(role, description, node_id, title=None, repo=None):
+            def _spawn_job(role, description, node_id, title=None, repo=None,
+                           parent_branch=None, parent_base_sha=None):
                 """Mint one queued AgentJob for a node (or a scatter
                 instance). Lazy-spawns the (role, scope) profile so
                 execute_jobs resolves the right role, including custom ones
                 like planner/decomposer whose kind isn't in the builtin map.
                 `title`/`repo` come from the producing output when present (a
                 scattered task names + optionally re-homes its coder); repo
-                falls back to the run's scope_repo, the shared default."""
+                falls back to the run's scope_repo, the shared default.
+                `parent_branch`/`parent_base_sha` stack a dependent task on its
+                parent: execute_jobs cuts the worktree from origin/<parent_branch>
+                so the child builds on the parent's work, not from scratch."""
                 job_repo = repo or scope_repo
                 profile = maybe_spawn(role, job_repo)
+                extra = {"workflow_run_id": run.id, "node_id": node_id}
+                if parent_branch:
+                    extra["parent_branch"] = parent_branch
+                if parent_base_sha:
+                    extra["parent_base_sha"] = parent_base_sha
                 job = AgentJob(
                     id=uuid.uuid4().hex[:24],
                     kind=role,
@@ -644,7 +653,7 @@ def _phase_advance_workflows():
                     created_by="system",
                     agent_profile_id=profile.id,
                     status="queued",
-                    extra={"workflow_run_id": run.id, "node_id": node_id},
+                    extra=extra,
                 )
                 db.session.add(job)
                 return job
@@ -690,6 +699,72 @@ def _phase_advance_workflows():
                     continue
                 role = pendings[0].agent_type
                 inbound = [e.get("source") for e in fwd_edges if e.get("target") == nid]
+
+                # DEFERRED STACKED CHILDREN: this node was already scattered on
+                #   an earlier tick (instances carry scatter_origin) and some are
+                #   pending on a parent task. Spawn each whose parent has finished
+                #   and pushed its branch, cutting the child off that branch, and
+                #   leave the rest pending. This intercepts before the scatter
+                #   detection below so the node never re-scatters.
+                if any((i.extra or {}).get("scatter_origin") for i in insts):
+                    by_item = {
+                        (i.extra or {}).get("item_id"): i
+                        for i in insts if (i.extra or {}).get("item_id")
+                    }
+                    for child in pendings:
+                        cx = child.extra or {}
+                        dep = cx.get("depends_on")
+                        if not dep:
+                            # Independent instance still pending (unusual): spawn
+                            # off the run's base.
+                            job = _spawn_job(role, cx.get("content"), nid,
+                                             title=cx.get("label"), repo=cx.get("repo"))
+                            child.status = "queued"
+                            child.agent_job_id = job.id
+                            advanced += 1
+                            continue
+                        parent = by_item.get(dep)
+                        if parent is None:
+                            logger.warning(
+                                f"[cycle] stacked task {cx.get('item_id')!r} depends "
+                                f"on unknown {dep!r}; starting from the base branch"
+                            )
+                            job = _spawn_job(role, cx.get("content"), nid,
+                                             title=cx.get("label"), repo=cx.get("repo"))
+                            child.status = "queued"
+                            child.agent_job_id = job.id
+                            advanced += 1
+                            continue
+                        if parent.status in ("failed", "skipped"):
+                            child.status = "skipped"
+                            child.error = "the task it stacks on did not finish"
+                            continue
+                        if parent.status != "done" or not parent.agent_job_id:
+                            continue  # parent still working; wait a tick
+                        parent_job = db.session.get(AgentJob, parent.agent_job_id)
+                        if not parent_job or not parent_job.branch or not parent_job.worktree_path:
+                            continue  # parent has no branch yet; wait
+                        # Push the parent's branch so the child can cut from
+                        # origin/<branch>; retry next tick if the push fails.
+                        if not _push_branch(parent_job.worktree_path, parent_job.branch):
+                            continue
+                        parent_sha = None
+                        try:
+                            r = _git(["rev-parse", "HEAD"], parent_job.worktree_path)
+                            if r.returncode == 0:
+                                parent_sha = (r.stdout or "").strip() or None
+                        except Exception:
+                            pass
+                        job = _spawn_job(
+                            role, cx.get("content"), nid,
+                            title=cx.get("label"), repo=cx.get("repo"),
+                            parent_branch=parent_job.branch, parent_base_sha=parent_sha,
+                        )
+                        child.status = "queued"
+                        child.agent_job_id = job.id
+                        child.extra = {**cx, "parent_branch": parent_job.branch}
+                        advanced += 1
+                    continue
 
                 # CASE A: re-armed fanned reviewer instances (they carry a
                 #   paired_to from propagation). Each re-reviews its own paired
@@ -855,24 +930,43 @@ def _phase_advance_workflows():
                             scatter_items = [{"content": t} for t in legacy]
                             break
                 if scatter_items is not None:
+                    # Mint a NodeRun per item carrying its payload + stacking
+                    # metadata (item_id, depends_on). Independent items spawn now
+                    # off the run's base; dependent items stay pending and the
+                    # deferred-stacked-children branch above spawns each off its
+                    # parent's branch once the parent finishes.
                     for idx, item in enumerate(scatter_items):
                         content = item.get("content")
                         # The output's title names the spawned job (else the
                         # task's first line); its repo re-homes that one coder
                         # (else the run's repo, applied in _spawn_job).
                         label = item.get("title") or _first_line(content)
+                        item_id = (item.get("id") or "").strip() or f"task{idx}"
+                        dep = item.get("depends_on")
+                        if isinstance(dep, list):
+                            dep = dep[0] if dep else None  # P1: a single parent
+                        if isinstance(dep, str):
+                            dep = dep.strip() or None
                         target = placeholder if idx == 0 else NodeRun(
                             workflow_run_id=run.id, node_id=nid, agent_type=role,
                         )
                         if idx > 0:
                             db.session.add(target)
-                        job = _spawn_job(
-                            role, content, nid,
-                            title=label, repo=item.get("repo"),
-                        )
-                        target.status = "queued"
-                        target.agent_job_id = job.id
-                        target.extra = {"instance": idx, "label": label}
+                        target.extra = {
+                            "instance": idx, "label": label,
+                            "scatter_origin": True, "item_id": item_id,
+                            "depends_on": dep,
+                            "content": content, "repo": item.get("repo"),
+                        }
+                        if dep:
+                            target.status = "pending"  # wait for the parent task
+                        else:
+                            job = _spawn_job(
+                                role, content, nid,
+                                title=label, repo=item.get("repo"),
+                            )
+                            target.status = "queued"
+                            target.agent_job_id = job.id
                         advanced += 1
                     continue
 
