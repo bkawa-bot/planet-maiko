@@ -555,6 +555,15 @@ def create_app(start_scheduler=False):
             ensure_seed_rule_automations()
         except Exception as e:
             logger.warning(f"[startup] Rule automation seeding skipped: {e}")
+        # Seed the default FLOWS (out-of-box equivalents of the pupdate rules)
+        # and archive the seeded automations they replace, so the same event
+        # doesn't fire on both engines. Runs after the automation seeders so a
+        # fresh install's just-seeded rows get archived in the same boot.
+        try:
+            from planet_maiko.seed_flows import ensure_seed_flows
+            ensure_seed_flows()
+        except Exception as e:
+            logger.warning(f"[startup] Default flow seeding skipped: {e}")
         try:
             ensure_plugin_default_automations()
         except Exception as e:
