@@ -52,6 +52,7 @@ _PATCH_COLUMNS = [
     # that fired a run.
     ("workflows", "trigger_evaluated_at", "DATETIME"),
     ("workflows", "trigger_armed", "BOOLEAN"),
+    ("workflows", "trigger_last_fired_at", "DATETIME"),
     ("workflow_runs", "triggering_pupdate_id", "VARCHAR(64)"),
 ]
 

@@ -58,6 +58,11 @@ class Workflow(db.Model):
     # changes this, so you can build a trigger flow without it going live.
     trigger_armed = db.Column(db.Boolean, default=False)
 
+    # Last time a SCHEDULE trigger on this flow fired (interval cadence). The
+    # pupdate-trigger watermark above is advanced every eval; this one only
+    # moves when a scheduled run actually starts.
+    trigger_last_fired_at = db.Column(db.DateTime, nullable=True)
+
     created_at = db.Column(
         db.DateTime,
         default=lambda: datetime.now(timezone.utc),

@@ -54,6 +54,17 @@ def _matches(p, cfg):
     return True
 
 
+def _interval_minutes(cfg):
+    """Minutes between fires for a schedule trigger (interval_value +
+    interval_unit). Defaults to 1 hour; floors at 1 minute."""
+    try:
+        val = max(1, int(cfg.get("interval_value") or 1))
+    except (TypeError, ValueError):
+        val = 1
+    unit = (cfg.get("interval_unit") or "hours").strip()
+    return val * {"minutes": 1, "hours": 60, "days": 1440}.get(unit, 60)
+
+
 def _phase_eval_triggers():
     from planet_maiko.database import db
     from planet_maiko.models.workflow import Workflow
@@ -73,6 +84,46 @@ def _phase_eval_triggers():
                 continue
             if not wf.trigger_armed:
                 continue  # paused: saved but inert (arm it to go live)
+
+            schedule_triggers = [
+                t for t in triggers
+                if (t.get("config") or {}).get("trigger_kind") == "schedule"
+            ]
+            pupdate_triggers = [
+                t for t in triggers
+                if (t.get("config") or {}).get("trigger_kind", "pupdate") != "schedule"
+            ]
+
+            # Schedule triggers: fire when the interval has elapsed since the
+            # last fire (once on the first eval after arming, then every
+            # interval). One last-fired stamp per flow; the common case is a
+            # single schedule trigger.
+            if schedule_triggers:
+                last = wf.trigger_last_fired_at
+                if last is not None and last.tzinfo is None:
+                    last = last.replace(tzinfo=timezone.utc)
+                for t in schedule_triggers:
+                    cfg = t.get("config") or {}
+                    interval_min = _interval_minutes(cfg)
+                    if last is None or (now - last).total_seconds() >= interval_min * 60:
+                        run = flows.start_run(
+                            wf,
+                            input=(cfg.get("input") or "Scheduled run").strip() or "Scheduled run",
+                            scope_repo=(cfg.get("repo") or "").strip() or None,
+                            triggering_pupdate_id=None,
+                        )
+                        if run:
+                            wf.trigger_last_fired_at = now
+                            last = now
+                            started += 1
+                            logger.info(
+                                f"[cycle] schedule trigger: flow '{wf.name}' "
+                                f"fired (every {interval_min}m)"
+                            )
+
+            # Pupdate triggers: fire on new pupdates after the watermark.
+            if not pupdate_triggers:
+                continue
             watermark = wf.trigger_evaluated_at
             if watermark is None:
                 # First sight of this armed flow: consume the backlog silently
@@ -89,7 +140,7 @@ def _phase_eval_triggers():
             )
             wf_started = 0
             for p in new_pupdates:
-                if not any(_matches(p, t.get("config") or {}) for t in triggers):
+                if not any(_matches(p, t.get("config") or {}) for t in pupdate_triggers):
                     continue
                 if wf_started >= _MAX_STARTS_PER_FLOW:
                     logger.info(

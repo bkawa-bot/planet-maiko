@@ -137,6 +137,26 @@
 }
 .flow-trigger-input:focus { border-color: #d9a93a; }
 .flow-trigger-foot { margin-top: 5px; font-size: 10px; color: var(--text-muted, #9a93a8); }
+.flow-trigger-select {
+  width: 100%; margin-top: 6px; box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.25); border: 1px solid #4a4458;
+  border-radius: 6px; padding: 3px 6px;
+  color: var(--text, #e8e6f0); font-size: 12px; font-family: inherit; outline: none;
+}
+.flow-trigger-select:focus { border-color: #d9a93a; }
+.flow-trigger-row {
+  display: flex; align-items: center; gap: 5px; margin-top: 6px;
+  font-size: 11px; color: var(--text-muted, #9a93a8);
+}
+.flow-trigger-row .flow-trigger-select { margin-top: 0; flex: 1; }
+.flow-trigger-num {
+  width: 46px; box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.25); border: 1px solid #4a4458;
+  border-radius: 6px; padding: 3px 5px;
+  color: var(--text, #e8e6f0); font-size: 12px; font-family: inherit; outline: none;
+}
+.flow-trigger-num:focus { border-color: #d9a93a; }
+textarea.flow-trigger-input { resize: vertical; min-height: 34px; }
 
 /* Action node: a non-agent side-effect (create memo/task), run inline. Mint
    to set it apart from agent steps (and the gold trigger). */
