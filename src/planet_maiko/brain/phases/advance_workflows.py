@@ -448,6 +448,161 @@ def _action_create_task(title, body, run):
     db.session.commit()
 
 
+def _branch_tip(worktree, ref="HEAD"):
+    """The SHA a ref points at in a worktree, or None."""
+    try:
+        r = _git(["rev-parse", ref], worktree)
+        return (r.stdout or "").strip() if r.returncode == 0 else None
+    except Exception:
+        return None
+
+
+def _merge_tree_conflicts(worktree, ours_ref, theirs_ref):
+    """Dry-run merge (git merge-tree --write-tree): would merging `theirs` into
+    `ours` conflict, WITHOUT touching the worktree? Returns ("clean", []),
+    ("conflict", [paths]), or ("unknown", []) when merge-tree isn't available
+    (pre-2.38 git) or errors, so a stale git never falsely reports a conflict."""
+    try:
+        r = _git(
+            ["merge-tree", "--write-tree", "--name-only", ours_ref, theirs_ref],
+            worktree, timeout=60,
+        )
+    except Exception:
+        return ("unknown", [])
+    if r.returncode == 0:
+        return ("clean", [])
+    if r.returncode == 1:
+        # stdout: line 1 = the merged tree OID, the rest = conflicted paths.
+        paths = [ln.strip() for ln in (r.stdout or "").splitlines()[1:] if ln.strip()]
+        return ("conflict", paths)
+    return ("unknown", [])
+
+
+def _sync_stacked_children(run):
+    """P2: keep stacked children in sync when their parent's branch advances.
+
+    Each tick, for every child job carrying extra.parent_branch whose parent's
+    branch tip moved past what the child last incorporated, merge the parent in
+    (the no-force-push sync). A clean merge on an idle (done) child runs inline;
+    a predicted conflict, or a still-running child, is delegated to the child
+    agent over the resume transport + an inbox memo. synced_parent_sha tracks
+    the last incorporated tip so each advance fires once. Best-effort: a failure
+    logs and never breaks the run."""
+    from planet_maiko.database import db
+    from planet_maiko.models.agent_job import AgentJob
+    jobs = []
+    for nr in run.node_runs:
+        if nr.agent_job_id:
+            j = db.session.get(AgentJob, nr.agent_job_id)
+            if j:
+                jobs.append(j)
+    by_branch = {j.branch: j for j in jobs if j.branch}
+    changed = False
+    for child in jobs:
+        cx = child.extra or {}
+        parent_branch = cx.get("parent_branch")
+        if not parent_branch or not child.branch or not child.worktree_path:
+            continue
+        if child.status not in ("running", "done"):
+            continue  # queued hasn't started (already cut from the parent)
+        parent = by_branch.get(parent_branch)
+        if not parent or not parent.worktree_path:
+            continue
+        parent_tip = _branch_tip(parent.worktree_path)
+        synced = cx.get("synced_parent_sha") or cx.get("parent_base_sha")
+        if not parent_tip or parent_tip == synced:
+            continue  # parent hasn't moved since the last sync
+        try:
+            _sync_one_child(run, child, parent, parent_branch)
+        except Exception as e:
+            logger.warning(f"[cycle] stack sync failed for {child.id}: {e}")
+        # Record the attempt (even on escalation) so we don't re-fire for the
+        # same parent tip; a further advance gets a new tip and re-syncs.
+        child.extra = {**(child.extra or {}), "synced_parent_sha": parent_tip}
+        changed = True
+    if changed:
+        db.session.commit()
+
+
+def _sync_one_child(run, child, parent, parent_branch):
+    """Bring one child in sync with its advanced parent (see
+    _sync_stacked_children)."""
+    from planet_maiko.database import db
+    from planet_maiko.models.agent_message import AgentMessage
+    from planet_maiko.brain.memos import create_memo
+    from planet_maiko.api.diff_api import _resume_agent_with_review
+    # Make sure origin has the parent's latest, then fetch it into the child.
+    _push_branch(parent.worktree_path, parent.branch)
+    _git(["fetch", "origin", parent_branch], child.worktree_path, timeout=60)
+    status, files = _merge_tree_conflicts(
+        child.worktree_path, child.branch, f"origin/{parent_branch}"
+    )
+
+    # Clean + idle: merge inline, no agent, no human. A done child's worktree is
+    # committed-clean, so a no-conflict merge is safe to run directly.
+    if status == "clean" and child.status == "done":
+        m = _git(["merge", "--no-edit", f"origin/{parent_branch}"],
+                 child.worktree_path, timeout=120)
+        if m.returncode == 0:
+            _push_branch(child.worktree_path, child.branch)
+            logger.info(
+                f"[cycle] stack sync: merged {parent_branch} into "
+                f"{child.branch} cleanly"
+            )
+            return
+        _git(["merge", "--abort"], child.worktree_path)  # unexpected; escalate
+
+    # Otherwise delegate to the child agent (it owns its worktree + can resolve)
+    # and flag a real conflict to the human.
+    detail = ""
+    if status == "conflict":
+        detail = ", ".join(files[:8]) + ("..." if len(files) > 8 else "") if files else "some files"
+        body = (
+            f"Your parent branch `{parent_branch}` advanced and will conflict. Run "
+            f"`git fetch origin {parent_branch} && git merge origin/{parent_branch}` "
+            f"on your branch `{child.branch}`, resolve the conflicts in {detail} "
+            f"(prefer the parent's structure for shared code), commit, and continue. "
+            f"If you cannot resolve it cleanly, reply with message_type='stuck'."
+        )
+    else:
+        body = (
+            f"Your parent branch `{parent_branch}` advanced. Run "
+            f"`git fetch origin {parent_branch} && git merge origin/{parent_branch}` "
+            f"to pull its new commits into `{child.branch}`, resolve anything that "
+            f"conflicts, commit, and continue. Reply stuck if you can't."
+        )
+    db.session.add(AgentMessage(
+        task_id=child.id, direction="to_agent", sender="stack-sync",
+        content=body, message_type="review",
+    ))
+    db.session.commit()
+    resumed = _resume_agent_with_review(child.id, child.worktree_path)
+    # Re-open a done child (only if it actually woke) so the run waits for the
+    # merge; a running child already has the message in its live session.
+    if resumed and child.status == "done":
+        child.status = "running"
+        for nr in run.node_runs:
+            if nr.agent_job_id == child.id:
+                nr.status = "running"
+                break
+        db.session.commit()
+    if status == "conflict":
+        try:
+            create_memo(
+                kind="flow_memo", category="info",
+                title=f"Stacked branch needs a merge: {child.branch}",
+                body=(
+                    f"`{child.branch}` stacks on `{parent_branch}`, which got new "
+                    f"commits that conflict. The agent was asked to merge and "
+                    f"resolve ({detail})."
+                ),
+                priority="normal",
+                extra={"workflow_run_id": run.id, "job_id": child.id},
+            )
+        except Exception:
+            pass
+
+
 def _phase_advance_workflows():
     from planet_maiko.database import db
     from planet_maiko.models.workflow_run import WorkflowRun, NodeRun
@@ -1043,6 +1198,14 @@ def _phase_advance_workflows():
                 placeholder.status = "queued"
                 placeholder.agent_job_id = job.id
                 advanced += 1
+
+            # P2 stacked-PR sync: when a parent's branch advanced, bring its
+            # dependent children in sync (merge parent -> child). Runs before
+            # the finish check so a re-opened child keeps the run running.
+            try:
+                _sync_stacked_children(run)
+            except Exception as e:
+                logger.warning(f"[cycle] stack sync skipped for run {run.id}: {e}")
 
             # 3. Finish the run when every node is terminal.
             statuses = [nr.status for nr in run.node_runs]
