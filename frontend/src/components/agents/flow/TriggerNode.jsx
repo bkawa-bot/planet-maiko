@@ -5,6 +5,8 @@ import { useFlowOptions } from "./useFlowOptions";
 
 const UNITS = ["minutes", "hours", "days"];
 const PRIORITIES = ["low", "normal", "high", "urgent"];
+const DAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 // A trigger node = the entry of an event-driven flow. Its kind is fixed at
 // creation by which palette button dropped it (config.trigger_kind), so there
@@ -38,6 +40,16 @@ export default function TriggerNode({ id, data }) {
     );
   };
   const stop = (e) => e.stopPropagation();
+
+  // Toggle a weekday in/out of the clock schedule's `days` (empty = daily).
+  const toggleDay = (i) => {
+    const cur = cfg.days || [];
+    patch({
+      days: cur.includes(i)
+        ? cur.filter((d) => d !== i)
+        : [...cur, i].sort((a, b) => a - b),
+    });
+  };
 
   // pupdate types grouped into <optgroup>s by their `group` (GitHub, Linear,
   // Agents, ...), preserving the backend's order within each group.
@@ -76,27 +88,68 @@ export default function TriggerNode({ id, data }) {
             <Clock size={13} className="flow-trigger-icon" />
             <span>On a schedule</span>
           </div>
-          <div className="flow-trigger-row">
-            <span>every</span>
-            <input
-              type="number"
-              min={1}
-              className="flow-trigger-num nodrag nopan"
-              value={ival}
-              onChange={(e) => setIval(e.target.value)}
-              onBlur={() => patch({ interval_value: Math.max(1, parseInt(ival, 10) || 1) })}
-              onKeyDown={(e) => { stop(e); if (e.key === "Enter") e.currentTarget.blur(); }}
-              onClick={stop}
-            />
-            <select
-              className="flow-trigger-select nodrag nopan"
-              value={cfg.interval_unit || "hours"}
-              onChange={(e) => patch({ interval_unit: e.target.value })}
-              onClick={stop}
-            >
-              {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-            </select>
-          </div>
+          <select
+            className="flow-trigger-select nodrag nopan"
+            value={cfg.schedule_kind || "interval"}
+            onChange={(e) => patch({ schedule_kind: e.target.value })}
+            onClick={stop}
+          >
+            <option value="interval">every N minutes / hours / days</option>
+            <option value="clock">at a set time</option>
+          </select>
+          {(cfg.schedule_kind || "interval") === "clock" ? (
+            <>
+              <div className="flow-trigger-row">
+                <span>at</span>
+                <input
+                  type="time"
+                  className="flow-trigger-time nodrag nopan"
+                  value={cfg.at || "09:00"}
+                  onChange={(e) => patch({ at: e.target.value })}
+                  onKeyDown={stop}
+                  onClick={stop}
+                />
+              </div>
+              <div className="flow-trigger-days">
+                {DAYS.map((d, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className={"flow-day" + ((cfg.days || []).includes(i) ? " on" : "")}
+                    onClick={(e) => { stop(e); toggleDay(i); }}
+                    title={DAY_NAMES[i]}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+              <div className="flow-trigger-foot">
+                {(cfg.days || []).length ? "on the picked days" : "every day"}
+              </div>
+            </>
+          ) : (
+            <div className="flow-trigger-row">
+              <span>every</span>
+              <input
+                type="number"
+                min={1}
+                className="flow-trigger-num nodrag nopan"
+                value={ival}
+                onChange={(e) => setIval(e.target.value)}
+                onBlur={() => patch({ interval_value: Math.max(1, parseInt(ival, 10) || 1) })}
+                onKeyDown={(e) => { stop(e); if (e.key === "Enter") e.currentTarget.blur(); }}
+                onClick={stop}
+              />
+              <select
+                className="flow-trigger-select nodrag nopan"
+                value={cfg.interval_unit || "hours"}
+                onChange={(e) => patch({ interval_unit: e.target.value })}
+                onClick={stop}
+              >
+                {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+          )}
           <input
             className="flow-trigger-input nodrag nopan"
             value={repo}

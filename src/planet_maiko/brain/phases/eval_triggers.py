@@ -65,6 +65,51 @@ def _interval_minutes(cfg):
     return val * {"minutes": 1, "hours": 60, "days": 1440}.get(unit, 60)
 
 
+def _schedule_due(cfg, last, now):
+    """Whether a schedule trigger should fire now. `last` is the flow's
+    last-fired time (aware UTC or None), `now` is aware UTC. Kind "clock"
+    fires at a wall-clock time; anything else is an interval cadence."""
+    if (cfg.get("schedule_kind") or "interval").strip() == "clock":
+        return _clock_due(cfg, last, now)
+    interval_min = _interval_minutes(cfg)
+    return last is None or (now - last).total_seconds() >= interval_min * 60
+
+
+def _clock_due(cfg, last, now):
+    """Clock-time cadence: fire once when we're at/past today's HH:MM (in the
+    server's local timezone, which is the user's since Maiko runs locally) on
+    an allowed weekday, and haven't fired since that time. `days` is a list of
+    weekday indices (Mon=0..Sun=6); empty = every day. A freshly-armed clock
+    trigger is primed to a baseline by the caller, so None isn't expected."""
+    now_local = now.astimezone()
+    try:
+        hour, minute = (int(x) for x in (cfg.get("at") or "").split(":"))
+        today_at = now_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    except (ValueError, TypeError):
+        return False  # missing / malformed / out-of-range time: never fire
+    if now_local < today_at:
+        return False  # today's time hasn't arrived yet
+    days = cfg.get("days") or []
+    if days and now_local.weekday() not in days:
+        return False  # not one of the chosen weekdays
+    if last is None:
+        return True  # defensive (caller primes None); fire at/after the time
+    return last.astimezone() < today_at  # not yet fired since today's time
+
+
+def _schedule_label(cfg):
+    """Short human label for the fire log line."""
+    if (cfg.get("schedule_kind") or "interval").strip() == "clock":
+        at = cfg.get("at") or "?"
+        days = cfg.get("days") or []
+        if days:
+            names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+            picked = " ".join(names[d] for d in days if 0 <= d < 7)
+            return f"at {at} on {picked}"
+        return f"daily at {at}"
+    return f"every {_interval_minutes(cfg)}m"
+
+
 def _phase_eval_triggers():
     from planet_maiko.database import db
     from planet_maiko.models.workflow import Workflow
@@ -94,18 +139,26 @@ def _phase_eval_triggers():
                 if (t.get("config") or {}).get("trigger_kind", "pupdate") != "schedule"
             ]
 
-            # Schedule triggers: fire when the interval has elapsed since the
-            # last fire (once on the first eval after arming, then every
-            # interval). One last-fired stamp per flow; the common case is a
-            # single schedule trigger.
+            # Schedule triggers fire on a cadence. Two kinds (config.
+            # schedule_kind): "interval" (every N min/hours/days, fires once on
+            # the first eval after arming then every interval) and "clock" (a
+            # wall-clock HH:MM, local, on optional weekdays). One last-fired
+            # stamp per flow; the common case is a single schedule trigger.
             if schedule_triggers:
                 last = wf.trigger_last_fired_at
                 if last is not None and last.tzinfo is None:
                     last = last.replace(tzinfo=timezone.utc)
                 for t in schedule_triggers:
                     cfg = t.get("config") or {}
-                    interval_min = _interval_minutes(cfg)
-                    if last is None or (now - last).total_seconds() >= interval_min * 60:
+                    is_clock = (cfg.get("schedule_kind") or "interval").strip() == "clock"
+                    # A freshly-armed clock trigger primes its baseline to now,
+                    # so it fires at the NEXT occurrence of HH:MM rather than
+                    # immediately for a time that already passed today.
+                    if is_clock and last is None:
+                        wf.trigger_last_fired_at = now
+                        last = now
+                        continue
+                    if _schedule_due(cfg, last, now):
                         run = flows.start_run(
                             wf,
                             input=(cfg.get("input") or "Scheduled run").strip() or "Scheduled run",
@@ -117,8 +170,8 @@ def _phase_eval_triggers():
                             last = now
                             started += 1
                             logger.info(
-                                f"[cycle] schedule trigger: flow '{wf.name}' "
-                                f"fired (every {interval_min}m)"
+                                f"[cycle] schedule trigger: flow '{wf.name}' fired "
+                                f"({_schedule_label(cfg)})"
                             )
 
             # Pupdate triggers: fire on new pupdates after the watermark.
