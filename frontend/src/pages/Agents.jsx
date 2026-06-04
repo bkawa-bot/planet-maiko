@@ -1,19 +1,14 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
-import { Plus, Target, X, SpellBook, GitBranch } from "@icons";
+import { Plus, Target, X } from "@icons";
 import InfoButton from "../components/InfoButton";
 import AgentsActiveTab from "../components/agents/AgentsActiveTab";
 import AgentsProfilesTab from "../components/agents/AgentsProfilesTab";
-import AgentTypesTab from "../components/agents/AgentTypesTab";
 import ModalPortal from "../components/ModalPortal";
 import { useConfiguredRepos } from "../utils/repo";
 import { useAgentTypes } from "../hooks/useAgentTypes";
 import "./Agents.css";
-
-// Lazy: FlowsTab pulls in the React Flow editor, so its chunk only
-// loads when the Flows tab is opened.
-const FlowsTab = lazy(() => import("../components/agents/FlowsTab"));
 
 export default function Agents() {
   const configuredRepos = useConfiguredRepos();
@@ -234,41 +229,6 @@ export default function Agents() {
           </InfoButton>
         )}
 
-        <button
-          className={`page-tab ${tab === "types" ? "active" : ""}`}
-          onClick={() => setTab("types")}
-        >
-          <SpellBook size={10} /> Roles
-        </button>
-        {tab === "types" && (
-          <InfoButton title={<><SpellBook size={16} /> Agent Roles</>}>
-            <p>A role is the <em>kind</em> of agent you can spawn (Coder, Reviewer, and any you add here). It's the template behind each character on the Profiles tab, and the thing the New Agent picker chooses from.</p>
-            <h4>What a role carries</h4>
-            <ul>
-              <li><strong>Protocol</strong>: how this kind of agent works, read at the start of every run.</li>
-              <li><strong>Workspace</strong>: a real git worktree it can commit in, or a throwaway scratch dir.</li>
-              <li><strong>Output</strong>: what it hands back, a diff to approve, a report, or an insight card.</li>
-              <li><strong>Model routing key</strong>: which Settings routing rule picks its model + effort.</li>
-            </ul>
-            <h4>Built-in vs custom</h4>
-            <p>The four built-ins ship with Maiko. Edit one and it keeps your changes (it stops auto-updating from then on). Custom roles are yours to add, edit, and remove.</p>
-          </InfoButton>
-        )}
-
-        <button
-          className={`page-tab ${tab === "flows" ? "active" : ""}`}
-          onClick={() => setTab("flows")}
-        >
-          <GitBranch size={10} /> Flows
-        </button>
-        {tab === "flows" && (
-          <InfoButton title={<><GitBranch size={16} /> Flows</>}>
-            <p>A flow is a pipeline of roles. One role's output drops into the next role's input: a planner's plan into a coder, a coder's diff into a reviewer. You build one by wiring roles on a canvas, and a wire only connects when the kinds match.</p>
-            <h4>Right now</h4>
-            <p>You can compose and save flows. Running them (spawning an agent per step and passing each one's output to the next) is the next piece of work.</p>
-          </InfoButton>
-        )}
-
         <button className="btn btn-primary new-agent-btn" onClick={handleCreateAgent}>
           <Plus size={12} /> New Agent
         </button>
@@ -292,14 +252,6 @@ export default function Agents() {
           onProfilesChanged={fetchData}
           onShowArchived={handleShowArchived}
         />
-      )}
-
-      {tab === "types" && <AgentTypesTab />}
-
-      {tab === "flows" && (
-        <Suspense fallback={<p className="page-empty">Loading flows…</p>}>
-          <FlowsTab />
-        </Suspense>
       )}
     </div>
   );

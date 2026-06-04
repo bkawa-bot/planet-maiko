@@ -1,16 +1,22 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import {
   Zap, Wand2, Sunrise, Brain, Coffee, Search, GitFork,
   Rocket, Clipboard, X, Loader, Plus, Save, Eye, Pencil, Trash2,
-  Compass, Pause, Play, ChevronDown, ChevronRight,
+  Compass, Pause, Play, ChevronDown, ChevronRight, GitBranch, SpellBook,
 } from "@icons";
 import { formatRepo, useDefaultOrg } from "../utils/repo";
 import { relativeTime } from "../utils/dates";
 import AutomationEditor from "../components/AutomationEditor";
+import InfoButton from "../components/InfoButton";
+import AgentTypesTab from "../components/agents/AgentTypesTab";
 import ModalPortal from "../components/ModalPortal";
 import "./Automations.css";
+
+// Lazy: FlowsTab pulls in the React Flow editor, so its chunk only loads
+// when the Flows tab is opened.
+const FlowsTab = lazy(() => import("../components/agents/FlowsTab"));
 
 const ICON_MAP = {
   "sunrise": Sunrise, "brain": Brain, "coffee": Coffee,
@@ -182,6 +188,43 @@ export default function Automations() {
         </button>
         <button
           role="tab"
+          aria-selected={activeTab === "flows"}
+          className={`page-tab ${activeTab === "flows" ? "active" : ""}`}
+          onClick={() => setActiveTab("flows")}
+        >
+          <GitBranch size={10} /> Flows
+        </button>
+        {activeTab === "flows" && (
+          <InfoButton title={<><GitBranch size={16} /> Flows</>}>
+            <p>A flow is a pipeline of steps wired on a canvas: a trigger or a role's output drops into the next step's input. You build one by wiring nodes, and a wire only connects when the kinds match.</p>
+            <h4>What you can wire</h4>
+            <p>Triggers (a pupdate arrives, or a schedule), roles (agents that do the work), actions (notify, create a task, run a skill, close a linked task), and approval gates.</p>
+          </InfoButton>
+        )}
+        <button
+          role="tab"
+          aria-selected={activeTab === "roles"}
+          className={`page-tab ${activeTab === "roles" ? "active" : ""}`}
+          onClick={() => setActiveTab("roles")}
+        >
+          <SpellBook size={10} /> Roles
+        </button>
+        {activeTab === "roles" && (
+          <InfoButton title={<><SpellBook size={16} /> Agent Roles</>}>
+            <p>A role is the <em>kind</em> of agent you can spawn (Coder, Reviewer, and any you add here). It's the template behind each character on the Pack's Profiles tab, and the thing the New Agent picker chooses from.</p>
+            <h4>What a role carries</h4>
+            <ul>
+              <li><strong>Protocol</strong>: how this kind of agent works, read at the start of every run.</li>
+              <li><strong>Workspace</strong>: a real git worktree it can commit in, or a throwaway scratch dir.</li>
+              <li><strong>Output</strong>: what it hands back, a diff to approve, a report, or an insight card.</li>
+              <li><strong>Model routing key</strong>: which Settings routing rule picks its model + effort.</li>
+            </ul>
+            <h4>Built-in vs custom</h4>
+            <p>The four built-ins ship with Maiko. Edit one and it keeps your changes (it stops auto-updating from then on). Custom roles are yours to add, edit, and remove.</p>
+          </InfoButton>
+        )}
+        <button
+          role="tab"
           aria-selected={activeTab === "specialties"}
           className={`page-tab ${activeTab === "specialties" ? "active" : ""}`}
           onClick={() => setActiveTab("specialties")}
@@ -191,6 +234,14 @@ export default function Automations() {
       </div>
 
       {activeTab === "automations" && <AutomationsList />}
+
+      {activeTab === "flows" && (
+        <Suspense fallback={<p className="page-empty">Loading flows…</p>}>
+          <FlowsTab />
+        </Suspense>
+      )}
+
+      {activeTab === "roles" && <AgentTypesTab />}
 
       {activeTab === "specialties" && (
       <div className="skills-section-header">
