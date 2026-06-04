@@ -320,37 +320,34 @@ def _emit_ready_memos(run, nrs_by_node):
 
 
 def _run_action_node(node, input_text, run):
-    """Run a non-agent action node inline (create a memo / task, or fire a
-    skill / agent job). Best-effort: a failure logs but never breaks the run."""
+    """Run a fire-and-forget action node inline (create a memo / task).
+    Best-effort: a failure logs but never breaks the run. The run_agent_job
+    subtype is NOT handled here: it's an awaited step spawned in the run loop
+    (like a role node), not an inline side-effect."""
     cfg = node.get("config") or {}
     subtype = (cfg.get("subtype") or "create_memo").strip()
     title = (cfg.get("title") or "").strip()
     try:
         if subtype == "create_task":
             _action_create_task(title, input_text, run)
-        elif subtype == "run_agent_job":
-            _action_run_agent_job(cfg, input_text, run)
         else:
             _action_create_memo(title, input_text, run)
     except Exception as e:
         logger.warning(f"[cycle] action node ({subtype}) failed for run {run.id}: {e}")
 
 
-def _action_run_agent_job(cfg, input_text, run):
-    """Fire a one-shot AgentJob (a skill or a builtin kind), fire-and-forget:
-    the execute phase picks it up next tick. Mirrors the automation
-    `run_agent_job` action — `kind` drives which skill/role runs. The node's
-    own input wins; absent it, the seed handed down the flow is used. This is
-    how a schedule trigger "runs a skill": [schedule] -> [run a skill]."""
-    from planet_maiko.database import db
+def _spawn_run_agent_job(cfg, description, run, node_id):
+    """Mint a queued AgentJob for a "run a skill" action STEP (kind = the
+    chosen skill / builtin). Unlike the fire-and-forget memo/task actions,
+    the caller links this job to the NodeRun and awaits it, so the skill's
+    output flows downstream like a role node's. No agent_profile_id: the
+    execute phase resolves the role from kind (skills via CustomSkill),
+    exactly as it does for an automation's run_agent_job. Returns the job
+    uncommitted (the phase's own commit persists it, after the NodeRun is
+    linked)."""
     from planet_maiko.models.agent_job import AgentJob
     kind = (cfg.get("job_kind") or cfg.get("kind") or "").strip() or "cartograph"
     repo = (cfg.get("repo") or "").strip() or (run.extra or {}).get("scope_repo")
-    description = (
-        (cfg.get("input") or cfg.get("description") or "").strip()
-        or (input_text or "").strip()
-        or None
-    )
     priority = (cfg.get("priority") or "normal").strip() or "normal"
     title = (cfg.get("title") or "").strip() or f"{kind} (flow)"
     job = AgentJob(
@@ -365,10 +362,10 @@ def _action_run_agent_job(cfg, input_text, run):
         status="queued",
         approved_by="auto",
         approved_at=datetime.now(timezone.utc),
-        extra={"workflow_run_id": run.id, "source": "flow"},
+        extra={"workflow_run_id": run.id, "node_id": node_id, "source": "flow"},
     )
     db.session.add(job)
-    db.session.commit()
+    return job
 
 
 def _action_create_memo(title, body, run):
@@ -446,10 +443,16 @@ def _phase_advance_workflows():
             # only by triggers is a root, seeded from run.extra.input (the
             # pupdate that fired the run). They start `done` (flows.start_run).
             trigger_ids = {n.get("id") for n in nodes if n.get("kind") == "trigger"}
-            # Action nodes (create memo/task) are non-agent side-effects that
-            # pass their input through, so they're excluded from real_inbound
-            # the same way triggers are.
-            action_ids = {n.get("id") for n in nodes if n.get("kind") == "action"}
+            # Fire-and-forget action nodes (create memo/task) pass their input
+            # through, so they're excluded from real_inbound the same way
+            # triggers are. A "run a skill" action (subtype run_agent_job) is
+            # NOT excluded: it's an awaited step that produces output, so a
+            # node wired after it reads that output like any role node does.
+            action_ids = {
+                n.get("id") for n in nodes
+                if n.get("kind") == "action"
+                and (n.get("config") or {}).get("subtype") != "run_agent_job"
+            }
             nrs_by_node = {}
             for nr in run.node_runs:
                 nrs_by_node.setdefault(nr.node_id, []).append(nr)
@@ -706,10 +709,59 @@ def _phase_advance_workflows():
                     _emit_gate_memo(run, nid, placeholder, fwd_edges, nrs_by_node)
                     continue
 
-                # Action node: a non-agent side-effect (create a memo / task).
-                # Run it inline with its input — the upstream artifact, or the
-                # pupdate that fired a trigger — then mark it done.
+                # Action node. "Run a skill" (subtype run_agent_job) behaves
+                # like a role node: compose its prompt, spawn the skill job,
+                # link it to this step and await it, so its output flows
+                # downstream. create memo/task stay fire-and-forget side-effects
+                # run inline.
                 if node.get("kind") == "action":
+                    a_cfg = node.get("config") or {}
+                    if (a_cfg.get("subtype") or "").strip() == "run_agent_job":
+                        # Prompt = the skill's own focus (config.input) plus the
+                        # seed (root) or the upstream artifacts / pushed branch.
+                        a_blocks = []
+                        skill_focus = (a_cfg.get("input") or "").strip()
+                        if skill_focus:
+                            a_blocks.append(skill_focus)
+                        real_in = [s for s in inbound if s not in trigger_ids and s not in action_ids]
+                        a_push_failed = False
+                        if not real_in:
+                            # Root step: seed from the flow input (a pupdate
+                            # body is real context; a schedule's seed is just a
+                            # placeholder, but harmless next to the focus).
+                            seed = (run.extra or {}).get("input")
+                            if seed and seed != skill_focus:
+                                a_blocks.append(seed)
+                        else:
+                            for src in inbound:
+                                for src_nr in nrs_by_node.get(src, []):
+                                    if src_nr.status != "done" or not src_nr.agent_job_id:
+                                        continue
+                                    src_job = db.session.get(AgentJob, src_nr.agent_job_id)
+                                    if not src_job:
+                                        continue
+                                    block, pf = _compose_block(src_nr, src_job)
+                                    if pf:
+                                        a_push_failed = True
+                                        break
+                                    if block:
+                                        a_blocks.append(block)
+                                if a_push_failed:
+                                    break
+                        if a_push_failed:
+                            placeholder.status = "failed"
+                            placeholder.error = "couldn't push the upstream branch for the skill to read"
+                            continue
+                        job = _spawn_run_agent_job(
+                            a_cfg, "\n\n".join(a_blocks) or None, run, nid,
+                        )
+                        placeholder.status = "queued"
+                        placeholder.agent_job_id = job.id
+                        advanced += 1
+                        continue
+                    # Fire-and-forget side-effect (create a memo / task): run
+                    # inline with its input (the upstream artifact, or the
+                    # pupdate that fired a trigger), then mark it done.
                     real_in = [s for s in inbound if s not in trigger_ids and s not in action_ids]
                     action_input = None
                     for src in real_in:
