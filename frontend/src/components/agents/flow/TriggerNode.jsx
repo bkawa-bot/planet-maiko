@@ -1,21 +1,31 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Handle, Position, useReactFlow } from "@xyflow/react";
-import { Crystal, X } from "@icons";
+import { Crystal, Clock, X } from "@icons";
+import { useFlowOptions } from "./useFlowOptions";
 
 const UNITS = ["minutes", "hours", "days"];
+const PRIORITIES = ["low", "normal", "high", "urgent"];
 
-// A trigger node: the entry of an event-driven flow. Two modes via
-// config.trigger_kind — "pupdate" (fire when a matching pupdate arrives) or
-// "schedule" (fire every N minutes/hours/days, seeding the flow with the
-// node's input). Output-only — nothing wires into it. Config writes to
-// node.data.config, read by the trigger-eval engine.
+// A trigger node = the entry of an event-driven flow. Its kind is fixed at
+// creation by which palette button dropped it (config.trigger_kind), so there
+// is no mode switch on the node itself:
+//   "pupdate"  — fire when a matching pupdate arrives. Pick the type from the
+//                live registry (grouped GitHub / Linear / Agents / ...);
+//                optionally narrow by priority / source.
+//   "schedule" — fire every N minutes/hours/days. The WORK lives downstream:
+//                wire this into a "run a skill" action or a role node. An
+//                optional seed repo scopes that first step.
+// Output-only — nothing wires in. Config writes to node.data.config, read by
+// the trigger-eval engine.
 export default function TriggerNode({ id, data }) {
   const { setNodes, deleteElements } = useReactFlow();
+  const { pupdateTypes, sources } = useFlowOptions();
   const cfg = data.config || {};
-  const mode = cfg.trigger_kind || "pupdate";
-  const [ptype, setPtype] = useState(cfg.pupdate_type || "");
+  const isSchedule = cfg.trigger_kind === "schedule";
+
+  // Free-text / number fields keep a local draft and commit on blur so typing
+  // doesn't churn the whole canvas on every keystroke; selects patch directly.
   const [ival, setIval] = useState(String(cfg.interval_value || 1));
-  const [input, setInput] = useState(cfg.input || "");
   const [repo, setRepo] = useState(cfg.repo || "");
 
   const patch = (next) => {
@@ -29,8 +39,26 @@ export default function TriggerNode({ id, data }) {
   };
   const stop = (e) => e.stopPropagation();
 
+  // pupdate types grouped into <optgroup>s by their `group` (GitHub, Linear,
+  // Agents, ...), preserving the backend's order within each group.
+  const grouped = useMemo(() => {
+    const out = [];
+    const idx = {};
+    for (const t of pupdateTypes) {
+      const g = t.group || "Other";
+      if (!(g in idx)) { idx[g] = out.length; out.push([g, []]); }
+      out[idx[g]][1].push(t);
+    }
+    return out;
+  }, [pupdateTypes]);
+
   return (
-    <div className="flow-trigger-node" title="Fires this flow on the chosen event">
+    <div
+      className="flow-trigger-node"
+      title={isSchedule
+        ? "Fires this flow on a schedule"
+        : "Fires this flow when a matching pupdate arrives"}
+    >
       {data.editable && (
         <button
           type="button"
@@ -41,33 +69,13 @@ export default function TriggerNode({ id, data }) {
           <X size={11} />
         </button>
       )}
-      <div className="flow-trigger-head">
-        <Crystal size={14} className="flow-trigger-icon" />
-        <span>When</span>
-      </div>
-      <select
-        className="flow-trigger-select nodrag nopan"
-        value={mode}
-        onChange={(e) => patch({ trigger_kind: e.target.value })}
-        onClick={stop}
-      >
-        <option value="pupdate">a pupdate arrives</option>
-        <option value="schedule">on a schedule</option>
-      </select>
 
-      {mode === "pupdate" ? (
-        <input
-          className="flow-trigger-input nodrag nopan"
-          value={ptype}
-          placeholder="type (blank = any)"
-          onChange={(e) => setPtype(e.target.value)}
-          onBlur={() => patch({ pupdate_type: ptype.trim() })}
-          onKeyDown={(e) => { stop(e); if (e.key === "Enter") e.currentTarget.blur(); }}
-          onClick={stop}
-          title="Pupdate type to fire on (blank = any)"
-        />
-      ) : (
+      {isSchedule ? (
         <>
+          <div className="flow-trigger-head">
+            <Clock size={13} className="flow-trigger-icon" />
+            <span>On a schedule</span>
+          </div>
           <div className="flow-trigger-row">
             <span>every</span>
             <input
@@ -89,16 +97,6 @@ export default function TriggerNode({ id, data }) {
               {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
-          <textarea
-            className="flow-trigger-input nodrag nopan"
-            rows={2}
-            value={input}
-            placeholder="what to do (seeded to the next step)"
-            onChange={(e) => setInput(e.target.value)}
-            onBlur={() => patch({ input: input.trim() })}
-            onKeyDown={stop}
-            onClick={stop}
-          />
           <input
             className="flow-trigger-input nodrag nopan"
             value={repo}
@@ -108,8 +106,57 @@ export default function TriggerNode({ id, data }) {
             onKeyDown={(e) => { stop(e); if (e.key === "Enter") e.currentTarget.blur(); }}
             onClick={stop}
           />
+          <div className="flow-trigger-foot">
+            Wire into a “run a skill” action or a role to do the work.
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flow-trigger-head">
+            <Crystal size={13} className="flow-trigger-icon" />
+            <span>When a pupdate arrives</span>
+          </div>
+          <select
+            className="flow-trigger-select nodrag nopan"
+            value={cfg.pupdate_type || ""}
+            onChange={(e) => patch({ pupdate_type: e.target.value })}
+            onClick={stop}
+            title="Pupdate type to fire on"
+          >
+            <option value="">any type</option>
+            {grouped.map(([g, items]) => (
+              <optgroup key={g} label={g}>
+                {items.map((t) => (
+                  <option key={t.name} value={t.name}>{t.label || t.name}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <div className="flow-trigger-row">
+            <select
+              className="flow-trigger-select nodrag nopan"
+              value={cfg.priority || ""}
+              onChange={(e) => patch({ priority: e.target.value })}
+              onClick={stop}
+              title="Only fire at this priority"
+            >
+              <option value="">any priority</option>
+              {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <select
+              className="flow-trigger-select nodrag nopan"
+              value={cfg.source || ""}
+              onChange={(e) => patch({ source: e.target.value })}
+              onClick={stop}
+              title="Only fire from this source"
+            >
+              <option value="">any source</option>
+              {sources.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+            </select>
+          </div>
         </>
       )}
+
       <Handle
         type="source"
         position={Position.Right}

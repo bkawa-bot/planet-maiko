@@ -10,7 +10,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
 import "./flow-theme.css";
-import { X, Save, Play, CombinationLock, Crystal, ListTodo } from "@icons";
+import { X, Save, Play, CombinationLock, Crystal, Clock, ListTodo } from "@icons";
 import RoleNode from "./RoleNode";
 import GateNode from "./GateNode";
 import TriggerNode from "./TriggerNode";
@@ -246,7 +246,11 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
     );
   };
 
-  const addTrigger = () => {
+  // Two trigger flavors share one node type (kind="trigger"); the palette
+  // button fixes which by seeding config.trigger_kind, so there's no mode
+  // switch on the node and the eval engine keys off the same config it always
+  // did. "pupdate" fires on a matching pupdate; "schedule" fires on a cadence.
+  const addTrigger = (triggerKind) => {
     const id = `trigger-${crypto.randomUUID().slice(0, 8)}`;
     const offset = nodes.length;
     setNodes((nds) =>
@@ -254,7 +258,7 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
         id,
         type: "trigger",
         position: { x: 60 + (offset % 3) * 40, y: 90 + (offset % 6) * 46 },
-        data: { editable: true, config: {} },
+        data: { editable: true, config: { trigger_kind: triggerKind } },
       })
     );
   };
@@ -386,11 +390,19 @@ export default function FlowEditor({ workflow, types, onSaved, onClose, onRan })
           <div className="flow-palette-label flow-palette-control">Triggers</div>
           <button
             className="flow-palette-item"
-            onClick={addTrigger}
+            onClick={() => addTrigger("pupdate")}
             title="Start this flow when a matching pupdate arrives"
           >
             <span className="flow-palette-icon"><Crystal size={16} /></span>
             <span className="flow-palette-name">Pupdate trigger</span>
+          </button>
+          <button
+            className="flow-palette-item"
+            onClick={() => addTrigger("schedule")}
+            title="Start this flow on a schedule (every N minutes/hours/days)"
+          >
+            <span className="flow-palette-icon"><Clock size={16} /></span>
+            <span className="flow-palette-name">Schedule trigger</span>
           </button>
           <div className="flow-palette-label flow-palette-control">Actions</div>
           <button

@@ -320,18 +320,55 @@ def _emit_ready_memos(run, nrs_by_node):
 
 
 def _run_action_node(node, input_text, run):
-    """Run a non-agent action node inline (create a memo / task). Best-effort:
-    a failure logs but never breaks the run."""
+    """Run a non-agent action node inline (create a memo / task, or fire a
+    skill / agent job). Best-effort: a failure logs but never breaks the run."""
     cfg = node.get("config") or {}
     subtype = (cfg.get("subtype") or "create_memo").strip()
     title = (cfg.get("title") or "").strip()
     try:
         if subtype == "create_task":
             _action_create_task(title, input_text, run)
+        elif subtype == "run_agent_job":
+            _action_run_agent_job(cfg, input_text, run)
         else:
             _action_create_memo(title, input_text, run)
     except Exception as e:
         logger.warning(f"[cycle] action node ({subtype}) failed for run {run.id}: {e}")
+
+
+def _action_run_agent_job(cfg, input_text, run):
+    """Fire a one-shot AgentJob (a skill or a builtin kind), fire-and-forget:
+    the execute phase picks it up next tick. Mirrors the automation
+    `run_agent_job` action — `kind` drives which skill/role runs. The node's
+    own input wins; absent it, the seed handed down the flow is used. This is
+    how a schedule trigger "runs a skill": [schedule] -> [run a skill]."""
+    from planet_maiko.database import db
+    from planet_maiko.models.agent_job import AgentJob
+    kind = (cfg.get("job_kind") or cfg.get("kind") or "").strip() or "cartograph"
+    repo = (cfg.get("repo") or "").strip() or (run.extra or {}).get("scope_repo")
+    description = (
+        (cfg.get("input") or cfg.get("description") or "").strip()
+        or (input_text or "").strip()
+        or None
+    )
+    priority = (cfg.get("priority") or "normal").strip() or "normal"
+    title = (cfg.get("title") or "").strip() or f"{kind} (flow)"
+    job = AgentJob(
+        id=f"job-{uuid.uuid4().hex[:10]}",
+        kind=kind,
+        title=title,
+        description=description,
+        scope_repo=repo,
+        priority=priority,
+        created_by="flow",
+        requires_approval=False,
+        status="queued",
+        approved_by="auto",
+        approved_at=datetime.now(timezone.utc),
+        extra={"workflow_run_id": run.id, "source": "flow"},
+    )
+    db.session.add(job)
+    db.session.commit()
 
 
 def _action_create_memo(title, body, run):

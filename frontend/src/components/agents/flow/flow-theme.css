@@ -182,6 +182,7 @@ textarea.flow-trigger-input { resize: vertical; min-height: 34px; }
   outline: none;
 }
 .flow-action-select:focus, .flow-action-input:focus { border-color: var(--mint, #6fc5a8); }
+textarea.flow-action-input { resize: vertical; min-height: 34px; }
 .flow-role-desc {
   margin-top: 8px;
   font-size: 11px; color: var(--text-dim); line-height: 1.4;
