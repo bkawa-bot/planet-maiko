@@ -714,6 +714,27 @@ def approve(job_id):
     # so its PR must target that branch (not the default), or the diff would
     # include the parent's commits too.
     parent_branch = (job.extra or {}).get("parent_branch")
+    # Stack legibility + safety: find this child's parent PR to cross-link, and
+    # detect whether this job is itself a stacked PARENT (a sibling in the same
+    # run stacks on its branch) so we can warn against squash-merging it.
+    parent_pr_url = None
+    is_stacked_parent = False
+    run_id = (job.extra or {}).get("workflow_run_id")
+    if run_id:
+        from planet_maiko.models.agent_job import AgentJob
+        from planet_maiko.models.workflow_run import WorkflowRun
+        wr = db.session.get(WorkflowRun, run_id)
+        if wr:
+            for nr in wr.node_runs:
+                if not nr.agent_job_id or nr.agent_job_id == job.id:
+                    continue
+                sib = db.session.get(AgentJob, nr.agent_job_id)
+                if not sib:
+                    continue
+                if (sib.extra or {}).get("parent_branch") == branch:
+                    is_stacked_parent = True
+                if parent_branch and sib.branch == parent_branch:
+                    parent_pr_url = (sib.extra or {}).get("pr_url")
 
     if existing_pr_url:
         instruction = (
@@ -725,12 +746,16 @@ def approve(job_id):
             f"message_type='stuck' and describe the error."
         )
     else:
-        base_note = (
-            f" This work stacks on `{parent_branch}`, so open the PR against "
-            f"that branch: pass `--base {parent_branch}` to `gh pr create` (not "
-            f"the default branch), so the PR shows only your changes."
-            if parent_branch else ""
-        )
+        if parent_branch:
+            ref = f"its parent PR ({parent_pr_url})" if parent_pr_url else f"branch `{parent_branch}`"
+            base_note = (
+                f" This work stacks on {ref}, so open the PR against "
+                f"`{parent_branch}`: pass `--base {parent_branch}` to `gh pr create` "
+                f"(not the default branch), so the PR shows only your changes, and "
+                f"link the parent in the PR body so the stack is clear."
+            )
+        else:
+            base_note = ""
         instruction = (
             f"Your work is approved. Time to open the PR:\n\n"
             f"1. Push branch `{branch}` to origin.\n"
@@ -743,6 +768,14 @@ def approve(job_id):
             f"Task: {title}\n\n"
             f"If you hit a problem (push rejected, gh auth missing, "
             f"template question), reply with message_type='stuck'."
+        )
+
+    if is_stacked_parent:
+        instruction += (
+            "\n\nNOTE: other PRs stack on this branch. When this one is merged, "
+            "use a regular merge commit, NOT squash. Squashing rewrites these "
+            "commits, which makes the stacked child PRs show them as duplicates "
+            "with false conflicts. If you open the PR, say so in the body."
         )
 
     from planet_maiko.agents.signature import signature_instruction_for_agent
