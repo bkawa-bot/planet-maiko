@@ -111,7 +111,7 @@ def _fetch_pr_head(repo_path, pr_number):
     return None
 
 
-def _create_worktree(repo_path, branch_name, pr_number=None):
+def _create_worktree(repo_path, branch_name, pr_number=None, base_branch=None):
     """Create a git worktree on a *new* branch for an agent to work in.
 
     Coding agents start from the latest origin/<default_branch> tip so
@@ -120,6 +120,11 @@ def _create_worktree(repo_path, branch_name, pr_number=None):
     base ref becomes the PR's head ref (fetched into FETCH_HEAD), so
     `git diff origin/<default>...HEAD` inside the worktree shows the
     PR's full diff and `leave_comment` calls can pin to real lines.
+
+    Stacked child: pass ``base_branch`` (a parent task's pushed branch) and
+    the worktree is cut from ``origin/<base_branch>`` instead of the default
+    branch, so a dependent task builds on its parent's work rather than from
+    scratch. Falls back to the default branch if that ref isn't on origin yet.
 
     Uses ``git worktree add -b <branch> <path> <base>`` so the branch
     is always fresh. Without ``-b``, ``git worktree add <path> <branch>``
@@ -135,6 +140,23 @@ def _create_worktree(repo_path, branch_name, pr_number=None):
 
     default_branch = _fetch_latest_base(repo_path)
     base_ref = f"origin/{default_branch}" if default_branch else None
+
+    # Stacked child: cut from the parent task's pushed branch instead of the
+    # default branch. _fetch_latest_base above already did `git fetch origin
+    # --prune`, so origin/<base_branch> is present if the parent pushed it.
+    if base_branch:
+        verify = subprocess.run(
+            ["git", "rev-parse", "--verify", f"origin/{base_branch}"],
+            cwd=repo_path, capture_output=True, text=True,
+        )
+        if verify.returncode == 0:
+            base_ref = f"origin/{base_branch}"
+            logger.info(f"[worktree] stacking {branch_name} on origin/{base_branch}")
+        else:
+            logger.warning(
+                f"[worktree] parent branch origin/{base_branch} not found; "
+                f"falling back to {base_ref} (child starts from default, not parent)"
+            )
 
     # Review path: fetch the PR's head ref into FETCH_HEAD and use it
     # as the worktree base. The new branch points at the PR's head SHA

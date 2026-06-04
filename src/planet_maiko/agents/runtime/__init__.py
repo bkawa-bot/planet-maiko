@@ -71,7 +71,7 @@ logger = logging.getLogger(__name__)
 
 def prepare(job_id, job_title, prompt, repo_path, branch_prefix="maiko",
             agent_profile_id=None, role="coding", specialty_id=None,
-            pr_number=None):
+            pr_number=None, base_branch=None):
     """Prepare a working directory for an agent to work on a job.
 
     `job_id` is an AgentJob.id. Every agent's MAIKO_JOB_ID is its
@@ -150,8 +150,11 @@ def prepare(job_id, job_title, prompt, repo_path, branch_prefix="maiko",
         # Review jobs pass pr_number so the worktree is built from the PR's
         # head ref instead of origin/main — the agent needs to see the
         # actual code under review for `git diff origin/main...HEAD` and
-        # leave_comment to pin to real lines.
-        working_path = _create_worktree(repo_path, branch_name, pr_number=pr_number)
+        # leave_comment to pin to real lines. A stacked child passes
+        # base_branch so its worktree is cut from the parent task's branch.
+        working_path = _create_worktree(
+            repo_path, branch_name, pr_number=pr_number, base_branch=base_branch,
+        )
         if not working_path:
             return None
 

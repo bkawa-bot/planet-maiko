@@ -301,6 +301,9 @@ def _phase_execute_agent_jobs():
                         role=role,
                         specialty_id=specialty_id,
                         pr_number=pr_number,
+                        # Stacked child: cut the worktree from the parent task's
+                        # branch (stamped by the workflow scatter) instead of main.
+                        base_branch=(job.extra or {}).get("parent_branch"),
                     )
                 except Exception as e:
                     logger.warning(f"[cycle] prepare failed for agent_job {job.id}: {e}")
