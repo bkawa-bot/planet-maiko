@@ -39,6 +39,24 @@ The `--title` is a short label (a few words) that names the task's coder job; th
 
 **Set `--repo org/name` on each task** — the repo its coder will work in. Routing each task to the right repo is your job: the coders work wherever you send them. Read the target repo from the plan (it names what's being changed and where). Most plans target a single repo, so put that same repo on every task; a plan that genuinely spans repos routes each task to its own. If you omit `--repo`, the task falls back to the repo the run was launched with (which may be blank, in which case the coder has no checkout, so don't rely on it). Make one `maiko emit --type task` call for each task.
 
+## Dependent tasks (stacked PRs)
+
+Most tasks should be independent so coders run in parallel. But sometimes one task can only be built on top of another: task B needs the database table that task A creates. For those, say so explicitly: give the parent a stable `--id`, and give the child `--depends-on <that id>`. The engine then waits for the parent to finish, starts the child's coder FROM the parent's branch (not main) so it builds on that work instead of from scratch, opens the child's PR against the parent's branch, and keeps the child in sync as the parent changes.
+
+```bash
+maiko emit --type task --id table --title "Add the sessions table" "$(cat <<'EOF'
+Add a `sessions` table plus its migration under db/migrations/.
+EOF
+)"
+maiko emit --type task --depends-on table --title "Add the session service" "$(cat <<'EOF'
+Add SessionService in src/services/ that reads and writes the sessions table
+from the previous task.
+EOF
+)"
+```
+
+Only declare a dependency when a task genuinely cannot start without another's code. Default to independent tasks; chain only the ones that truly stack. A child depends on a single parent.
+
 Then send ONE final reply that summarizes for the human and lists the tasks so they are readable at a glance:
 
 ```bash

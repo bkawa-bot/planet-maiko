@@ -137,6 +137,10 @@ def cmd_emit(args):
         data["title"] = args.title
     if getattr(args, "repo", None):
         data["repo"] = args.repo
+    if getattr(args, "id", None):
+        data["id"] = args.id
+    if getattr(args, "depends_on", None):
+        data["depends_on"] = args.depends_on
     api_request(f"/agents/{task_id}/outputs", method="POST", data=data)
     print(f"Emitted {args.type} output for {task_id}")
 
@@ -441,6 +445,8 @@ def register(subparsers):
     p.add_argument("--type", required=True, help="Output type: task | plan | diff | report | insight | proposal | verdict | comment")
     p.add_argument("--title", help="Short title — names the job spawned from this output (else a generic role label)")
     p.add_argument("--repo", help="Repo (org/name) this output's work targets — overrides the run's repo; omit to inherit it")
+    p.add_argument("--id", help="Stable id for this task, so a later task can depend on it via --depends-on")
+    p.add_argument("--depends-on", dest="depends_on", help="id of the task this one stacks on: its coder branches off that task's branch (not main) and waits for it")
     p.add_argument("--job", "--task", dest="task", help="Job ID (auto-detected from MAIKO_JOB_ID env or TASK.md if omitted)")
     p.set_defaults(func=cmd_emit)
 

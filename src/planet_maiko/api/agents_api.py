@@ -800,6 +800,20 @@ def emit_agent_output(job_id):
     repo = (data.get("repo") or "").strip()
     if repo:
         out["repo"] = repo
+    # Stacking metadata: a stable `id` lets a later task declare `depends_on`
+    # it; the executor then branches the dependent task's coder off this task's
+    # branch (not main) and waits for it. depends_on is a single id (a string)
+    # for now; a list is accepted for forward-compat.
+    tid = (data.get("id") or "").strip()
+    if tid:
+        out["id"] = tid
+    dep = data.get("depends_on")
+    if isinstance(dep, str) and dep.strip():
+        out["depends_on"] = dep.strip()
+    elif isinstance(dep, list):
+        deps = [str(d).strip() for d in dep if str(d).strip()]
+        if deps:
+            out["depends_on"] = deps
     # Reassign (not in-place append) so SQLAlchemy detects the JSON change.
     job.outputs = (job.outputs or []) + [out]
     db.session.commit()
