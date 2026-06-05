@@ -18,6 +18,7 @@ import ArtifactRow from "./memos/ArtifactRow";
 import PupdateSnapshot from "./memos/PupdateSnapshot";
 import RepoPickerModal from "./RepoPickerModal";
 import "./RepoPickerModal.css";
+import GateReviewModal from "./GateReviewModal";
 
 /**
  * Home's unified Memos pane — the single surface for every
@@ -161,6 +162,9 @@ export default function MemosPane() {
   // memo id + the payload so the modal renders, and confirming
   // re-fires approveMemo with { repo_path }.
   const [repoPicker, setRepoPicker] = useState(null);
+  // The flow gate the user opened to review (plan markdown + approve / request
+  // changes / reject), or null.
+  const [gateReview, setGateReview] = useState(null);
 
   const fetchQueue = async (isInitial = false) => {
     try {
@@ -416,10 +420,10 @@ export default function MemosPane() {
               >
                 {renderRowIcon(it, Icon)}
                 <div
-                  className={`review-queue-body${it.route ? " review-queue-row-main" : ""}`}
-                  onClick={it.route ? () => navigate(it.route) : undefined}
-                  role={it.route ? "button" : undefined}
-                  title={it.route ? "Open the flow run" : undefined}
+                  className="review-queue-body review-queue-row-main"
+                  onClick={() => setGateReview(it)}
+                  role="button"
+                  title="Review the plan and decide"
                 >
                   <div className="review-queue-title">{it.title || "Flow gate"}</div>
                   <div className="review-queue-meta">
@@ -430,15 +434,7 @@ export default function MemosPane() {
                       </span>
                     )}
                   </div>
-                  {it.body && (
-                    <div
-                      className="review-queue-description markdown"
-                      dangerouslySetInnerHTML={{ __html: renderMarkdown(it.body) }}
-                    />
-                  )}
-                  {it.route && (
-                    <span className="review-queue-cta">Open the flow →</span>
-                  )}
+                  <span className="review-queue-cta">Review and decide →</span>
                 </div>
                 <div className="review-queue-actions">
                   <button
@@ -701,6 +697,13 @@ export default function MemosPane() {
               );
             }
           }}
+        />
+      )}
+      {gateReview && (
+        <GateReviewModal
+          item={gateReview}
+          onClose={() => setGateReview(null)}
+          onSettled={fetchQueue}
         />
       )}
     </div>

@@ -340,6 +340,76 @@ def reject_node(run_id, node_run_id):
     return jsonify(run.to_dict())
 
 
+@workflows_bp.route("/workflow-runs/<run_id>/nodes/<node_run_id>/request-changes", methods=["POST"])
+def request_changes_node(run_id, node_run_id):
+    """Ask the step feeding a gate to revise. The human equivalent of the
+    reviewer->coder loop: send the user's feedback to that producer agent,
+    resume it, and re-arm the gate so the revised plan/tasks re-park here for
+    approval. Body: {feedback}."""
+    run, nr, err = _gate_node_run(run_id, node_run_id)
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    feedback = (data.get("feedback") or "").strip()
+    if not feedback:
+        return jsonify({"error": "feedback is required"}), 400
+
+    from planet_maiko.models.agent_job import AgentJob
+    from planet_maiko.models.agent_message import AgentMessage
+    from planet_maiko.api.diff_api import _resume_agent_with_review
+
+    # The producer feeding this gate (the plan/tasks under review).
+    graph = run.graph_snapshot or {}
+    edges = graph.get("edges") or []
+    producer_nr = None
+    for src_id in [e.get("source") for e in edges if e.get("target") == nr.node_id]:
+        cand = (
+            NodeRun.query
+            .filter_by(workflow_run_id=run.id, node_id=src_id)
+            .first()
+        )
+        if cand and cand.agent_job_id:
+            producer_nr = cand
+            break
+    producer_job = (
+        db.session.get(AgentJob, producer_nr.agent_job_id) if producer_nr else None
+    )
+    if producer_job is None or not producer_job.worktree_path:
+        return jsonify({"error": "No producer step with a live session to revise"}), 400
+
+    # Queue the feedback for the producer (same to_agent + resume transport the
+    # reviewer->coder loop uses), then wake it. Commit the message first so the
+    # resume reads it.
+    msg = (
+        "The user reviewed your output at an approval gate and asked for "
+        "changes before it moves on. Revise in this same session, then reply "
+        "--type ready_for_review again (and re-run any `maiko emit` outputs "
+        "your protocol specifies, e.g. one emit per task). Do not stop before "
+        "that reply.\n\n## Requested changes\n\n" + feedback
+    )
+    db.session.add(AgentMessage(
+        task_id=producer_job.id, direction="to_agent", sender="user",
+        content=msg, message_type="review",
+    ))
+    db.session.commit()
+
+    if not _resume_agent_with_review(producer_job.id, producer_job.worktree_path):
+        return jsonify({"error": "Couldn't wake the step to revise. Try again in a moment."}), 502
+
+    # Clear the producer's structured outputs so a re-emit REPLACES the old set
+    # (else a decomposer's revised tasks would scatter alongside the stale
+    # ones). Set producer + gate back so the gate re-parks once the revision
+    # lands; retire the current memo (a fresh one comes with the new output).
+    producer_job.outputs = []
+    producer_job.status = "running"
+    producer_nr.status = "running"
+    nr.status = "pending"
+    nr.agent_job_id = None
+    _retire_gate_memo(nr.id)
+    db.session.commit()
+    return jsonify(run.to_dict())
+
+
 @workflows_bp.route("/workflow-runs", methods=["GET"])
 def list_workflow_runs():
     """Recent runs across all flows, lightweight summary for the Flows
