@@ -144,19 +144,30 @@ def _matching_outputs(job, accepts):
 _MAX_REVIEW_ROUNDS = 3
 
 
+# A VERDICT line, tolerant of the markdown decoration LLMs sprinkle on it
+# (**VERDICT:**, ## VERDICT -, > VERDICT:). The old strict s[:8]=="VERDICT:"
+# check missed every decorated variant, so a reviewer that wrote a block
+# verdict but skipped `maiko request-changes` had its block silently dropped
+# and the loop never fired — the same fragility that once broke TASK parsing.
+_VERDICT_RE = re.compile(r"^[\s>#*_`\-]*verdict\b\s*[:\-]?\s*(.+)$", re.IGNORECASE)
+
+
 def _parse_verdict(text):
     """Pull a reviewer's verdict from its ready_for_review artifact, which
     the review protocol starts with `VERDICT: <tag>`. Returns one of
     approve | approve_with_comments | soft_block | hard_block, or None when
-    there's no verdict line (then the node isn't a review-loop node)."""
+    there's no verdict line (then the node isn't a review-loop node).
+    Tolerant of markdown decoration so a decorated block verdict still drives
+    the loop."""
     for ln in (text or "").splitlines():
-        s = ln.strip()
-        if s[:8].upper() == "VERDICT:":
-            v = s[8:].strip().lower()
-            for tag in ("hard_block", "soft_block", "approve_with_comments", "approve"):
-                if tag in v:
-                    return tag
-            return v or None
+        m = _VERDICT_RE.match(ln)
+        if not m:
+            continue
+        v = m.group(1).strip().strip("*_`# ").lower()
+        for tag in ("hard_block", "soft_block", "approve_with_comments", "approve"):
+            if tag in v:
+                return tag
+        return v or None
     return None
 
 
