@@ -25,7 +25,8 @@ _WORKTREE_SWEEP_INTERVAL_S = 24 * 60 * 60
 
 
 def _phase_nudge_quiet_agents():
-    """Phase: wake any AgentJob whose agent has been silent for too long.
+    """Phase: wake any AgentJob whose agent has been silent for too long, OR
+    that spawned but never came alive (a boot nudge).
 
     Agents are reactive — a claude process exits after each turn and
     only re-runs when wake_agent fires. Without an external trigger
@@ -63,10 +64,13 @@ def _phase_nudge_quiet_agents():
     if not cfg.get("enabled", True):
         return {"skipped": "disabled"}
 
-    nudge_after_minutes = int(cfg.get("nudge_after_minutes") or 7)
+    nudge_after_minutes = int(cfg.get("nudge_after_minutes") or 10)
     max_per_job = int(cfg.get("max_per_job") or 6)
+    boot_after_minutes = int(cfg.get("boot_nudge_after_minutes") or 4)
+    boot_max = int(cfg.get("boot_nudge_max_per_job") or 3)
 
     nudged = 0
+    booted = 0
     skipped_busy = 0
     skipped_waiting = 0
     skipped_fresh = 0
@@ -74,7 +78,8 @@ def _phase_nudge_quiet_agents():
     failed = 0
 
     try:
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=nudge_after_minutes)
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(minutes=nudge_after_minutes)
         running = AgentJob.query.filter(AgentJob.status == "running").all()
         for job in running:
             if is_working(job.id):
@@ -82,33 +87,68 @@ def _phase_nudge_quiet_agents():
                 continue
 
             extra = job.extra or {}
-            if int(extra.get("nudge_count") or 0) >= max_per_job:
-                # Stuck_check will catch this at the 15m mark and surface
-                # an agent_stuck memo for the user to nudge manually.
-                # Stay quiet here.
-                skipped_capped += 1
-                continue
-
-            # Check the agent's last_active_at via the linked profile.
-            # wake_agent.set_agent_state stamps this on each claude
-            # subprocess start/end, and the PostToolUse heartbeat
-            # endpoint stamps it during long turns — so a freshly-busy
-            # agent gets correctly classified as not-quiet.
+            # wake_agent.set_agent_state stamps last_active_at on each claude
+            # subprocess start/end, and the PostToolUse heartbeat stamps it
+            # during long turns — so a freshly-busy agent reads as not-quiet.
             profile = (
                 db.session.get(AgentProfile, job.agent_profile_id)
                 if job.agent_profile_id else None
             )
             last_active = profile.last_active_at if profile else None
-            if last_active is not None:
-                la = last_active
-                if la.tzinfo is None:
-                    la = la.replace(tzinfo=timezone.utc)
-                if la >= cutoff:
-                    skipped_fresh += 1
-                    continue
+            if last_active is not None and last_active.tzinfo is None:
+                last_active = last_active.replace(tzinfo=timezone.utc)
+            started = job.started_at
+            if started is not None and started.tzinfo is None:
+                started = started.replace(tzinfo=timezone.utc)
 
-            # Skip agents that emitted a "waiting on user" signal — they
-            # SHOULD be parked until the user replies, not woken.
+            # BOOT NUDGE: a just-started agent that has shown NO activity at
+            # all. last_active is stamped at spawn and advanced by any tool
+            # call / reply, so it still sitting at (or before) started_at means
+            # the agent never came alive — its opening prompt likely never
+            # landed. Past the boot window, kick it; separate, low cap so a
+            # truly-dead spawn isn't spammed (stuck_check flags it at 15m).
+            never_active = (
+                last_active is None
+                or (started is not None and last_active <= started + timedelta(seconds=90))
+            )
+            if (
+                started is not None
+                and never_active
+                and (now - started) >= timedelta(minutes=boot_after_minutes)
+                and int(extra.get("boot_nudge_count") or 0) < boot_max
+            ):
+                try:
+                    ok, _mode = wake_agent(
+                        job.id,
+                        "You're spawned but haven't started yet. Read TASK.md "
+                        "and CLAUDE.md in this directory and begin — post your "
+                        "boot-up status first via `maiko reply \"<one line in "
+                        "your voice>\" --type status`.",
+                        source="nudge",
+                    )
+                    if ok:
+                        booted += 1
+                        new_extra = dict(extra)
+                        new_extra["boot_nudge_count"] = int(new_extra.get("boot_nudge_count") or 0) + 1
+                        new_extra["last_nudged_at"] = now.isoformat()
+                        job.extra = new_extra
+                    else:
+                        failed += 1
+                except Exception as e:
+                    failed += 1
+                    logger.warning(f"[nudge] boot wake failed for job {job.id}: {e}")
+                continue
+
+            # STALL NUDGE: a running agent that was active but went quiet
+            # past the threshold (and isn't parked waiting on the user).
+            if int(extra.get("nudge_count") or 0) >= max_per_job:
+                # Stuck_check catches the truly-broken case at 15m as
+                # agent_stuck; further pinging just bleeds tokens.
+                skipped_capped += 1
+                continue
+            if last_active is not None and last_active >= cutoff:
+                skipped_fresh += 1
+                continue
             last_msg = (
                 AgentMessage.query
                 .filter_by(task_id=job.id, direction="from_agent")
@@ -133,12 +173,11 @@ def _phase_nudge_quiet_agents():
                 )
                 if ok:
                     nudged += 1
-                    # Persist the increment so the cap survives across
-                    # cycles. Re-assign rather than mutate-in-place so
-                    # SQLAlchemy notices the change to the JSON column.
+                    # Re-assign (not mutate-in-place) so SQLAlchemy notices
+                    # the JSON change; the cap survives across cycles.
                     new_extra = dict(extra)
                     new_extra["nudge_count"] = int(new_extra.get("nudge_count") or 0) + 1
-                    new_extra["last_nudged_at"] = datetime.now(timezone.utc).isoformat()
+                    new_extra["last_nudged_at"] = now.isoformat()
                     job.extra = new_extra
                 else:
                     failed += 1
@@ -146,19 +185,21 @@ def _phase_nudge_quiet_agents():
                 failed += 1
                 logger.warning(f"[nudge] wake failed for job {job.id}: {e}")
 
-        if nudged:
+        if nudged or booted:
             db.session.commit()
             logger.info(
-                f"[nudge] heartbeat-woke {nudged} quiet agent(s) "
-                f"(skipped: busy={skipped_busy}, waiting={skipped_waiting}, "
-                f"fresh={skipped_fresh}, capped={skipped_capped})"
+                f"[nudge] woke {nudged} quiet + {booted} not-yet-started "
+                f"agent(s) (skipped: busy={skipped_busy}, "
+                f"waiting={skipped_waiting}, fresh={skipped_fresh}, "
+                f"capped={skipped_capped})"
             )
     except Exception as e:
         logger.warning(f"[nudge] phase error: {e}")
-        return {"nudged": nudged, "error": str(e)}
+        return {"nudged": nudged, "booted": booted, "error": str(e)}
 
     return {
         "nudged": nudged,
+        "booted": booted,
         "skipped_busy": skipped_busy,
         "skipped_waiting": skipped_waiting,
         "skipped_fresh": skipped_fresh,

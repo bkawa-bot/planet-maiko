@@ -117,8 +117,15 @@ DEFAULT_CONFIG = {
         # outweighs visibility.
         "nudge_quiet_agents": {
             "enabled": True,
-            "nudge_after_minutes": 7,
+            "nudge_after_minutes": 10,     # ping a running, not-waiting agent
+                                           # whose last signal was >10 min ago
             "max_per_job": 6,
+            # Boot nudge: a just-started agent is told to post a boot status
+            # within a few minutes. If it's shown NO activity at all by then,
+            # its opening prompt likely never landed — kick it. Small cap so a
+            # truly-dead spawn isn't spammed (stuck_check flags it at 15m).
+            "boot_nudge_after_minutes": 4,
+            "boot_nudge_max_per_job": 3,
         },
         # Role-as-intent autonomy. Each role-native agent watches for
         # specific conditions (stale repo overview, missing CLAUDE.md,
