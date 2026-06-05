@@ -171,8 +171,12 @@ def _generate_reply(latest_user_message: str) -> str:
     # full chat history), and Opus reasoning over it can run past a
     # minute on its own — capping at 60s meant follow-up turns would
     # time out before she finished thinking.
+    # no_mcp: Maiko's reply is text-only (all the agents/tasks/automations
+    # context is already in the prompt), so don't spin up the user's MCP
+    # servers on every turn — that startup overhead was helping push this
+    # heavy Opus call past the 240s timeout.
     result = runtime.send(
-        prompt, timeout=240, source="maiko_chat",
+        prompt, timeout=240, source="maiko_chat", no_mcp=True,
         model=resolve_model("maiko"), effort=resolve_effort("maiko"),
     )
     if not result.get("success"):
