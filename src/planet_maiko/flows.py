@@ -4,14 +4,17 @@ trigger-eval phase so both start a run identically."""
 from planet_maiko.database import db
 
 
-def start_run(workflow, *, input=None, scope_repo=None, triggering_pupdate_id=None):
+def start_run(workflow, *, input=None, scope_repo=None, triggering_pupdate_id=None,
+              task_id=None):
     """Create + start a WorkflowRun for a saved Workflow.
 
     Pins the graph snapshot, seeds run.extra with the input + repo, and mints
     a NodeRun per node: a trigger node starts ``done`` (it's the entry — the
     pupdate that fired it IS its output, carried in ``run.extra.input``),
-    every other node starts ``pending``. Returns the run, or None if the flow
-    has no nodes. Caller strings should already be stripped."""
+    every other node starts ``pending``. ``task_id`` links the run back to the
+    Task it was launched from (the caller also marks that task in progress).
+    Returns the run, or None if the flow has no nodes. Caller strings should
+    already be stripped."""
     from planet_maiko.models.workflow_run import WorkflowRun, NodeRun
     graph = workflow.graph or {"nodes": [], "edges": []}
     nodes = graph.get("nodes") or []
@@ -22,7 +25,11 @@ def start_run(workflow, *, input=None, scope_repo=None, triggering_pupdate_id=No
         status="running",
         graph_snapshot=graph,
         triggering_pupdate_id=triggering_pupdate_id,
-        extra={"scope_repo": scope_repo or None, "input": input or None},
+        extra={
+            "scope_repo": scope_repo or None,
+            "input": input or None,
+            "task_id": task_id or None,
+        },
     )
     db.session.add(run)
     db.session.flush()  # assign run.id before the NodeRuns reference it

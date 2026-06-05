@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { showToast } from "../components/Toast";
 import AssignAgentModal from "../components/AssignAgentModal";
+import RunFlowModal from "../components/RunFlowModal";
 import TaskCard from "../components/TaskCard";
 import ViewPlanModal from "./tasks/ViewPlanModal";
 import TaskDetailModal from "./tasks/TaskDetailModal";
@@ -48,6 +49,7 @@ export default function Tasks() {
   const [expanded, setExpanded] = useState(null);
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [assigningTask, setAssigningTask] = useState(null);
+  const [runFlowTask, setRunFlowTask] = useState(null);
   const [generatedTasks, setGeneratedTasks] = useState(null); // { project_id, tasks: [...] }
   const [generating, setGenerating] = useState(null); // project_id being generated
   const [reviseFeedback, setReviseFeedback] = useState(""); // free-form text for "Revise" button
@@ -287,6 +289,7 @@ export default function Tasks() {
                   )}
                   onAction={handleAction}
                   onAssignAgent={setAssigningTask}
+                  onRunFlow={setRunFlowTask}
                   onEdit={(task, form) => { setEditForm(form); setEditingTask(task); }}
                   onShowDetail={setDetailTask}
                   onRefresh={fetchData}
@@ -375,6 +378,7 @@ export default function Tasks() {
                         onToggleExpand={() => setExpanded(expanded === t.id ? null : t.id)}
                         onAction={handleAction}
                         onAssignAgent={setAssigningTask}
+                        onRunFlow={setRunFlowTask}
                         onEdit={(task, form) => { setEditForm(form); setEditingTask(task); }}
                         onShowDetail={setDetailTask}
                         onRefresh={fetchData}
@@ -397,6 +401,7 @@ export default function Tasks() {
               onToggleExpand={() => setExpanded(expanded === t.id ? null : t.id)}
               onAction={handleAction}
               onAssignAgent={setAssigningTask}
+              onRunFlow={setRunFlowTask}
               onEdit={(task, form) => { setEditForm(form); setEditingTask(task); }}
               onShowDetail={setDetailTask}
               onRefresh={fetchData}
@@ -413,6 +418,14 @@ export default function Tasks() {
           task={assigningTask}
           onClose={() => setAssigningTask(null)}
           onAssigned={fetchData}
+        />
+      )}
+
+      {runFlowTask && (
+        <RunFlowModal
+          task={runFlowTask}
+          onClose={() => setRunFlowTask(null)}
+          onLaunched={fetchData}
         />
       )}
 

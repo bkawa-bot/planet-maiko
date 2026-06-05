@@ -98,7 +98,8 @@ def run_workflow(wf_id):
     """Launch a workflow. Snapshots the current graph, mints a NodeRun
     per node (pending), and sets the run running. The advance_workflows
     cycle phase spawns the root nodes on the next tick and drives the
-    rest. Optional body: {scope_repo} = the repo the steps run against."""
+    rest. Optional body: {input, scope_repo, task_id}. task_id launches the
+    flow on an existing Task (seeds the input/repo from it + links it)."""
     row = db.session.get(Workflow, wf_id)
     if row is None or row.deleted_at is not None:
         return jsonify({"error": "Workflow not found"}), 404
@@ -108,11 +109,37 @@ def run_workflow(wf_id):
 
     from planet_maiko import flows
     data = request.get_json() or {}
+    input_text = (data.get("input") or "").strip() or None
+    scope_repo = (data.get("scope_repo") or "").strip() or None
+
+    # Optional: launch the flow on an existing Task. The task seeds the flow's
+    # kickoff input (title + description) and repo when the caller didn't set
+    # them, and the run is linked back to the task (which goes in_progress).
+    task_id = (data.get("task_id") or "").strip() or None
+    task = None
+    if task_id:
+        from planet_maiko.models.task import Task
+        task = db.session.get(Task, task_id)
+        if task is None:
+            return jsonify({"error": f"Task {task_id} not found"}), 404
+        if not input_text:
+            desc = (task.extra or {}).get("description") or ""
+            input_text = f"{task.title}\n\n{desc}".strip() or task.title
+        if not scope_repo:
+            scope_repo = (task.extra or {}).get("repo") or None
+
     run = flows.start_run(
         row,
-        input=(data.get("input") or "").strip() or None,
-        scope_repo=(data.get("scope_repo") or "").strip() or None,
+        input=input_text,
+        scope_repo=scope_repo,
+        task_id=task_id,
     )
+    if task is not None and run is not None:
+        from datetime import datetime, timezone
+        task.status = "in_progress"
+        task.extra = {**(task.extra or {}), "workflow_run_id": run.id}
+        task.updated_at = datetime.now(timezone.utc)
+        db.session.commit()
     return jsonify(run.to_dict()), 201
 
 

@@ -47,6 +47,7 @@ export default function TaskCard({
   onToggleExpand,
   onAction,
   onAssignAgent,
+  onRunFlow,
   onEdit,
   onRefresh,
   projects,
@@ -348,6 +349,15 @@ export default function TaskCard({
                   title={`Currently: ${agentName || t.assigned_agent_id}. Click to switch.`}
                 >
                   <Bot size={10} /> Reassign
+                </button>
+              )}
+              {!isDone && onRunFlow && (
+                <button
+                  className="btn btn-sm btn-action"
+                  onClick={() => onRunFlow(t)}
+                  title="Run a saved flow on this task (planner, decomposer, coders, reviewer…)"
+                >
+                  <GitBranch size={10} /> Run a flow
                 </button>
               )}
               {/* Launch: assigned but not yet running. Covers both
