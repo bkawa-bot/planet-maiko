@@ -80,20 +80,16 @@ _PHASES = [
     ("learning", _phase_learning),
     ("insights_reconcile", _phase_insights_reconcile),
     ("rules_decay", _phase_rules_decay),
-    # Order matters: nudge first so a quiet agent gets a chance to
-    # re-engage and stamp last_active_at before stuck_check would
-    # flag it at the 15m mark.
-    ("nudge_quiet_agents", _phase_nudge_quiet_agents),
-    ("stuck_check", _phase_stuck_check),
     ("projects", _phase_projects),
     ("orchestrate", _phase_orchestrate),
     ("unblock", _phase_unblock_tasks),
-    ("spawn_jobs_for_tasks", _phase_spawn_jobs_for_tasks),
-    # advance_workflows + execute_agent_jobs are deliberately NOT here. They
-    # run on the dedicated job-worker thread every FAST_TICK seconds (app.py,
-    # via run_workflow_tick), so a slow or hung phase in this thinking cycle
-    # (e.g. a poller's network call) can never starve flow execution. Jobs
-    # are picked up only on the worker — one thread, no concurrent pickup.
+    # spawn_jobs_for_tasks, nudge_quiet_agents, stuck_check, advance_workflows,
+    # and execute_agent_jobs are deliberately NOT here — they run on the
+    # dedicated job-worker thread every FAST_TICK seconds (app.py, via
+    # run_workflow_tick), so they're responsive and a slow/hung phase in this
+    # thinking cycle (e.g. a poller's network call) can never starve job/flow
+    # execution OR the nudges. Jobs are picked up only on the worker (one
+    # thread, no concurrent pickup).
     ("stuck_escalation", _phase_stuck_escalation),
     # Daily-cadenced; the phase itself gates on a 24h cooldown so this
     # is cheap to invoke every cycle.
@@ -168,11 +164,20 @@ def run(app):
 
 _WORKFLOW_PHASES = [
     # Fire event-triggered flows first so a run started this tick advances in
-    # the same tick. On the worker thread, so triggering is fast + isn't
-    # starved when the full brain cycle is slow.
+    # the same tick. On the worker thread, so everything here is fast +
+    # reliable + not starved (or hung) by the slow brain cycle.
     ("eval_triggers", _phase_eval_triggers),
     ("advance_workflows", _phase_advance_workflows),
+    # Turn assigned tasks into queued jobs, then start queued jobs — both here
+    # so a task -> job -> running happens within one tick instead of waiting on
+    # the brain cycle. Single thread, so no concurrent pickup.
+    ("spawn_jobs_for_tasks", _phase_spawn_jobs_for_tasks),
     ("execute_agent_jobs", _phase_execute_agent_jobs),
+    # Health checks: nudge first (a quiet agent gets a chance to re-engage +
+    # stamp last_active_at before stuck_check flags it). Every tick, gated by
+    # their own thresholds + a per-job nudge cooldown.
+    ("nudge_quiet_agents", _phase_nudge_quiet_agents),
+    ("stuck_check", _phase_stuck_check),
 ]
 
 

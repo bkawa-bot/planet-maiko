@@ -126,6 +126,9 @@ DEFAULT_CONFIG = {
             # truly-dead spawn isn't spammed (stuck_check flags it at 15m).
             "boot_nudge_after_minutes": 4,
             "boot_nudge_max_per_job": 3,
+            # The nudge phase runs on the fast worker tick, so this is the
+            # minimum gap between pings to the same job (stall or boot).
+            "nudge_cooldown_seconds": 90,
         },
         # Role-as-intent autonomy. Each role-native agent watches for
         # specific conditions (stale repo overview, missing CLAUDE.md,

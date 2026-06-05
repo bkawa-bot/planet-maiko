@@ -68,10 +68,14 @@ def _phase_nudge_quiet_agents():
     max_per_job = int(cfg.get("max_per_job") or 6)
     boot_after_minutes = int(cfg.get("boot_nudge_after_minutes") or 4)
     boot_max = int(cfg.get("boot_nudge_max_per_job") or 3)
+    # This phase runs on the fast worker tick now (~12s), so a per-job cooldown
+    # keeps a quiet agent from being pinged every tick.
+    nudge_cooldown_seconds = int(cfg.get("nudge_cooldown_seconds") or 90)
 
     nudged = 0
     booted = 0
     skipped_busy = 0
+    skipped_cooldown = 0
     skipped_waiting = 0
     skipped_fresh = 0
     skipped_capped = 0
@@ -87,6 +91,20 @@ def _phase_nudge_quiet_agents():
                 continue
 
             extra = job.extra or {}
+            # Cooldown: don't re-nudge the same job within the window (this
+            # phase ticks every ~12s now). Applies to stall + boot nudges,
+            # which share last_nudged_at.
+            last_nudged = extra.get("last_nudged_at")
+            if last_nudged:
+                try:
+                    ln = datetime.fromisoformat(last_nudged)
+                    if ln.tzinfo is None:
+                        ln = ln.replace(tzinfo=timezone.utc)
+                    if (now - ln).total_seconds() < nudge_cooldown_seconds:
+                        skipped_cooldown += 1
+                        continue
+                except (ValueError, TypeError):
+                    pass
             # wake_agent.set_agent_state stamps last_active_at on each claude
             # subprocess start/end, and the PostToolUse heartbeat stamps it
             # during long turns — so a freshly-busy agent reads as not-quiet.
@@ -190,8 +208,8 @@ def _phase_nudge_quiet_agents():
             logger.info(
                 f"[nudge] woke {nudged} quiet + {booted} not-yet-started "
                 f"agent(s) (skipped: busy={skipped_busy}, "
-                f"waiting={skipped_waiting}, fresh={skipped_fresh}, "
-                f"capped={skipped_capped})"
+                f"cooldown={skipped_cooldown}, waiting={skipped_waiting}, "
+                f"fresh={skipped_fresh}, capped={skipped_capped})"
             )
     except Exception as e:
         logger.warning(f"[nudge] phase error: {e}")
@@ -201,6 +219,7 @@ def _phase_nudge_quiet_agents():
         "nudged": nudged,
         "booted": booted,
         "skipped_busy": skipped_busy,
+        "skipped_cooldown": skipped_cooldown,
         "skipped_waiting": skipped_waiting,
         "skipped_fresh": skipped_fresh,
         "skipped_capped": skipped_capped,
