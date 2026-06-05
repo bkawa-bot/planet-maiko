@@ -57,7 +57,7 @@ export default function GateReviewModal({ item, onClose, onSettled }) {
           <div className="modal-body agent-edit-body">
             {item.body ? (
               <div
-                className="review-queue-description markdown"
+                className="gate-review-plan markdown"
                 dangerouslySetInnerHTML={{ __html: renderMarkdown(item.body) }}
               />
             ) : (

@@ -6,6 +6,18 @@
 .review-queue-row.tone-info {
   border-left-color: var(--lavender, #b59dd8);
 }
+
+/* The full plan / tasks markdown inside the gate review modal. Unlike the
+   2-line-clamped .review-queue-description used on the compact row, this shows
+   everything and scrolls so a long plan is fully readable. */
+.gate-review-plan {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text, #e8e6f0);
+  max-height: 55vh;
+  overflow-y: auto;
+  word-break: break-word;
+}
 .review-queue-row.tone-info:hover {
   background: color-mix(in srgb, var(--lavender, #b59dd8) 8%, transparent);
 }
