@@ -683,11 +683,12 @@ def create_app(start_scheduler=False):
                         active = WorkflowRun.query.filter(
                             WorkflowRun.status == "running"
                         ).count()
-                    # TEMP heartbeat: one line per tick so the worker's
-                    # liveness + progress stays visible. Quiet later.
-                    logger.info(
-                        f"[worker] tick i={i} active_runs={active} advanced={adv}"
-                    )
+                    # Heartbeat only while a flow is actually running, so an
+                    # idle system stays quiet but live progress stays visible.
+                    if active or adv:
+                        logger.info(
+                            f"[worker] tick i={i} active_runs={active} advanced={adv}"
+                        )
                 except Exception as e:
                     logger.error(f"[worker] tick failed: {e}")
                 i += 1

@@ -121,7 +121,9 @@ def run(app):
         for key, phase_fn in _PHASES:
             # Per-phase trace so a hang or slow phase is locatable: the last
             # "→ {key}" with no following "{key} took ..." is where it stuck.
-            logger.info(f"[cycle] → {key}")
+            # Debug-level (not info) so it isn't routine noise; a slow phase
+            # still logs its duration below at info.
+            logger.debug(f"[cycle] → {key}")
             _t0 = time.time()
             results[key] = phase_fn()
             # Clean the session after every phase. Phases own their
@@ -147,7 +149,7 @@ def run(app):
         # cleanup). fire_hook skips disabled plugins. Pollers (network
         # calls) run here, so trace it too — a poller without a timeout
         # is a prime suspect for a hung cycle.
-        logger.info("[cycle] → plugin hooks (pollers run here)")
+        logger.debug("[cycle] → plugin hooks (pollers run here)")
         _t0 = time.time()
         from planet_maiko.plugins.loader import fire_hook
         for phase_name, phase_results in results.items():
