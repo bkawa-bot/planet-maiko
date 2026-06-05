@@ -134,7 +134,7 @@ class ClaudeCodeRuntime(AgentRuntime):
         env["ENABLE_PROMPT_CACHING_1H"] = "1"
         return env
 
-    def send(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None, session_id=None, skip_permissions=False, permission_mode=None, effort=None, source=None, no_mcp=False):
+    def send(self, prompt, working_dir=None, timeout=300, model=None, allowed_tools=None, session_id=None, skip_permissions=False, permission_mode=None, effort=None, source=None):
         """Send a prompt to claude CLI in print mode.
 
         Uses --print for single prompt/response (no interactive session).
@@ -207,21 +207,9 @@ class ClaudeCodeRuntime(AgentRuntime):
         # calling mcp__maiko-channel__reply without naming the
         # specific sub-tool, would still stall. The skip flag alone
         # is the right behavior for headless / autonomous runs.
-        # Text-only internal calls (e.g. maiko chat) don't call tools and
-        # shouldn't spin up the user's MCP servers on every turn. That startup
-        # is pure overhead for a prompt->text reply, and on a heavy call (Opus
-        # over a fat prompt) it's enough to push past the timeout. Skip MCP
-        # entirely: --strict-mcp-config (with no --mcp-config) loads zero
-        # servers, and we drop any mcp__ entries from the allow-list so nothing
-        # dangles. Built-in tools (Read/Grep/etc.) are unaffected.
-        if no_mcp:
-            cmd.append("--strict-mcp-config")
-
         if not skip_permissions:
             if allowed_tools is None:
                 allowed_tools = self._get_allowed_tools()
-            if no_mcp:
-                allowed_tools = [t for t in allowed_tools if not str(t).startswith("mcp__")]
             for tool in allowed_tools:
                 cmd.extend(["--allowedTools", tool])
 

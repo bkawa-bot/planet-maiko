@@ -165,18 +165,15 @@ def _generate_reply(latest_user_message: str) -> str:
 
     db.session.close()
 
-    # Match the agent-level timeout in agents/profiles.py (240s) rather
-    # than the short 45-60s used by quick triage / router calls. Maiko's
-    # prompt is large (voice file + agents + tasks + automations + the
-    # full chat history), and Opus reasoning over it can run past a
-    # minute on its own — capping at 60s meant follow-up turns would
-    # time out before she finished thinking.
-    # no_mcp: Maiko's reply is text-only (all the agents/tasks/automations
-    # context is already in the prompt), so don't spin up the user's MCP
-    # servers on every turn — that startup overhead was helping push this
-    # heavy Opus call past the 240s timeout.
+    # Maiko's heaviest call by design: Opus reasoning over a large prompt
+    # (voice + agents + tasks + automations + history) AND she uses the user's
+    # MCP servers, which spin up on each turn. So it's legitimately slow —
+    # a generous timeout is the right call, not clipping her tools. Generation
+    # runs off the request thread (background daemon + the frontend polls), so
+    # a long turn never blocks the UI or follow-up messages; better a slow
+    # reply than a dropped one.
     result = runtime.send(
-        prompt, timeout=240, source="maiko_chat", no_mcp=True,
+        prompt, timeout=600, source="maiko_chat",
         model=resolve_model("maiko"), effort=resolve_effort("maiko"),
     )
     if not result.get("success"):
