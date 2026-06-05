@@ -245,7 +245,12 @@ def get_review_queue():
             "title": m.title,
             "repo": None,
             "agent_name": None,
-            "route": (f"/jobs/{job_id}?view=report" if job_id else None),
+            # Open straight into the flow run so the gate can be reviewed in
+            # context (the run view shows the whole pipeline + approve/reject).
+            "route": (
+                f"/flows/runs/{m_extra.get('workflow_run_id')}"
+                if m_extra.get("workflow_run_id") else None
+            ),
             "run_id": m_extra.get("workflow_run_id"),
             "node_run_id": nr_id,
             "body": m.body,

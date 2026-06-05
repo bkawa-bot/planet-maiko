@@ -415,7 +415,12 @@ export default function MemosPane() {
                 className={`review-queue-row tone-${meta.tone}`}
               >
                 {renderRowIcon(it, Icon)}
-                <div className="review-queue-body">
+                <div
+                  className={`review-queue-body${it.route ? " review-queue-row-main" : ""}`}
+                  onClick={it.route ? () => navigate(it.route) : undefined}
+                  role={it.route ? "button" : undefined}
+                  title={it.route ? "Open the flow run" : undefined}
+                >
                   <div className="review-queue-title">{it.title || "Flow gate"}</div>
                   <div className="review-queue-meta">
                     <span className="review-queue-kind">{meta.label}</span>
@@ -430,6 +435,9 @@ export default function MemosPane() {
                       className="review-queue-description markdown"
                       dangerouslySetInnerHTML={{ __html: renderMarkdown(it.body) }}
                     />
+                  )}
+                  {it.route && (
+                    <span className="review-queue-cta">Open the flow →</span>
                   )}
                 </div>
                 <div className="review-queue-actions">
