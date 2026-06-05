@@ -77,6 +77,20 @@ _SETTLE_TIMEOUT_S = 8.0  # ...but send anyway after this, settled or not
 # it, so a long line is fully registered before the newline.
 _SUBMIT_DELAY_S = 0.3
 
+# Opening-prompt confirm + retry. The settle wait alone isn't enough for a
+# fresh spawn: if MCP is still loading when its 8s cap fires, the prompt is
+# sent into a not-ready pane and dropped, and the agent stalls until the user
+# messages it. So after sending we poll for claude to start a turn, and re-send
+# if the pane stays idle. _BUSY_MARKERS are the TUI's "a turn is running"
+# hints — tune them if the pane shows something different (the give-up log
+# prints the pane tail so you can see what it actually rendered).
+_MAX_OPENING_SENDS = 3
+_OPENING_CONFIRM_S = 8.0   # poll this long for a working indicator before re-sending
+_BUSY_MARKERS = (
+    "esc to interrupt",    # claude TUI's running-turn hint
+    "thinking",
+)
+
 # Poll cadence for "is the tmux session still alive?" while spawn /
 # resume blocks. 1s is fine — agent turns are seconds-to-minutes.
 _TURN_POLL_S = 1.0
@@ -265,21 +279,13 @@ class TmuxClaudeRuntime(ClaudeCodeRuntime):
             self._cleanup(sess, job_id)
             return _spawn_error("claude crashed before becoming ready (see agent.log)")
 
-        # Wait until the TUI stops rendering (claude finished booting +
-        # loading MCP) before typing, so the opening prompt lands in a
-        # ready input box instead of being dropped into a still-initializing
-        # pane. This was the "newly spawned agent does nothing until I
-        # message it" bug: the first send was lost, a later wake's send
-        # (into the now-settled pane) is what actually started the agent.
-        settled, waited = self._wait_until_settled(sess)
-        logger.info(
-            f"[tmux-claude] {sess} settled={settled} after {waited:.1f}s; "
-            f"sending opening prompt"
-        )
-
-        # Send the prompt as if the user typed it (-l = literal so special
-        # chars aren't interpreted as tmux keysyms like "C-c").
-        self._tmux_send(sess, prompt)
+        # Send the opening prompt and confirm it actually took. Waiting for the
+        # pane to settle before typing helps, but a fresh spawn can still be
+        # loading MCP when the settle cap fires, so the keystrokes get dropped
+        # into a not-ready pane and the agent sits idle until the user messages
+        # it. _send_opening_prompt re-sends if claude doesn't start a turn, so a
+        # dropped first send self-corrects instead of stalling.
+        self._send_opening_prompt(sess, prompt)
 
         # Return now. The pane stays alive and the agent works async in
         # the background; end_session() is the explicit teardown path
@@ -518,6 +524,64 @@ class TmuxClaudeRuntime(ClaudeCodeRuntime):
                 stable_since = None
             time.sleep(_READY_POLL_S)
         return (False, time.time() - start)
+
+    def _send_opening_prompt(self, sess, prompt):
+        """Send the opening prompt on a fresh session and make sure it lands.
+
+        The one-shot timed send is unreliable for a fresh spawn: while claude
+        is still loading MCP the pane isn't a ready input box, so the keystrokes
+        are dropped and the agent sits idle until the user messages it. Here we
+        wait for the pane to quiesce, send, then poll for claude to start a
+        turn; if it stays idle we re-send, up to _MAX_OPENING_SENDS tries. Each
+        attempt re-waits the settle, so a re-send also waits out any load still
+        in flight."""
+        for attempt in range(1, _MAX_OPENING_SENDS + 1):
+            settled, waited = self._wait_until_settled(sess)
+            logger.info(
+                f"[tmux-claude] {sess} settled={settled} after {waited:.1f}s "
+                f"(opening attempt {attempt}/{_MAX_OPENING_SENDS})"
+            )
+            self._tmux_send(sess, prompt)
+            outcome = self._await_prompt_outcome(sess)
+            if outcome == "dead":
+                return  # session died; the crash path / caller handles it
+            if outcome == "busy":
+                if attempt > 1:
+                    logger.info(
+                        f"[tmux-claude] {sess} opening prompt took on attempt {attempt}"
+                    )
+                return
+            if attempt < _MAX_OPENING_SENDS:
+                logger.info(
+                    f"[tmux-claude] {sess} pane still idle after the send "
+                    f"(attempt {attempt}); re-sending the opening prompt"
+                )
+        logger.warning(
+            f"[tmux-claude] {sess} opening prompt may not have landed after "
+            f"{_MAX_OPENING_SENDS} attempts; agent may need a nudge. Pane tail:\n"
+            f"{self._tmux_capture(sess)[-400:]}"
+        )
+
+    def _await_prompt_outcome(self, sess):
+        """After a send, poll the pane: 'busy' once claude shows it's running a
+        turn (the send took), 'dead' if the session ended, or 'idle' if the
+        confirm window elapses with no sign of work (the send was dropped, so
+        the caller re-sends)."""
+        deadline = time.time() + _OPENING_CONFIRM_S
+        while time.time() < deadline:
+            time.sleep(_READY_POLL_S)
+            if not self._tmux_alive(sess):
+                return "dead"
+            if self._looks_busy(self._tmux_capture(sess)):
+                return "busy"
+        return "idle"
+
+    def _looks_busy(self, content):
+        """Heuristic: is claude actively running a turn (so it accepted the
+        prompt)? Keys off the TUI's working hints; tune _BUSY_MARKERS against
+        the actual pane if the detection is off."""
+        low = (content or "").lower()
+        return any(m in low for m in _BUSY_MARKERS)
 
     def _cleanup(self, sess, job_id):
         with self._SESSIONS_GUARD:
