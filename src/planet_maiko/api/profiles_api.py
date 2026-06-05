@@ -137,6 +137,23 @@ def get_profile(profile_id):
 VALID_ROLES = ("coding", "review", "investigation", "cartographer")
 
 
+def _is_valid_role(role):
+    """A role is valid if it resolves to a known agent type — the four
+    built-ins OR any CUSTOM type added in the Roles tab. The old hardcoded
+    VALID_ROLES check rejected every custom type ("invalid role"); resolve
+    against the registry instead. VALID_ROLES stays as a fallback so the
+    built-ins still pass if the type lookup transiently fails."""
+    if not role:
+        return False
+    try:
+        from planet_maiko.agent_types import get_agent_type
+        if get_agent_type(role) is not None:
+            return True
+    except Exception:
+        pass
+    return role in VALID_ROLES
+
+
 def _sanitize_specialty_ids(raw):
     """Drop anything that isn't a known CustomSkill ID so the list never
     holds dead references. Returns a clean list (may be empty)."""
@@ -169,7 +186,7 @@ def create_agent_profile():
     """
     data = request.get_json(silent=True) or {}
     role = data.get("role") or "coding"
-    if role not in VALID_ROLES:
+    if not _is_valid_role(role):
         return jsonify({"error": f"invalid role: {role}"}), 400
     profile = create_profile(
         agent_id=data.get("agent_id", f"agent-{__import__('time').time_ns()}"),
@@ -194,7 +211,7 @@ def update_profile(profile_id):
         profile.avatar = data["avatar"]
     if "flavor_text" in data:
         profile.flavor_text = data["flavor_text"]
-    if "role" in data and data["role"] in VALID_ROLES:
+    if "role" in data and _is_valid_role(data["role"]):
         profile.role = data["role"]
     if "scope_repo" in data:
         # Empty string → null (global scope).
