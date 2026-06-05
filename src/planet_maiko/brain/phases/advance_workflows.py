@@ -176,15 +176,18 @@ def _revision_request(job):
 
     Primary path: a structured `revision_request` output the node posted
     via `maiko emit` — its content IS the feedback to hand back, and the
-    engine never reads the node's role or parses a verdict. Fallback: a
-    legacy reviewer that wrote a blocking `VERDICT:` line into its artifact
-    instead of emitting an output (pre-output protocol)."""
+    engine never reads the node's role or parses a verdict. Fallback: the
+    reviewer's VERDICT line. Anything but a clean `approve` earns another
+    pass: soft_block / hard_block (must-fix) AND approve_with_comments (fold
+    in the suggestions). Agents lean too lenient on commented approvals, so a
+    helpful non-blocking comment still buys one revision round (bounded by the
+    loop cap)."""
     if job is None:
         return None
     for o in reversed(job.outputs or []):
         if isinstance(o, dict) and o.get("type") == "revision_request" and o.get("content"):
             return o["content"]
-    if _parse_verdict(job.artifact) in ("soft_block", "hard_block"):
+    if _parse_verdict(job.artifact) in ("soft_block", "hard_block", "approve_with_comments"):
         return job.artifact or "Address the review feedback and revise."
     return None
 

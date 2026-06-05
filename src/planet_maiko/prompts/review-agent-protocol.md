@@ -142,25 +142,30 @@ Then (optional) one or two paragraphs of higher-level context that wouldn't fit 
 Then (optional) any `PATTERN:` / `PROPOSAL:` blocks, each separated by a blank line, each on its own.
 
 Verdict tags:
-- **approve** — clean diff, no concerns worth raising.
-- **approve_with_comments** — the change is good to land but the inline comments are worth addressing in a follow-up or stitching in before merge. Non-blocking.
+- **approve** — clean diff, no concerns worth raising. This is the ONLY verdict that lets a flow proceed without another coder pass, so use it when the work is genuinely ready, not as a default.
+- **approve_with_comments** — good direction, but your inline comments are worth folding in. In a flow this sends the work back to the coder for one pass to address them. Don't be lenient: if a comment would actually improve the diff, that's worth a round, not a "follow-up someday."
 - **soft_block** — the inline comments include at least one thing that should be fixed before this merges, but nothing catastrophic.
 - **hard_block** — something in this change is wrong enough that it SHOULD NOT MERGE as-is. Data loss, security, correctness, broken invariant. Reserve for serious concerns.
 
-### When you block, request another round
+### Sending work back for another round
 
-`soft_block` and `hard_block` mean the work goes back to its author for another pass. The flow decides that from a single signal you send, not from your prose. So when (and only when) your verdict is `soft_block` or `hard_block`, run:
+In a flow, **any verdict except a clean `approve` sends the work back to its author for another pass** (then you re-review, bounded by the loop's cap). The flow reads that from your verdict + signal, not your prose:
 
-```bash
-maiko request-changes "$(cat <<'EOF'
-The must-fix changes, concretely. List the items that drove the block so
-the author can act without re-reading the whole review. Name files / lines
-where you can.
-EOF
-)"
-```
+- **soft_block / hard_block** — run `maiko request-changes` once, covering every must-fix. This is the precise machine signal; the author is re-run with exactly this feedback:
 
-This fires the flow's loop edge (when the graph has one): the author is re-run with your feedback on its branch, then you re-review, up to the loop's cap. Run it once per review, covering every must-fix. On `approve` / `approve_with_comments`, do NOT run it — staying silent is what tells the flow the work is good and the next step can proceed. Your inline comments and reply are still the human-readable review; `request-changes` is the machine-readable "send it back" signal.
+  ```bash
+  maiko request-changes "$(cat <<'EOF'
+  The must-fix changes, concretely. List the items that drove the block so
+  the author can act without re-reading the whole review. Name files / lines
+  where you can.
+  EOF
+  )"
+  ```
+
+- **approve_with_comments** — no separate call needed; your inline comments + review ARE the feedback, and the flow hands them back automatically so the coder folds them in.
+- **approve** — stay silent. That is what tells the flow the work is good and the next step can proceed.
+
+Your inline comments and reply are always the human-readable review; the verdict (plus `request-changes` for a block) is the machine-readable "send it back" signal.
 
 ## Team rules — retrieve before you form a verdict
 
