@@ -2,7 +2,7 @@
 
 > *These alien dogs want to live in your computer, which is a weird thing for software to want to do. Would you let them in?*
 
-Planet Maiko is like if Conductor and Sunsama had a baby, and the baby is a pack of alien dogs that also remember every mistake you have ever made!
+Planet Maiko = Claude Squad x Todoist x n8n x your own pack of weird alien dogs.
 
 Free local dev tool made by 1 dev, for other devs, for fun! No accounts needed, no telemetry, no paid tiers (I don't even know how to do that and idc enough)
 
@@ -10,20 +10,33 @@ Free local dev tool made by 1 dev, for other devs, for fun! No accounts needed, 
 
 ![Profiles](docs/screenshots/profiles2.png)
 
+## What does Planet Maiko do? 
+
+Planet Maiko's goal is to be the center of your workday as a developer. It pulls info in from all your external and internal tools, task managers, issue trackers, working agents etc into one system.
+
+## Quick feature overview (non-exhaustive!):
+#### - Pulls in data from your whole stack into a centralized system.
+#### - Handles all your agent orchestration needs, but is way cooler cause the agents are space dogs.
+     - Runs coding agents in isolated git worktrees
+     - Custom agent builder
+     - Typed agent workflow builders
+### - Does some cool memory stuff like creating a local RAG system with guidelines based on your previous gh history.
+### - Works with whatever model you want (slightly wip/still testing)
+### - Custom automations (stuff like: my manager slacked me, set off an investigation agent to reply with an excuse for why I am OOO (just kidding but you can do this if you want))
+
+### - If it doesn't do something you need it to do, please tell me!! (seriously I have no life)
+
+
+It has agent orchestration with a local RAG system and (EXPERIMENTAL) model fine-tuning so you don't need a different tool for that stuff either.
+
+> *IMPORTANT UPDATE:* [The dogs are having a popularity contest and are threatening to start mining bitcoin on my computer if you don't vote](https://bkawa-bot.github.io/planet-maiko/popularity.html)
+
 ## I don't want to read all this, I just want the dogs
 Understandable, here you go! (You probably need python 3.10+ and Node.js 18+ though or else it might implode)
 
 ```
 git clone https://github.com/bkawa-bot/planet-maiko.git && cd planet-maiko && python3 bootstrap.py
 ```
-
-## What does Planet Maiko do? 
-
-Planet Maiko's goal is to be the center of your workday as a developer. It pulls info in from all your external and internal tools, task managers, issue trackers, working agents etc into one system.
-
-It has sophisticated agent orchestration with a local RAG system and (EXPERIMENTAL) model fine-tuning so you don't need a different tool for that stuff either.
-
-> *IMPORTANT UPDATE:* [The dogs are having a popularity contest and are threatening to start mining bitcoin on my computer if you don't vote](https://bkawa-bot.github.io/planet-maiko/popularity.html)
 ## Why did I make Planet Maiko (what problem does it solve)?
 
 As a professional software engineer, I was suffering a lot of mental fatigue from constantly switching between tools, all with their own agents and notifications yelling at me, while also trying to babysit a kindergarden class of baby agents.
