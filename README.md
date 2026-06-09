@@ -1,125 +1,55 @@
 # Planet Maiko
-
-> *These alien dogs want to live in your computer, which is a weird thing for software to want to do. Would you let them in?*
-
-Planet Maiko = Claude Squad x Todoist x n8n x your own pack of weird alien dogs.
-
-Free local dev tool made by 1 dev, for other devs, for fun! No accounts needed, no telemetry, no paid tiers (I don't even know how to do that and idc enough)
-
-[Testimonials (real)](https://bkawa-bot.github.io/planet-maiko/testimonials.html)
+> These alien dogs want to live in your computer, which is a strange thing for software to want to do. Would you let them in?
 
 ![Profiles](docs/screenshots/profiles2.png)
+[Testimonials (real)](https://bkawa-bot.github.io/planet-maiko/testimonials.html)
 
-## What does Planet Maiko do? 
+## What is Planet Maiko? 
+Planet Maiko is your developer home base on a strange little planet, where your pack of space dog agents live and work alongside you. It is not just an agent orchestration platform, but a world you build and call your own.
 
-Planet Maiko's goal is to be the center of your workday as a developer. It pulls info in from all your external and internal tools, task managers, issue trackers, working agents etc into one system.
-
-## Quick feature overview (non-exhaustive!):
-#### - Pulls in data from your whole stack into a centralized system.
-#### - Handles all your agent orchestration needs, but is way cooler cause the agents are space dogs.
-     - Runs coding agents in isolated git worktrees
-     - Custom agent builder
-     - Typed agent workflow builders
-### - Does some cool memory stuff like creating a local RAG system with guidelines based on your previous gh history.
-### - Works with whatever model you want (slightly wip/still testing)
-### - Custom automations (stuff like: my manager slacked me, set off an investigation agent to reply with an excuse for why I am OOO (just kidding but you can do this if you want))
-
-### - If it doesn't do something you need it to do, please tell me!! (seriously I have no life)
-
-
-It has agent orchestration with a local RAG system and (EXPERIMENTAL) model fine-tuning so you don't need a different tool for that stuff either.
-
-> *IMPORTANT UPDATE:* [The dogs are having a popularity contest and are threatening to start mining bitcoin on my computer if you don't vote](https://bkawa-bot.github.io/planet-maiko/popularity.html)
-
-## I don't want to read all this, I just want the dogs
-Understandable, here you go! (You probably need python 3.10+ and Node.js 18+ though or else it might implode)
-
-```
-git clone https://github.com/bkawa-bot/planet-maiko.git && cd planet-maiko && python3 bootstrap.py
-```
-## Why did I make Planet Maiko (what problem does it solve)?
-
-As a professional software engineer, I was suffering a lot of mental fatigue from constantly switching between tools, all with their own agents and notifications yelling at me, while also trying to babysit a kindergarden class of baby agents.
-
-I made Planet Maiko because I wanted 1 tool that I could trust to handle all the noise so I could focus on actually building cool things!
-
-## What would my day look like on Planet Maiko?
 ![Home](docs/screenshots/home.png)
 
-You wake up and see a greeting from Maiko (my irl dog) that knows all your in-progress work, what your manager asked you to do last week, if your teammate is waiting on a PR review, if any of your agents are stalled or stuck, even if it is a cool rainy day or a summer scorcher (in which case she will recommend you to take the afternoon off and go to the beach.)
+Features:
+- **Pulls your whole stack into one place.** Data from across your tools in a centralized view.
+  - Current integrations: GitHub, Linear, PagerDuty, Calendar
+- **All the agent orchestration you need** but it is way cooler because the agents are space dogs:
+  - Runs coding agents in isolated git worktrees
+  - Custom agent builder
+  - n8n-esque visual typed agent workflow builder
+- **Memory that learns.** A local RAG system that builds guidelines from your past GitHub history, so agents stop repeating old mistakes.
+- **Model-agnostic.** Use whatever model you want *(slightly WIP / still testing)*.
+- **Your own world.** Theme designer, weather and seasons, agents with profiles and personalities.
+- **Custom plugin architecture**
+- **Completely local and free. No telemetry.**
 
-She will then recommend a small set of action items to get your day started, pulling from your github, slack, calender, working agents, etc and distilling it down into what matters at that moment.
-
-From there, you can live your whole day in Planet Maiko, from reviewing your team's code, to managing and chatting with multiple agent sessions, to updating your issues and tasks, the sky is the limit!
-
-## Quick feature overview (non-exhaustive!):
-### - Pulls in data from your whole stack into a centralized system.
-### - Handles all your agent orchestration needs, but is way cooler cause the agents are space dogs.
-### - Does some cool memory stuff like creating a local RAG system with guidelines based on your previous gh history.
-### - Works with whatever model you want (slightly wip/still testing)
-### - Custom automations (stuff like: my manager slacked me, set off an investigation agent to reply with an excuse for why I am OOO (just kidding but you can do this if you want))
-
-### - If it doesn't do something you need it to do, please tell me!! (seriously I have no life)
-
-## Build a plugin for any tool you never want to have to look at again.
-
-Plug in any data you need by building 1 python class. Internal tools, big names, whatever shiny new GSD task manager you are trying this week.
-
-**Current integrations:**
-
-- PagerDuty
-- Linear
-- Calendar
-- GitHub
-
-## Stays yours
-
-- Runs locally on your laptop. Nothing leaves your machine.
-- No telemetry, no hosted account, no cloud.
-- Open source, free forever, no paid tiers or subscriptions.
+#### - If it doesn't do something you need it to do, please tell me!! (seriously I have no life)
 
 ## In-app diff review, agent chat view (no terminal needed), cost-aware model routing, automations, local RAG embeddings, and more!
 ![Diff](docs/screenshots/diff2.png)
 ![insights](docs/screenshots/insights2.png)
 <img width="597" height="483" alt="Screenshot 2026-05-19 at 9 41 02 PM" src="https://github.com/user-attachments/assets/5463d146-b8ac-4c57-9af9-abf8591a1008" />
 
-## Most importantly: agents are weird alien dogs, cause why not?
-
+### And it includes this weird guy
 ![Biolumen](docs/screenshots/biolumen.png)
 
-**[Full feature list](docs/FEATURES.md)**
-
 ## Install
-
-### Prerequisites
-
-- Python 3.10+
-- Node.js 18+
-- [`gh` CLI](https://cli.github.com)
-
-### Setup
-
-```bash
+(You probably need python 3.10+ and Node.js 18+ or else it might implode)
+```
 git clone https://github.com/bkawa-bot/planet-maiko.git && cd planet-maiko && python3 bootstrap.py
 ```
-> **SSL errors** with Linear or other integrations? `pip install --upgrade certifi`, then `open /Applications/Python\ 3.12/Install\ Certificates.command`.
 
-### Next time
-
-```bash
-source .venv/bin/activate    # Windows: .venv\Scripts\activate
+## Boot
+```
 maiko up
 ```
 
+**[Full feature list](docs/FEATURES.md)**
+
 **Full guide** (mental model, architecture, plugin system, extending, CLI reference): see [`docs/GUIDE.md`](docs/GUIDE.md).
 
-### License: AGPL v3
-
-#### Can I integrate with internal software?
-
-Yes. Planet Maiko is a free, open-source dev tool that runs locally, and you can build internal plugins for it. Under AGPL v3, any plugin that's a combined work with Planet Maiko must itself be AGPL v3, and you must make the source available to the people using it. For an internal tool, that means your teammates. You don't have to publish it publicly. What you can't do is ship Planet Maiko, or a derivative of it, under a proprietary license :)
-
 ## About
+
+> *IMPORTANT UPDATE:* [The dogs are having a popularity contest and are threatening to start mining bitcoin on my computer if you don't vote](https://bkawa-bot.github.io/planet-maiko/popularity.html)
 
 Planet Maiko is named lovingly after my real dog Maiko.
 
