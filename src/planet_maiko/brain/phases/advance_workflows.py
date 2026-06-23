@@ -360,6 +360,7 @@ def _spawn_run_agent_job(cfg, description, run, node_id):
     exactly as it does for an automation's run_agent_job. Returns the job
     uncommitted (the phase's own commit persists it, after the NodeRun is
     linked)."""
+    from planet_maiko.database import db
     from planet_maiko.models.agent_job import AgentJob
     kind = (cfg.get("job_kind") or cfg.get("kind") or "").strip() or "cartograph"
     repo = (cfg.get("repo") or "").strip() or (run.extra or {}).get("scope_repo")
@@ -802,7 +803,9 @@ def _phase_advance_workflows():
                 like planner/decomposer whose kind isn't in the builtin map.
                 `title`/`repo` come from the producing output when present (a
                 scattered task names + optionally re-homes its coder); repo
-                falls back to the run's scope_repo, the shared default.
+                falls back to the run's scope_repo, the shared default. Without
+                a `title` (single nodes, reviewers) the job is named after the
+                flow's task rather than a generic "<role> step".
                 `parent_branch`/`parent_base_sha` stack a dependent task on its
                 parent: execute_jobs cuts the worktree from origin/<parent_branch>
                 so the child builds on the parent's work, not from scratch."""
@@ -813,10 +816,17 @@ def _phase_advance_workflows():
                     extra["parent_branch"] = parent_branch
                 if parent_base_sha:
                     extra["parent_base_sha"] = parent_base_sha
+                if not title:
+                    # Name the job after the flow's task (the input the user
+                    # launched the flow with, or the event that triggered it)
+                    # instead of a generic "coding step" / "review step", so
+                    # the pack and active-agents list read as the actual work.
+                    seed = _first_line((run.extra or {}).get("input") or "", limit=60)
+                    title = f"{role}: {seed}" if seed and seed != "task" else f"{role} step"
                 job = AgentJob(
                     id=uuid.uuid4().hex[:24],
                     kind=role,
-                    title=title or f"{role} step",
+                    title=title,
                     description=description,
                     scope_repo=job_repo,
                     created_by="system",
