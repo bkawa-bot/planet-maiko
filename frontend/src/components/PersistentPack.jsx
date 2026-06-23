@@ -45,11 +45,15 @@ export default function PersistentPack() {
   const [activity, setActivity] = useState([]);
   const visitsRef = useRef(loadVisits());
   // Dock magnification refs: the column element, the rAF handle that
-  // throttles pointer updates to one per frame, and the latest cursor Y
-  // so the scheduled frame always uses the freshest position.
+  // throttles pointer updates to one per frame, the latest cursor Y so
+  // the scheduled frame always uses the freshest position, and the
+  // avatars' *resting* centers/sizes. We cache the rest positions because
+  // getBoundingClientRect reflects the live transforms we apply — true
+  // rest can only be read while no transform is set.
   const packRef = useRef(null);
   const rafRef = useRef(0);
   const lastYRef = useRef(0);
+  const baseRef = useRef([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,20 +77,61 @@ export default function PersistentPack() {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
   }, []);
 
-  // Scale every avatar by how close the cursor is to its center —
-  // applied straight to the DOM (no React re-render) so it tracks the
-  // pointer at 60fps. We scale the avatar wrap, not the whole button,
-  // so the hover speech-bubble stays its normal size.
+  // Snapshot each avatar's resting center + size. Clears any live
+  // transform first so the rects we read are the true rest layout (this
+  // is the one place we force a synchronous reflow — only on a gesture's
+  // first frame or when the pack's contents change, never per frame).
+  const measureBase = (wraps) => {
+    wraps.forEach((el) => { el.style.transform = ""; });
+    baseRef.current = wraps.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { center: r.top + r.height / 2, size: r.height };
+    });
+  };
+
+  // macOS-dock magnification. Each avatar scales by how close the cursor
+  // is to its resting center, AND shifts away from the cursor by the
+  // combined growth of the avatars between it and the cursor — so the
+  // big one under the pointer pushes its neighbors outward instead of
+  // overlapping them. The avatar at the cursor stays anchored; the column
+  // grows outward from it. Written straight to the DOM (no React
+  // re-render) so it tracks the pointer at 60fps. We transform the avatar
+  // wrap, not the button, so the hover bubble keeps its size.
   const magnify = (clientY) => {
     const root = packRef.current;
     if (!root) return;
-    root.querySelectorAll(".persistent-pack-avatar-wrap").forEach((el) => {
-      const r = el.getBoundingClientRect();
-      const center = r.top + r.height / 2;
-      const t = Math.max(0, 1 - Math.abs(clientY - center) / MAG_RADIUS);
-      const eased = t * t * (3 - 2 * t); // smoothstep
-      el.style.transform = `scale(${1 + MAG_STRENGTH * eased})`;
-    });
+    const wraps = [...root.querySelectorAll(".persistent-pack-avatar-wrap")];
+    if (!wraps.length) return;
+    // Re-measure when the cache is empty or the pack's size changed
+    // (an agent joined/left); otherwise reuse the cached rest layout.
+    if (baseRef.current.length !== wraps.length) measureBase(wraps);
+    const base = baseRef.current;
+    const n = wraps.length;
+
+    const scale = new Array(n);
+    const grow = new Array(n); // px added to this avatar's height
+    for (let i = 0; i < n; i++) {
+      const t = Math.max(0, 1 - Math.abs(base[i].center - clientY) / MAG_RADIUS);
+      const eased = t * t * (3 - 2 * t); // smoothstep falloff
+      scale[i] = 1 + MAG_STRENGTH * eased;
+      grow[i] = (scale[i] - 1) * base[i].size;
+    }
+
+    for (let i = 0; i < n; i++) {
+      const d = base[i].center - clientY;
+      const dir = d > 0 ? 1 : d < 0 ? -1 : 0;
+      // Half of this avatar's own growth keeps its near edge put, plus
+      // the full growth of every avatar sitting between it and the cursor.
+      let push = grow[i] / 2;
+      for (let j = 0; j < n; j++) {
+        if (j === i) continue;
+        const dj = base[j].center - clientY;
+        if (dir > 0 ? dj > 0 && dj < d : dir < 0 ? dj < 0 && dj > d : false) {
+          push += grow[j];
+        }
+      }
+      wraps[i].style.transform = `translateY(${(dir * push).toFixed(2)}px) scale(${scale[i].toFixed(4)})`;
+    }
   };
 
   const handleMove = (e) => {
