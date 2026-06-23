@@ -7,6 +7,12 @@ import "./PersistentPack.css";
 
 const POLL_MS = 15_000;
 const VISITS_KEY = "maiko-pack-visits";
+// Dock magnification: how far (px) along the column the cursor's pull
+// reaches, and the peak extra scale on the avatar directly under it
+// (0.45 → 1.45×). Falloff is smoothstepped so neighbors swell gently
+// the way the macOS dock does, instead of one avatar popping alone.
+const MAG_RADIUS = 90;
+const MAG_STRENGTH = 0.45;
 
 /**
  * Persistent pack dock — the active-agents avatar stack pinned to the
@@ -37,8 +43,13 @@ function saveVisits(map) {
 export default function PersistentPack() {
   const navigate = useNavigate();
   const [activity, setActivity] = useState([]);
-  const [expanded, setExpanded] = useState(false);
   const visitsRef = useRef(loadVisits());
+  // Dock magnification refs: the column element, the rAF handle that
+  // throttles pointer updates to one per frame, and the latest cursor Y
+  // so the scheduled frame always uses the freshest position.
+  const packRef = useRef(null);
+  const rafRef = useRef(0);
+  const lastYRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,6 +67,47 @@ export default function PersistentPack() {
       if (timer) clearTimeout(timer);
     };
   }, []);
+
+  // Drop any pending magnification frame if we unmount mid-gesture.
+  useEffect(() => () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  // Scale every avatar by how close the cursor is to its center —
+  // applied straight to the DOM (no React re-render) so it tracks the
+  // pointer at 60fps. We scale the avatar wrap, not the whole button,
+  // so the hover speech-bubble stays its normal size.
+  const magnify = (clientY) => {
+    const root = packRef.current;
+    if (!root) return;
+    root.querySelectorAll(".persistent-pack-avatar-wrap").forEach((el) => {
+      const r = el.getBoundingClientRect();
+      const center = r.top + r.height / 2;
+      const t = Math.max(0, 1 - Math.abs(clientY - center) / MAG_RADIUS);
+      const eased = t * t * (3 - 2 * t); // smoothstep
+      el.style.transform = `scale(${1 + MAG_STRENGTH * eased})`;
+    });
+  };
+
+  const handleMove = (e) => {
+    lastYRef.current = e.clientY;
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0;
+      magnify(lastYRef.current);
+    });
+  };
+
+  const handleLeave = () => {
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
+    const root = packRef.current;
+    if (!root) return;
+    // Hand the avatars back to their resting size; the CSS transition
+    // eases the settle.
+    root.querySelectorAll(".persistent-pack-avatar-wrap").forEach((el) => {
+      el.style.transform = "";
+    });
+  };
 
   // The dock stays visible on /jobs/<id> too -- the user wants to
   // hop between agent conversations without going back home, which
@@ -103,16 +155,15 @@ export default function PersistentPack() {
 
   return (
     <div
-      className={`persistent-pack ${expanded ? "expanded" : "collapsed"}`}
-      onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
+      className="persistent-pack"
+      ref={packRef}
+      onMouseMove={handleMove}
+      onMouseLeave={handleLeave}
     >
       <button
         type="button"
         className="persistent-pack-villager persistent-pack-maiko"
         onClick={() => navigate("/maiko")}
-        onFocus={() => setExpanded(true)}
-        onBlur={() => setExpanded(false)}
         aria-label="Maiko, the controller"
       >
         <span className="persistent-pack-avatar-wrap persistent-pack-maiko-wrap">
@@ -123,8 +174,8 @@ export default function PersistentPack() {
             src="/sprites/maiko-avatar.png"
             onError={(e) => { e.currentTarget.src = "/icon.svg"; }}
             alt=""
-            width={expanded ? 56 : 44}
-            height={expanded ? 56 : 44}
+            width={44}
+            height={44}
             className="persistent-pack-maiko-avatar"
           />
         </span>
@@ -151,14 +202,12 @@ export default function PersistentPack() {
             type="button"
             className={`persistent-pack-villager pack-status-${status}`}
             onClick={() => handleAvatarClick(a)}
-            onFocus={() => setExpanded(true)}
-            onBlur={() => setExpanded(false)}
             aria-label={`${name} — ${a.task_title || a.task_type || "working"}`}
           >
             <span className="persistent-pack-avatar-wrap">
               <CardAvatar
                 agent={agentForAvatar}
-                size={expanded ? 56 : 44}
+                size={44}
               />
               <span
                 className={`persistent-pack-state-dot state-${status}`}
@@ -192,12 +241,10 @@ export default function PersistentPack() {
         type="button"
         className="persistent-pack-villager persistent-pack-add"
         onClick={() => window.dispatchEvent(new CustomEvent("open-launch-agent"))}
-        onFocus={() => setExpanded(true)}
-        onBlur={() => setExpanded(false)}
         aria-label="Launch a new agent"
       >
         <span className="persistent-pack-avatar-wrap persistent-pack-add-wrap">
-          <Plus size={expanded ? 24 : 18} />
+          <Plus size={18} />
         </span>
         <span className="persistent-pack-bubble" role="tooltip">
           <span className="persistent-pack-bubble-name">Launch an agent</span>

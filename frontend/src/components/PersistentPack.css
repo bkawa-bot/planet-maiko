@@ -15,7 +15,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  /* A touch more breathing room than the old resting gap so a magnified
+     avatar (up to ~1.45×) doesn't crowd its neighbors. */
+  gap: 12px;
   padding: 14px 12px;
   background: var(--pane-bg, rgba(26, 31, 74, 0.65));
   backdrop-filter: blur(12px);
@@ -30,11 +32,6 @@
      runs >10 agents at once and the dock overflows the viewport,
      the cleanest fix is portal the bubble into <body> rather than
      re-introducing overflow here. */
-  transition: gap 0.15s ease, padding 0.15s ease;
-}
-
-.persistent-pack.expanded {
-  gap: 16px;
 }
 
 .persistent-pack-villager {
@@ -47,13 +44,6 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.15s ease;
-}
-
-.persistent-pack-villager:hover {
-  /* Nudge sideways toward the bubble instead of up — the dock is
-     vertical, so the depth direction is horizontal. */
-  transform: translateX(2px);
 }
 
 .persistent-pack-villager:focus-visible {
@@ -63,13 +53,28 @@
 }
 
 /* Avatar + state-dot wrapper. Same ring treatment as the home
-   pack-square so the visual language is consistent across surfaces. */
+   pack-square so the visual language is consistent across surfaces.
+   This is the element the dock magnification scales (JS sets an inline
+   `transform: scale(...)` as the cursor moves); scaling the wrap rather
+   than the whole button keeps the hover bubble at its normal size.
+   Grown from the center so it never pokes off the left screen edge and
+   stays clear of the bubble on its right. */
 .persistent-pack-avatar-wrap {
   position: relative;
   display: inline-flex;
   border-radius: 28%;
   background: var(--pink-soft);
   box-shadow: 0 0 0 2px var(--pink);
+  transform-origin: center center;
+  transition: transform 0.13s ease-out;
+  will-change: transform;
+}
+
+/* Keyboard users don't generate mousemove, so give focus its own gentle
+   pop. Pointer magnification sets an inline transform that overrides
+   this while the mouse is in play. */
+.persistent-pack-villager:focus-visible .persistent-pack-avatar-wrap {
+  transform: scale(1.3);
 }
 
 .persistent-pack-state-dot {
@@ -234,11 +239,10 @@
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  transition: width 0.15s ease, height 0.15s ease, color 0.15s, box-shadow 0.15s;
-}
-.persistent-pack.expanded .persistent-pack-add-wrap {
-  width: 56px;
-  height: 56px;
+  /* Keep `transform` here so the magnification still eases — this
+     rule's `transition` otherwise overrides the one on
+     .persistent-pack-avatar-wrap. */
+  transition: transform 0.13s ease-out, color 0.15s, box-shadow 0.15s;
 }
 .persistent-pack-add:hover .persistent-pack-add-wrap {
   color: var(--pink);
