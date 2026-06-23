@@ -315,19 +315,39 @@
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
   margin-bottom: 14px;
+  /* No `overflow: hidden` here — it would trap the sticky header below
+     in this (non-scrolling) box and kill the stick. Corner clipping is
+     handled by .diff-file-body instead. */
 }
 .agent-job-diff .diff-file-header {
+  /* Pin each file's name + stats to the top of the viewport while you
+     scroll through that file, then hand off to the next file's header.
+     `top: 48px` parks it flush under the fixed 48px topbar. This
+     replaced a single floating "N of M" bar that hid behind the topbar
+     once you scrolled and only ever showed as a duplicate of this
+     header at the very top. */
+  position: sticky;
+  top: 48px;
+  z-index: 4;
   padding: 10px 14px;
   background: var(--bg-card-alt);
   border-bottom: 1px solid var(--border);
+  border-top-left-radius: var(--radius);
+  border-top-right-radius: var(--radius);
   display: flex;
   align-items: center;
   gap: 10px;
   font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
+}
+/* Wraps the diff table so the rounded bottom corners of the card still
+   clip cleanly now that .diff-file-block can't use overflow:hidden. */
+.agent-job-diff .diff-file-body {
+  overflow: hidden;
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
 }
 .agent-job-diff .diff-file-path {
   flex: 1;
@@ -362,33 +382,6 @@
 .agent-job-diff .diff-type-badge.type-rename {
   background: rgba(167, 139, 250, 0.18); color: #a78bfa;
 }
-/* The library has its own .diff-sticky-bar at the top of the
-   scroll region — IntersectionObserver tracks which file is in
-   view. We let DiffView.jsx handle that internally. */
-.agent-job-diff .diff-sticky-bar {
-  position: sticky; top: 0; z-index: 5;
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  margin-bottom: 10px;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-}
-.agent-job-diff .diff-sticky-path {
-  flex: 1;
-  color: var(--text); font-weight: 600;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.agent-job-diff .diff-sticky-counter {
-  font-size: 10px; color: var(--text-muted);
-  padding: 2px 8px; border-radius: 10px;
-  background: var(--bg-hover);
-  white-space: nowrap;
-}
-
 /* react-diff-view default styles assume a light theme — without
    these overrides the diff body, gutter, and hunk headers all
    render with white-ish backgrounds against the dark Maiko theme,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import { Diff, Hunk, parseDiff, getChangeKey, tokenize } from "react-diff-view";
 import "react-diff-view/style/index.css";
 // refractor v5 ships an exports map that only exposes `refractor`
@@ -61,9 +61,10 @@ function languageFromPath(path) {
  * each file as a section, and threads per-line widgets (comment markers,
  * draft forms) into the gutter via the library's `widgets` prop.
  *
- * A sticky filename bar pinned to the scroll container tracks whichever
- * file is currently in view — saves scrolling to remember where you are
- * in a large diff.
+ * Each file's header is `position: sticky` (see AgentJobPage.css), so the
+ * filename + stats stay pinned to the top while you scroll through that
+ * file and hand off cleanly to the next — GitHub-style. No separate
+ * floating bar to track the active file.
  *
  * Props:
  *   rawDiff       — string, unified diff output from `git diff`
@@ -91,61 +92,14 @@ export default function DiffView({ rawDiff, anchors = {}, onLineClick, viewType 
 
   const fileStats = useMemo(() => files.map(fileStatsFor), [files]);
 
-  const blockRefs = useRef([]);
-  const [activeIdx, setActiveIdx] = useState(0);
-
-  useEffect(() => {
-    if (!files.length) return;
-    // Highlight the file whose header crossed the top-of-content mark
-    // most recently. rootMargin expands the trigger line well below
-    // the visible top so scrolling down snaps to the next file before
-    // its header leaves the screen — feels like the bar is "in sync"
-    // rather than "trailing".
-    const observer = new IntersectionObserver(
-      (entries) => {
-        // Collect currently-intersecting file indexes, pick the smallest
-        // (i.e. earliest/topmost file currently crossing the trigger).
-        const hits = entries
-          .filter((e) => e.isIntersecting)
-          .map((e) => Number(e.target.dataset.idx))
-          .filter((n) => !Number.isNaN(n));
-        if (hits.length) {
-          setActiveIdx(Math.min(...hits));
-        }
-      },
-      { rootMargin: "-60px 0px -75% 0px", threshold: 0 }
-    );
-    blockRefs.current.forEach((el) => el && observer.observe(el));
-    return () => observer.disconnect();
-  }, [files]);
-
   if (!rawDiff) return <div className="diff-view-empty">No diff yet — agent is still working.</div>;
   if (files.length === 0) return <div className="diff-view-empty">Empty diff (no changes).</div>;
 
-  const activeMeta = fileStats[activeIdx];
-
   return (
     <div className="diff-view">
-      {activeMeta && (
-        <div className="diff-sticky-bar">
-          <span className={`diff-type-badge type-${activeMeta.kind}`}>
-            {activeMeta.kindLabel}
-          </span>
-          <span className="diff-sticky-path">{activeMeta.path}</span>
-          <span className="diff-sticky-stats">
-            <span className="diff-stat-add">+{activeMeta.added}</span>
-            <span className="diff-stat-del">−{activeMeta.removed}</span>
-          </span>
-          <span className="diff-sticky-counter">
-            {activeIdx + 1} of {files.length}
-          </span>
-        </div>
-      )}
       {files.map((file, i) => (
         <FileBlock
           key={`${file.oldPath}-${file.newPath}-${i}`}
-          ref={(el) => (blockRefs.current[i] = el)}
-          idx={i}
           file={file}
           stats={fileStats[i]}
           viewType={viewType}
@@ -184,7 +138,7 @@ function fileStatsFor(file) {
   return { path, added, removed, kind, kindLabel };
 }
 
-function FileBlock({ ref, file, stats, viewType, anchors, onLineClick, idx }) {
+function FileBlock({ file, stats, viewType, anchors, onLineClick }) {
   const displayPath = stats.path;
 
   // Tokenize each file's hunks against its detected language. Memoized
@@ -245,7 +199,7 @@ function FileBlock({ ref, file, stats, viewType, anchors, onLineClick, idx }) {
   };
 
   return (
-    <div className="diff-file-block" ref={ref} data-idx={idx}>
+    <div className="diff-file-block">
       <div className="diff-file-header">
         <span className={`diff-type-badge type-${stats.kind}`}>
           {stats.kindLabel}
@@ -256,16 +210,18 @@ function FileBlock({ ref, file, stats, viewType, anchors, onLineClick, idx }) {
           <span className="diff-stat-del">−{stats.removed}</span>
         </span>
       </div>
-      <Diff
-        viewType={viewType}
-        diffType={file.type}
-        hunks={file.hunks}
-        tokens={tokens}
-        widgets={widgets}
-        gutterEvents={{ onClick: ({ change }) => handleGutterClick(change) }}
-      >
-        {(hunks) => hunks.map((h) => <Hunk key={h.content} hunk={h} />)}
-      </Diff>
+      <div className="diff-file-body">
+        <Diff
+          viewType={viewType}
+          diffType={file.type}
+          hunks={file.hunks}
+          tokens={tokens}
+          widgets={widgets}
+          gutterEvents={{ onClick: ({ change }) => handleGutterClick(change) }}
+        >
+          {(hunks) => hunks.map((h) => <Hunk key={h.content} hunk={h} />)}
+        </Diff>
+      </div>
     </div>
   );
 }

@@ -244,7 +244,13 @@ function JobHeader({ job, task, profile }) {
           <span className="agent-job-repo">{job.scope_repo}</span>
         )}
         {(() => {
-          const prUrl = task?.extra?.pr_url
+          // pr_url lives on the task's `extra` JSON (serialized to the
+          // client as `metadata`) and is mirrored onto task.url; a
+          // job-level PR with no linked task keeps it on job.extra.
+          // Check all three so the button surfaces whichever path
+          // actually opened the PR.
+          const prUrl = job?.extra?.pr_url
+            || task?.metadata?.pr_url
             || (task?.url && /github\.com\/[^/]+\/[^/]+\/pull\//.test(task.url) ? task.url : null);
           return prUrl ? (
             <a
@@ -389,12 +395,28 @@ function DiffPanel({ jobId, job, task, onChanged }) {
     setTimeout(() => setFocusedDiffKey((p) => (p === key ? null : p)), 1600);
   }, []);
 
+  // Adding or mutating a comment re-renders react-diff-view's rows (a
+  // new inline-marker widget appears), which knocks out the browser's
+  // native scroll anchoring and would otherwise fling the page. Pin the
+  // window scroll across the update so the reviewer stays exactly where
+  // they were reading. Double rAF lands the restore after React paints
+  // the new rows; the threshold skips a redundant scrollTo when nothing
+  // moved.
+  const restoreScroll = useCallback((y) => {
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (Math.abs(window.scrollY - y) > 1) window.scrollTo({ top: y });
+      }),
+    );
+  }, []);
+
   const handleLineClick = (filePath, line, side) => {
     setNewAnchor({ filePath, line, side });
     setNewBody("");
   };
   const submitNew = async () => {
     if (!newAnchor || !newBody.trim()) return;
+    const scrollY = window.scrollY;
     try {
       await api.createDiffComment(id, {
         file_path: newAnchor.filePath,
@@ -409,6 +431,7 @@ function DiffPanel({ jobId, job, task, onChanged }) {
       // re-mounts the diff body, flashes the loading state, and
       // dumps the user back at the top of the page).
       await refetchComments();
+      restoreScroll(scrollY);
     } catch (e) { showToast(e.message, "high"); }
   };
 
@@ -628,17 +651,21 @@ function DiffPanel({ jobId, job, task, onChanged }) {
                 <CommentThread
                   comments={cs}
                   onReply={async (body, parentId) => {
+                    const y = window.scrollY;
                     await api.createDiffComment(id, {
                       file_path: anchor.filePath,
                       line_number: anchor.line,
                       side: anchor.side,
                       body, parent_id: parentId, base_sha: diff?.base_sha,
                     });
-                    refetch();
+                    // Comments-only change — keep the diff mounted (no
+                    // loading flash) and hold the scroll position.
+                    await refetchComments();
+                    restoreScroll(y);
                   }}
-                  onEditDraft={async (id, body) => { await api.updateDiffComment(id, { body }); refetch(); }}
-                  onDeleteDraft={async (id) => { await api.deleteDiffComment(id); refetch(); }}
-                  onResolve={async (id) => { await api.updateDiffComment(id, { status: "resolved" }); refetch(); }}
+                  onEditDraft={async (cid, body) => { const y = window.scrollY; await api.updateDiffComment(cid, { body }); await refetchComments(); restoreScroll(y); }}
+                  onDeleteDraft={async (cid) => { const y = window.scrollY; await api.deleteDiffComment(cid); await refetchComments(); restoreScroll(y); }}
+                  onResolve={async (cid) => { const y = window.scrollY; await api.updateDiffComment(cid, { status: "resolved" }); await refetchComments(); restoreScroll(y); }}
                 />
               </div>
             );
